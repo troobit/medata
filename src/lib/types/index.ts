@@ -13,14 +13,15 @@ export type {
   EventMetadata,
   PhysiologicalEvent,
   CreateEventInput,
-  UpdateEventInput,
-  // Source tracking types (for workstreams)
-  MealDataSource,
-  BSLDataSource,
-  CorrectionRecord
+  UpdateEventInput
 } from './events';
 
-export { isMealMetadata, isInsulinMetadata, isBSLMetadata, isExerciseMetadata } from './events';
+export {
+  isMealMetadata,
+  isInsulinMetadata,
+  isBSLMetadata,
+  isExerciseMetadata
+} from './events';
 
 // Vision
 export type {
@@ -36,52 +37,3 @@ export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets
 // Settings
 export type { AIProvider, UserSettings } from './settings';
 export { DEFAULT_SETTINGS } from './settings';
-
-// Workstream A: AI Food Recognition
-export type {
-  BoundingBox,
-  RecognizedFoodItem,
-  FoodRecognitionResult,
-  NutritionLabelResult,
-  RecognitionOptions,
-  IFoodRecognitionService
-} from './ai';
-
-// Workstream B: CGM Graph Capture
-export type {
-  CGMDeviceType,
-  AxisRanges,
-  ExtractedDataPoint,
-  GraphRegion,
-  CGMExtractionResult,
-  CGMExtractionOptions,
-  ICGMImageService
-} from './cgm';
-
-// Workstream C: Local Food Estimation
-export type {
-  ReferenceObjectType,
-  DetectedReference,
-  FoodRegion,
-  FoodDensityEntry,
-  VolumeEstimationResult,
-  LocalEstimationResult,
-  CalibrationEntry,
-  IVolumeEstimationService
-} from './local-estimation';
-export { REFERENCE_DIMENSIONS } from './local-estimation';
-
-// Workstream D: BSL Data Import
-export type {
-  CSVFormatType,
-  CSVColumnMapping,
-  ParsedCSVRow,
-  RowValidationResult,
-  DuplicateMatch,
-  DuplicateStrategy,
-  ImportPreview,
-  ImportResult,
-  CSVImportOptions,
-  IImportService,
-  IExportService
-} from './import';

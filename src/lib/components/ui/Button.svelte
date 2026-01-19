@@ -43,7 +43,10 @@
 </script>
 
 {#if href}
-  <a {href} class="{baseClasses} {variantClasses[variant]} {sizeClasses[size]} {className}">
+  <a
+    {href}
+    class="{baseClasses} {variantClasses[variant]} {sizeClasses[size]} {className}"
+  >
     {#if loading}
       <span
         class="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"

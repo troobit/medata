@@ -5,7 +5,6 @@ import type {
   EventType,
   InsulinType,
   BSLUnit,
-  BSLDataSource,
   InsulinMetadata,
   BSLMetadata,
   MealMetadata
@@ -67,15 +66,9 @@ export class EventService {
   async logBSL(
     value: number,
     unit: BSLUnit = 'mmol/L',
-    timestamp: Date = new Date(),
-    options?: { isFingerPrick?: boolean; device?: string; source?: BSLDataSource }
+    timestamp: Date = new Date()
   ): Promise<PhysiologicalEvent> {
-    const metadata: BSLMetadata = {
-      unit,
-      source: options?.source ?? 'manual',
-      ...(options?.isFingerPrick !== undefined && { isFingerPrick: options.isFingerPrick }),
-      ...(options?.device && { device: options.device })
-    };
+    const metadata: BSLMetadata = { unit };
     return this.createEvent({
       timestamp,
       eventType: 'bsl',
@@ -125,37 +118,5 @@ export class EventService {
   async getLastInsulinDose(): Promise<PhysiologicalEvent | null> {
     const events = await this.repository.getByType('insulin', 1);
     return events.length > 0 ? events[events.length - 1] : null;
-  }
-
-  /**
-   * Get recent unique insulin dose values filtered by type
-   */
-  async getRecentInsulinDoses(insulinType: InsulinType, limit: number = 5): Promise<number[]> {
-    const events = await this.repository.getByType('insulin', 50);
-    const uniqueDoses = new Set<number>();
-
-    for (const event of events) {
-      if (event.metadata && (event.metadata as InsulinMetadata).type === insulinType) {
-        uniqueDoses.add(event.value);
-        if (uniqueDoses.size >= limit) break;
-      }
-    }
-
-    return Array.from(uniqueDoses);
-  }
-
-  /**
-   * Get recent unique BSL values
-   */
-  async getRecentBSLValues(limit: number = 5): Promise<number[]> {
-    const events = await this.repository.getByType('bsl', 50);
-    const uniqueValues = new Set<number>();
-
-    for (const event of events) {
-      uniqueValues.add(event.value);
-      if (uniqueValues.size >= limit) break;
-    }
-
-    return Array.from(uniqueValues);
   }
 }
