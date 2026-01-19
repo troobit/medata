@@ -1,30 +1,55 @@
+<div align="center">
+
+<img src="static/logo.png" alt="MeData logo" width="80" />
+
 # MeData
 
-A personal data tracking application for logging meal macros, insulin doses, and BSL. Uses ML-powered food recognition to estimate macros from photos.
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-Svelte_5-ff3e00?style=flat-square&logo=svelte&logoColor=white)](https://svelte.dev)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
-## Getting Started
+</div>
+
+---
+
+Personal health data tracker. SvelteKit 5, TailwindCSS 4, IndexedDB for local-first storage, PWA-ready.
+
+## Commands
 
 ```bash
-npm install
-npm run dev
+pnpm install    # Install deps + generate icons
+pnpm dev        # Dev server at localhost:5173
+pnpm build      # Production build
+pnpm preview    # Preview production build
+pnpm check      # TypeScript check
+pnpm icons      # Regenerate icons from static/icon.svg
 ```
 
-The app runs at `http://localhost:5173` by default.
+## Structure
 
-## Data Storage
+```
+src/routes/           # Pages (home, log, history, settings)
+src/lib/components/   # UI components (Button, EmptyState, icons, etc.)
+src/lib/stores/       # Svelte stores (events, settings, navigation)
+src/lib/services/     # Database and API services
+src/lib/types/        # TypeScript type definitions
+static/icon.svg       # Logo source (generates all PWA icons)
+```
 
-MeData uses **IndexedDB** for client-side data storage via [Dexie.js](https://dexie.org/). No database setup or server is required - the database is automatically created in your browser when you first use the app.
+## Stack
 
-### Troubleshooting: "The user denied permission to access the database"
+| Layer | Tech |
+|-------|------|
+| Framework | SvelteKit + Svelte 5 (runes) |
+| Styling | TailwindCSS 4 via Vite plugin |
+| Storage | IndexedDB via Dexie.js |
+| Deploy | Static adapter (any static host) |
 
-This error occurs when the browser cannot access IndexedDB. Common causes and solutions:
+## Quick Reference
 
-| Cause                          | Solution                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------- |
-| **Private/Incognito mode**     | Use a regular browser window. Some browsers restrict IndexedDB in private mode. |
-| **Storage permissions denied** | Check browser settings and allow storage for `localhost`                        |
-| **Accessing via `file://`**    | Always run via `npm run dev` and access at `http://localhost:5173`              |
-| **Browser storage disabled**   | Enable cookies/site data in browser settings                                    |
-| **Low disk space**             | Free up disk space on your device                                               |
+**Event types**: insulin, meal, bsl, exercise
 
-To reset storage permissions in Chrome: Settings → Privacy and security → Site settings → View permissions and data stored across sites → Search for "localhost" → Reset permissions.
+**Icons**: Generated on install from `static/icon.svg` (gitignored)
+
+**Brand colors**: Configured in `src/app.css` via `@theme` block
+
+> See `CLAUDE.md` for full development guide.
