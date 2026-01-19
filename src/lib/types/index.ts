@@ -16,12 +16,7 @@ export type {
   UpdateEventInput
 } from './events';
 
-export {
-  isMealMetadata,
-  isInsulinMetadata,
-  isBSLMetadata,
-  isExerciseMetadata
-} from './events';
+export { isMealMetadata, isInsulinMetadata, isBSLMetadata, isExerciseMetadata } from './events';
 
 // Presets
 export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets';

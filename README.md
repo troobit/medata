@@ -1,80 +1,35 @@
-<div align="center">
-
-<img src="static/logo.png" alt="MeData logo" width="80" />
-
 # MeData
 
-[![SvelteKit](https://img.shields.io/badge/SvelteKit-Svelte_5-ff3e00?style=flat-square&logo=svelte&logoColor=white)](https://svelte.dev)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
-[![Deploy](https://img.shields.io/badge/Deploy-Vercel-black?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com)
+A personal data tracking application for logging meal macros, insulin doses, and BSL. Uses ML-powered food recognition to estimate macros from photos.
 
-</div>
-
----
-
-Personal health data tracker with AI-powered food recognition. SvelteKit 5, TailwindCSS 4, IndexedDB for local-first storage, PWA-ready.
-
-## Commands
+## Getting Started
 
 ```bash
-pnpm install    # Install deps + generate icons
-pnpm dev        # Dev server at localhost:5173
-pnpm build      # Production build
-pnpm preview    # Preview production build
-pnpm check      # TypeScript check
-pnpm icons      # Regenerate icons from static/icon.svg
+npm install
+npm run dev
 ```
 
-## Structure
+## Storage
 
-```
-src/routes/           # Pages (home, log, history, settings)
-src/lib/components/   # UI components (Button, EmptyState, icons, etc.)
-src/lib/stores/       # Svelte stores (events, settings, navigation)
-src/lib/services/     # Database and API services
-src/lib/types/        # TypeScript type definitions
-static/icon.svg       # Logo source (generates all PWA icons)
-```
+MeData stores all data locally in your browser using IndexedDB. No server or cloud account is required.
 
-## Stack
+### Troubleshooting
 
-| Layer     | Tech                             |
-| --------- | -------------------------------- |
-| Framework | SvelteKit + Svelte 5 (runes)     |
-| Styling   | TailwindCSS 4 via Vite plugin    |
-| Storage   | IndexedDB via Dexie.js           |
-| AI        | Cloud Vision APIs (configurable) |
-| Deploy    | Vercel (auto-deploy on merge)    |
+**"Permission denied" or "Database access blocked" errors:**
 
-## Quick Reference
+This typically occurs when:
 
-**Event types**: insulin, meal, bsl, exercise
+1. **Safari Private Browsing**: IndexedDB is disabled in private/incognito mode on Safari. Use a regular browsing window instead.
+2. **Blocked site data**: Some browsers allow users to block all site data. Check your browser's privacy settings:
+   - Safari: Settings → Privacy → uncheck "Prevent cross-site tracking" or add MeData to allowed sites
+   - Chrome: Settings → Privacy and security → Site settings → ensure the site can store data
+   - Firefox: Settings → Privacy & Security → ensure "Standard" or allow site data for MeData
+3. **Storage quota exceeded**: If your device storage is full, the browser may refuse to create new databases. Free up space and try again.
 
-**Icons**: Generated on install from `static/icon.svg` (gitignored)
+**Data not persisting between sessions:**
 
-**Brand colors**: Configured in `src/app.css` via `@theme` block
+- Ensure you're not in private/incognito mode
+- Some browsers clear IndexedDB data when "Clear browsing data" includes site data
+- iOS Safari may clear IndexedDB if the device runs low on storage (use "Add to Home Screen" for better data persistence)
 
-## Research References
-
-The AI food recognition approach is informed by peer-reviewed research:
-
-| Paper                                                                                                                                                 | Key Findings                                                                                                                |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [GoCARB: Carbohydrate Estimation by Mobile Phone (JMIR 2016)](https://www.jmir.org/2016/5/e101/)                                                      | Mobile carbohydrate estimation achieves 26.9% mean absolute error vs 34.3% for self-report; 85.1% food recognition accuracy |
-| [Comprehensive Survey of Image-Based Food Recognition (Healthcare 2021)](https://pmc.ncbi.nlm.nih.gov/articles/PMC8700885/)                           | Survey of CNN architectures for food recognition; MobileNetV2 achieves ~85% on Food-101                                     |
-| [Smartphone-based Food Recognition with Multiple CNN Models (MTA 2021)](https://link.springer.com/article/10.1007/s11042-021-11329-6)                 | Ensemble deep learning approaches for mobile food classification                                                            |
-| [Applying Image-Based Food-Recognition Systems (Advances in Nutrition 2023)](<https://advances.nutrition.org/article/S2161-8313(23)00093-5/fulltext>) | Systematic review of dietary assessment accuracy across platforms                                                           |
-| [AI-based Digital Image Dietary Assessment (Annals of Medicine 2023)](https://www.tandfonline.com/doi/full/10.1080/07853890.2023.2273497)             | Comparison of AI methods to human assessment and ground truth                                                               |
-
-### Key Research Insights
-
-1. **User corrections improve accuracy**: Systems that capture user edits to AI predictions can iteratively improve (GoCARB approach)
-2. **Cloud APIs outperform on-device**: Modern vision APIs (GPT-4V, Gemini, Claude) exceed accuracy of standalone mobile models
-3. **Reference objects aid volume estimation**: Known-size objects (credit card, coin) improve portion size accuracy
-4. **Carb estimation is harder than recognition**: Identifying food is easier than accurately estimating macros from images
-
-> See `docs/DEVELOPMENT_PLAN.md` for implementation details.
-
----
-
-> See `CLAUDE.md` for full development guide.
+**No manual database setup required**: The app automatically creates and manages its database on first load.

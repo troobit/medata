@@ -133,6 +133,22 @@ function createEventsStore() {
     }
   }
 
+  async function getRecentInsulinDoses(insulinType: 'bolus' | 'basal', maxUnique: number = 6) {
+    try {
+      return await service.getRecentInsulinDoses(insulinType, maxUnique);
+    } catch {
+      return [];
+    }
+  }
+
+  async function getRecentCarbValues(maxUnique: number = 6) {
+    try {
+      return await service.getRecentCarbValues(maxUnique);
+    } catch {
+      return [];
+    }
+  }
+
   return {
     get events() {
       return events;
@@ -151,7 +167,9 @@ function createEventsStore() {
     logBSL,
     logMeal,
     deleteEvent,
-    updateEvent
+    updateEvent,
+    getRecentInsulinDoses,
+    getRecentCarbValues
   };
 }
 

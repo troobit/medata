@@ -22,7 +22,6 @@ export type ExerciseIntensity = 'low' | 'moderate' | 'high';
  * Macro nutrient data for meals
  */
 export interface MacroData {
-  calories: number;
   carbs: number;
   protein: number;
   fat: number;
@@ -106,12 +105,7 @@ export type UpdateEventInput = Partial<Omit<PhysiologicalEvent, 'id' | 'createdA
  * Type guard to check if metadata is MealMetadata
  */
 export function isMealMetadata(metadata: Record<string, unknown>): metadata is MealMetadata {
-  return (
-    'carbs' in metadata ||
-    'calories' in metadata ||
-    'description' in metadata ||
-    'photoUrl' in metadata
-  );
+  return 'carbs' in metadata || 'description' in metadata || 'photoUrl' in metadata;
 }
 
 /**

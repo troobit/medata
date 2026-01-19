@@ -1,6 +1,8 @@
 <script lang="ts">
   import '../app.css';
   import { AppShell } from '$lib/components/layout';
+  import { LoadingSpinner, StorageError } from '$lib/components/ui';
+  import { checkDatabaseAvailability } from '$lib/db';
   import { settingsStore } from '$lib/stores';
   import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
@@ -11,9 +13,19 @@
 
   let { children }: Props = $props();
 
-  onMount(() => {
-    // Load settings on app start
-    settingsStore.load();
+  let dbError = $state<string | null>(null);
+  let dbChecked = $state(false);
+
+  onMount(async () => {
+    // Check database availability before loading the app
+    const error = await checkDatabaseAvailability();
+    dbError = error;
+    dbChecked = true;
+
+    if (!error) {
+      // Load settings on app start (only if DB is available)
+      settingsStore.load();
+    }
 
     // Register service worker
     if ('serviceWorker' in navigator) {
@@ -26,9 +38,20 @@
 
 <svelte:head>
   <title>MeData</title>
-  <meta name="description" content="Personal health data tracking for meals, insulin, and blood sugar" />
+  <meta
+    name="description"
+    content="Personal health data tracking for meals, insulin, and blood sugar"
+  />
 </svelte:head>
 
-<AppShell>
-  {@render children()}
-</AppShell>
+{#if !dbChecked}
+  <div class="flex min-h-screen items-center justify-center bg-gray-900">
+    <LoadingSpinner size="lg" />
+  </div>
+{:else if dbError}
+  <StorageError error={dbError} />
+{:else}
+  <AppShell>
+    {@render children()}
+  </AppShell>
+{/if}
