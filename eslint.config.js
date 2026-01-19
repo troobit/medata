@@ -27,6 +27,6 @@ export default ts.config(
     }
   },
   {
-    ignores: ['build/', '.svelte-kit/', 'dist/', '.vercel/', 'node_modules/']
+    ignores: ['build/', '.svelte-kit/', 'dist/']
   }
 );

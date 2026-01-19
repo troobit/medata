@@ -1,7 +1,5 @@
 export { EventService } from './EventService';
 export { SettingsService } from './SettingsService';
-export { VisionService, VisionServiceError, getVisionService } from './VisionService';
-export { BSLRecognitionService, getBSLRecognitionService } from './BSLRecognitionService';
 
 // Factory functions with default repositories
 import { EventService } from './EventService';

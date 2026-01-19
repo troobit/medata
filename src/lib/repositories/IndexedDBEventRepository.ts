@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '$lib/db';
+import { db } from '$lib/db';
 import type {
   PhysiologicalEvent,
   CreateEventInput,
@@ -12,10 +12,6 @@ import type { IEventRepository } from './IEventRepository';
  * IndexedDB implementation of the event repository using Dexie.js
  */
 export class IndexedDBEventRepository implements IEventRepository {
-  private get db() {
-    return getDb();
-  }
-
   async create(input: CreateEventInput): Promise<PhysiologicalEvent> {
     const now = new Date();
     const event: PhysiologicalEvent = {
@@ -25,12 +21,12 @@ export class IndexedDBEventRepository implements IEventRepository {
       updatedAt: now
     };
 
-    await this.db.events.add(event);
+    await db.events.add(event);
     return event;
   }
 
   async getById(id: string): Promise<PhysiologicalEvent | null> {
-    const event = await this.db.events.get(id);
+    const event = await db.events.get(id);
     return event ?? null;
   }
 
@@ -46,20 +42,20 @@ export class IndexedDBEventRepository implements IEventRepository {
       updatedAt: new Date()
     };
 
-    await this.db.events.put(updated);
+    await db.events.put(updated);
     return updated;
   }
 
   async delete(id: string): Promise<void> {
-    await this.db.events.delete(id);
+    await db.events.delete(id);
   }
 
   async getByDateRange(start: Date, end: Date): Promise<PhysiologicalEvent[]> {
-    return this.db.events.where('timestamp').between(start, end, true, true).sortBy('timestamp');
+    return db.events.where('timestamp').between(start, end, true, true).sortBy('timestamp');
   }
 
   async getByType(type: EventType, limit?: number): Promise<PhysiologicalEvent[]> {
-    let query = this.db.events.where('eventType').equals(type).reverse();
+    let query = db.events.where('eventType').equals(type).reverse();
 
     if (limit) {
       return query.limit(limit).sortBy('timestamp');
@@ -69,7 +65,7 @@ export class IndexedDBEventRepository implements IEventRepository {
   }
 
   async getRecent(limit: number): Promise<PhysiologicalEvent[]> {
-    return this.db.events.orderBy('timestamp').reverse().limit(limit).toArray();
+    return db.events.orderBy('timestamp').reverse().limit(limit).toArray();
   }
 
   async bulkCreate(inputs: CreateEventInput[]): Promise<PhysiologicalEvent[]> {
@@ -81,19 +77,19 @@ export class IndexedDBEventRepository implements IEventRepository {
       updatedAt: now
     }));
 
-    await this.db.events.bulkAdd(events);
+    await db.events.bulkAdd(events);
     return events;
   }
 
   async exportAll(): Promise<PhysiologicalEvent[]> {
-    return this.db.events.toArray();
+    return db.events.toArray();
   }
 
   async importBulk(events: PhysiologicalEvent[]): Promise<void> {
-    await this.db.events.bulkPut(events);
+    await db.events.bulkPut(events);
   }
 
   async clear(): Promise<void> {
-    await this.db.events.clear();
+    await db.events.clear();
   }
 }

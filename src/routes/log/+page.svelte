@@ -77,35 +77,5 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>
     </a>
-
-    <a
-      href="/log/bsl-import"
-      class="flex items-center gap-4 rounded-xl bg-gray-800 p-4 transition-colors hover:bg-gray-700"
-    >
-      <span class="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/20">
-        <svg class="h-6 w-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
-      </span>
-      <div class="flex-1">
-        <h2 class="text-lg font-medium text-gray-200">Import from Screenshot</h2>
-        <p class="text-sm text-gray-400">Extract BSL from CGM app</p>
-      </div>
-      <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-      </svg>
-    </a>
-  </div>
-
-  <!-- Import Link -->
-  <div class="mt-8 text-center">
-    <a href="/import" class="text-sm text-gray-500 hover:text-gray-400">
-      Import data from CGM apps or CSV →
-    </a>
   </div>
 </div>

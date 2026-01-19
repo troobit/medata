@@ -11,7 +11,9 @@
   });
 
   const filteredEvents = $derived(
-    filter === 'all' ? eventsStore.events : eventsStore.events.filter((e) => e.eventType === filter)
+    filter === 'all'
+      ? eventsStore.events
+      : eventsStore.events.filter((e) => e.eventType === filter)
   );
 
   // Group events by date
@@ -111,7 +113,12 @@
                           : 'bg-purple-500/20 text-purple-400'}"
                   >
                     {#if event.eventType === 'insulin'}
-                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -120,7 +127,12 @@
                         />
                       </svg>
                     {:else if event.eventType === 'meal'}
-                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -129,7 +141,12 @@
                         />
                       </svg>
                     {:else if event.eventType === 'bsl'}
-                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -138,7 +155,12 @@
                         />
                       </svg>
                     {:else}
-                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"

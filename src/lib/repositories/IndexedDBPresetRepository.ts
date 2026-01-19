@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getDb } from '$lib/db';
+import { db } from '$lib/db';
 import type { MealPreset, CreatePresetInput, UpdatePresetInput } from '$lib/types';
 import type { IPresetRepository } from './IPresetRepository';
 
@@ -7,10 +7,6 @@ import type { IPresetRepository } from './IPresetRepository';
  * IndexedDB implementation of the preset repository using Dexie.js
  */
 export class IndexedDBPresetRepository implements IPresetRepository {
-  private get db() {
-    return getDb();
-  }
-
   async create(input: CreatePresetInput): Promise<MealPreset> {
     const now = new Date();
     const preset: MealPreset = {
@@ -20,12 +16,12 @@ export class IndexedDBPresetRepository implements IPresetRepository {
       updatedAt: now
     };
 
-    await this.db.presets.add(preset);
+    await db.presets.add(preset);
     return preset;
   }
 
   async getById(id: string): Promise<MealPreset | null> {
-    const preset = await this.db.presets.get(id);
+    const preset = await db.presets.get(id);
     return preset ?? null;
   }
 
@@ -41,24 +37,24 @@ export class IndexedDBPresetRepository implements IPresetRepository {
       updatedAt: new Date()
     };
 
-    await this.db.presets.put(updated);
+    await db.presets.put(updated);
     return updated;
   }
 
   async delete(id: string): Promise<void> {
-    await this.db.presets.delete(id);
+    await db.presets.delete(id);
   }
 
   async getAll(): Promise<MealPreset[]> {
-    return this.db.presets.orderBy('name').toArray();
+    return db.presets.orderBy('name').toArray();
   }
 
   async getByName(name: string): Promise<MealPreset | null> {
-    const preset = await this.db.presets.where('name').equalsIgnoreCase(name).first();
+    const preset = await db.presets.where('name').equalsIgnoreCase(name).first();
     return preset ?? null;
   }
 
   async clear(): Promise<void> {
-    await this.db.presets.clear();
+    await db.presets.clear();
   }
 }

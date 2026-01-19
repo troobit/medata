@@ -1,5 +1,5 @@
 import { getSettingsService } from '$lib/services';
-import type { UserSettings, AIProvider, AzureConfig, BedrockConfig, LocalModelConfig } from '$lib/types';
+import type { UserSettings, AIProvider } from '$lib/types';
 import { DEFAULT_SETTINGS } from '$lib/types';
 
 /**
@@ -79,110 +79,24 @@ function createSettingsStore() {
     }
   }
 
-  // Provider config setters for Azure, Bedrock, and Local
-  async function setAzureConfig(config: AzureConfig) {
-    loading = true;
-    error = null;
-    try {
-      settings = await service.setAzureConfig(config);
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to save Azure config';
-      throw e;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function setBedrockConfig(config: BedrockConfig) {
-    loading = true;
-    error = null;
-    try {
-      settings = await service.setBedrockConfig(config);
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to save Bedrock config';
-      throw e;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function setLocalModelConfig(config: LocalModelConfig) {
-    loading = true;
-    error = null;
-    try {
-      settings = await service.setLocalModelConfig(config);
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to save local model config';
-      throw e;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function clearProviderConfig(provider: 'azure' | 'bedrock' | 'local') {
-    loading = true;
-    error = null;
-    try {
-      settings = await service.clearProviderConfig(provider);
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to clear provider config';
-      throw e;
-    } finally {
-      loading = false;
-    }
-  }
-
   const isAIConfigured = $derived(
-    !!(
-      settings.openaiApiKey ||
-      settings.geminiApiKey ||
-      settings.claudeApiKey ||
-      settings.azureConfig?.apiKey ||
-      settings.bedrockConfig?.accessKeyId ||
-      settings.localModelConfig?.endpoint
-    )
+    !!(settings.openaiApiKey || settings.geminiApiKey || settings.claudeApiKey)
   );
 
   const configuredProvider = $derived.by((): AIProvider | null => {
-    // Check if preferred provider is configured
     if (settings.aiProvider) {
-      if (isProviderConfigured(settings, settings.aiProvider)) {
-        return settings.aiProvider;
-      }
+      const keyMap: Record<AIProvider, keyof UserSettings> = {
+        openai: 'openaiApiKey',
+        gemini: 'geminiApiKey',
+        claude: 'claudeApiKey'
+      };
+      if (settings[keyMap[settings.aiProvider]]) return settings.aiProvider;
     }
-    // Fallback to first configured provider
     if (settings.openaiApiKey) return 'openai';
     if (settings.geminiApiKey) return 'gemini';
     if (settings.claudeApiKey) return 'claude';
-    if (settings.azureConfig?.apiKey && settings.azureConfig?.endpoint) return 'azure';
-    if (
-      settings.bedrockConfig?.accessKeyId &&
-      settings.bedrockConfig?.secretAccessKey &&
-      settings.bedrockConfig?.region
-    )
-      return 'bedrock';
-    if (settings.localModelConfig?.endpoint) return 'local';
     return null;
   });
-
-  function isProviderConfigured(s: UserSettings, provider: AIProvider): boolean {
-    switch (provider) {
-      case 'openai':
-        return !!s.openaiApiKey;
-      case 'gemini':
-        return !!s.geminiApiKey;
-      case 'claude':
-        return !!s.claudeApiKey;
-      case 'azure':
-        return !!(s.azureConfig?.apiKey && s.azureConfig?.endpoint);
-      case 'bedrock':
-        return !!(s.bedrockConfig?.accessKeyId && s.bedrockConfig?.secretAccessKey && s.bedrockConfig?.region);
-      case 'local':
-        return !!s.localModelConfig?.endpoint;
-      default:
-        return false;
-    }
-  }
 
   return {
     get settings() {
@@ -207,11 +121,7 @@ function createSettingsStore() {
     update,
     reset,
     setApiKey,
-    clearApiKey,
-    setAzureConfig,
-    setBedrockConfig,
-    setLocalModelConfig,
-    clearProviderConfig
+    clearApiKey
   };
 }
 
