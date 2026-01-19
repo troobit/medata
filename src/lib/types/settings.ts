@@ -1,34 +1,19 @@
 import type { BSLUnit, InsulinType } from './events';
 
 /**
- * ML provider options for food recognition
- * - Cloud providers: openai, gemini, claude, foundry
- * - Self-hosted: ollama
+ * AI provider options for food recognition
  */
-export type MLProvider = 'openai' | 'gemini' | 'claude' | 'foundry' | 'ollama';
-
-/**
- * @deprecated Use MLProvider instead
- */
-export type AIProvider = MLProvider;
+export type AIProvider = 'openai' | 'gemini' | 'claude';
 
 /**
  * User preferences and settings
  */
 export interface UserSettings {
-  // ML Configuration (cloud providers)
-  aiProvider?: MLProvider;
+  // AI Configuration
+  aiProvider?: AIProvider;
   openaiApiKey?: string;
   geminiApiKey?: string;
   claudeApiKey?: string;
-
-  // Microsoft Foundry configuration
-  foundryEndpoint?: string; // e.g., https://<service>.services.ai.azure.com/api/projects/<project>
-  foundryApiKey?: string;
-
-  // Self-hosted Ollama configuration
-  ollamaEndpoint?: string; // e.g., http://localhost:11434
-  ollamaModel?: string; // e.g., llava, bakllava
 
   // Defaults
   defaultInsulinType: InsulinType;

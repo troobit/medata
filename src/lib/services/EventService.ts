@@ -119,21 +119,4 @@ export class EventService {
     const events = await this.repository.getByType('insulin', 1);
     return events.length > 0 ? events[events.length - 1] : null;
   }
-
-  /**
-   * Get recent unique insulin dose values filtered by type
-   */
-  async getRecentInsulinDoses(insulinType: InsulinType, limit: number = 5): Promise<number[]> {
-    const events = await this.repository.getByType('insulin', 50);
-    const uniqueDoses = new Set<number>();
-
-    for (const event of events) {
-      if (event.metadata && (event.metadata as InsulinMetadata).type === insulinType) {
-        uniqueDoses.add(event.value);
-        if (uniqueDoses.size >= limit) break;
-      }
-    }
-
-    return Array.from(uniqueDoses);
-  }
 }
