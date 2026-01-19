@@ -1,1 +1,1 @@
-export { db, MeDataDB, checkDatabaseAvailability } from './schema';
+export { db, getDb, MeDataDB } from './schema';

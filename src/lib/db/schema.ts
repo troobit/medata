@@ -22,44 +22,22 @@ export class MeDataDB extends Dexie {
 }
 
 /**
- * Singleton database instance
+ * Lazy-initialized singleton database instance
+ * Prevents SSR issues by only creating the database in the browser
  */
-export const db = new MeDataDB();
+let _db: MeDataDB | null = null;
+
+export function getDb(): MeDataDB {
+  if (!_db) {
+    if (typeof window === 'undefined') {
+      throw new Error('Database can only be accessed in the browser');
+    }
+    _db = new MeDataDB();
+  }
+  return _db;
+}
 
 /**
- * Check if IndexedDB is available and accessible
- * Returns null if successful, or an error message if not
+ * @deprecated Use getDb() instead to avoid SSR issues
  */
-export async function checkDatabaseAvailability(): Promise<string | null> {
-  // Check if IndexedDB API exists
-  if (typeof indexedDB === 'undefined') {
-    return 'IndexedDB is not supported in this browser';
-  }
-
-  try {
-    // Attempt to open the database to verify permissions
-    await db.open();
-    return null;
-  } catch (error) {
-    // Handle specific Dexie/IndexedDB errors
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase();
-
-      if (message.includes('permission') || message.includes('denied')) {
-        return 'Storage permission denied. This often happens in private browsing mode or when site data is blocked.';
-      }
-
-      if (message.includes('quota')) {
-        return 'Storage quota exceeded. Please free up some space on your device.';
-      }
-
-      if (message.includes('blocked')) {
-        return 'Database access was blocked by browser settings.';
-      }
-
-      return `Database error: ${error.message}`;
-    }
-
-    return 'An unknown storage error occurred';
-  }
-}
+export const db = typeof window !== 'undefined' ? new MeDataDB() : (null as unknown as MeDataDB);
