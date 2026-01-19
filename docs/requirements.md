@@ -19,32 +19,35 @@ These are the core system requirements and source of truth for the MeData projec
 ## 2. Data Input
 
 2.1. **Meal Entry**: Users can record meals as a point in time. Support for:
-   - Photo-based entry (AI estimates macros)
-   - Manual macro input
-   - Preset meals (saved groupings of food items)
 
-2.2. **Insulin Dose Entry**: Light-touch input within 3 clicks/steps:
-   - Defaults to current time
-   - Defaults to preferred or last-used type (bolus or basal)
-   - Whole number units only (no decimals)
-   - Range: 1–300 units (realistic max ~30)
+- Photo-based entry (AI estimates macros)
+- Manual macro input
+- Preset meals (saved groupings of food items)
 
-2.3. **Time Adjustment**: Users can adjust timestamps on any record and edit macro values after entry.
+  2.2. **Insulin Dose Entry**: Light-touch input within 3 clicks/steps:
+
+- Defaults to current time
+- Defaults to preferred or last-used type (bolus or basal)
+- Whole number units only (no decimals)
+- Range: 1–300 units (realistic max ~30)
+
+  2.3. **Time Adjustment**: Users can adjust timestamps on any record and edit macro values after entry.
 
 ---
 
 ## 3. Data Import/Export
 
 3.1. **Ingestion Methods**: Backend can asynchronously load data from multiple sources:
-   - Image uploads (processed by AI)
-   - CSV uploads
-   - Direct API integration (future)
 
-3.2. **Backup & Restore**: Users can upload/download their data for backup or to import prior records.
+- Image uploads (processed by AI)
+- CSV uploads
+- Direct API integration (future)
 
-3.3. **BSL Time-Series Upload**: Support upload of blood sugar level (BSL) time-series data for regression analysis.
+  3.2. **Backup & Restore**: Users can upload/download their data for backup or to import prior records.
 
-3.3.1 **Graph interpolation**: Support upload of images of graph data, (a line across a chart) to input estimate time series data in differing formats (may need to use similar process to food macro data method)
+  3.3. **BSL Time-Series Upload**: Support upload of blood sugar level (BSL) time-series data for regression analysis.
+
+  3.3.1 **Graph interpolation**: Support upload of images of graph data, (a line across a chart) to input estimate time series data in differing formats (may need to use similar process to food macro data method)
 
 ---
 
@@ -67,12 +70,13 @@ These are the core system requirements and source of truth for the MeData projec
 5.2. **Time-Series Analysis**: Use BSL data combined with meal and insulin events, and capacity to include future metrics like exercise records (intensity, duration, or direct wearable fitness data) to build regression models.
 
 5.3. **Decay Functions**: Model the biological half-life and compounding effects of:
-   - Insulin absorption over time
-   - Carbohydrate/fat breakdown and absorption rates
 
-5.4. **Time-of-Day Effects**: Model how absorption and insulin sensitivity vary by time of day.
+- Insulin absorption over time
+- Carbohydrate/fat breakdown and absorption rates
 
-5.5. **Continuous Improvement**: More recorded data leads to more accurate regression predictions.
+  5.4. **Time-of-Day Effects**: Model how absorption and insulin sensitivity vary by time of day.
+
+  5.5. **Continuous Improvement**: More recorded data leads to more accurate regression predictions.
 
 ---
 
@@ -91,8 +95,9 @@ These are the core system requirements and source of truth for the MeData projec
 7.1. **AI Model Integration**: Photos are sent to an AI model (Gemini, OpenAI, Claude, etc.) for food quantification.
 
 7.2. **API Key Configuration**: API keys can be provided either:
-   - In-app (stored as session variable for local-first mode)
-   - As environment variables (for cloud deployment, e.g., Azure Container Apps)
+
+- In-app (stored as session variable for local-first mode)
+- As environment variables (for cloud deployment, e.g., Azure Container Apps)
 
 ---
 
@@ -111,19 +116,22 @@ These patterns are recommended based on the data architecture review:
 9.1. **Ingestion Strategy**: Use Incremental Loader or Change Data Capture (CDC) for continuous/sporadic data ingestion without full dataset reloads.
 
 9.2. **Storage Layout**:
-   - **Horizontal Partitioning**: Partition by timestamp (daily or weekly) for data skipping and query optimization.
-   - **Vertical Partitioning**: Separate core columns (`timestamp`, `event_type`, `value`) from metadata JSON to reduce I/O for standard queries.
 
-9.3. **Indexing & Retrieval**:
-   - **Sorter Pattern**: Sort by timestamp within partitions.
-   - **Bucket Pattern**: Colocate records by time-window hash for efficient 5-minute interval resampling.
+- **Horizontal Partitioning**: Partition by timestamp (daily or weekly) for data skipping and query optimization.
+- **Vertical Partitioning**: Separate core columns (`timestamp`, `event_type`, `value`) from metadata JSON to reduce I/O for standard queries.
 
-9.4. **Stateful Sessionizer**: For decay function calculations, maintain state across intervals to accurately compute biological half-life effects across partitions.
+  9.3. **Indexing & Retrieval**:
 
-9.5. **Failure Mitigations**:
-   - **Late Data Detector**: Handle late-arriving events to maintain chronological integrity for regression.
-   - **Compactor Pattern**: Consolidate small files from incremental ingestion to avoid file-listing overhead.
-   - **Schema Compatibility Enforcer**: Validate new `event_type` entries to prevent breaking existing regression scripts.
+- **Sorter Pattern**: Sort by timestamp within partitions.
+- **Bucket Pattern**: Colocate records by time-window hash for efficient 5-minute interval resampling.
+
+  9.4. **Stateful Sessionizer**: For decay function calculations, maintain state across intervals to accurately compute biological half-life effects across partitions.
+
+  9.5. **Failure Mitigations**:
+
+- **Late Data Detector**: Handle late-arriving events to maintain chronological integrity for regression.
+- **Compactor Pattern**: Consolidate small files from incremental ingestion to avoid file-listing overhead.
+- **Schema Compatibility Enforcer**: Validate new `event_type` entries to prevent breaking existing regression scripts.
 
 ---
 

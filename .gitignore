@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 .svelte-kit/
+.vercel/
 
 # Environment files
 .env
@@ -28,3 +29,9 @@ npm-debug.log*
 # Local data
 *.sqlite
 *.db
+
+# Generated icons (from scripts/generate-icons.js)
+static/icon-*.png
+static/apple-touch-icon.png
+static/favicon.ico
+static/logo.png
