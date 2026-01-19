@@ -113,7 +113,7 @@
       <div class="mt-6">
         <h3 class="mb-3 text-sm font-medium text-gray-400">Recent entries</h3>
         <ul class="space-y-2">
-          {#each eventsStore.events.slice(0, 5) as event}
+          {#each eventsStore.events.slice(0, 5) as event (event.id)}
             <li class="flex items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3">
               <div class="flex items-center gap-3">
                 <span

@@ -133,6 +133,10 @@ function createEventsStore() {
     }
   }
 
+  async function getRecentInsulinDoses(insulinType: InsulinType, limit?: number) {
+    return service.getRecentInsulinDoses(insulinType, limit);
+  }
+
   return {
     get events() {
       return events;
@@ -151,7 +155,8 @@ function createEventsStore() {
     logBSL,
     logMeal,
     deleteEvent,
-    updateEvent
+    updateEvent,
+    getRecentInsulinDoses
   };
 }
 

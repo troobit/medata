@@ -11,14 +11,12 @@
   });
 
   const filteredEvents = $derived(
-    filter === 'all'
-      ? eventsStore.events
-      : eventsStore.events.filter((e) => e.eventType === filter)
+    filter === 'all' ? eventsStore.events : eventsStore.events.filter((e) => e.eventType === filter)
   );
 
-  // Group events by date
-  const groupedEvents = $derived(() => {
-    const groups: Map<string, typeof eventsStore.events> = new Map();
+  // Group events by date - using array of tuples instead of Map for cleaner iteration
+  const groupedEvents = $derived.by(() => {
+    const groupMap: Record<string, typeof eventsStore.events> = {};
 
     for (const event of filteredEvents) {
       const date = new Date(event.timestamp).toLocaleDateString('en-AU', {
@@ -28,13 +26,13 @@
         day: 'numeric'
       });
 
-      if (!groups.has(date)) {
-        groups.set(date, []);
+      if (!groupMap[date]) {
+        groupMap[date] = [];
       }
-      groups.get(date)!.push(event);
+      groupMap[date].push(event);
     }
 
-    return groups;
+    return Object.entries(groupMap);
   });
 
   function formatTime(date: Date): string {
@@ -67,7 +65,7 @@
 
   <!-- Filter Tabs -->
   <div class="mb-6 flex gap-2 overflow-x-auto pb-2">
-    {#each [{ value: 'all', label: 'All' }, { value: 'insulin', label: 'Insulin' }, { value: 'meal', label: 'Meals' }, { value: 'bsl', label: 'BSL' }] as option}
+    {#each [{ value: 'all', label: 'All' }, { value: 'insulin', label: 'Insulin' }, { value: 'meal', label: 'Meals' }, { value: 'bsl', label: 'BSL' }] as option (option.value)}
       <button
         type="button"
         class="whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors {filter ===
@@ -95,11 +93,11 @@
     />
   {:else}
     <div class="space-y-6">
-      {#each [...groupedEvents().entries()] as [date, events]}
+      {#each groupedEvents as [date, events] (date)}
         <div>
           <h2 class="mb-3 text-sm font-medium text-gray-400">{date}</h2>
           <ul class="space-y-2">
-            {#each events as event}
+            {#each events as event (event.id)}
               <li class="flex items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3">
                 <div class="flex items-center gap-3">
                   <span
@@ -113,12 +111,7 @@
                           : 'bg-purple-500/20 text-purple-400'}"
                   >
                     {#if event.eventType === 'insulin'}
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -127,12 +120,7 @@
                         />
                       </svg>
                     {:else if event.eventType === 'meal'}
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -141,12 +129,7 @@
                         />
                       </svg>
                     {:else if event.eventType === 'bsl'}
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -155,12 +138,7 @@
                         />
                       </svg>
                     {:else}
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"

@@ -8,10 +8,7 @@ const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 const staticDir = join(rootDir, 'static');
 
-// Brand colors from src/app.css
-const BRAND_BG = { r: 6, g: 78, b: 59, alpha: 1 }; // #064e3b
-
-console.log('Generating icons from static/icon.svg...');
+console.log('Generating PWA icons...');
 
 try {
   const svg = readFileSync(join(staticDir, 'icon.svg'));
@@ -32,7 +29,7 @@ try {
       bottom: 19,
       left: 19,
       right: 19,
-      background: BRAND_BG
+      background: { r: 6, g: 78, b: 59, alpha: 1 } // #064e3b emerald-950
     })
     .png()
     .toFile(join(staticDir, 'icon-192-maskable.png'));
@@ -45,7 +42,7 @@ try {
       bottom: 51,
       left: 51,
       right: 51,
-      background: BRAND_BG
+      background: { r: 6, g: 78, b: 59, alpha: 1 } // #064e3b emerald-950
     })
     .png()
     .toFile(join(staticDir, 'icon-512-maskable.png'));
@@ -57,10 +54,6 @@ try {
   // Generate favicon (32x32 ICO)
   console.log('  - favicon.ico');
   await sharp(svg).resize(32, 32).png().toFile(join(staticDir, 'favicon.ico'));
-
-  // Generate README logo (PNG for GitHub rendering)
-  console.log('  - logo.png (for README)');
-  await sharp(svg).resize(128, 128).png().toFile(join(staticDir, 'logo.png'));
 
   console.log('✓ All icons generated successfully!');
 } catch (error) {
