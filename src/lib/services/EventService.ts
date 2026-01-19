@@ -119,4 +119,40 @@ export class EventService {
     const events = await this.repository.getByType('insulin', 1);
     return events.length > 0 ? events[events.length - 1] : null;
   }
+
+  /**
+   * Get unique recent insulin dose values filtered by insulin type
+   * Returns an array of unique dose values (most recent first)
+   */
+  async getRecentInsulinDoses(insulinType: InsulinType, maxUnique: number = 6): Promise<number[]> {
+    // Get recent insulin events (more than maxUnique to find unique values)
+    const events = await this.repository.getByType('insulin', 50);
+
+    // Filter by insulin type and extract unique values
+    const uniqueDoses = new Set<number>();
+    for (const event of events) {
+      if (event.metadata && 'type' in event.metadata && event.metadata.type === insulinType) {
+        uniqueDoses.add(event.value);
+        if (uniqueDoses.size >= maxUnique) break;
+      }
+    }
+
+    return Array.from(uniqueDoses);
+  }
+
+  /**
+   * Get recent unique carb values from meal events
+   * Returns an array of unique carb values (most recent first)
+   */
+  async getRecentCarbValues(maxUnique: number = 6): Promise<number[]> {
+    const events = await this.repository.getByType('meal', 50);
+
+    const uniqueCarbs = new Set<number>();
+    for (const event of events) {
+      uniqueCarbs.add(event.value);
+      if (uniqueCarbs.size >= maxUnique) break;
+    }
+
+    return Array.from(uniqueCarbs);
+  }
 }
