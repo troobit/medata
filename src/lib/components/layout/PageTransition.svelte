@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
   import { navigationStore } from '$lib/stores/navigation.svelte';
 
