@@ -46,7 +46,7 @@ MeData is a **mobile-first SPA** for tracking physiological data (meals, insulin
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                 Repository Implementations                       │
+│                 Repository Implementations                      │
 │  IndexedDBEventRepository, LocalStorageSettingsRepository       │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -143,6 +143,56 @@ main
 
 ---
 
+## Parallel Worker Strategy
+
+Phases 2, 3, and 5 can run **concurrently** after Phase 1 completes. Phase 4 depends on Phase 2.
+
+### File Ownership
+
+Each phase owns distinct directories to prevent merge conflicts:
+
+| Phase | Owns | Can Extend |
+|-------|------|------------|
+| 1 | `types/`, `repositories/`, `services/`, `stores/`, `components/layout/`, `components/ui/` | - |
+| 2 | `components/input/`, `components/events/`, `routes/log/`, `routes/history/` | `components/ui/` |
+| 3 | `components/charts/`, `routes/dashboard/`, `utils/chartHelpers.ts` | `components/ui/` |
+| 4 | `services/ai/`, `components/ai/`, `types/ai.ts` | `routes/log/meal/`, `types/settings.ts` |
+| 5 | `services/ImportExportService.ts`, `components/import-export/` | `routes/settings/` |
+
+### Conflict Prevention Rules
+
+1. **Append-only** for shared files (export barrels, type extensions)
+2. **Extend interfaces** rather than modify them
+3. **Rebase onto main** after Phase 1 merges
+
+---
+
+## Frontend Abstraction
+
+Services are **pure TypeScript** (no Svelte imports) to support future React/Vue frontends:
+
+```
+Svelte Components → Svelte Stores (*.svelte.ts) → Services (pure TS) → Repositories
+```
+
+- **Services**: Return Promises, framework-agnostic
+- **Stores**: Wrap services with `$state`/`$derived` for Svelte reactivity
+- **Types**: Shared across any frontend
+
+---
+
+## Branding
+
+**Source**: `static/icon.svg` — all icons generated from this via `scripts/generate-icons.js`
+
+```bash
+node scripts/generate-icons.js  # Generates PWA icons, favicon, apple-touch-icon
+```
+
+**Brand colors**: Background `#064e3b`, Icon `#63ff00`
+
+---
+
 ## Phase 1: Foundation
 
 **Branch**: `phase-1/foundation`
@@ -150,7 +200,7 @@ main
 **Merge requirement**: Can merge to main independently
 
 ### Objectives
-- Project scaffolding with SvelteKit
+- Project scaffolding
 - Data layer with Repository Pattern
 - Core TypeScript types and interfaces
 - Basic app shell with mobile navigation
@@ -158,17 +208,17 @@ main
 ### Tasks
 
 #### 1.1 Project Setup
-- [ ] Initialize SvelteKit project with TypeScript
 - [ ] Configure adapter-static for SPA mode
 - [ ] Setup Tailwind CSS (mobile-first utilities)
 - [ ] Configure PWA manifest for mobile install
 - [ ] Setup service worker for offline caching
 - [ ] ESLint + Prettier configuration
+- [ ] Run `npm run generate-icons` to create PWA assets
 
 ```bash
 # Key dependencies
 npm create svelte@latest medata
-npm install -D @sveltejs/adapter-static tailwindcss
+npm install -D @sveltejs/adapter-static tailwindcss sharp
 npm install dexie uuid
 ```
 
@@ -198,39 +248,26 @@ npm install dexie uuid
 ```
 src/
 ├── lib/
-│   ├── types/
-│   │   ├── events.ts          # PhysiologicalEvent, EventType
-│   │   ├── presets.ts         # MealPreset, MacroData
-│   │   └── settings.ts        # UserSettings, APIConfig
-│   ├── db/
-│   │   ├── schema.ts          # Dexie database definition
-│   │   └── migrations.ts      # Version migrations
-│   ├── repositories/
-│   │   ├── interfaces/
-│   │   │   ├── IEventRepository.ts
-│   │   │   └── ISettingsRepository.ts
-│   │   ├── IndexedDBEventRepository.ts
-│   │   └── LocalStorageSettingsRepository.ts
-│   ├── services/
-│   │   ├── EventService.ts
-│   │   └── SettingsService.ts
-│   ├── stores/
-│   │   ├── events.svelte.ts   # Svelte 5 runes-based store
-│   │   └── settings.svelte.ts
+│   ├── types/           # events.ts, presets.ts, settings.ts
+│   ├── db/              # schema.ts, migrations.ts
+│   ├── repositories/    # Interfaces + IndexedDB/LocalStorage implementations
+│   ├── services/        # EventService.ts, SettingsService.ts (pure TS)
+│   ├── stores/          # *.svelte.ts (Svelte 5 runes adapters)
 │   └── components/
-│       ├── layout/
-│       │   ├── BottomNav.svelte
-│       │   └── AppShell.svelte
-│       └── ui/
-│           ├── LoadingSpinner.svelte
-│           └── EmptyState.svelte
+│       ├── layout/      # BottomNav, AppShell
+│       └── ui/          # index.ts, LoadingSpinner, EmptyState
 ├── routes/
 │   ├── +layout.svelte
-│   ├── +layout.js             # ssr = false, prerender = true
-│   ├── +page.svelte           # Home/Dashboard
-│   └── settings/
-│       └── +page.svelte
+│   ├── +layout.js       # ssr = false, prerender = true
+│   ├── +page.svelte
+│   └── settings/+page.svelte
 └── service-worker.js
+static/
+├── icon.svg             # Brand source (do not delete)
+├── *.png, favicon.ico   # Generated by scripts/generate-icons.js
+└── manifest.json
+scripts/
+└── generate-icons.js
 ```
 
 ### Acceptance Criteria
@@ -759,6 +796,7 @@ chore: maintenance tasks
 | Charting | TBD (LayerCake/ECharts) | - |
 | PWA | Workbox | 7.x |
 | Build | Vite | 5.x |
+| Asset Generation | Sharp | 0.33.x |
 
 ---
 
@@ -825,4 +863,4 @@ npm run preview
 
 ---
 
-*Last updated: 2025-01-19*
+*Last updated: 2026-01-19*
