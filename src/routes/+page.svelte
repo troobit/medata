@@ -32,23 +32,13 @@
 </script>
 
 <div class="px-4 py-6">
-  <!-- Header -->
-  <header class="mb-8 flex items-center gap-3">
-    <svg class="h-10 w-10" viewBox="0 0 128 128" aria-label="MeData logo">
-      <path
-        fill="none"
-        stroke="currentColor"
-        stroke-width="16"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="text-brand-accent"
-        d="M 24,24 C 130,24 130,104 24,104 L 24,64 M 104,64 L 104,104 M 64,64 L 64,64"
-      />
-    </svg>
-    <div>
-      <h1 class="text-2xl font-bold text-white">MeData</h1>
-      <p class="text-sm text-gray-400">My Data</p>
-    </div>
+  <!-- Header with Logo -->
+  <header class="mb-8 flex flex-col items-center text-center">
+    <img src="/icon.svg" alt="MeData logo" class="mb-4 w-48" />
+    <p class="text-lg font-light text-gray-300">
+      <span class="block">My body;</span>
+      <span class="block">My Data.</span>
+    </p>
   </header>
 
   <!-- Quick Actions -->
