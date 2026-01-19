@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui';
   import { eventsStore } from '$lib/stores';
+  import type { AlcoholType } from '$lib/types';
 
   // Preset type for quick meal shortcuts
   interface MealPreset {
@@ -11,21 +12,33 @@
     calories?: number;
     protein?: number;
     fat?: number;
+    alcoholUnits?: number;
+    alcoholType?: AlcoholType;
   }
 
   // Default meal presets (customizable in settings in future)
   const mealPresets: MealPreset[] = [
-    { icon: '🍔', label: 'Burger', carbs: 45, calories: 550, protein: 25, fat: 30 },
-    { icon: '🍕', label: 'Pizza', carbs: 35, calories: 280, protein: 12, fat: 12 },
-    { icon: '🍺', label: 'Pint', carbs: 15, calories: 200, protein: 2, fat: 0 },
-    { icon: '🍞', label: 'Toast', carbs: 15, calories: 80, protein: 3, fat: 1 },
-    { icon: '🍎', label: 'Apple', carbs: 25, calories: 95, protein: 0, fat: 0 },
-    { icon: '🥤', label: 'Soda', carbs: 40, calories: 150, protein: 0, fat: 0 }
+    { icon: '🍔', label: 'Burger', carbs: 45, protein: 25, fat: 30 },
+    { icon: '🍕', label: 'Pizza', carbs: 35, protein: 12, fat: 12 },
+    { icon: '🍞', label: 'Toast', carbs: 15, protein: 3, fat: 1 },
+    { icon: '🍎', label: 'Apple', carbs: 25, protein: 0, fat: 0 },
+    { icon: '🥗', label: 'Salad', carbs: 10, protein: 5, fat: 8 },
+    { icon: '🍚', label: 'Rice', carbs: 45, protein: 4, fat: 0 }
+  ];
+
+  // Drink presets for quick alcohol logging
+  const drinkPresets: MealPreset[] = [
+    { icon: '🍺', label: 'Pint', carbs: 15, alcoholUnits: 2, alcoholType: 'beer' },
+    { icon: '🍷', label: 'Wine', carbs: 4, alcoholUnits: 2, alcoholType: 'wine' },
+    { icon: '🥃', label: 'Spirit', carbs: 0, alcoholUnits: 1, alcoholType: 'spirit' },
+    { icon: '🍹', label: 'Cocktail', carbs: 20, alcoholUnits: 2, alcoholType: 'mixed' }
   ];
 
   let carbs = $state(0);
   let protein = $state(0);
   let fat = $state(0);
+  let alcoholUnits = $state(0);
+  let alcoholType = $state<AlcoholType | ''>('');
   let description = $state('');
   let saving = $state(false);
   let showDetails = $state(false);
@@ -55,10 +68,20 @@
     fat = Math.max(0, fat - amount);
   }
 
+  function incrementAlcohol(amount: number = 1) {
+    alcoholUnits = Math.min(20, Math.max(0, alcoholUnits + amount));
+  }
+
+  function decrementAlcohol(amount: number = 1) {
+    alcoholUnits = Math.max(0, alcoholUnits - amount);
+  }
+
   function applyPreset(preset: MealPreset) {
     carbs = preset.carbs;
     protein = preset.protein ?? 0;
     fat = preset.fat ?? 0;
+    alcoholUnits = preset.alcoholUnits ?? 0;
+    alcoholType = preset.alcoholType ?? '';
     description = preset.label;
   }
 
@@ -78,8 +101,11 @@
     photoPreview = null;
   }
 
+  // Allow saving if there's carbs OR alcohol
+  const canSave = $derived(carbs > 0 || alcoholUnits > 0);
+
   async function save() {
-    if (carbs <= 0) return;
+    if (!canSave) return;
 
     saving = true;
     try {
@@ -87,6 +113,8 @@
       await eventsStore.logMeal(carbs, {
         protein: protein > 0 ? protein : undefined,
         fat: fat > 0 ? fat : undefined,
+        alcoholUnits: alcoholUnits > 0 ? alcoholUnits : undefined,
+        alcoholType: alcoholUnits > 0 && alcoholType ? alcoholType : undefined,
         description: description || undefined
       });
       goto('/');
@@ -154,12 +182,12 @@
       {/if}
     </div>
 
-    <!-- Quick Meal Shortcuts -->
+    <!-- Quick Presets - Food and Drinks together -->
     <div class="mb-6">
-      <span id="shortcuts-label" class="mb-2 block text-sm font-medium text-gray-400">
-        Quick add
+      <span id="food-shortcuts-label" class="mb-2 block text-sm font-medium text-gray-400">
+        Food
       </span>
-      <div class="grid grid-cols-6 gap-2" role="group" aria-labelledby="shortcuts-label">
+      <div class="mb-4 grid grid-cols-6 gap-2" role="group" aria-labelledby="food-shortcuts-label">
         {#each mealPresets as preset (preset.label)}
           <button
             type="button"
@@ -175,65 +203,103 @@
           </button>
         {/each}
       </div>
+
+      <span id="drink-shortcuts-label" class="mb-2 block text-sm font-medium text-gray-400">
+        Drinks
+      </span>
+      <div class="grid grid-cols-4 gap-2" role="group" aria-labelledby="drink-shortcuts-label">
+        {#each drinkPresets as preset (preset.label)}
+          <button
+            type="button"
+            class="flex flex-col items-center rounded-lg p-2 text-center transition-colors {description ===
+            preset.label
+              ? 'bg-purple-500/20 ring-2 ring-purple-500'
+              : 'bg-gray-800 hover:bg-gray-700'}"
+            onclick={() => applyPreset(preset)}
+            title="{preset.label}: {preset.carbs}g carbs, {preset.alcoholUnits}u alcohol"
+          >
+            <span class="text-2xl">{preset.icon}</span>
+            <span class="mt-1 text-[10px] text-gray-400">{preset.carbs}g / {preset.alcoholUnits}u</span>
+          </button>
+        {/each}
+      </div>
     </div>
 
-    <!-- Carbs Stepper (Primary input) -->
-    <div class="mb-6">
-      <label for="carbs-input" class="mb-2 block text-sm font-medium text-gray-400">
-        Carbohydrates (g) <span class="text-red-400">*</span>
-      </label>
-      <div class="flex items-center justify-center gap-3">
-        <!-- -5 button -->
-        <button
-          type="button"
-          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={() => decrementCarbs(5)}
-          disabled={carbs < 5}
-          aria-label="Decrease by 5g"
-        >
-          -5
-        </button>
-        <!-- -1 button -->
-        <button
-          type="button"
-          class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-2xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={() => decrementCarbs(1)}
-          disabled={carbs <= 0}
-          aria-label="Decrease by 1g"
-        >
-          -
-        </button>
-        <div class="w-24 text-center">
-          <input
-            id="carbs-input"
-            type="number"
-            bind:value={carbs}
-            min="0"
-            max="500"
-            class="w-full bg-transparent text-center text-5xl font-bold text-white focus:outline-none"
-          />
-          <span class="text-sm text-gray-400">grams</span>
+    <!-- Primary Inputs: Carbs and Alcohol side by side -->
+    <div class="mb-6 grid grid-cols-2 gap-4">
+      <!-- Carbs Stepper -->
+      <div class="rounded-lg bg-gray-800/50 p-4">
+        <label for="carbs-input" class="mb-2 block text-center text-sm font-medium text-green-400">
+          Carbs (g)
+        </label>
+        <div class="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-700 text-xl text-gray-300 transition-colors hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50"
+            onclick={() => decrementCarbs(5)}
+            disabled={carbs < 5}
+            aria-label="Decrease by 5g"
+          >
+            -5
+          </button>
+          <div class="w-16 text-center">
+            <input
+              id="carbs-input"
+              type="number"
+              bind:value={carbs}
+              min="0"
+              max="500"
+              class="w-full bg-transparent text-center text-3xl font-bold text-white focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-700 text-xl text-gray-300 transition-colors hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50"
+            onclick={() => incrementCarbs(5)}
+            disabled={carbs > 495}
+            aria-label="Increase by 5g"
+          >
+            +5
+          </button>
         </div>
-        <!-- +1 button -->
-        <button
-          type="button"
-          class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-2xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={() => incrementCarbs(1)}
-          disabled={carbs >= 500}
-          aria-label="Increase by 1g"
-        >
-          +
-        </button>
-        <!-- +5 button -->
-        <button
-          type="button"
-          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={() => incrementCarbs(5)}
-          disabled={carbs > 495}
-          aria-label="Increase by 5g"
-        >
-          +5
-        </button>
+      </div>
+
+      <!-- Alcohol Stepper -->
+      <div class="rounded-lg bg-gray-800/50 p-4">
+        <label for="alcohol-input" class="mb-2 block text-center text-sm font-medium text-purple-400">
+          Drinks
+        </label>
+        <div class="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-700 text-xl text-gray-300 transition-colors hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50"
+            onclick={() => decrementAlcohol(1)}
+            disabled={alcoholUnits <= 0}
+            aria-label="Decrease by 1"
+          >
+            -
+          </button>
+          <div class="w-16 text-center">
+            <input
+              id="alcohol-input"
+              type="number"
+              bind:value={alcoholUnits}
+              min="0"
+              max="20"
+              step="0.5"
+              class="w-full bg-transparent text-center text-3xl font-bold text-white focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-700 text-xl text-gray-300 transition-colors hover:bg-gray-600 active:bg-gray-500 disabled:opacity-50"
+            onclick={() => incrementAlcohol(1)}
+            disabled={alcoholUnits >= 20}
+            aria-label="Increase by 1"
+          >
+            +
+          </button>
+        </div>
       </div>
     </div>
 
@@ -373,6 +439,26 @@
             </div>
           </div>
 
+          <!-- Drink Type (only show if alcohol) -->
+          {#if alcoholUnits > 0}
+            <div>
+              <label for="alcohol-type" class="mb-1 block text-xs font-medium text-gray-400">
+                Drink type
+              </label>
+              <select
+                id="alcohol-type"
+                bind:value={alcoholType}
+                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+              >
+                <option value="">Not specified</option>
+                <option value="beer">Beer / Cider</option>
+                <option value="wine">Wine</option>
+                <option value="spirit">Spirits / Shots</option>
+                <option value="mixed">Cocktails / Mixed</option>
+              </select>
+            </div>
+          {/if}
+
           <!-- Description -->
           <div>
             <label for="description" class="mb-1 block text-xs font-medium text-gray-400">
@@ -382,7 +468,7 @@
               id="description"
               bind:value={description}
               rows="2"
-              placeholder="What did you eat?"
+              placeholder="What did you eat or drink?"
               class="w-full resize-none rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
             ></textarea>
           </div>
@@ -404,10 +490,16 @@
         size="lg"
         class="w-full"
         onclick={save}
-        disabled={carbs <= 0}
+        disabled={!canSave}
         loading={saving}
       >
-        Log {carbs}g carbs
+        {#if alcoholUnits > 0 && carbs > 0}
+          Log {carbs}g carbs + {alcoholUnits} drinks
+        {:else if alcoholUnits > 0}
+          Log {alcoholUnits} drinks
+        {:else}
+          Log {carbs}g carbs
+        {/if}
       </Button>
     </div>
   </div>

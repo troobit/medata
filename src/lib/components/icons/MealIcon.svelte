@@ -7,7 +7,13 @@
 </script>
 
 <!-- Book/Menu icon (original) -->
-<svg class={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+<svg
+  class={className}
+  fill="none"
+  stroke="currentColor"
+  viewBox="0 0 24 24"
+  aria-hidden="true"
+>
   <path
     stroke-linecap="round"
     stroke-linejoin="round"

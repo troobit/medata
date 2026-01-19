@@ -19,6 +19,11 @@ export type BSLUnit = 'mmol/L' | 'mg/dL';
 export type ExerciseIntensity = 'low' | 'moderate' | 'high';
 
 /**
+ * Alcohol drink categories
+ */
+export type AlcoholType = 'beer' | 'wine' | 'spirit' | 'mixed';
+
+/**
  * Macro nutrient data for meals
  */
 export interface MacroData {
@@ -26,6 +31,7 @@ export interface MacroData {
   carbs: number;
   protein: number;
   fat: number;
+  alcohol?: number; // in grams
 }
 
 /**
@@ -35,6 +41,9 @@ export interface MealMetadata extends Partial<MacroData> {
   description?: string;
   photoUrl?: string;
   items?: MealItem[];
+  // Alcohol tracking
+  alcoholUnits?: number; // standard drink units
+  alcoholType?: AlcoholType;
   [key: string]: unknown;
 }
 
@@ -110,7 +119,8 @@ export function isMealMetadata(metadata: Record<string, unknown>): metadata is M
     'carbs' in metadata ||
     'calories' in metadata ||
     'description' in metadata ||
-    'photoUrl' in metadata
+    'photoUrl' in metadata ||
+    'alcoholUnits' in metadata
   );
 }
 

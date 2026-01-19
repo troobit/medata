@@ -7,7 +7,13 @@
 </script>
 
 <!-- Meat/Protein icon (drumstick) -->
-<svg class={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+<svg
+  class={className}
+  fill="none"
+  stroke="currentColor"
+  viewBox="0 0 24 24"
+  aria-hidden="true"
+>
   <!-- Drumstick meat -->
   <path
     stroke-linecap="round"

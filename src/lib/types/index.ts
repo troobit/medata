@@ -4,6 +4,7 @@ export type {
   InsulinType,
   BSLUnit,
   ExerciseIntensity,
+  AlcoholType,
   MacroData,
   MealMetadata,
   MealItem,
