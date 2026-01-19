@@ -3,6 +3,7 @@ export type {
   EventType,
   InsulinType,
   BSLUnit,
+  BSLSource,
   ExerciseIntensity,
   MacroData,
   MealMetadata,
@@ -17,6 +18,14 @@ export type {
 } from './events';
 
 export { isMealMetadata, isInsulinMetadata, isBSLMetadata, isExerciseMetadata } from './events';
+
+// Vision
+export type {
+  ExtractedBSLReading,
+  BSLExtractionResult,
+  VisionAnalysisOptions,
+  OpenAIVisionResponse
+} from './vision';
 
 // Presets
 export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets';

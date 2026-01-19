@@ -26,15 +26,12 @@
   const isConfigured = $derived(bslService.isConfigured());
 
   // Derived value for selected readings count
-  const selectedCount = $derived(
-    editableReadings.filter((r: EditableReading) => r.included).length
-  );
+  const selectedCount = $derived(editableReadings.filter((r: EditableReading) => r.included).length);
 
   async function handleImageSelect(base64: string) {
     if (!isConfigured) {
       pageState = 'error';
-      errorMessage =
-        'OpenAI API key not configured. Please set VITE_OPENAI_API_KEY in your .env file.';
+      errorMessage = 'OpenAI API key not configured. Please set VITE_OPENAI_API_KEY in your .env file.';
       return;
     }
 
@@ -52,8 +49,7 @@
 
       if (result.readings.length === 0) {
         pageState = 'error';
-        errorMessage =
-          'No blood sugar readings found in the image. Please try a different screenshot.';
+        errorMessage = 'No blood sugar readings found in the image. Please try a different screenshot.';
         return;
       }
 
@@ -87,7 +83,7 @@
           value: r.value,
           unit: r.unit,
           timestamp: r.timestamp,
-          source: 'cgm-image' as const
+          source: 'image-import' as const
         }))
       );
 
@@ -146,8 +142,7 @@
         <div class="mb-4 rounded-lg bg-yellow-500/20 px-4 py-3 text-yellow-400">
           <p class="font-medium">API Key Required</p>
           <p class="mt-1 text-sm">
-            Set <code class="rounded bg-gray-800 px-1">VITE_OPENAI_API_KEY</code> in your .env file to
-            enable image analysis.
+            Set <code class="rounded bg-gray-800 px-1">VITE_OPENAI_API_KEY</code> in your .env file to enable image analysis.
           </p>
         </div>
       {/if}
@@ -168,7 +163,11 @@
             <span class="font-medium text-white">{getSourceLabel(detectedSource)}</span>
           </div>
         {/if}
-        <ExtractedDataEditor {readings} onReadingsChange={handleReadingsChange} class="mb-6" />
+        <ExtractedDataEditor
+          {readings}
+          onReadingsChange={handleReadingsChange}
+          class="mb-6"
+        />
       </div>
 
       <div class="mt-auto space-y-3">
@@ -181,7 +180,9 @@
         >
           Import {selectedCount} Reading{selectedCount !== 1 ? 's' : ''}
         </Button>
-        <Button variant="ghost" size="md" class="w-full" onclick={reset}>Start Over</Button>
+        <Button variant="ghost" size="md" class="w-full" onclick={reset}>
+          Start Over
+        </Button>
       </div>
     {:else if pageState === 'importing'}
       <div class="flex flex-1 flex-col items-center justify-center">
@@ -222,7 +223,9 @@
         </div>
         <h2 class="text-xl font-bold text-white">Something went wrong</h2>
         <p class="mt-2 text-gray-400">{errorMessage}</p>
-        <Button variant="primary" size="md" class="mt-6" onclick={reset}>Try Again</Button>
+        <Button variant="primary" size="md" class="mt-6" onclick={reset}>
+          Try Again
+        </Button>
       </div>
     {/if}
   </div>

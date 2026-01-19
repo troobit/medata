@@ -78,12 +78,7 @@
         aria-label="Remove image"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M6 18L18 6M6 6l12 12"
-          />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
     </div>
@@ -96,8 +91,8 @@
       ondrop={handleDrop}
       class="w-full rounded-xl border-2 border-dashed p-8 text-center transition-colors
         {isDragging
-        ? 'border-brand-accent bg-brand-accent/10'
-        : 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50'}"
+          ? 'border-brand-accent bg-brand-accent/10'
+          : 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50'}"
     >
       <svg
         class="mx-auto h-12 w-12 text-gray-500"

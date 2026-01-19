@@ -56,10 +56,16 @@ export interface InsulinMetadata {
 }
 
 /**
+ * Source of a BSL reading
+ */
+export type BSLSource = 'manual' | 'image-import';
+
+/**
  * Metadata specific to BSL events
  */
 export interface BSLMetadata {
   unit: BSLUnit;
+  source?: BSLSource;
   [key: string]: unknown;
 }
 
