@@ -26,7 +26,10 @@
 
 <svelte:head>
   <title>MeData</title>
-  <meta name="description" content="Personal health data tracking for meals, insulin, and blood sugar" />
+  <meta
+    name="description"
+    content="Personal health data tracking for meals, insulin, and blood sugar"
+  />
 </svelte:head>
 
 <AppShell>

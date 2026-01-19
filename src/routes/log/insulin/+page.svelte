@@ -7,13 +7,23 @@
   let units = $state(0);
   let insulinType = $state<InsulinType>(settingsStore.settings.defaultInsulinType);
   let saving = $state(false);
+  let recentDoses = $state<number[]>([]);
 
-  function increment() {
-    if (units < 300) units++;
+  // Load recent doses when insulin type changes
+  $effect(() => {
+    loadRecentDoses(insulinType);
+  });
+
+  async function loadRecentDoses(type: InsulinType) {
+    recentDoses = await eventsStore.getRecentInsulinDoses(type, 4);
   }
 
-  function decrement() {
-    if (units > 0) units--;
+  function increment(amount: number = 1) {
+    units = Math.min(300, Math.max(0, units + amount));
+  }
+
+  function decrement(amount: number = 1) {
+    units = Math.max(0, units - amount);
   }
 
   async function save() {
@@ -22,7 +32,6 @@
     saving = true;
     try {
       await eventsStore.logInsulin(units, insulinType);
-      // Update default insulin type for next time
       await settingsStore.update({ defaultInsulinType: insulinType });
       goto('/');
     } catch {
@@ -47,8 +56,8 @@
   <div class="flex flex-1 flex-col">
     <!-- Insulin Type Toggle -->
     <div class="mb-8">
-      <label class="mb-2 block text-sm font-medium text-gray-400">Type</label>
-      <div class="grid grid-cols-2 gap-2">
+      <span id="insulin-type-label" class="mb-2 block text-sm font-medium text-gray-400">Type</span>
+      <div class="grid grid-cols-2 gap-2" role="group" aria-labelledby="insulin-type-label">
         <button
           type="button"
           class="rounded-lg px-4 py-3 text-center font-medium transition-colors {insulinType ===
@@ -72,20 +81,33 @@
       </div>
     </div>
 
-    <!-- Units Input -->
+    <!-- Units Input with ±1 and ±5 controls -->
     <div class="mb-8 flex-1">
-      <label class="mb-2 block text-sm font-medium text-gray-400">Units</label>
-      <div class="flex items-center justify-center gap-6">
+      <label for="units-input" class="mb-2 block text-sm font-medium text-gray-400">Units</label>
+      <div class="flex items-center justify-center gap-3">
+        <!-- -5 button -->
         <button
           type="button"
-          class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-800 text-3xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={decrement}
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
+          onclick={() => decrement(5)}
+          disabled={units < 5}
+          aria-label="Decrease by 5 units"
+        >
+          -5
+        </button>
+        <!-- -1 button -->
+        <button
+          type="button"
+          class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-2xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
+          onclick={() => decrement(1)}
           disabled={units <= 0}
+          aria-label="Decrease by 1 unit"
         >
           -
         </button>
         <div class="w-24 text-center">
           <input
+            id="units-input"
             type="number"
             bind:value={units}
             min="0"
@@ -94,34 +116,50 @@
           />
           <span class="text-sm text-gray-400">units</span>
         </div>
+        <!-- +1 button -->
         <button
           type="button"
-          class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-800 text-3xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={increment}
+          class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-2xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
+          onclick={() => increment(1)}
           disabled={units >= 300}
+          aria-label="Increase by 1 unit"
         >
           +
+        </button>
+        <!-- +5 button -->
+        <button
+          type="button"
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
+          onclick={() => increment(5)}
+          disabled={units > 295}
+          aria-label="Increase by 5 units"
+        >
+          +5
         </button>
       </div>
     </div>
 
-    <!-- Quick Select -->
-    <div class="mb-8">
-      <label class="mb-2 block text-sm font-medium text-gray-400">Quick select</label>
-      <div class="flex flex-wrap gap-2">
-        {#each [2, 4, 6, 8, 10, 12] as value}
-          <button
-            type="button"
-            class="rounded-full px-4 py-2 text-sm font-medium transition-colors {units === value
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-            onclick={() => (units = value)}
-          >
-            {value}
-          </button>
-        {/each}
+    <!-- Recent Doses (dynamic based on insulin type) -->
+    {#if recentDoses.length > 0}
+      <div class="mb-8">
+        <span id="recent-doses-label" class="mb-2 block text-sm font-medium text-gray-400">
+          Recent {insulinType} doses
+        </span>
+        <div class="flex flex-wrap gap-2" role="group" aria-labelledby="recent-doses-label">
+          {#each recentDoses as dose (dose)}
+            <button
+              type="button"
+              class="rounded-full px-4 py-2 text-sm font-medium transition-colors {units === dose
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
+              onclick={() => (units = dose)}
+            >
+              {dose}
+            </button>
+          {/each}
+        </div>
       </div>
-    </div>
+    {/if}
 
     <!-- Error Display -->
     {#if eventsStore.error}

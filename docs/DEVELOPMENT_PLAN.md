@@ -11,14 +11,14 @@ MeData is a **mobile-first SPA** for tracking physiological data (meals, insulin
 
 ### Key Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Framework | SvelteKit + adapter-static | SPA with offline capability, modern DX |
-| Data Storage | IndexedDB (via Dexie.js) | Structured offline storage, good capacity |
-| Data Abstraction | Repository Pattern | Clean separation, enables future backends |
-| API Keys | User-provided, session storage | Simplest model, no backend needed |
-| UI Approach | Mobile-first, responsive | Primary users on phones |
-| ML/Regression | Deferred to Phase 5+ | Focus on data capture first |
+| Decision         | Choice                         | Rationale                                 |
+| ---------------- | ------------------------------ | ----------------------------------------- |
+| Framework        | SvelteKit + adapter-static     | SPA with offline capability, modern DX    |
+| Data Storage     | IndexedDB (via Dexie.js)       | Structured offline storage, good capacity |
+| Data Abstraction | Repository Pattern             | Clean separation, enables future backends |
+| API Keys         | User-provided, session storage | Simplest model, no backend needed         |
+| UI Approach      | Mobile-first, responsive       | Primary users on phones                   |
+| ML/Regression    | Deferred to Phase 5+           | Focus on data capture first               |
 
 ---
 
@@ -62,21 +62,21 @@ MeData is a **mobile-first SPA** for tracking physiological data (meals, insulin
 ```typescript
 // Core event structure - all physiological data follows this pattern
 interface PhysiologicalEvent {
-  id: string;                    // UUID
-  timestamp: Date;               // When the event occurred
-  event_type: EventType;         // 'meal' | 'insulin' | 'bsl' | 'exercise' | ...
-  value: number;                 // Primary numeric value
+  id: string; // UUID
+  timestamp: Date; // When the event occurred
+  event_type: EventType; // 'meal' | 'insulin' | 'bsl' | 'exercise' | ...
+  value: number; // Primary numeric value
   metadata: Record<string, any>; // Type-specific additional data
-  created_at: Date;              // Record creation time
-  updated_at: Date;              // Last modification time
-  synced?: boolean;              // For future multi-device sync
+  created_at: Date; // Record creation time
+  updated_at: Date; // Last modification time
+  synced?: boolean; // For future multi-device sync
 }
 
 // Event type definitions
 type EventType =
-  | 'meal'      // value = total carbs, metadata = { calories, protein, fat, description, photo_url }
-  | 'insulin'   // value = units, metadata = { type: 'bolus' | 'basal' }
-  | 'bsl'       // value = mmol/L or mg/dL, metadata = { unit }
+  | 'meal' // value = total carbs, metadata = { calories, protein, fat, description, photo_url }
+  | 'insulin' // value = units, metadata = { type: 'bolus' | 'basal' }
+  | 'bsl' // value = mmol/L or mg/dL, metadata = { unit }
   | 'exercise'; // value = duration_minutes, metadata = { intensity, type }
 
 // Preset for saved meals
@@ -102,7 +102,9 @@ interface MacroData {
 // Base repository interface - all implementations must satisfy this
 interface IEventRepository {
   // CRUD
-  create(event: Omit<PhysiologicalEvent, 'id' | 'created_at' | 'updated_at'>): Promise<PhysiologicalEvent>;
+  create(
+    event: Omit<PhysiologicalEvent, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<PhysiologicalEvent>;
   getById(id: string): Promise<PhysiologicalEvent | null>;
   update(id: string, updates: Partial<PhysiologicalEvent>): Promise<PhysiologicalEvent>;
   delete(id: string): Promise<void>;
@@ -121,6 +123,7 @@ interface IEventRepository {
 ```
 
 This pattern allows:
+
 - **Testing**: Mock repositories for unit tests
 - **Future backends**: Implement `RestApiEventRepository` without changing UI
 - **Multiple storage**: Mix IndexedDB for events, LocalStorage for settings
@@ -151,13 +154,13 @@ Phases 2, 3, and 5 can run **concurrently** after Phase 1 completes. Phase 4 dep
 
 Each phase owns distinct directories to prevent merge conflicts:
 
-| Phase | Owns | Can Extend |
-|-------|------|------------|
-| 1 | `types/`, `repositories/`, `services/`, `stores/`, `components/layout/`, `components/ui/` | - |
-| 2 | `components/input/`, `components/events/`, `routes/log/`, `routes/history/` | `components/ui/` |
-| 3 | `components/charts/`, `routes/dashboard/`, `utils/chartHelpers.ts` | `components/ui/` |
-| 4 | `services/ai/`, `components/ai/`, `types/ai.ts` | `routes/log/meal/`, `types/settings.ts` |
-| 5 | `services/ImportExportService.ts`, `components/import-export/` | `routes/settings/` |
+| Phase | Owns                                                                                      | Can Extend                              |
+| ----- | ----------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1     | `types/`, `repositories/`, `services/`, `stores/`, `components/layout/`, `components/ui/` | -                                       |
+| 2     | `components/input/`, `components/events/`, `routes/log/`, `routes/history/`               | `components/ui/`                        |
+| 3     | `components/charts/`, `routes/dashboard/`, `utils/chartHelpers.ts`                        | `components/ui/`                        |
+| 4     | `services/ai/`, `components/ai/`, `types/ai.ts`                                           | `routes/log/meal/`, `types/settings.ts` |
+| 5     | `services/ImportExportService.ts`, `components/import-export/`                            | `routes/settings/`                      |
 
 ### Conflict Prevention Rules
 
@@ -200,6 +203,7 @@ node scripts/generate-icons.js  # Generates PWA icons, favicon, apple-touch-icon
 **Merge requirement**: Can merge to main independently
 
 ### Objectives
+
 - Project scaffolding
 - Data layer with Repository Pattern
 - Core TypeScript types and interfaces
@@ -208,12 +212,13 @@ node scripts/generate-icons.js  # Generates PWA icons, favicon, apple-touch-icon
 ### Tasks
 
 #### 1.1 Project Setup
+
 - [x] Configure adapter-static for SPA mode
 - [x] Setup Tailwind CSS (mobile-first utilities)
 - [x] Configure PWA manifest for mobile install
 - [x] Setup service worker for offline caching
 - [x] ESLint + Prettier configuration
-- [ ] Run `npm run generate-icons` to create PWA assets *(icons manually created, script not implemented)*
+- [ ] Run `npm run generate-icons` to create PWA assets _(icons manually created, script not implemented)_
 
 ```bash
 # Key dependencies
@@ -223,6 +228,7 @@ npm install dexie uuid
 ```
 
 #### 1.2 Data Layer Implementation
+
 - [x] Define TypeScript interfaces in `$lib/types/`
 - [x] Implement Dexie.js database schema in `$lib/db/`
 - [x] Create `IEventRepository` interface
@@ -232,11 +238,13 @@ npm install dexie uuid
 - [x] Create repository factory/provider
 
 #### 1.3 Service Layer
+
 - [x] `EventService` - business logic wrapper around repository
 - [x] `SettingsService` - API key management, preferences
 - [x] Svelte stores for reactive state (`$lib/stores/`)
 
 #### 1.4 App Shell
+
 - [x] Root layout with mobile navigation
 - [x] Bottom tab bar component (Home, Log, History, Settings)
 - [x] Settings page with API key input
@@ -271,11 +279,12 @@ scripts/
 ```
 
 ### Acceptance Criteria
-- [x] App loads offline after first visit *(service worker caches app shell)*
+
+- [x] App loads offline after first visit _(service worker caches app shell)_
 - [x] Can store and retrieve test events from IndexedDB
-- [x] Settings persist across sessions *(LocalStorage implementation)*
+- [x] Settings persist across sessions _(LocalStorage implementation)_
 - [x] Mobile navigation functional
-- [ ] Lighthouse PWA score > 90 *(needs testing)*
+- [ ] Lighthouse PWA score > 90 _(needs testing)_
 
 ---
 
@@ -284,6 +293,7 @@ scripts/
 **Status: COMPLETE** (all core objectives met)
 
 **Implementation Quality:**
+
 - Clean repository pattern with interfaces + IndexedDB/LocalStorage implementations
 - Services are framework-agnostic (pure TypeScript)
 - Svelte 5 runes properly used in stores (`$state`, `$derived`)
@@ -291,11 +301,13 @@ scripts/
 - PWA manifest and service worker fully configured
 
 **Architecture Decisions:**
+
 - Dexie.js used as planned with proper TypeScript EntityTable types
 - Settings stored in LocalStorage for simplicity (as planned)
 - Type guards implemented for metadata discrimination
 
 **Minor Gaps:**
+
 - Icon generation script not implemented (icons created manually)
 - Lighthouse score not yet validated
 
@@ -308,6 +320,7 @@ scripts/
 **Merge requirement**: Phase 1 merged first, or rebase onto phase-1
 
 ### Objectives
+
 - Insulin dose logging (3 clicks/steps max)
 - Manual meal entry with macros
 - Time adjustment for all entries
@@ -316,37 +329,41 @@ scripts/
 ### Tasks
 
 #### 2.1 Insulin Entry (Priority: Highest - Req 2.2)
+
 - [x] Quick insulin log component
   - Default to current time
   - Default to last-used type (bolus/basal)
   - Whole number input (1-300 range)
   - Large touch targets for mobile
 - [x] Insulin type toggle (bolus/basal)
-- [x] Number pad or stepper for units *(stepper with quick-select buttons)*
-- [ ] Confirmation haptic/visual feedback *(visual feedback only, no haptic)*
+- [x] Number pad or stepper for units _(stepper with quick-select buttons)_
+- [ ] Confirmation haptic/visual feedback _(visual feedback only, no haptic)_
 - [ ] "Just now" quick log button on home screen
 
 #### 2.2 Meal Entry (Manual - Req 2.1)
+
 - [x] Meal logging form
   - Carbs (required)
   - Calories, protein, fat (optional)
   - Description/notes
-  - ~~Time picker (defaults to now)~~ *(defaults to now only, no picker)*
+  - ~~Time picker (defaults to now)~~ _(defaults to now only, no picker)_
 - [ ] Quick macro calculator
 - [ ] Recent meals list for quick re-entry
 
 #### 2.3 Time Adjustment (Req 2.3)
+
 - [ ] Edit modal for any event
 - [ ] Timestamp picker component
 - [ ] Swipe-to-edit on event list items
 - [ ] Edit history tracking (in metadata)
 
 #### 2.4 Event History
-- [x] Chronological event list *(grouped by date)*
+
+- [x] Chronological event list _(grouped by date)_
 - [x] Filter by event type
 - [ ] Date range selector
 - [ ] Pull-to-refresh pattern
-- [ ] Infinite scroll or pagination *(limited to 50 recent events)*
+- [ ] Infinite scroll or pagination _(limited to 50 recent events)_
 
 ### UI Components (Phase 2)
 
@@ -383,9 +400,10 @@ src/routes/
 ```
 
 ### Acceptance Criteria
-- [x] Insulin can be logged in ≤3 taps from home *(Home → Log Insulin → Select type → Enter units → Save)*
+
+- [x] Insulin can be logged in ≤3 taps from home _(Home → Log Insulin → Select type → Enter units → Save)_
 - [x] Meal macros saved correctly to IndexedDB
-- [ ] Events can be edited after creation *(edit functionality not implemented)*
+- [ ] Events can be edited after creation _(edit functionality not implemented)_
 - [x] History shows all events chronologically
 - [x] Works fully offline
 
@@ -394,12 +412,14 @@ src/routes/
 ## Phase 2 Review Notes (2026-01-19)
 
 **Completed:**
+
 - Basic insulin logging with type toggle and stepper controls
 - Basic meal logging with macro inputs
 - Event history with type filtering
 - Home page with today's summary and recent entries
 
 **Outstanding:**
+
 - Time picker component for adjusting timestamps
 - Event editing modal
 - Haptic feedback
@@ -411,6 +431,43 @@ src/routes/
 
 ---
 
+## Phase 2 Review Notes (2026-01-20)
+
+### Issues Fixed
+
+- **A11y warnings**: Fixed label association warnings in insulin log page (`src/routes/log/insulin/+page.svelte`)
+  - Changed labels for button groups to `<span>` with `role="group"` and `aria-labelledby`
+  - Associated "Units" label with input using `for`/`id` attributes
+  - Added `aria-label` to increment/decrement buttons
+
+### Database Permission Error
+
+- **Not a setup issue**: IndexedDB is client-side and auto-creates on first use
+- **Cause**: Browser permissions, private mode, or `file://` access
+- **Documentation**: Added troubleshooting section to README.md
+
+### UI/UX Feedback for Future Iterations
+
+#### Insulin Quick Select (Task 2.1 Enhancement)
+
+Current implementation uses fixed values `[2, 4, 6, 8, 10, 12]`. Should be changed to:
+
+- Show recent doses filtered by insulin type (bolus/basal)
+- Add +5/-5 adjustment buttons relative to current value
+- Store last used doses per type in settings
+
+#### Meal Entry UI Consistency (Task 2.2 Enhancement)
+
+Current meal entry form is visually different from insulin entry. Should:
+
+- Use same stepper UI pattern as insulin for carb input
+- Add +5/-5 adjustment buttons for macro values
+- Include photo capture option in main meal UI (not separate route)
+- Add customizable icon-based shortcuts (burger, pint, etc.)
+- Quick presets based on recent/saved meals
+
+---
+
 ## Phase 3: Visualization
 
 **Branch**: `phase-3/visualization`
@@ -418,6 +475,7 @@ src/routes/
 **Merge requirement**: Phase 1 required; Phase 2 optional but recommended
 
 ### Objectives
+
 - BSL trend charts
 - Meal/insulin timeline overlay
 - Daily/weekly summary views
@@ -426,19 +484,21 @@ src/routes/
 ### Tasks
 
 #### 3.1 Charting Library Selection
+
 Evaluate and select charting library:
 
-| Library | Pros | Cons |
-|---------|------|------|
-| **Chart.js** | Simple, well-known | Less customizable |
-| **Apache ECharts** | Powerful, mobile-optimized | Larger bundle |
-| **Lightweight Charts** | Trading-style, performant | Limited chart types |
-| **LayerCake** | Svelte-native, composable | More manual work |
-| **Pancake** | Svelte-native, SSR-friendly | Less maintained |
+| Library                | Pros                        | Cons                |
+| ---------------------- | --------------------------- | ------------------- |
+| **Chart.js**           | Simple, well-known          | Less customizable   |
+| **Apache ECharts**     | Powerful, mobile-optimized  | Larger bundle       |
+| **Lightweight Charts** | Trading-style, performant   | Limited chart types |
+| **LayerCake**          | Svelte-native, composable   | More manual work    |
+| **Pancake**            | Svelte-native, SSR-friendly | Less maintained     |
 
 **Recommendation**: LayerCake or ECharts depending on complexity needs.
 
 #### 3.2 BSL Trend Chart
+
 - [ ] Time-series line chart for BSL readings
 - [ ] Configurable time range (day/week/month)
 - [ ] Touch-friendly zoom/pan
@@ -446,12 +506,14 @@ Evaluate and select charting library:
 - [ ] Color coding (in-range, high, low)
 
 #### 3.3 Event Timeline Overlay
+
 - [ ] Meal events as markers on BSL chart
 - [ ] Insulin doses as vertical lines/markers
 - [ ] Tap marker to see event details
 - [ ] Legend with toggle visibility
 
 #### 3.4 Summary Dashboard
+
 - [ ] Daily carb/insulin totals
 - [ ] Average BSL with trend indicator
 - [ ] Time-in-range percentage
@@ -473,6 +535,7 @@ src/lib/
 ```
 
 ### Acceptance Criteria
+
 - [ ] BSL chart renders smoothly with 1000+ data points
 - [ ] Charts responsive on mobile (touch gestures work)
 - [ ] Meal/insulin markers visible on timeline
@@ -488,6 +551,7 @@ src/lib/
 **Merge requirement**: Phase 1 required; Phase 2 recommended
 
 ### Objectives
+
 - Photo-based meal recognition (Req 4.1, 4.2)
 - Visual annotation of recognized food (Req 4.3)
 - Nutrition label scanning (Req 4.4)
@@ -496,6 +560,7 @@ src/lib/
 ### Tasks
 
 #### 4.1 AI Service Layer
+
 - [ ] `AIService` interface for food recognition
 - [ ] Implementations for:
   - OpenAI Vision API
@@ -520,12 +585,14 @@ interface FoodRecognitionResult {
 ```
 
 #### 4.2 Camera Integration
+
 - [ ] Camera capture component (mobile-optimized)
 - [ ] Image preview and retake
 - [ ] Image compression before upload
 - [ ] Gallery selection fallback
 
 #### 4.3 Food Recognition Flow
+
 - [ ] Capture/select photo
 - [ ] Show loading state during AI processing
 - [ ] Display recognized items with confidence
@@ -533,12 +600,14 @@ interface FoodRecognitionResult {
 - [ ] Save with photo reference
 
 #### 4.4 Nutrition Label Scanner
+
 - [ ] Dedicated "scan label" mode
 - [ ] Extract: serving size, calories, carbs, protein, fat
 - [ ] User inputs number of servings
 - [ ] Calculate totals
 
 #### 4.5 Visual Annotation (Req 4.3)
+
 - [ ] Overlay bounding boxes on recognized food
 - [ ] Color-coded by food type
 - [ ] Tap region to see item details
@@ -578,6 +647,7 @@ src/routes/
 ```
 
 ### Acceptance Criteria
+
 - [ ] User can configure API key in settings
 - [ ] Photo capture works on iOS and Android browsers
 - [ ] AI returns macro estimates within 10 seconds
@@ -594,6 +664,7 @@ src/routes/
 **Merge requirement**: Phase 1 required
 
 ### Objectives
+
 - CSV upload/download (Req 3.1, 3.2)
 - BSL time-series import (Req 3.3)
 - Backup and restore functionality
@@ -602,12 +673,14 @@ src/routes/
 ### Tasks
 
 #### 5.1 Export Functionality
+
 - [ ] Export all data as JSON backup
 - [ ] Export filtered data as CSV
 - [ ] Date range selection for export
 - [ ] Download trigger (mobile-friendly)
 
 #### 5.2 Import Functionality
+
 - [ ] JSON backup restore
 - [ ] CSV import with column mapping
 - [ ] Duplicate detection
@@ -615,6 +688,7 @@ src/routes/
 - [ ] Progress indicator for large imports
 
 #### 5.3 BSL Time-Series Import (Req 3.3)
+
 - [ ] Support common CGM export formats
 - [ ] Libre CSV format
 - [ ] Dexcom CSV format
@@ -622,6 +696,7 @@ src/routes/
 - [ ] Merge with existing data
 
 #### 5.4 Graph Image Interpolation (Req 3.3.1)
+
 - [ ] Upload graph image
 - [ ] AI-powered curve extraction
 - [ ] User-defined axis ranges
@@ -629,6 +704,7 @@ src/routes/
 - [ ] Preview before import
 
 #### 5.5 Meal Presets (Req 6.2)
+
 - [ ] Save current meal as preset
 - [ ] Preset library management
 - [ ] Quick-apply preset to new meal
@@ -669,6 +745,7 @@ src/routes/
 ```
 
 ### Acceptance Criteria
+
 - [ ] Full backup can be exported and re-imported
 - [ ] CSV import handles common date formats
 - [ ] BSL data from Libre/Dexcom imports correctly
@@ -684,12 +761,14 @@ src/routes/
 **Status**: Deferred until core features stable
 
 ### Objectives (Future)
+
 - Insulin dose prediction (Req 5.1)
 - Decay function modeling (Req 5.3)
 - Time-of-day effects (Req 5.4)
 - Continuous improvement with data (Req 5.5)
 
 ### Research Areas
+
 - [ ] Evaluate client-side ML (TensorFlow.js, ONNX Runtime)
 - [ ] Define minimum data requirements for training
 - [ ] Decay function mathematical models
@@ -729,9 +808,9 @@ src/routes/
 ```javascript
 // Service Worker caching strategy
 const CACHE_STRATEGIES = {
-  static: 'cache-first',     // App shell, JS, CSS
-  api: 'network-first',      // AI API calls (when online)
-  data: 'stale-while-revalidate'  // Not applicable for IndexedDB
+  static: 'cache-first', // App shell, JS, CSS
+  api: 'network-first', // AI API calls (when online)
+  data: 'stale-while-revalidate' // Not applicable for IndexedDB
 };
 ```
 
@@ -773,14 +852,14 @@ enum ErrorCode {
 
 ### Testing Strategy
 
-| Layer | Testing Approach |
-|-------|------------------|
-| Repositories | Unit tests with mock IndexedDB |
-| Services | Unit tests with mock repositories |
-| Components | Component tests with Testing Library |
-| E2E | Playwright for critical flows |
+| Layer        | Testing Approach                     |
+| ------------ | ------------------------------------ |
+| Repositories | Unit tests with mock IndexedDB       |
+| Services     | Unit tests with mock repositories    |
+| Components   | Component tests with Testing Library |
+| E2E          | Playwright for critical flows        |
 
-*Note: Testing frameworks are out of scope per requirements, but structure supports future addition.*
+_Note: Testing frameworks are out of scope per requirements, but structure supports future addition._
 
 ---
 
@@ -808,6 +887,7 @@ git checkout -b phase-2/data-input
 ### Independent Mergeability
 
 Phases are designed so that:
+
 - **Phase 1** can merge alone (foundation)
 - **Phase 3** can merge before Phase 2 (visualization works with test data)
 - **Phase 4** can merge before Phase 3 (AI works without charts)
@@ -829,16 +909,16 @@ chore: maintenance tasks
 
 ## Tech Stack Summary
 
-| Category | Technology | Version |
-|----------|------------|---------|
-| Framework | SvelteKit | 2.x |
-| Language | TypeScript | 5.x |
-| Styling | Tailwind CSS | 3.x |
-| Database | Dexie.js (IndexedDB) | 4.x |
-| Charting | TBD (LayerCake/ECharts) | - |
-| PWA | Workbox | 7.x |
-| Build | Vite | 5.x |
-| Asset Generation | Sharp | 0.33.x |
+| Category         | Technology              | Version |
+| ---------------- | ----------------------- | ------- |
+| Framework        | SvelteKit               | 2.x     |
+| Language         | TypeScript              | 5.x     |
+| Styling          | Tailwind CSS            | 3.x     |
+| Database         | Dexie.js (IndexedDB)    | 4.x     |
+| Charting         | TBD (LayerCake/ECharts) | -       |
+| PWA              | Workbox                 | 7.x     |
+| Build            | Vite                    | 5.x     |
+| Asset Generation | Sharp                   | 0.33.x  |
 
 ---
 
@@ -855,14 +935,15 @@ The requirements specify an event-log structure. This aligns with:
 
 ### IndexedDB vs Alternatives
 
-| Storage | Capacity | Structure | Offline | Decision |
-|---------|----------|-----------|---------|----------|
-| LocalStorage | 5-10MB | Key-value | Yes | Too small |
-| IndexedDB | 50MB+ | Structured | Yes | **Selected** |
-| SQLite (WASM) | Unlimited | Relational | Yes | Overkill for v1 |
-| PouchDB | 50MB+ | Document | Yes + Sync | Good, but adds dependency |
+| Storage       | Capacity  | Structure  | Offline    | Decision                  |
+| ------------- | --------- | ---------- | ---------- | ------------------------- |
+| LocalStorage  | 5-10MB    | Key-value  | Yes        | Too small                 |
+| IndexedDB     | 50MB+     | Structured | Yes        | **Selected**              |
+| SQLite (WASM) | Unlimited | Relational | Yes        | Overkill for v1           |
+| PouchDB       | 50MB+     | Document   | Yes + Sync | Good, but adds dependency |
 
 **Decision**: Dexie.js wrapping IndexedDB provides:
+
 - Clean Promise-based API
 - TypeScript support
 - Migration handling
@@ -878,6 +959,7 @@ The requirements specify an event-log structure. This aligns with:
 ### AI Service Abstraction
 
 User-provided API keys means:
+
 - Keys stored in sessionStorage (not persisted) or localStorage (user choice)
 - No backend proxy needed
 - User controls their API costs
@@ -905,5 +987,5 @@ npm run preview
 
 ---
 
-*Last updated: 2026-01-19*
-*Reviewed after commit 06ce1d2 - first pass at development*
+_Last updated: 2026-01-19_
+_Reviewed after commit 06ce1d2 - first pass at development_

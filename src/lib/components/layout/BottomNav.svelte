@@ -26,7 +26,7 @@
   class="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-800 bg-gray-950/95 backdrop-blur-sm pb-safe"
 >
   <div class="mx-auto flex max-w-lg items-center justify-around">
-    {#each navItems as item}
+    {#each navItems as item (item.href)}
       {@const active = isActive(item.href, $page.url.pathname)}
       <a
         href={item.href}

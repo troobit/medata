@@ -1,17 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" role="img"
-    aria-label="Logo">
-    <title>Logo</title>
-
-    <!-- Primary sharp crescent / scythe -->
-    <path
-        d="
-            M20 8
-            C72 10, 118 46, 120 64
-            C118 82, 76 116, 44 120
-            C70 98, 96 64, 92 44
-            C88 26, 56 12, 20 8
-            Z
-        "
-        fill="#63ff00"
-    />
+    aria-label="D curve with mirrored vertical segments">
+    <path fill="none" stroke="#000" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"
+        d="M 24,24 
+       C 130,24 130,104 24,104 
+       L 24,64 
+       M 104,64 
+       L 104,104
+       M 64,64 
+       L 64,64" />
 </svg>

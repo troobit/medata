@@ -1,11 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '$lib/db';
-import type {
-  PhysiologicalEvent,
-  CreateEventInput,
-  UpdateEventInput,
-  EventType
-} from '$lib/types';
+import type { PhysiologicalEvent, CreateEventInput, UpdateEventInput, EventType } from '$lib/types';
 import type { IEventRepository } from './IEventRepository';
 
 /**
@@ -55,7 +50,7 @@ export class IndexedDBEventRepository implements IEventRepository {
   }
 
   async getByType(type: EventType, limit?: number): Promise<PhysiologicalEvent[]> {
-    let query = db.events.where('eventType').equals(type).reverse();
+    const query = db.events.where('eventType').equals(type).reverse();
 
     if (limit) {
       return query.limit(limit).sortBy('timestamp');
