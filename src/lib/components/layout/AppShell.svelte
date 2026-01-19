@@ -14,9 +14,7 @@
   <!-- Main content area with bottom padding for nav -->
   <main class="flex-1 overflow-hidden pb-20">
     <PageTransition>
-      {#snippet children()}
-        {@render children()}
-      {/snippet}
+      {@render children()}
     </PageTransition>
   </main>
 

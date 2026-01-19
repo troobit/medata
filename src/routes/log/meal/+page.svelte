@@ -219,7 +219,9 @@
             title="{preset.label}: {preset.carbs}g carbs, {preset.alcoholUnits}u alcohol"
           >
             <span class="text-2xl">{preset.icon}</span>
-            <span class="mt-1 text-[10px] text-gray-400">{preset.carbs}g / {preset.alcoholUnits}u</span>
+            <span class="mt-1 text-[10px] text-gray-400"
+              >{preset.carbs}g / {preset.alcoholUnits}u</span
+            >
           </button>
         {/each}
       </div>
@@ -266,7 +268,10 @@
 
       <!-- Alcohol Stepper -->
       <div class="rounded-lg bg-gray-800/50 p-4">
-        <label for="alcohol-input" class="mb-2 block text-center text-sm font-medium text-purple-400">
+        <label
+          for="alcohol-input"
+          class="mb-2 block text-center text-sm font-medium text-purple-400"
+        >
           Drinks
         </label>
         <div class="flex items-center justify-center gap-2">

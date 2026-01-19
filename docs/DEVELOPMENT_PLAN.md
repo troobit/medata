@@ -134,14 +134,23 @@ This pattern allows:
 
 Each phase is developed on its own **feature branch** and can be merged independently. Phases are designed with minimal cross-dependencies.
 
+**Priority Order** (updated 2026-01-20):
+
+1. Phase 1: Foundation ✅ Complete
+2. Phase 2: Data Input ✅ Core complete
+3. **Phase 3: AI Food Recognition** ← CURRENT PRIORITY
+4. Phase 4: Visualization (deferred)
+5. Phase 5: Import/Export
+6. Phase 6: ML Regression (deferred)
+
 ```
 main
-  ├── phase-1/foundation
-  ├── phase-2/data-input
-  ├── phase-3/visualization
-  ├── phase-4/ai-integration
+  ├── phase-1/foundation          ✅ COMPLETE
+  ├── phase-2/data-input          ✅ CORE COMPLETE
+  ├── phase-3/ai-food-recognition ← PRIORITY
+  ├── phase-4/visualization       (deferred)
   ├── phase-5/import-export
-  └── phase-6/ml-regression (deferred)
+  └── phase-6/ml-regression       (deferred)
 ```
 
 ---
@@ -544,116 +553,260 @@ src/lib/
 
 ---
 
-## Phase 4: AI Integration
+## Phase 3: AI Food Recognition (PRIORITY)
 
-**Branch**: `phase-4/ai-integration`
+**Branch**: `phase-3/ai-food-recognition`
 **Dependencies**: Phase 1 (settings for API keys), Phase 2 (meal entry)
 **Merge requirement**: Phase 1 required; Phase 2 recommended
+**Priority**: HIGH - Core differentiating feature
+
+> **Research Reference**: [GoCARB System (JMIR 2016)](https://www.jmir.org/2016/5/e101/) - Mobile phone-based carbohydrate estimation achieving 26.9% mean absolute error vs 34.3% for self-report, with 85.1% food recognition accuracy.
 
 ### Objectives
 
 - Photo-based meal recognition (Req 4.1, 4.2)
 - Visual annotation of recognized food (Req 4.3)
 - Nutrition label scanning (Req 4.4)
-- API key configuration (Req 7.2)
+- **Cloud-first architecture**: Vision APIs with iterative learning from user corrections
+- User corrections stored to improve prompts and track accuracy over time
+
+### Architecture: Cloud Vision API with Iterative Learning
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Food Recognition Pipeline                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│      Cloud Vision API     │ │     User Corrections      │
+│      (Primary)            │ │     (Iterative Learning)  │
+├───────────────────────────┤ ├───────────────────────────┤
+│ • OpenAI Vision (GPT-4V)  │ │ • Store original image    │
+│ • Google Gemini Pro       │ │ • Store AI predictions    │
+│ • Anthropic Claude        │ │ • Capture user edits      │
+│ • Ollama + LLaVA (local)  │ │ • Build correction history│
+└───────────────────────────┘ └───────────────────────────┘
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Macro Estimation Engine                       │
+│  • Volume estimation (reference object or learned scales)        │
+│  • USDA FNDDS nutritional database lookup                       │
+│  • Confidence scoring and uncertainty bounds                    │
+│  • Prompt enhancement from correction history                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Research-Backed Approach
+
+Based on [GoCARB](https://www.jmir.org/2016/5/e101/) and recent advances in [mobile food recognition](https://link.springer.com/article/10.1007/s11042-021-11329-6):
+
+1. **Reference Object Estimation**: GoCARB uses reference card for volume/portion estimation
+2. **Cloud Vision APIs**: Modern LLM vision APIs (GPT-4V, Gemini, Claude) exceed standalone model accuracy
+3. **Iterative Improvement**: User corrections stored to enhance future prompts and accuracy tracking
+4. **Nutritional Mapping**: Link recognized items to USDA FNDDS database for macro lookup
 
 ### Tasks
 
-#### 4.1 AI Service Layer
+#### 3.1 Cloud AI Service Layer (Quick Start)
 
-- [ ] `AIService` interface for food recognition
-- [ ] Implementations for:
-  - OpenAI Vision API
-  - Google Gemini
-  - Claude (Anthropic)
-- [ ] API key validation and storage
+- [ ] `IFoodRecognitionService` interface
+- [ ] Cloud provider implementations:
+  - [ ] OpenAI Vision API (GPT-4V)
+  - [ ] Google Gemini Pro Vision
+  - [ ] Anthropic Claude (Vision)
+  - [ ] Ollama with LLaVA (self-hosted, privacy-first)
+- [ ] API key validation and secure storage
 - [ ] Rate limiting / error handling
-- [ ] Fallback between providers
+- [ ] Provider fallback chain
+- [ ] Structured prompt engineering for consistent macro output
 
 ```typescript
-interface IAIFoodService {
-  recognizeFood(image: Blob): Promise<FoodRecognitionResult>;
+interface IFoodRecognitionService {
+  recognizeFood(image: Blob, options?: RecognitionOptions): Promise<FoodRecognitionResult>;
   parseNutritionLabel(image: Blob): Promise<NutritionLabelResult>;
   isConfigured(): boolean;
+  getProvider(): MLProvider;
 }
 
 interface FoodRecognitionResult {
   items: RecognizedFoodItem[];
+  totalMacros: MacroData;
   confidence: number;
-  annotatedImageUrl?: string;
+  boundingBoxes?: BoundingBox[]; // For visual annotation
+  rawResponse?: string; // For debugging/improvement
+}
+
+interface RecognizedFoodItem {
+  name: string;
+  quantity: string; // "1 cup", "150g", etc.
+  macros: MacroData;
+  confidence: number;
+  boundingBox?: BoundingBox;
+  usdaFoodCode?: string; // Link to FNDDS
+}
+
+interface RecognitionOptions {
+  includeAnnotations?: boolean;
+  referenceObjectSize?: number; // Known size in mm for scale
+  preferredUnits?: 'metric' | 'imperial';
 }
 ```
 
-#### 4.2 Camera Integration
+#### 3.2 Iterative Learning Pipeline
+
+- [ ] **Correction Storage**: Save user edits for accuracy tracking
+  ```typescript
+  interface CorrectionRecord {
+    imageHash: string; // Deduplicated reference
+    originalPrediction: FoodRecognitionResult;
+    userCorrection: MacroData;
+    timestamp: Date;
+    feedbackType: 'macro_edit' | 'item_add' | 'item_remove' | 'quantity_change';
+  }
+  ```
+- [ ] **Prompt Enhancement**: Use correction history to improve prompts
+  - [ ] Track common user adjustments per food type
+  - [ ] Include correction patterns in system prompts
+  - [ ] "You previously overestimated carbs for pasta by 20%"
+- [ ] **Accuracy Tracking**:
+  - [ ] Track prediction accuracy over time
+  - [ ] Surface "uncertain" predictions for explicit user review
+  - [ ] Dashboard showing AI accuracy trends
+
+#### 3.3 Camera Integration
 
 - [ ] Camera capture component (mobile-optimized)
-- [ ] Image preview and retake
-- [ ] Image compression before upload
+  - [ ] `getUserMedia` with rear camera preference
+  - [ ] Flash/torch control
+  - [ ] Focus tap-to-focus
+- [ ] Reference object detection (optional)
+  - [ ] Credit card size reference (85.6mm × 53.98mm)
+  - [ ] Coin detection for scale
+- [ ] Image preprocessing:
+  - [ ] Resize to model input dimensions
+  - [ ] EXIF orientation handling
+  - [ ] Compression for cloud upload (WebP, quality 80)
 - [ ] Gallery selection fallback
 
-#### 4.3 Food Recognition Flow
+#### 3.4 Food Recognition UX Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Capture   │ ──► │  Analyzing  │ ──► │   Review    │ ──► │    Save     │
+│   Photo     │     │  (Loading)  │     │   Results   │     │   + Learn   │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+      │                   │                   │                   │
+      │                   │                   │                   │
+      ▼                   ▼                   ▼                   ▼
+ • Take photo        • Cloud API call    • Show items +      • Save event
+ • Add reference     • Progress bar        bounding boxes    • Store image
+   object (opt)      • Provider status   • Edit macros         hash
+ • Retake option                         • Add/remove items  • Log correction
+                                         • Confidence          if edited
+                                           indicators
+```
 
 - [ ] Capture/select photo
-- [ ] Show loading state during AI processing
-- [ ] Display recognized items with confidence
-- [ ] Allow user to adjust/confirm macros
-- [ ] Save with photo reference
+- [ ] Show loading state with progress
+- [ ] Display recognized items with confidence scores
+- [ ] Visual annotation with bounding boxes
+- [ ] Allow user to adjust/confirm macros (per-item and total)
+- [ ] Save meal with photo reference and correction data
 
-#### 4.4 Nutrition Label Scanner
+#### 3.5 Nutrition Label Scanner
 
 - [ ] Dedicated "scan label" mode
-- [ ] Extract: serving size, calories, carbs, protein, fat
+- [ ] OCR extraction via cloud vision API
+- [ ] Extract: serving size, calories, carbs, protein, fat, fiber
 - [ ] User inputs number of servings
 - [ ] Calculate totals
+- [ ] Support Australian nutrition panel format
 
-#### 4.5 Visual Annotation (Req 4.3)
+#### 3.6 Visual Annotation (Req 4.3)
 
 - [ ] Overlay bounding boxes on recognized food
-- [ ] Color-coded by food type
-- [ ] Tap region to see item details
+- [ ] Color-coded by macro density (high carb = green, high fat = yellow, etc.)
+- [ ] Tap region to see/edit item details
+- [ ] Canvas-based rendering for performance
 
-### File Structure (Phase 4)
+### File Structure (Phase 3)
 
 ```
 src/lib/
 ├── services/
 │   └── ai/
-│       ├── IAIFoodService.ts
+│       ├── IFoodRecognitionService.ts
 │       ├── OpenAIFoodService.ts
 │       ├── GeminiFoodService.ts
 │       ├── ClaudeFoodService.ts
-│       └── AIServiceFactory.ts
+│       ├── OllamaFoodService.ts
+│       ├── FoodServiceFactory.ts
+│       └── prompts/
+│           └── foodRecognition.ts    # Structured prompts
 ├── components/
 │   └── ai/
 │       ├── CameraCapture.svelte
+│       ├── PhotoPreview.svelte
+│       ├── RecognitionLoading.svelte
 │       ├── FoodRecognitionResult.svelte
 │       ├── AnnotatedFoodImage.svelte
+│       ├── FoodItemEditor.svelte
 │       ├── NutritionLabelScanner.svelte
 │       └── MacroConfirmation.svelte
+├── data/
+│   └── usda-fndds.ts               # Nutritional database subset
 └── utils/
-    └── imageProcessing.ts         # Compression, conversion
+    └── imageProcessing.ts          # Compression, conversion, EXIF
 ```
 
-### Routes (Phase 4)
+### Routes (Phase 3)
 
 ```
 src/routes/
 └── log/
     └── meal/
+        ├── +page.svelte            # Enhanced with photo capture
         ├── photo/
-        │   └── +page.svelte       # Photo capture & recognition
+        │   └── +page.svelte        # Dedicated photo recognition flow
         └── label/
-            └── +page.svelte       # Nutrition label scanning
+            └── +page.svelte        # Nutrition label scanning
 ```
 
 ### Acceptance Criteria
 
-- [ ] User can configure API key in settings
-- [ ] Photo capture works on iOS and Android browsers
-- [ ] AI returns macro estimates within 10 seconds
+- [ ] User can configure API key in settings ✅ (already implemented)
+- [ ] Photo capture works on iOS Safari and Android Chrome
+- [ ] Cloud AI returns macro estimates within 10 seconds
 - [ ] User can adjust AI estimates before saving
+- [ ] User corrections are stored for iterative improvement
+- [ ] Correction history used to enhance prompts over time
 - [ ] Nutrition label parsing extracts key values
-- [ ] Graceful degradation when AI unavailable
+- [ ] Visual bounding boxes displayed on recognized items
+- [ ] Graceful fallback to manual entry when API unavailable
+
+### Research References
+
+- [GoCARB: Carbohydrate Estimation by Mobile Phone (JMIR 2016)](https://www.jmir.org/2016/5/e101/)
+- [Comprehensive Survey of Image-Based Food Recognition (Healthcare 2021)](https://pmc.ncbi.nlm.nih.gov/articles/PMC8700885/)
+- [Smartphone-based Food Recognition with Multiple CNN Models (MTA 2021)](https://link.springer.com/article/10.1007/s11042-021-11329-6)
+- [Applying Image-Based Food-Recognition Systems (Advances in Nutrition 2023)](<https://advances.nutrition.org/article/S2161-8313(23)00093-5/fulltext>)
+- [AI-based Digital Image Dietary Assessment (Annals of Medicine 2023)](https://www.tandfonline.com/doi/full/10.1080/07853890.2023.2273497)
+
+---
+
+## Phase 4: Visualization (DEFERRED)
+
+> **Note**: Visualization is lower priority than AI food recognition. Implement after Phase 3.
+
+**Branch**: `phase-4/visualization`
+**Dependencies**: Phase 1 (data layer), benefits from Phase 2 data
+**Merge requirement**: Phase 1 required; Phase 2 optional but recommended
+
+_See original Phase 3 content below for visualization tasks._
 
 ---
 
@@ -987,5 +1140,166 @@ npm run preview
 
 ---
 
-_Last updated: 2026-01-19_
-_Reviewed after commit 06ce1d2 - first pass at development_
+## Phase 2 Review Notes (2026-01-20 - Comprehensive Review)
+
+### Code Quality Assessment
+
+**Svelte 5 Paradigm Usage**: ✅ Excellent
+
+- Proper use of `$state`, `$derived`, `$derived.by()`, `$effect`, `$props()` throughout
+- Snippets correctly used for component composition (`children`, `action`, `icon`)
+- `@render` directive used correctly for snippet rendering
+- Type-safe Props interfaces defined for all components
+- Stores use reactive getters pattern correctly
+
+**Responsive Design Patterns**: ✅ Good
+
+- Mobile-first approach with `min-h-dvh`, `pb-safe` for safe area insets
+- Touch-friendly targets (min-h-[44px] on interactive elements)
+- Responsive grid layouts (`grid-cols-2`, `grid-cols-3`, `grid-cols-6`)
+- Bottom navigation fixed with backdrop blur
+- Flexible layouts using `flex-1`, `flex-col`
+
+**Aesthetic & UI Consistency**: ✅ Good
+
+- Consistent dark theme (`gray-950` background, `gray-800` cards)
+- Coherent color palette (blue for insulin, green for meals, yellow for BSL, purple for alcohol)
+- Brand accent color (`#63ff00`) used consistently
+- Rounded corners (`rounded-lg`, `rounded-xl`) applied uniformly
+- Consistent spacing (`gap-2`, `gap-3`, `gap-4`, `mb-4`, `mb-6`, `mb-8`)
+- Icon components are consistent and well-structured
+
+**Architecture Quality**: ✅ Excellent
+
+- Clean separation: UI → Stores → Services → Repositories
+- Services are framework-agnostic (pure TypeScript)
+- Repository pattern properly implemented with interfaces
+- Type guards for metadata discrimination
+- IndexedDB via Dexie.js properly configured
+
+### Minor Issues Found
+
+1. **Prettier formatting** - 9 files had formatting issues (now fixed via `npm run format`)
+2. **Missing haptic feedback** - Not implemented (browser API support limited)
+3. **No event editing** - Events cannot be edited after creation
+
+### Current Feature Status
+
+| Feature              | Status         | Notes                                      |
+| -------------------- | -------------- | ------------------------------------------ |
+| Insulin logging      | ✅ Complete    | Type toggle, stepper, recent doses         |
+| Meal logging         | ✅ Complete    | Presets, macros, alcohol, photo capture UI |
+| History view         | ✅ Complete    | Filtering, grouping by date                |
+| Home dashboard       | ✅ Complete    | Today's summary, quick actions             |
+| Settings             | ✅ Complete    | ML provider config, defaults               |
+| Service worker       | ✅ Complete    | Offline caching                            |
+| PWA manifest         | ✅ Complete    | Installable                                |
+| Event editing        | ❌ Not started |                                            |
+| Time picker          | ❌ Not started |                                            |
+| BSL logging page     | ❌ Not started | Route exists in nav but no page            |
+| AI food recognition  | ❌ Not started | Settings ready, service not implemented    |
+| Data export/import   | ❌ Not started |                                            |
+| Charts/visualization | ❌ Not started |                                            |
+
+### Accessibility Notes
+
+- Proper `aria-labelledby` and `role="group"` for button groups
+- Labels associated with inputs via `for`/`id`
+- `aria-label` on icon-only buttons
+- `aria-current="page"` on active nav items
+- `aria-hidden="true"` on decorative SVGs
+
+---
+
+## Suggested Next Steps (Priority Order)
+
+### Immediate Priority: AI Food Recognition (Phase 3)
+
+1. **IFoodRecognitionService Interface**
+   - Define TypeScript interfaces for food recognition
+   - Create service factory for provider selection
+   - Structured prompt templates for consistent output
+
+2. **Cloud Provider Implementation (Start with one)**
+   - OpenAI Vision API (GPT-4V) - best accuracy
+   - OR Gemini Pro Vision - good free tier
+   - OR Ollama + LLaVA - privacy-first, self-hosted
+   - API key already stored in settings
+
+3. **Camera Capture Component**
+   - `getUserMedia` with rear camera
+   - Image preview and retake
+   - Compression for upload (WebP)
+   - EXIF orientation handling
+
+4. **Food Recognition Flow**
+   - Photo capture → Cloud API → Review results → Save
+   - Display recognized items with confidence
+   - Allow macro edits before saving
+   - Store corrections for iterative learning
+
+5. **Iterative Learning Pipeline**
+   - Save original prediction + user corrections
+   - Track accuracy over time
+   - Use correction history to enhance prompts
+
+6. **Nutrition Label Scanner**
+   - OCR via cloud vision API
+   - Australian nutrition panel support
+   - Serving size calculations
+
+### Lower Priority: Phase 2 Completion
+
+7. **BSL Logging Page** (`/log/bsl/+page.svelte`)
+   - Stepper-style input
+   - mmol/L and mg/dL units
+
+8. **Event Editing**
+   - Edit modal for existing events
+   - Time picker component
+
+### Deferred: Visualization (Phase 4)
+
+9. **Charting** (after AI recognition working)
+   - BSL trend charts
+   - Meal/insulin timeline overlay
+   - Weekly summaries
+
+### Research Tasks
+
+- [ ] Research USDA FNDDS API or static dataset for nutritional lookup
+- [ ] Test cloud vision APIs with sample food images
+- [ ] Design prompt templates for consistent macro extraction
+- [ ] Evaluate reference object detection for portion estimation
+
+---
+
+_Last updated: 2026-01-20_
+_Reviewed after commit 29731a8 - UI updates and logo input_
+_Priority update: AI Food Recognition now Phase 3 (priority), Visualization deferred to Phase 4_
+_Research reference: [GoCARB JMIR 2016](https://www.jmir.org/2016/5/e101/) for cloud-only architecture with iterative learning_
+
+## Svelte 5 Compliance Verification (2026-01-20)
+
+All components verified with MCP Svelte autofixer:
+
+| Component               | Status | Notes                                          |
+| ----------------------- | ------ | ---------------------------------------------- |
+| AppShell.svelte         | ✅     | No issues                                      |
+| PageTransition.svelte   | ✅     | $effect for navigation tracking is intentional |
+| BottomNav.svelte        | ✅     | Removed redundant onMount (now uses $effect)   |
+| Button.svelte           | ✅     | No issues                                      |
+| EmptyState.svelte       | ✅     | No issues                                      |
+| LoadingSpinner.svelte   | ✅     | No issues                                      |
+
+**Svelte 5 Patterns Used Correctly:**
+- `$state` for reactive state
+- `$derived` and `$derived.by()` for computed values
+- `$effect` for side effects
+- `$props()` with TypeScript interfaces
+- Snippets with `@render` directive
+- No legacy Svelte 4 patterns (`export let`, `$:`, `on:` directives)
+
+**Build & Lint Status:** All checks pass (0 errors, 0 warnings)
+
+**Ready for Phase 3:** AI Food Recognition implementation

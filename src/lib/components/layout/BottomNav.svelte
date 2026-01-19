@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
 
   interface NavItem {
     href: string;
@@ -30,22 +29,8 @@
   let navContainer: HTMLElement;
   let underlineStyle = $state({ left: '0px', width: '0px' });
 
-  // Update underline position when active item changes
+  // Update underline position when active item changes (runs after mount and on changes)
   $effect(() => {
-    if (navContainer && activeIndex >= 0) {
-      const items = navContainer.querySelectorAll('a');
-      const activeItem = items[activeIndex] as HTMLElement;
-      if (activeItem) {
-        underlineStyle = {
-          left: `${activeItem.offsetLeft}px`,
-          width: `${activeItem.offsetWidth}px`
-        };
-      }
-    }
-  });
-
-  onMount(() => {
-    // Initial position
     if (navContainer && activeIndex >= 0) {
       const items = navContainer.querySelectorAll('a');
       const activeItem = items[activeIndex] as HTMLElement;
