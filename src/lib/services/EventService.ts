@@ -119,4 +119,18 @@ export class EventService {
     const events = await this.repository.getByType('insulin', 1);
     return events.length > 0 ? events[events.length - 1] : null;
   }
+
+  async getRecentInsulinDosesByType(
+    insulinType: InsulinType,
+    limit: number = 10
+  ): Promise<number[]> {
+    const events = await this.repository.getByType('insulin', 50);
+    const doses = events
+      .filter((e) => e.metadata && (e.metadata as InsulinMetadata).type === insulinType)
+      .map((e) => e.value)
+      .slice(0, limit);
+
+    // Return unique values only
+    return [...new Set(doses)];
+  }
 }

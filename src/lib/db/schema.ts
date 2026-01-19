@@ -22,6 +22,22 @@ export class MeDataDB extends Dexie {
 }
 
 /**
- * Singleton database instance
+ * Lazy-initialized singleton database instance
+ * Prevents SSR issues by only creating the database in the browser
  */
-export const db = new MeDataDB();
+let _db: MeDataDB | null = null;
+
+export function getDb(): MeDataDB {
+  if (!_db) {
+    if (typeof window === 'undefined') {
+      throw new Error('Database can only be accessed in the browser');
+    }
+    _db = new MeDataDB();
+  }
+  return _db;
+}
+
+/**
+ * @deprecated Use getDb() instead to avoid SSR issues
+ */
+export const db = typeof window !== 'undefined' ? new MeDataDB() : (null as unknown as MeDataDB);
