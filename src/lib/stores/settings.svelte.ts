@@ -1,5 +1,5 @@
 import { getSettingsService } from '$lib/services';
-import type { UserSettings, MLProvider, AIProvider } from '$lib/types';
+import type { UserSettings, AIProvider } from '$lib/types';
 import { DEFAULT_SETTINGS } from '$lib/types';
 
 /**
@@ -79,48 +79,24 @@ function createSettingsStore() {
     }
   }
 
-  const isMLConfigured = $derived(
-    !!(
-      settings.openaiApiKey ||
-      settings.geminiApiKey ||
-      settings.claudeApiKey ||
-      (settings.foundryEndpoint && settings.foundryApiKey) ||
-      settings.ollamaEndpoint
-    )
+  const isAIConfigured = $derived(
+    !!(settings.openaiApiKey || settings.geminiApiKey || settings.claudeApiKey)
   );
 
-  // Backwards compatibility alias
-  const isAIConfigured = $derived(isMLConfigured);
-
-  const configuredProvider = $derived.by((): MLProvider | null => {
-    // If explicit provider is set, check if it's configured
+  const configuredProvider = $derived.by((): AIProvider | null => {
     if (settings.aiProvider) {
-      const isConfigured = checkProviderConfigured(settings.aiProvider);
-      if (isConfigured) return settings.aiProvider;
+      const keyMap: Record<AIProvider, keyof UserSettings> = {
+        openai: 'openaiApiKey',
+        gemini: 'geminiApiKey',
+        claude: 'claudeApiKey'
+      };
+      if (settings[keyMap[settings.aiProvider]]) return settings.aiProvider;
     }
-    // Auto-detect first configured provider
     if (settings.openaiApiKey) return 'openai';
     if (settings.geminiApiKey) return 'gemini';
     if (settings.claudeApiKey) return 'claude';
-    if (settings.foundryEndpoint && settings.foundryApiKey) return 'foundry';
-    if (settings.ollamaEndpoint) return 'ollama';
     return null;
   });
-
-  function checkProviderConfigured(provider: MLProvider): boolean {
-    switch (provider) {
-      case 'openai':
-        return !!settings.openaiApiKey;
-      case 'gemini':
-        return !!settings.geminiApiKey;
-      case 'claude':
-        return !!settings.claudeApiKey;
-      case 'foundry':
-        return !!(settings.foundryEndpoint && settings.foundryApiKey);
-      case 'ollama':
-        return !!settings.ollamaEndpoint;
-    }
-  }
 
   return {
     get settings() {
@@ -135,10 +111,6 @@ function createSettingsStore() {
     get initialized() {
       return initialized;
     },
-    get isMLConfigured() {
-      return isMLConfigured;
-    },
-    /** @deprecated Use isMLConfigured instead */
     get isAIConfigured() {
       return isAIConfigured;
     },
