@@ -5,6 +5,7 @@ import type {
   EventType,
   InsulinType,
   BSLUnit,
+  BSLDataSource,
   InsulinMetadata,
   BSLMetadata,
   MealMetadata
@@ -66,9 +67,15 @@ export class EventService {
   async logBSL(
     value: number,
     unit: BSLUnit = 'mmol/L',
-    timestamp: Date = new Date()
+    timestamp: Date = new Date(),
+    options?: { isFingerPrick?: boolean; device?: string; source?: BSLDataSource }
   ): Promise<PhysiologicalEvent> {
-    const metadata: BSLMetadata = { unit };
+    const metadata: BSLMetadata = {
+      unit,
+      source: options?.source ?? 'manual',
+      ...(options?.isFingerPrick !== undefined && { isFingerPrick: options.isFingerPrick }),
+      ...(options?.device && { device: options.device })
+    };
     return this.createEvent({
       timestamp,
       eventType: 'bsl',
@@ -135,5 +142,20 @@ export class EventService {
     }
 
     return Array.from(uniqueDoses);
+  }
+
+  /**
+   * Get recent unique BSL values
+   */
+  async getRecentBSLValues(limit: number = 5): Promise<number[]> {
+    const events = await this.repository.getByType('bsl', 50);
+    const uniqueValues = new Set<number>();
+
+    for (const event of events) {
+      uniqueValues.add(event.value);
+      if (uniqueValues.size >= limit) break;
+    }
+
+    return Array.from(uniqueValues);
   }
 }
