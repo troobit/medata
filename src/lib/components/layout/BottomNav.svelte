@@ -20,51 +20,23 @@
     }
     return pathname.startsWith(href);
   }
-
-  function getActiveIndex(pathname: string): number {
-    return navItems.findIndex((item) => isActive(item.href, pathname));
-  }
-
-  let activeIndex = $derived(getActiveIndex($page.url.pathname));
-  let navContainer: HTMLElement;
-  let underlineStyle = $state({ left: '0px', width: '0px' });
-
-  // Update underline position when active item changes (runs after mount and on changes)
-  $effect(() => {
-    if (navContainer && activeIndex >= 0) {
-      const items = navContainer.querySelectorAll('a');
-      const activeItem = items[activeIndex] as HTMLElement;
-      if (activeItem) {
-        underlineStyle = {
-          left: `${activeItem.offsetLeft}px`,
-          width: `${activeItem.offsetWidth}px`
-        };
-      }
-    }
-  });
 </script>
 
 <nav
   class="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-800 bg-gray-950/95 backdrop-blur-sm pb-safe"
 >
-  <div class="relative mx-auto flex max-w-lg items-center justify-around" bind:this={navContainer}>
-    <!-- Sliding underline indicator -->
-    <div
-      class="absolute top-0 h-[2px] bg-gradient-to-r from-brand-accent to-brand-accent/70 transition-all duration-300 ease-out"
-      style="left: {underlineStyle.left}; width: {underlineStyle.width};"
-    ></div>
-
-    {#each navItems as item (item.href)}
+  <div class="mx-auto flex max-w-lg items-center justify-around">
+    {#each navItems as item}
       {@const active = isActive(item.href, $page.url.pathname)}
       <a
         href={item.href}
-        class="flex min-h-[56px] min-w-[64px] flex-col items-center justify-center px-3 py-2 transition-colors duration-200 {active
+        class="flex min-h-[56px] min-w-[64px] flex-col items-center justify-center px-3 py-2 transition-colors {active
           ? 'text-brand-accent'
           : 'text-gray-400 hover:text-gray-200'}"
         aria-current={active ? 'page' : undefined}
       >
         <svg
-          class="h-6 w-6 transition-transform duration-200 {active ? 'scale-110' : ''}"
+          class="h-6 w-6"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

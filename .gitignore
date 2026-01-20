@@ -30,8 +30,7 @@ npm-debug.log*
 *.sqlite
 *.db
 
-# Generated icons (from scripts/generate-icons.js)
+# Generated icons (only icon.svg is source of truth)
 static/icon-*.png
 static/apple-touch-icon.png
 static/favicon.ico
-static/logo.png

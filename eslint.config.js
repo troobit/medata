@@ -24,23 +24,9 @@ export default ts.config(
       parserOptions: {
         parser: ts.parser
       }
-    },
-    rules: {
-      // Disable rules that are too strict for this project
-      // The app uses static paths without base path config
-      'svelte/no-navigation-without-resolve': 'off',
-      'svelte/require-each-key': 'warn'
     }
   },
   {
-    files: ['**/*.svelte.ts', '**/*.svelte.js'],
-    languageOptions: {
-      parserOptions: {
-        parser: ts.parser
-      }
-    }
-  },
-  {
-    ignores: ['build/', '.svelte-kit/', 'dist/', '.vercel/']
+    ignores: ['build/', '.svelte-kit/', 'dist/', '.vercel/', 'node_modules/']
   }
 );

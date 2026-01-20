@@ -1,5 +1,5 @@
 import { getSettingsService } from '$lib/services';
-import type { UserSettings, MLProvider, AIProvider } from '$lib/types';
+import type { UserSettings, AIProvider, AzureConfig, BedrockConfig, LocalModelConfig } from '$lib/types';
 import { DEFAULT_SETTINGS } from '$lib/types';
 
 /**
@@ -79,46 +79,108 @@ function createSettingsStore() {
     }
   }
 
-  const isMLConfigured = $derived(
+  // Provider config setters for Azure, Bedrock, and Local
+  async function setAzureConfig(config: AzureConfig) {
+    loading = true;
+    error = null;
+    try {
+      settings = await service.setAzureConfig(config);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save Azure config';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function setBedrockConfig(config: BedrockConfig) {
+    loading = true;
+    error = null;
+    try {
+      settings = await service.setBedrockConfig(config);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save Bedrock config';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function setLocalModelConfig(config: LocalModelConfig) {
+    loading = true;
+    error = null;
+    try {
+      settings = await service.setLocalModelConfig(config);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to save local model config';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function clearProviderConfig(provider: 'azure' | 'bedrock' | 'local') {
+    loading = true;
+    error = null;
+    try {
+      settings = await service.clearProviderConfig(provider);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to clear provider config';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  const isAIConfigured = $derived(
     !!(
       settings.openaiApiKey ||
       settings.geminiApiKey ||
       settings.claudeApiKey ||
-      (settings.foundryEndpoint && settings.foundryApiKey) ||
-      settings.ollamaEndpoint
+      settings.azureConfig?.apiKey ||
+      settings.bedrockConfig?.accessKeyId ||
+      settings.localModelConfig?.endpoint
     )
   );
 
-  // Backwards compatibility alias
-  const isAIConfigured = $derived(isMLConfigured);
-
-  const configuredProvider = $derived.by((): MLProvider | null => {
-    // If explicit provider is set, check if it's configured
+  const configuredProvider = $derived.by((): AIProvider | null => {
+    // Check if preferred provider is configured
     if (settings.aiProvider) {
-      const isConfigured = checkProviderConfigured(settings.aiProvider);
-      if (isConfigured) return settings.aiProvider;
+      if (isProviderConfigured(settings, settings.aiProvider)) {
+        return settings.aiProvider;
+      }
     }
-    // Auto-detect first configured provider
+    // Fallback to first configured provider
     if (settings.openaiApiKey) return 'openai';
     if (settings.geminiApiKey) return 'gemini';
     if (settings.claudeApiKey) return 'claude';
-    if (settings.foundryEndpoint && settings.foundryApiKey) return 'foundry';
-    if (settings.ollamaEndpoint) return 'ollama';
+    if (settings.azureConfig?.apiKey && settings.azureConfig?.endpoint) return 'azure';
+    if (
+      settings.bedrockConfig?.accessKeyId &&
+      settings.bedrockConfig?.secretAccessKey &&
+      settings.bedrockConfig?.region
+    )
+      return 'bedrock';
+    if (settings.localModelConfig?.endpoint) return 'local';
     return null;
   });
 
-  function checkProviderConfigured(provider: MLProvider): boolean {
+  function isProviderConfigured(s: UserSettings, provider: AIProvider): boolean {
     switch (provider) {
       case 'openai':
-        return !!settings.openaiApiKey;
+        return !!s.openaiApiKey;
       case 'gemini':
-        return !!settings.geminiApiKey;
+        return !!s.geminiApiKey;
       case 'claude':
-        return !!settings.claudeApiKey;
-      case 'foundry':
-        return !!(settings.foundryEndpoint && settings.foundryApiKey);
-      case 'ollama':
-        return !!settings.ollamaEndpoint;
+        return !!s.claudeApiKey;
+      case 'azure':
+        return !!(s.azureConfig?.apiKey && s.azureConfig?.endpoint);
+      case 'bedrock':
+        return !!(s.bedrockConfig?.accessKeyId && s.bedrockConfig?.secretAccessKey && s.bedrockConfig?.region);
+      case 'local':
+        return !!s.localModelConfig?.endpoint;
+      default:
+        return false;
     }
   }
 
@@ -135,10 +197,6 @@ function createSettingsStore() {
     get initialized() {
       return initialized;
     },
-    get isMLConfigured() {
-      return isMLConfigured;
-    },
-    /** @deprecated Use isMLConfigured instead */
     get isAIConfigured() {
       return isAIConfigured;
     },
@@ -149,7 +207,11 @@ function createSettingsStore() {
     update,
     reset,
     setApiKey,
-    clearApiKey
+    clearApiKey,
+    setAzureConfig,
+    setBedrockConfig,
+    setLocalModelConfig,
+    clearProviderConfig
   };
 }
 

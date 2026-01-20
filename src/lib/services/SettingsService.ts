@@ -1,104 +1,162 @@
-import type { UserSettings, MLProvider, AIProvider } from '$lib/types';
+import type { UserSettings, AIProvider, AzureConfig, BedrockConfig, LocalModelConfig } from '$lib/types';
 import type { ISettingsRepository } from '$lib/repositories';
-
-// Map of cloud providers to their API key field
-type CloudProvider = 'openai' | 'gemini' | 'claude';
-const CLOUD_KEY_MAP: Record<CloudProvider, keyof UserSettings> = {
-  openai: 'openaiApiKey',
-  gemini: 'geminiApiKey',
-  claude: 'claudeApiKey'
-};
+import { mergeWithEnvSettings } from '$lib/config';
 
 /**
  * Business logic layer for user settings
  * Framework-agnostic - returns Promises, no Svelte imports
+ *
+ * Settings are merged from two sources:
+ * 1. Environment variables (via .env files)
+ * 2. User settings (stored in localStorage)
+ *
+ * User settings take precedence over environment variables.
  */
 export class SettingsService {
   constructor(private repository: ISettingsRepository) {}
 
+  /**
+   * Gets settings merged from env vars and user storage.
+   * User-configured values take precedence over env vars.
+   */
   async getSettings(): Promise<UserSettings> {
+    const userSettings = await this.repository.get();
+    return mergeWithEnvSettings(userSettings);
+  }
+
+  /**
+   * Gets raw user settings without env var merging.
+   * Useful for settings UI to show what the user has explicitly configured.
+   */
+  async getUserSettings(): Promise<UserSettings> {
     return this.repository.get();
   }
 
   async updateSettings(updates: Partial<UserSettings>): Promise<UserSettings> {
-    return this.repository.update(updates);
+    const updated = await this.repository.update(updates);
+    return mergeWithEnvSettings(updated);
   }
 
   async resetSettings(): Promise<void> {
     return this.repository.clear();
   }
 
-  // API Key management for cloud providers
+  // API Key management for direct API providers
   async setApiKey(provider: AIProvider, key: string): Promise<UserSettings> {
-    if (provider === 'foundry' || provider === 'ollama') {
-      throw new Error(`Use updateSettings() for ${provider} configuration`);
+    const keyMap: Partial<Record<AIProvider, keyof UserSettings>> = {
+      openai: 'openaiApiKey',
+      gemini: 'geminiApiKey',
+      claude: 'claudeApiKey'
+    };
+
+    const settingKey = keyMap[provider];
+    if (!settingKey) {
+      throw new Error(
+        `Provider "${provider}" uses config objects instead of API keys. Use setProviderConfig instead.`
+      );
     }
 
-    const keyField = CLOUD_KEY_MAP[provider as CloudProvider];
     return this.updateSettings({
-      [keyField]: key,
+      [settingKey]: key,
       aiProvider: provider
     });
   }
 
   async getApiKey(provider: AIProvider): Promise<string | undefined> {
     const settings = await this.getSettings();
+    const keyMap: Partial<Record<AIProvider, keyof UserSettings>> = {
+      openai: 'openaiApiKey',
+      gemini: 'geminiApiKey',
+      claude: 'claudeApiKey'
+    };
 
-    if (provider === 'foundry') return settings.foundryApiKey;
-    if (provider === 'ollama') return undefined; // Ollama doesn't use API keys
+    const settingKey = keyMap[provider];
+    if (!settingKey) return undefined;
 
-    const keyField = CLOUD_KEY_MAP[provider as CloudProvider];
-    return settings[keyField] as string | undefined;
+    return settings[settingKey] as string | undefined;
   }
 
   async clearApiKey(provider: AIProvider): Promise<UserSettings> {
-    if (provider === 'foundry') {
-      return this.updateSettings({ foundryApiKey: undefined, foundryEndpoint: undefined });
-    }
-    if (provider === 'ollama') {
-      return this.updateSettings({ ollamaEndpoint: undefined, ollamaModel: undefined });
+    const keyMap: Partial<Record<AIProvider, keyof UserSettings>> = {
+      openai: 'openaiApiKey',
+      gemini: 'geminiApiKey',
+      claude: 'claudeApiKey'
+    };
+
+    const settingKey = keyMap[provider];
+    if (!settingKey) {
+      throw new Error(`Provider "${provider}" uses config objects. Use clearProviderConfig instead.`);
     }
 
-    const keyField = CLOUD_KEY_MAP[provider as CloudProvider];
-    return this.updateSettings({ [keyField]: undefined });
+    return this.updateSettings({ [settingKey]: undefined });
   }
 
-  async isMLConfigured(): Promise<boolean> {
+  // Config management for Azure, Bedrock, and Local providers
+  async setAzureConfig(config: AzureConfig): Promise<UserSettings> {
+    return this.updateSettings({
+      azureConfig: config,
+      aiProvider: 'azure'
+    });
+  }
+
+  async setBedrockConfig(config: BedrockConfig): Promise<UserSettings> {
+    return this.updateSettings({
+      bedrockConfig: config,
+      aiProvider: 'bedrock'
+    });
+  }
+
+  async setLocalModelConfig(config: LocalModelConfig): Promise<UserSettings> {
+    return this.updateSettings({
+      localModelConfig: config,
+      aiProvider: 'local'
+    });
+  }
+
+  async clearProviderConfig(provider: 'azure' | 'bedrock' | 'local'): Promise<UserSettings> {
+    const configMap: Record<typeof provider, keyof UserSettings> = {
+      azure: 'azureConfig',
+      bedrock: 'bedrockConfig',
+      local: 'localModelConfig'
+    };
+
+    return this.updateSettings({ [configMap[provider]]: undefined });
+  }
+
+  async isAIConfigured(): Promise<boolean> {
     const settings = await this.getSettings();
     return !!(
       settings.openaiApiKey ||
       settings.geminiApiKey ||
       settings.claudeApiKey ||
-      (settings.foundryEndpoint && settings.foundryApiKey) ||
-      settings.ollamaEndpoint
+      settings.azureConfig?.apiKey ||
+      settings.bedrockConfig?.accessKeyId ||
+      settings.localModelConfig?.endpoint
     );
   }
 
-  /** @deprecated Use isMLConfigured instead */
-  async isAIConfigured(): Promise<boolean> {
-    return this.isMLConfigured();
-  }
-
-  async getConfiguredProvider(): Promise<MLProvider | null> {
+  async getConfiguredProvider(): Promise<AIProvider | null> {
     const settings = await this.getSettings();
 
-    // Check explicit provider preference first
-    if (settings.aiProvider && (await this.isProviderConfigured(settings.aiProvider))) {
-      return settings.aiProvider;
+    // Check if preferred provider is configured
+    if (settings.aiProvider) {
+      if (this.isProviderConfigured(settings, settings.aiProvider)) {
+        return settings.aiProvider;
+      }
     }
 
     // Fallback to first configured provider
-    if (settings.openaiApiKey) return 'openai';
-    if (settings.geminiApiKey) return 'gemini';
-    if (settings.claudeApiKey) return 'claude';
-    if (settings.foundryEndpoint && settings.foundryApiKey) return 'foundry';
-    if (settings.ollamaEndpoint) return 'ollama';
+    const providers: AIProvider[] = ['openai', 'gemini', 'claude', 'azure', 'bedrock', 'local'];
+    for (const provider of providers) {
+      if (this.isProviderConfigured(settings, provider)) {
+        return provider;
+      }
+    }
 
     return null;
   }
 
-  private async isProviderConfigured(provider: MLProvider): Promise<boolean> {
-    const settings = await this.getSettings();
+  private isProviderConfigured(settings: UserSettings, provider: AIProvider): boolean {
     switch (provider) {
       case 'openai':
         return !!settings.openaiApiKey;
@@ -106,10 +164,18 @@ export class SettingsService {
         return !!settings.geminiApiKey;
       case 'claude':
         return !!settings.claudeApiKey;
-      case 'foundry':
-        return !!(settings.foundryEndpoint && settings.foundryApiKey);
-      case 'ollama':
-        return !!settings.ollamaEndpoint;
+      case 'azure':
+        return !!(settings.azureConfig?.apiKey && settings.azureConfig?.endpoint);
+      case 'bedrock':
+        return !!(
+          settings.bedrockConfig?.accessKeyId &&
+          settings.bedrockConfig?.secretAccessKey &&
+          settings.bedrockConfig?.region
+        );
+      case 'local':
+        return !!settings.localModelConfig?.endpoint;
+      default:
+        return false;
     }
   }
 }

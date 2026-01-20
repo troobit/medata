@@ -1,80 +1,131 @@
-<div align="center">
-
-<img src="static/logo.png" alt="MeData logo" width="80" />
-
 # MeData
 
-[![SvelteKit](https://img.shields.io/badge/SvelteKit-Svelte_5-ff3e00?style=flat-square&logo=svelte&logoColor=white)](https://svelte.dev)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
-[![Deploy](https://img.shields.io/badge/Deploy-Vercel-black?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com)
+A personal data tracking application for logging meal macros, insulin doses, and BSL. Uses ML-powered food recognition to estimate macros from photos.
 
-</div>
-
----
-
-Personal health data tracker with AI-powered food recognition. SvelteKit 5, TailwindCSS 4, IndexedDB for local-first storage, PWA-ready.
-
-## Commands
+## Quick Start
 
 ```bash
-pnpm install    # Install deps + generate icons
-pnpm dev        # Dev server at localhost:5173
-pnpm build      # Production build
-pnpm preview    # Preview production build
-pnpm check      # TypeScript check
-pnpm icons      # Regenerate icons from static/icon.svg
+pnpm install
+pnpm dev
 ```
 
-## Structure
-
-```
-src/routes/           # Pages (home, log, history, settings)
-src/lib/components/   # UI components (Button, EmptyState, icons, etc.)
-src/lib/stores/       # Svelte stores (events, settings, navigation)
-src/lib/services/     # Database and API services
-src/lib/types/        # TypeScript type definitions
-static/icon.svg       # Logo source (generates all PWA icons)
+Build for production:
+```bash
+pnpm build
+pnpm preview
 ```
 
-## Stack
+## Features
 
-| Layer     | Tech                             |
-| --------- | -------------------------------- |
-| Framework | SvelteKit + Svelte 5 (runes)     |
-| Styling   | TailwindCSS 4 via Vite plugin    |
-| Storage   | IndexedDB via Dexie.js           |
-| AI        | Cloud Vision APIs (configurable) |
-| Deploy    | Vercel (auto-deploy on merge)    |
+| Feature | Route | Status |
+|---------|-------|--------|
+| Manual meal logging | `/log/meal` | Complete |
+| AI photo recognition | `/log/meal/photo` | Complete |
+| Nutrition label scan | `/log/meal/label` | Complete |
+| Volume estimation | `/log/meal/estimate` | Complete |
+| Insulin logging | `/log/insulin` | Complete |
+| Manual BSL entry | `/log/bsl` | Complete |
+| CSV BSL import | `/import/bsl` | Complete |
+| CGM graph import | `/import/cgm` | Complete |
+| Event history | `/history` | Complete |
+| Settings | `/settings` | Complete |
 
-## Quick Reference
+## Development
 
-**Event types**: insulin, meal, bsl, exercise
+### Branch Structure
 
-**Icons**: Generated on install from `static/icon.svg` (gitignored)
+```
+main                    # Stable releases
+└── dev-0               # Integration staging
+    ├── dev-1           # Workstream A: AI food recognition (merged)
+    ├── dev-2           # Workstream B: CGM graph capture (merged)
+    ├── dev-3           # Workstream C: Local estimation (merged)
+    └── dev-4           # Workstream D: BSL import (merged)
+```
 
-**Brand colors**: Configured in `src/app.css` via `@theme` block
+### Key Directories
 
-## Research References
+```
+src/
+├── lib/
+│   ├── components/     # Svelte components by feature
+│   │   ├── ai/         # AI recognition components
+│   │   ├── cgm/        # CGM graph components
+│   │   ├── import/     # CSV import components
+│   │   ├── local-estimation/  # Volume estimation
+│   │   └── ui/         # Shared UI components
+│   ├── services/       # Business logic
+│   │   ├── ai/         # AI provider services
+│   │   ├── cgm/        # CGM extraction
+│   │   ├── import/     # CSV parsing
+│   │   └── local-estimation/  # Volume calculation
+│   ├── stores/         # Svelte 5 runes stores
+│   ├── types/          # TypeScript interfaces
+│   └── db/             # IndexedDB (Dexie)
+└── routes/             # SvelteKit routes
+```
 
-The AI food recognition approach is informed by peer-reviewed research:
+### Commands
 
-| Paper                                                                                                                                                 | Key Findings                                                                                                                |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [GoCARB: Carbohydrate Estimation by Mobile Phone (JMIR 2016)](https://www.jmir.org/2016/5/e101/)                                                      | Mobile carbohydrate estimation achieves 26.9% mean absolute error vs 34.3% for self-report; 85.1% food recognition accuracy |
-| [Comprehensive Survey of Image-Based Food Recognition (Healthcare 2021)](https://pmc.ncbi.nlm.nih.gov/articles/PMC8700885/)                           | Survey of CNN architectures for food recognition; MobileNetV2 achieves ~85% on Food-101                                     |
-| [Smartphone-based Food Recognition with Multiple CNN Models (MTA 2021)](https://link.springer.com/article/10.1007/s11042-021-11329-6)                 | Ensemble deep learning approaches for mobile food classification                                                            |
-| [Applying Image-Based Food-Recognition Systems (Advances in Nutrition 2023)](<https://advances.nutrition.org/article/S2161-8313(23)00093-5/fulltext>) | Systematic review of dietary assessment accuracy across platforms                                                           |
-| [AI-based Digital Image Dietary Assessment (Annals of Medicine 2023)](https://www.tandfonline.com/doi/full/10.1080/07853890.2023.2273497)             | Comparison of AI methods to human assessment and ground truth                                                               |
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start dev server |
+| `pnpm build` | Production build |
+| `pnpm check` | Type checking |
+| `pnpm lint` | ESLint + Prettier |
+| `pnpm format` | Format code |
+| `pnpm generate-icons` | Regenerate PWA icons |
 
-### Key Research Insights
+## Configuration
 
-1. **User corrections improve accuracy**: Systems that capture user edits to AI predictions can iteratively improve (GoCARB approach)
-2. **Cloud APIs outperform on-device**: Modern vision APIs (GPT-4V, Gemini, Claude) exceed accuracy of standalone mobile models
-3. **Reference objects aid volume estimation**: Known-size objects (credit card, coin) improve portion size accuracy
-4. **Carb estimation is harder than recognition**: Identifying food is easier than accurately estimating macros from images
+### API Keys
 
-> See `docs/DEVELOPMENT_PLAN.md` for implementation details.
+Set API keys in Settings (`/settings`) for AI features:
 
----
+- **OpenAI** - GPT-4 Vision for food recognition
+- **Google Gemini** - Alternative vision provider
+- **Anthropic Claude** - Alternative vision provider
 
-> See `CLAUDE.md` for full development guide.
+Keys are stored in localStorage, never sent to any server except the respective AI provider.
+
+### Data Sources
+
+Events are tagged with their source:
+
+| Source | Description |
+|--------|-------------|
+| `manual` | User entered |
+| `ai` | AI photo recognition |
+| `local-estimation` | Volume-based estimation |
+| `cgm-image` | Extracted from CGM screenshot |
+| `csv-import` | Imported from CSV file |
+
+## Storage
+
+All data is stored locally in IndexedDB via Dexie.js. No server or cloud account required.
+
+### Troubleshooting
+
+**"Permission denied" or "Database access blocked":**
+
+1. Safari Private Browsing disables IndexedDB - use regular window
+2. Check browser privacy settings allow site data
+3. Free up device storage if quota exceeded
+
+**Data not persisting:**
+
+- Avoid private/incognito mode
+- iOS Safari: use "Add to Home Screen" for better persistence
+
+## Tech Stack
+
+- SvelteKit + Svelte 5 (runes)
+- TypeScript
+- Tailwind CSS v4
+- Dexie.js (IndexedDB)
+- Vercel adapter
+
+## Documentation
+
+- [Requirements](docs/requirements.md) - Original specification
+- [Development Plan](docs/DEVELOPMENT_PLAN.md) - Workstream details
