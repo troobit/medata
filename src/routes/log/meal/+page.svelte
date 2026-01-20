@@ -113,6 +113,41 @@
   </header>
 
   <div class="flex flex-1 flex-col">
+    <!-- Smart Entry Options -->
+    <div class="mb-6">
+      <span class="mb-2 block text-sm font-medium text-gray-400">Smart Entry</span>
+      <div class="grid grid-cols-3 gap-2">
+        <a
+          href="/log/meal/photo"
+          class="flex flex-col items-center rounded-lg bg-blue-500/10 p-3 text-center transition-colors hover:bg-blue-500/20"
+        >
+          <span class="mb-1 text-2xl">📷</span>
+          <span class="text-xs text-blue-400">AI Photo</span>
+        </a>
+        <a
+          href="/log/meal/estimate"
+          class="flex flex-col items-center rounded-lg bg-purple-500/10 p-3 text-center transition-colors hover:bg-purple-500/20"
+        >
+          <span class="mb-1 text-2xl">📐</span>
+          <span class="text-xs text-purple-400">Estimate</span>
+        </a>
+        <a
+          href="/log/meal/label"
+          class="flex flex-col items-center rounded-lg bg-green-500/10 p-3 text-center transition-colors hover:bg-green-500/20"
+        >
+          <span class="mb-1 text-2xl">🏷️</span>
+          <span class="text-xs text-green-400">Scan Label</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="mb-6 flex items-center gap-3">
+      <div class="h-px flex-1 bg-gray-800"></div>
+      <span class="text-xs text-gray-500">or enter manually</span>
+      <div class="h-px flex-1 bg-gray-800"></div>
+    </div>
+
     <!-- Photo Capture -->
     <div class="mb-6">
       {#if photoUrl}

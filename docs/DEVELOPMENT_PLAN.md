@@ -1,7 +1,8 @@
 # MeData Development Plan
 
 > **Source of Truth**: [requirements.md](./requirements.md)
-> **Architecture Reference**: [arch_pattern_review.md](./arch_pattern_review.md)
+> **Last Updated**: 2026-01-20
+> **Current Branch**: `dev-0` (integration staging)
 
 ---
 
@@ -11,14 +12,13 @@ MeData is a **mobile-first SPA** for tracking physiological data (meals, insulin
 
 ### Key Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Framework | SvelteKit + adapter-static | SPA with offline capability, modern DX |
-| Data Storage | IndexedDB (via Dexie.js) | Structured offline storage, good capacity |
-| Data Abstraction | Repository Pattern | Clean separation, enables future backends |
-| API Keys | User-provided, session storage | Simplest model, no backend needed |
-| UI Approach | Mobile-first, responsive | Primary users on phones |
-| ML/Regression | Deferred to Phase 5+ | Focus on data capture first |
+| Decision         | Choice                      | Rationale                                 |
+| ---------------- | --------------------------- | ----------------------------------------- |
+| Framework        | SvelteKit + adapter-vercel  | SPA with offline capability, modern DX    |
+| Data Storage     | IndexedDB (via Dexie.js)    | Structured offline storage, good capacity |
+| Data Abstraction | Repository Pattern          | Clean separation, enables future backends |
+| API Keys         | User-provided, localStorage | Simplest model, no backend needed         |
+| UI Approach      | Mobile-first, responsive    | Primary users on phones                   |
 
 ---
 
@@ -35,7 +35,7 @@ MeData is a **mobile-first SPA** for tracking physiological data (meals, insulin
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Service Layer                              │
-│  (EventService, MealService, InsulinService, AIService)         │
+│  (EventService, SettingsService, + Workstream Services)         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -57,875 +57,828 @@ MeData is a **mobile-first SPA** for tracking physiological data (meals, insulin
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Model (Event Log)
+---
+
+## Parallel Workstream Architecture
+
+The project is structured into **4 independent workstreams** that can be developed concurrently by different team members. Each workstream has:
+
+- Its own feature branch
+- Dedicated file ownership (no overlapping files)
+- Independent merge capability
+- Shared interfaces for integration
+
+```
+main (stable releases)
+  │
+  └── dev-0 (integration staging)
+        │
+        ├── dev-1 ← CGM graph image capture
+        ├── dev-2 ← AI-powered food recognition
+        ├── dev-3 ← Local food volume estimation
+        └── dev-4 ← BSL data import
+```
+
+### Integration Strategy
+
+1. **Feature branches** merge into `dev-0` for integration testing
+2. **dev-0** merges into `main` for stable releases
+3. All workstreams share common interfaces defined in `src/lib/types/`
+4. Integration tests run on `dev-0` before main merge
+
+---
+
+## Shared Infrastructure (Phase 0)
+
+**Status**: ✅ COMPLETE (Phase 1 & 2 baseline)
+
+Before workstreams begin, the following shared infrastructure must be in place:
+
+### Completed Foundation
+
+- [x] Project scaffolding (SvelteKit, TypeScript, Tailwind)
+- [x] Data layer with Repository Pattern
+- [x] Core TypeScript types and interfaces
+- [x] Basic app shell with mobile navigation
+- [x] Settings page with API key management
+- [x] Event logging (insulin, meal basics)
+- [x] History view with filtering
+- [x] PWA manifest and service worker
+
+### Shared Types & Interfaces
+
+All workstreams use these common interfaces:
 
 ```typescript
-// Core event structure - all physiological data follows this pattern
+// src/lib/types/events.ts - SHARED (do not modify without coordination)
 interface PhysiologicalEvent {
-  id: string;                    // UUID
-  timestamp: Date;               // When the event occurred
-  event_type: EventType;         // 'meal' | 'insulin' | 'bsl' | 'exercise' | ...
-  value: number;                 // Primary numeric value
-  metadata: Record<string, any>; // Type-specific additional data
-  created_at: Date;              // Record creation time
-  updated_at: Date;              // Last modification time
-  synced?: boolean;              // For future multi-device sync
-}
-
-// Event type definitions
-type EventType =
-  | 'meal'      // value = total carbs, metadata = { calories, protein, fat, description, photo_url }
-  | 'insulin'   // value = units, metadata = { type: 'bolus' | 'basal' }
-  | 'bsl'       // value = mmol/L or mg/dL, metadata = { unit }
-  | 'exercise'; // value = duration_minutes, metadata = { intensity, type }
-
-// Preset for saved meals
-interface MealPreset {
   id: string;
-  name: string;
-  items: MealItem[];
-  total_macros: MacroData;
-  created_at: Date;
+  timestamp: Date;
+  eventType: 'meal' | 'insulin' | 'bsl' | 'exercise';
+  value: number;
+  metadata: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  synced?: boolean;
 }
 
-interface MacroData {
-  calories: number;
-  carbs: number;
-  protein: number;
-  fat: number;
+// Meal metadata structure (extended by workstreams A & C)
+interface MealMetadata {
+  calories?: number;
+  protein?: number;
+  fat?: number;
+  carbs?: number; // Stored in value field
+  description?: string;
+  photoUrl?: string;
+  items?: MealItem[];
+  source?: 'manual' | 'ai' | 'local-estimation'; // NEW: Identifies data source
+  confidence?: number; // NEW: Estimation confidence 0-1
+  corrections?: CorrectionRecord[]; // NEW: User correction history
 }
-```
 
-### Repository Interface Pattern
-
-```typescript
-// Base repository interface - all implementations must satisfy this
-interface IEventRepository {
-  // CRUD
-  create(event: Omit<PhysiologicalEvent, 'id' | 'created_at' | 'updated_at'>): Promise<PhysiologicalEvent>;
-  getById(id: string): Promise<PhysiologicalEvent | null>;
-  update(id: string, updates: Partial<PhysiologicalEvent>): Promise<PhysiologicalEvent>;
-  delete(id: string): Promise<void>;
-
-  // Queries
-  getByDateRange(start: Date, end: Date): Promise<PhysiologicalEvent[]>;
-  getByType(type: EventType, limit?: number): Promise<PhysiologicalEvent[]>;
-  getRecent(limit: number): Promise<PhysiologicalEvent[]>;
-
-  // Bulk operations
-  bulkCreate(events: PhysiologicalEvent[]): Promise<PhysiologicalEvent[]>;
-  exportAll(): Promise<PhysiologicalEvent[]>;
-  importBulk(events: PhysiologicalEvent[]): Promise<void>;
-  clear(): Promise<void>;
+// BSL metadata structure (used by workstreams B & D)
+interface BSLMetadata {
+  unit: 'mmol/L' | 'mg/dL';
+  source?: 'manual' | 'cgm-image' | 'csv-import' | 'api'; // NEW
+  device?: string; // NEW: e.g., "Freestyle Libre 3"
 }
-```
-
-This pattern allows:
-- **Testing**: Mock repositories for unit tests
-- **Future backends**: Implement `RestApiEventRepository` without changing UI
-- **Multiple storage**: Mix IndexedDB for events, LocalStorage for settings
-
----
-
-## Phase Structure
-
-Each phase is developed on its own **feature branch** and can be merged independently. Phases are designed with minimal cross-dependencies.
-
-```
-main
-  ├── phase-1/foundation
-  ├── phase-2/data-input
-  ├── phase-3/visualization
-  ├── phase-4/ai-integration
-  ├── phase-5/import-export
-  └── phase-6/ml-regression (deferred)
 ```
 
 ---
 
-## Parallel Worker Strategy
+## Workstream A: AI-Powered Food Recognition
 
-Phases 2, 3, and 5 can run **concurrently** after Phase 1 completes. Phase 4 depends on Phase 2.
+**Branch**: `dev-1`
+**Owner**: TBD
+**Dependencies**: Phase 0 complete
+**Priority**: HIGH - Core differentiating feature
+
+### Objectives
+
+- Photo-based meal recognition using cloud Vision APIs
+- User correction capture for iterative learning
+- Nutrition label scanning (OCR)
+- Visual annotation with bounding boxes
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Food Recognition Pipeline                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│      Cloud Vision API     │ │     User Corrections      │
+│      (Primary)            │ │     (Iterative Learning)  │
+├───────────────────────────┤ ├───────────────────────────┤
+│ • OpenAI Vision (GPT-4V)  │ │ • Store original image    │
+│ • Google Gemini Pro       │ │ • Store AI predictions    │
+│ • Anthropic Claude        │ │ • Capture user edits      │
+│ • Ollama + LLaVA (local)  │ │ • Build correction history│
+└───────────────────────────┘ └───────────────────────────┘
+```
 
 ### File Ownership
-
-Each phase owns distinct directories to prevent merge conflicts:
-
-| Phase | Owns | Can Extend |
-|-------|------|------------|
-| 1 | `types/`, `repositories/`, `services/`, `stores/`, `components/layout/`, `components/ui/` | - |
-| 2 | `components/input/`, `components/events/`, `routes/log/`, `routes/history/` | `components/ui/` |
-| 3 | `components/charts/`, `routes/dashboard/`, `utils/chartHelpers.ts` | `components/ui/` |
-| 4 | `services/ai/`, `components/ai/`, `types/ai.ts` | `routes/log/meal/`, `types/settings.ts` |
-| 5 | `services/ImportExportService.ts`, `components/import-export/` | `routes/settings/` |
-
-### Conflict Prevention Rules
-
-1. **Append-only** for shared files (export barrels, type extensions)
-2. **Extend interfaces** rather than modify them
-3. **Rebase onto main** after Phase 1 merges
-
----
-
-## Frontend Abstraction
-
-Services are **pure TypeScript** (no Svelte imports) to support future React/Vue frontends:
-
-```
-Svelte Components → Svelte Stores (*.svelte.ts) → Services (pure TS) → Repositories
-```
-
-- **Services**: Return Promises, framework-agnostic
-- **Stores**: Wrap services with `$state`/`$derived` for Svelte reactivity
-- **Types**: Shared across any frontend
-
----
-
-## Branding
-
-**Source**: `static/icon.svg` — all icons generated from this via `scripts/generate-icons.js`
-
-```bash
-node scripts/generate-icons.js  # Generates PWA icons, favicon, apple-touch-icon
-```
-
-**Brand colors**: Background `#064e3b`, Icon `#63ff00`
-
----
-
-## Phase 1: Foundation
-
-**Branch**: `phase-1/foundation`
-**Dependencies**: None
-**Merge requirement**: Can merge to main independently
-
-### Objectives
-- Project scaffolding
-- Data layer with Repository Pattern
-- Core TypeScript types and interfaces
-- Basic app shell with mobile navigation
-
-### Tasks
-
-#### 1.1 Project Setup
-- [x] Configure adapter-static for SPA mode
-- [x] Setup Tailwind CSS (mobile-first utilities)
-- [x] Configure PWA manifest for mobile install
-- [x] Setup service worker for offline caching
-- [x] ESLint + Prettier configuration
-- [ ] Run `npm run generate-icons` to create PWA assets *(icons manually created, script not implemented)*
-- [x] (FIX) (Phase 1) Add README "Storage/IndexedDB" troubleshooting (Safari private mode / blocked site data) and clarify no manual DB setup is required
-- [x] (FIX) (Phase 1) Add app-level IndexedDB availability check + user-friendly error message when Dexie open fails (e.g., permission denied)
-
-```bash
-# Key dependencies
-npm create svelte@latest medata
-npm install -D @sveltejs/adapter-static tailwindcss sharp
-npm install dexie uuid
-```
-
-#### 1.2 Data Layer Implementation
-- [x] Define TypeScript interfaces in `$lib/types/`
-- [x] Implement Dexie.js database schema in `$lib/db/`
-- [x] Create `IEventRepository` interface
-- [x] Implement `IndexedDBEventRepository`
-- [x] Create `ISettingsRepository` for user preferences
-- [x] Implement `LocalStorageSettingsRepository`
-- [x] Create repository factory/provider
-
-#### 1.3 Service Layer
-- [x] `EventService` - business logic wrapper around repository
-- [x] `SettingsService` - API key management, preferences
-- [x] Svelte stores for reactive state (`$lib/stores/`)
-
-#### 1.4 App Shell
-- [x] Root layout with mobile navigation
-- [x] Bottom tab bar component (Home, Log, History, Settings)
-- [x] Settings page with API key input
-- [x] Empty state components
-- [x] Loading/error state components
-
-### File Structure (Phase 1)
-
-```
-src/
-├── lib/
-│   ├── types/           # events.ts, presets.ts, settings.ts
-│   ├── db/              # schema.ts, migrations.ts
-│   ├── repositories/    # Interfaces + IndexedDB/LocalStorage implementations
-│   ├── services/        # EventService.ts, SettingsService.ts (pure TS)
-│   ├── stores/          # *.svelte.ts (Svelte 5 runes adapters)
-│   └── components/
-│       ├── layout/      # BottomNav, AppShell
-│       └── ui/          # index.ts, LoadingSpinner, EmptyState
-├── routes/
-│   ├── +layout.svelte
-│   ├── +layout.js       # ssr = false, prerender = true
-│   ├── +page.svelte
-│   └── settings/+page.svelte
-└── service-worker.js
-static/
-├── icon.svg             # Brand source (do not delete)
-├── *.png, favicon.ico   # Generated by scripts/generate-icons.js
-└── manifest.json
-scripts/
-└── generate-icons.js
-```
-
-### Acceptance Criteria
-- [x] App loads offline after first visit *(service worker caches app shell)*
-- [x] Can store and retrieve test events from IndexedDB
-- [x] Settings persist across sessions *(LocalStorage implementation)*
-- [x] Mobile navigation functional
-- [ ] Lighthouse PWA score > 90 *(needs testing)*
-
----
-
-## Phase 1 Review Notes (2026-01-19)
-
-**Status: COMPLETE** (all core objectives met)
-
-**Implementation Quality:**
-- Clean repository pattern with interfaces + IndexedDB/LocalStorage implementations
-- Services are framework-agnostic (pure TypeScript)
-- Svelte 5 runes properly used in stores (`$state`, `$derived`)
-- Mobile-first dark theme with Tailwind CSS
-- PWA manifest and service worker fully configured
-
-**Architecture Decisions:**
-- Dexie.js used as planned with proper TypeScript EntityTable types
-- Settings stored in LocalStorage for simplicity (as planned)
-- Type guards implemented for metadata discrimination
-
-**Minor Gaps:**
-- Icon generation script not implemented (icons created manually)
-- Lighthouse score not yet validated
-
----
-
-## Phase 2: Data Input
-
-**Branch**: `phase-2/data-input`
-**Dependencies**: Phase 1 (data layer)
-**Merge requirement**: Phase 1 merged first, or rebase onto phase-1
-
-### Objectives
-- Insulin dose logging (3 clicks/steps max)
-- Manual meal entry with macros
-- Time adjustment for all entries
-- Recent entries list
-
-### Tasks
-
-#### 2.1 Insulin Entry (Priority: Highest - Req 2.2)
-- [x] Quick insulin log component
-  - Default to current time
-  - Default to last-used type (bolus/basal)
-  - Whole number input (1-300 range)
-  - Large touch targets for mobile
-- [x] Insulin type toggle (bolus/basal)
-- [x] Number pad or stepper for units *(stepper with quick-select buttons)*
-- [ ] Confirmation haptic/visual feedback *(visual feedback only, no haptic)*
-- [ ] "Just now" quick log button on home screen
-- [x] (FIX) (Phase 2) Resolve Svelte a11y warnings in insulin log page (associate labels with controls or replace non-control labels)
-- [x] (FIX) (Phase 2) Replace insulin quick-select fixed values with "most recent doses" (unique values), filtered by selected insulin type (basal vs bolus)
-- [x] (FIX) (Phase 2) Add +5 / -5 adjustments for insulin dose entry (in addition to +/-1 stepper)
-
-#### 2.2 Meal Entry (Manual - Req 2.1)
-- [x] Meal logging form
-  - Carbs (required)
-  - Calories, protein, fat (optional)
-  - Description/notes
-  - ~~Time picker (defaults to now)~~ *(defaults to now only, no picker)*
-- [ ] Quick macro calculator
-- [ ] Recent meals list for quick re-entry
-- [x] (FIX) (Phase 2) Unify meal input UX with insulin dose picker (stepper + quick picks, avoid "jarring" different UI)
-- [x] (FIX) (Phase 2) Add +5 / -5 adjustments for carbs and macro fields (carbs required; optional calories/protein/fat)
-- [x] (FIX) (Phase 2) Add photo capture/select as part of "add food" UI flow (store `photoUrl` in meal metadata)
-- [x] (FIX) (Phase 2) Add customizable icon-based food shortcuts (e.g., burger, pint) that set a default meal template
-- [x] (FIX) (Phase 2) Integrate shortcuts + meal presets into meal logging flow (quick apply + edit before save)
-
-#### 2.3 Time Adjustment (Req 2.3)
-- [ ] Edit modal for any event
-- [ ] Timestamp picker component
-- [ ] Swipe-to-edit on event list items
-- [ ] Edit history tracking (in metadata)
-
-#### 2.4 Event History
-- [x] Chronological event list *(grouped by date)*
-- [x] Filter by event type
-- [ ] Date range selector
-- [ ] Pull-to-refresh pattern
-- [ ] Infinite scroll or pagination *(limited to 50 recent events)*
-
-### UI Components (Phase 2)
-
-```
-src/lib/components/
-├── input/
-│   ├── InsulinQuickLog.svelte    # 3-step insulin entry
-│   ├── MealEntryForm.svelte      # Full meal form
-│   ├── NumberStepper.svelte      # +/- buttons for units
-│   ├── TimePicker.svelte         # Mobile-friendly time picker
-│   └── MacroInputGroup.svelte    # Carbs/protein/fat inputs
-├── events/
-│   ├── EventList.svelte          # Scrollable event history
-│   ├── EventCard.svelte          # Single event display
-│   ├── EventEditModal.svelte     # Edit existing event
-│   └── EventFilters.svelte       # Type/date filters
-└── feedback/
-    ├── Toast.svelte              # Success/error notifications
-    └── HapticButton.svelte       # Button with haptic feedback
-```
-
-### Routes (Phase 2)
-
-```
-src/routes/
-├── log/
-│   ├── +page.svelte              # Log entry hub
-│   ├── insulin/
-│   │   └── +page.svelte          # Quick insulin entry
-│   └── meal/
-│       └── +page.svelte          # Meal entry form
-└── history/
-    └── +page.svelte              # Event history list
-```
-
-### Acceptance Criteria
-- [x] Insulin can be logged in ≤3 taps from home *(Home → Log Insulin → Select type → Enter units → Save)*
-- [x] Meal macros saved correctly to IndexedDB
-- [ ] Events can be edited after creation *(edit functionality not implemented)*
-- [x] History shows all events chronologically
-- [x] Works fully offline
-
----
-
-## Phase 2 Review Notes (2026-01-19)
-
-**Completed:**
-- Basic insulin logging with type toggle and stepper controls
-- Basic meal logging with macro inputs
-- Event history with type filtering
-- Home page with today's summary and recent entries
-
-**Outstanding:**
-- Time picker component for adjusting timestamps
-- Event editing modal
-- Haptic feedback
-- Quick log from home screen
-- Macro calculator
-- Recent meals quick-select
-- Date range filtering in history
-- Pagination/infinite scroll
-
----
-
-## Phase 3: Visualization
-
-**Branch**: `phase-3/visualization`
-**Dependencies**: Phase 1 (data layer), benefits from Phase 2 data
-**Merge requirement**: Phase 1 required; Phase 2 optional but recommended
-
-### Objectives
-- BSL trend charts
-- Meal/insulin timeline overlay
-- Daily/weekly summary views
-- Best-in-class mobile charting
-
-### Tasks
-
-#### 3.1 Charting Library Selection
-Evaluate and select charting library:
-
-| Library | Pros | Cons |
-|---------|------|------|
-| **Chart.js** | Simple, well-known | Less customizable |
-| **Apache ECharts** | Powerful, mobile-optimized | Larger bundle |
-| **Lightweight Charts** | Trading-style, performant | Limited chart types |
-| **LayerCake** | Svelte-native, composable | More manual work |
-| **Pancake** | Svelte-native, SSR-friendly | Less maintained |
-
-**Recommendation**: LayerCake or ECharts depending on complexity needs.
-
-#### 3.2 BSL Trend Chart
-- [ ] Time-series line chart for BSL readings
-- [ ] Configurable time range (day/week/month)
-- [ ] Touch-friendly zoom/pan
-- [ ] Reference lines for target ranges
-- [ ] Color coding (in-range, high, low)
-
-#### 3.3 Event Timeline Overlay
-- [ ] Meal events as markers on BSL chart
-- [ ] Insulin doses as vertical lines/markers
-- [ ] Tap marker to see event details
-- [ ] Legend with toggle visibility
-
-#### 3.4 Summary Dashboard
-- [ ] Daily carb/insulin totals
-- [ ] Average BSL with trend indicator
-- [ ] Time-in-range percentage
-- [ ] Weekly comparison cards
-
-### File Structure (Phase 3)
-
-```
-src/lib/
-├── components/
-│   └── charts/
-│       ├── BSLTrendChart.svelte
-│       ├── TimelineOverlay.svelte
-│       ├── DailySummaryCard.svelte
-│       ├── WeeklySummary.svelte
-│       └── ChartControls.svelte   # Zoom, pan, time range
-└── utils/
-    └── chartHelpers.ts            # Data transformation for charts
-```
-
-### Acceptance Criteria
-- [ ] BSL chart renders smoothly with 1000+ data points
-- [ ] Charts responsive on mobile (touch gestures work)
-- [ ] Meal/insulin markers visible on timeline
-- [ ] Summary statistics calculate correctly
-- [ ] Charts work offline with cached data
-
----
-
-## Phase 4: AI Integration
-
-**Branch**: `phase-4/ai-integration`
-**Dependencies**: Phase 1 (settings for API keys), Phase 2 (meal entry)
-**Merge requirement**: Phase 1 required; Phase 2 recommended
-
-### Objectives
-- Photo-based meal recognition (Req 4.1, 4.2)
-- Visual annotation of recognized food (Req 4.3)
-- Nutrition label scanning (Req 4.4)
-- API key configuration (Req 7.2)
-
-### Tasks
-
-#### 4.1 AI Service Layer
-- [ ] `AIService` interface for food recognition
-- [ ] Implementations for:
-  - OpenAI Vision API
-  - Google Gemini
-  - Claude (Anthropic)
-- [ ] API key validation and storage
-- [ ] Rate limiting / error handling
-- [ ] Fallback between providers
-
-```typescript
-interface IAIFoodService {
-  recognizeFood(image: Blob): Promise<FoodRecognitionResult>;
-  parseNutritionLabel(image: Blob): Promise<NutritionLabelResult>;
-  isConfigured(): boolean;
-}
-
-interface FoodRecognitionResult {
-  items: RecognizedFoodItem[];
-  confidence: number;
-  annotatedImageUrl?: string;
-}
-```
-
-#### 4.2 Camera Integration
-- [ ] Camera capture component (mobile-optimized)
-- [ ] Image preview and retake
-- [ ] Image compression before upload
-- [ ] Gallery selection fallback
-
-#### 4.3 Food Recognition Flow
-- [ ] Capture/select photo
-- [ ] Show loading state during AI processing
-- [ ] Display recognized items with confidence
-- [ ] Allow user to adjust/confirm macros
-- [ ] Save with photo reference
-
-#### 4.4 Nutrition Label Scanner
-- [ ] Dedicated "scan label" mode
-- [ ] Extract: serving size, calories, carbs, protein, fat
-- [ ] User inputs number of servings
-- [ ] Calculate totals
-
-#### 4.5 Visual Annotation (Req 4.3)
-- [ ] Overlay bounding boxes on recognized food
-- [ ] Color-coded by food type
-- [ ] Tap region to see item details
-
-### File Structure (Phase 4)
 
 ```
 src/lib/
 ├── services/
-│   └── ai/
-│       ├── IAIFoodService.ts
+│   └── ai/                          # OWNED BY WORKSTREAM A
+│       ├── IFoodRecognitionService.ts
 │       ├── OpenAIFoodService.ts
 │       ├── GeminiFoodService.ts
 │       ├── ClaudeFoodService.ts
-│       └── AIServiceFactory.ts
+│       ├── OllamaFoodService.ts
+│       ├── FoodServiceFactory.ts
+│       └── prompts/
+│           └── foodRecognition.ts
 ├── components/
-│   └── ai/
+│   └── ai/                          # OWNED BY WORKSTREAM A
 │       ├── CameraCapture.svelte
+│       ├── PhotoPreview.svelte
+│       ├── RecognitionLoading.svelte
 │       ├── FoodRecognitionResult.svelte
 │       ├── AnnotatedFoodImage.svelte
+│       ├── FoodItemEditor.svelte
 │       ├── NutritionLabelScanner.svelte
 │       └── MacroConfirmation.svelte
+├── types/
+│   └── ai.ts                        # OWNED BY WORKSTREAM A
 └── utils/
-    └── imageProcessing.ts         # Compression, conversion
+    └── imageProcessing.ts           # OWNED BY WORKSTREAM A
 ```
 
-### Routes (Phase 4)
+### Routes
 
 ```
 src/routes/
 └── log/
     └── meal/
-        ├── photo/
-        │   └── +page.svelte       # Photo capture & recognition
-        └── label/
-            └── +page.svelte       # Nutrition label scanning
+        ├── photo/                   # OWNED BY WORKSTREAM A
+        │   └── +page.svelte         # AI photo recognition flow
+        └── label/                   # OWNED BY WORKSTREAM A
+            └── +page.svelte         # Nutrition label scanning
 ```
-
-### Acceptance Criteria
-- [ ] User can configure API key in settings
-- [ ] Photo capture works on iOS and Android browsers
-- [ ] AI returns macro estimates within 10 seconds
-- [ ] User can adjust AI estimates before saving
-- [ ] Nutrition label parsing extracts key values
-- [ ] Graceful degradation when AI unavailable
-
----
-
-## Phase 5: Import/Export
-
-**Branch**: `phase-5/import-export`
-**Dependencies**: Phase 1 (data layer)
-**Merge requirement**: Phase 1 required
-
-### Objectives
-- CSV upload/download (Req 3.1, 3.2)
-- BSL time-series import (Req 3.3)
-- Backup and restore functionality
-- Meal presets (Req 6.2)
 
 ### Tasks
 
-#### 5.1 Export Functionality
-- [ ] Export all data as JSON backup
-- [ ] Export filtered data as CSV
-- [ ] Date range selection for export
-- [ ] Download trigger (mobile-friendly)
+#### A.1 Cloud AI Service Layer
 
-#### 5.2 Import Functionality
-- [ ] JSON backup restore
-- [ ] CSV import with column mapping
-- [ ] Duplicate detection
-- [ ] Import preview before commit
-- [ ] Progress indicator for large imports
+- [ ] Define `IFoodRecognitionService` interface
+- [ ] Implement OpenAI Vision provider (GPT-4V)
+- [ ] Implement Gemini Pro Vision provider
+- [ ] Implement Claude Vision provider
+- [ ] Implement Ollama/LLaVA provider (self-hosted)
+- [ ] Create provider factory with fallback chain
+- [ ] Structured prompt engineering for consistent output
 
-#### 5.3 BSL Time-Series Import (Req 3.3)
-- [ ] Support common CGM export formats
-- [ ] Libre CSV format
-- [ ] Dexcom CSV format
-- [ ] Time zone handling
-- [ ] Merge with existing data
+#### A.2 Camera & Image Processing
 
-#### 5.4 Graph Image Interpolation (Req 3.3.1)
-- [ ] Upload graph image
-- [ ] AI-powered curve extraction
-- [ ] User-defined axis ranges
-- [ ] Convert to time-series data points
-- [ ] Preview before import
+- [ ] Camera capture component (`getUserMedia`)
+- [ ] Image compression (WebP, quality 80)
+- [ ] EXIF orientation handling
+- [ ] Gallery selection fallback
 
-#### 5.5 Meal Presets (Req 6.2)
-- [ ] Save current meal as preset
-- [ ] Preset library management
-- [ ] Quick-apply preset to new meal
-- [ ] Edit/delete presets
+#### A.3 Recognition UX Flow
 
-### File Structure (Phase 5)
+- [ ] Photo capture screen
+- [ ] Loading state with progress
+- [ ] Results display with bounding boxes
+- [ ] Per-item macro editing
+- [ ] Confidence indicators
+- [ ] Save with source attribution
+
+#### A.4 Iterative Learning Pipeline
+
+- [ ] Store original predictions
+- [ ] Capture user corrections
+- [ ] Track accuracy over time
+- [ ] Prompt enhancement from history
+
+#### A.5 Nutrition Label Scanner
+
+- [ ] OCR via cloud vision API
+- [ ] Australian nutrition panel format
+- [ ] Serving size calculations
+
+### Acceptance Criteria
+
+- [ ] Photo capture works on iOS Safari and Android Chrome
+- [ ] Cloud AI returns macro estimates within 10 seconds
+- [ ] User can adjust AI estimates before saving
+- [ ] User corrections stored with `source: 'ai'`
+- [ ] Graceful fallback to manual entry when API unavailable
+
+---
+
+## Workstream B: CGM Graph Image Capture
+
+**Branch**: `dev-2`
+**Owner**: TBD
+**Dependencies**: Phase 0 complete
+**Priority**: HIGH - Enables BSL data without manual entry
+
+### Objectives
+
+- Capture screenshots from Freestyle Libre, Dexcom, and similar CGM apps
+- Extract BSL time-series data from graph images
+- ML-assisted curve extraction (initially), moving to local algorithms
+- Handle standard CGM graph formats efficiently
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   CGM Graph Processing Pipeline                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│   Image Preprocessing     │ │    Curve Extraction       │
+├───────────────────────────┤ ├───────────────────────────┤
+│ • Graph region detection  │ │ • ML-assisted (Phase 1)   │
+│ • Axis label OCR          │ │ • Template matching       │
+│ • Grid line detection     │ │ • Local algorithms (Goal) │
+│ • Color filtering         │ │ • Edge detection          │
+└───────────────────────────┘ └───────────────────────────┘
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Time-Series Generation                        │
+│  • Map pixels to BSL values using detected axis ranges          │
+│  • Generate 5-minute interval data points                        │
+│  • Validate against expected CGM ranges                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### CGM App Formats
+
+| App             | Graph Style           | Time Range       | Y-Axis       |
+| --------------- | --------------------- | ---------------- | ------------ |
+| Freestyle Libre | Yellow line, white bg | 8h, 12h, 24h     | 2-15 mmol/L  |
+| Dexcom G6/G7    | Blue line, dark bg    | 3h, 6h, 12h, 24h | 40-400 mg/dL |
+| Medtronic       | Blue gradient         | Variable         | Variable     |
+
+### File Ownership
 
 ```
 src/lib/
 ├── services/
-│   ├── ImportExportService.ts
-│   ├── CSVParser.ts
-│   └── PresetService.ts
+│   └── cgm/                         # OWNED BY WORKSTREAM B
+│       ├── ICGMImageService.ts
+│       ├── CGMImageProcessor.ts
+│       ├── LibreGraphParser.ts
+│       ├── DexcomGraphParser.ts
+│       ├── CurveExtractor.ts
+│       └── AxisDetector.ts
 ├── components/
-│   └── import-export/
-│       ├── ExportPanel.svelte
-│       ├── ImportWizard.svelte
-│       ├── CSVColumnMapper.svelte
-│       ├── ImportPreview.svelte
-│       ├── GraphImageImport.svelte
-│       └── PresetManager.svelte
+│   └── cgm/                         # OWNED BY WORKSTREAM B
+│       ├── CGMImageCapture.svelte
+│       ├── GraphRegionSelector.svelte
+│       ├── AxisRangeInput.svelte
+│       ├── ExtractionPreview.svelte
+│       └── TimeSeriesConfirm.svelte
+├── types/
+│   └── cgm.ts                       # OWNED BY WORKSTREAM B
 └── utils/
-    ├── csvHelpers.ts
-    └── dateNormalization.ts
+    └── curveExtraction.ts           # OWNED BY WORKSTREAM B
 ```
 
-### Routes (Phase 5)
+### Routes
 
 ```
 src/routes/
-├── settings/
-│   ├── export/
-│   │   └── +page.svelte
-│   ├── import/
-│   │   └── +page.svelte
-│   └── presets/
-│       └── +page.svelte
+└── import/
+    └── cgm/                         # OWNED BY WORKSTREAM B
+        └── +page.svelte             # CGM graph image import
 ```
+
+### Tasks
+
+#### B.1 Image Preprocessing
+
+- [ ] Graph region auto-detection
+- [ ] Manual region selection fallback
+- [ ] Axis label OCR (time and BSL ranges)
+- [ ] Grid line detection for calibration
+
+#### B.2 Curve Extraction - ML Phase
+
+- [ ] Cloud vision API for initial extraction
+- [ ] Prompt engineering for CGM graphs
+- [ ] Structured output (time-series JSON)
+
+#### B.3 Curve Extraction - Local Algorithms
+
+- [ ] Color-based line detection (filter by CGM line color)
+- [ ] Edge detection for curve tracing
+- [ ] Template matching for known CGM formats
+- [ ] Canvas-based pixel analysis
+
+#### B.4 Time-Series Generation
+
+- [ ] Pixel-to-value mapping
+- [ ] 5-minute interval resampling
+- [ ] Outlier detection and smoothing
+- [ ] Range validation (2-25 mmol/L / 36-450 mg/dL)
+
+#### B.5 User Confirmation Flow
+
+- [ ] Overlay extracted curve on original image
+- [ ] Allow manual point adjustment
+- [ ] Show generated time-series preview
+- [ ] Batch import into event log
 
 ### Acceptance Criteria
-- [ ] Full backup can be exported and re-imported
-- [ ] CSV import handles common date formats
-- [ ] BSL data from Libre/Dexcom imports correctly
-- [ ] Presets save and apply correctly
-- [ ] No data loss on import/export cycle
+
+- [ ] Libre graph screenshots extract ≥90% of data points correctly
+- [ ] Dexcom graph screenshots supported
+- [ ] User can adjust axis ranges if auto-detection fails
+- [ ] Extracted data imports as BSL events with `source: 'cgm-image'`
+- [ ] Local extraction works without API (Phase 2 goal)
 
 ---
 
-## Phase 6: ML & Regression (Deferred)
+## Workstream C: Local Food Volume Estimation
 
-**Branch**: `phase-6/ml-regression`
-**Dependencies**: Phases 1-5 (needs sufficient data)
-**Status**: Deferred until core features stable
+**Branch**: `dev-3`
+**Owner**: TBD
+**Dependencies**: Phase 0 complete
+**Priority**: MEDIUM - Privacy-first alternative to cloud AI
 
-### Objectives (Future)
-- Insulin dose prediction (Req 5.1)
-- Decay function modeling (Req 5.3)
-- Time-of-day effects (Req 5.4)
-- Continuous improvement with data (Req 5.5)
+### Objectives
 
-### Research Areas
-- [ ] Evaluate client-side ML (TensorFlow.js, ONNX Runtime)
-- [ ] Define minimum data requirements for training
-- [ ] Decay function mathematical models
-- [ ] Time-series regression approaches
+- Non-AI food volume estimation using reference objects
+- Browser/device-local processing (no cloud calls)
+- Reference card method (credit card = 85.6mm × 53.98mm)
+- Iterative estimation engine that improves over time
 
-### Potential Architecture
+### Research References
+
+- [GoCARB System](https://www.jmir.org/2016/5/e101/): Uses reference card for volume estimation, achieved 26.9% MAE
+- 3D reconstruction from single image with known reference size
+- Depth estimation using monocular cues
+
+### Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│           ML Service Layer              │
-│  (Runs in Web Worker for performance)   │
-└─────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────┐
-│         Feature Engineering             │
-│  - 5-min interval resampling            │
-│  - Decay function application           │
-│  - Time-of-day encoding                 │
-└─────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────┐
-│         Regression Model                │
-│  - Linear regression (baseline)         │
-│  - Gradient boosting (advanced)         │
-│  - Personal model per user              │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                 Local Volume Estimation Pipeline                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│   Reference Detection     │ │    Volume Estimation      │
+├───────────────────────────┤ ├───────────────────────────┤
+│ • Card edge detection     │ │ • Pixel-to-mm scaling     │
+│ • Perspective correction  │ │ • Food region segmentation│
+│ • Scale factor calc       │ │ • Height estimation       │
+│ • Coin detection (alt)    │ │ • Volume calculation      │
+└───────────────────────────┘ └───────────────────────────┘
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Macro Lookup & Estimation                     │
+│  • Food type selection (user-assisted)                          │
+│  • USDA FNDDS density lookup                                    │
+│  • Volume → weight → macros conversion                          │
+│  • User correction feedback loop                                │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+### File Ownership
+
+```
+src/lib/
+├── services/
+│   └── local-estimation/            # OWNED BY WORKSTREAM C
+│       ├── IVolumeEstimationService.ts
+│       ├── ReferenceDetector.ts
+│       ├── VolumeCalculator.ts
+│       ├── FoodDensityLookup.ts
+│       └── EstimationEngine.ts
+├── components/
+│   └── local-estimation/            # OWNED BY WORKSTREAM C
+│       ├── ReferenceCardGuide.svelte
+│       ├── FoodRegionSelector.svelte
+│       ├── VolumePreview.svelte
+│       ├── FoodTypeSelector.svelte
+│       └── EstimationResult.svelte
+├── data/
+│   └── food-density.ts              # OWNED BY WORKSTREAM C (USDA subset)
+├── types/
+│   └── local-estimation.ts          # OWNED BY WORKSTREAM C
+└── utils/
+    └── volumeCalculation.ts         # OWNED BY WORKSTREAM C
+```
+
+### Routes
+
+```
+src/routes/
+└── log/
+    └── meal/
+        └── estimate/                # OWNED BY WORKSTREAM C
+            └── +page.svelte         # Local volume estimation flow
+```
+
+### Tasks
+
+#### C.1 Reference Object Detection
+
+- [ ] Credit card edge detection (Canvas API)
+- [ ] Perspective correction (homography)
+- [ ] Scale factor calculation (pixels/mm)
+- [ ] Alternative: coin detection (known diameters)
+- [ ] Guide overlay for card placement
+
+#### C.2 Food Region Segmentation
+
+- [ ] User-assisted region selection (tap/draw)
+- [ ] Color-based foreground extraction
+- [ ] Boundary refinement
+- [ ] Multiple food regions support
+
+#### C.3 Volume Estimation
+
+- [ ] 2D area calculation from segmentation
+- [ ] Height estimation heuristics
+- [ ] Shape templates (bowl, plate, pile)
+- [ ] Volume calculation with uncertainty bounds
+
+#### C.4 Macro Lookup
+
+- [ ] USDA FNDDS food density dataset (subset)
+- [ ] Food type selector with search
+- [ ] Volume → weight → macros conversion
+- [ ] Confidence scoring
+
+#### C.5 Estimation Engine Improvement
+
+- [ ] Store estimations with user corrections
+- [ ] Track estimation accuracy per food type
+- [ ] Calibration factors learned from corrections
+- [ ] Export/import calibration data
+
+### Acceptance Criteria
+
+- [ ] Reference card detected in >80% of well-lit photos
+- [ ] Volume estimation within 30% of actual (initially)
+- [ ] Works entirely in-browser (no network calls)
+- [ ] User corrections improve future estimates
+- [ ] Saved with `source: 'local-estimation'`
 
 ---
 
-## Cross-Cutting Concerns
+## Workstream D: BSL Data Import
 
-### Offline-First Strategy
+**Branch**: `dev-4`
+**Owner**: TBD
+**Dependencies**: Phase 0 complete
+**Priority**: HIGH - Essential for regression modeling
 
-```javascript
-// Service Worker caching strategy
-const CACHE_STRATEGIES = {
-  static: 'cache-first',     // App shell, JS, CSS
-  api: 'network-first',      // AI API calls (when online)
-  data: 'stale-while-revalidate'  // Not applicable for IndexedDB
-};
+### Objectives
+
+- CSV import from Freestyle Libre, Dexcom exports
+- Manual BSL entry (finger prick, more accurate than CGM)
+- Historical data bulk import
+- Time zone handling and duplicate detection
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    BSL Data Import Pipeline                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│   CSV Import    │ │  Manual Entry   │ │  API Import     │
+├─────────────────┤ ├─────────────────┤ ├─────────────────┤
+│ • Libre CSV     │ │ • Single reading│ │ • Future: Direct│
+│ • Dexcom CSV    │ │ • Finger prick  │ │   CGM API       │
+│ • Generic CSV   │ │ • Lab results   │ │                 │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Data Normalization                            │
+│  • Timestamp parsing (multiple formats)                          │
+│  • Unit conversion (mmol/L ↔ mg/dL)                             │
+│  • Duplicate detection                                           │
+│  • Time zone handling                                            │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-- All data stored in IndexedDB (always available offline)
-- Service worker caches app shell
-- AI features gracefully degrade when offline
-- Sync indicator when back online (future)
+### File Ownership
 
-### Mobile-First Design Principles
-
-1. **Touch targets**: Minimum 44x44px
-2. **Bottom navigation**: Thumb-reachable actions
-3. **Swipe gestures**: Edit, delete, navigate
-4. **Large text**: Readable without zooming
-5. **Dark mode**: Respect system preference
-6. **Haptic feedback**: Confirm important actions
-
-### Error Handling Strategy
-
-```typescript
-// Centralized error handling
-class AppError extends Error {
-  constructor(
-    message: string,
-    public code: ErrorCode,
-    public recoverable: boolean = true
-  ) {
-    super(message);
-  }
-}
-
-enum ErrorCode {
-  STORAGE_FULL = 'STORAGE_FULL',
-  AI_UNAVAILABLE = 'AI_UNAVAILABLE',
-  INVALID_DATA = 'INVALID_DATA',
-  NETWORK_ERROR = 'NETWORK_ERROR'
-}
+```
+src/lib/
+├── services/
+│   └── import/                      # OWNED BY WORKSTREAM D
+│       ├── IImportService.ts
+│       ├── CSVParser.ts
+│       ├── LibreCSVParser.ts
+│       ├── DexcomCSVParser.ts
+│       ├── GenericCSVParser.ts
+│       └── DuplicateDetector.ts
+├── components/
+│   └── import/                      # OWNED BY WORKSTREAM D
+│       ├── CSVUpload.svelte
+│       ├── ColumnMapper.svelte
+│       ├── ImportPreview.svelte
+│       ├── DuplicateResolver.svelte
+│       └── ImportProgress.svelte
+├── components/
+│   └── bsl/                         # OWNED BY WORKSTREAM D
+│       ├── BSLQuickLog.svelte
+│       └── BSLHistoryInput.svelte
+├── types/
+│   └── import.ts                    # OWNED BY WORKSTREAM D
+└── utils/
+    ├── csvHelpers.ts                # OWNED BY WORKSTREAM D
+    └── dateNormalization.ts         # OWNED BY WORKSTREAM D
 ```
 
-### Testing Strategy
+### Routes
 
-| Layer | Testing Approach |
-|-------|------------------|
-| Repositories | Unit tests with mock IndexedDB |
-| Services | Unit tests with mock repositories |
-| Components | Component tests with Testing Library |
-| E2E | Playwright for critical flows |
+```
+src/routes/
+├── log/
+│   └── bsl/                         # OWNED BY WORKSTREAM D
+│       └── +page.svelte             # Manual BSL entry
+└── import/
+    └── bsl/                         # OWNED BY WORKSTREAM D
+        └── +page.svelte             # CSV import wizard
+```
 
-*Note: Testing frameworks are out of scope per requirements, but structure supports future addition.*
+### CSV Format Support
+
+**Freestyle Libre Export**:
+
+```csv
+Device,Serial Number,Device Timestamp,Record Type,Historic Glucose mmol/L,...
+FreeStyle Libre 3,ABC123,01-15-2026 08:30,0,5.6,...
+```
+
+**Dexcom Export**:
+
+```csv
+Index,Timestamp (YYYY-MM-DDThh:mm:ss),Event Type,Event Subtype,Glucose Value (mg/dL),...
+1,2026-01-15T08:30:00,EGV,,112,...
+```
+
+### Tasks
+
+#### D.1 Manual BSL Entry Page
+
+- [ ] BSL logging page (`/log/bsl`)
+- [ ] Stepper-style input (like insulin)
+- [ ] Unit toggle (mmol/L ↔ mg/dL)
+- [ ] Source indicator (CGM vs finger prick)
+- [ ] Historical timestamp entry
+
+#### D.2 CSV Parser Framework
+
+- [ ] Generic CSV parsing with column detection
+- [ ] Libre CSV format parser
+- [ ] Dexcom CSV format parser
+- [ ] Auto-detect format from file header
+
+#### D.3 Import Wizard UI
+
+- [ ] File upload component
+- [ ] Format detection and confirmation
+- [ ] Column mapping for generic CSV
+- [ ] Import preview with sample rows
+- [ ] Progress indicator for large files
+
+#### D.4 Data Normalization
+
+- [ ] Multiple timestamp format parsing
+- [ ] Unit conversion (mg/dL × 0.0555 = mmol/L)
+- [ ] Time zone handling
+- [ ] Outlier flagging (values outside 2-30 mmol/L)
+
+#### D.5 Duplicate Detection
+
+- [ ] Exact match detection (same timestamp + value)
+- [ ] Near-duplicate detection (within 5 min window)
+- [ ] Merge strategies (keep newer, keep both, skip)
+- [ ] User confirmation for conflicts
+
+#### D.6 Export Functionality
+
+- [ ] JSON backup export
+- [ ] CSV export with date range
+- [ ] Include source metadata
+
+### Acceptance Criteria
+
+- [ ] Libre CSV imports correctly (tested with sample data)
+- [ ] Dexcom CSV imports correctly (tested with sample data)
+- [ ] Manual BSL entry in ≤3 taps
+- [ ] Duplicates detected and handled gracefully
+- [ ] Imported data has `source: 'csv-import'` metadata
+- [ ] Finger prick entries marked as higher accuracy
 
 ---
 
-## Git Workflow
+## Integration Points
 
-### Branch Strategy
+### Shared Meal Entry Page
+
+The `/log/meal/+page.svelte` page serves as the entry point, with options:
+
+- **Manual entry** (existing)
+- **AI Photo** → Workstream A route
+- **Estimate** → Workstream C route
+
+```svelte
+<!-- Integration in /log/meal/+page.svelte -->
+<div class="grid grid-cols-3 gap-2">
+  <a href="/log/meal/photo">📷 AI Photo</a>
+  <a href="/log/meal/estimate">📐 Estimate</a>
+  <button>✏️ Manual</button>
+</div>
+```
+
+### Shared BSL Entry Points
+
+BSL data can come from multiple sources:
+
+- **Manual** → Workstream D `/log/bsl`
+- **CSV Import** → Workstream D `/import/bsl`
+- **Graph Image** → Workstream B `/import/cgm`
+
+### Event Metadata Source Tracking
+
+All workstreams must set the `source` field in event metadata:
+
+| Workstream | Source Value         | Description                    |
+| ---------- | -------------------- | ------------------------------ |
+| Manual     | `'manual'`           | User typed values              |
+| A          | `'ai'`               | Cloud AI recognition           |
+| B          | `'cgm-image'`        | Extracted from graph image     |
+| C          | `'local-estimation'` | Local volume estimation        |
+| D          | `'csv-import'`       | Imported from CSV file         |
+| D          | `'api'`              | Future: direct API integration |
+
+---
+
+## Git Workflow & Merge Strategy
+
+### Branch Naming Convention
+
+```
+dev-0              # Integration staging branch
+dev-1              # Workstream A: AI-Powered Food Recognition
+dev-2              # Workstream B: CGM Graph Image Capture
+dev-3              # Workstream C: Local Food Volume Estimation
+dev-4              # Workstream D: BSL Data Import
+dev-n              # Additional workstreams as needed
+```
+
+### Development Flow
 
 ```bash
-# Create phase branch from main
-git checkout main
-git checkout -b phase-1/foundation
+# Start new workstream (from dev-0)
+git checkout dev-0
+git pull origin dev-0
+git checkout -b dev-1
 
-# Work on phase
-git commit -m "feat: add event repository interface"
+# Work on features
+git commit -m "feat(food-ai): add OpenAI vision service"
 
-# When phase complete, create PR to main
-# Review and merge
+# Keep in sync with dev-0
+git fetch origin
+git rebase origin/dev-0
 
-# Next phase branches from main (includes previous phases)
-git checkout main
-git pull
-git checkout -b phase-2/data-input
+# Create PR to dev-0 (not main)
+gh pr create --base dev-0 --title "feat: AI food recognition"
 ```
 
-### Independent Mergeability
+### Merge Order
 
-Phases are designed so that:
-- **Phase 1** can merge alone (foundation)
-- **Phase 3** can merge before Phase 2 (visualization works with test data)
-- **Phase 4** can merge before Phase 3 (AI works without charts)
-- **Phase 5** can merge independently (import/export is standalone)
+Workstreams can merge in any order since they own distinct files:
 
-### Commit Convention
+1. PR from `dev-n` → `dev-0` (integration testing)
+2. After integration tests pass on `dev-0`:
+3. PR from `dev-0` → `main` (stable release)
 
-```
-feat: add new feature
-fix: bug fix
-refactor: code change that neither fixes bug nor adds feature
-docs: documentation only
-style: formatting, no code change
-test: adding tests
-chore: maintenance tasks
-```
+### Conflict Prevention Rules
 
----
+1. **File ownership is strict** - only modify files in your workstream's directories
+2. **Extend shared types** - add optional fields, don't modify existing
+3. **Use barrel exports** - `index.ts` files should only add, not remove
+4. **Coordinate type changes** - if you need to modify shared types, discuss first
 
-## Tech Stack Summary
+### Integration Testing on dev-0
 
-| Category | Technology | Version |
-|----------|------------|---------|
-| Framework | SvelteKit | 2.x |
-| Language | TypeScript | 5.x |
-| Styling | Tailwind CSS | 3.x |
-| Database | Dexie.js (IndexedDB) | 4.x |
-| Charting | TBD (LayerCake/ECharts) | - |
-| PWA | Workbox | 7.x |
-| Build | Vite | 5.x |
-| Asset Generation | Sharp | 0.33.x |
+Before merging to main:
+
+- [ ] All workstream features work independently
+- [ ] Manual + AI + Estimate meal entry all work
+- [ ] BSL from manual + CSV + graph image all import correctly
+- [ ] Event history shows source correctly
+- [ ] No console errors in production build
 
 ---
 
-## Appendix: Data Model Research
+## File Ownership Matrix
 
-### Event Log Paradigm Analysis
-
-The requirements specify an event-log structure. This aligns with:
-
-1. **Immutability**: Events are facts that occurred; editing creates new events
-2. **Extensibility**: New `event_type` values without schema changes
-3. **Time-series friendly**: Natural fit for BSL data and regression
-4. **Audit trail**: Full history for medical/personal records
-
-### IndexedDB vs Alternatives
-
-| Storage | Capacity | Structure | Offline | Decision |
-|---------|----------|-----------|---------|----------|
-| LocalStorage | 5-10MB | Key-value | Yes | Too small |
-| IndexedDB | 50MB+ | Structured | Yes | **Selected** |
-| SQLite (WASM) | Unlimited | Relational | Yes | Overkill for v1 |
-| PouchDB | 50MB+ | Document | Yes + Sync | Good, but adds dependency |
-
-**Decision**: Dexie.js wrapping IndexedDB provides:
-- Clean Promise-based API
-- TypeScript support
-- Migration handling
-- Good performance for our data volume
-
-### Repository Pattern Benefits
-
-1. **Testability**: Mock repositories for unit tests
-2. **Portability**: Swap IndexedDB for REST API without UI changes
-3. **Single Responsibility**: UI doesn't know about storage details
-4. **Future-proofing**: Multi-user/sync can be added at repository level
-
-### AI Service Abstraction
-
-User-provided API keys means:
-- Keys stored in sessionStorage (not persisted) or localStorage (user choice)
-- No backend proxy needed
-- User controls their API costs
-- Graceful degradation when keys not configured
+| Directory/File                         | Owner        | Can Extend By      |
+| -------------------------------------- | ------------ | ------------------ |
+| `src/lib/types/events.ts`              | Shared       | All (add optional) |
+| `src/lib/types/settings.ts`            | Shared       | All (add optional) |
+| `src/lib/types/ai.ts`                  | Workstream A | -                  |
+| `src/lib/types/cgm.ts`                 | Workstream B | -                  |
+| `src/lib/types/local-estimation.ts`    | Workstream C | -                  |
+| `src/lib/types/import.ts`              | Workstream D | -                  |
+| `src/lib/services/ai/`                 | Workstream A | -                  |
+| `src/lib/services/cgm/`                | Workstream B | -                  |
+| `src/lib/services/local-estimation/`   | Workstream C | -                  |
+| `src/lib/services/import/`             | Workstream D | -                  |
+| `src/lib/components/ai/`               | Workstream A | -                  |
+| `src/lib/components/cgm/`              | Workstream B | -                  |
+| `src/lib/components/local-estimation/` | Workstream C | -                  |
+| `src/lib/components/import/`           | Workstream D | -                  |
+| `src/lib/components/bsl/`              | Workstream D | -                  |
+| `src/routes/log/meal/photo/`           | Workstream A | -                  |
+| `src/routes/log/meal/label/`           | Workstream A | -                  |
+| `src/routes/log/meal/estimate/`        | Workstream C | -                  |
+| `src/routes/log/bsl/`                  | Workstream D | -                  |
+| `src/routes/import/cgm/`               | Workstream B | -                  |
+| `src/routes/import/bsl/`               | Workstream D | -                  |
 
 ---
 
-## Getting Started (Phase 1)
+## Testing Strategy
 
-```bash
-# Clone and install
-git clone <repo>
-cd medata
-npm install
+| Layer       | Approach                            | Owner   |
+| ----------- | ----------------------------------- | ------- |
+| Unit tests  | Vitest for services and utilities   | Each WS |
+| Component   | Svelte Testing Library              | Each WS |
+| Integration | Playwright on dev-0                 | Shared  |
+| E2E         | Critical flows (meal, BSL, history) | Shared  |
 
-# Start development
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-```
+_Note: Testing frameworks are out of scope per requirements, but file structure supports future addition._
 
 ---
 
-*Last updated: 2026-01-19*
-*Reviewed after commit 06ce1d2 - first pass at development*
+## Success Metrics
+
+### Workstream A (AI Food)
+
+- Photo recognition accuracy vs user corrections (track over time)
+- API response time < 10 seconds
+- User correction rate (lower = better AI)
+
+### Workstream B (CGM Capture)
+
+- Graph extraction accuracy (vs manual verification)
+- Percentage of graphs successfully processed
+- Time to extract vs manual entry
+
+### Workstream C (Local Estimation)
+
+- Volume estimation accuracy (user-corrected vs original)
+- Reference card detection success rate
+- Estimation improvement over time (learning)
+
+### Workstream D (BSL Import)
+
+- CSV import success rate
+- Duplicate detection accuracy
+- Manual entry speed (taps to complete)
 
 ---
 
-## Agent Log
+## Appendix: Research References
 
-- **REVIEWER (2026-01-19):** Fail (needs fixes): IndexedDB/Dexie operations can throw `UnknownError: The user denied permission to access the database` when browser storage is blocked (common on Safari private mode / blocked site data). Add explicit README troubleshooting + app-level detection/UX. Also fix Svelte a11y warnings in the insulin log page caused by `<label>` elements not associated with a form control.
-- **REVIEWER (2026-01-20):** Fail (needs UX alignment): Insulin "Quick select" is currently hardcoded; requirements are for recent-dose shortcuts filtered by insulin type plus +5/-5 adjustments. Meal input UI should match insulin picker UX (stepper/quick picks) and include photo + customizable icon shortcuts + presets in the same flow.
-- **IMPLEMENTER (2026-01-20):** Pass (all fixes implemented):
-  - Phase 1: README troubleshooting section added; StorageError component + checkDatabaseAvailability() for IndexedDB permission errors
-  - Phase 2 Insulin: A11y fixed (fieldset/legend), recent doses by type, +5/-5 adjustments
-  - Phase 2 Meal: Unified stepper UI, +5/-5 carb adjustments, photo capture, food icon shortcuts, recent carbs quick-select
-  - Build passes, svelte-check shows 0 errors/warnings
+### Food Recognition
+
+- [GoCARB: Carbohydrate Estimation by Mobile Phone (JMIR 2016)](https://www.jmir.org/2016/5/e101/)
+- [Comprehensive Survey of Image-Based Food Recognition (Healthcare 2021)](https://pmc.ncbi.nlm.nih.gov/articles/PMC8700885/)
+
+### Volume Estimation
+
+- Reference card method: Credit card = 85.6mm × 53.98mm (ISO/IEC 7810)
+- GoCARB achieved 26.9% MAE using reference card for scale
+
+### CGM Data Formats
+
+- [Freestyle Libre CSV Export Format](https://www.freestylelibre.com/)
+- [Dexcom Clarity Export Format](https://clarity.dexcom.com/)
+
+---
+
+_Last updated: 2026-01-20_
+_Architecture: 4 parallel workstreams with independent merge capability_
