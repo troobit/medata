@@ -1,13 +1,11 @@
 /**
  * Workstream C: Local Food Estimation Components
- * Branch: workstream-c/local-food
+ * Branch: dev-3
  *
- * Export components here as they are created.
+ * Svelte components for browser-local food volume estimation UI.
  */
 
-// TODO: Export components when implemented
-// export { default as ReferenceCardGuide } from './ReferenceCardGuide.svelte';
-// export { default as FoodRegionSelector } from './FoodRegionSelector.svelte';
-// export { default as VolumePreview } from './VolumePreview.svelte';
-// export { default as FoodTypeSelector } from './FoodTypeSelector.svelte';
-// export { default as EstimationResult } from './EstimationResult.svelte';
+export { default as ReferenceCardGuide } from './ReferenceCardGuide.svelte';
+export { default as FoodRegionSelector } from './FoodRegionSelector.svelte';
+export { default as FoodTypeSelector } from './FoodTypeSelector.svelte';
+export { default as EstimationResult } from './EstimationResult.svelte';
