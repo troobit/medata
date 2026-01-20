@@ -67,9 +67,15 @@ export class EventService {
   async logBSL(
     value: number,
     unit: BSLUnit = 'mmol/L',
-    timestamp: Date = new Date()
+    timestamp: Date = new Date(),
+    options?: { isFingerPrick?: boolean; device?: string; source?: BSLDataSource }
   ): Promise<PhysiologicalEvent> {
-    const metadata: BSLMetadata = { unit };
+    const metadata: BSLMetadata = {
+      unit,
+      source: options?.source ?? 'manual',
+      ...(options?.isFingerPrick !== undefined && { isFingerPrick: options.isFingerPrick }),
+      ...(options?.device && { device: options.device })
+    };
     return this.createEvent({
       timestamp,
       eventType: 'bsl',
@@ -165,18 +171,17 @@ export class EventService {
   }
 
   /**
-   * Get recent unique carb values from meal events
-   * Returns an array of unique carb values (most recent first)
+   * Get recent unique BSL values
    */
-  async getRecentCarbValues(maxUnique: number = 6): Promise<number[]> {
-    const events = await this.repository.getByType('meal', 50);
+  async getRecentBSLValues(limit: number = 5): Promise<number[]> {
+    const events = await this.repository.getByType('bsl', 50);
+    const uniqueValues = new Set<number>();
 
-    const uniqueCarbs = new Set<number>();
     for (const event of events) {
-      uniqueCarbs.add(event.value);
-      if (uniqueCarbs.size >= maxUnique) break;
+      uniqueValues.add(event.value);
+      if (uniqueValues.size >= limit) break;
     }
 
-    return Array.from(uniqueCarbs);
+    return Array.from(uniqueValues);
   }
 }

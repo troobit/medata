@@ -542,6 +542,7 @@ src/routes/
 **Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Essential for regression modeling
+**Status**: 🟡 IN PROGRESS
 
 ### Objectives
 
@@ -639,55 +640,80 @@ Index,Timestamp (YYYY-MM-DDThh:mm:ss),Event Type,Event Subtype,Glucose Value (mg
 
 #### D.1 Manual BSL Entry Page
 
-- [ ] BSL logging page (`/log/bsl`)
-- [ ] Stepper-style input (like insulin)
-- [ ] Unit toggle (mmol/L ↔ mg/dL)
-- [ ] Source indicator (CGM vs finger prick)
-- [ ] Historical timestamp entry
+- [x] BSL logging page (`/log/bsl`)
+- [x] Stepper-style input (like insulin)
+- [x] Unit toggle (mmol/L ↔ mg/dL)
+- [x] Source indicator (CGM vs finger prick)
+- [x] Historical timestamp entry
 
 #### D.2 CSV Parser Framework
 
-- [ ] Generic CSV parsing with column detection
-- [ ] Libre CSV format parser
-- [ ] Dexcom CSV format parser
-- [ ] Auto-detect format from file header
+- [x] Generic CSV parsing with column detection
+- [x] Libre CSV format parser
+- [x] Dexcom CSV format parser
+- [x] Auto-detect format from file header
 
 #### D.3 Import Wizard UI
 
-- [ ] File upload component
-- [ ] Format detection and confirmation
-- [ ] Column mapping for generic CSV
-- [ ] Import preview with sample rows
-- [ ] Progress indicator for large files
+- [x] File upload component
+- [x] Format detection and confirmation
+- [x] Column mapping for generic CSV
+- [x] Import preview with sample rows
+- [x] Progress indicator for large files
 
 #### D.4 Data Normalization
 
-- [ ] Multiple timestamp format parsing
-- [ ] Unit conversion (mg/dL × 0.0555 = mmol/L)
-- [ ] Time zone handling
-- [ ] Outlier flagging (values outside 2-30 mmol/L)
+- [x] Multiple timestamp format parsing
+- [x] Unit conversion (mg/dL × 0.0555 = mmol/L)
+- [x] Time zone handling
+- [x] Outlier flagging (values outside 2-30 mmol/L)
 
 #### D.5 Duplicate Detection
 
-- [ ] Exact match detection (same timestamp + value)
-- [ ] Near-duplicate detection (within 5 min window)
-- [ ] Merge strategies (keep newer, keep both, skip)
-- [ ] User confirmation for conflicts
+- [x] Exact match detection (same timestamp + value)
+- [x] Near-duplicate detection (within 5 min window)
+- [x] Merge strategies (keep newer, keep both, skip)
+- [x] User confirmation for conflicts
 
 #### D.6 Export Functionality
 
-- [ ] JSON backup export
-- [ ] CSV export with date range
-- [ ] Include source metadata
+- [x] JSON backup export
+- [x] CSV export with date range
+- [x] Include source metadata
 
 ### Acceptance Criteria
 
 - [ ] Libre CSV imports correctly (tested with sample data)
 - [ ] Dexcom CSV imports correctly (tested with sample data)
-- [ ] Manual BSL entry in ≤3 taps
-- [ ] Duplicates detected and handled gracefully
-- [ ] Imported data has `source: 'csv-import'` metadata
-- [ ] Finger prick entries marked as higher accuracy
+- [x] Manual BSL entry in ≤3 taps
+- [x] Duplicates detected and handled gracefully
+- [x] Imported data has `source: 'csv-import'` metadata
+- [x] Finger prick entries marked as higher accuracy
+
+### Implementation Notes (dev-4)
+
+**Completed Services:**
+- `CSVParser.ts` - Base parser with encoding detection, header parsing
+- `LibreCSVParser.ts` - Freestyle Libre format with multi-line header handling
+- `DexcomCSVParser.ts` - Dexcom Clarity export format
+- `GenericCSVParser.ts` - User-configurable column mapping
+- `DuplicateDetector.ts` - Exact and near-duplicate detection with merge strategies
+- `ExportService.ts` - JSON/CSV export with date filtering
+
+**Completed Components:**
+- `CSVUpload.svelte` - Drag-drop file upload with format detection
+- `ColumnMapper.svelte` - Interactive column mapping for generic CSV
+- `ImportPreview.svelte` - Preview parsed data before import
+- `DuplicateResolver.svelte` - UI for resolving duplicate entries
+- `ImportProgress.svelte` - Progress indicator for batch imports
+
+**Completed Routes:**
+- `/log/bsl` - Manual BSL entry with unit toggle, source selection
+- `/import/bsl` - Full CSV import wizard
+
+**Remaining:**
+- End-to-end testing with real Libre/Dexcom export files
+- Edge case handling for malformed CSV data
 
 ---
 

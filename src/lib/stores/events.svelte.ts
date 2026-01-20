@@ -81,11 +81,16 @@ function createEventsStore() {
     }
   }
 
-  async function logBSL(value: number, unit?: BSLUnit, timestamp?: Date) {
+  async function logBSL(
+    value: number,
+    unit?: BSLUnit,
+    timestamp?: Date,
+    options?: { isFingerPrick?: boolean; device?: string; source?: BSLDataSource }
+  ) {
     loading = true;
     error = null;
     try {
-      const event = await service.logBSL(value, unit, timestamp);
+      const event = await service.logBSL(value, unit, timestamp, options);
       events = [event, ...events];
       return event;
     } catch (e) {
@@ -94,6 +99,10 @@ function createEventsStore() {
     } finally {
       loading = false;
     }
+  }
+
+  async function getRecentBSLValues(limit?: number) {
+    return service.getRecentBSLValues(limit);
   }
 
   async function logMeal(carbs: number, metadata?: Partial<MealMetadata>, timestamp?: Date) {
@@ -194,7 +203,7 @@ function createEventsStore() {
     deleteEvent,
     updateEvent,
     getRecentInsulinDoses,
-    getRecentCarbValues
+    getRecentBSLValues
   };
 }
 
