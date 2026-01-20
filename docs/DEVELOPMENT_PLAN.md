@@ -73,8 +73,8 @@ main (stable releases)
   │
   └── dev-0 (integration staging)
         │
-        ├── dev-1 ← CGM graph image capture 
-        ├── dev-2 ← AI-powered food recognition
+        ├── dev-1 ← AI-powered food recognition
+        ├── dev-2 ← CGM graph image capture 
         ├── dev-3 ← Local food volume estimation
         └── dev-4 ← BSL data import
 ```
@@ -146,7 +146,133 @@ interface BSLMetadata {
 
 ---
 
-## Workstream A: CGM Graph Image Capture
+## Workstream A: AI-Powered Food Recognition
+
+**Branch**: `dev-1`
+**Dependencies**: Phase 0 complete
+**Priority**: HIGH - Core differentiating feature
+
+### Objectives
+
+- Photo-based meal recognition using cloud Vision APIs
+- User correction capture for iterative learning
+- Nutrition label scanning (OCR)
+- Visual annotation with bounding boxes
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Food Recognition Pipeline                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│      Cloud Vision API     │ │     User Corrections      │
+│      (Primary)            │ │     (Iterative Learning)  │
+├───────────────────────────┤ ├───────────────────────────┤
+│ • OpenAI Vision (GPT-4V)  │ │ • Store original image    │
+│ • Google Gemini Pro       │ │ • Store AI predictions    │
+│ • Anthropic Claude        │ │ • Capture user edits      │
+│ • Ollama + LLaVA (local)  │ │ • Build correction history│
+└───────────────────────────┘ └───────────────────────────┘
+```
+
+### File Ownership
+
+```
+src/lib/
+├── services/
+│   └── ai/                          # OWNED BY WORKSTREAM A
+│       ├── IFoodRecognitionService.ts
+│       ├── OpenAIFoodService.ts
+│       ├── GeminiFoodService.ts
+│       ├── ClaudeFoodService.ts
+│       ├── OllamaFoodService.ts
+│       ├── FoodServiceFactory.ts
+│       └── prompts/
+│           └── foodRecognition.ts
+├── components/
+│   └── ai/                          # OWNED BY WORKSTREAM A
+│       ├── CameraCapture.svelte
+│       ├── PhotoPreview.svelte
+│       ├── RecognitionLoading.svelte
+│       ├── FoodRecognitionResult.svelte
+│       ├── AnnotatedFoodImage.svelte
+│       ├── FoodItemEditor.svelte
+│       ├── NutritionLabelScanner.svelte
+│       └── MacroConfirmation.svelte
+├── types/
+│   └── ai.ts                        # OWNED BY WORKSTREAM A
+└── utils/
+    └── imageProcessing.ts           # OWNED BY WORKSTREAM A
+```
+
+### Routes
+
+```
+src/routes/
+└── log/
+    └── meal/
+        ├── photo/                   # OWNED BY WORKSTREAM A
+        │   └── +page.svelte         # AI photo recognition flow
+        └── label/                   # OWNED BY WORKSTREAM A
+            └── +page.svelte         # Nutrition label scanning
+```
+
+### Tasks
+
+#### A.1 Cloud AI Service Layer
+
+- [ ] Define `IFoodRecognitionService` interface
+- [ ] Implement OpenAI Vision provider (GPT-4V)
+- [ ] Implement Gemini Pro Vision provider
+- [ ] Implement Claude Vision provider
+- [ ] Implement Ollama/LLaVA provider (self-hosted)
+- [ ] Create provider factory with fallback chain
+- [ ] Structured prompt engineering for consistent output
+
+#### A.2 Camera & Image Processing
+
+- [ ] Camera capture component (`getUserMedia`)
+- [ ] Image compression (WebP, quality 80)
+- [ ] EXIF orientation handling
+- [ ] Gallery selection fallback
+
+#### A.3 Recognition UX Flow
+
+- [ ] Photo capture screen
+- [ ] Loading state with progress
+- [ ] Results display with bounding boxes
+- [ ] Per-item macro editing
+- [ ] Confidence indicators
+- [ ] Save with source attribution
+
+#### A.4 Iterative Learning Pipeline
+
+- [ ] Store original predictions
+- [ ] Capture user corrections
+- [ ] Track accuracy over time
+- [ ] Prompt enhancement from history
+
+#### A.5 Nutrition Label Scanner
+
+- [ ] OCR via cloud vision API
+- [ ] Australian nutrition panel format
+- [ ] Serving size calculations
+
+### Acceptance Criteria
+
+- [ ] Photo capture works on iOS Safari and Android Chrome
+- [ ] Cloud AI returns macro estimates within 10 seconds
+- [ ] User can adjust AI estimates before saving
+- [ ] User corrections stored with `source: 'ai'`
+- [ ] Graceful fallback to manual entry when API unavailable
+
+---
+
+## Workstream B: CGM Graph Image Capture
 
 **Branch**: `dev-1`
 **Dependencies**: Phase 0 complete
@@ -231,34 +357,34 @@ src/routes/
 
 ### Tasks
 
-#### A.1 Image Preprocessing
+#### B.1 Image Preprocessing
 
 - [ ] Graph region auto-detection
 - [ ] Manual region selection fallback
 - [ ] Axis label OCR (time and BSL ranges)
 - [ ] Grid line detection for calibration
 
-#### A.2 Curve Extraction - ML Phase
+#### B.2 Curve Extraction - ML Phase
 
 - [ ] Cloud vision API for initial extraction
 - [ ] Prompt engineering for CGM graphs
 - [ ] Structured output (time-series JSON)
 
-#### A.3 Curve Extraction - Local Algorithms
+#### B.3 Curve Extraction - Local Algorithms
 
 - [ ] Color-based line detection (filter by CGM line color)
 - [ ] Edge detection for curve tracing
 - [ ] Template matching for known CGM formats
 - [ ] Canvas-based pixel analysis
 
-#### A.4 Time-Series Generation
+#### B.4 Time-Series Generation
 
 - [ ] Pixel-to-value mapping
 - [ ] 5-minute interval resampling
 - [ ] Outlier detection and smoothing
 - [ ] Range validation (2-25 mmol/L / 36-450 mg/dL)
 
-#### A.5 User Confirmation Flow
+#### B.5 User Confirmation Flow
 
 - [ ] Overlay extracted curve on original image
 - [ ] Allow manual point adjustment
@@ -275,131 +401,6 @@ src/routes/
 
 ---
 
-## Workstream B: AI-Powered Food Recognition
-
-**Branch**: `dev-2`
-**Dependencies**: Phase 0 complete
-**Priority**: HIGH - Core differentiating feature
-
-### Objectives
-
-- Photo-based meal recognition using cloud Vision APIs
-- User correction capture for iterative learning
-- Nutrition label scanning (OCR)
-- Visual annotation with bounding boxes
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Food Recognition Pipeline                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    ▼                   ▼
-┌───────────────────────────┐ ┌───────────────────────────┐
-│      Cloud Vision API     │ │     User Corrections      │
-│      (Primary)            │ │     (Iterative Learning)  │
-├───────────────────────────┤ ├───────────────────────────┤
-│ • OpenAI Vision (GPT-4V)  │ │ • Store original image    │
-│ • Google Gemini Pro       │ │ • Store AI predictions    │
-│ • Anthropic Claude        │ │ • Capture user edits      │
-│ • Ollama + LLaVA (local)  │ │ • Build correction history│
-└───────────────────────────┘ └───────────────────────────┘
-```
-
-### File Ownership
-
-```
-src/lib/
-├── services/
-│   └── ai/                          # OWNED BY WORKSTREAM A
-│       ├── IFoodRecognitionService.ts
-│       ├── OpenAIFoodService.ts
-│       ├── GeminiFoodService.ts
-│       ├── ClaudeFoodService.ts
-│       ├── OllamaFoodService.ts
-│       ├── FoodServiceFactory.ts
-│       └── prompts/
-│           └── foodRecognition.ts
-├── components/
-│   └── ai/                          # OWNED BY WORKSTREAM A
-│       ├── CameraCapture.svelte
-│       ├── PhotoPreview.svelte
-│       ├── RecognitionLoading.svelte
-│       ├── FoodRecognitionResult.svelte
-│       ├── AnnotatedFoodImage.svelte
-│       ├── FoodItemEditor.svelte
-│       ├── NutritionLabelScanner.svelte
-│       └── MacroConfirmation.svelte
-├── types/
-│   └── ai.ts                        # OWNED BY WORKSTREAM A
-└── utils/
-    └── imageProcessing.ts           # OWNED BY WORKSTREAM A
-```
-
-### Routes
-
-```
-src/routes/
-└── log/
-    └── meal/
-        ├── photo/                   # OWNED BY WORKSTREAM A
-        │   └── +page.svelte         # AI photo recognition flow
-        └── label/                   # OWNED BY WORKSTREAM A
-            └── +page.svelte         # Nutrition label scanning
-```
-
-### Tasks
-
-#### B.1 Cloud AI Service Layer
-
-- [ ] Define `IFoodRecognitionService` interface
-- [ ] Implement OpenAI Vision provider (GPT-4V)
-- [ ] Implement Gemini Pro Vision provider
-- [ ] Implement Claude Vision provider
-- [ ] Implement Ollama/LLaVA provider (self-hosted)
-- [ ] Create provider factory with fallback chain
-- [ ] Structured prompt engineering for consistent output
-
-#### B.2 Camera & Image Processing
-
-- [ ] Camera capture component (`getUserMedia`)
-- [ ] Image compression (WebP, quality 80)
-- [ ] EXIF orientation handling
-- [ ] Gallery selection fallback
-
-#### B.3 Recognition UX Flow
-
-- [ ] Photo capture screen
-- [ ] Loading state with progress
-- [ ] Results display with bounding boxes
-- [ ] Per-item macro editing
-- [ ] Confidence indicators
-- [ ] Save with source attribution
-
-#### B.4 Iterative Learning Pipeline
-
-- [ ] Store original predictions
-- [ ] Capture user corrections
-- [ ] Track accuracy over time
-- [ ] Prompt enhancement from history
-
-#### B.5 Nutrition Label Scanner
-
-- [ ] OCR via cloud vision API
-- [ ] Australian nutrition panel format
-- [ ] Serving size calculations
-
-### Acceptance Criteria
-
-- [ ] Photo capture works on iOS Safari and Android Chrome
-- [ ] Cloud AI returns macro estimates within 10 seconds
-- [ ] User can adjust AI estimates before saving
-- [ ] User corrections stored with `source: 'ai'`
-- [ ] Graceful fallback to manual entry when API unavailable
-
----
 
 ## Workstream C: Local Food Volume Estimation
 
