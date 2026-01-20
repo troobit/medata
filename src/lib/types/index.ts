@@ -4,7 +4,6 @@ export type {
   InsulinType,
   BSLUnit,
   ExerciseIntensity,
-  AlcoholType,
   MacroData,
   MealMetadata,
   MealItem,
@@ -23,11 +22,19 @@ export type {
 
 export { isMealMetadata, isInsulinMetadata, isBSLMetadata, isExerciseMetadata } from './events';
 
+// Vision
+export type {
+  ExtractedBSLReading,
+  BSLExtractionResult,
+  VisionAnalysisOptions,
+  OpenAIVisionResponse
+} from './vision';
+
 // Presets
 export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets';
 
 // Settings
-export type { MLProvider, AIProvider, UserSettings } from './settings';
+export type { AIProvider, UserSettings } from './settings';
 export { DEFAULT_SETTINGS } from './settings';
 
 // Workstream A: AI Food Recognition
