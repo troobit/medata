@@ -6,8 +6,12 @@
  * Provides fallback chain for resilience.
  */
 
-import type { IFoodRecognitionService, FoodRecognitionResult, RecognitionOptions } from '$lib/types/ai';
-import type { UserSettings, MLProvider } from '$lib/types/settings';
+import type {
+  IFoodRecognitionService,
+  FoodRecognitionResult,
+  RecognitionOptions
+} from '$lib/types/ai';
+import type { UserSettings, AIProvider } from '$lib/types/settings';
 import { OpenAIFoodService } from './OpenAIFoodService';
 import { GeminiFoodService } from './GeminiFoodService';
 import { ClaudeFoodService } from './ClaudeFoodService';
@@ -16,7 +20,7 @@ import { ClaudeFoodService } from './ClaudeFoodService';
  * Creates the appropriate food service based on provider type and settings
  */
 export function createFoodService(
-  provider: MLProvider,
+  provider: AIProvider,
   settings: UserSettings
 ): IFoodRecognitionService | null {
   switch (provider) {
@@ -35,19 +39,6 @@ export function createFoodService(
         return new ClaudeFoodService(settings.claudeApiKey);
       }
       break;
-    case 'foundry':
-      // Foundry uses OpenAI-compatible API with custom endpoint
-      if (settings.foundryEndpoint && settings.foundryApiKey) {
-        // TODO: Implement FoundryFoodService if needed
-        return null;
-      }
-      break;
-    case 'ollama':
-      // TODO: Implement OllamaFoodService for local inference
-      if (settings.ollamaEndpoint) {
-        return null;
-      }
-      break;
   }
   return null;
 }
@@ -55,18 +46,15 @@ export function createFoodService(
 /**
  * Gets the preferred provider order for fallback chain
  */
-function getProviderOrder(preferredProvider: MLProvider | undefined): MLProvider[] {
-  const allProviders: MLProvider[] = ['openai', 'gemini', 'claude', 'foundry', 'ollama'];
+function getProviderOrder(preferredProvider: AIProvider | undefined): AIProvider[] {
+  const allProviders: AIProvider[] = ['openai', 'gemini', 'claude'];
 
   if (!preferredProvider) {
     return allProviders;
   }
 
   // Put preferred provider first, then the rest
-  return [
-    preferredProvider,
-    ...allProviders.filter((p) => p !== preferredProvider)
-  ];
+  return [preferredProvider, ...allProviders.filter((p) => p !== preferredProvider)];
 }
 
 /**

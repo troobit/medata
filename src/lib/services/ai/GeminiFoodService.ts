@@ -50,10 +50,7 @@ export class GeminiFoodService implements IFoodRecognitionService {
     this.model = model;
   }
 
-  async recognizeFood(
-    image: Blob,
-    options?: RecognitionOptions
-  ): Promise<FoodRecognitionResult> {
+  async recognizeFood(image: Blob, _options?: RecognitionOptions): Promise<FoodRecognitionResult> {
     const startTime = performance.now();
 
     const base64Image = await this.blobToBase64(image);

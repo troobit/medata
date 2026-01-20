@@ -7,10 +7,13 @@
    */
   import { goto } from '$app/navigation';
   import { CameraCapture, PhotoPreview, FoodRecognitionResult } from '$lib/components/ai';
-  import { recognizeFoodWithFallback, isAnyProviderConfigured } from '$lib/services/ai';
+  import { recognizeFoodWithFallback } from '$lib/services/ai';
   import { compressImage, blobToDataUrl } from '$lib/utils/imageProcessing';
   import { settingsStore, eventsStore } from '$lib/stores';
-  import type { FoodRecognitionResult as FoodRecognitionResultType, RecognizedFoodItem } from '$lib/types/ai';
+  import type {
+    FoodRecognitionResult as FoodRecognitionResultType,
+    RecognizedFoodItem
+  } from '$lib/types/ai';
   import type { MacroData } from '$lib/types/events';
   import { Button } from '$lib/components/ui';
 
@@ -24,8 +27,8 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
 
-  // Check if ML is configured
-  let mlConfigured = $derived(settingsStore.isMLConfigured);
+  // Check if AI is configured
+  let aiConfigured = $derived(settingsStore.isAIConfigured);
 
   async function handleCapture(blob: Blob) {
     error = null;
@@ -59,10 +62,7 @@
     processing = true;
 
     try {
-      recognitionResult = await recognizeFoodWithFallback(
-        capturedImage,
-        settingsStore.settings
-      );
+      recognitionResult = await recognizeFoodWithFallback(capturedImage, settingsStore.settings);
       flowState = 'result';
     } catch (e) {
       error = e instanceof Error ? e.message : 'Recognition failed';
@@ -128,10 +128,12 @@
     </p>
   </header>
 
-  {#if !mlConfigured}
+  {#if !aiConfigured}
     <!-- No AI Configured -->
     <div class="flex flex-1 flex-col items-center justify-center text-center">
-      <div class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20 text-4xl">
+      <div
+        class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20 text-4xl"
+      >
         ⚙️
       </div>
       <h2 class="mb-2 text-xl font-semibold text-white">AI Not Configured</h2>

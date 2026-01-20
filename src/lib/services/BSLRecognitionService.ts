@@ -68,8 +68,8 @@ export class BSLRecognitionService {
   private parseResponse(response: string): BSLExtractionResult {
     try {
       // Extract JSON from potential markdown code blocks
-      const jsonMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-                        response.match(/\{[\s\S]*\}/);
+      const jsonMatch =
+        response.match(/```(?:json)?\s*([\s\S]*?)```/) || response.match(/\{[\s\S]*\}/);
 
       const jsonStr = jsonMatch?.[1] || jsonMatch?.[0] || response;
       const parsed = JSON.parse(jsonStr.trim());
@@ -139,9 +139,8 @@ export class BSLRecognitionService {
     }
 
     // Confidence score
-    const confidence = typeof raw.confidence === 'number'
-      ? Math.max(0, Math.min(1, raw.confidence))
-      : 0.8;
+    const confidence =
+      typeof raw.confidence === 'number' ? Math.max(0, Math.min(1, raw.confidence)) : 0.8;
 
     return {
       value,
