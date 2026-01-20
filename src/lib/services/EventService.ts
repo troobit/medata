@@ -77,6 +77,22 @@ export class EventService {
     });
   }
 
+  /**
+   * Log BSL with full metadata (used by CGM import and other sources)
+   */
+  async logBSLWithMetadata(
+    value: number,
+    metadata: BSLMetadata,
+    timestamp: Date = new Date()
+  ): Promise<PhysiologicalEvent> {
+    return this.createEvent({
+      timestamp,
+      eventType: 'bsl',
+      value,
+      metadata
+    });
+  }
+
   async logMeal(
     carbs: number,
     metadata: Partial<MealMetadata> = {},

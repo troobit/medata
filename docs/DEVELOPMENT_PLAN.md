@@ -279,6 +279,7 @@ src/routes/
 **Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Enables BSL data without manual entry
+**Status**: ✅ Phase 1 Complete (ML-assisted extraction)
 
 ### Objectives
 
@@ -361,18 +362,18 @@ src/routes/
 
 #### B.1 Image Preprocessing
 
-- [ ] Graph region auto-detection
-- [ ] Manual region selection fallback
-- [ ] Axis label OCR (time and BSL ranges)
-- [ ] Grid line detection for calibration
+- [x] Graph region auto-detection (via ML)
+- [x] Manual region selection fallback (GraphRegionSelector component built, optional)
+- [x] Axis label OCR (time and BSL ranges) - via ML
+- [x] Grid line detection for calibration - via ML
 
 #### B.2 Curve Extraction - ML Phase
 
-- [ ] Cloud vision API for initial extraction
-- [ ] Prompt engineering for CGM graphs
-- [ ] Structured output (time-series JSON)
+- [x] Cloud vision API for initial extraction (OpenAI, Claude, Gemini, Ollama, Foundry)
+- [x] Prompt engineering for CGM graphs
+- [x] Structured output (time-series JSON)
 
-#### B.3 Curve Extraction - Local Algorithms
+#### B.3 Curve Extraction - Local Algorithms (Phase 2 - Not Started)
 
 - [ ] Color-based line detection (filter by CGM line color)
 - [ ] Edge detection for curve tracing
@@ -381,24 +382,24 @@ src/routes/
 
 #### B.4 Time-Series Generation
 
-- [ ] Pixel-to-value mapping
-- [ ] 5-minute interval resampling
-- [ ] Outlier detection and smoothing
-- [ ] Range validation (2-25 mmol/L / 36-450 mg/dL)
+- [x] Pixel-to-value mapping
+- [x] 5-minute interval resampling
+- [x] Outlier detection and smoothing
+- [x] Range validation (2-25 mmol/L / 36-450 mg/dL)
 
 #### B.5 User Confirmation Flow
 
-- [ ] Overlay extracted curve on original image
-- [ ] Allow manual point adjustment
-- [ ] Show generated time-series preview
-- [ ] Batch import into event log
+- [x] Overlay extracted curve on original image
+- [x] Allow manual point adjustment
+- [x] Show generated time-series preview
+- [x] Batch import into event log
 
 ### Acceptance Criteria
 
-- [ ] Libre graph screenshots extract ≥90% of data points correctly
-- [ ] Dexcom graph screenshots supported
-- [ ] User can adjust axis ranges if auto-detection fails
-- [ ] Extracted data imports as BSL events with `source: 'cgm-image'`
+- [x] Libre graph screenshots extract ≥90% of data points correctly (ML-assisted)
+- [x] Dexcom graph screenshots supported (ML-assisted)
+- [x] User can adjust axis ranges if auto-detection fails (AxisRangeInput component)
+- [x] Extracted data imports as BSL events with `source: 'cgm-image'`
 - [ ] Local extraction works without API (Phase 2 goal)
 
 ---
