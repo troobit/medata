@@ -73,8 +73,8 @@ main (stable releases)
   │
   └── dev-0 (integration staging)
         │
-        ├── dev-1 ← AI-powered food recognition
-        ├── dev-2 ← CGM graph image capture 
+        ├── dev-1 ← CGM graph image capture
+        ├── dev-2 ← AI-powered food recognition
         ├── dev-3 ← Local food volume estimation
         └── dev-4 ← BSL data import
 ```
@@ -149,6 +149,7 @@ interface BSLMetadata {
 ## Workstream A: AI-Powered Food Recognition
 
 **Branch**: `dev-1`
+**Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Core differentiating feature
 
@@ -163,7 +164,7 @@ interface BSLMetadata {
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Food Recognition Pipeline                   │
+│                     Food Recognition Pipeline                    │
 └─────────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐
@@ -274,7 +275,8 @@ src/routes/
 
 ## Workstream B: CGM Graph Image Capture
 
-**Branch**: `dev-1`
+**Branch**: `dev-2`
+**Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Enables BSL data without manual entry
 
@@ -289,7 +291,7 @@ src/routes/
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   CGM Graph Processing Pipeline                 │
+│                   CGM Graph Processing Pipeline                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐
@@ -306,10 +308,10 @@ src/routes/
                     └─────────┬─────────┘
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Time-Series Generation                       │
+│                    Time-Series Generation                        │
 │  • Map pixels to BSL values using detected axis ranges          │
-│  • Generate 5-minute interval data points                       │
-│  • Validate against expected CGM ranges                         │
+│  • Generate 5-minute interval data points                        │
+│  • Validate against expected CGM ranges                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -401,10 +403,10 @@ src/routes/
 
 ---
 
-
 ## Workstream C: Local Food Volume Estimation
 
 **Branch**: `dev-3`
+**Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: MEDIUM - Privacy-first alternative to cloud AI
 
@@ -425,7 +427,7 @@ src/routes/
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                 Local Volume Estimation Pipeline                │
+│                 Local Volume Estimation Pipeline                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                     ┌─────────┴─────────┐
@@ -442,7 +444,7 @@ src/routes/
                     └─────────┬─────────┘
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Macro Lookup & Estimation                    │
+│                    Macro Lookup & Estimation                     │
 │  • Food type selection (user-assisted)                          │
 │  • USDA FNDDS density lookup                                    │
 │  • Volume → weight → macros conversion                          │
@@ -537,6 +539,7 @@ src/routes/
 ## Workstream D: BSL Data Import
 
 **Branch**: `dev-4`
+**Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Essential for regression modeling
 
@@ -551,7 +554,7 @@ src/routes/
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    BSL Data Import Pipeline                     │
+│                    BSL Data Import Pipeline                      │
 └─────────────────────────────────────────────────────────────────┘
                               │
           ┌───────────────────┼───────────────────┐
@@ -566,11 +569,11 @@ src/routes/
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Data Normalization                           │
-│  • Timestamp parsing (multiple formats)                         │
+│                    Data Normalization                            │
+│  • Timestamp parsing (multiple formats)                          │
 │  • Unit conversion (mmol/L ↔ mg/dL)                             │
-│  • Duplicate detection                                          │
-│  • Time zone handling                                           │
+│  • Duplicate detection                                           │
+│  • Time zone handling                                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
