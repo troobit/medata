@@ -1,8 +1,8 @@
 # MeData Development Plan
 
 > **Source of Truth**: [requirements.md](./requirements.md)
-> **Last Updated**: 2026-01-20 (Workstream B Phase 2 complete)
-> **Current Branch**: `dev-2` (CGM Graph Image Capture)
+> **Last Updated**: 2026-01-20 (Merged Workstreams A, B, D)
+> **Current Branch**: `dev-2` (Integration branch with A, B, D merged)
 
 ---
 
@@ -73,10 +73,10 @@ main (stable releases)
   │
   └── dev-0 (integration staging)
         │
-        ├── dev-1 ← CGM graph image capture
-        ├── dev-2 ← AI-powered food recognition
-        ├── dev-3 ← Local food volume estimation
-        └── dev-4 ← BSL data import
+        ├── dev-1 ← AI-powered food recognition ✅ MERGED
+        ├── dev-2 ← CGM graph image capture ✅ MERGED (current integration branch)
+        ├── dev-3 ← Local food volume estimation (pending)
+        └── dev-4 ← BSL data import ✅ MERGED
 ```
 
 ### Integration Strategy
@@ -152,6 +152,7 @@ interface BSLMetadata {
 **Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Core differentiating feature
+**Status**: ✅ COMPLETE (Core implementation merged)
 
 ### Objectives
 
@@ -226,50 +227,73 @@ src/routes/
 
 #### A.1 Cloud AI Service Layer
 
-- [ ] Define `IFoodRecognitionService` interface
-- [ ] Implement OpenAI Vision provider (GPT-4V)
-- [ ] Implement Gemini Pro Vision provider
-- [ ] Implement Claude Vision provider
+- [x] Define `IFoodRecognitionService` interface
+- [x] Implement OpenAI Vision provider (GPT-4V)
+- [x] Implement Gemini Pro Vision provider
+- [x] Implement Claude Vision provider
 - [ ] Implement Ollama/LLaVA provider (self-hosted)
-- [ ] Create provider factory with fallback chain
-- [ ] Structured prompt engineering for consistent output
+- [x] Create provider factory with fallback chain
+- [x] Structured prompt engineering for consistent output
 
 #### A.2 Camera & Image Processing
 
-- [ ] Camera capture component (`getUserMedia`)
-- [ ] Image compression (WebP, quality 80)
-- [ ] EXIF orientation handling
-- [ ] Gallery selection fallback
+- [x] Camera capture component (`getUserMedia`)
+- [x] Image compression (WebP, quality 80)
+- [x] EXIF orientation handling
+- [x] Gallery selection fallback
 
 #### A.3 Recognition UX Flow
 
-- [ ] Photo capture screen
-- [ ] Loading state with progress
-- [ ] Results display with bounding boxes
-- [ ] Per-item macro editing
-- [ ] Confidence indicators
-- [ ] Save with source attribution
+- [x] Photo capture screen
+- [x] Loading state with progress
+- [x] Results display with bounding boxes
+- [x] Per-item macro editing
+- [x] Confidence indicators
+- [x] Save with source attribution
 
 #### A.4 Iterative Learning Pipeline
 
-- [ ] Store original predictions
-- [ ] Capture user corrections
+- [x] Store original predictions
+- [x] Capture user corrections
 - [ ] Track accuracy over time
 - [ ] Prompt enhancement from history
 
 #### A.5 Nutrition Label Scanner
 
-- [ ] OCR via cloud vision API
-- [ ] Australian nutrition panel format
-- [ ] Serving size calculations
+- [x] OCR via cloud vision API
+- [x] Australian nutrition panel format
+- [x] Serving size calculations
 
 ### Acceptance Criteria
 
-- [ ] Photo capture works on iOS Safari and Android Chrome
-- [ ] Cloud AI returns macro estimates within 10 seconds
-- [ ] User can adjust AI estimates before saving
-- [ ] User corrections stored with `source: 'ai'`
-- [ ] Graceful fallback to manual entry when API unavailable
+- [x] Photo capture works on iOS Safari and Android Chrome
+- [x] Cloud AI returns macro estimates within 10 seconds
+- [x] User can adjust AI estimates before saving
+- [x] User corrections stored with `source: 'ai'`
+- [x] Graceful fallback to manual entry when API unavailable
+
+### Implementation Notes (dev-1 merged)
+
+**Completed Services:**
+- `OpenAIFoodService.ts` - GPT-4V integration for food recognition
+- `GeminiFoodService.ts` - Gemini Pro Vision integration
+- `ClaudeFoodService.ts` - Claude Vision integration
+- `FoodServiceFactory.ts` - Provider factory with fallback chain
+- `prompts/foodRecognition.ts` - Structured prompts for consistent output
+
+**Completed Components:**
+- `CameraCapture.svelte` - Camera capture with gallery fallback
+- `PhotoPreview.svelte` - Image preview before processing
+- `FoodRecognitionResult.svelte` - Results display with editing
+- `FoodItemEditor.svelte` - Per-item macro editing
+
+**Completed Utilities:**
+- `imageProcessing.ts` - Compression, EXIF handling, orientation fixes
+
+**Remaining:**
+- Ollama/LLaVA self-hosted provider
+- Accuracy tracking over time
+- Prompt enhancement from correction history
 
 ---
 
@@ -544,6 +568,7 @@ src/routes/
 **Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Essential for regression modeling
+**Status**: ✅ COMPLETE (Core implementation merged)
 
 ### Objectives
 
@@ -641,55 +666,79 @@ Index,Timestamp (YYYY-MM-DDThh:mm:ss),Event Type,Event Subtype,Glucose Value (mg
 
 #### D.1 Manual BSL Entry Page
 
-- [ ] BSL logging page (`/log/bsl`)
-- [ ] Stepper-style input (like insulin)
-- [ ] Unit toggle (mmol/L ↔ mg/dL)
-- [ ] Source indicator (CGM vs finger prick)
-- [ ] Historical timestamp entry
+- [x] BSL logging page (`/log/bsl`)
+- [x] Stepper-style input (like insulin)
+- [x] Unit toggle (mmol/L ↔ mg/dL)
+- [x] Source indicator (CGM vs finger prick)
+- [x] Historical timestamp entry
 
 #### D.2 CSV Parser Framework
 
-- [ ] Generic CSV parsing with column detection
-- [ ] Libre CSV format parser
-- [ ] Dexcom CSV format parser
-- [ ] Auto-detect format from file header
+- [x] Generic CSV parsing with column detection
+- [x] Libre CSV format parser
+- [x] Dexcom CSV format parser
+- [x] Auto-detect format from file header
 
 #### D.3 Import Wizard UI
 
-- [ ] File upload component
-- [ ] Format detection and confirmation
-- [ ] Column mapping for generic CSV
-- [ ] Import preview with sample rows
-- [ ] Progress indicator for large files
+- [x] File upload component
+- [x] Format detection and confirmation
+- [x] Column mapping for generic CSV
+- [x] Import preview with sample rows
+- [x] Progress indicator for large files
 
 #### D.4 Data Normalization
 
-- [ ] Multiple timestamp format parsing
-- [ ] Unit conversion (mg/dL × 0.0555 = mmol/L)
-- [ ] Time zone handling
-- [ ] Outlier flagging (values outside 2-30 mmol/L)
+- [x] Multiple timestamp format parsing
+- [x] Unit conversion (mg/dL × 0.0555 = mmol/L)
+- [x] Time zone handling
+- [x] Outlier flagging (values outside 2-30 mmol/L)
 
 #### D.5 Duplicate Detection
 
-- [ ] Exact match detection (same timestamp + value)
-- [ ] Near-duplicate detection (within 5 min window)
-- [ ] Merge strategies (keep newer, keep both, skip)
-- [ ] User confirmation for conflicts
+- [x] Exact match detection (same timestamp + value)
+- [x] Near-duplicate detection (within 5 min window)
+- [x] Merge strategies (keep newer, keep both, skip)
+- [x] User confirmation for conflicts
 
 #### D.6 Export Functionality
 
-- [ ] JSON backup export
-- [ ] CSV export with date range
-- [ ] Include source metadata
+- [x] JSON backup export
+- [x] CSV export with date range
+- [x] Include source metadata
 
 ### Acceptance Criteria
 
-- [ ] Libre CSV imports correctly (tested with sample data)
-- [ ] Dexcom CSV imports correctly (tested with sample data)
-- [ ] Manual BSL entry in ≤3 taps
-- [ ] Duplicates detected and handled gracefully
-- [ ] Imported data has `source: 'csv-import'` metadata
-- [ ] Finger prick entries marked as higher accuracy
+- [x] Libre CSV imports correctly (tested with sample data)
+- [x] Dexcom CSV imports correctly (tested with sample data)
+- [x] Manual BSL entry in ≤3 taps
+- [x] Duplicates detected and handled gracefully
+- [x] Imported data has `source: 'csv-import'` metadata
+- [x] Finger prick entries marked as higher accuracy
+
+### Implementation Notes (dev-4)
+
+**Completed Services:**
+- `CSVParser.ts` - Base parser with encoding detection, header parsing
+- `LibreCSVParser.ts` - Freestyle Libre format with multi-line header handling
+- `DexcomCSVParser.ts` - Dexcom Clarity export format
+- `GenericCSVParser.ts` - User-configurable column mapping
+- `DuplicateDetector.ts` - Exact and near-duplicate detection with merge strategies
+- `ExportService.ts` - JSON/CSV export with date filtering
+
+**Completed Components:**
+- `CSVUpload.svelte` - Drag-drop file upload with format detection
+- `ColumnMapper.svelte` - Interactive column mapping for generic CSV
+- `ImportPreview.svelte` - Preview parsed data before import
+- `DuplicateResolver.svelte` - UI for resolving duplicate entries
+- `ImportProgress.svelte` - Progress indicator for batch imports
+
+**Completed Routes:**
+- `/log/bsl` - Manual BSL entry with unit toggle, source selection
+- `/import/bsl` - Full CSV import wizard
+
+**Remaining:**
+- Edge case handling for malformed CSV data (optional hardening)
 
 ---
 
@@ -884,3 +933,4 @@ _Note: Testing frameworks are out of scope per requirements, but file structure 
 
 _Last updated: 2026-01-20_
 _Architecture: 4 parallel workstreams with independent merge capability_
+_Status: Workstreams A, B, D merged into dev-2; Workstream C pending_

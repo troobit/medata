@@ -129,8 +129,8 @@
     <section>
       <h2 class="mb-4 text-lg font-semibold text-gray-200">Defaults</h2>
 
-      <div class="mb-4">
-        <label class="mb-2 block text-sm font-medium text-gray-400">Default Insulin Type</label>
+      <fieldset class="mb-4">
+        <legend class="mb-2 block text-sm font-medium text-gray-400">Default Insulin Type</legend>
         <div class="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -153,10 +153,10 @@
             Basal
           </button>
         </div>
-      </div>
+      </fieldset>
 
-      <div class="mb-4">
-        <label class="mb-2 block text-sm font-medium text-gray-400">Blood Sugar Unit</label>
+      <fieldset class="mb-4">
+        <legend class="mb-2 block text-sm font-medium text-gray-400">Blood Sugar Unit</legend>
         <div class="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -179,7 +179,7 @@
             mg/dL
           </button>
         </div>
-      </div>
+      </fieldset>
     </section>
 
     <!-- Save Button -->

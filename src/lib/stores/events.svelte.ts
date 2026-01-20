@@ -1,5 +1,12 @@
 import { getEventService } from '$lib/services';
-import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, BSLMetadata, MealMetadata } from '$lib/types';
+import type {
+  PhysiologicalEvent,
+  EventType,
+  InsulinType,
+  BSLUnit,
+  BSLDataSource,
+  MealMetadata
+} from '$lib/types';
 
 /**
  * Reactive store for physiological events using Svelte 5 runes
@@ -74,11 +81,16 @@ function createEventsStore() {
     }
   }
 
-  async function logBSL(value: number, unit?: BSLUnit, timestamp?: Date) {
+  async function logBSL(
+    value: number,
+    unit?: BSLUnit,
+    timestamp?: Date,
+    options?: { isFingerPrick?: boolean; device?: string; source?: BSLDataSource }
+  ) {
     loading = true;
     error = null;
     try {
-      const event = await service.logBSL(value, unit, timestamp);
+      const event = await service.logBSL(value, unit, timestamp, options);
       events = [event, ...events];
       return event;
     } catch (e) {
@@ -89,19 +101,8 @@ function createEventsStore() {
     }
   }
 
-  async function logBSLWithMetadata(value: number, metadata: BSLMetadata, timestamp?: Date) {
-    loading = true;
-    error = null;
-    try {
-      const event = await service.logBSLWithMetadata(value, metadata, timestamp);
-      events = [event, ...events];
-      return event;
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to log BSL';
-      throw e;
-    } finally {
-      loading = false;
-    }
+  async function getRecentBSLValues(limit?: number) {
+    return service.getRecentBSLValues(limit);
   }
 
   async function logMeal(carbs: number, metadata?: Partial<MealMetadata>, timestamp?: Date) {
@@ -113,6 +114,23 @@ function createEventsStore() {
       return event;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to log meal';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function bulkLogBSL(
+    readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLDataSource }>
+  ) {
+    loading = true;
+    error = null;
+    try {
+      const newEvents = await service.bulkLogBSL(readings);
+      events = [...newEvents, ...events];
+      return newEvents;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to import BSL readings';
       throw e;
     } finally {
       loading = false;
@@ -148,12 +166,17 @@ function createEventsStore() {
     }
   }
 
-  async function getRecentInsulinDosesByType(
-    insulinType: 'bolus' | 'basal',
-    limit: number = 10
-  ): Promise<number[]> {
+  async function getRecentInsulinDoses(insulinType: 'bolus' | 'basal', maxUnique: number = 6) {
     try {
-      return await service.getRecentInsulinDosesByType(insulinType, limit);
+      return await service.getRecentInsulinDoses(insulinType, maxUnique);
+    } catch {
+      return [];
+    }
+  }
+
+  async function getRecentCarbValues(maxUnique: number = 6) {
+    try {
+      return await service.getRecentCarbValues(maxUnique);
     } catch {
       return [];
     }
@@ -175,11 +198,12 @@ function createEventsStore() {
     loadByType,
     logInsulin,
     logBSL,
-    logBSLWithMetadata,
     logMeal,
+    bulkLogBSL,
     deleteEvent,
     updateEvent,
-    getRecentInsulinDosesByType
+    getRecentInsulinDoses,
+    getRecentBSLValues
   };
 }
 
