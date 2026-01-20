@@ -57,4 +57,11 @@
       </svg>
     </a>
   </div>
+
+  <!-- Import Link -->
+  <div class="mt-8 text-center">
+    <a href="/import" class="text-sm text-gray-500 hover:text-gray-400">
+      Import data from CGM apps or CSV →
+    </a>
+  </div>
 </div>
