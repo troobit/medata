@@ -1,8 +1,8 @@
 # MeData Development Plan
 
 > **Source of Truth**: [requirements.md](./requirements.md)
-> **Last Updated**: 2026-01-20
-> **Current Branch**: `dev-0` (integration staging)
+> **Last Updated**: 2026-01-20 (Workstream B Phase 2 complete)
+> **Current Branch**: `dev-2` (CGM Graph Image Capture)
 
 ---
 
@@ -279,7 +279,7 @@ src/routes/
 **Owner**: TBD
 **Dependencies**: Phase 0 complete
 **Priority**: HIGH - Enables BSL data without manual entry
-**Status**: ✅ Phase 1 Complete (ML-assisted extraction)
+**Status**: ✅ Phase 1 Complete (ML-assisted extraction), ✅ Phase 2 Complete (Local CV extraction)
 
 ### Objectives
 
@@ -330,14 +330,15 @@ src/routes/
 src/lib/
 ├── services/
 │   └── cgm/                         # OWNED BY WORKSTREAM B
-│       ├── ICGMImageService.ts
-│       ├── CGMImageProcessor.ts
-│       ├── LibreGraphParser.ts
-│       ├── DexcomGraphParser.ts
-│       ├── CurveExtractor.ts
-│       └── AxisDetector.ts
+│       ├── index.ts                 # Service exports
+│       ├── CGMImageProcessor.ts     # Main processor (ML + local CV)
+│       ├── LocalCurveExtractor.ts   # Phase 2: Local CV extraction
+│       ├── LibreGraphParser.ts      # Phase 2: Libre-specific parser
+│       ├── DexcomGraphParser.ts     # Phase 2: Dexcom-specific parser
+│       └── README.md
 ├── components/
 │   └── cgm/                         # OWNED BY WORKSTREAM B
+│       ├── index.ts
 │       ├── CGMImageCapture.svelte
 │       ├── GraphRegionSelector.svelte
 │       ├── AxisRangeInput.svelte
@@ -346,7 +347,7 @@ src/lib/
 ├── types/
 │   └── cgm.ts                       # OWNED BY WORKSTREAM B
 └── utils/
-    └── curveExtraction.ts           # OWNED BY WORKSTREAM B
+    └── curveExtraction.ts           # Phase 2: Edge detection utilities
 ```
 
 ### Routes
@@ -373,12 +374,12 @@ src/routes/
 - [x] Prompt engineering for CGM graphs
 - [x] Structured output (time-series JSON)
 
-#### B.3 Curve Extraction - Local Algorithms (Phase 2 - Not Started)
+#### B.3 Curve Extraction - Local Algorithms (Phase 2 - Complete)
 
-- [ ] Color-based line detection (filter by CGM line color)
-- [ ] Edge detection for curve tracing
-- [ ] Template matching for known CGM formats
-- [ ] Canvas-based pixel analysis
+- [x] Color-based line detection (filter by CGM line color)
+- [x] Edge detection for curve tracing (Sobel, Canny-style)
+- [x] Template matching for known CGM formats (LibreGraphParser, DexcomGraphParser)
+- [x] Canvas-based pixel analysis (LocalCurveExtractor)
 
 #### B.4 Time-Series Generation
 
@@ -400,7 +401,7 @@ src/routes/
 - [x] Dexcom graph screenshots supported (ML-assisted)
 - [x] User can adjust axis ranges if auto-detection fails (AxisRangeInput component)
 - [x] Extracted data imports as BSL events with `source: 'cgm-image'`
-- [ ] Local extraction works without API (Phase 2 goal)
+- [x] Local extraction works without API (Phase 2 - LocalCurveExtractor, LibreGraphParser, DexcomGraphParser)
 
 ---
 

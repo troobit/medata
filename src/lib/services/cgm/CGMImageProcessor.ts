@@ -2,7 +2,8 @@
  * Workstream B: CGM Graph Image Processor
  *
  * Main service for extracting BSL time-series data from CGM app screenshots.
- * Uses ML-assisted extraction via cloud vision APIs.
+ * Supports both ML-assisted extraction via cloud vision APIs and local
+ * computer vision algorithms for offline/privacy-first extraction.
  */
 
 import type {
@@ -16,6 +17,9 @@ import type {
 } from '$lib/types/cgm';
 import type { BSLUnit } from '$lib/types/events';
 import type { MLProvider, UserSettings } from '$lib/types/settings';
+import { LocalCurveExtractor } from './LocalCurveExtractor';
+import { LibreGraphParser } from './LibreGraphParser';
+import { DexcomGraphParser } from './DexcomGraphParser';
 
 /**
  * Prompt for CGM graph extraction via vision API
@@ -65,13 +69,62 @@ interface MLExtractionResponse {
 }
 
 /**
- * CGMImageProcessor - Extracts BSL data from CGM screenshots using ML
+ * Extended options for CGM extraction with local fallback support
+ */
+export interface ExtendedCGMExtractionOptions extends CGMExtractionOptions {
+  /** Force use of local extraction even if ML is available */
+  useLocalExtraction?: boolean;
+  /** Preferred extraction method: 'ml' | 'local' | 'auto' (default: 'auto') */
+  preferredMethod?: 'ml' | 'local' | 'auto';
+}
+
+/**
+ * CGMImageProcessor - Extracts BSL data from CGM screenshots
+ *
+ * Supports two extraction methods:
+ * 1. ML-assisted extraction via cloud vision APIs (higher accuracy)
+ * 2. Local computer vision extraction (offline, privacy-first)
+ *
+ * By default, uses ML when configured and falls back to local extraction.
  */
 export class CGMImageProcessor implements ICGMImageService {
   private settings: UserSettings;
+  private localExtractor: LocalCurveExtractor | null = null;
+  private libreParser: LibreGraphParser | null = null;
+  private dexcomParser: DexcomGraphParser | null = null;
 
   constructor(settings: UserSettings) {
     this.settings = settings;
+  }
+
+  /**
+   * Get or create local curve extractor
+   */
+  private getLocalExtractor(): LocalCurveExtractor {
+    if (!this.localExtractor) {
+      this.localExtractor = new LocalCurveExtractor();
+    }
+    return this.localExtractor;
+  }
+
+  /**
+   * Get or create device-specific parser
+   */
+  private getDeviceParser(deviceType: CGMDeviceType): LibreGraphParser | DexcomGraphParser | null {
+    switch (deviceType) {
+      case 'freestyle-libre':
+        if (!this.libreParser) {
+          this.libreParser = new LibreGraphParser();
+        }
+        return this.libreParser;
+      case 'dexcom':
+        if (!this.dexcomParser) {
+          this.dexcomParser = new DexcomGraphParser();
+        }
+        return this.dexcomParser;
+      default:
+        return null;
+    }
   }
 
   /**
@@ -358,17 +411,59 @@ export class CGMImageProcessor implements ICGMImageService {
   }
 
   /**
-   * Extract BSL time-series from CGM graph image
+   * Extract using local computer vision (no API required)
    */
-  async extractFromImage(
+  private async extractWithLocalCV(
     image: Blob,
     options: CGMExtractionOptions = {}
   ): Promise<CGMExtractionResult> {
+    // Try device-specific parser if device type is known
+    if (options.deviceType) {
+      const parser = this.getDeviceParser(options.deviceType);
+      if (parser) {
+        return parser.extractFromImage(image, options);
+      }
+    }
+
+    // Use generic local extractor
+    const extractor = this.getLocalExtractor();
+    return extractor.extractFromImage(image, options);
+  }
+
+  /**
+   * Extract BSL time-series from CGM graph image
+   *
+   * Uses ML extraction when available, with local CV as fallback.
+   * Set options.useLocalExtraction = true to force local extraction.
+   */
+  async extractFromImage(
+    image: Blob,
+    options: ExtendedCGMExtractionOptions = {}
+  ): Promise<CGMExtractionResult> {
     const startTime = performance.now();
+
+    // Determine extraction method
+    const preferredMethod = options.preferredMethod || 'auto';
+    const useLocal = options.useLocalExtraction ||
+      preferredMethod === 'local' ||
+      (preferredMethod === 'auto' && !this.isConfigured());
+
+    // Use local extraction if requested or if ML is not configured
+    if (useLocal) {
+      if (!LocalCurveExtractor.isAvailable()) {
+        throw new Error('Local extraction requires a browser environment with Canvas support.');
+      }
+      return this.extractWithLocalCV(image, options);
+    }
 
     const mlConfig = this.getMLConfig();
     if (!mlConfig) {
-      throw new Error('No ML provider configured. Please set up an API key in Settings.');
+      // Fallback to local extraction
+      if (LocalCurveExtractor.isAvailable()) {
+        console.warn('No ML provider configured, falling back to local extraction.');
+        return this.extractWithLocalCV(image, options);
+      }
+      throw new Error('No ML provider configured. Please set up an API key in Settings or use local extraction.');
     }
 
     const imageBase64 = await this.blobToBase64(image);
@@ -544,6 +639,34 @@ export class CGMImageProcessor implements ICGMImageService {
    */
   isConfigured(): boolean {
     return this.getMLConfig() !== null;
+  }
+
+  /**
+   * Check if local extraction is available
+   */
+  isLocalExtractionAvailable(): boolean {
+    return LocalCurveExtractor.isAvailable();
+  }
+
+  /**
+   * Check if any extraction method is available
+   */
+  canExtract(): boolean {
+    return this.isConfigured() || this.isLocalExtractionAvailable();
+  }
+
+  /**
+   * Get the available extraction methods
+   */
+  getAvailableMethods(): Array<'ml' | 'local'> {
+    const methods: Array<'ml' | 'local'> = [];
+    if (this.isConfigured()) {
+      methods.push('ml');
+    }
+    if (this.isLocalExtractionAvailable()) {
+      methods.push('local');
+    }
+    return methods;
   }
 }
 
