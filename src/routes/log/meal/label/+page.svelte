@@ -30,7 +30,7 @@
   let fat = $state(0);
   let calories = $state(0);
 
-  let mlConfigured = $derived(settingsStore.isMLConfigured);
+  let aiConfigured = $derived(settingsStore.isAIConfigured);
 
   async function handleCapture(blob: Blob) {
     error = null;
@@ -150,9 +150,11 @@
     </p>
   </header>
 
-  {#if !mlConfigured}
+  {#if !aiConfigured}
     <div class="flex flex-1 flex-col items-center justify-center text-center">
-      <div class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20 text-4xl">
+      <div
+        class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20 text-4xl"
+      >
         ⚙️
       </div>
       <h2 class="mb-2 text-xl font-semibold text-white">AI Not Configured</h2>
@@ -245,7 +247,9 @@
             <div class="mb-2 text-xs text-gray-500">Per serving (tap to edit)</div>
             <div class="grid grid-cols-4 gap-2">
               <div>
-                <label for="carbs" class="mb-1 block text-xs font-medium text-green-400">Carbs</label>
+                <label for="carbs" class="mb-1 block text-xs font-medium text-green-400"
+                  >Carbs</label
+                >
                 <input
                   id="carbs"
                   type="number"
@@ -255,7 +259,9 @@
                 />
               </div>
               <div>
-                <label for="protein" class="mb-1 block text-xs font-medium text-blue-400">Protein</label>
+                <label for="protein" class="mb-1 block text-xs font-medium text-blue-400"
+                  >Protein</label
+                >
                 <input
                   id="protein"
                   type="number"
@@ -275,7 +281,9 @@
                 />
               </div>
               <div>
-                <label for="calories" class="mb-1 block text-xs font-medium text-gray-400">Calories</label>
+                <label for="calories" class="mb-1 block text-xs font-medium text-gray-400"
+                  >Calories</label
+                >
                 <input
                   id="calories"
                   type="number"

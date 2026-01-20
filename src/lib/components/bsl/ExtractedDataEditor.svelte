@@ -15,9 +15,7 @@
   let { readings, onReadingsChange, class: className = '' }: Props = $props();
 
   // Convert readings to editable format
-  let editableReadings = $state<EditableReading[]>(
-    readings.map((r) => ({ ...r, included: true }))
-  );
+  let editableReadings = $state<EditableReading[]>(readings.map((r) => ({ ...r, included: true })));
 
   // Sync when readings prop changes
   $effect(() => {
@@ -110,8 +108,8 @@
           onclick={() => toggleReading(index)}
           class="flex h-6 w-6 shrink-0 items-center justify-center rounded border transition-colors
             {reading.included
-              ? 'border-brand-accent bg-brand-accent text-gray-950'
-              : 'border-gray-600 bg-transparent'}"
+            ? 'border-brand-accent bg-brand-accent text-gray-950'
+            : 'border-gray-600 bg-transparent'}"
           aria-label={reading.included ? 'Exclude reading' : 'Include reading'}
         >
           {#if reading.included}

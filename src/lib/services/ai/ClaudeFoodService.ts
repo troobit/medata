@@ -50,10 +50,7 @@ export class ClaudeFoodService implements IFoodRecognitionService {
     this.model = model;
   }
 
-  async recognizeFood(
-    image: Blob,
-    options?: RecognitionOptions
-  ): Promise<FoodRecognitionResult> {
+  async recognizeFood(image: Blob, _options?: RecognitionOptions): Promise<FoodRecognitionResult> {
     const startTime = performance.now();
 
     const base64Image = await this.blobToBase64(image);
@@ -201,9 +198,7 @@ export class ClaudeFoodService implements IFoodRecognitionService {
     return 'Claude';
   }
 
-  private getMediaType(
-    mimeType: string
-  ): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+  private getMediaType(mimeType: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
     if (validTypes.includes(mimeType as (typeof validTypes)[number])) {
       return mimeType as (typeof validTypes)[number];

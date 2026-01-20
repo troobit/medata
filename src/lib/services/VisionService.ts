@@ -94,10 +94,18 @@ export class VisionService {
           throw new VisionServiceError('Invalid API key', 'INVALID_API_KEY', 401);
         }
         if (response.status === 429) {
-          throw new VisionServiceError('Rate limit exceeded. Please try again later.', 'RATE_LIMIT', 429);
+          throw new VisionServiceError(
+            'Rate limit exceeded. Please try again later.',
+            'RATE_LIMIT',
+            429
+          );
         }
         if (response.status >= 500) {
-          throw new VisionServiceError('OpenAI service unavailable. Please try again later.', 'SERVICE_UNAVAILABLE', response.status);
+          throw new VisionServiceError(
+            'OpenAI service unavailable. Please try again later.',
+            'SERVICE_UNAVAILABLE',
+            response.status
+          );
         }
 
         throw new VisionServiceError(errorMessage, 'API_ERROR', response.status);
@@ -115,7 +123,10 @@ export class VisionService {
         throw error;
       }
       if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new VisionServiceError('Network error. Please check your internet connection.', 'NETWORK_ERROR');
+        throw new VisionServiceError(
+          'Network error. Please check your internet connection.',
+          'NETWORK_ERROR'
+        );
       }
       throw new VisionServiceError(
         error instanceof Error ? error.message : 'Unknown error occurred',

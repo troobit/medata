@@ -50,7 +50,7 @@ export class IndexedDBEventRepository implements IEventRepository {
   }
 
   async getByType(type: EventType, limit?: number): Promise<PhysiologicalEvent[]> {
-    let query = db.events.where('eventType').equals(type).reverse();
+    const query = db.events.where('eventType').equals(type).reverse();
 
     if (limit) {
       return query.limit(limit).sortBy('timestamp');

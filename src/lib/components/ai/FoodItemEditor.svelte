@@ -69,7 +69,8 @@
         </span>
       </div>
       <div class="text-sm text-gray-400">
-        {quantity} {unit} &middot; {carbs}g carbs
+        {quantity}
+        {unit} &middot; {carbs}g carbs
       </div>
     </div>
     <svg
@@ -153,7 +154,10 @@
           />
         </div>
         <div>
-          <label for="item-protein-{item.name}" class="mb-1 block text-xs font-medium text-blue-400">
+          <label
+            for="item-protein-{item.name}"
+            class="mb-1 block text-xs font-medium text-blue-400"
+          >
             Protein
           </label>
           <input

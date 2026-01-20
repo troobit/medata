@@ -35,9 +35,7 @@
       <img src={imageUrl} alt="Captured food" class="h-64 w-full object-cover" />
 
       {#if processing}
-        <div
-          class="absolute inset-0 flex items-center justify-center bg-black/50"
-        >
+        <div class="absolute inset-0 flex items-center justify-center bg-black/50">
           <div class="flex flex-col items-center">
             <div
               class="mb-2 h-8 w-8 animate-spin rounded-full border-2 border-blue-400 border-t-transparent"
@@ -49,7 +47,9 @@
     </div>
   {:else}
     <div class="mb-4 flex h-64 items-center justify-center rounded-lg bg-gray-800">
-      <div class="h-8 w-8 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
+      <div
+        class="h-8 w-8 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"
+      ></div>
     </div>
   {/if}
 

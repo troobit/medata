@@ -237,9 +237,7 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
 /**
  * Gets image dimensions from a Blob
  */
-export async function getImageDimensions(
-  blob: Blob
-): Promise<{ width: number; height: number }> {
+export async function getImageDimensions(blob: Blob): Promise<{ width: number; height: number }> {
   const img = await createImageFromBlob(blob);
   return { width: img.width, height: img.height };
 }

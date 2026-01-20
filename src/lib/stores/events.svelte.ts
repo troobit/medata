@@ -1,5 +1,12 @@
 import { getEventService } from '$lib/services';
-import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, BSLDataSource, MealMetadata } from '$lib/types';
+import type {
+  PhysiologicalEvent,
+  EventType,
+  InsulinType,
+  BSLUnit,
+  BSLDataSource,
+  MealMetadata
+} from '$lib/types';
 
 /**
  * Reactive store for physiological events using Svelte 5 runes

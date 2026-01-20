@@ -119,12 +119,7 @@
   {#if cameraActive}
     <!-- Camera Preview -->
     <div class="relative mb-4 overflow-hidden rounded-lg bg-black">
-      <video
-        bind:this={videoElement}
-        autoplay
-        playsinline
-        muted
-        class="h-64 w-full object-cover"
+      <video bind:this={videoElement} autoplay playsinline muted class="h-64 w-full object-cover"
       ></video>
 
       <!-- Camera Controls Overlay -->
@@ -181,7 +176,12 @@
         onclick={startCamera}
         class="flex flex-col items-center justify-center rounded-lg bg-blue-500/10 p-6 transition-colors hover:bg-blue-500/20"
       >
-        <svg class="mb-2 h-10 w-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="mb-2 h-10 w-10 text-blue-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -201,7 +201,12 @@
       <label
         class="flex cursor-pointer flex-col items-center justify-center rounded-lg bg-purple-500/10 p-6 transition-colors hover:bg-purple-500/20"
       >
-        <svg class="mb-2 h-10 w-10 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="mb-2 h-10 w-10 text-purple-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
