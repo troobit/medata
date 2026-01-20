@@ -1,5 +1,5 @@
 import { getEventService } from '$lib/services';
-import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, BSLSource, MealMetadata } from '$lib/types';
+import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, BSLDataSource, MealMetadata } from '$lib/types';
 
 /**
  * Reactive store for physiological events using Svelte 5 runes
@@ -105,7 +105,7 @@ function createEventsStore() {
   }
 
   async function bulkLogBSL(
-    readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLSource }>
+    readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLDataSource }>
   ) {
     loading = true;
     error = null;

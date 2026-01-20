@@ -5,7 +5,7 @@ import type {
   EventType,
   InsulinType,
   BSLUnit,
-  BSLSource,
+  BSLDataSource,
   InsulinMetadata,
   BSLMetadata,
   MealMetadata
@@ -99,13 +99,13 @@ export class EventService {
    * Log multiple BSL readings at once (e.g., from image import)
    */
   async bulkLogBSL(
-    readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLSource }>
+    readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLDataSource }>
   ): Promise<PhysiologicalEvent[]> {
     const events: PhysiologicalEvent[] = [];
     for (const reading of readings) {
       const metadata: BSLMetadata = {
         unit: reading.unit,
-        source: reading.source || 'image-import'
+        source: reading.source || 'cgm-image'
       };
       const event = await this.createEvent({
         timestamp: reading.timestamp,

@@ -83,7 +83,7 @@
           value: r.value,
           unit: r.unit,
           timestamp: r.timestamp,
-          source: 'image-import' as const
+          source: 'cgm-image' as const
         }))
       );
 

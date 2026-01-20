@@ -3,7 +3,6 @@ export type {
   EventType,
   InsulinType,
   BSLUnit,
-  BSLSource,
   ExerciseIntensity,
   MacroData,
   MealMetadata,
