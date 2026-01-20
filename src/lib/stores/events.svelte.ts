@@ -1,5 +1,12 @@
 import { getEventService } from '$lib/services';
-import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, MealMetadata } from '$lib/types';
+import type {
+  PhysiologicalEvent,
+  EventType,
+  InsulinType,
+  BSLUnit,
+  BSLDataSource,
+  MealMetadata
+} from '$lib/types';
 
 /**
  * Reactive store for physiological events using Svelte 5 runes
@@ -74,11 +81,16 @@ function createEventsStore() {
     }
   }
 
-  async function logBSL(value: number, unit?: BSLUnit, timestamp?: Date) {
+  async function logBSL(
+    value: number,
+    unit?: BSLUnit,
+    timestamp?: Date,
+    options?: { isFingerPrick?: boolean; device?: string; source?: BSLDataSource }
+  ) {
     loading = true;
     error = null;
     try {
-      const event = await service.logBSL(value, unit, timestamp);
+      const event = await service.logBSL(value, unit, timestamp, options);
       events = [event, ...events];
       return event;
     } catch (e) {
@@ -87,6 +99,10 @@ function createEventsStore() {
     } finally {
       loading = false;
     }
+  }
+
+  async function getRecentBSLValues(limit?: number) {
+    return service.getRecentBSLValues(limit);
   }
 
   async function logMeal(carbs: number, metadata?: Partial<MealMetadata>, timestamp?: Date) {
@@ -98,6 +114,23 @@ function createEventsStore() {
       return event;
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to log meal';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function bulkLogBSL(
+    readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLDataSource }>
+  ) {
+    loading = true;
+    error = null;
+    try {
+      const newEvents = await service.bulkLogBSL(readings);
+      events = [...newEvents, ...events];
+      return newEvents;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to import BSL readings';
       throw e;
     } finally {
       loading = false;
@@ -133,8 +166,20 @@ function createEventsStore() {
     }
   }
 
-  async function getRecentInsulinDoses(insulinType: InsulinType, limit?: number) {
-    return service.getRecentInsulinDoses(insulinType, limit);
+  async function getRecentInsulinDoses(insulinType: 'bolus' | 'basal', maxUnique: number = 6) {
+    try {
+      return await service.getRecentInsulinDoses(insulinType, maxUnique);
+    } catch {
+      return [];
+    }
+  }
+
+  async function getRecentCarbValues(maxUnique: number = 6) {
+    try {
+      return await service.getRecentCarbValues(maxUnique);
+    } catch {
+      return [];
+    }
   }
 
   return {
@@ -154,9 +199,11 @@ function createEventsStore() {
     logInsulin,
     logBSL,
     logMeal,
+    bulkLogBSL,
     deleteEvent,
     updateEvent,
-    getRecentInsulinDoses
+    getRecentInsulinDoses,
+    getRecentBSLValues
   };
 }
 
