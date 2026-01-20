@@ -39,8 +39,14 @@ export type {
 export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets';
 
 // Settings
-export type { AIProvider, UserSettings } from './settings';
-export { DEFAULT_SETTINGS } from './settings';
+export type {
+  AIProvider,
+  UserSettings,
+  AzureConfig,
+  BedrockConfig,
+  LocalModelConfig
+} from './settings';
+export { DEFAULT_SETTINGS, ENV_VAR_NAMES } from './settings';
 
 // Workstream A: AI Food Recognition
 export type {
