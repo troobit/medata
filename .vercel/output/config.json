@@ -1,0 +1,191 @@
+{
+	"version": 3,
+	"routes": [
+		{
+			"src": "/history",
+			"dest": "/history/"
+		},
+		{
+			"src": "/history/",
+			"status": 308,
+			"headers": {
+				"Location": "/history"
+			}
+		},
+		{
+			"src": "/import",
+			"dest": "/import/"
+		},
+		{
+			"src": "/import/",
+			"status": 308,
+			"headers": {
+				"Location": "/import"
+			}
+		},
+		{
+			"src": "/import/bsl",
+			"dest": "/import/bsl/"
+		},
+		{
+			"src": "/import/bsl/",
+			"status": 308,
+			"headers": {
+				"Location": "/import/bsl"
+			}
+		},
+		{
+			"src": "/import/cgm",
+			"dest": "/import/cgm/"
+		},
+		{
+			"src": "/import/cgm/",
+			"status": 308,
+			"headers": {
+				"Location": "/import/cgm"
+			}
+		},
+		{
+			"src": "/log",
+			"dest": "/log/"
+		},
+		{
+			"src": "/log/",
+			"status": 308,
+			"headers": {
+				"Location": "/log"
+			}
+		},
+		{
+			"src": "/log/bsl",
+			"dest": "/log/bsl/"
+		},
+		{
+			"src": "/log/bsl/",
+			"status": 308,
+			"headers": {
+				"Location": "/log/bsl"
+			}
+		},
+		{
+			"src": "/log/insulin",
+			"dest": "/log/insulin/"
+		},
+		{
+			"src": "/log/insulin/",
+			"status": 308,
+			"headers": {
+				"Location": "/log/insulin"
+			}
+		},
+		{
+			"src": "/log/meal",
+			"dest": "/log/meal/"
+		},
+		{
+			"src": "/log/meal/",
+			"status": 308,
+			"headers": {
+				"Location": "/log/meal"
+			}
+		},
+		{
+			"src": "/log/meal/estimate",
+			"dest": "/log/meal/estimate/"
+		},
+		{
+			"src": "/log/meal/estimate/",
+			"status": 308,
+			"headers": {
+				"Location": "/log/meal/estimate"
+			}
+		},
+		{
+			"src": "/log/meal/label",
+			"dest": "/log/meal/label/"
+		},
+		{
+			"src": "/log/meal/label/",
+			"status": 308,
+			"headers": {
+				"Location": "/log/meal/label"
+			}
+		},
+		{
+			"src": "/log/meal/photo",
+			"dest": "/log/meal/photo/"
+		},
+		{
+			"src": "/log/meal/photo/",
+			"status": 308,
+			"headers": {
+				"Location": "/log/meal/photo"
+			}
+		},
+		{
+			"src": "/settings",
+			"dest": "/settings/"
+		},
+		{
+			"src": "/settings/",
+			"status": 308,
+			"headers": {
+				"Location": "/settings"
+			}
+		},
+		{
+			"src": "/_app/immutable/.+",
+			"headers": {
+				"cache-control": "public, immutable, max-age=31536000"
+			}
+		},
+		{
+			"handle": "filesystem"
+		},
+		{
+			"src": "/.*",
+			"dest": "/![-]/catchall"
+		}
+	],
+	"overrides": {
+		"index.html": {
+			"path": ""
+		},
+		"history.html": {
+			"path": "history"
+		},
+		"import.html": {
+			"path": "import"
+		},
+		"import/bsl.html": {
+			"path": "import/bsl"
+		},
+		"import/cgm.html": {
+			"path": "import/cgm"
+		},
+		"log.html": {
+			"path": "log"
+		},
+		"log/bsl.html": {
+			"path": "log/bsl"
+		},
+		"log/insulin.html": {
+			"path": "log/insulin"
+		},
+		"log/meal.html": {
+			"path": "log/meal"
+		},
+		"log/meal/estimate.html": {
+			"path": "log/meal/estimate"
+		},
+		"log/meal/label.html": {
+			"path": "log/meal/label"
+		},
+		"log/meal/photo.html": {
+			"path": "log/meal/photo"
+		},
+		"settings.html": {
+			"path": "settings"
+		}
+	}
+}
