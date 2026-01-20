@@ -1,5 +1,5 @@
 import { getEventService } from '$lib/services';
-import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, MealMetadata } from '$lib/types';
+import type { PhysiologicalEvent, EventType, InsulinType, BSLUnit, BSLMetadata, MealMetadata } from '$lib/types';
 
 /**
  * Reactive store for physiological events using Svelte 5 runes
@@ -89,6 +89,21 @@ function createEventsStore() {
     }
   }
 
+  async function logBSLWithMetadata(value: number, metadata: BSLMetadata, timestamp?: Date) {
+    loading = true;
+    error = null;
+    try {
+      const event = await service.logBSLWithMetadata(value, metadata, timestamp);
+      events = [event, ...events];
+      return event;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to log BSL';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
   async function logMeal(carbs: number, metadata?: Partial<MealMetadata>, timestamp?: Date) {
     loading = true;
     error = null;
@@ -160,6 +175,7 @@ function createEventsStore() {
     loadByType,
     logInsulin,
     logBSL,
+    logBSLWithMetadata,
     logMeal,
     deleteEvent,
     updateEvent,
