@@ -1,15 +1,23 @@
 /**
  * Workstream A: AI Food Recognition Services
- * Branch: workstream-a/food-ai
- *
- * Export implementations here as they are created.
+ * Branch: dev-1
  */
 
-// TODO: Export FoodServiceFactory when implemented
-// export { FoodServiceFactory } from './FoodServiceFactory';
-
-// TODO: Export individual providers when implemented
-// export { OpenAIFoodService } from './OpenAIFoodService';
-// export { GeminiFoodService } from './GeminiFoodService';
-// export { ClaudeFoodService } from './ClaudeFoodService';
-// export { OllamaFoodService } from './OllamaFoodService';
+export { OpenAIFoodService } from './OpenAIFoodService';
+export { GeminiFoodService } from './GeminiFoodService';
+export { ClaudeFoodService } from './ClaudeFoodService';
+export {
+  createFoodService,
+  getFoodService,
+  getAllConfiguredServices,
+  recognizeFoodWithFallback,
+  isAnyProviderConfigured,
+  getPrimaryProviderName
+} from './FoodServiceFactory';
+export {
+  FOOD_RECOGNITION_SYSTEM_PROMPT,
+  FOOD_RECOGNITION_USER_PROMPT,
+  NUTRITION_LABEL_SYSTEM_PROMPT,
+  NUTRITION_LABEL_USER_PROMPT,
+  parseAIResponse
+} from './prompts/foodRecognition';
