@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 128 128" role="img"
+    aria-label="MeData logo">
+    <path fill="none" stroke="#63ff00" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"
+        d="M 24,24
+       C 130,24 130,104 24,104
+       L 24,64
+       M 104,64
+       L 104,104
+       M 64,64
+       L 64,64" />
+</svg>
