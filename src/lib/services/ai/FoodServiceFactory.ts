@@ -4,6 +4,14 @@
  *
  * Creates and manages AI food recognition services based on user settings.
  * Provides fallback chain for resilience.
+ *
+ * Supported providers:
+ * - OpenAI (GPT-4 Vision)
+ * - Google Gemini
+ * - Anthropic Claude
+ * - Azure OpenAI Service (Azure Foundry)
+ * - Amazon Bedrock
+ * - Local models (Ollama, LM Studio)
  */
 
 import type {
@@ -15,6 +23,9 @@ import type { UserSettings, AIProvider } from '$lib/types/settings';
 import { OpenAIFoodService } from './OpenAIFoodService';
 import { GeminiFoodService } from './GeminiFoodService';
 import { ClaudeFoodService } from './ClaudeFoodService';
+import { AzureFoodService } from './AzureFoodService';
+import { BedrockFoodService } from './BedrockFoodService';
+import { LocalFoodService } from './LocalFoodService';
 
 /**
  * Creates the appropriate food service based on provider type and settings
@@ -39,6 +50,25 @@ export function createFoodService(
         return new ClaudeFoodService(settings.claudeApiKey);
       }
       break;
+    case 'azure':
+      if (settings.azureConfig?.apiKey && settings.azureConfig?.endpoint) {
+        return new AzureFoodService(settings.azureConfig);
+      }
+      break;
+    case 'bedrock':
+      if (
+        settings.bedrockConfig?.accessKeyId &&
+        settings.bedrockConfig?.secretAccessKey &&
+        settings.bedrockConfig?.region
+      ) {
+        return new BedrockFoodService(settings.bedrockConfig);
+      }
+      break;
+    case 'local':
+      if (settings.localModelConfig?.endpoint) {
+        return new LocalFoodService(settings.localModelConfig);
+      }
+      break;
   }
   return null;
 }
@@ -47,7 +77,7 @@ export function createFoodService(
  * Gets the preferred provider order for fallback chain
  */
 function getProviderOrder(preferredProvider: AIProvider | undefined): AIProvider[] {
-  const allProviders: AIProvider[] = ['openai', 'gemini', 'claude'];
+  const allProviders: AIProvider[] = ['openai', 'gemini', 'claude', 'azure', 'bedrock', 'local'];
 
   if (!preferredProvider) {
     return allProviders;
