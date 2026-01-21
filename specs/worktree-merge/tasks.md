@@ -54,11 +54,11 @@ references:
 
 ## Phase 5: Partial Cleanup (Keep logoui Active)
 
-- [ ] 21. Remove auth worktree: git worktree remove /Users/ronan/repos/beetus/auth
+- [x] 21. Remove auth worktree: git worktree remove /Users/ronan/repos/beetus/auth
 
-- [ ] 22. Verify git worktree list shows dev-0 and logoui only
+- [x] 22. Verify git worktree list shows dev-0 and logoui only
 
-- [ ] 23. Push dev-0 to origin: git push origin dev-0
+- [x] 23. Push dev-0 to origin: git push origin dev-0
 
 ## Phase 6: Continue UI Development (logoui remains active)
 
