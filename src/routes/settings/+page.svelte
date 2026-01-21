@@ -1,14 +1,22 @@
 <script lang="ts">
-  import { Button } from '$lib/components/ui';
+  import { Button, Input, ExpandableSection } from '$lib/components/ui';
   import { settingsStore } from '$lib/stores';
   import type { AIProvider, InsulinType, BSLUnit } from '$lib/types';
 
+  // ML Model Config
+  let foundryKey = $state(settingsStore.settings.foundryConfig?.apiKey || '');
+  let foundryEndpoint = $state(settingsStore.settings.foundryConfig?.endpoint || '');
+  let foundryModel = $state(settingsStore.settings.foundryConfig?.model || '');
   let openaiKey = $state(settingsStore.settings.openaiApiKey || '');
   let geminiKey = $state(settingsStore.settings.geminiApiKey || '');
   let claudeKey = $state(settingsStore.settings.claudeApiKey || '');
   let selectedProvider = $state<AIProvider | ''>(settingsStore.settings.aiProvider || '');
+
+  // Metrics
   let defaultInsulinType = $state<InsulinType>(settingsStore.settings.defaultInsulinType);
   let defaultBSLUnit = $state<BSLUnit>(settingsStore.settings.defaultBSLUnit);
+
+  // UI State
   let saving = $state(false);
   let saved = $state(false);
 
@@ -17,6 +25,14 @@
     saved = false;
     try {
       await settingsStore.update({
+        foundryConfig:
+          foundryKey || foundryEndpoint
+            ? {
+                apiKey: foundryKey || undefined,
+                endpoint: foundryEndpoint || undefined,
+                model: foundryModel || undefined
+              }
+            : undefined,
         openaiApiKey: openaiKey || undefined,
         geminiApiKey: geminiKey || undefined,
         claudeApiKey: claudeKey || undefined,
@@ -42,14 +58,50 @@
     <h1 class="text-2xl font-bold text-white">Settings</h1>
   </header>
 
-  <div class="space-y-8">
-    <!-- AI Configuration -->
+  <div class="space-y-6">
+    <!-- Metrics Section (formerly Defaults) -->
     <section>
-      <h2 class="mb-4 text-lg font-semibold text-gray-200">AI Configuration</h2>
-      <p class="mb-4 text-sm text-gray-400">
-        Configure API keys for AI-powered food recognition. Keys are stored locally on your device.
-      </p>
+      <h2 class="mb-4 text-lg font-semibold text-gray-200">Metrics</h2>
 
+      <fieldset class="mb-4">
+        <legend class="mb-2 block text-sm font-medium text-gray-400">Default Insulin Type</legend>
+        <div class="grid grid-cols-2 gap-2">
+          <Button
+            variant={defaultInsulinType === 'bolus' ? 'primary' : 'secondary'}
+            onclick={() => (defaultInsulinType = 'bolus')}
+          >
+            Bolus
+          </Button>
+          <Button
+            variant={defaultInsulinType === 'basal' ? 'primary' : 'secondary'}
+            onclick={() => (defaultInsulinType = 'basal')}
+          >
+            Basal
+          </Button>
+        </div>
+      </fieldset>
+
+      <fieldset class="mb-4">
+        <legend class="mb-2 block text-sm font-medium text-gray-400">Blood Sugar Unit</legend>
+        <div class="grid grid-cols-2 gap-2">
+          <Button
+            variant={defaultBSLUnit === 'mmol/L' ? 'primary' : 'secondary'}
+            onclick={() => (defaultBSLUnit = 'mmol/L')}
+          >
+            mmol/L
+          </Button>
+          <Button
+            variant={defaultBSLUnit === 'mg/dL' ? 'primary' : 'secondary'}
+            onclick={() => (defaultBSLUnit = 'mg/dL')}
+          >
+            mg/dL
+          </Button>
+        </div>
+      </fieldset>
+    </section>
+
+    <!-- ML Model Config (Collapsible) -->
+    <ExpandableSection title="ML Model Config" subtitle="Configure ML Model" collapsed={true}>
       <!-- Provider Selection -->
       <div class="mb-4">
         <label for="provider" class="mb-2 block text-sm font-medium text-gray-400">
@@ -58,27 +110,53 @@
         <select
           id="provider"
           bind:value={selectedProvider}
-          class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+          class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white transition-colors focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/30"
         >
           <option value="">Auto-detect</option>
+          <option value="foundry">Azure AI Foundry (Recommended)</option>
           <option value="openai">OpenAI</option>
           <option value="gemini">Google Gemini</option>
           <option value="claude">Anthropic Claude</option>
+          <option value="azure">Azure OpenAI (Classic)</option>
         </select>
       </div>
 
-      <!-- OpenAI Key -->
+      <!-- Azure AI Foundry Config -->
+      <div class="mb-6 rounded-lg border border-gray-800 bg-gray-900/30 p-4">
+        <h3 class="mb-3 text-sm font-medium text-gray-300">Azure AI Foundry</h3>
+
+        <div class="space-y-3">
+          <Input
+            type="password"
+            label="API Key"
+            bind:value={foundryKey}
+            placeholder="Enter your API key"
+          />
+          {#if settingsStore.settings.foundryConfig?.apiKey}
+            <p class="text-xs text-gray-500">
+              Current: {maskKey(settingsStore.settings.foundryConfig.apiKey)}
+            </p>
+          {/if}
+
+          <Input
+            type="url"
+            label="Endpoint"
+            bind:value={foundryEndpoint}
+            placeholder="https://your-resource.openai.azure.com"
+          />
+
+          <Input
+            type="text"
+            label="Model (optional)"
+            bind:value={foundryModel}
+            placeholder="gpt-4o"
+          />
+        </div>
+      </div>
+
+      <!-- OpenAI Config -->
       <div class="mb-4">
-        <label for="openai" class="mb-2 block text-sm font-medium text-gray-400">
-          OpenAI API Key
-        </label>
-        <input
-          id="openai"
-          type="password"
-          bind:value={openaiKey}
-          placeholder="sk-..."
-          class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
-        />
+        <Input type="password" label="OpenAI API Key" bind:value={openaiKey} placeholder="sk-..." />
         {#if settingsStore.settings.openaiApiKey}
           <p class="mt-1 text-xs text-gray-500">
             Current: {maskKey(settingsStore.settings.openaiApiKey)}
@@ -86,17 +164,13 @@
         {/if}
       </div>
 
-      <!-- Gemini Key -->
+      <!-- Gemini Config -->
       <div class="mb-4">
-        <label for="gemini" class="mb-2 block text-sm font-medium text-gray-400">
-          Google Gemini API Key
-        </label>
-        <input
-          id="gemini"
+        <Input
           type="password"
+          label="Google Gemini API Key"
           bind:value={geminiKey}
           placeholder="AIza..."
-          class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
         />
         {#if settingsStore.settings.geminiApiKey}
           <p class="mt-1 text-xs text-gray-500">
@@ -105,17 +179,13 @@
         {/if}
       </div>
 
-      <!-- Claude Key -->
+      <!-- Claude Config -->
       <div class="mb-4">
-        <label for="claude" class="mb-2 block text-sm font-medium text-gray-400">
-          Anthropic Claude API Key
-        </label>
-        <input
-          id="claude"
+        <Input
           type="password"
+          label="Anthropic Claude API Key"
           bind:value={claudeKey}
           placeholder="sk-ant-..."
-          class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
         />
         {#if settingsStore.settings.claudeApiKey}
           <p class="mt-1 text-xs text-gray-500">
@@ -123,64 +193,7 @@
           </p>
         {/if}
       </div>
-    </section>
-
-    <!-- Defaults -->
-    <section>
-      <h2 class="mb-4 text-lg font-semibold text-gray-200">Defaults</h2>
-
-      <div class="mb-4">
-        <label class="mb-2 block text-sm font-medium text-gray-400">Default Insulin Type</label>
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            class="rounded-lg px-4 py-3 text-center font-medium transition-colors {defaultInsulinType ===
-            'bolus'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-            onclick={() => (defaultInsulinType = 'bolus')}
-          >
-            Bolus
-          </button>
-          <button
-            type="button"
-            class="rounded-lg px-4 py-3 text-center font-medium transition-colors {defaultInsulinType ===
-            'basal'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-            onclick={() => (defaultInsulinType = 'basal')}
-          >
-            Basal
-          </button>
-        </div>
-      </div>
-
-      <div class="mb-4">
-        <label class="mb-2 block text-sm font-medium text-gray-400">Blood Sugar Unit</label>
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            class="rounded-lg px-4 py-3 text-center font-medium transition-colors {defaultBSLUnit ===
-            'mmol/L'
-              ? 'bg-yellow-500 text-gray-950'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-            onclick={() => (defaultBSLUnit = 'mmol/L')}
-          >
-            mmol/L
-          </button>
-          <button
-            type="button"
-            class="rounded-lg px-4 py-3 text-center font-medium transition-colors {defaultBSLUnit ===
-            'mg/dL'
-              ? 'bg-yellow-500 text-gray-950'
-              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
-            onclick={() => (defaultBSLUnit = 'mg/dL')}
-          >
-            mg/dL
-          </button>
-        </div>
-      </div>
-    </section>
+    </ExpandableSection>
 
     <!-- Save Button -->
     <div class="pt-4">

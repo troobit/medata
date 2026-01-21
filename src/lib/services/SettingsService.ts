@@ -1,4 +1,11 @@
-import type { UserSettings, AIProvider, AzureConfig, BedrockConfig, LocalModelConfig } from '$lib/types';
+import type {
+  UserSettings,
+  AIProvider,
+  FoundryConfig,
+  AzureConfig,
+  BedrockConfig,
+  LocalModelConfig
+} from '$lib/types';
 import type { ISettingsRepository } from '$lib/repositories';
 import { mergeWithEnvSettings } from '$lib/config';
 
@@ -91,7 +98,14 @@ export class SettingsService {
     return this.updateSettings({ [settingKey]: undefined });
   }
 
-  // Config management for Azure, Bedrock, and Local providers
+  // Config management for Foundry, Azure, Bedrock, and Local providers
+  async setFoundryConfig(config: FoundryConfig): Promise<UserSettings> {
+    return this.updateSettings({
+      foundryConfig: config,
+      aiProvider: 'foundry'
+    });
+  }
+
   async setAzureConfig(config: AzureConfig): Promise<UserSettings> {
     return this.updateSettings({
       azureConfig: config,
@@ -113,8 +127,9 @@ export class SettingsService {
     });
   }
 
-  async clearProviderConfig(provider: 'azure' | 'bedrock' | 'local'): Promise<UserSettings> {
+  async clearProviderConfig(provider: 'foundry' | 'azure' | 'bedrock' | 'local'): Promise<UserSettings> {
     const configMap: Record<typeof provider, keyof UserSettings> = {
+      foundry: 'foundryConfig',
       azure: 'azureConfig',
       bedrock: 'bedrockConfig',
       local: 'localModelConfig'
@@ -126,6 +141,7 @@ export class SettingsService {
   async isAIConfigured(): Promise<boolean> {
     const settings = await this.getSettings();
     return !!(
+      settings.foundryConfig?.apiKey ||
       settings.openaiApiKey ||
       settings.geminiApiKey ||
       settings.claudeApiKey ||
@@ -145,8 +161,16 @@ export class SettingsService {
       }
     }
 
-    // Fallback to first configured provider
-    const providers: AIProvider[] = ['openai', 'gemini', 'claude', 'azure', 'bedrock', 'local'];
+    // Fallback to first configured provider (foundry first for Azure users)
+    const providers: AIProvider[] = [
+      'foundry',
+      'openai',
+      'gemini',
+      'claude',
+      'azure',
+      'bedrock',
+      'local'
+    ];
     for (const provider of providers) {
       if (this.isProviderConfigured(settings, provider)) {
         return provider;
@@ -158,6 +182,8 @@ export class SettingsService {
 
   private isProviderConfigured(settings: UserSettings, provider: AIProvider): boolean {
     switch (provider) {
+      case 'foundry':
+        return !!(settings.foundryConfig?.apiKey && settings.foundryConfig?.endpoint);
       case 'openai':
         return !!settings.openaiApiKey;
       case 'gemini':

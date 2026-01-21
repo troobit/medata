@@ -42,6 +42,7 @@ export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets
 export type {
   AIProvider,
   UserSettings,
+  FoundryConfig,
   AzureConfig,
   BedrockConfig,
   LocalModelConfig

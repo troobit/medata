@@ -5,11 +5,12 @@
  * Creates and manages AI food recognition services based on user settings.
  * Provides fallback chain for resilience.
  *
- * Supported providers:
+ * Supported providers (in priority order):
+ * - Azure AI Foundry (v1 API - recommended for Azure users)
  * - OpenAI (GPT-4 Vision)
  * - Google Gemini
  * - Anthropic Claude
- * - Azure OpenAI Service (Azure Foundry)
+ * - Azure OpenAI Service (classic)
  * - Amazon Bedrock
  * - Local models (Ollama, LM Studio)
  */
@@ -20,6 +21,7 @@ import type {
   RecognitionOptions
 } from '$lib/types/ai';
 import type { UserSettings, AIProvider } from '$lib/types/settings';
+import { AzureFoundryFoodService } from './AzureFoundryFoodService';
 import { OpenAIFoodService } from './OpenAIFoodService';
 import { GeminiFoodService } from './GeminiFoodService';
 import { ClaudeFoodService } from './ClaudeFoodService';
@@ -35,6 +37,11 @@ export function createFoodService(
   settings: UserSettings
 ): IFoodRecognitionService | null {
   switch (provider) {
+    case 'foundry':
+      if (settings.foundryConfig?.apiKey && settings.foundryConfig?.endpoint) {
+        return new AzureFoundryFoodService(settings.foundryConfig);
+      }
+      break;
     case 'openai':
       if (settings.openaiApiKey) {
         return new OpenAIFoodService(settings.openaiApiKey);
@@ -75,9 +82,18 @@ export function createFoodService(
 
 /**
  * Gets the preferred provider order for fallback chain
+ * Note: 'foundry' (Azure AI Foundry) is first as the primary Azure provider
  */
 function getProviderOrder(preferredProvider: AIProvider | undefined): AIProvider[] {
-  const allProviders: AIProvider[] = ['openai', 'gemini', 'claude', 'azure', 'bedrock', 'local'];
+  const allProviders: AIProvider[] = [
+    'foundry',
+    'openai',
+    'gemini',
+    'claude',
+    'azure',
+    'bedrock',
+    'local'
+  ];
 
   if (!preferredProvider) {
     return allProviders;

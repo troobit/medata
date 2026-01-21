@@ -64,7 +64,8 @@ export interface RecognitionOptions {
 
 /**
  * Interface that all AI food recognition services must implement
- * Implementations: OpenAIFoodService, GeminiFoodService, ClaudeFoodService, OllamaFoodService
+ * Implementations: AzureFoundryFoodService, OpenAIFoodService, GeminiFoodService,
+ *                  ClaudeFoodService, AzureFoodService, BedrockFoodService, LocalFoodService
  */
 export interface IFoodRecognitionService {
   recognizeFood(image: Blob, options?: RecognitionOptions): Promise<FoodRecognitionResult>;

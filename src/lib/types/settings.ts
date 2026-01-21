@@ -3,16 +3,26 @@ import type { BSLUnit, InsulinType } from './events';
 /**
  * AI provider options for food recognition
  */
-export type AIProvider = 'openai' | 'gemini' | 'claude' | 'azure' | 'bedrock' | 'local';
+export type AIProvider = 'foundry' | 'openai' | 'gemini' | 'claude' | 'azure' | 'bedrock' | 'local';
 
 /**
- * Azure OpenAI configuration
+ * Azure OpenAI configuration (classic)
  */
 export interface AzureConfig {
   apiKey?: string;
   endpoint?: string; // e.g., https://your-resource.openai.azure.com
   deploymentName?: string; // e.g., gpt-4o
   apiVersion?: string; // e.g., 2024-02-15-preview
+}
+
+/**
+ * Azure AI Foundry configuration (v1 API)
+ * Uses the new OpenAI v1 compatible endpoint
+ */
+export interface FoundryConfig {
+  apiKey?: string;
+  endpoint?: string; // e.g., https://your-resource.openai.azure.com/openai/v1
+  model?: string; // e.g., gpt-4o, gpt-4o-mini
 }
 
 /**
@@ -44,7 +54,10 @@ export interface UserSettings {
   geminiApiKey?: string;
   claudeApiKey?: string;
 
-  // Azure OpenAI
+  // Azure AI Foundry (primary for Azure users)
+  foundryConfig?: FoundryConfig;
+
+  // Azure OpenAI (classic)
   azureConfig?: AzureConfig;
 
   // Amazon Bedrock
@@ -73,7 +86,12 @@ export const ENV_VAR_NAMES = {
   GEMINI_API_KEY: 'VITE_GEMINI_API_KEY',
   CLAUDE_API_KEY: 'VITE_CLAUDE_API_KEY',
 
-  // Azure OpenAI
+  // Azure AI Foundry (v1 API - preferred for Azure users)
+  AZURE_FOUNDRY_API_KEY: 'VITE_AZURE_FOUNDRY_API_KEY',
+  AZURE_FOUNDRY_ENDPOINT: 'VITE_AZURE_FOUNDRY_ENDPOINT',
+  AZURE_FOUNDRY_MODEL: 'VITE_AZURE_FOUNDRY_MODEL',
+
+  // Azure OpenAI (classic)
   AZURE_OPENAI_API_KEY: 'VITE_AZURE_OPENAI_API_KEY',
   AZURE_OPENAI_ENDPOINT: 'VITE_AZURE_OPENAI_ENDPOINT',
   AZURE_OPENAI_DEPLOYMENT: 'VITE_AZURE_OPENAI_DEPLOYMENT',
