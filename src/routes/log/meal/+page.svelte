@@ -1,89 +1,113 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui';
   import { eventsStore } from '$lib/stores';
-
-  interface FoodPreset {
-    icon: string;
-    name: string;
-    carbs: number;
-    calories?: number;
-    protein?: number;
-    fat?: number;
-  }
-
-  const defaultPresets: FoodPreset[] = [
-    { icon: '🍔', name: 'Burger', carbs: 45, calories: 550, protein: 25, fat: 30 },
-    { icon: '🍕', name: 'Pizza', carbs: 35, calories: 300, protein: 12, fat: 12 },
-    { icon: '🍺', name: 'Pint', carbs: 15, calories: 180 },
-    { icon: '🍞', name: 'Bread', carbs: 15, calories: 80, protein: 3 },
-    { icon: '🍎', name: 'Apple', carbs: 25, calories: 95, fat: 0 },
-    { icon: '🍚', name: 'Rice', carbs: 45, calories: 200, protein: 4 }
-  ];
+  import type { AlcoholType } from '$lib/types';
 
   let carbs = $state(0);
-  let calories = $state<number | undefined>(undefined);
   let protein = $state<number | undefined>(undefined);
   let fat = $state<number | undefined>(undefined);
   let description = $state('');
   let saving = $state(false);
-  let showMoreOptions = $state(false);
-  let photoUrl = $state<string | undefined>(undefined);
-  let fileInput = $state<HTMLInputElement | null>(null);
+  let recentCarbs = $state<number[]>([]);
+  let loadingRecent = $state(true);
 
-  function increment() {
-    if (carbs < 500) carbs++;
+  // Alcohol tracking
+  let alcoholUnits = $state<number | undefined>(undefined);
+  let alcoholType = $state<AlcoholType | undefined>(undefined);
+
+  // Alcohol type options
+  const alcoholTypeOptions: Array<{ value: AlcoholType | ''; label: string }> = [
+    { value: '', label: 'Not specified' },
+    { value: 'beer', label: 'Beer / Cider' },
+    { value: 'wine', label: 'Wine' },
+    { value: 'spirit', label: 'Spirits' },
+    { value: 'mixed', label: 'Cocktails / Mixed' }
+  ];
+
+  // Default quick-select values as fallback when no recent carbs exist
+  const defaultCarbQuickSelect = [15, 30, 45, 60, 75, 90];
+
+  // Food icon shortcuts with default carb values
+  const foodShortcuts = [
+    { icon: '🍞', label: 'Bread', carbs: 15 },
+    { icon: '🍕', label: 'Pizza', carbs: 30, fat: 12 },
+    { icon: '🍔', label: 'Burger', carbs: 35, protein: 25, fat: 20 },
+    { icon: '🍎', label: 'Apple', carbs: 25 },
+    { icon: '🍚', label: 'Rice', carbs: 45 }
+  ];
+
+  // Drink shortcuts with carbs and alcohol units
+  const drinkShortcuts = [
+    { icon: '🍺', label: 'Pint', carbs: 12, alcoholUnits: 2.3, alcoholType: 'beer' as AlcoholType },
+    { icon: '🍷', label: 'Wine', carbs: 4, alcoholUnits: 2.1, alcoholType: 'wine' as AlcoholType },
+    { icon: '🥃', label: 'Spirit', carbs: 0, alcoholUnits: 1, alcoholType: 'spirit' as AlcoholType },
+    { icon: '🍹', label: 'Cocktail', carbs: 20, alcoholUnits: 2, alcoholType: 'mixed' as AlcoholType }
+  ];
+
+  // Load recent carb values
+  async function loadRecentCarbs() {
+    loadingRecent = true;
+    const values = await eventsStore.getRecentCarbValues(6);
+    recentCarbs = values;
+    loadingRecent = false;
   }
 
-  function decrement() {
-    if (carbs > 0) carbs--;
-  }
+  onMount(() => {
+    loadRecentCarbs();
+  });
 
-  function adjustBy(amount: number) {
+  function adjustCarbs(amount: number) {
     const newValue = carbs + amount;
     if (newValue >= 0 && newValue <= 500) {
       carbs = newValue;
     }
   }
 
-  function applyPreset(preset: FoodPreset) {
-    carbs = preset.carbs;
-    if (preset.calories) calories = preset.calories;
-    if (preset.protein) protein = preset.protein;
-    if (preset.fat) fat = preset.fat;
-    description = preset.name;
+  function applyFoodShortcut(food: (typeof foodShortcuts)[0]) {
+    carbs = food.carbs;
+    if (food.protein) protein = food.protein;
+    if (food.fat) fat = food.fat;
+    description = food.label;
+    // Clear alcohol when selecting food
+    alcoholUnits = undefined;
+    alcoholType = undefined;
   }
 
-  function handlePhotoCapture(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        photoUrl = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+  function applyDrinkShortcut(drink: (typeof drinkShortcuts)[0]) {
+    carbs = drink.carbs;
+    alcoholUnits = drink.alcoholUnits;
+    alcoholType = drink.alcoholType;
+    description = drink.label;
+    // Clear food macros when selecting drink
+    protein = undefined;
+    fat = undefined;
+  }
+
+  function adjustAlcoholUnits(amount: number) {
+    const current = alcoholUnits ?? 0;
+    const newValue = Math.round((current + amount) * 10) / 10; // Round to 1 decimal
+    if (newValue >= 0 && newValue <= 50) {
+      alcoholUnits = newValue > 0 ? newValue : undefined;
     }
   }
 
-  function removePhoto() {
-    photoUrl = undefined;
-    if (fileInput) {
-      fileInput.value = '';
-    }
-  }
+  // Check if this is primarily an alcohol entry
+  let isAlcoholEntry = $derived((alcoholUnits ?? 0) > 0);
 
   async function save() {
-    if (carbs <= 0) return;
+    // Allow saving if carbs > 0 OR alcohol units > 0
+    if (carbs <= 0 && !isAlcoholEntry) return;
 
     saving = true;
     try {
       await eventsStore.logMeal(carbs, {
-        calories,
         protein,
         fat,
         description: description || undefined,
-        photoUrl
+        alcoholUnits: alcoholUnits || undefined,
+        alcoholType: alcoholType || undefined
       });
       goto('/');
     } catch {
@@ -92,10 +116,13 @@
       saving = false;
     }
   }
+
+  // Use recent carbs if available, otherwise fall back to defaults
+  const quickSelectValues = $derived(recentCarbs.length > 0 ? recentCarbs : defaultCarbQuickSelect);
 </script>
 
 <div class="flex min-h-[calc(100dvh-80px)] flex-col px-4 py-6">
-  <header class="mb-8">
+  <header class="mb-6">
     <a href="/log" class="mb-4 inline-flex items-center text-gray-400 hover:text-gray-200">
       <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -106,32 +133,36 @@
   </header>
 
   <div class="flex flex-1 flex-col">
-    <!-- Smart Entry Options -->
+    <!-- Camera Entry - Unified smart entry point -->
     <div class="mb-6">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Smart Entry</span>
-      <div class="grid grid-cols-3 gap-2">
-        <a
-          href="/log/meal/photo"
-          class="flex flex-col items-center rounded-lg bg-blue-500/10 p-3 text-center transition-colors hover:bg-blue-500/20"
-        >
-          <span class="mb-1 text-2xl">📷</span>
-          <span class="text-xs text-blue-400">AI Photo</span>
-        </a>
-        <a
-          href="/log/meal/estimate"
-          class="flex flex-col items-center rounded-lg bg-purple-500/10 p-3 text-center transition-colors hover:bg-purple-500/20"
-        >
-          <span class="mb-1 text-2xl">📐</span>
-          <span class="text-xs text-purple-400">Estimate</span>
-        </a>
-        <a
-          href="/log/meal/label"
-          class="flex flex-col items-center rounded-lg bg-green-500/10 p-3 text-center transition-colors hover:bg-green-500/20"
-        >
-          <span class="mb-1 text-2xl">🏷️</span>
-          <span class="text-xs text-green-400">Scan Label</span>
-        </a>
-      </div>
+      <a
+        href="/log/meal/camera"
+        class="flex w-full items-center gap-4 rounded-lg bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-green-500/10 p-4 transition-all hover:from-blue-500/20 hover:via-purple-500/20 hover:to-green-500/20"
+      >
+        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800">
+          <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+        </div>
+        <div class="flex-1">
+          <span class="block font-medium text-white">Use Camera</span>
+          <span class="text-sm text-gray-400">AI analysis, volume estimate, or label scan</span>
+        </div>
+        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
     </div>
 
     <!-- Divider -->
@@ -141,128 +172,114 @@
       <div class="h-px flex-1 bg-gray-800"></div>
     </div>
 
-    <!-- Photo Capture -->
-    <div class="mb-6">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Photo (optional)</span>
-      {#if photoUrl}
-        <div class="relative">
-          <img
-            src={photoUrl}
-            alt="Captured food"
-            class="h-32 w-full rounded-lg object-cover"
-          />
+    <!-- Food Shortcuts -->
+    <fieldset class="mb-4">
+      <legend class="mb-2 block text-sm font-medium text-gray-400">Quick add - Food</legend>
+      <div class="flex flex-wrap gap-2">
+        {#each foodShortcuts as food}
           <button
             type="button"
-            aria-label="Remove photo"
-            class="absolute right-2 top-2 rounded-full bg-gray-900/80 p-1.5 text-gray-300 hover:bg-gray-900 hover:text-white"
-            onclick={removePhoto}
+            class="flex items-center gap-1 rounded-full bg-gray-800 px-3 py-2 text-sm transition-colors hover:bg-gray-700"
+            onclick={() => applyFoodShortcut(food)}
+            aria-label={`Add ${food.label} (${food.carbs}g carbs)`}
           >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      {:else}
-        <label class="flex h-24 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-700 bg-gray-800/50 transition-colors hover:border-gray-600 hover:bg-gray-800">
-          <div class="flex flex-col items-center text-gray-400">
-            <svg class="mb-1 h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span class="text-sm">Take or choose photo</span>
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            class="hidden"
-            bind:this={fileInput}
-            onchange={handlePhotoCapture}
-          />
-        </label>
-      {/if}
-    </div>
-
-    <!-- Food Presets -->
-    <div class="mb-6">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Quick add</span>
-      <div class="grid grid-cols-3 gap-2">
-        {#each defaultPresets as preset (preset.name)}
-          <button
-            type="button"
-            class="flex flex-col items-center rounded-lg bg-gray-800 px-3 py-3 transition-colors hover:bg-gray-700 active:bg-gray-600"
-            onclick={() => applyPreset(preset)}
-          >
-            <span class="text-2xl">{preset.icon}</span>
-            <span class="mt-1 text-xs text-gray-400">{preset.name}</span>
-            <span class="text-xs text-gray-500">{preset.carbs}g</span>
+            <span class="text-lg">{food.icon}</span>
+            <span class="text-gray-300">{food.carbs}g</span>
           </button>
         {/each}
       </div>
-    </div>
+    </fieldset>
 
-    <!-- Carbs Input -->
-    <div class="mb-6 flex-1">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Carbohydrates (g)</span>
-      <div class="flex items-center justify-center gap-6">
+    <!-- Drink Shortcuts -->
+    <fieldset class="mb-6">
+      <legend class="mb-2 block text-sm font-medium text-gray-400">Quick add - Drinks</legend>
+      <div class="flex flex-wrap gap-2">
+        {#each drinkShortcuts as drink}
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-2 text-sm transition-colors hover:bg-amber-500/20"
+            onclick={() => applyDrinkShortcut(drink)}
+            aria-label={`Add ${drink.label} (${drink.carbs}g carbs, ${drink.alcoholUnits} units)`}
+          >
+            <span class="text-lg">{drink.icon}</span>
+            <span class="text-amber-300">{drink.alcoholUnits}u</span>
+          </button>
+        {/each}
+      </div>
+    </fieldset>
+
+    <!-- Carbs Input with +/-1 and +/-5 adjustments -->
+    <div class="mb-6">
+      <label for="carbs-input" class="mb-2 block text-sm font-medium text-gray-400">
+        Carbohydrates (g) <span class="text-red-400">*</span>
+      </label>
+      <div class="flex items-center justify-center gap-3">
+        <!-- -5 button -->
         <button
           type="button"
-          class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-800 text-3xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={decrement}
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+          onclick={() => adjustCarbs(-5)}
+          disabled={carbs < 5}
+          aria-label="Decrease carbs by 5"
+        >
+          -5
+        </button>
+        <!-- -1 button -->
+        <button
+          type="button"
+          class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-2xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+          onclick={() => adjustCarbs(-1)}
           disabled={carbs <= 0}
+          aria-label="Decrease carbs by 1"
         >
           -
         </button>
+        <!-- Value display -->
         <div class="w-24 text-center">
           <input
+            id="carbs-input"
             type="number"
             bind:value={carbs}
             min="0"
             max="500"
-            aria-label="Carbohydrates in grams"
             class="w-full bg-transparent text-center text-5xl font-bold text-white focus:outline-none"
+            aria-describedby="carbs-label"
           />
-          <span class="text-sm text-gray-400">grams</span>
+          <span id="carbs-label" class="text-sm text-gray-400">grams</span>
         </div>
+        <!-- +1 button -->
         <button
           type="button"
-          class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-800 text-3xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={increment}
+          class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800 text-2xl text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+          onclick={() => adjustCarbs(1)}
           disabled={carbs >= 500}
+          aria-label="Increase carbs by 1"
         >
           +
         </button>
-      </div>
-    </div>
-
-    <!-- Adjustment Buttons -->
-    <div class="mb-6">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Adjust</span>
-      <div class="flex justify-center gap-4">
+        <!-- +5 button -->
         <button
           type="button"
-          class="rounded-lg bg-gray-800 px-6 py-3 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-50"
-          onclick={() => adjustBy(-5)}
-          disabled={carbs < 5}
-        >
-          -5
-        </button>
-        <button
-          type="button"
-          class="rounded-lg bg-gray-800 px-6 py-3 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600"
-          onclick={() => adjustBy(5)}
-          disabled={carbs >= 495}
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-800 text-lg font-medium text-gray-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+          onclick={() => adjustCarbs(5)}
+          disabled={carbs > 495}
+          aria-label="Increase carbs by 5"
         >
           +5
         </button>
       </div>
     </div>
 
-    <!-- Quick Carb Select -->
-    <div class="mb-6">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Quick select</span>
+    <!-- Quick Select (recent carbs or defaults) -->
+    <fieldset class="mb-6">
+      <legend class="mb-2 block text-sm font-medium text-gray-400">
+        {recentCarbs.length > 0 ? 'Recent values' : 'Quick select'}
+        {#if loadingRecent}
+          <span class="ml-2 text-xs text-gray-500">Loading...</span>
+        {/if}
+      </legend>
       <div class="flex flex-wrap gap-2">
-        {#each [15, 30, 45, 60, 75, 90] as value (value)}
+        {#each quickSelectValues as value}
           <button
             type="button"
             class="rounded-full px-4 py-2 text-sm font-medium transition-colors {carbs === value
@@ -274,41 +291,82 @@
           </button>
         {/each}
       </div>
-    </div>
+    </fieldset>
 
-    <!-- More Options Toggle -->
-    <button
-      type="button"
-      class="mb-4 flex w-full items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3 text-sm text-gray-400 transition-colors hover:bg-gray-800"
-      onclick={() => (showMoreOptions = !showMoreOptions)}
-    >
-      <span>More options</span>
-      <svg
-        class="h-5 w-5 transform transition-transform {showMoreOptions ? 'rotate-180' : ''}"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-      </svg>
-    </button>
-
-    {#if showMoreOptions}
-      <!-- Optional Macros -->
-      <div class="mb-4 grid grid-cols-3 gap-3">
-        <div>
-          <label for="calories" class="mb-2 block text-xs font-medium text-gray-400">Calories</label>
-          <input
-            id="calories"
-            type="number"
-            bind:value={calories}
-            min="0"
-            placeholder="-"
-            class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
-          />
+    <!-- Alcohol Logging Section -->
+    <details class="mb-6" open={isAlcoholEntry}>
+      <summary class="cursor-pointer text-sm font-medium text-amber-400 hover:text-amber-300">
+        Alcohol ({alcoholUnits ?? 0} units)
+      </summary>
+      <div class="mt-3 rounded-lg bg-amber-500/5 p-4">
+        <!-- Alcohol Units Input -->
+        <div class="mb-4">
+          <label for="alcohol-units" class="mb-2 block text-xs font-medium text-gray-400">
+            Standard drink units
+          </label>
+          <div class="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-800 text-lg text-amber-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+              onclick={() => adjustAlcoholUnits(-0.5)}
+              disabled={(alcoholUnits ?? 0) < 0.5}
+              aria-label="Decrease alcohol by 0.5 units"
+            >
+              -
+            </button>
+            <div class="w-20 text-center">
+              <input
+                id="alcohol-units"
+                type="number"
+                bind:value={alcoholUnits}
+                min="0"
+                max="50"
+                step="0.1"
+                placeholder="0"
+                class="w-full bg-transparent text-center text-3xl font-bold text-amber-300 placeholder-gray-600 focus:outline-none"
+              />
+              <span class="text-xs text-gray-400">units</span>
+            </div>
+            <button
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-800 text-lg text-amber-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+              onclick={() => adjustAlcoholUnits(0.5)}
+              disabled={(alcoholUnits ?? 0) >= 50}
+              aria-label="Increase alcohol by 0.5 units"
+            >
+              +
+            </button>
+          </div>
         </div>
+
+        <!-- Alcohol Type Selector -->
         <div>
-          <label for="protein" class="mb-2 block text-xs font-medium text-gray-400">Protein (g)</label>
+          <label for="alcohol-type" class="mb-2 block text-xs font-medium text-gray-400">
+            Drink type
+          </label>
+          <select
+            id="alcohol-type"
+            bind:value={alcoholType}
+            class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            {#each alcoholTypeOptions as option}
+              <option value={option.value || undefined}>{option.label}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <!-- Optional Macros (collapsible) -->
+    <details class="mb-6">
+      <summary class="cursor-pointer text-sm font-medium text-gray-400 hover:text-gray-300">
+        Additional macros (optional)
+      </summary>
+      <div class="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <label for="protein" class="mb-1 block text-xs font-medium text-gray-500"
+            >Protein (g)</label
+          >
           <input
             id="protein"
             type="number"
@@ -319,7 +377,7 @@
           />
         </div>
         <div>
-          <label for="fat" class="mb-2 block text-xs font-medium text-gray-400">Fat (g)</label>
+          <label for="fat" class="mb-1 block text-xs font-medium text-gray-500">Fat (g)</label>
           <input
             id="fat"
             type="number"
@@ -330,21 +388,21 @@
           />
         </div>
       </div>
+    </details>
 
-      <!-- Description -->
-      <div class="mb-4">
-        <label for="description" class="mb-2 block text-sm font-medium text-gray-400">
-          Description
-        </label>
-        <textarea
-          id="description"
-          bind:value={description}
-          rows="2"
-          placeholder="What did you eat?"
-          class="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
-        ></textarea>
-      </div>
-    {/if}
+    <!-- Description -->
+    <div class="mb-6 flex-1">
+      <label for="description" class="mb-2 block text-sm font-medium text-gray-400">
+        Description (optional)
+      </label>
+      <textarea
+        id="description"
+        bind:value={description}
+        rows="2"
+        placeholder="What did you eat?"
+        class="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
+      ></textarea>
+    </div>
 
     <!-- Error Display -->
     {#if eventsStore.error}
@@ -359,10 +417,16 @@
       size="lg"
       class="w-full"
       onclick={save}
-      disabled={carbs <= 0}
+      disabled={carbs <= 0 && !isAlcoholEntry}
       loading={saving}
     >
-      Log Meal
+      {#if isAlcoholEntry && carbs <= 0}
+        Log {alcoholUnits} units alcohol
+      {:else if isAlcoholEntry}
+        Log {carbs}g carbs + {alcoholUnits}u alcohol
+      {:else}
+        Log {carbs}g carbs
+      {/if}
     </Button>
   </div>
 </div>
