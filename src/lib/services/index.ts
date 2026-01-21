@@ -11,7 +11,11 @@ export * from './modeling';
 import { EventService } from './EventService';
 import { SettingsService } from './SettingsService';
 import { ValidationService } from './ValidationService';
-import { getEventRepository, getSettingsRepository, getValidationRepository } from '$lib/repositories';
+import {
+  getEventRepository,
+  getSettingsRepository,
+  getValidationRepository
+} from '$lib/repositories';
 
 let eventService: EventService | null = null;
 let settingsService: SettingsService | null = null;

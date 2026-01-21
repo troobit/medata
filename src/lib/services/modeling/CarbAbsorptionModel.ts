@@ -170,7 +170,8 @@ export function calculateCarbAbsorption(
   let carbsAbsorbed: number;
   if (t < tPeak) {
     // Rising phase - integral of power function
-    carbsAbsorbed = (totalCarbs * Math.pow(t / tPeak, k + 1) * tPeak) / ((k + 1) * params.durationMinutes);
+    carbsAbsorbed =
+      (totalCarbs * Math.pow(t / tPeak, k + 1) * tPeak) / ((k + 1) * params.durationMinutes);
   } else {
     // Peak and decay phase
     const absorbedAtPeak = totalCarbs * 0.4; // ~40% absorbed by peak

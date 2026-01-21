@@ -490,7 +490,8 @@ export class LibreGraphParser {
     const now = new Date();
     const axisRanges: AxisRanges = options.manualAxisRanges
       ? {
-          timeStart: options.manualAxisRanges.timeStart ||
+          timeStart:
+            options.manualAxisRanges.timeStart ||
             new Date(now.getTime() - timeEstimate.durationHours * 60 * 60 * 1000),
           timeEnd: options.manualAxisRanges.timeEnd || now,
           bslMin: options.manualAxisRanges.bslMin ?? 2.2,

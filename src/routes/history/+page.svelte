@@ -50,7 +50,9 @@
   }
 
   // Get alcohol info from meal metadata
-  function getAlcoholInfo(event: (typeof eventsStore.events)[0]): { units: number; type?: AlcoholType } | null {
+  function getAlcoholInfo(
+    event: (typeof eventsStore.events)[0]
+  ): { units: number; type?: AlcoholType } | null {
     if (event.eventType !== 'meal') return null;
     const metadata = event.metadata as MealMetadata;
     if (!metadata.alcoholUnits || metadata.alcoholUnits <= 0) return null;
@@ -243,7 +245,9 @@
                       <span class="text-xs text-gray-500">Processed</span>
                     {/if}
                     {#if alcoholInfo?.type}
-                      <span class="text-xs text-gray-500">{formatAlcoholType(alcoholInfo.type)}</span>
+                      <span class="text-xs text-gray-500"
+                        >{formatAlcoholType(alcoholInfo.type)}</span
+                      >
                     {/if}
                   </div>
                 {/if}

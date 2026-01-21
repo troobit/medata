@@ -67,7 +67,10 @@
   </header>
 
   {#if expanded}
-    <div class="border-t border-gray-800 px-4 py-4" transition:slide={{ duration: getAnimationDuration(200) }}>
+    <div
+      class="border-t border-gray-800 px-4 py-4"
+      transition:slide={{ duration: getAnimationDuration(200) }}
+    >
       {@render children()}
     </div>
   {/if}

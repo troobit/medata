@@ -173,7 +173,10 @@
     try {
       switch (selectedMode) {
         case 'ai':
-          recognitionResult = await recognizeFoodWithFallback(capturedImage, settingsStore.settings);
+          recognitionResult = await recognizeFoodWithFallback(
+            capturedImage,
+            settingsStore.settings
+          );
           flowState = 'ai-result';
           break;
 
@@ -235,7 +238,12 @@
     error = null;
     try {
       const shape = volumeCalculator.suggestShape(selectedFood.name);
-      estimationResult = await estimationEngine.estimate(capturedImage, regions, selectedFood, shape);
+      estimationResult = await estimationEngine.estimate(
+        capturedImage,
+        regions,
+        selectedFood,
+        shape
+      );
       finalCarbs = estimationResult.estimatedMacros.carbs;
       flowState = 'estimate-result';
     } catch (err) {
@@ -428,7 +436,12 @@
       {#if flowState === 'mode-select' || flowState === 'capture'}
         <a href="/log/meal" class="inline-flex items-center text-gray-400 hover:text-gray-200">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back
         </a>
@@ -439,14 +452,23 @@
           onclick={goBack}
         >
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back
         </button>
       {/if}
 
       {#if flowState !== 'mode-select' && flowState !== 'capture'}
-        <button type="button" class="text-sm text-gray-500 hover:text-gray-300" onclick={handleRetake}>
+        <button
+          type="button"
+          class="text-sm text-gray-500 hover:text-gray-300"
+          onclick={handleRetake}
+        >
           Start over
         </button>
       {/if}
@@ -492,7 +514,10 @@
           {#each modes as mode}
             <button
               type="button"
-              class="flex w-full items-start gap-4 rounded-lg p-4 text-left transition-colors {mode.bgColor} {selectedMode === mode.id ? 'ring-2 ring-white/20' : ''}"
+              class="flex w-full items-start gap-4 rounded-lg p-4 text-left transition-colors {mode.bgColor} {selectedMode ===
+              mode.id
+                ? 'ring-2 ring-white/20'
+                : ''}"
               onclick={() => selectMode(mode.id)}
               disabled={mode.requiresAI && !aiConfigured}
             >
@@ -508,8 +533,18 @@
                 </div>
                 <p class="mt-1 text-sm text-gray-400">{mode.description}</p>
               </div>
-              <svg class="h-5 w-5 {mode.color} mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              <svg
+                class="h-5 w-5 {mode.color} mt-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
           {/each}
@@ -524,15 +559,17 @@
           </div>
         {/if}
       </div>
-
     {:else if flowState === 'capture'}
       <!-- Camera Capture -->
       <CameraCapture onCapture={handleCapture} onCancel={handleCancel} />
-
     {:else if flowState === 'preview' && capturedImage}
       <!-- Photo Preview -->
-      <PhotoPreview image={capturedImage} onConfirm={handleConfirm} onRetake={handleRetake} {processing} />
-
+      <PhotoPreview
+        image={capturedImage}
+        onConfirm={handleConfirm}
+        onRetake={handleRetake}
+        {processing}
+      />
     {:else if flowState === 'ai-result' && recognitionResult}
       <!-- AI Recognition Result -->
       <FoodRecognitionResult
@@ -542,23 +579,28 @@
         onCancel={handleRetake}
         {saving}
       />
-
     {:else if flowState === 'estimate-region' && imageUrl}
       <!-- Volume Estimation: Region Selection -->
       <div class="flex flex-1 flex-col">
         {#if detecting}
           <div class="flex flex-1 items-center justify-center">
             <div class="text-center">
-              <div class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-purple-500 border-t-transparent"></div>
+              <div
+                class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-purple-500 border-t-transparent"
+              ></div>
               <p class="text-gray-400">Detecting reference card...</p>
             </div>
           </div>
         {:else}
           <!-- Reference status -->
-          <div class="mb-3 rounded-lg px-3 py-2 {reference ? 'bg-green-500/10' : 'bg-yellow-500/10'}">
+          <div
+            class="mb-3 rounded-lg px-3 py-2 {reference ? 'bg-green-500/10' : 'bg-yellow-500/10'}"
+          >
             {#if reference}
               <p class="text-sm text-green-400">
-                {reference.type === 'credit-card' ? 'Card' : 'Coin'} detected ({Math.round(reference.confidence * 100)}% confidence)
+                {reference.type === 'credit-card' ? 'Card' : 'Coin'} detected ({Math.round(
+                  reference.confidence * 100
+                )}% confidence)
               </p>
             {:else}
               <p class="text-sm text-yellow-400">
@@ -582,13 +624,11 @@
           </div>
         {/if}
       </div>
-
     {:else if flowState === 'estimate-food-type'}
       <!-- Volume Estimation: Food Type Selection -->
       <div class="flex flex-1 flex-col">
         <FoodTypeSelector selected={selectedFood} onSelect={handleFoodSelect} />
       </div>
-
     {:else if flowState === 'estimate-result' && estimationResult}
       <!-- Volume Estimation: Result -->
       <div class="flex flex-1 flex-col">
@@ -598,9 +638,12 @@
           </div>
         {/if}
 
-        <EstimationResult result={estimationResult} onCarbsChange={handleCarbsChange} onSave={saveEstimationResult} />
+        <EstimationResult
+          result={estimationResult}
+          onCarbsChange={handleCarbsChange}
+          onSave={saveEstimationResult}
+        />
       </div>
-
     {:else if flowState === 'label-result' && scanResult}
       <!-- Label Scanning Result -->
       <div class="flex flex-col">
@@ -675,7 +718,9 @@
               />
             </div>
             <div>
-              <label for="protein" class="mb-1 block text-xs font-medium text-blue-400">Protein</label>
+              <label for="protein" class="mb-1 block text-xs font-medium text-blue-400"
+                >Protein</label
+              >
               <input
                 id="protein"
                 type="number"
@@ -695,7 +740,9 @@
               />
             </div>
             <div>
-              <label for="calories" class="mb-1 block text-xs font-medium text-gray-400">Calories</label>
+              <label for="calories" class="mb-1 block text-xs font-medium text-gray-400"
+                >Calories</label
+              >
               <input
                 id="calories"
                 type="number"

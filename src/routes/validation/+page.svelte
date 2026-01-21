@@ -7,11 +7,7 @@
   import { Button, ExpandableSection } from '$lib/components/ui';
   import { validationStore, settingsStore } from '$lib/stores';
   import { generateSyntheticTestBatch } from '$lib/services/validation/SyntheticImageGenerator';
-  import type {
-    FoodCategory,
-    GroundTruthSource,
-    TestDatasetExport
-  } from '$lib/types';
+  import type { FoodCategory, GroundTruthSource, TestDatasetExport } from '$lib/types';
 
   // Tab state
   type TabId = 'dataset' | 'metrics' | 'corrections' | 'enhancements';
@@ -40,11 +36,24 @@
   ];
 
   const categories: FoodCategory[] = [
-    'grain', 'protein', 'vegetable', 'fruit', 'dairy', 'fat', 'beverage', 'mixed', 'snack', 'other'
+    'grain',
+    'protein',
+    'vegetable',
+    'fruit',
+    'dairy',
+    'fat',
+    'beverage',
+    'mixed',
+    'snack',
+    'other'
   ];
 
   const sources: GroundTruthSource[] = [
-    'usda', 'academic', 'nutrition-label', 'manual-weighed', 'imported'
+    'usda',
+    'academic',
+    'nutrition-label',
+    'manual-weighed',
+    'imported'
   ];
 
   // Load data on mount
@@ -70,7 +79,10 @@
     } else {
       await validationStore.loadTestEntries();
     }
-    await validationStore.loadAccuracyMetrics(providerFilter || undefined, categoryFilter || undefined);
+    await validationStore.loadAccuracyMetrics(
+      providerFilter || undefined,
+      categoryFilter || undefined
+    );
   }
 
   async function handleSourceFilter() {
@@ -82,7 +94,10 @@
   }
 
   async function handleProviderFilter() {
-    await validationStore.loadAccuracyMetrics(providerFilter || undefined, categoryFilter || undefined);
+    await validationStore.loadAccuracyMetrics(
+      providerFilter || undefined,
+      categoryFilter || undefined
+    );
   }
 
   // Export handler
@@ -128,7 +143,7 @@
       } else {
         importSuccess = `Imported ${result.imported} entries, skipped ${result.skipped}`;
         if (result.errors.length > 0) {
-          importError = result.errors.map(e => `Line ${e.line}: ${e.message}`).join('; ');
+          importError = result.errors.map((e) => `Line ${e.line}: ${e.message}`).join('; ');
         }
       }
     } catch (e) {
@@ -211,11 +226,11 @@
 
   function sourceLabel(src: GroundTruthSource): string {
     const labels: Record<GroundTruthSource, string> = {
-      'usda': 'USDA',
-      'academic': 'Academic',
+      usda: 'USDA',
+      academic: 'Academic',
       'nutrition-label': 'Label',
       'manual-weighed': 'Weighed',
-      'imported': 'Imported'
+      imported: 'Imported'
     };
     return labels[src] || src;
   }
@@ -238,9 +253,7 @@
       <h1 class="text-2xl font-bold text-white">AI Validation</h1>
       <a href="/settings" class="text-sm text-gray-400 hover:text-gray-200">Settings</a>
     </div>
-    <p class="text-sm text-gray-400">
-      Collect test data, track accuracy, and improve AI estimates
-    </p>
+    <p class="text-sm text-gray-400">Collect test data, track accuracy, and improve AI estimates</p>
   </header>
 
   <!-- Tab Navigation -->
@@ -248,7 +261,10 @@
     {#each tabs as tab}
       <button
         type="button"
-        class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors {activeTab === tab.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}"
+        class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors {activeTab ===
+        tab.id
+          ? 'bg-gray-700 text-white'
+          : 'text-gray-400 hover:text-gray-200'}"
         onclick={() => (activeTab = tab.id)}
       >
         <span>{tab.icon}</span>
@@ -279,7 +295,9 @@
   <!-- Loading State -->
   {#if validationStore.loading}
     <div class="flex items-center justify-center py-12">
-      <div class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"></div>
+      <div
+        class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+      ></div>
     </div>
   {:else}
     <!-- Tab Content -->
@@ -305,11 +323,14 @@
         <!-- Actions -->
         <div class="flex flex-wrap gap-2">
           <a href="/validation/capture" class="inline-flex">
-            <Button variant="primary" size="sm">
-              📸 Add Test Data
-            </Button>
+            <Button variant="primary" size="sm">📸 Add Test Data</Button>
           </a>
-          <Button variant="secondary" size="sm" onclick={handleGenerateSynthetic} loading={generatingSynthetic}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onclick={handleGenerateSynthetic}
+            loading={generatingSynthetic}
+          >
             🎨 Generate Synthetic
           </Button>
           <Button variant="secondary" size="sm" onclick={handleExport} loading={exporting}>
@@ -371,7 +392,9 @@
                     class="h-16 w-16 rounded-lg object-cover"
                   />
                 {:else}
-                  <div class="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-700 text-gray-500">
+                  <div
+                    class="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-700 text-gray-500"
+                  >
                     📷
                   </div>
                 {/if}
@@ -411,7 +434,12 @@
                   title="Delete entry"
                 >
                   <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
                   </svg>
                 </button>
               </div>
@@ -422,19 +450,33 @@
         <!-- Danger Zone -->
         <ExpandableSection title="Danger Zone" subtitle="Clear all data" collapsed={true}>
           <div class="space-y-3">
-            <Button variant="secondary" size="sm" onclick={handleClearDataset} class="w-full text-red-400">
+            <Button
+              variant="secondary"
+              size="sm"
+              onclick={handleClearDataset}
+              class="w-full text-red-400"
+            >
               Clear Test Dataset
             </Button>
-            <Button variant="secondary" size="sm" onclick={handleClearResults} class="w-full text-red-400">
+            <Button
+              variant="secondary"
+              size="sm"
+              onclick={handleClearResults}
+              class="w-full text-red-400"
+            >
               Clear Validation Results
             </Button>
-            <Button variant="secondary" size="sm" onclick={handleClearCorrections} class="w-full text-red-400">
+            <Button
+              variant="secondary"
+              size="sm"
+              onclick={handleClearCorrections}
+              class="w-full text-red-400"
+            >
               Clear Correction History
             </Button>
           </div>
         </ExpandableSection>
       </div>
-
     {:else if activeTab === 'metrics'}
       <!-- Accuracy Metrics Tab -->
       <div class="space-y-6">
@@ -478,25 +520,33 @@
               <!-- MAPE Summary -->
               <div class="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div class="text-center">
-                  <div class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.carbs)}`}>
+                  <div
+                    class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.carbs)}`}
+                  >
                     {formatPercent(validationStore.accuracyMetrics.mape.carbs)}
                   </div>
                   <div class="text-xs text-green-400">Carbs MAPE</div>
                 </div>
                 <div class="text-center">
-                  <div class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.protein)}`}>
+                  <div
+                    class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.protein)}`}
+                  >
                     {formatPercent(validationStore.accuracyMetrics.mape.protein)}
                   </div>
                   <div class="text-xs text-blue-400">Protein MAPE</div>
                 </div>
                 <div class="text-center">
-                  <div class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.fat)}`}>
+                  <div
+                    class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.fat)}`}
+                  >
                     {formatPercent(validationStore.accuracyMetrics.mape.fat)}
                   </div>
                   <div class="text-xs text-yellow-400">Fat MAPE</div>
                 </div>
                 <div class="text-center">
-                  <div class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.calories)}`}>
+                  <div
+                    class={`text-2xl font-bold ${mapeColor(validationStore.accuracyMetrics.mape.calories)}`}
+                  >
                     {formatPercent(validationStore.accuracyMetrics.mape.calories)}
                   </div>
                   <div class="text-xs text-gray-400">Calories MAPE</div>
@@ -508,19 +558,27 @@
                 <div class="mb-2 text-xs text-gray-500">Mean Absolute Error (grams)</div>
                 <div class="grid grid-cols-4 gap-2 text-center text-sm">
                   <div>
-                    <span class="text-green-400">{formatNumber(validationStore.accuracyMetrics.mae.carbs)}g</span>
+                    <span class="text-green-400"
+                      >{formatNumber(validationStore.accuracyMetrics.mae.carbs)}g</span
+                    >
                     <div class="text-xs text-gray-500">Carbs</div>
                   </div>
                   <div>
-                    <span class="text-blue-400">{formatNumber(validationStore.accuracyMetrics.mae.protein)}g</span>
+                    <span class="text-blue-400"
+                      >{formatNumber(validationStore.accuracyMetrics.mae.protein)}g</span
+                    >
                     <div class="text-xs text-gray-500">Protein</div>
                   </div>
                   <div>
-                    <span class="text-yellow-400">{formatNumber(validationStore.accuracyMetrics.mae.fat)}g</span>
+                    <span class="text-yellow-400"
+                      >{formatNumber(validationStore.accuracyMetrics.mae.fat)}g</span
+                    >
                     <div class="text-xs text-gray-500">Fat</div>
                   </div>
                   <div>
-                    <span class="text-gray-300">{formatNumber(validationStore.accuracyMetrics.mae.calories)}</span>
+                    <span class="text-gray-300"
+                      >{formatNumber(validationStore.accuracyMetrics.mae.calories)}</span
+                    >
                     <div class="text-xs text-gray-500">Calories</div>
                   </div>
                 </div>
@@ -528,8 +586,16 @@
 
               <!-- Additional Metrics -->
               <div class="flex justify-between text-sm text-gray-400">
-                <span>Avg Confidence: {formatPercent(validationStore.accuracyMetrics.avgConfidence * 100)}</span>
-                <span>Avg Time: {Math.round(validationStore.accuracyMetrics.avgProcessingTimeMs)}ms</span>
+                <span
+                  >Avg Confidence: {formatPercent(
+                    validationStore.accuracyMetrics.avgConfidence * 100
+                  )}</span
+                >
+                <span
+                  >Avg Time: {Math.round(
+                    validationStore.accuracyMetrics.avgProcessingTimeMs
+                  )}ms</span
+                >
               </div>
             {:else}
               <p class="text-center text-gray-400">
@@ -543,21 +609,24 @@
             <h3 class="mb-3 font-semibold text-white">Requirement: 5% Accuracy Target</h3>
             {#if validationStore.accuracyMetrics.sampleCount > 0}
               <div class="space-y-2">
-                {#each [
-                  { label: 'Carbs', value: validationStore.accuracyMetrics.mape.carbs, color: 'green' },
-                  { label: 'Protein', value: validationStore.accuracyMetrics.mape.protein, color: 'blue' },
-                  { label: 'Fat', value: validationStore.accuracyMetrics.mape.fat, color: 'yellow' },
-                  { label: 'Calories', value: validationStore.accuracyMetrics.mape.calories, color: 'gray' }
-                ] as metric}
+                {#each [{ label: 'Carbs', value: validationStore.accuracyMetrics.mape.carbs, color: 'green' }, { label: 'Protein', value: validationStore.accuracyMetrics.mape.protein, color: 'blue' }, { label: 'Fat', value: validationStore.accuracyMetrics.mape.fat, color: 'yellow' }, { label: 'Calories', value: validationStore.accuracyMetrics.mape.calories, color: 'gray' }] as metric}
                   <div class="flex items-center gap-3">
                     <span class="w-20 text-sm text-gray-400">{metric.label}</span>
                     <div class="flex-1 h-2 rounded-full bg-gray-700">
                       <div
-                        class="h-2 rounded-full transition-all {metric.value <= 5 ? 'bg-green-500' : metric.value <= 15 ? 'bg-yellow-500' : 'bg-red-500'}"
-                        style="width: {Math.min(metric.value / 30 * 100, 100)}%"
+                        class="h-2 rounded-full transition-all {metric.value <= 5
+                          ? 'bg-green-500'
+                          : metric.value <= 15
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500'}"
+                        style="width: {Math.min((metric.value / 30) * 100, 100)}%"
                       ></div>
                     </div>
-                    <span class="w-16 text-right text-sm {metric.value <= 5 ? 'text-green-400' : 'text-gray-400'}">
+                    <span
+                      class="w-16 text-right text-sm {metric.value <= 5
+                        ? 'text-green-400'
+                        : 'text-gray-400'}"
+                    >
                       {formatPercent(metric.value)}
                     </span>
                     {#if metric.value <= 5}
@@ -576,7 +645,6 @@
           <p class="text-center text-gray-400">Loading metrics...</p>
         {/if}
       </div>
-
     {:else if activeTab === 'corrections'}
       <!-- Corrections Tab -->
       <div class="space-y-6">
@@ -588,7 +656,8 @@
 
           {#if validationStore.correctionHistory.length === 0}
             <p class="text-center text-gray-500">
-              No corrections recorded yet. Corrections are captured when users edit AI meal estimates.
+              No corrections recorded yet. Corrections are captured when users edit AI meal
+              estimates.
             </p>
           {:else}
             <div class="space-y-3">
@@ -600,7 +669,9 @@
                   </div>
 
                   {#if correction.category}
-                    <span class="mb-2 inline-block rounded bg-gray-700 px-1.5 py-0.5 text-xs text-gray-300">
+                    <span
+                      class="mb-2 inline-block rounded bg-gray-700 px-1.5 py-0.5 text-xs text-gray-300"
+                    >
                       {categoryLabel(correction.category)}
                     </span>
                   {/if}
@@ -621,8 +692,12 @@
                   </div>
 
                   <div class="mt-1 text-xs text-gray-500">
-                    Difference: {correction.userCorrection.carbs - correction.aiPrediction.carbs > 0 ? '+' : ''}{correction.userCorrection.carbs - correction.aiPrediction.carbs}g
-                    ({correction.aiConfidence > 0 ? `${Math.round(correction.aiConfidence * 100)}% confidence` : 'N/A'})
+                    Difference: {correction.userCorrection.carbs - correction.aiPrediction.carbs > 0
+                      ? '+'
+                      : ''}{correction.userCorrection.carbs - correction.aiPrediction.carbs}g ({correction.aiConfidence >
+                    0
+                      ? `${Math.round(correction.aiConfidence * 100)}% confidence`
+                      : 'N/A'})
                   </div>
                 </div>
               {/each}
@@ -662,7 +737,6 @@
           </div>
         {/if}
       </div>
-
     {:else if activeTab === 'enhancements'}
       <!-- Prompt Enhancements Tab -->
       <div class="space-y-6">
@@ -674,21 +748,31 @@
 
           {#if validationStore.promptEnhancements.length === 0}
             <p class="text-center text-gray-500">
-              Not enough correction data to generate suggestions. Keep using the app and correcting estimates.
+              Not enough correction data to generate suggestions. Keep using the app and correcting
+              estimates.
             </p>
           {:else}
             <div class="space-y-3">
               {#each validationStore.promptEnhancements as enhancement}
                 <div class="rounded-lg bg-gray-900/50 p-3">
                   <div class="mb-2 flex items-center justify-between">
-                    <span class="font-medium text-white">{categoryLabel(enhancement.category)}</span>
-                    <span class="rounded px-1.5 py-0.5 text-xs {enhancement.adjustment === 'decrease' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">
-                      {enhancement.adjustment === 'decrease' ? '↓' : '↑'} {enhancement.field}
+                    <span class="font-medium text-white">{categoryLabel(enhancement.category)}</span
+                    >
+                    <span
+                      class="rounded px-1.5 py-0.5 text-xs {enhancement.adjustment === 'decrease'
+                        ? 'bg-red-500/20 text-red-400'
+                        : 'bg-green-500/20 text-green-400'}"
+                    >
+                      {enhancement.adjustment === 'decrease' ? '↓' : '↑'}
+                      {enhancement.field}
                     </span>
                   </div>
 
                   <p class="text-sm text-gray-300">
-                    {enhancement.adjustment === 'decrease' ? 'Reduce' : 'Increase'} {enhancement.field} estimates by ~{formatPercent(enhancement.percentageAdjustment)} for {categoryLabel(enhancement.category)} foods.
+                    {enhancement.adjustment === 'decrease' ? 'Reduce' : 'Increase'}
+                    {enhancement.field} estimates by ~{formatPercent(
+                      enhancement.percentageAdjustment
+                    )} for {categoryLabel(enhancement.category)} foods.
                   </p>
 
                   <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
@@ -706,8 +790,9 @@
           <h4 class="mb-2 font-medium text-blue-400">How to Apply Enhancements</h4>
           <p class="text-sm text-gray-300">
             These suggestions can be incorporated into the AI prompt by modifying
-            <code class="rounded bg-gray-800 px-1 text-xs">src/lib/services/ai/prompts/foodRecognition.ts</code>.
-            Add category-specific adjustment factors based on the patterns above.
+            <code class="rounded bg-gray-800 px-1 text-xs"
+              >src/lib/services/ai/prompts/foodRecognition.ts</code
+            >. Add category-specific adjustment factors based on the patterns above.
           </p>
         </div>
       </div>

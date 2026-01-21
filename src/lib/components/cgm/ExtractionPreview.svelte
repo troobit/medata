@@ -75,7 +75,11 @@
     <img src={imageUrl} alt="CGM graph with extracted curve" class="w-full" />
 
     <!-- SVG overlay for extracted curve -->
-    <svg class="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <svg
+      class="pointer-events-none absolute inset-0 h-full w-full"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+    >
       {#if curvePath}
         <!-- Curve shadow for visibility -->
         <path
@@ -102,13 +106,17 @@
           {@const timeRange =
             extractionResult.axisRanges.timeEnd.getTime() -
             extractionResult.axisRanges.timeStart.getTime()}
-          {@const bslRange = extractionResult.axisRanges.bslMax - extractionResult.axisRanges.bslMin}
+          {@const bslRange =
+            extractionResult.axisRanges.bslMax - extractionResult.axisRanges.bslMin}
           {@const timeProgress =
             (point.timestamp.getTime() - extractionResult.axisRanges.timeStart.getTime()) /
             timeRange}
           {@const bslProgress = (point.value - extractionResult.axisRanges.bslMin) / bslRange}
-          {@const x = extractionResult.graphRegion.x + timeProgress * extractionResult.graphRegion.width}
-          {@const y = extractionResult.graphRegion.y + (1 - bslProgress) * extractionResult.graphRegion.height}
+          {@const x =
+            extractionResult.graphRegion.x + timeProgress * extractionResult.graphRegion.width}
+          {@const y =
+            extractionResult.graphRegion.y +
+            (1 - bslProgress) * extractionResult.graphRegion.height}
           {#if i % 3 === 0}
             <!-- Show every 3rd point to reduce clutter -->
             <circle

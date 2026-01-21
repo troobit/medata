@@ -446,10 +446,7 @@ export function getLargestComponent(
 /**
  * Fit a smooth curve through points using cubic spline interpolation
  */
-export function smoothCurveSpline(
-  points: Point2D[],
-  numOutputPoints: number
-): Point2D[] {
+export function smoothCurveSpline(points: Point2D[], numOutputPoints: number): Point2D[] {
   if (points.length < 4) return points;
 
   // Sort by x
@@ -506,10 +503,7 @@ export function smoothCurveSpline(
 /**
  * Resample points to uniform x spacing
  */
-export function resampleUniform(
-  points: Point2D[],
-  numPoints: number
-): Point2D[] {
+export function resampleUniform(points: Point2D[], numPoints: number): Point2D[] {
   if (points.length < 2) return points;
 
   const sorted = [...points].sort((a, b) => a.x - b.x);

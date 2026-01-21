@@ -85,14 +85,8 @@
 
 <div class="space-y-4">
   <div class="flex items-center justify-between">
-    <p class="text-sm text-gray-400">
-      Drag to select the graph area (optional)
-    </p>
-    <button
-      type="button"
-      class="text-sm text-brand-accent hover:underline"
-      onclick={resetRegion}
-    >
+    <p class="text-sm text-gray-400">Drag to select the graph area (optional)</p>
+    <button type="button" class="text-sm text-brand-accent hover:underline" onclick={resetRegion}>
       Use Full Image
     </button>
   </div>
@@ -144,7 +138,9 @@
       <!-- Right overlay -->
       <div
         class="pointer-events-none absolute right-0 bg-black/50"
-        style="top: {currentRegion.y}%; width: {100 - currentRegion.x - currentRegion.width}%; height: {currentRegion.height}%;"
+        style="top: {currentRegion.y}%; width: {100 -
+          currentRegion.x -
+          currentRegion.width}%; height: {currentRegion.height}%;"
       ></div>
 
       <!-- Selection border -->

@@ -75,7 +75,9 @@
     <label
       for={inputId}
       class="absolute left-3 px-1 transition-all duration-200 ease-out pointer-events-none origin-left
-        {isFloating ? '-top-2.5 text-xs font-medium bg-gray-800' : 'top-1/2 -translate-y-1/2 text-base'}
+        {isFloating
+        ? '-top-2.5 text-xs font-medium bg-gray-800'
+        : 'top-1/2 -translate-y-1/2 text-base'}
         {error ? 'text-red-400' : isFocused ? 'text-brand-accent' : 'text-gray-400'}"
     >
       {label}

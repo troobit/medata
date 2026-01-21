@@ -23,12 +23,7 @@ export type {
   CorrectionRecord
 } from './events';
 
-export {
-  isMealMetadata,
-  isInsulinMetadata,
-  isBSLMetadata,
-  isExerciseMetadata
-} from './events';
+export { isMealMetadata, isInsulinMetadata, isBSLMetadata, isExerciseMetadata } from './events';
 
 // Vision
 export type {

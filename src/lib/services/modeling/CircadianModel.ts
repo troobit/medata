@@ -226,9 +226,7 @@ export function estimateCircadianBSLDrift(startTime: Date, endTime: Date): numbe
  * @param userAdjustments - Optional user adjustments
  * @returns Array of sensitivity values for each hour
  */
-export function generateCircadianCurve(
-  userAdjustments?: Partial<Record<number, number>>
-): Array<{
+export function generateCircadianCurve(userAdjustments?: Partial<Record<number, number>>): Array<{
   hour: number;
   insulinSensitivity: number;
   dawnEffect: number;
@@ -258,9 +256,7 @@ export function generateCircadianCurve(
  * @param overnightBSLs - Array of BSL readings from overnight
  * @returns Suggested adjustments
  */
-export function analyzeOvernightPattern(
-  overnightBSLs: Array<{ timestamp: Date; value: number }>
-): {
+export function analyzeOvernightPattern(overnightBSLs: Array<{ timestamp: Date; value: number }>): {
   dawnPhenomenonDetected: boolean;
   suggestedAdjustments: Partial<Record<number, number>>;
   analysis: string;

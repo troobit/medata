@@ -31,7 +31,9 @@
   let calories = $state(0);
 
   // Items (optional breakdown)
-  let items = $state<Array<{ name: string; quantity: number; unit: string; macros: Partial<MacroData> }>>([]);
+  let items = $state<
+    Array<{ name: string; quantity: number; unit: string; macros: Partial<MacroData> }>
+  >([]);
   let showItems = $state(false);
   let newItemName = $state('');
   let newItemQuantity = $state(0);
@@ -193,7 +195,12 @@
       {#if flowState === 'capture'}
         <a href="/validation" class="inline-flex items-center text-gray-400 hover:text-gray-200">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back
         </a>
@@ -204,7 +211,12 @@
           onclick={handleRetake}
         >
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Retake
         </button>
@@ -215,15 +227,18 @@
           onclick={() => (flowState = 'preview')}
         >
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back
         </button>
       {/if}
 
-      <span class="rounded bg-purple-500/20 px-2 py-1 text-xs text-purple-400">
-        Admin Mode
-      </span>
+      <span class="rounded bg-purple-500/20 px-2 py-1 text-xs text-purple-400"> Admin Mode </span>
     </div>
 
     <h1 class="text-xl font-bold text-white">{pageTitle}</h1>
@@ -249,7 +264,6 @@
   <div class="flex flex-1 flex-col">
     {#if flowState === 'capture'}
       <CameraCapture onCapture={handleCapture} onCancel={handleCancel} />
-
     {:else if flowState === 'preview' && capturedImage}
       <PhotoPreview
         image={capturedImage}
@@ -257,17 +271,12 @@
         onRetake={handleRetake}
         processing={false}
       />
-
     {:else if flowState === 'form'}
       <div class="flex flex-1 flex-col">
         <!-- Image thumbnail -->
         {#if imageUrl}
           <div class="mb-4 flex items-center gap-4">
-            <img
-              src={imageUrl}
-              alt="Test food"
-              class="h-20 w-20 rounded-lg object-cover"
-            />
+            <img src={imageUrl} alt="Test food" class="h-20 w-20 rounded-lg object-cover" />
             <button
               type="button"
               class="text-sm text-gray-400 hover:text-gray-200"
@@ -287,7 +296,9 @@
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="carbs" class="mb-1 block text-xs font-medium text-green-400">Carbs (g)</label>
+              <label for="carbs" class="mb-1 block text-xs font-medium text-green-400"
+                >Carbs (g)</label
+              >
               <input
                 id="carbs"
                 type="number"
@@ -299,7 +310,9 @@
               />
             </div>
             <div>
-              <label for="protein" class="mb-1 block text-xs font-medium text-blue-400">Protein (g)</label>
+              <label for="protein" class="mb-1 block text-xs font-medium text-blue-400"
+                >Protein (g)</label
+              >
               <input
                 id="protein"
                 type="number"
@@ -311,7 +324,8 @@
               />
             </div>
             <div>
-              <label for="fat" class="mb-1 block text-xs font-medium text-yellow-400">Fat (g)</label>
+              <label for="fat" class="mb-1 block text-xs font-medium text-yellow-400">Fat (g)</label
+              >
               <input
                 id="fat"
                 type="number"
@@ -323,7 +337,9 @@
               />
             </div>
             <div>
-              <label for="calories" class="mb-1 block text-xs font-medium text-gray-400">Calories</label>
+              <label for="calories" class="mb-1 block text-xs font-medium text-gray-400"
+                >Calories</label
+              >
               <input
                 id="calories"
                 type="number"
@@ -344,7 +360,9 @@
           />
 
           <div>
-            <label for="category" class="mb-1 block text-sm font-medium text-gray-400">Category</label>
+            <label for="category" class="mb-1 block text-sm font-medium text-gray-400"
+              >Category</label
+            >
             <select
               id="category"
               bind:value={category}
@@ -357,7 +375,9 @@
           </div>
 
           <div>
-            <label for="source" class="mb-1 block text-sm font-medium text-gray-400">Data Source</label>
+            <label for="source" class="mb-1 block text-sm font-medium text-gray-400"
+              >Data Source</label
+            >
             <select
               id="source"
               bind:value={source}
@@ -395,7 +415,8 @@
                   {#each items as item, index}
                     <div class="flex items-center justify-between rounded bg-gray-900 px-3 py-2">
                       <span class="text-sm text-white">
-                        {item.quantity}{item.unit} {item.name}
+                        {item.quantity}{item.unit}
+                        {item.name}
                       </span>
                       <button
                         type="button"
@@ -434,9 +455,7 @@
                   placeholder="Food name"
                   class="flex-1 rounded bg-gray-900 px-2 py-1 text-sm text-white focus:outline-none"
                 />
-                <Button variant="secondary" size="sm" onclick={addItem}>
-                  Add
-                </Button>
+                <Button variant="secondary" size="sm" onclick={addItem}>Add</Button>
               </div>
             </div>
           {/if}
@@ -444,12 +463,8 @@
 
         <!-- Actions -->
         <div class="mt-auto grid grid-cols-2 gap-3 pt-4">
-          <Button variant="secondary" onclick={handleCancel}>
-            Cancel
-          </Button>
-          <Button variant="primary" onclick={handleSave} loading={saving}>
-            Save Test Data
-          </Button>
+          <Button variant="secondary" onclick={handleCancel}>Cancel</Button>
+          <Button variant="primary" onclick={handleSave} loading={saving}>Save Test Data</Button>
         </div>
       </div>
     {/if}

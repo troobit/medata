@@ -105,7 +105,12 @@
         aria-label="Clear search"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
         </svg>
       </button>
     {/if}
@@ -130,7 +135,10 @@
         {#each searchResults as food (food.id)}
           <button
             type="button"
-            class="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors {selected?.id === food.id ? 'bg-purple-500/30' : 'hover:bg-gray-800'}"
+            class="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors {selected?.id ===
+            food.id
+              ? 'bg-purple-500/30'
+              : 'hover:bg-gray-800'}"
             onclick={() => selectFood(food)}
           >
             <div>
@@ -152,20 +160,29 @@
           onclick={goBack}
         >
           <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back to categories
         </button>
 
         <h3 class="mb-2 text-sm font-medium text-gray-400">
-          {categoryIcons[selectedCategory] || '🍽️'} {selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
+          {categoryIcons[selectedCategory] || '🍽️'}
+          {selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1)}
         </h3>
 
         <div class="space-y-1">
           {#each categoryFoods as food (food.id)}
             <button
               type="button"
-              class="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors {selected?.id === food.id ? 'bg-purple-500/30' : 'hover:bg-gray-800'}"
+              class="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors {selected?.id ===
+              food.id
+                ? 'bg-purple-500/30'
+                : 'hover:bg-gray-800'}"
               onclick={() => selectFood(food)}
             >
               <div>
@@ -176,7 +193,11 @@
               </div>
               {#if selected?.id === food.id}
                 <svg class="h-5 w-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  <path
+                    fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               {/if}
             </button>
@@ -205,7 +226,10 @@
           {#each popularFoods as food (food.id)}
             <button
               type="button"
-              class="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors {selected?.id === food.id ? 'bg-purple-500/30' : 'hover:bg-gray-800'}"
+              class="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors {selected?.id ===
+              food.id
+                ? 'bg-purple-500/30'
+                : 'hover:bg-gray-800'}"
               onclick={() => selectFood(food)}
             >
               <div>

@@ -1,7 +1,15 @@
 <script lang="ts">
   import { Button, Input, ExpandableSection } from '$lib/components/ui';
   import { settingsStore } from '$lib/stores';
-  import type { AIProvider, InsulinType, BSLUnit, LocalModelConfig, CGMApiProvider, User, StoredCredential } from '$lib/types';
+  import type {
+    AIProvider,
+    InsulinType,
+    BSLUnit,
+    LocalModelConfig,
+    CGMApiProvider,
+    User,
+    StoredCredential
+  } from '$lib/types';
   import { isWebAuthnSupported, isPlatformAuthenticatorAvailable } from '$lib/types';
   import { CGM_PROVIDERS, createCGMApiService } from '$lib/services/cgm';
   import { getAuthService } from '$lib/services/auth';
@@ -25,7 +33,9 @@
   let localTestMessage = $state('');
 
   // CGM API Config (Task 22)
-  let cgmProvider = $state<CGMApiProvider | ''>(settingsStore.settings.cgmApiConfig?.provider || '');
+  let cgmProvider = $state<CGMApiProvider | ''>(
+    settingsStore.settings.cgmApiConfig?.provider || ''
+  );
   let libreEmail = $state(settingsStore.settings.cgmApiConfig?.libreLink?.email || '');
   let librePassword = $state(settingsStore.settings.cgmApiConfig?.libreLink?.password || '');
   let libreRegion = $state(settingsStore.settings.cgmApiConfig?.libreLink?.region || 'us');
@@ -169,7 +179,11 @@
               provider: cgmProvider,
               libreLink:
                 cgmProvider === 'librelink' && libreEmail && librePassword
-                  ? { email: libreEmail, password: librePassword, region: libreRegion as 'us' | 'eu' | 'ae' | 'ap' | 'au' | 'ca' | 'de' | 'fr' }
+                  ? {
+                      email: libreEmail,
+                      password: librePassword,
+                      region: libreRegion as 'us' | 'eu' | 'ae' | 'ap' | 'au' | 'ca' | 'de' | 'fr'
+                    }
                   : undefined,
               dexcomShare:
                 cgmProvider === 'dexcom-share' && dexcomUsername && dexcomPassword
@@ -258,7 +272,11 @@
         provider: cgmProvider as CGMApiProvider,
         libreLink:
           cgmProvider === 'librelink'
-            ? { email: libreEmail, password: librePassword, region: libreRegion as 'us' | 'eu' | 'ae' | 'ap' | 'au' | 'ca' | 'de' | 'fr' }
+            ? {
+                email: libreEmail,
+                password: librePassword,
+                region: libreRegion as 'us' | 'eu' | 'ae' | 'ap' | 'au' | 'ca' | 'de' | 'fr'
+              }
             : undefined,
         dexcomShare:
           cgmProvider === 'dexcom-share'
@@ -471,12 +489,7 @@
             </p>
           {/if}
 
-          <Input
-            type="text"
-            label="Model Name"
-            bind:value={localModelName}
-            placeholder="llava"
-          />
+          <Input type="text" label="Model Name" bind:value={localModelName} placeholder="llava" />
           <p class="text-xs text-gray-500">
             Recommended: llava, llava-llama3, bakllava, or any vision-capable model
           </p>
@@ -503,7 +516,11 @@
     </ExpandableSection>
 
     <!-- CGM API Config (Task 22) -->
-    <ExpandableSection title="CGM Integration" subtitle="Connect to your glucose monitor" collapsed={true}>
+    <ExpandableSection
+      title="CGM Integration"
+      subtitle="Connect to your glucose monitor"
+      collapsed={true}
+    >
       <p class="mb-4 text-sm text-gray-400">
         Connect directly to your CGM to automatically sync glucose readings. Requires sharing to be
         enabled in your CGM app.
@@ -535,7 +552,12 @@
           </p>
 
           <div class="space-y-3">
-            <Input type="email" label="Email" bind:value={libreEmail} placeholder="your@email.com" />
+            <Input
+              type="email"
+              label="Email"
+              bind:value={libreEmail}
+              placeholder="your@email.com"
+            />
 
             <Input
               type="password"
@@ -632,7 +654,8 @@
     <ExpandableSection title="Security" subtitle="FIDO/YubiKey authentication" collapsed={true}>
       {#if !webAuthnSupported}
         <div class="rounded-lg bg-yellow-500/20 px-4 py-3 text-yellow-400">
-          WebAuthn is not supported in this browser. Use a modern browser like Chrome, Firefox, or Safari.
+          WebAuthn is not supported in this browser. Use a modern browser like Chrome, Firefox, or
+          Safari.
         </div>
       {:else}
         <p class="mb-4 text-sm text-gray-400">
@@ -689,7 +712,9 @@
                   {#each authCredentials as credential}
                     <div class="flex items-center justify-between rounded bg-gray-800 px-3 py-2">
                       <div>
-                        <p class="text-sm text-white">{credential.friendlyName || 'Security Key'}</p>
+                        <p class="text-sm text-white">
+                          {credential.friendlyName || 'Security Key'}
+                        </p>
                         <p class="text-xs text-gray-500">
                           Added {new Date(credential.createdAt).toLocaleDateString()}
                         </p>

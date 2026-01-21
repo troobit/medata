@@ -23,11 +23,7 @@
 
   // Confidence level text
   const confidenceText = $derived(
-    result.confidence > 0.8
-      ? 'High'
-      : result.confidence > 0.6
-        ? 'Medium'
-        : 'Low'
+    result.confidence > 0.8 ? 'High' : result.confidence > 0.6 ? 'Medium' : 'Low'
   );
 
   const confidenceColor = $derived(

@@ -176,7 +176,7 @@ function createEventsStore() {
     }
   }
 
-  async function getRecentCarbValues(maxUnique: number = 6) {
+  async function getRecentCarbValues(maxUnique: number = 6): Promise<number[]> {
     try {
       return await service.getRecentCarbValues(maxUnique);
     } catch {
@@ -226,6 +226,7 @@ function createEventsStore() {
     updateEvent,
     getRecentInsulinDoses,
     getRecentBSLValues,
+    getRecentCarbValues,
     logExercise
   };
 }

@@ -141,9 +141,7 @@
     if (points.length < 2) return '';
 
     const first = points[0];
-    let d = normalize
-      ? `M ${first.x * 100}% ${first.y * 100}%`
-      : `M ${first.x} ${first.y}`;
+    let d = normalize ? `M ${first.x * 100}% ${first.y * 100}%` : `M ${first.x} ${first.y}`;
 
     for (let i = 1; i < points.length; i++) {
       const p = points[i];
@@ -215,7 +213,10 @@
       <!-- Current drawing -->
       {#if currentPoints.length >= 2}
         <path
-          d={pointsToPath(currentPoints.map((p) => ({ x: p.x * 100, y: p.y * 100 })), false)}
+          d={pointsToPath(
+            currentPoints.map((p) => ({ x: p.x * 100, y: p.y * 100 })),
+            false
+          )}
           fill="rgba(124, 58, 237, 0.2)"
           stroke="rgba(124, 58, 237, 0.8)"
           stroke-width="0.5"
@@ -257,11 +258,7 @@
 <!-- Controls -->
 {#if editable && regions.length > 0}
   <div class="mt-3 flex justify-between">
-    <button
-      type="button"
-      class="text-sm text-gray-400 hover:text-white"
-      onclick={clearAllRegions}
-    >
+    <button type="button" class="text-sm text-gray-400 hover:text-white" onclick={clearAllRegions}>
       Clear all
     </button>
     <p class="text-sm text-gray-400">

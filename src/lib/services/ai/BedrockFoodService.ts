@@ -60,7 +60,11 @@ export class BedrockFoodService implements IFoodRecognitionService {
     const startTime = performance.now();
 
     const base64Image = await this.blobToBase64(image);
-    const mimeType = (image.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    const mimeType = (image.type || 'image/jpeg') as
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/webp';
 
     // Bedrock uses Claude's message format for Anthropic models
     const requestBody = {
@@ -119,7 +123,11 @@ export class BedrockFoodService implements IFoodRecognitionService {
 
   async parseNutritionLabel(image: Blob): Promise<NutritionLabelResult> {
     const base64Image = await this.blobToBase64(image);
-    const mimeType = (image.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+    const mimeType = (image.type || 'image/jpeg') as
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/webp';
 
     const requestBody = {
       anthropic_version: 'bedrock-2023-05-31',
@@ -168,11 +176,7 @@ export class BedrockFoodService implements IFoodRecognitionService {
   }
 
   isConfigured(): boolean {
-    return !!(
-      this.config.accessKeyId &&
-      this.config.secretAccessKey &&
-      this.config.region
-    );
+    return !!(this.config.accessKeyId && this.config.secretAccessKey && this.config.region);
   }
 
   getProviderName(): string {

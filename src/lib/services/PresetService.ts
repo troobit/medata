@@ -5,7 +5,13 @@
  * Provides CRUD operations for meal presets.
  */
 
-import type { MealPreset, CreatePresetInput, UpdatePresetInput, MacroData, MealItem } from '$lib/types';
+import type {
+  MealPreset,
+  CreatePresetInput,
+  UpdatePresetInput,
+  MacroData,
+  MealItem
+} from '$lib/types';
 import { db } from '$lib/db/schema';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -48,9 +54,7 @@ export class PresetService {
    */
   async searchByName(query: string): Promise<MealPreset[]> {
     const lowerQuery = query.toLowerCase();
-    return db.presets
-      .filter((preset) => preset.name.toLowerCase().includes(lowerQuery))
-      .toArray();
+    return db.presets.filter((preset) => preset.name.toLowerCase().includes(lowerQuery)).toArray();
   }
 
   /**

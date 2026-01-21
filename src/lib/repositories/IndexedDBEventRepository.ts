@@ -1,11 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '$lib/db';
-import type {
-  PhysiologicalEvent,
-  CreateEventInput,
-  UpdateEventInput,
-  EventType
-} from '$lib/types';
+import type { PhysiologicalEvent, CreateEventInput, UpdateEventInput, EventType } from '$lib/types';
 import type { IEventRepository } from './IEventRepository';
 
 /**

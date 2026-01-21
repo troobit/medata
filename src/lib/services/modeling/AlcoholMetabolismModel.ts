@@ -185,8 +185,7 @@ export function calculateAlcoholState(
       const decayDuration = sensitivityDurationMinutes - effectPeak;
       const decayFraction = decayTime / decayDuration;
       sensitivityModifier =
-        params.insulinSensitivityModifier +
-        (1 - params.insulinSensitivityModifier) * decayFraction;
+        params.insulinSensitivityModifier + (1 - params.insulinSensitivityModifier) * decayFraction;
     }
   }
 

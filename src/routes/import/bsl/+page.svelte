@@ -184,14 +184,24 @@
         onclick={goBack}
       >
         <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
         Back
       </button>
     {:else if step === 'upload'}
       <a href="/import" class="mb-4 inline-flex items-center text-gray-400 hover:text-gray-200">
         <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
         Back
       </a>
@@ -210,7 +220,9 @@
 
       {#if isLoading}
         <div class="mt-6 flex items-center justify-center gap-3 text-gray-400">
-          <div class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-brand-accent"></div>
+          <div
+            class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-brand-accent"
+          ></div>
           Processing file...
         </div>
       {/if}
@@ -240,10 +252,7 @@
 
     <!-- Step: Preview -->
     {#if step === 'preview' && preview}
-      <ImportPreview
-        {preview}
-        displayUnit={settingsStore.settings.defaultBSLUnit}
-      />
+      <ImportPreview {preview} displayUnit={settingsStore.settings.defaultBSLUnit} />
 
       <div class="mt-8 space-y-3">
         {#if preview.duplicates.length > 0}
@@ -278,12 +287,7 @@
       />
 
       <div class="mt-8">
-        <Button
-          variant="primary"
-          size="lg"
-          class="w-full"
-          onclick={() => (step = 'preview')}
-        >
+        <Button variant="primary" size="lg" class="w-full" onclick={() => (step = 'preview')}>
           Continue to Import
         </Button>
       </div>
@@ -291,28 +295,12 @@
 
     <!-- Step: Importing / Complete -->
     {#if step === 'importing' || step === 'complete'}
-      <ImportProgress
-        isImporting={step === 'importing'}
-        result={importResult}
-        {error}
-      />
+      <ImportProgress isImporting={step === 'importing'} result={importResult} {error} />
 
       {#if step === 'complete'}
         <div class="mt-8 space-y-3">
-          <Button
-            variant="primary"
-            size="lg"
-            class="w-full"
-            href="/"
-          >
-            Done
-          </Button>
-          <Button
-            variant="secondary"
-            size="lg"
-            class="w-full"
-            onclick={reset}
-          >
+          <Button variant="primary" size="lg" class="w-full" href="/">Done</Button>
+          <Button variant="secondary" size="lg" class="w-full" onclick={reset}>
             Import Another File
           </Button>
         </div>

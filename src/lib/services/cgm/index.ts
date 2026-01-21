@@ -22,10 +22,7 @@ export {
 } from './CGMImageProcessor';
 
 // Local computer vision extractor (Phase 2)
-export {
-  LocalCurveExtractor,
-  createLocalCurveExtractor
-} from './LocalCurveExtractor';
+export { LocalCurveExtractor, createLocalCurveExtractor } from './LocalCurveExtractor';
 
 // Device-specific parsers (Phase 2)
 export { LibreGraphParser, createLibreGraphParser } from './LibreGraphParser';

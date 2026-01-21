@@ -139,7 +139,8 @@
       <span
         class="ripple"
         class:ripple-primary={variant === 'primary'}
-        style="left: {ripple.x}px; top: {ripple.y}px; transform: scale({ripple.spring.current}); opacity: {1 - ripple.spring.current / 20};"
+        style="left: {ripple.x}px; top: {ripple.y}px; transform: scale({ripple.spring
+          .current}); opacity: {1 - ripple.spring.current / 20};"
         transition:scaleTransition={{ duration: 300, easing: cubicOut, start: 0 }}
       ></span>
     {/each}
@@ -172,7 +173,8 @@
       <span
         class="ripple"
         class:ripple-primary={variant === 'primary'}
-        style="left: {ripple.x}px; top: {ripple.y}px; transform: scale({ripple.spring.current}); opacity: {1 - ripple.spring.current / 20};"
+        style="left: {ripple.x}px; top: {ripple.y}px; transform: scale({ripple.spring
+          .current}); opacity: {1 - ripple.spring.current / 20};"
         transition:scaleTransition={{ duration: 300, easing: cubicOut, start: 0 }}
       ></span>
     {/each}

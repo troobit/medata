@@ -92,7 +92,9 @@ export class SettingsService {
 
     const settingKey = keyMap[provider];
     if (!settingKey) {
-      throw new Error(`Provider "${provider}" uses config objects. Use clearProviderConfig instead.`);
+      throw new Error(
+        `Provider "${provider}" uses config objects. Use clearProviderConfig instead.`
+      );
     }
 
     return this.updateSettings({ [settingKey]: undefined });
@@ -127,7 +129,9 @@ export class SettingsService {
     });
   }
 
-  async clearProviderConfig(provider: 'foundry' | 'azure' | 'bedrock' | 'local'): Promise<UserSettings> {
+  async clearProviderConfig(
+    provider: 'foundry' | 'azure' | 'bedrock' | 'local'
+  ): Promise<UserSettings> {
     const configMap: Record<typeof provider, keyof UserSettings> = {
       foundry: 'foundryConfig',
       azure: 'azureConfig',

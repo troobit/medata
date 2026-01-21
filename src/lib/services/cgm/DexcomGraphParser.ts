@@ -148,7 +148,14 @@ export class DexcomGraphParser {
     r: number,
     g: number,
     b: number,
-    range: { hueMin: number; hueMax: number; satMin: number; satMax: number; lightMin: number; lightMax: number }
+    range: {
+      hueMin: number;
+      hueMax: number;
+      satMin: number;
+      satMax: number;
+      lightMin: number;
+      lightMax: number;
+    }
   ): boolean {
     const [h, s, l] = this.rgbToHsl(r, g, b);
 
@@ -355,9 +362,9 @@ export class DexcomGraphParser {
   /**
    * Estimate time range from point density
    */
-  private estimateTimeRange(
-    curvePoints: Array<{ x: number; y: number }>
-  ): { durationHours: number } {
+  private estimateTimeRange(curvePoints: Array<{ x: number; y: number }>): {
+    durationHours: number;
+  } {
     // Dexcom typically has consistent point density
     // Estimate based on curve length
     if (curvePoints.length < 50) {
@@ -527,7 +534,8 @@ export class DexcomGraphParser {
     const now = new Date();
     const axisRanges: AxisRanges = options.manualAxisRanges
       ? {
-          timeStart: options.manualAxisRanges.timeStart ||
+          timeStart:
+            options.manualAxisRanges.timeStart ||
             new Date(now.getTime() - timeEstimate.durationHours * 60 * 60 * 1000),
           timeEnd: options.manualAxisRanges.timeEnd || now,
           bslMin: options.manualAxisRanges.bslMin ?? (detectedUnit === 'mg/dL' ? 40 : 2.2),

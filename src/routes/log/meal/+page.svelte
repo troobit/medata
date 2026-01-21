@@ -46,8 +46,20 @@
   const drinkShortcuts = [
     { icon: '🍺', label: 'Pint', carbs: 12, alcoholUnits: 2.3, alcoholType: 'beer' as AlcoholType },
     { icon: '🍷', label: 'Wine', carbs: 4, alcoholUnits: 2.1, alcoholType: 'wine' as AlcoholType },
-    { icon: '🥃', label: 'Spirit', carbs: 0, alcoholUnits: 1, alcoholType: 'spirit' as AlcoholType },
-    { icon: '🍹', label: 'Cocktail', carbs: 20, alcoholUnits: 2, alcoholType: 'mixed' as AlcoholType }
+    {
+      icon: '🥃',
+      label: 'Spirit',
+      carbs: 0,
+      alcoholUnits: 1,
+      alcoholType: 'spirit' as AlcoholType
+    },
+    {
+      icon: '🍹',
+      label: 'Cocktail',
+      carbs: 20,
+      alcoholUnits: 2,
+      alcoholType: 'mixed' as AlcoholType
+    }
   ];
 
   // Load recent carb values
@@ -213,25 +225,26 @@
         <legend class="mb-2 block text-sm font-medium text-gray-400">Saved Meals</legend>
         <div class="flex flex-wrap gap-2">
           {#each presetsStore.presets as preset}
-            <button
-              type="button"
+            <div
               class="group relative flex items-center gap-2 rounded-full bg-purple-500/10 px-3 py-2 text-sm transition-colors hover:bg-purple-500/20"
-              onclick={() => applyPreset(preset)}
             >
-              <span class="text-purple-300">{preset.name}</span>
-              <span class="text-xs text-purple-400">{preset.totalMacros.carbs}g</span>
+              <button
+                type="button"
+                class="flex items-center gap-2"
+                onclick={() => applyPreset(preset)}
+              >
+                <span class="text-purple-300">{preset.name}</span>
+                <span class="text-xs text-purple-400">{preset.totalMacros.carbs}g</span>
+              </button>
               <button
                 type="button"
                 class="ml-1 hidden text-purple-400 hover:text-red-400 group-hover:inline"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  deletePreset(preset.id);
-                }}
+                onclick={() => deletePreset(preset.id)}
                 aria-label={`Delete ${preset.name}`}
               >
                 &times;
               </button>
-            </button>
+            </div>
           {/each}
         </div>
       </fieldset>
@@ -517,7 +530,12 @@
             }}
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+              />
             </svg>
             Save as preset
           </button>

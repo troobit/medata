@@ -239,4 +239,21 @@ export class EventService {
 
     return Array.from(uniqueValues);
   }
+
+  /**
+   * Get recent unique carb values from meal events
+   */
+  async getRecentCarbValues(maxUnique: number = 6): Promise<number[]> {
+    const events = await this.repository.getByType('meal', 50);
+    const uniqueCarbs = new Set<number>();
+
+    for (const event of events) {
+      if (event.value > 0) {
+        uniqueCarbs.add(event.value);
+        if (uniqueCarbs.size >= maxUnique) break;
+      }
+    }
+
+    return Array.from(uniqueCarbs);
+  }
 }

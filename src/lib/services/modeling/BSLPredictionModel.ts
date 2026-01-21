@@ -124,7 +124,10 @@ export function calculatePredictionFactors(
 ): BSLPredictionFactors {
   // Insulin effect: IOB * correction factor = BSL drop
   // Adjusted for alcohol sensitivity
-  const insulinDropBase = estimateInsulinBSLEffect(state.insulin.totalIOB, userParams.correctionFactor);
+  const insulinDropBase = estimateInsulinBSLEffect(
+    state.insulin.totalIOB,
+    userParams.correctionFactor
+  );
   const insulinEffect = -insulinDropBase * state.alcohol.insulinSensitivityModifier;
 
   // Carb effect: COB converted to equivalent insulin * CF = BSL rise
@@ -138,7 +141,8 @@ export function calculatePredictionFactors(
 
   // Alcohol direct effect on BSL (tends to lower it)
   // Rough model: alcohol in system can suppress liver glucose output
-  const alcoholEffect = state.alcohol.alcoholInSystem > 0 ? -state.alcohol.alcoholInSystem * 0.05 : 0;
+  const alcoholEffect =
+    state.alcohol.alcoholInSystem > 0 ? -state.alcohol.alcoholInSystem * 0.05 : 0;
 
   // Circadian drift (dawn phenomenon, etc.)
   const circadianAdjustment = estimateCircadianBSLDrift(lastBSLTime, targetTime);

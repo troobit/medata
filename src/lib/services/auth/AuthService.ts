@@ -129,7 +129,8 @@ export class AuthService {
         userId,
         publicKey: arrayBufferToBase64(publicKeyBytes),
         counter: 0,
-        deviceType: this.config.authenticatorAttachment === 'platform' ? 'platform' : 'cross-platform',
+        deviceType:
+          this.config.authenticatorAttachment === 'platform' ? 'platform' : 'cross-platform',
         createdAt: new Date(),
         friendlyName: 'Security Key'
       };
@@ -220,7 +221,8 @@ export class AuthService {
       userId,
       publicKey: arrayBufferToBase64(publicKeyBytes),
       counter: 0,
-      deviceType: this.config.authenticatorAttachment === 'platform' ? 'platform' : 'cross-platform',
+      deviceType:
+        this.config.authenticatorAttachment === 'platform' ? 'platform' : 'cross-platform',
       createdAt: new Date(),
       friendlyName: friendlyName || `Security Key ${existingCredentials.length + 1}`
     };
@@ -427,7 +429,9 @@ export class AuthService {
   }
 
   private saveCredential(credential: StoredCredential): void {
-    const credentials = this.getAllCredentials().filter((c) => c.credentialId !== credential.credentialId);
+    const credentials = this.getAllCredentials().filter(
+      (c) => c.credentialId !== credential.credentialId
+    );
     credentials.push(credential);
     localStorage.setItem(STORAGE_KEYS.CREDENTIALS, JSON.stringify(credentials));
   }

@@ -106,7 +106,7 @@ export function calculateMealDose(
     );
     // Small reduction if lots of carbs on board and low BSL
     if (currentBSL !== null && currentBSL < 6.0) {
-      cobAdjustment = -cobResult.totalCOB / userParams.insulinToCarbRatio * 0.25;
+      cobAdjustment = (-cobResult.totalCOB / userParams.insulinToCarbRatio) * 0.25;
     }
   }
 
@@ -137,8 +137,7 @@ export function calculateMealDose(
     now,
     userParams.circadianAdjustments
   );
-  const circadianAdjustment =
-    timeAdjust.adjustedDose - (carbCoverage + correctionDose);
+  const circadianAdjustment = timeAdjust.adjustedDose - (carbCoverage + correctionDose);
 
   // Calculate total dose
   let recommendedDose =
@@ -339,8 +338,11 @@ export function suggestICRAdjustment(
   const insulinEvents = events.filter((e) => e.eventType === 'insulin');
   const bslEvents = events.filter((e) => e.eventType === 'bsl');
 
-  const successfulPairs: Array<{ carbs: number; insulin: number; outcome: 'good' | 'high' | 'low' }> =
-    [];
+  const successfulPairs: Array<{
+    carbs: number;
+    insulin: number;
+    outcome: 'good' | 'high' | 'low';
+  }> = [];
 
   for (const meal of mealEvents) {
     const mealTime = new Date(meal.timestamp).getTime();
@@ -382,7 +384,8 @@ export function suggestICRAdjustment(
     return {
       suggestedICR: currentICR,
       confidence: 0,
-      analysis: 'Insufficient data for ICR analysis. Need at least 5 meal-insulin pairs with post-meal BSL.',
+      analysis:
+        'Insufficient data for ICR analysis. Need at least 5 meal-insulin pairs with post-meal BSL.',
       dataPoints: successfulPairs.length
     };
   }
@@ -430,7 +433,9 @@ export function explainRecommendation(recommendation: InsulinRecommendation): st
   const lines: string[] = [];
 
   lines.push(`Recommended dose: ${recommendedDose} units`);
-  lines.push(`Confidence: ${Math.round(confidence * 100)}% (${confidenceInterval[0]}-${confidenceInterval[1]} units)`);
+  lines.push(
+    `Confidence: ${Math.round(confidence * 100)}% (${confidenceInterval[0]}-${confidenceInterval[1]} units)`
+  );
   lines.push('');
   lines.push('Breakdown:');
 
@@ -450,7 +455,9 @@ export function explainRecommendation(recommendation: InsulinRecommendation): st
     lines.push(`  Alcohol adj: ${breakdown.alcoholAdjustment.toFixed(1)} units`);
   }
   if (Math.abs(breakdown.circadianAdjustment) > 0.1) {
-    lines.push(`  Time-of-day: ${breakdown.circadianAdjustment > 0 ? '+' : ''}${breakdown.circadianAdjustment.toFixed(1)} units`);
+    lines.push(
+      `  Time-of-day: ${breakdown.circadianAdjustment > 0 ? '+' : ''}${breakdown.circadianAdjustment.toFixed(1)} units`
+    );
   }
 
   return lines.join('\n');

@@ -249,8 +249,20 @@ export class ValidationService {
     const stats: CorrectionPatternStats[] = [];
 
     for (const [category, entries] of byCategory) {
-      const overestimation: MacroErrorMetrics = { calories: 0, carbs: 0, protein: 0, fat: 0, overall: 0 };
-      const underestimation: MacroErrorMetrics = { calories: 0, carbs: 0, protein: 0, fat: 0, overall: 0 };
+      const overestimation: MacroErrorMetrics = {
+        calories: 0,
+        carbs: 0,
+        protein: 0,
+        fat: 0,
+        overall: 0
+      };
+      const underestimation: MacroErrorMetrics = {
+        calories: 0,
+        carbs: 0,
+        protein: 0,
+        fat: 0,
+        overall: 0
+      };
       let overCount = 0;
       let underCount = 0;
       let totalConfidence = 0;
@@ -460,28 +472,58 @@ export class ValidationService {
   private inferCategory(description: string): FoodCategory {
     const lower = description.toLowerCase();
 
-    if (lower.includes('bread') || lower.includes('rice') || lower.includes('pasta') || lower.includes('cereal')) {
+    if (
+      lower.includes('bread') ||
+      lower.includes('rice') ||
+      lower.includes('pasta') ||
+      lower.includes('cereal')
+    ) {
       return 'grain';
     }
-    if (lower.includes('chicken') || lower.includes('beef') || lower.includes('fish') || lower.includes('egg')) {
+    if (
+      lower.includes('chicken') ||
+      lower.includes('beef') ||
+      lower.includes('fish') ||
+      lower.includes('egg')
+    ) {
       return 'protein';
     }
     if (lower.includes('milk') || lower.includes('cheese') || lower.includes('yogurt')) {
       return 'dairy';
     }
-    if (lower.includes('apple') || lower.includes('banana') || lower.includes('orange') || lower.includes('fruit')) {
+    if (
+      lower.includes('apple') ||
+      lower.includes('banana') ||
+      lower.includes('orange') ||
+      lower.includes('fruit')
+    ) {
       return 'fruit';
     }
-    if (lower.includes('carrot') || lower.includes('broccoli') || lower.includes('salad') || lower.includes('vegetable')) {
+    if (
+      lower.includes('carrot') ||
+      lower.includes('broccoli') ||
+      lower.includes('salad') ||
+      lower.includes('vegetable')
+    ) {
       return 'vegetable';
     }
     if (lower.includes('oil') || lower.includes('butter') || lower.includes('cream')) {
       return 'fat';
     }
-    if (lower.includes('soda') || lower.includes('juice') || lower.includes('coffee') || lower.includes('tea')) {
+    if (
+      lower.includes('soda') ||
+      lower.includes('juice') ||
+      lower.includes('coffee') ||
+      lower.includes('tea')
+    ) {
       return 'beverage';
     }
-    if (lower.includes('cookie') || lower.includes('chip') || lower.includes('candy') || lower.includes('snack')) {
+    if (
+      lower.includes('cookie') ||
+      lower.includes('chip') ||
+      lower.includes('candy') ||
+      lower.includes('snack')
+    ) {
       return 'snack';
     }
 

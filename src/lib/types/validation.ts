@@ -24,7 +24,12 @@ export type FoodCategory =
 /**
  * Source of ground truth data
  */
-export type GroundTruthSource = 'usda' | 'academic' | 'nutrition-label' | 'manual-weighed' | 'imported';
+export type GroundTruthSource =
+  | 'usda'
+  | 'academic'
+  | 'nutrition-label'
+  | 'manual-weighed'
+  | 'imported';
 
 /**
  * Test dataset entry - food image with known nutritional values

@@ -128,7 +128,8 @@
         </button>
         <button
           type="button"
-          class="rounded-lg px-4 py-3 text-center font-medium transition-colors {intensity === 'high'
+          class="rounded-lg px-4 py-3 text-center font-medium transition-colors {intensity ===
+          'high'
             ? 'bg-red-600 text-white'
             : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
           onclick={() => (intensity = 'high')}
@@ -225,11 +226,18 @@
     <!-- Advanced Options -->
     {#if showAdvanced}
       <div class="mb-6 space-y-4 rounded-lg border border-gray-800 bg-gray-900/30 p-4">
-        <Input type="text" label="Exercise name (optional)" bind:value={exerciseType} placeholder="e.g., Morning jog" />
+        <Input
+          type="text"
+          label="Exercise name (optional)"
+          bind:value={exerciseType}
+          placeholder="e.g., Morning jog"
+        />
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label for="calories" class="mb-2 block text-sm font-medium text-gray-400">Calories burned</label>
+            <label for="calories" class="mb-2 block text-sm font-medium text-gray-400"
+              >Calories burned</label
+            >
             <input
               id="calories"
               type="number"
@@ -239,7 +247,9 @@
             />
           </div>
           <div>
-            <label for="heartrate" class="mb-2 block text-sm font-medium text-gray-400">Avg heart rate</label>
+            <label for="heartrate" class="mb-2 block text-sm font-medium text-gray-400"
+              >Avg heart rate</label
+            >
             <input
               id="heartrate"
               type="number"
@@ -252,7 +262,9 @@
 
         {#if category === 'walking' || category === 'running' || category === 'cycling'}
           <div>
-            <label for="distance" class="mb-2 block text-sm font-medium text-gray-400">Distance (km)</label>
+            <label for="distance" class="mb-2 block text-sm font-medium text-gray-400"
+              >Distance (km)</label
+            >
             <input
               id="distance"
               type="number"

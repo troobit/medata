@@ -63,7 +63,7 @@ export class DexcomShareApiService implements ICGMApiService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        Accept: 'application/json'
       },
       body: JSON.stringify({
         accountId: accountId,
@@ -101,7 +101,7 @@ export class DexcomShareApiService implements ICGMApiService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        Accept: 'application/json'
       },
       body: JSON.stringify({
         accountName: this.config.username,
@@ -145,7 +145,7 @@ export class DexcomShareApiService implements ICGMApiService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          Accept: 'application/json'
         }
       }
     );
@@ -162,7 +162,7 @@ export class DexcomShareApiService implements ICGMApiService {
 
     const data: DexcomReadingsResponse[] = await response.json();
 
-    const readings: CGMGlucoseReading[] = data.map(reading => ({
+    const readings: CGMGlucoseReading[] = data.map((reading) => ({
       timestamp: this.parseWallTime(reading.WT),
       value: this.convertToMmol(reading.Value),
       unit: 'mmol/L' as BSLUnit,
@@ -173,19 +173,18 @@ export class DexcomShareApiService implements ICGMApiService {
     // Apply date filters if provided
     let filteredReadings = readings;
     if (options?.startDate) {
-      filteredReadings = filteredReadings.filter(r => r.timestamp >= options.startDate!);
+      filteredReadings = filteredReadings.filter((r) => r.timestamp >= options.startDate!);
     }
     if (options?.endDate) {
-      filteredReadings = filteredReadings.filter(r => r.timestamp <= options.endDate!);
+      filteredReadings = filteredReadings.filter((r) => r.timestamp <= options.endDate!);
     }
 
     // Sort by timestamp (newest first in API response, so reverse)
     filteredReadings.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
     // Current reading is the most recent
-    const currentReading = filteredReadings.length > 0
-      ? filteredReadings[filteredReadings.length - 1]
-      : undefined;
+    const currentReading =
+      filteredReadings.length > 0 ? filteredReadings[filteredReadings.length - 1] : undefined;
 
     return {
       provider: 'dexcom-share',

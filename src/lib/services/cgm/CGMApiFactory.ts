@@ -44,7 +44,7 @@ export function isCGMApiConfigured(config: CGMApiConfig | undefined): boolean {
     case 'dexcom-share':
       return !!(config.dexcomShare?.username && config.dexcomShare?.password);
     case 'nightscout':
-      return !!(config.nightscout?.url);
+      return !!config.nightscout?.url;
     default:
       return false;
   }

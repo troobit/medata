@@ -98,8 +98,8 @@ export class LibreLinkApiService implements ICGMApiService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'product': 'llu.android',
-        'version': '4.7.0'
+        product: 'llu.android',
+        version: '4.7.0'
       },
       body: JSON.stringify({
         email: this.config.email,
@@ -115,7 +115,9 @@ export class LibreLinkApiService implements ICGMApiService {
     const data: LibreLoginResponse = await response.json();
 
     if (data.status !== 0) {
-      throw new Error('LibreLink login failed. Check credentials and ensure LibreLinkUp sharing is enabled.');
+      throw new Error(
+        'LibreLink login failed. Check credentials and ensure LibreLinkUp sharing is enabled.'
+      );
     }
 
     this.session = {
@@ -142,9 +144,9 @@ export class LibreLinkApiService implements ICGMApiService {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.session.token}`,
-        'product': 'llu.android',
-        'version': '4.7.0'
+        Authorization: `Bearer ${this.session.token}`,
+        product: 'llu.android',
+        version: '4.7.0'
       }
     });
 
@@ -179,9 +181,9 @@ export class LibreLinkApiService implements ICGMApiService {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.session!.token}`,
-        'product': 'llu.android',
-        'version': '4.7.0'
+        Authorization: `Bearer ${this.session!.token}`,
+        product: 'llu.android',
+        version: '4.7.0'
       }
     });
 
@@ -193,7 +195,7 @@ export class LibreLinkApiService implements ICGMApiService {
 
     // Find the patient's data
     const patientData = this.session?.patientId
-      ? data.data.find(p => p.patientId === this.session?.patientId)
+      ? data.data.find((p) => p.patientId === this.session?.patientId)
       : data.data[0];
 
     if (!patientData?.glucoseMeasurement) {
@@ -228,9 +230,9 @@ export class LibreLinkApiService implements ICGMApiService {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.session!.token}`,
-        'product': 'llu.android',
-        'version': '4.7.0'
+        Authorization: `Bearer ${this.session!.token}`,
+        product: 'llu.android',
+        version: '4.7.0'
       }
     });
 
@@ -240,7 +242,7 @@ export class LibreLinkApiService implements ICGMApiService {
 
     const data: LibreGraphResponse = await response.json();
 
-    let readings: CGMGlucoseReading[] = data.data.graphData.map(point => ({
+    let readings: CGMGlucoseReading[] = data.data.graphData.map((point) => ({
       timestamp: new Date(point.Timestamp),
       value: this.convertToMmol(point.Value),
       unit: 'mmol/L' as BSLUnit,
@@ -249,10 +251,10 @@ export class LibreLinkApiService implements ICGMApiService {
 
     // Apply date filters if provided
     if (options?.startDate) {
-      readings = readings.filter(r => r.timestamp >= options.startDate!);
+      readings = readings.filter((r) => r.timestamp >= options.startDate!);
     }
     if (options?.endDate) {
-      readings = readings.filter(r => r.timestamp <= options.endDate!);
+      readings = readings.filter((r) => r.timestamp <= options.endDate!);
     }
     if (options?.maxCount) {
       readings = readings.slice(-options.maxCount);
@@ -282,9 +284,9 @@ export class LibreLinkApiService implements ICGMApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.session!.token}`,
-          'product': 'llu.android',
-          'version': '4.7.0'
+          Authorization: `Bearer ${this.session!.token}`,
+          product: 'llu.android',
+          version: '4.7.0'
         }
       });
 
@@ -294,7 +296,7 @@ export class LibreLinkApiService implements ICGMApiService {
 
       const data: LibreConnectionsResponse = await response.json();
       const patient = this.session?.patientId
-        ? data.data.find(p => p.patientId === this.session?.patientId)
+        ? data.data.find((p) => p.patientId === this.session?.patientId)
         : data.data[0];
 
       return {

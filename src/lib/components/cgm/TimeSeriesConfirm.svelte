@@ -198,15 +198,11 @@
   </div>
 
   <!-- Note about source -->
-  <p class="text-center text-xs text-gray-500">
-    Data will be imported with source: "cgm-image"
-  </p>
+  <p class="text-center text-xs text-gray-500">Data will be imported with source: "cgm-image"</p>
 
   <!-- Action Buttons -->
   <div class="flex gap-3">
-    <Button variant="secondary" class="flex-1" onclick={onCancel} disabled={loading}>
-      Cancel
-    </Button>
+    <Button variant="secondary" class="flex-1" onclick={onCancel} disabled={loading}>Cancel</Button>
     <Button
       variant="primary"
       class="flex-1"

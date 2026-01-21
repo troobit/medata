@@ -165,9 +165,7 @@ export function isBSLColumn(values: string[]): boolean {
 
   // Check if values are in reasonable BSL range
   // mmol/L: 2-30, mg/dL: 36-540
-  const allInRange = numericValues.every(
-    (n) => (n >= 2 && n <= 30) || (n >= 36 && n <= 540)
-  );
+  const allInRange = numericValues.every((n) => (n >= 2 && n <= 30) || (n >= 36 && n <= 540));
 
   return allInRange;
 }
