@@ -78,17 +78,17 @@ metadata:
 
 ## Component System
 
-- [ ] 26. Replace hover:scale-105 with contained animations to prevent button collision
-  - [ ] 26.1. Use inner element transforms or box-shadow instead of scaling the button bounds
-  - [ ] 26.2. Add gap/margin utilities to button containers to accommodate subtle motion
+- [x] 26. Replace hover:scale-105 with contained animations to prevent button collision
+  - [x] 26.1. Use inner element transforms or box-shadow instead of scaling the button bounds
+  - [x] 26.2. Add gap/margin utilities to button containers to accommodate subtle motion
 
-- [ ] 27. Add animation prop to Button (variant: 'none' | 'subtle' | 'full') for configurable effects
-  - [ ] 27.1. Use Svelte 5.16+ class={{ }} object syntax for conditional animation classes
+- [x] 27. Add animation prop to Button (variant: 'none' | 'subtle' | 'full') for configurable effects
+  - [x] 27.1. Use Svelte 5.16+ class={{ }} object syntax for conditional animation classes
 
-- [ ] 28. Replace custom CSS ripple/shimmer with Svelte Spring class and svelte/transition
-  - [ ] 28.1. Use Svelte 5 Spring.of() for reactive scale feedback on press/release
-  - [ ] 28.2. Replace @keyframes ripple-effect with svelte/transition scale function
+- [x] 28. Replace custom CSS ripple/shimmer with Svelte Spring class and svelte/transition
+  - [x] 28.1. Use Svelte 5 Spring.of() for reactive scale feedback on press/release
+  - [x] 28.2. Replace @keyframes ripple-effect with svelte/transition scale function
 
-- [ ] 29. Use svelte/easing functions instead of custom @keyframes animations
+- [x] 29. Use svelte/easing functions instead of custom @keyframes animations
 
-- [ ] 30. Integrate prefersReducedMotion from svelte/motion for accessibility compliance
+- [x] 30. Integrate prefersReducedMotion from svelte/motion for accessibility compliance
