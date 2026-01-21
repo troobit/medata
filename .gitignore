@@ -5,7 +5,15 @@ node_modules/
 dist/
 build/
 .svelte-kit/
+
+# Deployment
 .vercel/
+.netlify/
+.cloudflare/
+.firebase/
+.amplify/
+.output/
+.wrangler/
 
 # Environment files
 .env

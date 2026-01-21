@@ -34,7 +34,7 @@
   <!-- Header -->
   <header class="mb-8">
     <h1 class="text-2xl font-bold text-white">MeData</h1>
-    <p class="mt-1 text-gray-400">Track your health data</p>
+    <p class="mt-1 text-gray-400">Medical Data. For Me.</p>
   </header>
 
   <!-- Quick Actions -->

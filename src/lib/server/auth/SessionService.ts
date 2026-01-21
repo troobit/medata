@@ -12,8 +12,8 @@ import type { SessionData, SessionConfig } from './types';
 // Single user ID constant
 const USER_ID = 'owner';
 
-// Default session duration: 7 days
-const DEFAULT_MAX_AGE = 7 * 24 * 60 * 60;
+// Default session duration: 2 days
+const DEFAULT_MAX_AGE = 2 * 24 * 60 * 60;
 
 export class SessionService {
   private config: SessionConfig;

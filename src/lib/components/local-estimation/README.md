@@ -1,7 +1,5 @@
 # Workstream C: Local Food Estimation Components
 
-**Branch**: `workstream-c/local-food`
-
 Svelte components for browser-local food volume estimation UI.
 
 ## Components to create
