@@ -24,7 +24,7 @@ references:
 
 ## Phase 1: Core Logo Component
 
-- [ ] 8. Add TypeScript props interface with size and class props
+- [x] 8. Add TypeScript props interface with size and class props
 
 ## Phase 2: Stroke-Draw Animation
 
