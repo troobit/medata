@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { EmptyState, LoadingSpinner } from '$lib/components/ui';
+  import { EmptyState, Logo } from '$lib/components/ui';
   import { eventsStore } from '$lib/stores';
   import { onMount } from 'svelte';
   import type { EventType, MealMetadata, AlcoholType } from '$lib/types';
@@ -131,7 +131,7 @@
   <!-- Events List -->
   {#if eventsStore.loading}
     <div class="flex justify-center py-12">
-      <LoadingSpinner size="lg" />
+      <Logo animated size="lg" />
     </div>
   {:else if filteredEvents.length === 0}
     <EmptyState

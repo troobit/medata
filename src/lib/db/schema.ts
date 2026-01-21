@@ -64,12 +64,12 @@ export function getDb(): MeDataDB {
 export const db = typeof window !== 'undefined' ? new MeDataDB() : (null as unknown as MeDataDB);
 
 /**
- * Check if the database is available and accessible
- * Returns an error message if there's an issue, null if everything is OK
+ * Check if IndexedDB is available and working
+ * Returns null if available, or an error message if not
  */
 export async function checkDatabaseAvailability(): Promise<string | null> {
   if (typeof window === 'undefined') {
-    return 'Database is not available in server-side rendering';
+    return 'Database is only available in the browser';
   }
 
   if (!('indexedDB' in window)) {
@@ -77,18 +77,20 @@ export async function checkDatabaseAvailability(): Promise<string | null> {
   }
 
   try {
-    const db = getDb();
-    // Test basic database operation
-    await db.events.count();
+    const testDb = getDb();
+    await testDb.events.count();
     return null;
   } catch (error) {
     if (error instanceof Error) {
-      // Handle private browsing / incognito mode
+      // Check for common IndexedDB errors
       if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        return 'Storage quota exceeded. Please clear browser data or disable private browsing mode.';
+        return 'Storage quota exceeded. Please free up some space.';
+      }
+      if (error.message.includes('private browsing') || error.message.includes('Private mode')) {
+        return 'Private/Incognito browsing mode detected. Please use a regular browser window.';
       }
       return `Database error: ${error.message}`;
     }
-    return 'Unknown database error';
+    return 'Failed to initialize database';
   }
 }

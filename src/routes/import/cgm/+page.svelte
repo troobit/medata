@@ -10,7 +10,7 @@
    * 5. Data confirmation and import
    */
   import { goto } from '$app/navigation';
-  import { Button, LoadingSpinner } from '$lib/components/ui';
+  import { Button, Logo } from '$lib/components/ui';
   import {
     CGMImageCapture,
     AxisRangeInput,
@@ -201,7 +201,7 @@
   <!-- Step: Extracting -->
   {#if step === 'extracting'}
     <div class="flex flex-col items-center justify-center py-12">
-      <LoadingSpinner />
+      <Logo animated size="lg" />
       <p class="mt-4 text-lg font-medium text-white">Extracting BSL Data...</p>
       <p class="mt-2 text-sm text-gray-400">
         Analyzing graph with {settingsStore.configuredProvider || 'ML'}
@@ -241,7 +241,7 @@
   <!-- Step: Importing -->
   {#if step === 'importing'}
     <div class="flex flex-col items-center justify-center py-12">
-      <LoadingSpinner />
+      <Logo animated size="lg" />
       <p class="mt-4 text-lg font-medium text-white">Importing Data...</p>
       <p class="mt-2 text-sm text-gray-400">
         Saving {extractionResult?.dataPoints.length || 0} BSL readings
