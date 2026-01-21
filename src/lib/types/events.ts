@@ -37,6 +37,25 @@ export type BSLUnit = 'mmol/L' | 'mg/dL';
 export type ExerciseIntensity = 'low' | 'moderate' | 'high';
 
 /**
+ * Exercise category for wearable integration
+ */
+export type ExerciseCategory =
+  | 'walking'
+  | 'running'
+  | 'cycling'
+  | 'swimming'
+  | 'weights'
+  | 'hiit'
+  | 'yoga'
+  | 'sports'
+  | 'other';
+
+/**
+ * Data source for exercise events
+ */
+export type ExerciseDataSource = 'manual' | 'apple-health' | 'google-fit' | 'garmin' | 'fitbit';
+
+/**
  * Alcohol drink categories
  */
 export type AlcoholType = 'beer' | 'wine' | 'spirit' | 'mixed';
@@ -105,6 +124,16 @@ export interface BSLMetadata {
 export interface ExerciseMetadata {
   intensity: ExerciseIntensity;
   exerciseType?: string;
+  category?: ExerciseCategory;
+  durationMinutes?: number;
+  caloriesBurned?: number;
+  heartRateAvg?: number;
+  heartRateMax?: number;
+  distanceKm?: number;
+  steps?: number;
+  source?: ExerciseDataSource;
+  deviceName?: string;
+  externalId?: string; // ID from wearable platform
   [key: string]: unknown;
 }
 

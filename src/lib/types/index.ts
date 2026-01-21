@@ -4,6 +4,8 @@ export type {
   InsulinType,
   BSLUnit,
   ExerciseIntensity,
+  ExerciseCategory,
+  ExerciseDataSource,
   AlcoholType,
   MacroData,
   MealMetadata,
@@ -71,6 +73,23 @@ export type {
   ICGMImageService
 } from './cgm';
 
+// CGM API Integration (Task 22)
+export type {
+  CGMApiProvider,
+  LibreLinkConfig,
+  DexcomShareConfig,
+  NightscoutConfig,
+  CGMApiConfig,
+  CGMAuthSession,
+  CGMGlucoseReading,
+  CGMTrendDirection,
+  CGMFetchResult,
+  CGMConnectionStatus,
+  CGMFetchOptions,
+  ICGMApiService
+} from './cgm-api';
+export { TREND_ARROWS, dexcomTrendToDirection, libreTrendToDirection } from './cgm-api';
+
 // Workstream C: Local Food Estimation
 export type {
   ReferenceObjectType,
@@ -116,6 +135,29 @@ export type {
   USDAFoodEntry,
   DatasetImportResult
 } from './validation';
+
+// Authentication (Task 24)
+export type {
+  User,
+  StoredCredential,
+  AuthSession,
+  AuthChallenge,
+  RegistrationOptions,
+  AuthenticationOptions,
+  RegistrationResult,
+  AuthenticationResult,
+  AuthConfig,
+  AuthErrorCode
+} from './auth';
+export {
+  DEFAULT_AUTH_CONFIG,
+  AuthError,
+  isWebAuthnSupported,
+  isPlatformAuthenticatorAvailable,
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+  generateChallenge
+} from './auth';
 
 // Regression & Modeling
 export type {

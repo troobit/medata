@@ -1,4 +1,5 @@
 import type { BSLUnit, InsulinType } from './events';
+import type { CGMApiConfig } from './cgm-api';
 
 /**
  * AI provider options for food recognition
@@ -65,6 +66,9 @@ export interface UserSettings {
 
   // Local Models
   localModelConfig?: LocalModelConfig;
+
+  // CGM API Integration (Task 22)
+  cgmApiConfig?: CGMApiConfig;
 
   // Defaults
   defaultInsulinType: InsulinType;

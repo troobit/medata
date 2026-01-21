@@ -66,15 +66,15 @@ metadata:
 
 ## Future Enhancements
 
-- [ ] 21. Implement Ollama/LLaVA self-hosted provider for offline AI estimation
+- [x] 21. Implement Ollama/LLaVA self-hosted provider for offline AI estimation
 
-- [ ] 22. Add direct CGM API integration (Freestyle Libre, Dexcom)
+- [x] 22. Add direct CGM API integration (Freestyle Libre, Dexcom)
 
-- [ ] 23. Build exercise event logging with wearable integration support
+- [x] 23. Build exercise event logging with wearable integration support
 
-- [ ] 24. Implement authentication (FIDO/YubiKey support for multi-user)
+- [x] 24. Implement authentication (FIDO/YubiKey support for multi-user)
 
-- [ ] 25. Add meal preset management (save and recall common meals)
+- [x] 25. Add meal preset management (save and recall common meals)
 
 ## Component System
 

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { Button } from '$lib/components/ui';
-  import { eventsStore } from '$lib/stores';
-  import type { AlcoholType } from '$lib/types';
+  import { Button, Input } from '$lib/components/ui';
+  import { eventsStore, presetsStore } from '$lib/stores';
+  import type { AlcoholType, MealPreset } from '$lib/types';
 
   let carbs = $state(0);
   let protein = $state<number | undefined>(undefined);
@@ -16,6 +16,10 @@
   // Alcohol tracking
   let alcoholUnits = $state<number | undefined>(undefined);
   let alcoholType = $state<AlcoholType | undefined>(undefined);
+
+  // Preset management
+  let showSavePreset = $state(false);
+  let presetName = $state('');
 
   // Alcohol type options
   const alcoholTypeOptions: Array<{ value: AlcoholType | ''; label: string }> = [
@@ -56,6 +60,7 @@
 
   onMount(() => {
     loadRecentCarbs();
+    presetsStore.loadRecent(5);
   });
 
   function adjustCarbs(amount: number) {
@@ -119,6 +124,43 @@
 
   // Use recent carbs if available, otherwise fall back to defaults
   const quickSelectValues = $derived(recentCarbs.length > 0 ? recentCarbs : defaultCarbQuickSelect);
+
+  function applyPreset(preset: MealPreset) {
+    carbs = preset.totalMacros.carbs;
+    protein = preset.totalMacros.protein || undefined;
+    fat = preset.totalMacros.fat || undefined;
+    description = preset.name;
+    // Clear alcohol when selecting preset
+    alcoholUnits = undefined;
+    alcoholType = undefined;
+    // Mark preset as recently used
+    presetsStore.markUsed(preset.id);
+  }
+
+  async function saveAsPreset() {
+    if (!presetName.trim() || carbs <= 0) return;
+
+    try {
+      await presetsStore.create({
+        name: presetName,
+        items: [
+          {
+            name: description || presetName,
+            macros: { carbs, protein: protein || 0, fat: fat || 0, calories: 0 }
+          }
+        ],
+        totalMacros: { carbs, protein: protein || 0, fat: fat || 0, calories: 0 }
+      });
+      presetName = '';
+      showSavePreset = false;
+    } catch {
+      // Error shown via store
+    }
+  }
+
+  async function deletePreset(id: string) {
+    await presetsStore.deletePreset(id);
+  }
 </script>
 
 <div class="flex min-h-[calc(100dvh-80px)] flex-col px-4 py-6">
@@ -164,6 +206,36 @@
         </svg>
       </a>
     </div>
+
+    <!-- Saved Presets -->
+    {#if presetsStore.presets.length > 0}
+      <fieldset class="mb-4">
+        <legend class="mb-2 block text-sm font-medium text-gray-400">Saved Meals</legend>
+        <div class="flex flex-wrap gap-2">
+          {#each presetsStore.presets as preset}
+            <button
+              type="button"
+              class="group relative flex items-center gap-2 rounded-full bg-purple-500/10 px-3 py-2 text-sm transition-colors hover:bg-purple-500/20"
+              onclick={() => applyPreset(preset)}
+            >
+              <span class="text-purple-300">{preset.name}</span>
+              <span class="text-xs text-purple-400">{preset.totalMacros.carbs}g</span>
+              <button
+                type="button"
+                class="ml-1 hidden text-purple-400 hover:text-red-400 group-hover:inline"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  deletePreset(preset.id);
+                }}
+                aria-label={`Delete ${preset.name}`}
+              >
+                &times;
+              </button>
+            </button>
+          {/each}
+        </div>
+      </fieldset>
+    {/if}
 
     <!-- Divider -->
     <div class="mb-6 flex items-center gap-3">
@@ -403,6 +475,55 @@
         class="w-full resize-none rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white placeholder-gray-500 focus:border-brand-accent focus:outline-none focus:ring-1 focus:ring-brand-accent"
       ></textarea>
     </div>
+
+    <!-- Save as Preset Option -->
+    {#if carbs > 0 && !isAlcoholEntry}
+      <div class="mb-4">
+        {#if showSavePreset}
+          <div class="flex items-center gap-2 rounded-lg bg-purple-500/10 p-3">
+            <input
+              type="text"
+              bind:value={presetName}
+              placeholder="Preset name"
+              class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              onkeydown={(e) => e.key === 'Enter' && saveAsPreset()}
+            />
+            <button
+              type="button"
+              class="rounded-lg bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+              onclick={saveAsPreset}
+              disabled={!presetName.trim()}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-2 text-sm text-gray-400 transition-colors hover:text-gray-200"
+              onclick={() => {
+                showSavePreset = false;
+                presetName = '';
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        {:else}
+          <button
+            type="button"
+            class="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-700 px-3 py-2 text-sm text-gray-400 transition-colors hover:border-purple-500 hover:text-purple-400"
+            onclick={() => {
+              showSavePreset = true;
+              presetName = description || '';
+            }}
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+            Save as preset
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Error Display -->
     {#if eventsStore.error}
