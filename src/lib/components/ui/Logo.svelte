@@ -1,7 +1,7 @@
 <script lang="ts">
   import { env } from '$env/dynamic/public';
 
-  type LogoVariant = 'default' | 'pride' | 'contrast';
+  type LogoVariant = 'default' | 'colour' | 'contrast';
 
   interface Props {
     size?: 'sm' | 'md' | 'lg' | 'splash';
@@ -22,16 +22,16 @@
 
   // Pre-calculated path lengths for stroke-dasharray animation
   // Main path: bezier curve (~216) + vertical line (40) = ~256
-  // Right vertical: 52 (from y=52 to y=104)
+  // Right vertical: 40 (from y=64 to y=104)
   // Center dot: 0.01 (minimal length, rendered as dot via stroke-linecap)
   const pathLengths = {
     main: 256,
-    right: 52,
+    right: 40,
     dot: 0.01
   };
 
   // Validate variant from environment, fallback to default
-  const validVariants: LogoVariant[] = ['default', 'pride', 'contrast'];
+  const validVariants: LogoVariant[] = ['default', 'colour', 'contrast'];
   const envVariant = env.PUBLIC_LOGO_VARIANT;
   const variant: LogoVariant = validVariants.includes(envVariant as LogoVariant)
     ? (envVariant as LogoVariant)
@@ -41,11 +41,11 @@
   const variantColors = {
     default: { main: '#63ff00', dot: '#63ff00' },
     contrast: { main: '#000000', dot: '#ffcc00' },
-    pride: { main: 'url(#pride-gradient)', dot: 'url(#pride-gradient)' }
+    colour: { main: 'url(#colour-gradient)', dot: 'url(#colour-gradient)' }
   };
 
   const colors = variantColors[variant];
-  const isPrideVariant = variant === 'pride';
+  const isColourVariant = variant === 'colour';
 </script>
 
 <svg
@@ -58,10 +58,10 @@
   class="{className} {animated ? 'logo-animated' : ''}"
   style="--path-main: {pathLengths.main}; --path-right: {pathLengths.right}; --path-dot: {pathLengths.dot};"
 >
-  {#if isPrideVariant}
-    <!-- Pride rainbow gradient definition -->
+  {#if isColourVariant}
+    <!-- Rainbow gradient definition -->
     <defs>
-      <linearGradient id="pride-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <linearGradient id="colour-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="#E40303" />
         <stop offset="20%" stop-color="#FF8C00" />
         <stop offset="40%" stop-color="#FFED00" />
@@ -82,7 +82,7 @@
     d="M 24,24 C 130,24 130,104 24,104 L 24,64"
     style="stroke-dasharray: {pathLengths.main}; stroke-dashoffset: 0;"
   />
-  <!-- Right vertical (starts at y=52 so round cap is hidden under curve) -->
+  <!-- Right vertical (starts at y=64 so round cap aligns with curve edge) -->
   <path
     class="logo-right"
     fill="none"
@@ -90,7 +90,7 @@
     stroke-width="24"
     stroke-linecap="round"
     stroke-linejoin="round"
-    d="M 104,52 L 104,104"
+    d="M 104,64 L 104,104"
     style="stroke-dasharray: {pathLengths.right}; stroke-dashoffset: 0;"
   />
   <!-- Center dot -->
@@ -127,7 +127,7 @@
   @keyframes stroke-right {
     0%,
     15% {
-      stroke-dashoffset: 52;
+      stroke-dashoffset: 40;
     }
     /* Draw complete */
     42%,
@@ -137,24 +137,25 @@
     /* Undraw complete */
     85%,
     100% {
-      stroke-dashoffset: 52;
+      stroke-dashoffset: 40;
     }
   }
 
-  /* Center dot animation: draws last (30-50%), undraws first (50-70%) */
+  /* Center dot animation: draws last (30-50%), undraws first (50-70%) using opacity */
   @keyframes stroke-dot {
     0%,
     30% {
-      stroke-dashoffset: 0.01;
+      opacity: 0;
     }
     /* Draw complete */
-    50% {
-      stroke-dashoffset: 0;
+    35%,
+    65% {
+      opacity: 1;
     }
     /* Undraw complete */
     70%,
     100% {
-      stroke-dashoffset: 0.01;
+      opacity: 0;
     }
   }
 

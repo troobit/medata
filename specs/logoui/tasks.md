@@ -89,3 +89,17 @@ references:
 - [x] 35. Verify animation performance on mobile devices
 
 - [x] 36. Verify no visual regressions across app
+
+## Phase 6: Demo Page for Testing
+
+- [x] 37. Create (public) route group with layout that bypasses authentication
+
+- [x] 38. Create /demologo page displaying all logo sizes (sm, md, lg, splash)
+
+- [x] 39. Add static and animated variants side-by-side for each size
+
+- [ ] 40. Verify page loads at /demologo without authentication
+
+- [ ] 41. Validate all logo sizes render correctly at specified pixel dimensions
+
+- [ ] 42. Confirm animation plays smoothly on animated variants
