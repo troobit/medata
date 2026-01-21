@@ -52,17 +52,17 @@ metadata:
 
 ## Regression & Modeling
 
-- [ ] 16. Model insulin decay function (biological half-life, compounding effects)
+- [x] 16. Model insulin decay function (biological half-life, compounding effects)
 
-- [ ] 17. Model carbohydrate and alcohol absorption decay rates
-  - [ ] 17.1. Research alcohol metabolism rates by drink type and body composition
-  - [ ] 17.2. Implement alcohol-induced insulin sensitivity changes in BSL prediction
+- [x] 17. Model carbohydrate and alcohol absorption decay rates
+  - [x] 17.1. Research alcohol metabolism rates by drink type and body composition
+  - [x] 17.2. Implement alcohol-induced insulin sensitivity changes in BSL prediction
 
-- [ ] 18. Implement time-of-day sensitivity adjustments for insulin response
+- [x] 18. Implement time-of-day sensitivity adjustments for insulin response
 
-- [ ] 19. Build BSL prediction model combining meal, insulin, and alcohol events
+- [x] 19. Build BSL prediction model combining meal, insulin, and alcohol events
 
-- [ ] 20. Create insulin dose recommendation engine with confidence intervals
+- [x] 20. Create insulin dose recommendation engine with confidence intervals
 
 ## Future Enhancements
 

@@ -116,3 +116,28 @@ export type {
   USDAFoodEntry,
   DatasetImportResult
 } from './validation';
+
+// Regression & Modeling
+export type {
+  InsulinKinetics,
+  InsulinActivityPoint,
+  ActiveInsulinResult,
+  DoseContribution,
+  CarbAbsorptionParams,
+  CarbAbsorptionPoint,
+  ActiveCarbsResult,
+  MealContribution,
+  AlcoholMetabolismParams,
+  BloodAlcoholResult,
+  DrinkContribution,
+  CircadianFactors,
+  UserModelParameters,
+  BSLPrediction,
+  BSLPredictionFactors,
+  InsulinRecommendation,
+  DoseBreakdown,
+  MetabolicState,
+  BSLTimeSeries,
+  BSLTimeSeriesPoint,
+  EventWindow
+} from './modeling';

@@ -4,6 +4,9 @@ export { VisionService, VisionServiceError, getVisionService } from './VisionSer
 export { BSLRecognitionService, getBSLRecognitionService } from './BSLRecognitionService';
 export { ValidationService } from './ValidationService';
 
+// Modeling services
+export * from './modeling';
+
 // Factory functions with default repositories
 import { EventService } from './EventService';
 import { SettingsService } from './SettingsService';
