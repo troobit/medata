@@ -1,0 +1,80 @@
+---
+references:
+    - requirements.md
+metadata:
+    architecture: SSG UI + Server Auth API + Client Gate
+    scope: Single-user WebAuthn server-side authentication
+---
+# WebAuthn Server-Side Authentication
+
+## Phase 1: Server Infrastructure & Registration Endpoints
+
+- [ ] 1. Switch adapter from adapter-static to adapter-vercel
+
+- [ ] 2. Create WebAuthnService.ts with server-side verification logic
+
+- [ ] 3. Create CredentialStore.ts for credential persistence
+
+- [ ] 4. Implement POST /api/auth/register/options endpoint
+
+- [ ] 5. Implement POST /api/auth/register/verify endpoint
+
+- [ ] 6. Create .env.example with AUTH_RP_ID, AUTH_ORIGIN, AUTH_CREDENTIALS_PATH
+
+- [ ] 7. Verify registration flow with YubiKey end-to-end
+
+## Phase 2: Authentication Endpoints & Session Management
+
+- [ ] 8. Implement POST /api/auth/login/options endpoint
+
+- [ ] 9. Implement POST /api/auth/login/verify endpoint with assertion verification
+
+- [ ] 10. Create SessionService.ts for session management
+
+- [ ] 11. Implement secure HttpOnly cookie session creation
+
+- [ ] 12. Implement POST /api/auth/logout endpoint
+
+- [ ] 13. Implement GET /api/auth/session endpoint
+
+- [ ] 14. Create hooks.server.ts with session validation middleware
+
+- [ ] 15. Implement counter validation and update on authentication
+
+- [ ] 16. Verify authentication flow with session persistence
+
+## Phase 3: Client Integration & Auth Gate
+
+- [ ] 17. Create ServerAuthClient.ts for client-side API calls
+
+- [ ] 18. Create auth.svelte.ts reactive store for auth state
+
+- [ ] 19. Create AuthGate.svelte component to protect app content
+
+- [ ] 20. Create LoginPrompt.svelte component with YubiKey authentication UI
+
+- [ ] 21. Integrate AuthGate in +layout.svelte at app root
+
+- [ ] 22. Add logout functionality to UI
+
+- [ ] 23. Verify end-to-end auth flow from login to app access
+
+## Phase 4: Credential Management & Bootstrap
+
+- [ ] 24. Implement bootstrap.ts for first credential enrollment
+
+- [ ] 25. Implement POST /api/auth/bootstrap endpoint with token validation
+
+- [ ] 26. Implement GET /api/auth/credentials endpoint (authenticated)
+
+- [ ] 27. Implement PATCH /api/auth/credentials/[id] for updating credential metadata
+
+- [ ] 28. Implement DELETE /api/auth/credentials/[id] with lockout prevention
+
+- [ ] 29. Add credential management UI to settings page
+
+- [ ] 30. Implement add additional credential flow (authenticated)
+
+- [ ] 31. Add AUTH_BOOTSTRAP_TOKEN and AUTH_SESSION_SECRET to environment config
+
+- [ ] 32. Verify bootstrap and credential management end-to-end
