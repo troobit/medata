@@ -45,19 +45,19 @@ metadata:
 
 ## Phase 3: Client Integration & Auth Gate
 
-- [ ] 17. Create ServerAuthClient.ts for client-side API calls
+- [x] 17. Create ServerAuthClient.ts for client-side API calls
 
-- [ ] 18. Create auth.svelte.ts reactive store for auth state
+- [x] 18. Create auth.svelte.ts reactive store for auth state
 
-- [ ] 19. Create AuthGate.svelte component to protect app content
+- [x] 19. Create AuthGate.svelte component to protect app content
 
-- [ ] 20. Create LoginPrompt.svelte component with YubiKey authentication UI
+- [x] 20. Create LoginPrompt.svelte component with YubiKey authentication UI
 
-- [ ] 21. Integrate AuthGate in +layout.svelte at app root
+- [x] 21. Integrate AuthGate in +layout.svelte at app root
 
-- [ ] 22. Add logout functionality to UI
+- [x] 22. Add logout functionality to UI
 
-- [ ] 23. Verify end-to-end auth flow from login to app access
+- [x] 23. Verify end-to-end auth flow from login to app access
 
 ## Phase 4: Credential Management & Bootstrap
 

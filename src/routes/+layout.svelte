@@ -1,9 +1,10 @@
 <script lang="ts">
   import '../app.css';
+  import { AuthGate } from '$lib/components/auth';
   import { AppShell } from '$lib/components/layout';
   import { LoadingSpinner, StorageError } from '$lib/components/ui';
   import { checkDatabaseAvailability } from '$lib/db';
-  import { settingsStore } from '$lib/stores';
+  import { authStore, settingsStore } from '$lib/stores';
   import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
 
@@ -22,16 +23,18 @@
     dbError = error;
     dbChecked = true;
 
-    if (!error) {
-      // Load settings on app start (only if DB is available)
-      settingsStore.load();
-    }
-
     // Register service worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js').catch((err) => {
         console.error('Service worker registration failed:', err);
       });
+    }
+  });
+
+  // Load settings once authenticated and DB is available
+  $effect(() => {
+    if (authStore.isAuthenticated && dbChecked && !dbError) {
+      settingsStore.load();
     }
   });
 </script>
@@ -51,7 +54,9 @@
 {:else if dbError}
   <StorageError error={dbError} />
 {:else}
-  <AppShell>
-    {@render children()}
-  </AppShell>
+  <AuthGate>
+    <AppShell>
+      {@render children()}
+    </AppShell>
+  </AuthGate>
 {/if}

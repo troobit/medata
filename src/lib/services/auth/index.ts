@@ -1,6 +1,7 @@
-/**
- * Authentication Services
- * Task 24: FIDO/YubiKey authentication
- */
-
-export { AuthService, getAuthService } from './AuthService';
+export {
+  ServerAuthClient,
+  ServerAuthClientError,
+  getServerAuthClient,
+  type LoginVerifyResponse,
+  type LogoutResponse
+} from './ServerAuthClient';
