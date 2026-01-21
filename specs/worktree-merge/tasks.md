@@ -62,9 +62,9 @@ references:
 
 ## Phase 6: Continue UI Development (logoui remains active)
 
-- [ ] 24. Continue UI work on logoui branch with auth features available
+- [x] 24. Continue UI work on logoui branch with auth features available
 
-- [ ] 25. Periodically sync dev-0 changes into logoui if needed
+- [x] 25. Periodically sync dev-0 changes into logoui if needed
 
 ## Phase 7: Final Merge (when UI complete)
 
