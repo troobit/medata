@@ -4,6 +4,7 @@
 
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
 export { CredentialStore, getCredentialStore } from './CredentialStore';
+export { SessionService, createSessionConfig, getSessionService } from './SessionService';
 export type {
   StoredCredential,
   StoredChallenge,
@@ -12,5 +13,10 @@ export type {
   RegistrationOptionsResponse,
   RegistrationVerifyRequest,
   RegistrationVerifyResponse,
-  AuthErrorResponse
+  AuthErrorResponse,
+  AuthenticationOptionsResponse,
+  AuthenticationVerifyResponse,
+  SessionData,
+  SessionStatusResponse,
+  SessionConfig
 } from './types';

@@ -25,23 +25,23 @@ metadata:
 
 ## Phase 2: Authentication Endpoints & Session Management
 
-- [ ] 8. Implement POST /api/auth/login/options endpoint
+- [x] 8. Implement POST /api/auth/login/options endpoint
 
-- [ ] 9. Implement POST /api/auth/login/verify endpoint with assertion verification
+- [x] 9. Implement POST /api/auth/login/verify endpoint with assertion verification
 
-- [ ] 10. Create SessionService.ts for session management
+- [x] 10. Create SessionService.ts for session management
 
-- [ ] 11. Implement secure HttpOnly cookie session creation
+- [x] 11. Implement secure HttpOnly cookie session creation
 
-- [ ] 12. Implement POST /api/auth/logout endpoint
+- [x] 12. Implement POST /api/auth/logout endpoint
 
-- [ ] 13. Implement GET /api/auth/session endpoint
+- [x] 13. Implement GET /api/auth/session endpoint
 
-- [ ] 14. Create hooks.server.ts with session validation middleware
+- [x] 14. Create hooks.server.ts with session validation middleware
 
-- [ ] 15. Implement counter validation and update on authentication
+- [x] 15. Implement counter validation and update on authentication
 
-- [ ] 16. Verify authentication flow with session persistence
+- [x] 16. Verify authentication flow with session persistence
 
 ## Phase 3: Client Integration & Auth Gate
 

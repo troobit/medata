@@ -111,3 +111,53 @@ export interface AuthErrorResponse {
   error: string;
   code: string;
 }
+
+/**
+ * Authentication options response sent to client
+ */
+export interface AuthenticationOptionsResponse {
+  challenge: string;
+  rpId: string;
+  allowCredentials: Array<{
+    id: string;
+    type: 'public-key';
+    transports?: AuthenticatorTransportFuture[];
+  }>;
+  timeout: number;
+  userVerification: 'preferred';
+}
+
+/**
+ * Authentication verification response
+ */
+export interface AuthenticationVerifyResponse {
+  verified: boolean;
+}
+
+/**
+ * Session data stored in cookie
+ */
+export interface SessionData {
+  userId: string;
+  credentialId: string;
+  createdAt: number; // Unix timestamp
+  expiresAt: number; // Unix timestamp
+}
+
+/**
+ * Session status response
+ */
+export interface SessionStatusResponse {
+  authenticated: boolean;
+  expiresAt: string | null; // ISO timestamp
+}
+
+/**
+ * Session configuration
+ */
+export interface SessionConfig {
+  secret: string;
+  cookieName: string;
+  maxAge: number; // seconds
+  secure: boolean;
+}

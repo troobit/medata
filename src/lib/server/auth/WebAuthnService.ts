@@ -7,20 +7,25 @@
 
 import {
   generateRegistrationOptions,
-  verifyRegistrationResponse
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import type {
   GenerateRegistrationOptionsOpts,
-  VerifyRegistrationResponseOpts
+  VerifyRegistrationResponseOpts,
+  GenerateAuthenticationOptionsOpts,
+  VerifyAuthenticationResponseOpts
 } from '@simplewebauthn/server';
-import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { isoBase64URL } from '@simplewebauthn/server/helpers';
 
 import type {
   WebAuthnConfig,
   StoredCredential,
   RegistrationOptionsResponse,
-  StoredChallenge
+  StoredChallenge,
+  AuthenticationOptionsResponse
 } from './types';
 
 // Challenge expiry time: 5 minutes
@@ -148,6 +153,96 @@ export class WebAuthnService {
     };
 
     return storedCredential;
+  }
+
+  /**
+   * Generate authentication options for login
+   */
+  async generateAuthenticationOptions(
+    credentials: StoredCredential[]
+  ): Promise<{ options: AuthenticationOptionsResponse; challenge: StoredChallenge }> {
+    if (credentials.length === 0) {
+      throw new Error('No credentials registered');
+    }
+
+    const opts: GenerateAuthenticationOptionsOpts = {
+      rpID: this.config.rpId,
+      timeout: 60000,
+      allowCredentials: credentials.map((cred) => ({
+        id: cred.id,
+        transports: cred.transports
+      })),
+      userVerification: 'preferred'
+    };
+
+    const authOptions = await generateAuthenticationOptions(opts);
+
+    // Store challenge with expiry
+    const challenge: StoredChallenge = {
+      challenge: authOptions.challenge,
+      expiresAt: Date.now() + CHALLENGE_EXPIRY_MS
+    };
+
+    // Transform to our response format
+    const options: AuthenticationOptionsResponse = {
+      challenge: authOptions.challenge,
+      rpId: this.config.rpId,
+      allowCredentials:
+        authOptions.allowCredentials?.map((cred) => ({
+          id: cred.id,
+          type: 'public-key' as const,
+          transports: cred.transports
+        })) ?? [],
+      timeout: authOptions.timeout ?? 60000,
+      userVerification: 'preferred'
+    };
+
+    return { options, challenge };
+  }
+
+  /**
+   * Verify authentication response and return verification result with updated counter
+   */
+  async verifyAuthentication(
+    response: AuthenticationResponseJSON,
+    storedChallenge: StoredChallenge,
+    credential: StoredCredential
+  ): Promise<{ verified: boolean; newCounter: number }> {
+    // Check challenge expiry
+    if (Date.now() > storedChallenge.expiresAt) {
+      throw new Error('Challenge expired');
+    }
+
+    const opts: VerifyAuthenticationResponseOpts = {
+      response,
+      expectedChallenge: storedChallenge.challenge,
+      expectedOrigin: this.config.origin,
+      expectedRPID: this.config.rpId,
+      credential: {
+        id: credential.id,
+        publicKey: isoBase64URL.toBuffer(credential.publicKey),
+        counter: credential.counter,
+        transports: credential.transports
+      },
+      requireUserVerification: false
+    };
+
+    const verification = await verifyAuthenticationResponse(opts);
+
+    if (!verification.verified) {
+      throw new Error('Authentication verification failed');
+    }
+
+    // Validate counter to prevent replay attacks
+    const newCounter = verification.authenticationInfo.newCounter;
+    if (newCounter <= credential.counter) {
+      throw new Error('Counter validation failed: possible replay attack');
+    }
+
+    return {
+      verified: true,
+      newCounter
+    };
   }
 }
 
