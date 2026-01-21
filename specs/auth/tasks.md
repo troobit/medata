@@ -27,16 +27,16 @@ metadata:
 
 ## Phase 2: Vercel KV Implementation
 
-- [ ] 4. Install @vercel/kv package
+- [x] 4. Install @vercel/kv package
   - Add to dependencies
   - Verify types are included
 
-- [ ] 5. Create KVCredentialStore.ts implementing ICredentialStore
+- [x] 5. Create KVCredentialStore.ts implementing ICredentialStore
   - Use @vercel/kv client for all operations
   - Store credentials array under 'credentials' key
   - Store challenge under 'challenge' key with TTL
 
-- [ ] 6. Implement credential methods in KVCredentialStore
+- [x] 6. Implement credential methods in KVCredentialStore
   - getCredentials: kv.get<StoredCredential[]>('credentials')
   - addCredential: Append to array and kv.set
   - updateCredential: Find, update, and kv.set
@@ -44,7 +44,7 @@ metadata:
   - getCredentialById: Get array and find
   - hasCredentials/getCredentialCount: Get array and check length
 
-- [ ] 7. Implement challenge methods with TTL in KVCredentialStore
+- [x] 7. Implement challenge methods with TTL in KVCredentialStore
   - setChallenge: kv.set with ex option (300 seconds)
   - getChallenge: kv.get with expiry check
   - clearChallenge: kv.del
