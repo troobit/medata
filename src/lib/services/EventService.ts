@@ -8,9 +8,7 @@ import type {
   BSLDataSource,
   InsulinMetadata,
   BSLMetadata,
-  MealMetadata,
-  ExerciseMetadata,
-  ExerciseIntensity
+  MealMetadata
 } from '$lib/types';
 import type { IEventRepository } from '$lib/repositories';
 
@@ -104,59 +102,6 @@ export class EventService {
   }
 
   /**
-   * Log exercise event with optional wearable data
-   */
-  async logExercise(
-    durationMinutes: number,
-    intensity: ExerciseIntensity,
-    metadata: Partial<ExerciseMetadata> = {},
-    timestamp: Date = new Date()
-  ): Promise<PhysiologicalEvent> {
-    const fullMetadata: ExerciseMetadata = {
-      intensity,
-      durationMinutes,
-      source: metadata.source ?? 'manual',
-      ...metadata
-    };
-    return this.createEvent({
-      timestamp,
-      eventType: 'exercise',
-      value: durationMinutes,
-      metadata: fullMetadata
-    });
-  }
-
-  /**
-   * Log multiple exercise events at once (e.g., from wearable sync)
-   */
-  async bulkLogExercise(
-    exercises: Array<{
-      timestamp: Date;
-      durationMinutes: number;
-      intensity: ExerciseIntensity;
-      metadata?: Partial<ExerciseMetadata>;
-    }>
-  ): Promise<PhysiologicalEvent[]> {
-    const events: PhysiologicalEvent[] = [];
-    for (const exercise of exercises) {
-      const metadata: ExerciseMetadata = {
-        intensity: exercise.intensity,
-        durationMinutes: exercise.durationMinutes,
-        source: exercise.metadata?.source ?? 'manual',
-        ...exercise.metadata
-      };
-      const event = await this.createEvent({
-        timestamp: exercise.timestamp,
-        eventType: 'exercise',
-        value: exercise.durationMinutes,
-        metadata
-      });
-      events.push(event);
-    }
-    return events;
-  }
-
-  /**
    * Log multiple BSL readings at once (e.g., from image import)
    */
   async bulkLogBSL(
@@ -241,19 +186,19 @@ export class EventService {
   }
 
   /**
-   * Get recent unique carb values from meal events
+   * Get recent unique carb values from meals
    */
   async getRecentCarbValues(maxUnique: number = 6): Promise<number[]> {
     const events = await this.repository.getByType('meal', 50);
-    const uniqueCarbs = new Set<number>();
+    const uniqueValues = new Set<number>();
 
     for (const event of events) {
-      if (event.value > 0) {
-        uniqueCarbs.add(event.value);
-        if (uniqueCarbs.size >= maxUnique) break;
+      if (event.metadata && 'carbs' in event.metadata) {
+        uniqueValues.add(event.metadata.carbs as number);
+        if (uniqueValues.size >= maxUnique) break;
       }
     }
 
-    return Array.from(uniqueCarbs);
+    return Array.from(uniqueValues);
   }
 }

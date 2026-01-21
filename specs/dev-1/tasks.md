@@ -9,19 +9,19 @@ metadata:
 
 ## Phase 1: Server Infrastructure & Registration Endpoints
 
-- [ ] 1. Switch adapter from adapter-static to adapter-vercel
+- [x] 1. Switch adapter from adapter-static to adapter-vercel
 
-- [ ] 2. Create WebAuthnService.ts with server-side verification logic
+- [x] 2. Create WebAuthnService.ts with server-side verification logic
 
-- [ ] 3. Create CredentialStore.ts for credential persistence
+- [x] 3. Create CredentialStore.ts for credential persistence
 
-- [ ] 4. Implement POST /api/auth/register/options endpoint
+- [x] 4. Implement POST /api/auth/register/options endpoint
 
-- [ ] 5. Implement POST /api/auth/register/verify endpoint
+- [x] 5. Implement POST /api/auth/register/verify endpoint
 
-- [ ] 6. Create .env.example with AUTH_RP_ID, AUTH_ORIGIN, AUTH_CREDENTIALS_PATH
+- [x] 6. Create .env.example with AUTH_RP_ID, AUTH_ORIGIN, AUTH_CREDENTIALS_PATH
 
-- [ ] 7. Verify registration flow with YubiKey end-to-end
+- [x] 7. Verify registration flow with YubiKey end-to-end
 
 ## Phase 2: Authentication Endpoints & Session Management
 
