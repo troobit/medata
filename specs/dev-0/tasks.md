@@ -9,19 +9,19 @@ metadata:
 
 ## UI Refinement
 
-- [ ] 1. Consolidate camera entry: merge 'Add photo' button with 'AI Photo' smart entry into unified camera view
-  - [ ] 1.1. Remove redundant 'Add photo' button from manual entry section
-  - [ ] 1.2. Create unified CameraEntry component with processing mode selection
+- [x] 1. Consolidate camera entry: merge 'Add photo' button with 'AI Photo' smart entry into unified camera view
+  - [x] 1.1. Remove redundant 'Add photo' button from manual entry section
+  - [x] 1.2. Create unified CameraEntry component with processing mode selection
 
-- [ ] 2. Add mode selector within camera view (AI analysis vs manual estimation vs label scan)
+- [x] 2. Add mode selector within camera view (AI analysis vs manual estimation vs label scan)
 
-- [ ] 3. Restore alcohol logging UI with drink units and type selector (beer/wine/spirit/mixed)
-  - [ ] 3.1. Add alcoholUnits and alcoholType fields to meal entry form
-  - [ ] 3.2. Include drink type selector dropdown (Not specified, Beer/Cider, Wine, Spirits, Cocktails)
+- [x] 3. Restore alcohol logging UI with drink units and type selector (beer/wine/spirit/mixed)
+  - [x] 3.1. Add alcoholUnits and alcoholType fields to meal entry form
+  - [x] 3.2. Include drink type selector dropdown (Not specified, Beer/Cider, Wine, Spirits, Cocktails)
 
-- [ ] 4. Add drink shortcuts grid (pint, wine, spirit, cocktail) with carb and alcohol unit presets
+- [x] 4. Add drink shortcuts grid (pint, wine, spirit, cocktail) with carb and alcohol unit presets
 
-- [ ] 5. Update history view to display alcohol entries with decay indicator icon
+- [x] 5. Update history view to display alcohol entries with decay indicator icon
 
 ## AI Model Validation
 

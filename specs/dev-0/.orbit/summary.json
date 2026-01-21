@@ -1,0 +1,15 @@
+{
+  "started_at": "2026-01-21T13:13:37.13238+11:00",
+  "status": "running",
+  "phases_completed": 0,
+  "total_cost_usd": 0,
+  "total_duration_ms": 0,
+  "sessions": [],
+  "current_phase": {
+    "phase": 1,
+    "session_id": "df9c7b2d-6f12-4fda-9fc6-6c4a4391aaa1",
+    "started_at": "2026-01-21T13:13:37.197505+11:00"
+  },
+  "run_number": 1,
+  "branch_name": "dev-0"
+}
