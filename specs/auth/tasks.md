@@ -74,17 +74,17 @@ metadata:
 
 ## Phase 4: Environment & Configuration
 
-- [ ] 11. Update .env.example with Vercel KV documentation
+- [x] 11. Update .env.example with Vercel KV documentation
   - Add KV_REST_API_URL and KV_REST_API_TOKEN placeholders
   - Document that these are auto-set by Vercel
   - Note that AUTH_CREDENTIALS_PATH is only for local dev
 
-- [ ] 12. Add Vercel KV section to docs/auth.md
+- [x] 12. Add Vercel KV section to docs/auth.md
   - Setup instructions using Vercel dashboard
   - CLI commands for linking KV store
   - Environment variable verification steps
 
-- [ ] 13. Update README.md with Vercel deployment section
+- [x] 13. Update README.md with Vercel deployment section
   - Add "Deploying to Vercel" section after "Getting Started"
   - Include Vercel KV setup steps
   - Document environment variables for production

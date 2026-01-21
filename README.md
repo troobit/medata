@@ -51,6 +51,87 @@ On first run, no credentials exist. You'll need to enroll your first security ke
 
 **After initial enrollment**, remove or rotate `AUTH_BOOTSTRAP_TOKEN` to prevent unauthorised credential registration.
 
+## Deploying to Vercel
+
+MeData can be deployed to Vercel with YubiKey authentication. Vercel KV is required for credential storage since serverless functions have a read-only filesystem.
+
+### 1. Set Up Vercel KV
+
+**Via Vercel Dashboard:**
+1. Go to your Vercel project → **Storage** tab
+2. Click **Create Database** → **KV**
+3. Name it (e.g., `medata-auth`)
+4. Click **Create** and it will auto-link to your project
+
+**Via CLI:**
+```bash
+vercel storage add kv medata-auth
+```
+
+### 2. Configure Environment Variables
+
+```bash
+# Set the production domain
+vercel env add AUTH_RP_ID production
+# Enter: your-domain.vercel.app
+
+vercel env add AUTH_ORIGIN production
+# Enter: https://your-domain.vercel.app
+
+# Generate and set session secret
+vercel env add AUTH_SESSION_SECRET production
+# Enter: $(openssl rand -base64 32)
+
+# Generate bootstrap token for initial enrollment
+vercel env add AUTH_BOOTSTRAP_TOKEN production
+# Enter: $(openssl rand -hex 16)
+```
+
+### 3. Deploy
+
+```bash
+vercel --prod
+```
+
+### 4. Enroll Your YubiKey
+
+1. Visit `https://your-domain.vercel.app`
+2. Enter your bootstrap token when prompted
+3. Insert and tap your YubiKey
+4. You're now authenticated
+
+### 5. Remove Bootstrap Token (Important)
+
+After successful enrollment:
+
+```bash
+vercel env rm AUTH_BOOTSTRAP_TOKEN production
+vercel --prod  # Redeploy to apply
+```
+
+### Environment Variables for Production
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTH_RP_ID` | Yes | Your Vercel domain (e.g., `myapp.vercel.app`) |
+| `AUTH_ORIGIN` | Yes | Full URL with `https://` |
+| `AUTH_SESSION_SECRET` | Yes | 32+ char secret for session signing |
+| `AUTH_BOOTSTRAP_TOKEN` | First deploy | Remove after initial enrollment |
+| `KV_REST_API_URL` | Auto | Set automatically when KV is linked |
+| `KV_REST_API_TOKEN` | Auto | Set automatically when KV is linked |
+
+### Troubleshooting Vercel Deployment
+
+| Problem | Solution |
+|---------|----------|
+| `ENOENT: mkdir './data'` | KV is not linked. Add a KV store in Vercel dashboard. |
+| `Invalid origin` | Ensure `AUTH_ORIGIN` matches your actual URL exactly |
+| YubiKey not working | Verify the domain uses HTTPS (required for WebAuthn) |
+| Credentials lost after redeploy | This shouldn't happen with KV. Verify KV is linked. |
+| Bootstrap not prompting | Credentials already exist in KV. Check Vercel KV data browser. |
+
+See [docs/auth.md](docs/auth.md) for detailed KV configuration and troubleshooting.
+
 ## Authentication
 
 MeData uses WebAuthn (FIDO2) passkey authentication - no passwords required. This provides phishing-resistant, cryptographic authentication.
