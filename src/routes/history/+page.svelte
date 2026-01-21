@@ -87,7 +87,6 @@
       case 'insulin':
         return `${event.value} units ${(event.metadata as { type?: string }).type || ''}`;
       case 'meal': {
-        const metadata = event.metadata as MealMetadata;
         const alcoholInfo = getAlcoholInfo(event);
         if (alcoholInfo && event.value === 0) {
           // Alcohol-only entry

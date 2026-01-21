@@ -42,7 +42,6 @@ export interface WebAuthnConfig {
   rpId: string;
   rpName: string;
   origin: string;
-  credentialsPath: string;
 }
 
 /**

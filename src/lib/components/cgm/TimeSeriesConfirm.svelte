@@ -19,6 +19,8 @@
   let { dataPoints, axisRanges, onConfirm, onCancel, loading = false }: Props = $props();
 
   // State for editable points - initialized via $effect
+  // Using state + effect pattern since points are modified by user
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let editablePoints = $state<ExtractedDataPoint[]>([]);
   let showAllPoints = $state(false);
 

@@ -373,7 +373,7 @@ export class LocalCurveExtractor {
     linePixels: Array<{ x: number; y: number }>,
     graphRegion: GraphRegion,
     imageWidth: number,
-    imageHeight: number
+    _imageHeight: number
   ): Array<{ x: number; y: number }> {
     const regionX = Math.floor((graphRegion.x / 100) * imageWidth);
     const regionW = Math.floor((graphRegion.width / 100) * imageWidth);

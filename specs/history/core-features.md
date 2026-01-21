@@ -9,6 +9,7 @@ Established the core functionality of the MeData diabetes management application
 ## Implementation Summary
 
 Built a comprehensive diabetes tracking application with:
+
 - Unified camera-based food entry with AI analysis
 - Alcohol logging with drink type presets
 - AI model validation and accuracy metrics
@@ -20,6 +21,7 @@ Built a comprehensive diabetes tracking application with:
 ## Features Implemented
 
 ### UI Refinement
+
 - Consolidated camera entry merging 'Add photo' with 'AI Photo' smart entry
 - Created unified CameraEntry component with processing mode selection
 - Added mode selector within camera view (AI analysis / manual estimation / label scan)
@@ -28,6 +30,7 @@ Built a comprehensive diabetes tracking application with:
 - Updated history view with alcohol decay indicator icons
 
 ### AI Model Validation
+
 - Test data collection interface for food images with known carb content
 - Admin mode for capturing food images with verified macro data
 - Export test dataset as JSON with image URLs and ground truth values
@@ -38,6 +41,7 @@ Built a comprehensive diabetes tracking application with:
 - Synthetic test image generation with reference objects
 
 ### Local Food Estimation
+
 - Reference card detection with credit card edge detection and perspective correction
 - Food region segmentation with user-assisted boundary selection
 - USDA FNDDS food density lookup with category search
@@ -45,6 +49,7 @@ Built a comprehensive diabetes tracking application with:
 - Estimation calibration factors learned from user corrections
 
 ### Regression & Modelling
+
 - Insulin decay function modelling (biological half-life, compounding effects)
 - Carbohydrate and alcohol absorption decay rates
 - Alcohol metabolism rates by drink type and body composition
@@ -54,6 +59,7 @@ Built a comprehensive diabetes tracking application with:
 - Insulin dose recommendation engine with confidence intervals
 
 ### Future Enhancements (Foundations)
+
 - Ollama/LLaVA self-hosted provider for offline AI estimation
 - Direct CGM API integration (Freestyle Libre, Dexcom)
 - Exercise event logging with wearable integration support
@@ -61,6 +67,7 @@ Built a comprehensive diabetes tracking application with:
 - Meal preset management (save and recall common meals)
 
 ### Component System
+
 - Replaced hover:scale-105 with contained animations
 - Added animation prop to Button (variant: 'none' | 'subtle' | 'full')
 - Replaced custom CSS ripple/shimmer with Svelte Spring and svelte/transition
@@ -70,6 +77,7 @@ Built a comprehensive diabetes tracking application with:
 ## Files Changed
 
 ### Components Added
+
 - `src/lib/components/ai/CameraCapture.svelte`
 - `src/lib/components/ai/FoodItemEditor.svelte`
 - `src/lib/components/ai/FoodRecognitionResult.svelte`
@@ -89,6 +97,7 @@ Built a comprehensive diabetes tracking application with:
 - `src/lib/components/Logo.svelte`
 
 ### Services Added
+
 - `src/lib/services/ai/` - Multi-provider AI food estimation (Azure, Gemini, Claude, OpenAI, Bedrock, Local)
 - `src/lib/services/cgm/` - CGM integration services (Dexcom, Libre)
 - `src/lib/services/decay/` - Decay function calculations
@@ -98,6 +107,7 @@ Built a comprehensive diabetes tracking application with:
 - `src/lib/services/validation/` - AI model validation
 
 ### Types Added
+
 - `src/lib/types/ai.ts`
 - `src/lib/types/cgm.ts`
 - `src/lib/types/exercise.ts`
@@ -108,6 +118,7 @@ Built a comprehensive diabetes tracking application with:
 - `src/lib/types/vision.ts`
 
 ### Routes Added
+
 - `src/routes/import/` - Data import pages
 - `src/routes/import/bsl/` - BSL time-series import
 - `src/routes/import/cgm/` - CGM data import
@@ -121,6 +132,7 @@ Built a comprehensive diabetes tracking application with:
 - `src/routes/validation/capture/` - Validation data capture
 
 ### Utilities Added
+
 - `src/lib/utils/csvHelpers.ts`
 - `src/lib/utils/curveExtraction.ts`
 - `src/lib/utils/dateNormalization.ts`
@@ -136,6 +148,7 @@ Built a comprehensive diabetes tracking application with:
 ## Design Decisions
 
 See `docs/design.md` for architectural decisions including:
+
 - Event-log data paradigm
 - Multi-provider AI service architecture
 - Local estimation pipeline design

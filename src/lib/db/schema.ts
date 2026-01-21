@@ -83,7 +83,7 @@ export async function checkDatabaseAvailability(): Promise<string | null> {
   } catch (error) {
     if (error instanceof Error) {
       // Check for common IndexedDB errors
-      if (error.name === 'QuotaExceededError') {
+      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
         return 'Storage quota exceeded. Please free up some space.';
       }
       if (error.message.includes('private browsing') || error.message.includes('Private mode')) {

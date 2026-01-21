@@ -3,9 +3,16 @@
  */
 
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
-export { CredentialStore, getCredentialStore } from './CredentialStore';
+export { FileCredentialStore, getFileCredentialStore } from './FileCredentialStore';
+export { KVCredentialStore, getKVCredentialStore } from './KVCredentialStore';
+export {
+  getCredentialStore,
+  isKVStorageAvailable,
+  clearCredentialStoreCache
+} from './credentialStoreFactory';
 export { SessionService, createSessionConfig, getSessionService } from './SessionService';
 export { BootstrapService, createBootstrapConfig } from './bootstrap';
+export type { ICredentialStore } from './ICredentialStore';
 export type { BootstrapConfig, BootstrapState } from './bootstrap';
 export type {
   StoredCredential,

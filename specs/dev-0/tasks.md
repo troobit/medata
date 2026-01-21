@@ -1,10 +1,11 @@
 ---
 references:
-    - docs/requirements.md
+  - docs/requirements.md
 metadata:
-    branch: dev-0
-    status: active
+  branch: dev-0
+  status: active
 ---
+
 # MeData Development Tasks
 
 ## UI Refinement

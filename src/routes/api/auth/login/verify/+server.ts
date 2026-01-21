@@ -25,14 +25,15 @@ interface VerifyRequestBody {
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
     const service = new WebAuthnService(config);
     const sessionConfig = createSessionConfig(env);
 
     if (!sessionConfig) {
       return json(
         {
-          error: 'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
+          error:
+            'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
           code: 'CONFIG_ERROR'
         },
         { status: 500 }
