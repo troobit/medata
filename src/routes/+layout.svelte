@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../app.css';
+  import { env } from '$env/dynamic/public';
   import { AuthGate } from '$lib/components/auth';
   import { AppShell } from '$lib/components/layout';
   import { LoadingSpinner, StorageError } from '$lib/components/ui';
@@ -16,6 +17,14 @@
 
   let dbError = $state<string | null>(null);
   let dbChecked = $state(false);
+
+  // Favicon variant from build-time environment variable
+  type LogoVariant = 'default' | 'pride' | 'contrast';
+  const validVariants: LogoVariant[] = ['default', 'pride', 'contrast'];
+  const envVariant = env.PUBLIC_LOGO_VARIANT;
+  const faviconVariant: LogoVariant = validVariants.includes(envVariant as LogoVariant)
+    ? (envVariant as LogoVariant)
+    : 'default';
 
   onMount(async () => {
     // Check database availability before loading the app
@@ -45,6 +54,8 @@
     name="description"
     content="Personal health data tracking for meals, insulin, and blood sugar"
   />
+  <link rel="icon" type="image/svg+xml" href="/favicon-{faviconVariant}.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon-{faviconVariant}.png" />
 </svelte:head>
 
 {#if !dbChecked}

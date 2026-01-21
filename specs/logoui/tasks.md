@@ -64,17 +64,17 @@ references:
 
 ## Phase 4: Favicon Generation
 
-- [ ] 25. Create static/favicon-default.svg from icon.svg
+- [x] 25. Create static/favicon-default.svg from icon.svg
 
-- [ ] 26. Create static/favicon-pride.svg with rainbow gradient
+- [x] 26. Create static/favicon-pride.svg with rainbow gradient
 
-- [ ] 27. Create static/favicon-contrast.svg with black/yellow scheme
+- [x] 27. Create static/favicon-contrast.svg with black/yellow scheme
 
-- [ ] 28. Update src/app.html to reference variant-aware favicon
+- [x] 28. Update src/app.html to reference variant-aware favicon
 
-- [ ] 29. Add Apple touch icon variants (180x180)
+- [x] 29. Add Apple touch icon variants (180x180)
 
-- [ ] 30. Implement build-time favicon selection based on PUBLIC_LOGO_VARIANT
+- [x] 30. Implement build-time favicon selection based on PUBLIC_LOGO_VARIANT
 
 ## Phase 5: Site Integration
 
