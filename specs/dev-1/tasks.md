@@ -61,20 +61,20 @@ metadata:
 
 ## Phase 4: Credential Management & Bootstrap
 
-- [ ] 24. Implement bootstrap.ts for first credential enrollment
+- [x] 24. Implement bootstrap.ts for first credential enrollment
 
-- [ ] 25. Implement POST /api/auth/bootstrap endpoint with token validation
+- [x] 25. Implement POST /api/auth/bootstrap endpoint with token validation
 
-- [ ] 26. Implement GET /api/auth/credentials endpoint (authenticated)
+- [x] 26. Implement GET /api/auth/credentials endpoint (authenticated)
 
-- [ ] 27. Implement PATCH /api/auth/credentials/[id] for updating credential metadata
+- [x] 27. Implement PATCH /api/auth/credentials/[id] for updating credential metadata
 
-- [ ] 28. Implement DELETE /api/auth/credentials/[id] with lockout prevention
+- [x] 28. Implement DELETE /api/auth/credentials/[id] with lockout prevention
 
-- [ ] 29. Add credential management UI to settings page
+- [x] 29. Add credential management UI to settings page
 
-- [ ] 30. Implement add additional credential flow (authenticated)
+- [x] 30. Implement add additional credential flow (authenticated)
 
-- [ ] 31. Add AUTH_BOOTSTRAP_TOKEN and AUTH_SESSION_SECRET to environment config
+- [x] 31. Add AUTH_BOOTSTRAP_TOKEN and AUTH_SESSION_SECRET to environment config
 
-- [ ] 32. Verify bootstrap and credential management end-to-end
+- [x] 32. Verify bootstrap and credential management end-to-end

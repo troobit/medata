@@ -5,6 +5,8 @@
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
 export { CredentialStore, getCredentialStore } from './CredentialStore';
 export { SessionService, createSessionConfig, getSessionService } from './SessionService';
+export { BootstrapService, createBootstrapConfig } from './bootstrap';
+export type { BootstrapConfig, BootstrapState } from './bootstrap';
 export type {
   StoredCredential,
   StoredChallenge,

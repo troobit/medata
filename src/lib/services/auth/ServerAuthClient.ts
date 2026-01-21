@@ -5,10 +5,11 @@
 
 import type {
   AuthenticationOptionsResponse,
+  RegistrationOptionsResponse,
   SessionStatusResponse,
   AuthErrorResponse
 } from '$lib/server/auth/types';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/browser';
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
 
 export interface LoginVerifyResponse {
   verified: boolean;
@@ -17,6 +18,24 @@ export interface LoginVerifyResponse {
 
 export interface LogoutResponse {
   success: boolean;
+}
+
+export interface CredentialInfo {
+  id: string;
+  friendlyName: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  deviceType: string;
+  backedUp: boolean;
+}
+
+export interface CredentialsListResponse {
+  credentials: CredentialInfo[];
+}
+
+export interface RegistrationVerifyResponse {
+  verified: boolean;
+  credentialId: string;
 }
 
 export class ServerAuthClientError extends Error {
@@ -110,6 +129,109 @@ export class ServerAuthClient {
     }
 
     return response.json() as Promise<LogoutResponse>;
+  }
+
+  /**
+   * List all registered credentials.
+   * @returns List of credential info
+   */
+  async listCredentials(): Promise<CredentialsListResponse> {
+    const response = await fetch('/api/auth/credentials', {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const error = (await response.json()) as AuthErrorResponse;
+      throw new ServerAuthClientError(error.error, error.code, response.status);
+    }
+
+    return response.json() as Promise<CredentialsListResponse>;
+  }
+
+  /**
+   * Update a credential's metadata.
+   * @param id - Credential ID
+   * @param friendlyName - New friendly name
+   * @returns Updated credential info
+   */
+  async updateCredential(id: string, friendlyName: string): Promise<CredentialInfo> {
+    const response = await fetch(`/api/auth/credentials/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ friendlyName })
+    });
+
+    if (!response.ok) {
+      const error = (await response.json()) as AuthErrorResponse;
+      throw new ServerAuthClientError(error.error, error.code, response.status);
+    }
+
+    return response.json() as Promise<CredentialInfo>;
+  }
+
+  /**
+   * Delete a credential.
+   * @param id - Credential ID
+   */
+  async deleteCredential(id: string): Promise<void> {
+    const response = await fetch(`/api/auth/credentials/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const error = (await response.json()) as AuthErrorResponse;
+      throw new ServerAuthClientError(error.error, error.code, response.status);
+    }
+  }
+
+  /**
+   * Get registration options for adding a new credential (authenticated).
+   * @returns Registration options to pass to navigator.credentials.create()
+   */
+  async getRegistrationOptions(): Promise<RegistrationOptionsResponse> {
+    const response = await fetch('/api/auth/register/options', {
+      method: 'POST',
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      const error = (await response.json()) as AuthErrorResponse;
+      throw new ServerAuthClientError(error.error, error.code, response.status);
+    }
+
+    return response.json() as Promise<RegistrationOptionsResponse>;
+  }
+
+  /**
+   * Verify and add a new credential (authenticated).
+   * @param credential - The credential response from navigator.credentials.create()
+   * @param friendlyName - Friendly name for the credential
+   * @returns Verification result
+   */
+  async verifyRegistration(
+    credential: RegistrationResponseJSON,
+    friendlyName?: string
+  ): Promise<RegistrationVerifyResponse> {
+    const response = await fetch('/api/auth/register/verify', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ credential, friendlyName })
+    });
+
+    if (!response.ok) {
+      const error = (await response.json()) as AuthErrorResponse;
+      throw new ServerAuthClientError(error.error, error.code, response.status);
+    }
+
+    return response.json() as Promise<RegistrationVerifyResponse>;
   }
 }
 
