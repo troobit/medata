@@ -67,6 +67,92 @@ Restart the dev server. Bootstrap enrollment is now disabled.
 
 ---
 
+## Vercel KV Storage
+
+On Vercel, credentials are stored in Vercel KV (a serverless Redis-compatible key-value store) because the serverless function filesystem is read-only.
+
+### Why Vercel KV?
+
+- **Serverless-compatible**: Works with Vercel's read-only filesystem
+- **Automatic TTL**: Challenge tokens expire automatically (no manual cleanup)
+- **Low latency**: Edge-optimized for fast auth operations
+- **Zero configuration**: Environment variables are auto-set when linked
+
+### Setup Instructions
+
+#### 1. Create a KV Store
+
+Using the Vercel Dashboard:
+1. Go to your project in the Vercel Dashboard
+2. Navigate to **Storage** tab
+3. Click **Create Database** → **KV**
+4. Name it `medata-auth` (or any name you prefer)
+5. Select your preferred region
+6. Click **Create**
+
+Or using the Vercel CLI:
+```bash
+vercel storage add kv medata-auth
+```
+
+#### 2. Link KV to Your Project
+
+The KV store must be linked to your project to auto-inject environment variables:
+
+```bash
+# Ensure you're in the project directory
+cd /Users/ronan/repos/beetus/medata
+
+# Link to Vercel (if not already linked)
+vercel link
+
+# Pull environment variables to local .env file
+vercel env pull .env.local
+```
+
+#### 3. Verify Environment Variables
+
+After linking, verify the KV variables are set:
+
+```bash
+# List production environment variables
+vercel env ls production
+
+# You should see:
+# KV_REST_API_URL
+# KV_REST_API_TOKEN
+```
+
+For local development with KV (optional):
+```bash
+# Pull KV credentials to local env
+vercel env pull .env.local
+
+# Check .env.local contains KV_REST_API_URL and KV_REST_API_TOKEN
+cat .env.local | grep KV_
+```
+
+### How It Works
+
+The app automatically detects the environment:
+
+| Environment | KV Variables Present? | Storage Used |
+|-------------|----------------------|--------------|
+| Local dev | No | File-based (`AUTH_CREDENTIALS_PATH`) |
+| Local dev | Yes (via `vercel env pull`) | Vercel KV |
+| Vercel production | Yes (auto-injected) | Vercel KV |
+
+### Troubleshooting KV
+
+| Problem | Solution |
+|---------|----------|
+| `KV_REST_API_URL not found` | Run `vercel link` and `vercel env pull .env.local` |
+| `Unauthorized` KV errors | Regenerate KV credentials in Vercel Dashboard |
+| Credentials not persisting | Verify KV store is linked to the correct project |
+| Local dev using KV unexpectedly | Remove `KV_REST_API_URL` from `.env.local` to use file storage |
+
+---
+
 ## Vercel Production Setup
 
 ### Step 1: Generate Production Secrets

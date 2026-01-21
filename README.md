@@ -51,6 +51,71 @@ On first run, no credentials exist. You'll need to enroll your first security ke
 
 **After initial enrollment**, remove or rotate `AUTH_BOOTSTRAP_TOKEN` to prevent unauthorised credential registration.
 
+## Deploying to Vercel
+
+### 1. Set Up Vercel KV
+
+Vercel's serverless functions have a read-only filesystem, so credentials are stored in Vercel KV instead of a JSON file.
+
+```bash
+# Create a KV store for authentication
+vercel storage add kv medata-auth
+
+# Link to your project
+vercel link
+```
+
+### 2. Configure Production Environment Variables
+
+```bash
+# Set WebAuthn configuration
+vercel env add AUTH_RP_ID production
+# Enter: your-domain.vercel.app
+
+vercel env add AUTH_ORIGIN production
+# Enter: https://your-domain.vercel.app
+
+# Set session secret (generate with: openssl rand -base64 32)
+vercel env add AUTH_SESSION_SECRET production
+
+# Set temporary bootstrap token for initial enrollment
+vercel env add AUTH_BOOTSTRAP_TOKEN production
+```
+
+Note: `KV_REST_API_URL` and `KV_REST_API_TOKEN` are automatically set when you link the KV store.
+
+### 3. Deploy
+
+```bash
+vercel --prod
+```
+
+### 4. Enroll Your Security Key
+
+1. Visit your production URL
+2. Enter the bootstrap token when prompted
+3. Register your security key
+
+### 5. Remove Bootstrap Token
+
+After successful enrollment, remove the bootstrap token for security:
+
+```bash
+vercel env rm AUTH_BOOTSTRAP_TOKEN production
+vercel --prod
+```
+
+### Troubleshooting Vercel Deployment
+
+| Problem | Solution |
+|---------|----------|
+| `ENOENT: mkdir './data'` | KV not linked. Run `vercel storage add kv` and redeploy |
+| Credentials not persisting | Verify KV store is linked: `vercel env ls production` should show `KV_REST_API_URL` |
+| `Unauthorized` KV errors | Regenerate KV credentials in Vercel Dashboard → Storage → your KV store |
+| Bootstrap not working | Verify `AUTH_BOOTSTRAP_TOKEN` is set: `vercel env ls production` |
+
+For detailed KV setup instructions, see [docs/auth.md](docs/auth.md#vercel-kv-storage).
+
 ## Authentication
 
 MeData uses WebAuthn (FIDO2) passkey authentication - no passwords required. This provides phishing-resistant, cryptographic authentication.
