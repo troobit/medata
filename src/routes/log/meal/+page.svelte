@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { Button, Input } from '$lib/components/ui';
+  import { Button } from '$lib/components/ui';
   import { eventsStore, presetsStore } from '$lib/stores';
   import type { AlcoholType, MealPreset } from '$lib/types';
 

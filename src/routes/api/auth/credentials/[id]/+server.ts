@@ -7,9 +7,8 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
-import { createWebAuthnConfig, getCredentialStore } from '$lib/server/auth';
+import { getCredentialStore } from '$lib/server/auth';
 
 interface UpdateCredentialRequest {
   friendlyName?: string;
@@ -43,7 +42,6 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
       );
     }
 
-    const config = createWebAuthnConfig(env);
     const store = getCredentialStore();
 
     // Check if credential exists
@@ -130,7 +128,6 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
       );
     }
 
-    const config = createWebAuthnConfig(env);
     const store = getCredentialStore();
 
     // Check if credential exists

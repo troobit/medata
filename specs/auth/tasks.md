@@ -1,12 +1,13 @@
 ---
 references:
-    - requirements.md
-    - ../../src/lib/server/auth/CredentialStore.ts
-    - ../../src/lib/server/auth/types.ts
+  - requirements.md
+  - ../../src/lib/server/auth/CredentialStore.ts
+  - ../../src/lib/server/auth/types.ts
 metadata:
-    architecture: Storage adapter pattern with environment-aware factory
-    scope: Vercel KV credential persistence for serverless deployment
+  architecture: Storage adapter pattern with environment-aware factory
+  scope: Vercel KV credential persistence for serverless deployment
 ---
+
 # Vercel KV Credential Storage
 
 ## Phase 1: Interface Extraction & File Store Refactor

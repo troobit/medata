@@ -6,14 +6,7 @@
  * and passkeys via the WebAuthn API.
  */
 
-import type {
-  User,
-  StoredCredential,
-  AuthSession,
-  AuthConfig,
-  RegistrationResult,
-  AuthenticationResult
-} from '$lib/types/auth';
+import type { User, StoredCredential, AuthSession, AuthConfig } from '$lib/types/auth';
 import {
   DEFAULT_AUTH_CONFIG,
   AuthError,

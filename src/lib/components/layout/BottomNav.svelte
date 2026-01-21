@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import { base } from '$app/paths';
 
   interface NavItem {
     href: string;
@@ -26,10 +27,10 @@
   class="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-800 bg-gray-950/95 backdrop-blur-sm pb-safe"
 >
   <div class="mx-auto flex max-w-lg items-center justify-around">
-    {#each navItems as item}
+    {#each navItems as item (item.href)}
       {@const active = isActive(item.href, $page.url.pathname)}
       <a
-        href={item.href}
+        href="{base}{item.href}"
         class="flex min-h-[56px] min-w-[64px] flex-col items-center justify-center px-3 py-2 transition-colors {active
           ? 'text-brand-accent'
           : 'text-gray-400 hover:text-gray-200'}"

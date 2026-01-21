@@ -58,11 +58,7 @@
     lg: 'text-lg px-6 py-3 min-h-[52px]'
   };
 
-  // Add gap utility classes for button containers to accommodate motion
-  const motionClasses = $derived({
-    'shadow-hover': shouldAnimate,
-    'shadow-hover-full': isFullAnimation
-  });
+  // Motion classes are applied directly via class directives below
 
   const classes = $derived(
     [baseClasses, variantClasses[variant], sizeClasses[size], className].join(' ')
@@ -111,6 +107,7 @@
 </script>
 
 {#if href}
+  <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- href is provided by caller who is responsible for resolving -->
   <a
     {href}
     class={classes}

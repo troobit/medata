@@ -58,12 +58,14 @@ MeData can be deployed to Vercel with YubiKey authentication. Vercel KV is requi
 ### 1. Set Up Vercel KV
 
 **Via Vercel Dashboard:**
+
 1. Go to your Vercel project → **Storage** tab
 2. Click **Create Database** → **KV**
 3. Name it (e.g., `medata-auth`)
 4. Click **Create** and it will auto-link to your project
 
 **Via CLI:**
+
 ```bash
 vercel storage add kv medata-auth
 ```
@@ -111,24 +113,24 @@ vercel --prod  # Redeploy to apply
 
 ### Environment Variables for Production
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AUTH_RP_ID` | Yes | Your Vercel domain (e.g., `myapp.vercel.app`) |
-| `AUTH_ORIGIN` | Yes | Full URL with `https://` |
-| `AUTH_SESSION_SECRET` | Yes | 32+ char secret for session signing |
-| `AUTH_BOOTSTRAP_TOKEN` | First deploy | Remove after initial enrollment |
-| `KV_REST_API_URL` | Auto | Set automatically when KV is linked |
-| `KV_REST_API_TOKEN` | Auto | Set automatically when KV is linked |
+| Variable               | Required     | Description                                   |
+| ---------------------- | ------------ | --------------------------------------------- |
+| `AUTH_RP_ID`           | Yes          | Your Vercel domain (e.g., `myapp.vercel.app`) |
+| `AUTH_ORIGIN`          | Yes          | Full URL with `https://`                      |
+| `AUTH_SESSION_SECRET`  | Yes          | 32+ char secret for session signing           |
+| `AUTH_BOOTSTRAP_TOKEN` | First deploy | Remove after initial enrollment               |
+| `KV_REST_API_URL`      | Auto         | Set automatically when KV is linked           |
+| `KV_REST_API_TOKEN`    | Auto         | Set automatically when KV is linked           |
 
 ### Troubleshooting Vercel Deployment
 
-| Problem | Solution |
-|---------|----------|
-| `ENOENT: mkdir './data'` | KV is not linked. Add a KV store in Vercel dashboard. |
-| `Invalid origin` | Ensure `AUTH_ORIGIN` matches your actual URL exactly |
-| YubiKey not working | Verify the domain uses HTTPS (required for WebAuthn) |
-| Credentials lost after redeploy | This shouldn't happen with KV. Verify KV is linked. |
-| Bootstrap not prompting | Credentials already exist in KV. Check Vercel KV data browser. |
+| Problem                         | Solution                                                       |
+| ------------------------------- | -------------------------------------------------------------- |
+| `ENOENT: mkdir './data'`        | KV is not linked. Add a KV store in Vercel dashboard.          |
+| `Invalid origin`                | Ensure `AUTH_ORIGIN` matches your actual URL exactly           |
+| YubiKey not working             | Verify the domain uses HTTPS (required for WebAuthn)           |
+| Credentials lost after redeploy | This shouldn't happen with KV. Verify KV is linked.            |
+| Bootstrap not prompting         | Credentials already exist in KV. Check Vercel KV data browser. |
 
 See [docs/auth.md](docs/auth.md) for detailed KV configuration and troubleshooting.
 
@@ -148,6 +150,7 @@ MeData uses WebAuthn (FIDO2) passkey authentication - no passwords required. Thi
 For local development, use your browser's virtual authenticator:
 
 **Chrome/Chromium:**
+
 1. Open DevTools (F12)
 2. Go to "Application" tab → "WebAuthn" section
 3. Check "Enable virtual authenticator environment"
@@ -155,6 +158,7 @@ For local development, use your browser's virtual authenticator:
 5. The virtual authenticator will respond to WebAuthn prompts
 
 **Firefox:**
+
 1. Navigate to `about:config`
 2. Set `security.webauthn.softtoken` to `true`
 3. Firefox will simulate a platform authenticator
@@ -170,13 +174,13 @@ App loads → AuthGate checks session → Valid? → Show app
 
 ### Environment Variables Reference
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AUTH_RP_ID` | Yes | Domain for WebAuthn. Use `localhost` for dev. |
-| `AUTH_ORIGIN` | Yes | Full origin URL. Use `http://localhost:5173` for dev. |
-| `AUTH_CREDENTIALS_PATH` | Yes | Path to store credentials JSON file. |
-| `AUTH_SESSION_SECRET` | Yes | Min 32 chars. HMAC secret for session signing. |
-| `AUTH_BOOTSTRAP_TOKEN` | First run | One-time token for initial enrollment. Remove after setup. |
+| Variable                | Required  | Description                                                |
+| ----------------------- | --------- | ---------------------------------------------------------- |
+| `AUTH_RP_ID`            | Yes       | Domain for WebAuthn. Use `localhost` for dev.              |
+| `AUTH_ORIGIN`           | Yes       | Full origin URL. Use `http://localhost:5173` for dev.      |
+| `AUTH_CREDENTIALS_PATH` | Yes       | Path to store credentials JSON file.                       |
+| `AUTH_SESSION_SECRET`   | Yes       | Min 32 chars. HMAC secret for session signing.             |
+| `AUTH_BOOTSTRAP_TOKEN`  | First run | One-time token for initial enrollment. Remove after setup. |
 
 ### Credential Management
 

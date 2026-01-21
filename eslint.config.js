@@ -37,7 +37,7 @@ export default ts.config(
     }
   },
   {
-    // Allow unused variables that start with underscore (intentionally unused)
+    // Project-specific rule adjustments
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -45,7 +45,13 @@ export default ts.config(
           argsIgnorePattern: '^_',
           varsIgnorePattern: '^_'
         }
-      ]
+      ],
+      // Disable strict navigation resolution for single-domain personal app with no base path
+      'svelte/no-navigation-without-resolve': 'off',
+      // Disable strict each-key requirement (useful for dynamic lists, but overkill for static ones)
+      'svelte/require-each-key': 'warn',
+      // Disable SvelteDate/SvelteMap requirement (standard Date/Map work fine for most cases)
+      'svelte/prefer-svelte-reactivity': 'off'
     }
   },
   {

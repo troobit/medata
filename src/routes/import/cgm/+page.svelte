@@ -153,7 +153,7 @@
   <!-- Progress indicator -->
   {#if step !== 'upload' && step !== 'complete'}
     <div class="mb-6 flex items-center justify-center gap-2">
-      {#each ['upload', 'extracting', 'preview', 'confirm'] as s, i}
+      {#each ['upload', 'extracting', 'preview', 'confirm'] as _s, i}
         <div
           class="h-2 w-2 rounded-full {['upload', 'extracting', 'preview', 'confirm'].indexOf(
             step

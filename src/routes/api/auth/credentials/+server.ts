@@ -7,9 +7,8 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
-import { createWebAuthnConfig, getCredentialStore } from '$lib/server/auth';
+import { getCredentialStore } from '$lib/server/auth';
 
 export interface CredentialInfo {
   id: string;
@@ -33,7 +32,8 @@ export const GET: RequestHandler = async ({ locals }) => {
   }
 
   try {
-    const config = createWebAuthnConfig(env);
+    // Note: config available for future WebAuthn options if needed
+    // const config = createWebAuthnConfig(env);
     const store = getCredentialStore();
 
     const credentials = await store.getCredentials();

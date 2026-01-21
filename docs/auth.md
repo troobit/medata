@@ -187,25 +187,25 @@ vercel --prod
 
 ## Environment Variables Reference
 
-| Variable | Local Dev | Production |
-|----------|-----------|------------|
-| `AUTH_RP_ID` | `localhost` | `your-domain.vercel.app` |
-| `AUTH_ORIGIN` | `http://localhost:5173` | `https://your-domain.vercel.app` |
-| `AUTH_SESSION_SECRET` | Random 32+ char base64 | Random 32+ char base64 (different from local) |
-| `AUTH_BOOTSTRAP_TOKEN` | Temporary, remove after setup | Temporary, remove after setup |
-| `AUTH_CREDENTIALS_PATH` | `./data/credentials.json` | (optional, defaults to same) |
+| Variable                | Local Dev                     | Production                                    |
+| ----------------------- | ----------------------------- | --------------------------------------------- |
+| `AUTH_RP_ID`            | `localhost`                   | `your-domain.vercel.app`                      |
+| `AUTH_ORIGIN`           | `http://localhost:5173`       | `https://your-domain.vercel.app`              |
+| `AUTH_SESSION_SECRET`   | Random 32+ char base64        | Random 32+ char base64 (different from local) |
+| `AUTH_BOOTSTRAP_TOKEN`  | Temporary, remove after setup | Temporary, remove after setup                 |
+| `AUTH_CREDENTIALS_PATH` | `./data/credentials.json`     | (optional, defaults to same)                  |
 
 ---
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
+| Problem                | Solution                                                                   |
+| ---------------------- | -------------------------------------------------------------------------- |
 | "Invalid origin" error | Ensure `AUTH_ORIGIN` matches your browser URL exactly (including protocol) |
-| YubiKey not detected | Try a different USB port, ensure browser supports WebAuthn |
-| Bootstrap not working | Verify `AUTH_BOOTSTRAP_TOKEN` is set and no credentials exist yet |
-| Session not persisting | Check `AUTH_SESSION_SECRET` is set and at least 32 characters |
-| "Challenge expired" | Complete the YubiKey tap within 5 minutes of starting |
+| YubiKey not detected   | Try a different USB port, ensure browser supports WebAuthn                 |
+| Bootstrap not working  | Verify `AUTH_BOOTSTRAP_TOKEN` is set and no credentials exist yet          |
+| Session not persisting | Check `AUTH_SESSION_SECRET` is set and at least 32 characters              |
+| "Challenge expired"    | Complete the YubiKey tap within 5 minutes of starting                      |
 
 ---
 
@@ -241,6 +241,7 @@ For Vercel deployments, MeData uses **Vercel KV** for credential storage instead
 #### 1. Create a KV Store
 
 **Via Vercel Dashboard:**
+
 1. Go to your Vercel project → **Storage** tab
 2. Click **Create Database** → **KV**
 3. Name it (e.g., `medata-auth`)
@@ -248,6 +249,7 @@ For Vercel deployments, MeData uses **Vercel KV** for credential storage instead
 5. Click **Create**
 
 **Via Vercel CLI:**
+
 ```bash
 vercel storage add kv medata-auth
 ```
@@ -281,11 +283,11 @@ vercel env ls production
 
 ### Environment Variable Reference
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `KV_REST_API_URL` | Auto (Vercel) | KV REST API endpoint. Presence triggers KV mode. |
-| `KV_REST_API_TOKEN` | Auto (Vercel) | KV authentication token. |
-| `AUTH_CREDENTIALS_PATH` | Manual | **Ignored** when KV is configured. Only used locally. |
+| Variable                | Source        | Description                                           |
+| ----------------------- | ------------- | ----------------------------------------------------- |
+| `KV_REST_API_URL`       | Auto (Vercel) | KV REST API endpoint. Presence triggers KV mode.      |
+| `KV_REST_API_TOKEN`     | Auto (Vercel) | KV authentication token.                              |
+| `AUTH_CREDENTIALS_PATH` | Manual        | **Ignored** when KV is configured. Only used locally. |
 
 ### How It Works
 
@@ -316,22 +318,22 @@ Or set the KV variables manually in `.env.local` (not recommended for security).
 
 ### Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| `ENOENT: no such file or directory, mkdir './data'` | KV is not configured. Run `vercel link && vercel env pull` |
-| `KV_REST_API_URL is not defined` | Ensure KV store is linked to your project in Vercel dashboard |
-| Credentials not persisting | Verify `KV_REST_API_URL` is set in Vercel environment variables |
-| Challenge expired immediately | Check server time sync; KV TTL is 5 minutes |
-| `Unauthorized` from KV | `KV_REST_API_TOKEN` may be invalid. Re-link the KV store |
+| Problem                                             | Solution                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------- |
+| `ENOENT: no such file or directory, mkdir './data'` | KV is not configured. Run `vercel link && vercel env pull`      |
+| `KV_REST_API_URL is not defined`                    | Ensure KV store is linked to your project in Vercel dashboard   |
+| Credentials not persisting                          | Verify `KV_REST_API_URL` is set in Vercel environment variables |
+| Challenge expired immediately                       | Check server time sync; KV TTL is 5 minutes                     |
+| `Unauthorized` from KV                              | `KV_REST_API_TOKEN` may be invalid. Re-link the KV store        |
 
 ### Data Model
 
 The KV store uses two keys:
 
-| Key | Value | TTL |
-|-----|-------|-----|
+| Key           | Value                | TTL              |
+| ------------- | -------------------- | ---------------- |
 | `credentials` | `StoredCredential[]` | None (permanent) |
-| `challenge` | `StoredChallenge` | 5 minutes |
+| `challenge`   | `StoredChallenge`    | 5 minutes        |
 
 ### Security Notes
 

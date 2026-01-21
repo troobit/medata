@@ -47,10 +47,10 @@ src/lib/server/auth/
 
 **Key Structure:**
 
-| Key | Value Type | Description |
-|-----|------------|-------------|
+| Key           | Value Type           | Description                         |
+| ------------- | -------------------- | ----------------------------------- |
 | `credentials` | `StoredCredential[]` | Array of all registered credentials |
-| `challenge` | `StoredChallenge` | Current active challenge (with TTL) |
+| `challenge`   | `StoredChallenge`    | Current active challenge (with TTL) |
 
 **TTL Strategy:**
 
@@ -74,10 +74,10 @@ function getCredentialStore(): ICredentialStore {
 
 ### Required Environment Variables
 
-| Variable | Description | How to Obtain |
-|----------|-------------|---------------|
-| `KV_REST_API_URL` | Vercel KV REST endpoint | Auto-set when KV linked |
-| `KV_REST_API_TOKEN` | Vercel KV auth token | Auto-set when KV linked |
+| Variable            | Description             | How to Obtain           |
+| ------------------- | ----------------------- | ----------------------- |
+| `KV_REST_API_URL`   | Vercel KV REST endpoint | Auto-set when KV linked |
+| `KV_REST_API_TOKEN` | Vercel KV auth token    | Auto-set when KV linked |
 
 ### Setup Commands
 

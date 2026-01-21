@@ -14,7 +14,7 @@
  * - Clinical guidelines for circadian insulin dosing
  */
 
-import type { CircadianFactors, UserModelParameters } from '../../types/modeling';
+import type { CircadianFactors } from '../../types/modeling';
 
 /**
  * Default circadian sensitivity pattern
@@ -200,8 +200,9 @@ export function adjustDoseForTimeOfDay(
  */
 export function estimateCircadianBSLDrift(startTime: Date, endTime: Date): number {
   // Integrate dawn effect over the period
-  const startHour = startTime.getHours() + startTime.getMinutes() / 60;
-  const endHour = endTime.getHours() + endTime.getMinutes() / 60;
+  // Note: fractional hours available for future enhanced algorithms
+  // const startHour = startTime.getHours() + startTime.getMinutes() / 60;
+  // const endHour = endTime.getHours() + endTime.getMinutes() / 60;
 
   let totalDawnEffect = 0;
   const steps = 12; // 5-minute steps

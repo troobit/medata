@@ -14,8 +14,7 @@ import type {
   USDAFoodEntry,
   DatasetImportResult,
   CorrectionPatternStats,
-  PromptEnhancement,
-  MealMetadata
+  PromptEnhancement
 } from '$lib/types';
 import type { IValidationRepository } from '$lib/repositories';
 

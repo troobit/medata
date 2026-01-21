@@ -9,6 +9,7 @@ Implemented server-side WebAuthn authentication for single-user deployment. This
 ## Implementation Summary
 
 Built a complete authentication system with:
+
 - Server-side WebAuthn registration and assertion verification
 - Secure session management with HttpOnly cookies
 - Client-side auth gate protecting app functionality
@@ -27,6 +28,7 @@ Built a complete authentication system with:
 ## Features Implemented
 
 ### Phase 1: Server Infrastructure & Registration
+
 - Switched adapter from adapter-static to adapter-vercel
 - Created WebAuthnService.ts with server-side verification logic using @simplewebauthn/server
 - Created CredentialStore.ts for file-based credential persistence
@@ -35,6 +37,7 @@ Built a complete authentication system with:
 - Environment configuration for rpId, origin, and credentials path
 
 ### Phase 2: Authentication & Session Management
+
 - Authentication options endpoint with challenge generation
 - Authentication verification endpoint with assertion verification
 - SessionService.ts for session management
@@ -45,6 +48,7 @@ Built a complete authentication system with:
 - hooks.server.ts with session validation middleware
 
 ### Phase 3: Client Integration & Auth Gate
+
 - ServerAuthClient.ts for client-side API calls
 - auth.svelte.ts reactive store for auth state
 - AuthGate.svelte component protecting app content
@@ -53,6 +57,7 @@ Built a complete authentication system with:
 - Session persistence across page reloads
 
 ### Phase 4: Credential Management & Bootstrap
+
 - bootstrap.ts for first credential enrollment
 - Bootstrap endpoint with one-time token validation
 - Credentials list endpoint (authenticated)
@@ -64,6 +69,7 @@ Built a complete authentication system with:
 ## Files Changed
 
 ### Server Auth (Added)
+
 - `src/lib/server/auth/WebAuthnService.ts` - WebAuthn registration/verification logic
 - `src/lib/server/auth/SessionService.ts` - Session management
 - `src/lib/server/auth/CredentialStore.ts` - Credential persistence
@@ -73,6 +79,7 @@ Built a complete authentication system with:
 - `src/hooks.server.ts` - Request authentication hook
 
 ### API Routes (Added)
+
 - `src/routes/api/auth/register/options/+server.ts` - Generate registration challenge
 - `src/routes/api/auth/register/verify/+server.ts` - Verify attestation, store credential
 - `src/routes/api/auth/login/options/+server.ts` - Generate auth challenge
@@ -85,6 +92,7 @@ Built a complete authentication system with:
 - `src/routes/api/auth/credentials/[id]/+server.ts` - Update/delete credential
 
 ### Client Components (Added)
+
 - `src/lib/components/auth/AuthGate.svelte` - Protects app content
 - `src/lib/components/auth/LoginPrompt.svelte` - Authentication UI
 - `src/lib/components/auth/index.ts` - Module exports
@@ -93,24 +101,26 @@ Built a complete authentication system with:
 - `src/lib/stores/auth.svelte.ts` - Reactive auth state
 
 ### Configuration (Added/Modified)
+
 - `.env.example` - Environment variable documentation
 - `svelte.config.js` - Changed to adapter-vercel
 - `src/routes/+layout.svelte` - Integrated AuthGate
 - `src/routes/settings/+page.svelte` - Credential management UI
 
 ### Dependencies Added
+
 - `@simplewebauthn/server` - Server-side WebAuthn verification
 - `@simplewebauthn/browser` - Browser credential API wrapper
 
 ## Environment Variables
 
-| Variable | Purpose |
-|----------|---------|
-| `AUTH_RP_ID` | Relying Party ID (domain) |
-| `AUTH_ORIGIN` | Expected origin for verification |
-| `AUTH_SESSION_SECRET` | Secret for signing session cookies |
-| `AUTH_BOOTSTRAP_TOKEN` | One-time token for initial enrollment |
-| `AUTH_CREDENTIALS_PATH` | Path to credentials storage file |
+| Variable                | Purpose                               |
+| ----------------------- | ------------------------------------- |
+| `AUTH_RP_ID`            | Relying Party ID (domain)             |
+| `AUTH_ORIGIN`           | Expected origin for verification      |
+| `AUTH_SESSION_SECRET`   | Secret for signing session cookies    |
+| `AUTH_BOOTSTRAP_TOKEN`  | One-time token for initial enrollment |
+| `AUTH_CREDENTIALS_PATH` | Path to credentials storage file      |
 
 ## Documentation Updates
 
@@ -119,6 +129,7 @@ Built a complete authentication system with:
 ## Design Decisions
 
 See `docs/design.md` for architectural decisions including:
+
 - SSG + Server API hybrid architecture
 - Single-user authentication model
 - File-based credential storage

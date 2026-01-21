@@ -20,6 +20,8 @@
   let { result, imageUrl, onSave, onCancel, saving = false }: Props = $props();
 
   // Make items editable - sync when result changes
+  // Using state + effect pattern since items are modified by user
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let editedItems = $state<RecognisedFoodItem[]>([...result.items]);
 
   // Sync editedItems when result prop changes (e.g., new recognition)

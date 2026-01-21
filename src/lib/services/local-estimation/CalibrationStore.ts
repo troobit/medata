@@ -157,7 +157,7 @@ export class CalibrationStore {
         this.calibrations.set(entry.foodTypeId, entry);
       }
       this.save();
-    } catch (e) {
+    } catch {
       throw new Error('Invalid calibration data format');
     }
   }
