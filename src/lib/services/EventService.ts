@@ -8,7 +8,9 @@ import type {
   BSLDataSource,
   InsulinMetadata,
   BSLMetadata,
-  MealMetadata
+  MealMetadata,
+  ExerciseMetadata,
+  ExerciseIntensity
 } from '$lib/types';
 import type { IEventRepository } from '$lib/repositories';
 
@@ -97,6 +99,25 @@ export class EventService {
       timestamp,
       eventType: 'meal',
       value: carbs,
+      metadata: fullMetadata
+    });
+  }
+
+  async logExercise(
+    durationMinutes: number,
+    intensity: ExerciseIntensity,
+    metadata: Partial<ExerciseMetadata> = {},
+    timestamp: Date = new Date()
+  ): Promise<PhysiologicalEvent> {
+    const fullMetadata: ExerciseMetadata = {
+      intensity,
+      durationMinutes,
+      ...metadata
+    };
+    return this.createEvent({
+      timestamp,
+      eventType: 'exercise',
+      value: durationMinutes,
       metadata: fullMetadata
     });
   }
