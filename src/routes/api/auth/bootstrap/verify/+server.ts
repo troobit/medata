@@ -29,7 +29,7 @@ interface BootstrapVerifyRequest {
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
     const bootstrapConfig = createBootstrapConfig(env);
     const bootstrapService = new BootstrapService(store, bootstrapConfig);
 
@@ -93,7 +93,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     if (!sessionConfig) {
       return json(
         {
-          error: 'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
+          error:
+            'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
           code: 'CONFIG_ERROR'
         },
         { status: 500 }

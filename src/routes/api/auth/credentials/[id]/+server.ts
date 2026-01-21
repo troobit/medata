@@ -44,7 +44,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     }
 
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
 
     // Check if credential exists
     const credential = await store.getCredentialById(id);
@@ -131,7 +131,7 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
     }
 
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
 
     // Check if credential exists
     const credential = await store.getCredentialById(id);

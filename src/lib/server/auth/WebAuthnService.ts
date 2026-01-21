@@ -250,14 +250,9 @@ export class WebAuthnService {
  * Create WebAuthn config from environment variables
  * @param env - Environment variables from $env/dynamic/private
  */
-export function createWebAuthnConfig(env: {
-  AUTH_RP_ID?: string;
-  AUTH_ORIGIN?: string;
-  AUTH_CREDENTIALS_PATH?: string;
-}): WebAuthnConfig {
+export function createWebAuthnConfig(env: Record<string, string | undefined>): WebAuthnConfig {
   const rpId = env.AUTH_RP_ID;
   const origin = env.AUTH_ORIGIN;
-  const credentialsPath = env.AUTH_CREDENTIALS_PATH || './data/credentials.json';
 
   if (!rpId) {
     throw new Error('AUTH_RP_ID environment variable is required');
@@ -270,7 +265,6 @@ export function createWebAuthnConfig(env: {
   return {
     rpId,
     rpName: 'Beetus',
-    origin,
-    credentialsPath
+    origin
   };
 }

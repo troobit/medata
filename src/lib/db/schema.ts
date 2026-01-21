@@ -62,3 +62,26 @@ export function getDb(): MeDataDB {
  * @deprecated Use getDb() instead to avoid SSR issues
  */
 export const db = typeof window !== 'undefined' ? new MeDataDB() : (null as unknown as MeDataDB);
+
+/**
+ * Check if IndexedDB is available and working
+ * Returns null if available, error message string if not
+ */
+export async function checkDatabaseAvailability(): Promise<string | null> {
+  if (typeof window === 'undefined') {
+    return 'Database is only available in the browser';
+  }
+
+  if (!window.indexedDB) {
+    return 'IndexedDB is not supported in this browser';
+  }
+
+  try {
+    const db = getDb();
+    await db.open();
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    return `Failed to open database: ${message}`;
+  }
+}

@@ -2,10 +2,10 @@
  * Server-side authentication module
  */
 
-import { FileCredentialStore, getFileCredentialStore } from './FileCredentialStore';
-
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
-export { FileCredentialStore, getFileCredentialStore };
+export { FileCredentialStore, getFileCredentialStore } from './FileCredentialStore';
+export { KVCredentialStore, getKVCredentialStore } from './KVCredentialStore';
+export { getCredentialStore, isKVConfigured } from './credentialStoreFactory';
 export { SessionService, createSessionConfig, getSessionService } from './SessionService';
 export { BootstrapService, createBootstrapConfig } from './bootstrap';
 export type { ICredentialStore } from './ICredentialStore';
@@ -25,6 +25,3 @@ export type {
   SessionStatusResponse,
   SessionConfig
 } from './types';
-
-// Backward compatibility - alias for getFileCredentialStore
-export const getCredentialStore = getFileCredentialStore;
