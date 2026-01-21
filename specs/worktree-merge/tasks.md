@@ -16,15 +16,15 @@ references:
 
 ## Phase 2: Merge auth Branch into dev-0
 
-- [ ] 5. Checkout dev-0 and ensure clean working state
+- [x] 5. Checkout dev-0 and ensure clean working state
 
-- [ ] 6. Merge auth branch into dev-0 (expect fast-forward or clean merge)
+- [x] 6. Merge auth branch into dev-0 (expect fast-forward or clean merge)
 
-- [ ] 7. Run pnpm install to update lockfile with @vercel/kv
+- [x] 7. Run pnpm install to update lockfile with @vercel/kv
 
-- [ ] 8. Verify build succeeds after auth merge
+- [x] 8. Verify build succeeds after auth merge
 
-- [ ] 9. Test auth bootstrap flow works on dev-0
+- [x] 9. Test auth bootstrap flow works on dev-0
 
 ## Phase 3: Sync dev-0 into logoui Worktree
 
