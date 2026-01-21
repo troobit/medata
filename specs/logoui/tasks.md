@@ -78,14 +78,14 @@ references:
 
 ## Phase 5: Site Integration
 
-- [ ] 31. Replace LoadingSpinner with Logo animated in +layout.svelte
+- [x] 31. Replace LoadingSpinner with Logo animated in +layout.svelte
 
-- [ ] 32. Add static Logo to AppShell header/navigation
+- [x] 32. Add static Logo to AppShell header/navigation
 
-- [ ] 33. Update any other LoadingSpinner usages to use Logo where appropriate
+- [x] 33. Update any other LoadingSpinner usages to use Logo where appropriate
 
-- [ ] 34. Test all three variants build correctly
+- [x] 34. Test all three variants build correctly
 
-- [ ] 35. Verify animation performance on mobile devices
+- [x] 35. Verify animation performance on mobile devices
 
-- [ ] 36. Verify no visual regressions across app
+- [x] 36. Verify no visual regressions across app

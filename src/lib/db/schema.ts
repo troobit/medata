@@ -62,3 +62,35 @@ export function getDb(): MeDataDB {
  * @deprecated Use getDb() instead to avoid SSR issues
  */
 export const db = typeof window !== 'undefined' ? new MeDataDB() : (null as unknown as MeDataDB);
+
+/**
+ * Check if IndexedDB is available and working
+ * Returns null if available, or an error message if not
+ */
+export async function checkDatabaseAvailability(): Promise<string | null> {
+  if (typeof window === 'undefined') {
+    return 'Database is only available in the browser';
+  }
+
+  if (!('indexedDB' in window)) {
+    return 'IndexedDB is not supported in this browser';
+  }
+
+  try {
+    const testDb = getDb();
+    await testDb.events.count();
+    return null;
+  } catch (error) {
+    if (error instanceof Error) {
+      // Check for common IndexedDB errors
+      if (error.name === 'QuotaExceededError') {
+        return 'Storage quota exceeded. Please free up some space.';
+      }
+      if (error.message.includes('private browsing') || error.message.includes('Private mode')) {
+        return 'Private/Incognito browsing mode detected. Please use a regular browser window.';
+      }
+      return `Database error: ${error.message}`;
+    }
+    return 'Failed to initialize database';
+  }
+}

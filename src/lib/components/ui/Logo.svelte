@@ -161,13 +161,16 @@
   /* Animation duration and timing */
   :global(.logo-animated) .logo-main {
     animation: stroke-main 3s ease-in-out infinite;
+    will-change: stroke-dashoffset;
   }
 
   :global(.logo-animated) .logo-right {
     animation: stroke-right 3s ease-in-out infinite;
+    will-change: stroke-dashoffset;
   }
 
   :global(.logo-animated) .logo-dot {
     animation: stroke-dot 3s ease-in-out infinite;
+    will-change: stroke-dashoffset;
   }
 </style>

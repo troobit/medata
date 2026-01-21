@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
   import { authStore } from '$lib/stores';
-  import { LoadingSpinner } from '$lib/components/ui';
+  import { Logo } from '$lib/components/ui';
   import LoginPrompt from './LoginPrompt.svelte';
 
   interface Props {
@@ -18,7 +18,7 @@
 
 {#if authStore.isChecking}
   <div class="flex min-h-screen items-center justify-center bg-gray-900">
-    <LoadingSpinner size="lg" />
+    <Logo animated size="splash" />
   </div>
 {:else if authStore.isAuthenticated}
   {@render children()}

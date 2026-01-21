@@ -3,7 +3,7 @@
   import { env } from '$env/dynamic/public';
   import { AuthGate } from '$lib/components/auth';
   import { AppShell } from '$lib/components/layout';
-  import { LoadingSpinner, StorageError } from '$lib/components/ui';
+  import { Logo, StorageError } from '$lib/components/ui';
   import { checkDatabaseAvailability } from '$lib/db';
   import { authStore, settingsStore } from '$lib/stores';
   import { onMount } from 'svelte';
@@ -60,7 +60,7 @@
 
 {#if !dbChecked}
   <div class="flex min-h-screen items-center justify-center bg-gray-900">
-    <LoadingSpinner size="lg" />
+    <Logo animated size="splash" />
   </div>
 {:else if dbError}
   <StorageError error={dbError} />
