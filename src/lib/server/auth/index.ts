@@ -3,9 +3,10 @@
  */
 
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
-export { CredentialStore, getCredentialStore } from './CredentialStore';
+export { FileCredentialStore, getFileCredentialStore } from './FileCredentialStore';
 export { SessionService, createSessionConfig, getSessionService } from './SessionService';
 export { BootstrapService, createBootstrapConfig } from './bootstrap';
+export type { ICredentialStore } from './ICredentialStore';
 export type { BootstrapConfig, BootstrapState } from './bootstrap';
 export type {
   StoredCredential,
@@ -22,3 +23,7 @@ export type {
   SessionStatusResponse,
   SessionConfig
 } from './types';
+
+// Backward compatibility alias
+export { FileCredentialStore as CredentialStore } from './FileCredentialStore';
+export { getFileCredentialStore as getCredentialStore } from './FileCredentialStore';
