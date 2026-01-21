@@ -46,11 +46,11 @@ references:
 
 ## Phase 4: Archive dev-2
 
-- [ ] 18. Remove dev-2 worktree: git worktree remove /Users/ronan/repos/beetus/dev-2
+- [x] 18. Remove dev-2 worktree: git worktree remove /Users/ronan/repos/beetus/dev-2
 
-- [ ] 19. Delete dev-2 branch: git branch -D dev-2
+- [x] 19. Delete dev-2 branch: git branch -D dev-2
 
-- [ ] 20. Verify .vercel/output artifacts not in repository (gitignored)
+- [x] 20. Verify .vercel/output artifacts not in repository (gitignored)
 
 ## Phase 5: Partial Cleanup (Keep logoui Active)
 
