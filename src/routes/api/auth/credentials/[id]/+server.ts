@@ -152,7 +152,8 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
     if (count <= 1) {
       return json(
         {
-          error: 'Cannot delete the last credential. Add another credential first to avoid lockout.',
+          error:
+            'Cannot delete the last credential. Add another credential first to avoid lockout.',
           code: 'LOCKOUT_PREVENTION'
         },
         { status: 400 }

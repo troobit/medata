@@ -2,10 +2,7 @@
  * Server-side authentication types for WebAuthn
  */
 
-import type {
-  AuthenticatorTransportFuture,
-  CredentialDeviceType
-} from '@simplewebauthn/server';
+import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 
 /**
  * Stored credential for a registered authenticator

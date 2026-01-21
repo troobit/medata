@@ -9,11 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 
-import {
-  WebAuthnService,
-  createWebAuthnConfig,
-  getCredentialStore
-} from '$lib/server/auth';
+import { WebAuthnService, createWebAuthnConfig, getCredentialStore } from '$lib/server/auth';
 
 export const POST: RequestHandler = async () => {
   try {

@@ -10,11 +10,7 @@ import type { RequestHandler } from './$types';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { env } from '$env/dynamic/private';
 
-import {
-  WebAuthnService,
-  createWebAuthnConfig,
-  getCredentialStore
-} from '$lib/server/auth';
+import { WebAuthnService, createWebAuthnConfig, getCredentialStore } from '$lib/server/auth';
 
 interface VerifyRequestBody {
   credential: RegistrationResponseJSON;

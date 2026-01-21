@@ -1,10 +1,11 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 metadata:
-    architecture: SSG UI + Server Auth API + Client Gate
-    scope: Single-user WebAuthn server-side authentication
+  architecture: SSG UI + Server Auth API + Client Gate
+  scope: Single-user WebAuthn server-side authentication
 ---
+
 # WebAuthn Server-Side Authentication
 
 ## Phase 1: Server Infrastructure & Registration Endpoints

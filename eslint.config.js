@@ -27,6 +27,28 @@ export default ts.config(
     }
   },
   {
-    ignores: ['build/', '.svelte-kit/', 'dist/']
+    // Svelte 5 runes files use .svelte.ts extension and need svelte parser
+    files: ['**/*.svelte.ts', '**/*.svelte.js'],
+    languageOptions: {
+      parser: svelte.parser,
+      parserOptions: {
+        parser: ts.parser
+      }
+    }
+  },
+  {
+    // Allow unused variables that start with underscore (intentionally unused)
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_'
+        }
+      ]
+    }
+  },
+  {
+    ignores: ['build/', '.svelte-kit/', 'dist/', '.vercel/', 'node_modules/']
   }
 );

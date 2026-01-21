@@ -5,6 +5,7 @@
 This document defines requirements for implementing server-side WebAuthn authentication for a **single-user** deployment. The goal is to protect the application with hardware key authentication (YubiKey/passkey) verified on the server, replacing the current browser-only implementation.
 
 **In Scope:**
+
 - Single-user authentication (one owner with multiple hardware keys)
 - Server-side WebAuthn assertion verification
 - Secure session management with HttpOnly cookies
@@ -13,6 +14,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Client-side auth gate for protected functionality
 
 **Out of Scope (Explicitly Removed):**
+
 - Multi-user support and user management
 - User registration/enrollment UI for arbitrary users
 - Role-based access control
@@ -22,17 +24,18 @@ This document defines requirements for implementing server-side WebAuthn authent
 
 ## Current State Summary
 
-| Aspect | Current Implementation |
-|--------|------------------------|
-| Auth Flow | Browser-only WebAuthn via `navigator.credentials` |
-| Storage | localStorage for users, credentials, sessions |
-| Session | 30-day client-side expiry |
-| Render Mode | SSR disabled (`ssr=false`), prerender enabled |
-| Adapter | `@sveltejs/adapter-static` |
-| Server Endpoints | None exist |
-| Verification | Client-side only (no server verification) |
+| Aspect           | Current Implementation                            |
+| ---------------- | ------------------------------------------------- |
+| Auth Flow        | Browser-only WebAuthn via `navigator.credentials` |
+| Storage          | localStorage for users, credentials, sessions     |
+| Session          | 30-day client-side expiry                         |
+| Render Mode      | SSR disabled (`ssr=false`), prerender enabled     |
+| Adapter          | `@sveltejs/adapter-static`                        |
+| Server Endpoints | None exist                                        |
+| Verification     | Client-side only (no server verification)         |
 
 **Key Files:**
+
 - `src/routes/+layout.ts` - SSR/prerender config
 - `svelte.config.js` - Adapter configuration
 - `src/lib/services/` - Service layer pattern
@@ -48,6 +51,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 **Approach:** Keep the static/prerendered UI, add SvelteKit API endpoints for authentication, and implement a client-side gate that requires valid session before showing protected functionality.
 
 **Justification:**
+
 - Minimal disruption to existing SSG/offline-capable architecture
 - Preserves fast initial load and CDN cacheability of static assets
 - Clear separation between public shell and protected data/functionality
@@ -56,6 +60,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Single API boundary that could serve other clients in future
 
 **Tradeoffs Accepted:**
+
 - Static HTML/JS is technically public (but contains no sensitive data)
 - Auth gate enforced client-side for UI, server-side for data access
 - Requires adapter change from `adapter-static` to `adapter-vercel` or `adapter-node`
@@ -63,10 +68,12 @@ This document defines requirements for implementing server-side WebAuthn authent
 ### Alternatives Considered
 
 **Option 2: Enable Full SSR**
+
 - Pros: Server-side route protection, no client-side gate needed
 - Cons: Larger architectural change, loses prerender benefits, slower page loads
 
 **Option 3: Separate Backend Service**
+
 - Pros: Maximum flexibility, language-agnostic backend
 - Cons: More complex deployment, additional infrastructure, overkill for single-user
 
@@ -79,6 +86,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 **Scope:** Establish server-side auth foundation with credential registration flow.
 
 **Deliverables:**
+
 - Switch adapter to support server endpoints
 - Create WebAuthn registration options endpoint
 - Create WebAuthn registration verification endpoint
@@ -86,6 +94,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Environment configuration for rpId and origin
 
 **Files to Add/Change:**
+
 - `svelte.config.js` - Change to `@sveltejs/adapter-vercel` or `@sveltejs/adapter-node`
 - `src/routes/api/auth/register/options/+server.ts` - Generate registration challenge
 - `src/routes/api/auth/register/verify/+server.ts` - Verify attestation, store credential
@@ -95,16 +104,19 @@ This document defines requirements for implementing server-side WebAuthn authent
 - `.env.example` - Document required environment variables
 
 **API Endpoints:**
+
 - `POST /api/auth/register/options` - Returns registration options with challenge
 - `POST /api/auth/register/verify` - Verifies attestation and stores credential
 
 **Acceptance Criteria:**
+
 - Server generates valid WebAuthn registration options with correct rpId
 - Attestation verification succeeds for valid hardware key response
 - Credential (credentialId, publicKey, counter) persists server-side
 - Invalid attestation returns appropriate error response
 
 **Verification Checklist:**
+
 1. Run `pnpm dev` and confirm server starts without errors
 2. Call `/api/auth/register/options` and verify response contains challenge, rpId, user info
 3. Complete registration flow with YubiKey; confirm credential stored in server storage
@@ -118,6 +130,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 **Scope:** Implement authentication flow with server-verified assertions and secure session cookies.
 
 **Deliverables:**
+
 - Authentication options endpoint (challenge generation)
 - Authentication verification endpoint (assertion verification)
 - Session creation with HttpOnly secure cookies
@@ -125,6 +138,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Logout endpoint
 
 **Files to Add/Change:**
+
 - `src/routes/api/auth/login/options/+server.ts` - Generate auth challenge
 - `src/routes/api/auth/login/verify/+server.ts` - Verify assertion, create session
 - `src/routes/api/auth/logout/+server.ts` - Clear session
@@ -133,12 +147,14 @@ This document defines requirements for implementing server-side WebAuthn authent
 - `src/hooks.server.ts` - Request authentication hook
 
 **API Endpoints:**
+
 - `POST /api/auth/login/options` - Returns authentication options with allowCredentials
 - `POST /api/auth/login/verify` - Verifies assertion, sets session cookie, returns success
 - `POST /api/auth/logout` - Clears session cookie
 - `GET /api/auth/session` - Returns current session status
 
 **Acceptance Criteria:**
+
 - Authentication challenge includes only allowlisted credential IDs
 - Valid assertion from registered key creates session cookie
 - Session cookie is HttpOnly, Secure (in production), SameSite=Lax
@@ -147,6 +163,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Logout clears session and cookie
 
 **Verification Checklist:**
+
 1. Call `/api/auth/login/options` and verify challenge and allowCredentials returned
 2. Authenticate with registered YubiKey; confirm session cookie set
 3. Call `/api/auth/session` with cookie; confirm authenticated status
@@ -162,6 +179,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 **Scope:** Integrate client-side UI with server auth and implement authentication gate.
 
 **Deliverables:**
+
 - Client auth service that calls server endpoints
 - Auth gate component that protects app functionality
 - Login UI with hardware key prompt
@@ -169,6 +187,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Local development mode bypass (optional, configurable)
 
 **Files to Add/Change:**
+
 - `src/lib/services/auth/ServerAuthClient.ts` - Client-side API wrapper
 - `src/lib/services/auth/index.ts` - Export auth client
 - `src/lib/components/AuthGate.svelte` - Protects child content until authenticated
@@ -177,6 +196,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - `src/lib/stores/auth.svelte.ts` - Reactive auth state store
 
 **Acceptance Criteria:**
+
 - App shows login prompt when no valid session exists
 - Successful authentication reveals protected app content
 - Session persists across page reloads (cookie-based)
@@ -184,6 +204,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Auth state is reactive and updates UI appropriately
 
 **Verification Checklist:**
+
 1. Load app without session; confirm login prompt displayed
 2. Authenticate with YubiKey; confirm app content becomes visible
 3. Refresh page; confirm still authenticated (session persists)
@@ -197,6 +218,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 **Scope:** Implement secure credential enrollment and management for the single owner.
 
 **Deliverables:**
+
 - Bootstrap mechanism for initial credential enrollment
 - Add additional credentials to existing allowlist
 - Remove credentials from allowlist
@@ -204,6 +226,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Admin-only credential management (protected by existing session)
 
 **Files to Add/Change:**
+
 - `src/routes/api/auth/credentials/+server.ts` - List credentials (authenticated)
 - `src/routes/api/auth/credentials/[id]/+server.ts` - Update/delete credential
 - `src/lib/server/auth/bootstrap.ts` - First-credential enrollment logic
@@ -211,12 +234,14 @@ This document defines requirements for implementing server-side WebAuthn authent
 - `.env` - Bootstrap token for initial enrollment
 
 **API Endpoints:**
+
 - `GET /api/auth/credentials` - List all registered credentials (requires auth)
 - `PATCH /api/auth/credentials/[id]` - Update credential metadata
 - `DELETE /api/auth/credentials/[id]` - Remove credential from allowlist
 - `POST /api/auth/bootstrap` - One-time initial enrollment (requires bootstrap token)
 
 **Acceptance Criteria:**
+
 - Bootstrap allows first credential registration with valid token
 - Bootstrap token only works once or for limited time window
 - Authenticated user can add additional credentials
@@ -225,6 +250,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 - Credentials display friendly name and last-used timestamp
 
 **Verification Checklist:**
+
 1. Set bootstrap token in environment; register first credential via bootstrap
 2. Confirm bootstrap endpoint disabled after successful first enrollment
 3. Authenticate and add second credential via settings UI
@@ -240,6 +266,7 @@ This document defines requirements for implementing server-side WebAuthn authent
 ### Types
 
 **RegistrationOptions**
+
 - challenge: string (base64url)
 - rpId: string
 - rpName: string
@@ -250,22 +277,27 @@ This document defines requirements for implementing server-side WebAuthn authent
 - authenticatorSelection: { residentKey, userVerification }
 
 **RegistrationVerifyRequest**
+
 - credential: PublicKeyCredential (serialized)
 
 **AuthenticationOptions**
+
 - challenge: string (base64url)
 - rpId: string
 - allowCredentials: Array<{ id: string, type: "public-key" }>
 - userVerification: "preferred"
 
 **AuthenticationVerifyRequest**
+
 - credential: PublicKeyCredential (serialized)
 
 **SessionStatus**
+
 - authenticated: boolean
 - expiresAt: string (ISO timestamp) | null
 
 **CredentialInfo**
+
 - id: string
 - friendlyName: string
 - createdAt: string
@@ -277,23 +309,25 @@ This document defines requirements for implementing server-side WebAuthn authent
 
 ### Environment Variables
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `AUTH_RP_ID` | Relying Party ID (domain) | `localhost` (dev), `app.example.com` (prod) |
-| `AUTH_ORIGIN` | Expected origin for verification | `http://localhost:5173` (dev), `https://app.example.com` (prod) |
-| `AUTH_SESSION_SECRET` | Secret for signing session cookies | 32+ random characters |
-| `AUTH_BOOTSTRAP_TOKEN` | One-time token for initial enrollment | Random UUID or passphrase |
-| `AUTH_CREDENTIALS_PATH` | Path to credentials storage file | `./data/credentials.json` |
+| Variable                | Purpose                               | Example                                                         |
+| ----------------------- | ------------------------------------- | --------------------------------------------------------------- |
+| `AUTH_RP_ID`            | Relying Party ID (domain)             | `localhost` (dev), `app.example.com` (prod)                     |
+| `AUTH_ORIGIN`           | Expected origin for verification      | `http://localhost:5173` (dev), `https://app.example.com` (prod) |
+| `AUTH_SESSION_SECRET`   | Secret for signing session cookies    | 32+ random characters                                           |
+| `AUTH_BOOTSTRAP_TOKEN`  | One-time token for initial enrollment | Random UUID or passphrase                                       |
+| `AUTH_CREDENTIALS_PATH` | Path to credentials storage file      | `./data/credentials.json`                                       |
 
 ### Environment-Specific Configuration
 
 **Development:**
+
 - `AUTH_RP_ID=localhost`
 - `AUTH_ORIGIN=http://localhost:5173`
 - Bootstrap token set in `.env.local` (gitignored)
 - Credentials stored in local `./data/` directory
 
 **Production (Vercel):**
+
 - `AUTH_RP_ID` and `AUTH_ORIGIN` set via Vercel environment variables
 - `AUTH_SESSION_SECRET` stored securely in Vercel
 - `AUTH_BOOTSTRAP_TOKEN` set once, then removed after enrollment
@@ -334,6 +368,7 @@ src/lib/
 ### Alternative Frontend Integration
 
 The auth API is designed as a standalone REST API:
+
 - Any client that can make HTTP requests can authenticate
 - Session is cookie-based (works with browsers) or can return token for non-browser clients
 - Mobile app would call same `/api/auth/*` endpoints
@@ -348,6 +383,7 @@ The auth API is designed as a standalone REST API:
 Each phase includes a verification checklist. Additionally:
 
 **End-to-End Flow Test:**
+
 1. Fresh deployment with no credentials
 2. Use bootstrap token to enroll first YubiKey
 3. Verify bootstrap disabled after enrollment
@@ -359,6 +395,7 @@ Each phase includes a verification checklist. Additionally:
 9. Attempt removal of last key, verify prevented
 
 **Security Verification:**
+
 - Confirm session cookie has HttpOnly flag
 - Confirm session cookie has Secure flag (production)
 - Confirm session cookie has SameSite=Lax

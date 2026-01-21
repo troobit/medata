@@ -5,7 +5,6 @@
    *
    * Multi-step wizard for importing BSL data from CSV files.
    */
-  import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui';
   import {
     CSVUpload,

@@ -1,6 +1,5 @@
 # Front end integration and server-side verification for WebAuthn-based authentication
 
-
 ## Incorporate explicitly:
 
 - Current client-side WebAuthn flow and storage:
@@ -14,7 +13,6 @@
 svelte.config.js (@sveltejs/adapter-vercel; prerender config)
 app.d.ts (App.Locals placeholder exists but unused; relevant if introducing server hooks)
 There are currently no SvelteKit +server.ts endpoints in src/routes (verify via repo structure); the server/auth layer will need to be introduced.
-
 
 ## Goal state (production pattern):
 
@@ -31,7 +29,7 @@ Since the UI is currently prerendered and ssr is disabled, â€œprotecting routesâ
 1. Keep SSG UI, add backend/serverless auth API, and implement a client-side gate (app requires valid session before loading sensitive functionality), plus clarify what is and is not protected (static assets remain public).
 2. Enable SSR (change +layout.ts and related configs) and use SvelteKit server hooks to enforce authentication on page requests and API requests.
 3. Split into a dedicated backend service (separate Node service) plus static frontend; document deployment and routing assumptions.
-Pick a recommended approach and list alternatives with tradeoffs.
+   Pick a recommended approach and list alternatives with tradeoffs.
 
 ## Functional requirements to include (non-exhaustive; expand as needed):
 
@@ -63,7 +61,6 @@ Pick a recommended approach and list alternatives with tradeoffs.
   - Replay protection via challenges; counter verification updates
   - Audit/logging requirements (minimal but actionable)
 
-
 ## Non-functional requirements:
 
 - Verification approach: define manual verification checklists per phase (developer-run steps in local dev and production-like preview) that confirm expected behaviors end-to-end.
@@ -77,7 +74,7 @@ You must reference concrete repo files that will likely need changes or addition
 - auth.ts (likely needs new shared DTOs or helpers; may split server-only types out)
 - +page.svelte (UI will need to support enrollment/login flows that interact with server; differentiate local vs server mode)
 - +layout.ts and/or introduction of src/hooks.server.ts (if SSR/protection is implemented server-side)
-- Introduction of new SvelteKit endpoints: src/routes/api/auth/**/+server.ts (or similar) if using SvelteKit backend
+- Introduction of new SvelteKit endpoints: src/routes/api/auth/\*\*/+server.ts (or similar) if using SvelteKit backend
 - svelte.config.js / deployment config if SSR or server routes require changes
 - app.d.ts if adding Locals typings for authenticated user/session
 
@@ -86,8 +83,8 @@ Write the requirements document as a standalone artifact:
 File: specs/dev-0/requirements.md
 The document must be planned and phased, with acceptance criteria and a verification method per phase.
 
-
 ## Steps
+
 Summarize current state (briefly) using repo specifics:
 
 Confirm current WebAuthn is browser-only and stored in localStorage, and does not perform server-side assertion verification.
@@ -111,7 +108,6 @@ Describe the extensibility model:
 Proposed module boundaries (client vs server; domain vs transport)
 Minimal interface definitions (names only; no large code)
 How a different frontend would integrate (e.g., mobile app) via the same backend API
-
 
 ## Output
 

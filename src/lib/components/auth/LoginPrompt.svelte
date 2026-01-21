@@ -15,9 +15,7 @@
     </div>
 
     <div class="space-y-4">
-      <div
-        class="rounded-lg border border-gray-700 bg-gray-800/50 p-6"
-      >
+      <div class="rounded-lg border border-gray-700 bg-gray-800/50 p-6">
         <div class="mb-4 flex justify-center">
           <svg
             class="h-16 w-16 text-brand-accent"
@@ -34,9 +32,7 @@
           </svg>
         </div>
 
-        <p class="mb-6 text-sm text-gray-300">
-          Insert your security key and tap to authenticate
-        </p>
+        <p class="mb-6 text-sm text-gray-300">Insert your security key and tap to authenticate</p>
 
         <Button
           variant="primary"
@@ -65,8 +61,6 @@
       {/if}
     </div>
 
-    <p class="text-xs text-gray-500">
-      Requires a registered FIDO2 security key
-    </p>
+    <p class="text-xs text-gray-500">Requires a registered FIDO2 security key</p>
   </div>
 </div>

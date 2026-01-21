@@ -32,7 +32,8 @@ import type {
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000;
 
 // Single user identity for this single-user application
-const USER_ID = 'owner';
+// Note: USER_ID is reserved for future use when user identification is needed
+const _USER_ID = 'owner';
 const USER_NAME = 'owner';
 const USER_DISPLAY_NAME = 'Owner';
 
@@ -137,8 +138,7 @@ export class WebAuthnService {
       throw new Error('Registration verification failed');
     }
 
-    const { credential, credentialDeviceType, credentialBackedUp } =
-      verification.registrationInfo;
+    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
 
     const storedCredential: StoredCredential = {
       id: credential.id,
