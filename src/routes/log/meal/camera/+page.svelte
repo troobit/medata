@@ -17,7 +17,7 @@
   import { recognizeFoodWithFallback, getFoodService } from '$lib/services/ai';
   import { estimationEngine, volumeCalculator } from '$lib/services/local-estimation';
   import { compressImage, blobToDataUrl } from '$lib/utils/imageProcessing';
-  import { settingsStore, eventsStore } from '$lib/stores';
+  import { settingsStore, eventsStore, validationStore } from '$lib/stores';
   import { Button } from '$lib/components/ui';
   import type {
     FoodRecognitionResult as FoodRecognitionResultType,
@@ -257,7 +257,7 @@
     error = null;
 
     try {
-      await eventsStore.logMeal(macros.carbs, {
+      const event = await eventsStore.logMeal(macros.carbs, {
         calories: macros.calories,
         protein: macros.protein,
         fat: macros.fat,
@@ -271,6 +271,24 @@
         confidence: recognitionResult?.confidence,
         photoUrl: imageUrl ?? undefined
       });
+
+      // Record correction if user edited the AI prediction
+      if (recognitionResult) {
+        const original = recognitionResult.totalMacros;
+        const hasCorrection =
+          Math.abs(original.carbs - macros.carbs) > 0.5 ||
+          Math.abs(original.protein - macros.protein) > 0.5 ||
+          Math.abs(original.fat - macros.fat) > 0.5 ||
+          Math.abs(original.calories - macros.calories) > 1;
+
+        if (hasCorrection) {
+          await validationStore.recordCorrection(event.id, original, macros, {
+            imageUrl: imageUrl ?? undefined,
+            aiProvider: recognitionResult.provider,
+            aiConfidence: recognitionResult.confidence
+          });
+        }
+      }
 
       goto('/');
     } catch (e) {

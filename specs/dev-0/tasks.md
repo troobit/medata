@@ -25,18 +25,18 @@ metadata:
 
 ## AI Model Validation
 
-- [ ] 6. Create test data collection interface for food images with known carb content
-  - [ ] 6.1. Admin mode to capture food images with verified macro data
-  - [ ] 6.2. Export test dataset as JSON with image URLs and ground truth values
-  - [ ] 6.3. Support importing nutrition research datasets (USDA, academic sources)
+- [x] 6. Create test data collection interface for food images with known carb content
+  - [x] 6.1. Admin mode to capture food images with verified macro data
+  - [x] 6.2. Export test dataset as JSON with image URLs and ground truth values
+  - [x] 6.3. Support importing nutrition research datasets (USDA, academic sources)
 
-- [ ] 7. Build validation dataset from user corrections (original AI estimate vs corrected value)
+- [x] 7. Build validation dataset from user corrections (original AI estimate vs corrected value)
 
-- [ ] 8. Implement accuracy metrics dashboard (MAE, MAPE by food category)
+- [x] 8. Implement accuracy metrics dashboard (MAE, MAPE by food category)
 
-- [ ] 9. Add prompt enhancement pipeline using correction history to improve estimates
+- [x] 9. Add prompt enhancement pipeline using correction history to improve estimates
 
-- [ ] 10. Generate synthetic test images with reference objects for volume estimation validation
+- [x] 10. Generate synthetic test images with reference objects for volume estimation validation
 
 ## Local Food Estimation
 

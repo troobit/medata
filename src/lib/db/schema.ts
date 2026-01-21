@@ -1,5 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { PhysiologicalEvent, MealPreset } from '$lib/types';
+import type {
+  PhysiologicalEvent,
+  MealPreset,
+  TestDatasetEntry,
+  ValidationResult,
+  CorrectionHistoryEntry
+} from '$lib/types';
 
 /**
  * Database schema for MeData
@@ -8,6 +14,9 @@ import type { PhysiologicalEvent, MealPreset } from '$lib/types';
 export class MeDataDB extends Dexie {
   events!: EntityTable<PhysiologicalEvent, 'id'>;
   presets!: EntityTable<MealPreset, 'id'>;
+  testDataset!: EntityTable<TestDatasetEntry, 'id'>;
+  validationResults!: EntityTable<ValidationResult, 'testEntryId'>;
+  correctionHistory!: EntityTable<CorrectionHistoryEntry, 'id'>;
 
   constructor() {
     super('medata');
@@ -17,6 +26,18 @@ export class MeDataDB extends Dexie {
       events: 'id, timestamp, eventType, [eventType+timestamp], createdAt',
       // Primary key is 'id', indexed by name and createdAt
       presets: 'id, name, createdAt'
+    });
+
+    // Version 2: Add validation tables
+    this.version(2).stores({
+      events: 'id, timestamp, eventType, [eventType+timestamp], createdAt',
+      presets: 'id, name, createdAt',
+      // Test dataset entries with known ground truth
+      testDataset: 'id, category, source, createdAt',
+      // Validation results from running AI against test data
+      validationResults: 'testEntryId, aiProvider, timestamp, [aiProvider+timestamp]',
+      // Correction history from user edits
+      correctionHistory: 'id, eventId, aiProvider, category, timestamp, [aiProvider+timestamp]'
     });
   }
 }

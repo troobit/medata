@@ -98,3 +98,21 @@ export type {
   IImportService,
   IExportService
 } from './import';
+
+// AI Model Validation
+export type {
+  FoodCategory,
+  GroundTruthSource,
+  TestDatasetEntry,
+  ValidationResult,
+  MacroErrorMetrics,
+  AccuracyMetrics,
+  CorrectionHistoryEntry,
+  CorrectionPatternStats,
+  PromptEnhancement,
+  CreateTestDataInput,
+  UpdateTestDataInput,
+  TestDatasetExport,
+  USDAFoodEntry,
+  DatasetImportResult
+} from './validation';
