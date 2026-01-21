@@ -257,7 +257,6 @@ export function createWebAuthnConfig(env: {
 }): WebAuthnConfig {
   const rpId = env.AUTH_RP_ID;
   const origin = env.AUTH_ORIGIN;
-  const credentialsPath = env.AUTH_CREDENTIALS_PATH || './data/credentials.json';
 
   if (!rpId) {
     throw new Error('AUTH_RP_ID environment variable is required');
@@ -270,7 +269,6 @@ export function createWebAuthnConfig(env: {
   return {
     rpId,
     rpName: 'Beetus',
-    origin,
-    credentialsPath
+    origin
   };
 }

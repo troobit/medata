@@ -25,7 +25,7 @@ interface VerifyRequestBody {
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
     const service = new WebAuthnService(config);
     const sessionConfig = createSessionConfig(env);
 

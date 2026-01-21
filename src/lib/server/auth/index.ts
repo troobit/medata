@@ -4,6 +4,12 @@
 
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
 export { FileCredentialStore, getFileCredentialStore } from './FileCredentialStore';
+export { KVCredentialStore, getKVCredentialStore } from './KVCredentialStore';
+export {
+  getCredentialStore,
+  isKVStorageAvailable,
+  clearCredentialStoreCache
+} from './credentialStoreFactory';
 export { SessionService, createSessionConfig, getSessionService } from './SessionService';
 export { BootstrapService, createBootstrapConfig } from './bootstrap';
 export type { ICredentialStore } from './ICredentialStore';
@@ -23,7 +29,3 @@ export type {
   SessionStatusResponse,
   SessionConfig
 } from './types';
-
-// Backward compatibility alias
-export { FileCredentialStore as CredentialStore } from './FileCredentialStore';
-export { getFileCredentialStore as getCredentialStore } from './FileCredentialStore';

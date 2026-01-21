@@ -51,13 +51,13 @@ metadata:
 
 ## Phase 3: Store Factory & Integration
 
-- [ ] 8. Create credentialStoreFactory.ts
+- [x] 8. Create credentialStoreFactory.ts
   - Check for KV_REST_API_URL environment variable
   - Return KVCredentialStore when KV configured
   - Fall back to FileCredentialStore for local dev
   - Cache singleton instance
 
-- [ ] 9. Update all API routes to use factory
+- [x] 9. Update all API routes to use factory
   - src/routes/api/auth/bootstrap/options/+server.ts
   - src/routes/api/auth/bootstrap/verify/+server.ts
   - src/routes/api/auth/register/options/+server.ts
@@ -67,7 +67,7 @@ metadata:
   - src/routes/api/auth/credentials/+server.ts
   - src/routes/api/auth/credentials/[id]/+server.ts
 
-- [ ] 10. Remove credentialsPath from WebAuthnConfig
+- [x] 10. Remove credentialsPath from WebAuthnConfig
   - Update WebAuthnConfig type to make credentialsPath optional
   - Update createWebAuthnConfig to not require path when KV available
   - Store factory handles path internally for file-based store

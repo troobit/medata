@@ -24,7 +24,7 @@ interface BootstrapOptionsRequest {
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
     const bootstrapConfig = createBootstrapConfig(env);
     const bootstrapService = new BootstrapService(store, bootstrapConfig);
 

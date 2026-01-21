@@ -14,7 +14,7 @@ import { WebAuthnService, createWebAuthnConfig, getCredentialStore } from '$lib/
 export const POST: RequestHandler = async () => {
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
     const service = new WebAuthnService(config);
 
     // Get existing credentials to exclude from registration

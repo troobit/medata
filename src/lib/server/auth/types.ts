@@ -42,7 +42,8 @@ export interface WebAuthnConfig {
   rpId: string;
   rpName: string;
   origin: string;
-  credentialsPath: string;
+  /** @deprecated Use getCredentialStore() factory instead. Only used for backward compatibility. */
+  credentialsPath?: string;
 }
 
 /**

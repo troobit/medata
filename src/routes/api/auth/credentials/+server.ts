@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
 
     const credentials = await store.getCredentials();
 

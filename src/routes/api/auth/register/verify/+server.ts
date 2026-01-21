@@ -20,7 +20,7 @@ interface VerifyRequestBody {
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const config = createWebAuthnConfig(env);
-    const store = getCredentialStore(config.credentialsPath);
+    const store = getCredentialStore();
     const service = new WebAuthnService(config);
 
     // Parse request body
