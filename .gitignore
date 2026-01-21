@@ -46,3 +46,4 @@ static/favicon.ico
 
 # Orbit task management
 **/.orbit/
+.vercel

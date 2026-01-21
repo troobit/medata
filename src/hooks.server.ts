@@ -24,24 +24,28 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Default to no session
   event.locals.session = null;
 
-  try {
-    const sessionConfig = createSessionConfig(env);
-    const sessionService = getSessionService(sessionConfig);
+  // createSessionConfig returns null during prerender when env vars aren't available
+  const sessionConfig = createSessionConfig(env);
 
-    // Get session cookie
-    const cookieOptions = sessionService.getCookieOptions();
-    const token = event.cookies.get(cookieOptions.name);
+  if (sessionConfig) {
+    try {
+      const sessionService = getSessionService(sessionConfig);
 
-    if (token) {
-      // Validate session
-      const sessionData = sessionService.validateSession(token);
-      if (sessionData) {
-        event.locals.session = sessionData;
+      // Get session cookie
+      const cookieOptions = sessionService.getCookieOptions();
+      const token = event.cookies.get(cookieOptions.name);
+
+      if (token) {
+        // Validate session
+        const sessionData = sessionService.validateSession(token);
+        if (sessionData) {
+          event.locals.session = sessionData;
+        }
       }
+    } catch (error) {
+      // Log error but don't block request - just leave session as null
+      console.error('Session validation error in hooks:', error);
     }
-  } catch (error) {
-    // Log error but don't block request - just leave session as null
-    console.error('Session validation error in hooks:', error);
   }
 
   return resolve(event);

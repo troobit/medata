@@ -14,6 +14,17 @@ import type { SessionStatusResponse } from '$lib/server/auth';
 export const GET: RequestHandler = async ({ cookies }) => {
   try {
     const sessionConfig = createSessionConfig(env);
+
+    if (!sessionConfig) {
+      return json(
+        {
+          error: 'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
+          code: 'CONFIG_ERROR'
+        },
+        { status: 500 }
+      );
+    }
+
     const sessionService = getSessionService(sessionConfig);
 
     // Get session cookie

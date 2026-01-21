@@ -160,17 +160,17 @@ export class SessionService {
 
 /**
  * Create session config from environment variables
+ * Returns null if AUTH_SESSION_SECRET is not available (e.g., during prerender)
  */
 export function createSessionConfig(env: {
   AUTH_SESSION_SECRET?: string;
   NODE_ENV?: string;
-}): SessionConfig {
+}): SessionConfig | null {
   const secret = env.AUTH_SESSION_SECRET;
 
+  // Return null during prerender/build when env vars aren't available
   if (!secret || secret.length < 32) {
-    throw new Error(
-      'AUTH_SESSION_SECRET environment variable is required and must be at least 32 characters'
-    );
+    return null;
   }
 
   const isProduction = env.NODE_ENV === 'production';

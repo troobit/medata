@@ -13,6 +13,17 @@ import { createSessionConfig, getSessionService } from '$lib/server/auth';
 export const POST: RequestHandler = async ({ cookies }) => {
   try {
     const sessionConfig = createSessionConfig(env);
+
+    if (!sessionConfig) {
+      return json(
+        {
+          error: 'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
+          code: 'CONFIG_ERROR'
+        },
+        { status: 500 }
+      );
+    }
+
     const sessionService = getSessionService(sessionConfig);
 
     // Clear session cookie
