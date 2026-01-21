@@ -6,13 +6,13 @@ references:
 
 ## Phase 1: Validation
 
-- [ ] 1. Verify auth branch builds and tests pass in worktree
+- [x] 1. Verify auth branch builds and tests pass in worktree
 
-- [ ] 2. Verify logoui branch builds successfully in worktree
+- [x] 2. Verify logoui branch builds successfully in worktree
 
-- [ ] 3. Confirm dev-2 is fully superseded by logoui (no unique features)
+- [x] 3. Confirm dev-2 is fully superseded by logoui (no unique features)
 
-- [ ] 4. Document any uncommitted changes in worktrees before merge
+- [x] 4. Document any uncommitted changes in worktrees before merge
 
 ## Phase 2: Merge auth Branch into dev-0
 
