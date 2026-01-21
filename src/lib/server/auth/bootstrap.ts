@@ -5,7 +5,7 @@
  * where no credentials exist yet. Requires a bootstrap token for security.
  */
 
-import type { CredentialStore } from './CredentialStore';
+import type { ICredentialStore } from './ICredentialStore';
 
 export interface BootstrapConfig {
   token: string;
@@ -17,10 +17,10 @@ export interface BootstrapState {
 }
 
 export class BootstrapService {
-  private store: CredentialStore;
+  private store: ICredentialStore;
   private config: BootstrapConfig;
 
-  constructor(store: CredentialStore, config: BootstrapConfig) {
+  constructor(store: ICredentialStore, config: BootstrapConfig) {
     this.store = store;
     this.config = config;
   }

@@ -1,16 +1,17 @@
 /**
- * CredentialStore - File-based credential persistence
+ * FileCredentialStore - File-based credential persistence
  *
  * Stores credentials in a JSON file for single-user deployments.
- * For production on Vercel, consider using Vercel KV for persistence.
+ * For production on Vercel, use KVCredentialStore instead.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+import type { ICredentialStore } from './ICredentialStore';
 import type { StoredCredential, StoredChallenge, CredentialStoreData } from './types';
 
-export class CredentialStore {
+export class FileCredentialStore implements ICredentialStore {
   private filePath: string;
   private data: CredentialStoreData | null = null;
 
@@ -169,11 +170,11 @@ export class CredentialStore {
 /**
  * Singleton instance factory
  */
-let storeInstance: CredentialStore | null = null;
+let storeInstance: FileCredentialStore | null = null;
 
-export function getCredentialStore(filePath: string): CredentialStore {
+export function getFileCredentialStore(filePath: string): FileCredentialStore {
   if (!storeInstance || storeInstance['filePath'] !== filePath) {
-    storeInstance = new CredentialStore(filePath);
+    storeInstance = new FileCredentialStore(filePath);
   }
   return storeInstance;
 }
