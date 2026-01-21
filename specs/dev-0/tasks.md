@@ -40,15 +40,15 @@ metadata:
 
 ## Local Food Estimation
 
-- [ ] 11. Implement reference card detection (credit card edge detection, perspective correction)
+- [x] 11. Implement reference card detection (credit card edge detection, perspective correction)
 
-- [ ] 12. Build food region segmentation with user-assisted boundary selection
+- [x] 12. Build food region segmentation with user-assisted boundary selection
 
-- [ ] 13. Create USDA FNDDS food density lookup with category search
+- [x] 13. Create USDA FNDDS food density lookup with category search
 
-- [ ] 14. Implement volume-to-macro conversion with confidence scoring
+- [x] 14. Implement volume-to-macro conversion with confidence scoring
 
-- [ ] 15. Store estimation calibration factors learned from user corrections
+- [x] 15. Store estimation calibration factors learned from user corrections
 
 ## Regression & Modeling
 
