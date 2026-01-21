@@ -98,8 +98,8 @@ references:
 
 - [x] 39. Add static and animated variants side-by-side for each size
 
-- [ ] 40. Verify page loads at /demologo without authentication
+- [x] 40. Verify page loads at /demologo without authentication
 
-- [ ] 41. Validate all logo sizes render correctly at specified pixel dimensions
+- [x] 41. Validate all logo sizes render correctly at specified pixel dimensions
 
-- [ ] 42. Confirm animation plays smoothly on animated variants
+- [x] 42. Confirm animation plays smoothly on animated variants
