@@ -11,7 +11,7 @@
   let recentDoses = $state<number[]>([]);
 
   async function loadRecentDoses() {
-    recentDoses = await eventsStore.getRecentInsulinDosesByType(insulinType, 5);
+    recentDoses = await eventsStore.getRecentInsulinDoses(insulinType, 5);
   }
 
   onMount(() => {

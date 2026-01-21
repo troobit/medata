@@ -92,18 +92,18 @@ metadata:
 
 ## Phase 5: Testing & Verification
 
-- [ ] 14. Test local development with file-based store
+- [x] 14. Test local development with file-based store
   - Verify bootstrap flow works locally
   - Confirm credentials persist in ./data/credentials.json
   - Test login/logout cycle
 
-- [ ] 15. Test Vercel preview deployment with KV
+- [x] 15. Test Vercel preview deployment with KV
   - Deploy to preview environment
   - Complete bootstrap flow with YubiKey
   - Verify credential persists across requests
   - Test login with registered credential
 
-- [ ] 16. Verify challenge TTL behavior
+- [x] 16. Verify challenge TTL behavior
   - Start registration, wait >5 minutes, attempt verify
   - Confirm challenge expired error returned
   - Verify no stale challenges accumulate in KV
