@@ -53,33 +53,40 @@ On first run, no credentials exist. You'll need to enroll your first security ke
 
 ## Deploying to Vercel
 
+MeData can be deployed to Vercel with YubiKey authentication. Vercel KV is required for credential storage since serverless functions have a read-only filesystem.
+
 ### 1. Set Up Vercel KV
 
-Vercel's serverless functions have a read-only filesystem, so credentials are stored in Vercel KV instead of a JSON file.
+**Via Vercel Dashboard:**
+
+1. Go to your Vercel project → **Storage** tab
+2. Click **Create Database** → **KV**
+3. Name it (e.g., `medata-auth`)
+4. Click **Create** and it will auto-link to your project
+
+**Via CLI:**
 
 ```bash
-# Create a KV store for authentication
 vercel storage add kv medata-auth
-
-# Link to your project
-vercel link
 ```
 
-### 2. Configure Production Environment Variables
+### 2. Configure Environment Variables
 
 ```bash
-# Set WebAuthn configuration
+# Set the production domain
 vercel env add AUTH_RP_ID production
 # Enter: your-domain.vercel.app
 
 vercel env add AUTH_ORIGIN production
 # Enter: https://your-domain.vercel.app
 
-# Set session secret (generate with: openssl rand -base64 32)
+# Generate and set session secret
 vercel env add AUTH_SESSION_SECRET production
+# Enter: $(openssl rand -base64 32)
 
-# Set temporary bootstrap token for initial enrollment
+# Generate bootstrap token for initial enrollment
 vercel env add AUTH_BOOTSTRAP_TOKEN production
+# Enter: $(openssl rand -hex 16)
 ```
 
 Note: `KV_REST_API_URL` and `KV_REST_API_TOKEN` are automatically set when you link the KV store.
@@ -90,31 +97,44 @@ Note: `KV_REST_API_URL` and `KV_REST_API_TOKEN` are automatically set when you l
 vercel --prod
 ```
 
-### 4. Enroll Your Security Key
+### 4. Enroll Your YubiKey
 
-1. Visit your production URL
-2. Enter the bootstrap token when prompted
-3. Register your security key
+1. Visit `https://your-domain.vercel.app`
+2. Enter your bootstrap token when prompted
+3. Insert and tap your YubiKey
+4. You're now authenticated
 
-### 5. Remove Bootstrap Token
+### 5. Remove Bootstrap Token (Important)
 
-After successful enrollment, remove the bootstrap token for security:
+After successful enrollment:
 
 ```bash
 vercel env rm AUTH_BOOTSTRAP_TOKEN production
-vercel --prod
+vercel --prod  # Redeploy to apply
 ```
+
+### Environment Variables for Production
+
+| Variable               | Required     | Description                                   |
+| ---------------------- | ------------ | --------------------------------------------- |
+| `AUTH_RP_ID`           | Yes          | Your Vercel domain (e.g., `myapp.vercel.app`) |
+| `AUTH_ORIGIN`          | Yes          | Full URL with `https://`                      |
+| `AUTH_SESSION_SECRET`  | Yes          | 32+ char secret for session signing           |
+| `AUTH_BOOTSTRAP_TOKEN` | First deploy | Remove after initial enrollment               |
+| `KV_REST_API_URL`      | Auto         | Set automatically when KV is linked           |
+| `KV_REST_API_TOKEN`    | Auto         | Set automatically when KV is linked           |
 
 ### Troubleshooting Vercel Deployment
 
-| Problem | Solution |
-|---------|----------|
-| `ENOENT: mkdir './data'` | KV not linked. Run `vercel storage add kv` and redeploy |
-| Credentials not persisting | Verify KV store is linked: `vercel env ls production` should show `KV_REST_API_URL` |
-| `Unauthorized` KV errors | Regenerate KV credentials in Vercel Dashboard → Storage → your KV store |
-| Bootstrap not working | Verify `AUTH_BOOTSTRAP_TOKEN` is set: `vercel env ls production` |
+| Problem                         | Solution                                                       |
+| ------------------------------- | -------------------------------------------------------------- |
+| `ENOENT: mkdir './data'`        | KV is not linked. Add a KV store in Vercel dashboard.          |
+| `Invalid origin`                | Ensure `AUTH_ORIGIN` matches your actual URL exactly           |
+| YubiKey not working             | Verify the domain uses HTTPS (required for WebAuthn)           |
+| Credentials lost after redeploy | This shouldn't happen with KV. Verify KV is linked.            |
+| Bootstrap not prompting         | Credentials already exist in KV. Check Vercel KV data browser. |
 
-For detailed KV setup instructions, see [docs/auth.md](docs/auth.md#vercel-kv-storage).
+See [docs/auth.md](docs/auth.md) for detailed KV configuration and troubleshooting.
 
 ## Authentication
 
@@ -132,6 +152,7 @@ MeData uses WebAuthn (FIDO2) passkey authentication - no passwords required. Thi
 For local development, use your browser's virtual authenticator:
 
 **Chrome/Chromium:**
+
 1. Open DevTools (F12)
 2. Go to "Application" tab → "WebAuthn" section
 3. Check "Enable virtual authenticator environment"
@@ -139,6 +160,7 @@ For local development, use your browser's virtual authenticator:
 5. The virtual authenticator will respond to WebAuthn prompts
 
 **Firefox:**
+
 1. Navigate to `about:config`
 2. Set `security.webauthn.softtoken` to `true`
 3. Firefox will simulate a platform authenticator
@@ -154,13 +176,13 @@ App loads → AuthGate checks session → Valid? → Show app
 
 ### Environment Variables Reference
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AUTH_RP_ID` | Yes | Domain for WebAuthn. Use `localhost` for dev. |
-| `AUTH_ORIGIN` | Yes | Full origin URL. Use `http://localhost:5173` for dev. |
-| `AUTH_CREDENTIALS_PATH` | Yes | Path to store credentials JSON file. |
-| `AUTH_SESSION_SECRET` | Yes | Min 32 chars. HMAC secret for session signing. |
-| `AUTH_BOOTSTRAP_TOKEN` | First run | One-time token for initial enrollment. Remove after setup. |
+| Variable                | Required  | Description                                                |
+| ----------------------- | --------- | ---------------------------------------------------------- |
+| `AUTH_RP_ID`            | Yes       | Domain for WebAuthn. Use `localhost` for dev.              |
+| `AUTH_ORIGIN`           | Yes       | Full origin URL. Use `http://localhost:5173` for dev.      |
+| `AUTH_CREDENTIALS_PATH` | Yes       | Path to store credentials JSON file.                       |
+| `AUTH_SESSION_SECRET`   | Yes       | Min 32 chars. HMAC secret for session signing.             |
+| `AUTH_BOOTSTRAP_TOKEN`  | First run | One-time token for initial enrollment. Remove after setup. |
 
 ### Credential Management
 

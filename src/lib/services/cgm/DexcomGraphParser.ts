@@ -71,8 +71,9 @@ const DEXCOM_COLORS = {
 
 /**
  * Common Dexcom graph configurations
+ * Note: Currently unused but kept for future preset detection
  */
-const DEXCOM_PRESETS = {
+const _DEXCOM_PRESETS = {
   '3h': { durationHours: 3, expectedDataPoints: 36 },
   '6h': { durationHours: 6, expectedDataPoints: 72 },
   '12h': { durationHours: 12, expectedDataPoints: 144 },
@@ -382,9 +383,9 @@ export class DexcomGraphParser {
    * Detect if using mg/dL or mmol/L based on typical value ranges
    */
   private detectUnit(
-    curvePoints: Array<{ x: number; y: number }>,
-    graphRegion: GraphRegion,
-    imageHeight: number
+    _curvePoints: Array<{ x: number; y: number }>,
+    _graphRegion: GraphRegion,
+    _imageHeight: number
   ): BSLUnit {
     // Analyze y-position distribution
     // mg/dL typically uses larger range (40-400)

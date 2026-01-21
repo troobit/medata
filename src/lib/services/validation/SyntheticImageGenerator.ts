@@ -177,11 +177,12 @@ export function generateSyntheticSVG(config: SyntheticImageConfig): string {
       case 'rectangle':
         svg += `<rect x="${foodX}" y="${foodY}" width="${foodWidthPx}" height="${foodHeightPx}" rx="3" fill="${food.color}" stroke="#00000033" stroke-width="2"/>`;
         break;
-      case 'irregular':
+      case 'irregular': {
         // Blob-like shape
         const points = generateIrregularPath(foodX, foodY, foodWidthPx, foodHeightPx);
         svg += `<path d="${points}" fill="${food.color}" stroke="#00000033" stroke-width="2"/>`;
         break;
+      }
     }
 
     // Move to next position

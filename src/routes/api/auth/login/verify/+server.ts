@@ -32,7 +32,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     if (!sessionConfig) {
       return json(
         {
-          error: 'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
+          error:
+            'Session configuration unavailable. Check AUTH_SESSION_SECRET environment variable.',
           code: 'CONFIG_ERROR'
         },
         { status: 500 }

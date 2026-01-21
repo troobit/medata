@@ -25,7 +25,7 @@
     DetectedReference,
     LocalEstimationResult
   } from '$lib/types/local-estimation';
-  import type { ShapeTemplate } from '$lib/services/local-estimation';
+  // Note: ShapeTemplate available for future shape re-estimation feature
 
   // Flow steps
   type Step = 'capture' | 'region' | 'food-type' | 'result';
@@ -38,7 +38,7 @@
   let selectedFood = $state<FoodDensityEntry | null>(null);
   let result = $state<LocalEstimationResult | null>(null);
   let finalCarbs = $state<number>(0);
-  let saving = $state(false);
+  let _saving = $state(false);
   let detecting = $state(false);
   let error = $state<string | null>(null);
 
@@ -170,7 +170,7 @@
   async function saveResult() {
     if (!result) return;
 
-    saving = true;
+    _saving = true;
     error = null;
     try {
       await eventsStore.logMeal(finalCarbs, {
@@ -182,10 +182,8 @@
         confidence: result.confidence
       });
       goto('/');
-    } catch (err) {
+    } catch {
       error = 'Failed to save meal';
-    } finally {
-      saving = false;
     }
   }
 
@@ -301,7 +299,7 @@
 
     <!-- Progress indicator -->
     <div class="mt-3 flex gap-1">
-      {#each Object.entries(stepNumbers) as [step, num]}
+      {#each Object.entries(stepNumbers) as [_step, num]}
         <div
           class="h-1 flex-1 rounded-full transition-colors {stepNumbers[currentStep] >= num
             ? 'bg-purple-500'

@@ -5,7 +5,7 @@
    */
   import { onMount } from 'svelte';
   import { Button, ExpandableSection } from '$lib/components/ui';
-  import { validationStore, settingsStore } from '$lib/stores';
+  import { validationStore } from '$lib/stores';
   import { generateSyntheticTestBatch } from '$lib/services/validation/SyntheticImageGenerator';
   import type { FoodCategory, GroundTruthSource, TestDatasetExport } from '$lib/types';
 

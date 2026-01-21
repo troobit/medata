@@ -17,18 +17,23 @@ Each spec history file follows this format:
 # [Spec Name]
 
 ## Overview
+
 Brief description of the spec's scope and goals
 
 ## Implementation Summary
+
 High-level summary of what was built
 
 ## Files Changed
+
 Categorised list of added/modified files
 
 ## Features Implemented
+
 Bulleted list of completed features
 
 ## Documentation Updates
+
 Links to any docs created or updated
 ```
 
@@ -44,7 +49,7 @@ When completing a spec:
 
 ## History Index
 
-| Spec | Branch | Status | Description |
-|------|--------|--------|-------------|
-| [Core Features](core-features.md) | dev-0 | Complete | UI, AI validation, local estimation, modelling, component system |
-| [WebAuthn Authentication](webauthn-authentication.md) | dev-1 | Complete | Server-side WebAuthn with YubiKey support |
+| Spec                                                  | Branch | Status   | Description                                                      |
+| ----------------------------------------------------- | ------ | -------- | ---------------------------------------------------------------- |
+| [Core Features](core-features.md)                     | dev-0  | Complete | UI, AI validation, local estimation, modelling, component system |
+| [WebAuthn Authentication](webauthn-authentication.md) | dev-1  | Complete | Server-side WebAuthn with YubiKey support                        |

@@ -28,7 +28,7 @@ import { calculateActiveInsulin, assessInsulinStacking } from './InsulinDecayMod
 import { calculateActiveCarbs } from './CarbAbsorptionModel';
 import { calculateBloodAlcohol, getHypoglycemiaRiskWindow } from './AlcoholMetabolismModel';
 import { adjustDoseForTimeOfDay } from './CircadianModel';
-import { buildEventWindow, DEFAULT_USER_PARAMETERS } from './BSLPredictionModel';
+import { DEFAULT_USER_PARAMETERS } from './BSLPredictionModel';
 
 /**
  * Safety thresholds for recommendations
@@ -270,7 +270,7 @@ function calculateDoseConfidence(
  */
 export function getTimingRecommendation(
   currentBSL: number | null,
-  plannedCarbs: number
+  _plannedCarbs: number
 ): {
   minutesBefore: number;
   reason: string;

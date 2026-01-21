@@ -184,7 +184,7 @@
 
   <!-- SVG overlay for regions -->
   {#if imageLoaded}
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <svg
       class="absolute inset-0 h-full w-full touch-none"
       viewBox="0 0 100 100"

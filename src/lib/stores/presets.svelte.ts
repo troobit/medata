@@ -103,7 +103,7 @@ function createPresetsStore() {
       await service.markUsed(id);
       // Re-sort presets by updatedAt
       await loadAll();
-    } catch (e) {
+    } catch {
       // Silent failure - not critical
     }
   }

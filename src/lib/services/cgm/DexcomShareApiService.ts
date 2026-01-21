@@ -29,10 +29,7 @@ const DEXCOM_ENDPOINTS = {
 
 const DEXCOM_APPLICATION_ID = 'd89443d2-327c-4a6f-89e5-496bbb0317db';
 
-interface DexcomLoginResponse {
-  // Returns session ID string directly
-  SessionId: string;
-}
+// Note: Login response is just the session ID string directly
 
 interface DexcomReadingsResponse {
   // Array of glucose readings
@@ -201,7 +198,7 @@ export class DexcomShareApiService implements ICGMApiService {
       }
 
       // Try to fetch a single reading to verify connection
-      const result = await this.getReadings({ maxCount: 1 });
+      await this.getReadings({ maxCount: 1 });
 
       return {
         provider: 'dexcom-share',

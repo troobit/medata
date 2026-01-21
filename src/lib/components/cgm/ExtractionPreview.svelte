@@ -102,7 +102,7 @@
           vector-effect="non-scaling-stroke"
         />
         <!-- Data points -->
-        {#each extractionResult.dataPoints as point, i}
+        {#each extractionResult.dataPoints as point, i (point.timestamp.getTime())}
           {@const timeRange =
             extractionResult.axisRanges.timeEnd.getTime() -
             extractionResult.axisRanges.timeStart.getTime()}
@@ -185,7 +185,7 @@
     <div class="rounded-lg border border-yellow-500/50 bg-yellow-500/10 px-4 py-3">
       <p class="mb-1 text-sm font-medium text-yellow-400">Warnings:</p>
       <ul class="list-inside list-disc text-sm text-yellow-300/80">
-        {#each extractionResult.warnings as warning}
+        {#each extractionResult.warnings as warning (warning)}
           <li>{warning}</li>
         {/each}
       </ul>

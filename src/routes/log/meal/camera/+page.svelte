@@ -6,10 +6,8 @@
    * Flow: Mode Selection -> Capture -> Process (varies by mode)
    */
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
   import { CameraCapture, PhotoPreview, FoodRecognitionResult } from '$lib/components/ai';
   import {
-    ReferenceCardGuide,
     FoodRegionSelector,
     FoodTypeSelector,
     EstimationResult
@@ -123,8 +121,7 @@
   let adjustedCalories = $derived(Math.round(calories * servings));
 
   // Mode requires AI but AI not configured
-  let modeRequiresAI = $derived(modes.find((m) => m.id === selectedMode)?.requiresAI ?? false);
-  let modeBlocked = $derived(modeRequiresAI && !aiConfigured);
+  let _modeRequiresAI = $derived(modes.find((m) => m.id === selectedMode)?.requiresAI ?? false);
 
   function selectMode(mode: ProcessingMode) {
     selectedMode = mode;
@@ -192,7 +189,7 @@
           flowState = 'estimate-region';
           break;
 
-        case 'label':
+        case 'label': {
           const service = getFoodService(settingsStore.settings);
           if (!service) {
             throw new Error('No AI provider configured');
@@ -205,6 +202,7 @@
           servings = 1;
           flowState = 'label-result';
           break;
+        }
       }
     } catch (e) {
       error = e instanceof Error ? e.message : 'Processing failed';
@@ -322,7 +320,7 @@
         photoUrl: imageUrl ?? undefined
       });
       goto('/');
-    } catch (err) {
+    } catch {
       error = 'Failed to save meal';
     } finally {
       saving = false;
