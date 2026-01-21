@@ -68,12 +68,12 @@ references:
 
 ## Phase 7: Final Merge (when UI complete)
 
-- [ ] 26. Merge logoui into dev-0 when UI work reaches milestone
+- [x] 26. Merge logoui into dev-0 when UI work reaches milestone
 
-- [ ] 27. Run full validation on dev-0: pnpm install && pnpm build && pnpm dev
+- [x] 27. Run full validation on dev-0: pnpm install && pnpm build && pnpm dev
 
-- [ ] 28. Remove logoui worktree: git worktree remove /Users/ronan/repos/beetus/logoui
+- [x] 28. Remove logoui worktree: git worktree remove /Users/ronan/repos/beetus/logoui
 
-- [ ] 29. Push final dev-0 to origin
+- [x] 29. Push final dev-0 to origin
 
-- [ ] 30. Create PR from dev-0 to main
+- [x] 30. Create PR from dev-0 to main
