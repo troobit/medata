@@ -28,21 +28,21 @@ references:
 
 ## Phase 3: Sync dev-0 into logoui Worktree
 
-- [ ] 10. In logoui worktree, merge dev-0 to bring in auth changes
+- [x] 10. In logoui worktree, merge dev-0 to bring in auth changes
 
-- [ ] 11. Resolve .env.example conflict: combine KV vars + LOGO_VARIANT
+- [x] 11. Resolve .env.example conflict: combine KV vars + LOGO_VARIANT
 
-- [ ] 12. Resolve src/lib/db/schema.ts conflict if present (keep both changes)
+- [x] 12. Resolve src/lib/db/schema.ts conflict if present (keep both changes)
 
-- [ ] 13. Keep logoui version of specs/logoui/tasks.md
+- [x] 13. Keep logoui version of specs/logoui/tasks.md
 
-- [ ] 14. Run pnpm install in logoui worktree
+- [x] 14. Run pnpm install in logoui worktree
 
-- [ ] 15. Verify build succeeds with auth + logo combined
+- [x] 15. Verify build succeeds with auth + logo combined
 
-- [ ] 16. Test auth bootstrap flow works in logoui environment
+- [x] 16. Test auth bootstrap flow works in logoui environment
 
-- [ ] 17. Test Logo component renders with animation
+- [x] 17. Test Logo component renders with animation
 
 ## Phase 4: Archive dev-2
 
