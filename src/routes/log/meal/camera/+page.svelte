@@ -14,14 +14,14 @@
     FoodTypeSelector,
     EstimationResult
   } from '$lib/components/local-estimation';
-  import { recognizeFoodWithFallback, getFoodService } from '$lib/services/ai';
+  import { RecogniseFoodWithFallback, getFoodService } from '$lib/services/ai';
   import { estimationEngine, volumeCalculator } from '$lib/services/local-estimation';
   import { compressImage, blobToDataUrl } from '$lib/utils/imageProcessing';
   import { settingsStore, eventsStore, validationStore } from '$lib/stores';
   import { Button } from '$lib/components/ui';
   import type {
     FoodRecognitionResult as FoodRecognitionResultType,
-    RecognizedFoodItem,
+    RecognisedFoodItem,
     NutritionLabelResult
   } from '$lib/types/ai';
   import type { MacroData } from '$lib/types/events';
@@ -173,7 +173,7 @@
     try {
       switch (selectedMode) {
         case 'ai':
-          recognitionResult = await recognizeFoodWithFallback(
+          recognitionResult = await RecogniseFoodWithFallback(
             capturedImage,
             settingsStore.settings
           );
@@ -260,7 +260,7 @@
   }
 
   // Save handlers
-  async function handleAISave(macros: MacroData, items: RecognizedFoodItem[]) {
+  async function handleAISave(macros: MacroData, items: RecognisedFoodItem[]) {
     saving = true;
     error = null;
 

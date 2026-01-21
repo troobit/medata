@@ -139,7 +139,7 @@ export function getAllConfiguredServices(settings: UserSettings): IFoodRecogniti
 /**
  * Attempts food recognition with automatic fallback to next provider on failure
  */
-export async function recognizeFoodWithFallback(
+export async function RecogniseFoodWithFallback(
   image: Blob,
   settings: UserSettings,
   options?: RecognitionOptions
@@ -154,7 +154,7 @@ export async function recognizeFoodWithFallback(
 
   for (const service of services) {
     try {
-      return await service.recognizeFood(image, options);
+      return await service.RecogniseFood(image, options);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.warn(`${service.getProviderName()} failed, trying next provider:`, lastError.message);

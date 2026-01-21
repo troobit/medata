@@ -4,7 +4,7 @@
  */
 
 import type { MacroData, MealDataSource } from './events';
-import type { RecognizedFoodItem } from './ai';
+import type { RecognisedFoodItem } from './ai';
 
 /**
  * Food category for grouping accuracy metrics
@@ -61,7 +61,7 @@ export interface ValidationResult {
   aiProvider: string;
   predictedMacros: MacroData;
   groundTruth: MacroData;
-  predictedItems?: RecognizedFoodItem[];
+  predictedItems?: RecognisedFoodItem[];
   confidence: number;
   processingTimeMs: number;
   // Error metrics
@@ -107,7 +107,7 @@ export interface CorrectionHistoryEntry {
   imageUrl?: string;
   aiPrediction: MacroData;
   userCorrection: MacroData;
-  aiItems?: RecognizedFoodItem[];
+  aiItems?: RecognisedFoodItem[];
   correctedItems?: Array<{
     name: string;
     quantity: number;

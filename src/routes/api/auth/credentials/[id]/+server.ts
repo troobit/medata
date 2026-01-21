@@ -24,7 +24,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     return json(
       {
         error: 'Authentication required',
-        code: 'UNAUTHORIZED'
+        code: 'UNauthoriseD'
       },
       { status: 401 }
     );
@@ -111,7 +111,7 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
     return json(
       {
         error: 'Authentication required',
-        code: 'UNAUTHORIZED'
+        code: 'UNauthoriseD'
       },
       { status: 401 }
     );

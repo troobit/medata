@@ -49,7 +49,7 @@ On first run, no credentials exist. You'll need to enroll your first security ke
 4. Follow the browser prompt to register a security key (hardware key or virtual authenticator)
 5. Once enrolled, you're logged in and can access the app
 
-**After initial enrollment**, remove or rotate `AUTH_BOOTSTRAP_TOKEN` to prevent unauthorized credential registration.
+**After initial enrollment**, remove or rotate `AUTH_BOOTSTRAP_TOKEN` to prevent unauthorised credential registration.
 
 ## Authentication
 

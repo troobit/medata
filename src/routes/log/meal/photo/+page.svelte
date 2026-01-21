@@ -7,12 +7,12 @@
    */
   import { goto } from '$app/navigation';
   import { CameraCapture, PhotoPreview, FoodRecognitionResult } from '$lib/components/ai';
-  import { recognizeFoodWithFallback } from '$lib/services/ai';
+  import { RecogniseFoodWithFallback } from '$lib/services/ai';
   import { compressImage, blobToDataUrl } from '$lib/utils/imageProcessing';
   import { settingsStore, eventsStore } from '$lib/stores';
   import type {
     FoodRecognitionResult as FoodRecognitionResultType,
-    RecognizedFoodItem
+    RecognisedFoodItem
   } from '$lib/types/ai';
   import type { MacroData } from '$lib/types/events';
   import { Button } from '$lib/components/ui';
@@ -62,7 +62,7 @@
     processing = true;
 
     try {
-      recognitionResult = await recognizeFoodWithFallback(capturedImage, settingsStore.settings);
+      recognitionResult = await RecogniseFoodWithFallback(capturedImage, settingsStore.settings);
       flowState = 'result';
     } catch (e) {
       error = e instanceof Error ? e.message : 'Recognition failed';
@@ -71,7 +71,7 @@
     }
   }
 
-  async function handleSave(macros: MacroData, items: RecognizedFoodItem[]) {
+  async function handleSave(macros: MacroData, items: RecognisedFoodItem[]) {
     saving = true;
     error = null;
 

@@ -26,7 +26,7 @@ export const GET: RequestHandler = async ({ locals }) => {
     return json(
       {
         error: 'Authentication required',
-        code: 'UNAUTHORIZED'
+        code: 'UNauthoriseD'
       },
       { status: 401 }
     );

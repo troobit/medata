@@ -8,7 +8,7 @@ import type {
   FoodRecognitionResult,
   NutritionLabelResult,
   RecognitionOptions,
-  RecognizedFoodItem
+  RecognisedFoodItem
 } from '$lib/types/ai';
 import type { MacroData } from '$lib/types/events';
 import {
@@ -50,7 +50,7 @@ export class ClaudeFoodService implements IFoodRecognitionService {
     this.model = model;
   }
 
-  async recognizeFood(image: Blob, _options?: RecognitionOptions): Promise<FoodRecognitionResult> {
+  async RecogniseFood(image: Blob, _options?: RecognitionOptions): Promise<FoodRecognitionResult> {
     const startTime = performance.now();
 
     const base64Image = await this.blobToBase64(image);
@@ -107,7 +107,7 @@ export class ClaudeFoodService implements IFoodRecognitionService {
     const parsed = parseAIResponse<ClaudeFoodResponse>(rawResponse);
     const processingTimeMs = performance.now() - startTime;
 
-    const items: RecognizedFoodItem[] = parsed.items.map((item) => ({
+    const items: RecognisedFoodItem[] = parsed.items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
       unit: item.unit,

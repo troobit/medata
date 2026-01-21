@@ -50,7 +50,7 @@ export { DEFAULT_SETTINGS, ENV_VAR_NAMES } from './settings';
 // Workstream A: AI Food Recognition
 export type {
   BoundingBox,
-  RecognizedFoodItem,
+  RecognisedFoodItem,
   FoodRecognitionResult,
   NutritionLabelResult,
   RecognitionOptions,
