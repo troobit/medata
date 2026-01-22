@@ -22,10 +22,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const configResult = createWebAuthnConfig(env);
 
     if (!configResult.success) {
-      return json(
-        { error: configResult.error, code: configResult.code },
-        { status: 503 }
-      );
+      return json({ error: configResult.error, code: configResult.code }, { status: 503 });
     }
 
     const store = getCredentialStore();

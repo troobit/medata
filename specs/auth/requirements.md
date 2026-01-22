@@ -6,25 +6,25 @@ The deployed Svelte app at https://medata-rtob.vercel.app/ throws environment-re
 
 ### Required Environment Variables for Production
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `AUTH_RP_ID` | WebAuthn Relying Party ID (domain) | `medata-rtob.vercel.app` |
-| `AUTH_ORIGIN` | Expected origin for WebAuthn verification | `https://medata-rtob.vercel.app` |
-| `AUTH_SESSION_SECRET` | Secret for signing session cookies (min 32 chars) | Generated via `openssl rand -base64 32` |
-| `AUTH_BOOTSTRAP_TOKEN` | Temporary token for initial credential enrolment | Generated via `openssl rand -hex 16` |
-| `KV_REST_API_URL` | Vercel KV endpoint (auto-set when KV linked) | Auto-populated by Vercel |
-| `KV_REST_API_TOKEN` | Vercel KV auth token (auto-set when KV linked) | Auto-populated by Vercel |
+| Variable               | Description                                       | Example                                 |
+| ---------------------- | ------------------------------------------------- | --------------------------------------- |
+| `AUTH_RP_ID`           | WebAuthn Relying Party ID (domain)                | `medata-rtob.vercel.app`                |
+| `AUTH_ORIGIN`          | Expected origin for WebAuthn verification         | `https://medata-rtob.vercel.app`        |
+| `AUTH_SESSION_SECRET`  | Secret for signing session cookies (min 32 chars) | Generated via `openssl rand -base64 32` |
+| `AUTH_BOOTSTRAP_TOKEN` | Temporary token for initial credential enrolment  | Generated via `openssl rand -hex 16`    |
+| `KV_REST_API_URL`      | Vercel KV endpoint (auto-set when KV linked)      | Auto-populated by Vercel                |
+| `KV_REST_API_TOKEN`    | Vercel KV auth token (auto-set when KV linked)    | Auto-populated by Vercel                |
 
 ### Current Status (2026-01-23)
 
-| Variable | Status |
-|----------|--------|
-| `AUTH_RP_ID` | ✅ Set in Vercel Production |
-| `AUTH_ORIGIN` | ✅ Set in Vercel Production |
-| `AUTH_SESSION_SECRET` | ✅ Set in Vercel Production |
-| `AUTH_BOOTSTRAP_TOKEN` | ✅ Set in Vercel Production |
-| `KV_REST_API_URL` | ❌ **Not set** - KV store needs to be created via Vercel Dashboard |
-| `KV_REST_API_TOKEN` | ❌ **Not set** - Auto-populated when KV is linked |
+| Variable               | Status                                                             |
+| ---------------------- | ------------------------------------------------------------------ |
+| `AUTH_RP_ID`           | ✅ Set in Vercel Production                                        |
+| `AUTH_ORIGIN`          | ✅ Set in Vercel Production                                        |
+| `AUTH_SESSION_SECRET`  | ✅ Set in Vercel Production                                        |
+| `AUTH_BOOTSTRAP_TOKEN` | ✅ Set in Vercel Production                                        |
+| `KV_REST_API_URL`      | ❌ **Not set** - KV store needs to be created via Vercel Dashboard |
+| `KV_REST_API_TOKEN`    | ❌ **Not set** - Auto-populated when KV is linked                  |
 
 ### Manual Action Required
 
@@ -44,6 +44,7 @@ Vercel KV must be configured via the Vercel Dashboard (the CLI doesn't support K
 ## R2: PWA Icon Assets Missing
 
 The manifest.json references icon files that do not exist in the static directory:
+
 - `icon-192.png` - 404 error
 - `icon-512.png` - 404 error
 - `icon-192-maskable.png` - 404 error
@@ -64,6 +65,7 @@ Desired behaviour: Return a structured error response indicating the app is misc
 The front-end pre-login page has been simplified. The rest of the site should follow this simplified style:
 
 ### Style Characteristics
+
 - Dark theme with `bg-gray-800`, `bg-gray-800/50` cards
 - Clean header with Logo component and descriptive tagline
 - Minimal padding (`px-4 py-6`)
@@ -79,6 +81,7 @@ The front-end pre-login page has been simplified. The rest of the site should fo
   - Helper text: `text-xs text-gray-500`
 
 ### Pages to Review
+
 All pages should be audited for consistency with this simplified style pattern.
 
 ## R5: Documentation Update - Correct Domain

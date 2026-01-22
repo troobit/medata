@@ -1,7 +1,8 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 ---
+
 # Auth - Production Deployment & UI Refinement
 
 ## R1: Fix Vercel File System Error
@@ -50,8 +51,8 @@ references:
 
 ## R6: Documentation Domain Update
 
-- [ ] 18. Investigate: Identify placeholder domains in docs/auth.md
+- [x] 18. Investigate: Identify placeholder domains in docs/auth.md
 
-- [ ] 19. Implement: Update docs with actual domain or mark as placeholders
+- [x] 19. Implement: Update docs with actual domain or mark as placeholders
 
-- [ ] 20. Verify: Review updated documentation for accuracy
+- [x] 20. Verify: Review updated documentation for accuracy
