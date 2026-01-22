@@ -23,6 +23,12 @@ const config = {
     }),
     alias: {
       $lib: './src/lib'
+    },
+    prerender: {
+      // These redirect routes are prerenderable but not discovered via crawling
+      // since they redirect to other files and aren't linked from any page
+      entries: ['*', '/favicon.ico', '/apple-touch-icon.png'],
+      handleUnseenRoutes: 'ignore'
     }
   }
 };
