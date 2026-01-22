@@ -18,15 +18,15 @@ references:
 
 ## R2: Merge datagen worktree
 
-- [ ] 6. Review datagen branch changes at `/Users/ronan/repos/beetus/datagen`
+- [x] 6. Review datagen branch changes at `/Users/ronan/repos/beetus/datagen`
 
-- [ ] 7. Identify non-conflicting changes from datagen
+- [x] 7. Identify non-conflicting changes from datagen
 
-- [ ] 8. Merge datagen branch into dev-0
+- [x] 8. Merge datagen branch into dev-0
 
-- [ ] 9. Resolve any conflicts from datagen merge
+- [x] 9. Resolve any conflicts from datagen merge
 
-- [ ] 10. Verify: datagen changes integrated cleanly
+- [x] 10. Verify: datagen changes integrated cleanly
 
 ## R3: Update documentation
 
@@ -43,3 +43,11 @@ references:
 - [ ] 15. Replace American spellings with Irish/British equivalents
 
 - [ ] 16. Verify: No American spellings remain in codebase
+
+## R5: Address Svelte errors and favicon 404s
+
+- [ ] 17. Fix all Svelte compilation errors and warnings
+
+- [ ] 18. Address favicon 404 errors (add favicon or configure better error message if expected)
+
+- [ ] 19. Verify: No Svelte errors at build/deploy time and no unexpected 404s when running locally
