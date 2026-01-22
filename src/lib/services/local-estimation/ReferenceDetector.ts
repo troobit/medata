@@ -102,10 +102,7 @@ export class ReferenceDetector {
   /**
    * Detect credit card based on aspect ratio and size
    */
-  private detectCreditCard(
-    imageData: ImageData,
-    scale: number
-  ): DetectedReference | null {
+  private detectCreditCard(imageData: ImageData, scale: number): DetectedReference | null {
     // Credit card aspect ratio: 85.6 / 53.98 ≈ 1.586
     const targetAspectRatio = 85.6 / 53.98;
     const aspectTolerance = 0.15;
@@ -132,8 +129,7 @@ export class ReferenceDetector {
     // Score candidates (prefer larger, more rectangular shapes)
     const scored = cardCandidates.map((rect) => {
       const sizeScore = Math.min(1, rect.area / (imageData.width * imageData.height * 0.1));
-      const aspectScore =
-        1 - Math.abs(rect.aspectRatio - targetAspectRatio) / targetAspectRatio;
+      const aspectScore = 1 - Math.abs(rect.aspectRatio - targetAspectRatio) / targetAspectRatio;
       return {
         rect,
         score: sizeScore * 0.4 + aspectScore * 0.4 + rect.confidence * 0.2
@@ -185,9 +181,7 @@ export class ReferenceDetector {
     const minRadius = Math.min(imageData.width, imageData.height) * 0.03;
     const maxRadius = Math.min(imageData.width, imageData.height) * 0.2;
 
-    const validCircles = circles.filter(
-      (c) => c.radius >= minRadius && c.radius <= maxRadius
-    );
+    const validCircles = circles.filter((c) => c.radius >= minRadius && c.radius <= maxRadius);
 
     if (validCircles.length === 0) {
       return null;
@@ -419,8 +413,7 @@ export class ReferenceDetector {
     height: number
   ): Array<{ x: number; y: number; radius: number; votes: number }> {
     const { data } = edges;
-    const circles: Map<string, { x: number; y: number; radius: number; votes: number }> =
-      new Map();
+    const circles: Map<string, { x: number; y: number; radius: number; votes: number }> = new Map();
 
     // Parameters
     const minRadius = Math.round(Math.min(width, height) * 0.02);

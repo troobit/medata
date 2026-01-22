@@ -20,8 +20,8 @@ import type {
   BSLMetadata
 } from '$lib/types';
 import { getEventRepository } from '$lib/repositories';
-import { parseLibreCSV, validateLibreRows, isLibreCSV } from './LibreCSVParser';
-import { parseDexcomCSV, validateDexcomRows, isDexcomCSV } from './DexcomCSVParser';
+import { parseLibreCSV, isLibreCSV } from './LibreCSVParser';
+import { parseDexcomCSV, isDexcomCSV } from './DexcomCSVParser';
 import { parseGenericCSV, validateGenericRows, suggestColumnMapping } from './GenericCSVParser';
 import { findDuplicates, filterRowsByStrategy } from './DuplicateDetector';
 

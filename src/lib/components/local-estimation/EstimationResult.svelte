@@ -15,19 +15,21 @@
 
   let { result, onCarbsChange, onSave, editable = true }: Props = $props();
 
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let editedCarbs = $state(result.estimatedMacros.carbs);
   let isEditing = $state(false);
+
+  // Sync when result changes
+  $effect(() => {
+    editedCarbs = result.estimatedMacros.carbs;
+  });
 
   // Calculate uncertainty bounds
   const uncertainty = $derived(volumeCalculator.calculateUncertainty(result.volume));
 
   // Confidence level text
   const confidenceText = $derived(
-    result.confidence > 0.8
-      ? 'High'
-      : result.confidence > 0.6
-        ? 'Medium'
-        : 'Low'
+    result.confidence > 0.8 ? 'High' : result.confidence > 0.6 ? 'Medium' : 'Low'
   );
 
   const confidenceColor = $derived(
@@ -203,7 +205,7 @@
     <div class="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
       <p class="mb-1 text-sm font-medium text-yellow-400">Notes</p>
       <ul class="space-y-1 text-sm text-yellow-300/80">
-        {#each result.volume.warnings as warning}
+        {#each result.volume.warnings as warning (warning)}
           <li>• {warning}</li>
         {/each}
       </ul>

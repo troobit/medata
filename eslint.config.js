@@ -27,6 +27,34 @@ export default ts.config(
     }
   },
   {
+    // Svelte 5 runes files use .svelte.ts extension and need svelte parser
+    files: ['**/*.svelte.ts', '**/*.svelte.js'],
+    languageOptions: {
+      parser: svelte.parser,
+      parserOptions: {
+        parser: ts.parser
+      }
+    }
+  },
+  {
+    // Project-specific rule adjustments
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_'
+        }
+      ],
+      // Disable strict navigation resolution for single-domain personal app with no base path
+      'svelte/no-navigation-without-resolve': 'off',
+      // Disable strict each-key requirement (useful for dynamic lists, but overkill for static ones)
+      'svelte/require-each-key': 'warn',
+      // Disable SvelteDate/SvelteMap requirement (standard Date/Map work fine for most cases)
+      'svelte/prefer-svelte-reactivity': 'off'
+    }
+  },
+  {
     ignores: ['build/', '.svelte-kit/', 'dist/', '.vercel/', 'node_modules/']
   }
 );

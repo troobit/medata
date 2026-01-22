@@ -7,6 +7,7 @@
 
 import type {
   AIProvider,
+  FoundryConfig,
   AzureConfig,
   BedrockConfig,
   LocalModelConfig,
@@ -33,7 +34,15 @@ function getEnvProvider(): AIProvider | undefined {
   const value = getEnvVar(ENV_VAR_NAMES.AI_PROVIDER);
   if (!value) return undefined;
 
-  const validProviders: AIProvider[] = ['openai', 'gemini', 'claude', 'azure', 'bedrock', 'local'];
+  const validProviders: AIProvider[] = [
+    'foundry',
+    'openai',
+    'gemini',
+    'claude',
+    'azure',
+    'bedrock',
+    'local'
+  ];
   if (validProviders.includes(value as AIProvider)) {
     return value as AIProvider;
   }
@@ -43,7 +52,24 @@ function getEnvProvider(): AIProvider | undefined {
 }
 
 /**
- * Gets Azure OpenAI configuration from environment
+ * Gets Azure AI Foundry configuration from environment (v1 API)
+ */
+function getEnvFoundryConfig(): FoundryConfig | undefined {
+  const apiKey = getEnvVar(ENV_VAR_NAMES.AZURE_FOUNDRY_API_KEY);
+  const endpoint = getEnvVar(ENV_VAR_NAMES.AZURE_FOUNDRY_ENDPOINT);
+
+  // At minimum need API key and endpoint
+  if (!apiKey || !endpoint) return undefined;
+
+  return {
+    apiKey,
+    endpoint,
+    model: getEnvVar(ENV_VAR_NAMES.AZURE_FOUNDRY_MODEL) || 'gpt-4o'
+  };
+}
+
+/**
+ * Gets Azure OpenAI configuration from environment (classic)
  */
 function getEnvAzureConfig(): AzureConfig | undefined {
   const apiKey = getEnvVar(ENV_VAR_NAMES.AZURE_OPENAI_API_KEY);
@@ -119,7 +145,11 @@ export function getEnvSettings(): Partial<UserSettings> {
   const claudeApiKey = getEnvVar(ENV_VAR_NAMES.CLAUDE_API_KEY);
   if (claudeApiKey) settings.claudeApiKey = claudeApiKey;
 
-  // Azure config
+  // Azure AI Foundry config (v1 API - preferred for Azure users)
+  const foundryConfig = getEnvFoundryConfig();
+  if (foundryConfig) settings.foundryConfig = foundryConfig;
+
+  // Azure OpenAI config (classic)
   const azureConfig = getEnvAzureConfig();
   if (azureConfig) settings.azureConfig = azureConfig;
 
@@ -152,6 +182,7 @@ export function mergeWithEnvSettings(userSettings: UserSettings): UserSettings {
     openaiApiKey: userSettings.openaiApiKey || envSettings.openaiApiKey,
     geminiApiKey: userSettings.geminiApiKey || envSettings.geminiApiKey,
     claudeApiKey: userSettings.claudeApiKey || envSettings.claudeApiKey,
+    foundryConfig: userSettings.foundryConfig || envSettings.foundryConfig,
     azureConfig: userSettings.azureConfig || envSettings.azureConfig,
     bedrockConfig: userSettings.bedrockConfig || envSettings.bedrockConfig,
     localModelConfig: userSettings.localModelConfig || envSettings.localModelConfig,
@@ -166,6 +197,7 @@ export function mergeWithEnvSettings(userSettings: UserSettings): UserSettings {
 export function hasEnvAIConfig(): boolean {
   const envSettings = getEnvSettings();
   return !!(
+    envSettings.foundryConfig ||
     envSettings.openaiApiKey ||
     envSettings.geminiApiKey ||
     envSettings.claudeApiKey ||

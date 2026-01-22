@@ -81,9 +81,7 @@
 
   <div class="flex flex-col items-center justify-center px-6 py-12">
     <!-- Camera Icon -->
-    <div
-      class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-800 text-3xl"
-    >
+    <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-800 text-3xl">
       <svg class="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           stroke-linecap="round"
@@ -104,9 +102,7 @@
       {dragOver ? 'Drop image here' : 'Upload CGM Screenshot'}
     </p>
 
-    <p class="mb-4 text-center text-sm text-gray-400">
-      Take a photo or select from gallery
-    </p>
+    <p class="mb-4 text-center text-sm text-gray-400">Take a photo or select from gallery</p>
 
     <div class="flex gap-4">
       <button
@@ -122,8 +118,6 @@
       </button>
     </div>
 
-    <p class="mt-4 text-xs text-gray-500">
-      Supports Freestyle Libre, Dexcom G6/G7, Medtronic
-    </p>
+    <p class="mt-4 text-xs text-gray-500">Supports Freestyle Libre, Dexcom G6/G7, Medtronic</p>
   </div>
 </div>

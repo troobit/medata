@@ -76,10 +76,7 @@ export class EstimationEngine implements IVolumeEstimationService {
   /**
    * Calculate macros from volume and food type
    */
-  calculateMacros(
-    volume: VolumeEstimationResult,
-    food: FoodDensityEntry
-  ): LocalEstimationResult {
+  calculateMacros(volume: VolumeEstimationResult, food: FoodDensityEntry): LocalEstimationResult {
     const startTime = performance.now();
 
     const weightGrams = this.foodLookup.volumeToWeight(food, volume.totalVolumeMl);
@@ -139,10 +136,7 @@ export class EstimationEngine implements IVolumeEstimationService {
   /**
    * Record a user correction for learning
    */
-  recordUserCorrection(
-    result: LocalEstimationResult,
-    correctedCarbs: number
-  ): void {
+  recordUserCorrection(result: LocalEstimationResult, correctedCarbs: number): void {
     if (result.estimatedMacros.carbs === 0) return;
 
     this.calibrationStore.recordCorrection({

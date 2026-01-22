@@ -1,10 +1,3 @@
-import { db, MeDataDB, checkDatabaseAvailability } from './schema';
+import { db, MeDataDB, getDb, checkDatabaseAvailability } from './schema';
 
-export { db, MeDataDB, checkDatabaseAvailability };
-
-/**
- * Get the database instance (for dependency injection patterns)
- */
-export function getDb(): MeDataDB {
-  return db;
-}
+export { db, MeDataDB, getDb, checkDatabaseAvailability };

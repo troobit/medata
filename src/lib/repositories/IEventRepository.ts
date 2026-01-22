@@ -1,9 +1,4 @@
-import type {
-  PhysiologicalEvent,
-  CreateEventInput,
-  UpdateEventInput,
-  EventType
-} from '$lib/types';
+import type { PhysiologicalEvent, CreateEventInput, UpdateEventInput, EventType } from '$lib/types';
 
 /**
  * Repository interface for physiological events

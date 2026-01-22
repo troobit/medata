@@ -5,7 +5,9 @@ import type {
   InsulinType,
   BSLUnit,
   BSLDataSource,
-  MealMetadata
+  MealMetadata,
+  ExerciseMetadata,
+  ExerciseIntensity
 } from '$lib/types';
 
 /**
@@ -120,6 +122,26 @@ function createEventsStore() {
     }
   }
 
+  async function logExercise(
+    durationMinutes: number,
+    intensity: ExerciseIntensity,
+    metadata?: Partial<ExerciseMetadata>,
+    timestamp?: Date
+  ) {
+    loading = true;
+    error = null;
+    try {
+      const event = await service.logExercise(durationMinutes, intensity, metadata, timestamp);
+      events = [event, ...events];
+      return event;
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to log exercise';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
   async function bulkLogBSL(
     readings: Array<{ value: number; unit: BSLUnit; timestamp: Date; source?: BSLDataSource }>
   ) {
@@ -199,11 +221,13 @@ function createEventsStore() {
     logInsulin,
     logBSL,
     logMeal,
+    logExercise,
     bulkLogBSL,
     deleteEvent,
     updateEvent,
     getRecentInsulinDoses,
-    getRecentBSLValues
+    getRecentBSLValues,
+    getRecentCarbValues
   };
 }
 

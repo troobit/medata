@@ -12,14 +12,5 @@ export {
   suggestColumnMapping,
   getAvailableColumns
 } from './GenericCSVParser';
-export {
-  findDuplicates,
-  filterRowsByStrategy,
-  getDuplicateStats
-} from './DuplicateDetector';
-export {
-  ExportService,
-  getExportService,
-  downloadBlob,
-  generateFilename
-} from './ExportService';
+export { findDuplicates, filterRowsByStrategy, getDuplicateStats } from './DuplicateDetector';
+export { ExportService, getExportService, downloadBlob, generateFilename } from './ExportService';

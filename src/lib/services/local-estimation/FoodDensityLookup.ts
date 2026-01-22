@@ -4,11 +4,7 @@
  */
 
 import type { FoodDensityEntry } from '$lib/types/local-estimation';
-import {
-  FOOD_DENSITY_DATABASE,
-  getCategories,
-  getFoodsByCategory
-} from '$lib/data/food-density';
+import { FOOD_DENSITY_DATABASE, getCategories, getFoodsByCategory } from '$lib/data/food-density';
 
 /**
  * Search result with relevance scoring
@@ -55,11 +51,7 @@ export class FoodDensityLookup {
   /**
    * Calculate relevance score for a food entry
    */
-  private calculateScore(
-    food: FoodDensityEntry,
-    queryTerms: string[],
-    fullQuery: string
-  ): number {
+  private calculateScore(food: FoodDensityEntry, queryTerms: string[], fullQuery: string): number {
     const name = food.name.toLowerCase();
     const category = food.category.toLowerCase();
     let score = 0;

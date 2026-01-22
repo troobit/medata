@@ -19,8 +19,13 @@
   } from '$lib/components/local-estimation';
   import { estimationEngine, volumeCalculator } from '$lib/services/local-estimation';
   import { eventsStore } from '$lib/stores';
-  import type { FoodRegion, FoodDensityEntry, DetectedReference, LocalEstimationResult } from '$lib/types/local-estimation';
-  import type { ShapeTemplate } from '$lib/services/local-estimation';
+  import type {
+    FoodRegion,
+    FoodDensityEntry,
+    DetectedReference,
+    LocalEstimationResult
+  } from '$lib/types/local-estimation';
+  // Note: ShapeTemplate available for future shape re-estimation feature
 
   // Flow steps
   type Step = 'capture' | 'region' | 'food-type' | 'result';
@@ -33,7 +38,7 @@
   let selectedFood = $state<FoodDensityEntry | null>(null);
   let result = $state<LocalEstimationResult | null>(null);
   let finalCarbs = $state<number>(0);
-  let saving = $state(false);
+  let _saving = $state(false);
   let detecting = $state(false);
   let error = $state<string | null>(null);
 
@@ -84,11 +89,15 @@
 
     ctx.drawImage(videoRef, 0, 0);
 
-    canvas.toBlob(async (blob) => {
-      if (blob) {
-        await processImage(blob);
-      }
-    }, 'image/jpeg', 0.9);
+    canvas.toBlob(
+      async (blob) => {
+        if (blob) {
+          await processImage(blob);
+        }
+      },
+      'image/jpeg',
+      0.9
+    );
   }
 
   async function handleFileSelect(e: Event) {
@@ -161,7 +170,7 @@
   async function saveResult() {
     if (!result) return;
 
-    saving = true;
+    _saving = true;
     error = null;
     try {
       await eventsStore.logMeal(finalCarbs, {
@@ -173,10 +182,8 @@
         confidence: result.confidence
       });
       goto('/');
-    } catch (err) {
+    } catch {
       error = 'Failed to save meal';
-    } finally {
-      saving = false;
     }
   }
 
@@ -256,7 +263,12 @@
       {#if currentStep === 'capture'}
         <a href="/log/meal" class="inline-flex items-center text-gray-400 hover:text-gray-200">
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back
         </a>
@@ -267,17 +279,18 @@
           onclick={goBack}
         >
           <svg class="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
           </svg>
           Back
         </button>
       {/if}
 
-      <button
-        type="button"
-        class="text-sm text-gray-500 hover:text-gray-300"
-        onclick={restart}
-      >
+      <button type="button" class="text-sm text-gray-500 hover:text-gray-300" onclick={restart}>
         Start over
       </button>
     </div>
@@ -286,7 +299,7 @@
 
     <!-- Progress indicator -->
     <div class="mt-3 flex gap-1">
-      {#each Object.entries(stepNumbers) as [step, num]}
+      {#each Object.entries(stepNumbers) as [_step, num]}
         <div
           class="h-1 flex-1 rounded-full transition-colors {stepNumbers[currentStep] >= num
             ? 'bg-purple-500'
@@ -310,17 +323,8 @@
       <div class="flex flex-1 flex-col">
         {#if cameraActive}
           <div class="relative mb-4 overflow-hidden rounded-lg">
-            <video
-              bind:this={videoRef}
-              class="w-full"
-              autoplay
-              playsinline
-              muted
-            ></video>
-            <ReferenceCardGuide
-              detected={!!reference}
-              confidence={reference?.confidence ?? 0}
-            />
+            <video bind:this={videoRef} class="w-full" autoplay playsinline muted></video>
+            <ReferenceCardGuide detected={!!reference} confidence={reference?.confidence ?? 0} />
           </div>
 
           <div class="mt-auto space-y-3">
@@ -335,15 +339,15 @@
           <div class="flex flex-1 flex-col items-center justify-center">
             <!-- Instructions -->
             <div class="mb-8 text-center">
-              <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-purple-500/20 text-3xl">
+              <div
+                class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-purple-500/20 text-3xl"
+              >
                 📐
               </div>
               <p class="mb-2 text-gray-300">
                 Take a photo of your food with a <strong>credit card</strong> for scale
               </p>
-              <p class="text-sm text-gray-500">
-                The card helps estimate portion size accurately
-              </p>
+              <p class="text-sm text-gray-500">The card helps estimate portion size accurately</p>
             </div>
 
             {#if cameraError}
@@ -375,34 +379,34 @@
                   />
                 </svg>
                 Choose from gallery
-                <input
-                  type="file"
-                  accept="image/*"
-                  class="hidden"
-                  onchange={handleFileSelect}
-                />
+                <input type="file" accept="image/*" class="hidden" onchange={handleFileSelect} />
               </label>
             </div>
           </div>
         {/if}
       </div>
-
     {:else if currentStep === 'region' && imageUrl}
       <!-- Region selection step -->
       <div class="flex flex-1 flex-col">
         {#if detecting}
           <div class="flex flex-1 items-center justify-center">
             <div class="text-center">
-              <div class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-purple-500 border-t-transparent"></div>
+              <div
+                class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-purple-500 border-t-transparent"
+              ></div>
               <p class="text-gray-400">Detecting reference card...</p>
             </div>
           </div>
         {:else}
           <!-- Reference status -->
-          <div class="mb-3 rounded-lg px-3 py-2 {reference ? 'bg-green-500/10' : 'bg-yellow-500/10'}">
+          <div
+            class="mb-3 rounded-lg px-3 py-2 {reference ? 'bg-green-500/10' : 'bg-yellow-500/10'}"
+          >
             {#if reference}
               <p class="text-sm text-green-400">
-                {reference.type === 'credit-card' ? 'Card' : 'Coin'} detected ({Math.round(reference.confidence * 100)}% confidence)
+                {reference.type === 'credit-card' ? 'Card' : 'Coin'} detected ({Math.round(
+                  reference.confidence * 100
+                )}% confidence)
               </p>
             {:else}
               <p class="text-sm text-yellow-400">
@@ -411,11 +415,7 @@
             {/if}
           </div>
 
-          <FoodRegionSelector
-            {imageUrl}
-            {regions}
-            onRegionsChange={handleRegionsChange}
-          />
+          <FoodRegionSelector {imageUrl} {regions} onRegionsChange={handleRegionsChange} />
 
           <div class="mt-auto pt-4">
             <Button
@@ -430,13 +430,11 @@
           </div>
         {/if}
       </div>
-
     {:else if currentStep === 'food-type'}
       <!-- Food type selection step -->
       <div class="flex flex-1 flex-col">
         <FoodTypeSelector selected={selectedFood} onSelect={handleFoodSelect} />
       </div>
-
     {:else if currentStep === 'result' && result}
       <!-- Result step -->
       <div class="flex flex-1 flex-col">
@@ -447,11 +445,7 @@
           </div>
         {/if}
 
-        <EstimationResult
-          {result}
-          onCarbsChange={handleCarbsChange}
-          onSave={saveResult}
-        />
+        <EstimationResult {result} onCarbsChange={handleCarbsChange} onSave={saveResult} />
       </div>
     {/if}
   </div>

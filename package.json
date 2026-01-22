@@ -36,6 +36,9 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^13.2.2",
+    "@vercel/kv": "^3.0.0",
     "dexie": "^4.0.10",
     "uuid": "^11.0.5"
   }

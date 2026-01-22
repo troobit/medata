@@ -1,0 +1,14 @@
+# Documentation and specs
+docs/
+specs/
+README.md
+
+# Development scripts
+scripts/
+
+# Development files
+error.log
+*.log
+
+# Claude Code
+.claude/

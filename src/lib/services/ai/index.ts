@@ -10,7 +10,7 @@ export {
   createFoodService,
   getFoodService,
   getAllConfiguredServices,
-  recognizeFoodWithFallback,
+  RecogniseFoodWithFallback,
   isAnyProviderConfigured,
   getPrimaryProviderName
 } from './FoodServiceFactory';

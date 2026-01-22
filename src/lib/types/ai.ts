@@ -9,7 +9,7 @@
 import type { MacroData, MealItem } from './events';
 
 /**
- * Bounding box for visual annotation of recognized food
+ * Bounding box for visual annotation of Recognised food
  */
 export interface BoundingBox {
   x: number; // top-left x (0-1 normalized)
@@ -19,9 +19,9 @@ export interface BoundingBox {
 }
 
 /**
- * Individual food item recognized by AI
+ * Individual food item Recognised by AI
  */
-export interface RecognizedFoodItem extends MealItem {
+export interface RecognisedFoodItem extends MealItem {
   confidence: number; // 0-1
   boundingBox?: BoundingBox;
   usdaFoodCode?: string; // USDA FNDDS reference
@@ -31,7 +31,7 @@ export interface RecognizedFoodItem extends MealItem {
  * Result from food recognition service
  */
 export interface FoodRecognitionResult {
-  items: RecognizedFoodItem[];
+  items: RecognisedFoodItem[];
   totalMacros: MacroData;
   confidence: number; // overall confidence 0-1
   boundingBoxes?: BoundingBox[];
@@ -64,10 +64,11 @@ export interface RecognitionOptions {
 
 /**
  * Interface that all AI food recognition services must implement
- * Implementations: OpenAIFoodService, GeminiFoodService, ClaudeFoodService, OllamaFoodService
+ * Implementations: AzureFoundryFoodService, OpenAIFoodService, GeminiFoodService,
+ *                  ClaudeFoodService, AzureFoodService, BedrockFoodService, LocalFoodService
  */
 export interface IFoodRecognitionService {
-  recognizeFood(image: Blob, options?: RecognitionOptions): Promise<FoodRecognitionResult>;
+  RecogniseFood(image: Blob, options?: RecognitionOptions): Promise<FoodRecognitionResult>;
   parseNutritionLabel(image: Blob): Promise<NutritionLabelResult>;
   isConfigured(): boolean;
   getProviderName(): string;

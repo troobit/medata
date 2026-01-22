@@ -53,8 +53,13 @@ const LIBRE_COLORS = {
 
 /**
  * Common Libre graph configurations
+ * Note: Currently used for type reference in estimateTimeRange
  */
-const LIBRE_PRESETS = {
+type LibrePresetKey = '8h' | '12h' | '24h';
+const _LIBRE_PRESETS: Record<
+  LibrePresetKey,
+  { durationHours: number; expectedDataPoints: number }
+> = {
   '8h': {
     durationHours: 8,
     expectedDataPoints: 96 // 5-min intervals
@@ -336,12 +341,11 @@ export class LibreGraphParser {
    */
   private estimateTimeRange(
     curvePoints: Array<{ x: number; y: number }>,
-    graphRegion: GraphRegion,
-    width: number
-  ): { durationHours: number; preset: keyof typeof LIBRE_PRESETS } {
+    _graphRegion: GraphRegion,
+    _width: number
+  ): { durationHours: number; preset: LibrePresetKey } {
     // Count data points to estimate time range
-    const regionW = Math.floor((graphRegion.width / 100) * width);
-    const pointDensity = curvePoints.length / regionW;
+    // Note: Point density analysis could be used in future for more accurate detection
 
     // Libre shows approximately 12 pixels per 5 minutes for 8h view
     // This varies by device resolution
@@ -490,7 +494,8 @@ export class LibreGraphParser {
     const now = new Date();
     const axisRanges: AxisRanges = options.manualAxisRanges
       ? {
-          timeStart: options.manualAxisRanges.timeStart ||
+          timeStart:
+            options.manualAxisRanges.timeStart ||
             new Date(now.getTime() - timeEstimate.durationHours * 60 * 60 * 1000),
           timeEnd: options.manualAxisRanges.timeEnd || now,
           bslMin: options.manualAxisRanges.bslMin ?? 2.2,

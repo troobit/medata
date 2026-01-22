@@ -143,7 +143,8 @@ export class VolumeCalculator {
     shape: ShapeTemplate
   ): VolumeEstimationResult {
     const shapeParams = SHAPE_TEMPLATES[shape];
-    const pixelsPerMm = previousResult.referenceUsed?.pixelsPerMm ?? this.estimateDefaultScale();
+    // Note: pixelsPerMm available from reference if needed for future enhancements
+    // const pixelsPerMm = previousResult.referenceUsed?.pixelsPerMm ?? this.estimateDefaultScale();
 
     let totalVolumeMl = 0;
     const updatedRegions: FoodRegion[] = [];

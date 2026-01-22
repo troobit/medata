@@ -20,14 +20,18 @@
   {#if isImporting}
     <!-- Loading State -->
     <div class="flex flex-col items-center justify-center py-12">
-      <div class="mb-6 h-16 w-16 animate-spin rounded-full border-4 border-gray-600 border-t-brand-accent"></div>
+      <div
+        class="mb-6 h-16 w-16 animate-spin rounded-full border-4 border-gray-600 border-t-brand-accent"
+      ></div>
       <p class="text-lg font-medium text-white">Importing data...</p>
       <p class="mt-2 text-gray-400">This may take a moment for large files</p>
     </div>
   {:else if error}
     <!-- Error State -->
     <div class="flex flex-col items-center justify-center py-12">
-      <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20 text-4xl">
+      <div
+        class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20 text-4xl"
+      >
         ✕
       </div>
       <p class="text-lg font-medium text-red-400">Import failed</p>
@@ -36,7 +40,9 @@
   {:else if result}
     <!-- Success State -->
     <div class="flex flex-col items-center justify-center py-12">
-      <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 text-4xl">
+      <div
+        class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20 text-4xl"
+      >
         ✓
       </div>
       <p class="text-lg font-medium text-green-400">Import complete!</p>

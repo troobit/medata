@@ -36,13 +36,7 @@ export function parseLibreDate(dateStr: string, usFormat: boolean = true): Date 
   const month = usFormat ? parseInt(first, 10) - 1 : parseInt(second, 10) - 1;
   const day = usFormat ? parseInt(second, 10) : parseInt(first, 10);
 
-  const date = new Date(
-    parseInt(year, 10),
-    month,
-    day,
-    parseInt(hour, 10),
-    parseInt(minute, 10)
-  );
+  const date = new Date(parseInt(year, 10), month, day, parseInt(hour, 10), parseInt(minute, 10));
 
   // Validate the date is reasonable
   if (isNaN(date.getTime())) return null;

@@ -1,5 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { PhysiologicalEvent, MealPreset } from '$lib/types';
+import type {
+  PhysiologicalEvent,
+  MealPreset,
+  TestDatasetEntry,
+  ValidationResult,
+  CorrectionHistoryEntry
+} from '$lib/types';
 
 /**
  * Database schema for MeData
@@ -8,6 +14,9 @@ import type { PhysiologicalEvent, MealPreset } from '$lib/types';
 export class MeDataDB extends Dexie {
   events!: EntityTable<PhysiologicalEvent, 'id'>;
   presets!: EntityTable<MealPreset, 'id'>;
+  testDataset!: EntityTable<TestDatasetEntry, 'id'>;
+  validationResults!: EntityTable<ValidationResult, 'testEntryId'>;
+  correctionHistory!: EntityTable<CorrectionHistoryEntry, 'id'>;
 
   constructor() {
     super('medata');
@@ -18,48 +27,70 @@ export class MeDataDB extends Dexie {
       // Primary key is 'id', indexed by name and createdAt
       presets: 'id, name, createdAt'
     });
+
+    // Version 2: Add validation tables
+    this.version(2).stores({
+      events: 'id, timestamp, eventType, [eventType+timestamp], createdAt',
+      presets: 'id, name, createdAt',
+      // Test dataset entries with known ground truth
+      testDataset: 'id, category, source, createdAt',
+      // Validation results from running AI against test data
+      validationResults: 'testEntryId, aiProvider, timestamp, [aiProvider+timestamp]',
+      // Correction history from user edits
+      correctionHistory: 'id, eventId, aiProvider, category, timestamp, [aiProvider+timestamp]'
+    });
   }
 }
 
 /**
- * Singleton database instance
+ * Lazy-initialized singleton database instance
+ * Prevents SSR issues by only creating the database in the browser
  */
-export const db = new MeDataDB();
+let _db: MeDataDB | null = null;
+
+export function getDb(): MeDataDB {
+  if (!_db) {
+    if (typeof window === 'undefined') {
+      throw new Error('Database can only be accessed in the browser');
+    }
+    _db = new MeDataDB();
+  }
+  return _db;
+}
 
 /**
- * Check if IndexedDB is available and accessible
- * Returns null if successful, or an error message if not
+ * @deprecated Use getDb() instead to avoid SSR issues
+ */
+export const db = typeof window !== 'undefined' ? new MeDataDB() : (null as unknown as MeDataDB);
+
+/**
+ * Check if IndexedDB is available and working
+ * Returns null if available, or an error message if not
  */
 export async function checkDatabaseAvailability(): Promise<string | null> {
-  // Check if IndexedDB API exists
-  if (typeof indexedDB === 'undefined') {
+  if (typeof window === 'undefined') {
+    return 'Database is only available in the browser';
+  }
+
+  if (!('indexedDB' in window)) {
     return 'IndexedDB is not supported in this browser';
   }
 
   try {
-    // Attempt to open the database to verify permissions
-    await db.open();
+    const testDb = getDb();
+    await testDb.events.count();
     return null;
   } catch (error) {
-    // Handle specific Dexie/IndexedDB errors
     if (error instanceof Error) {
-      const message = error.message.toLowerCase();
-
-      if (message.includes('permission') || message.includes('denied')) {
-        return 'Storage permission denied. This often happens in private browsing mode or when site data is blocked.';
+      // Check for common IndexedDB errors
+      if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+        return 'Storage quota exceeded. Please free up some space.';
       }
-
-      if (message.includes('quota')) {
-        return 'Storage quota exceeded. Please free up some space on your device.';
+      if (error.message.includes('private browsing') || error.message.includes('Private mode')) {
+        return 'Private/Incognito browsing mode detected. Please use a regular browser window.';
       }
-
-      if (message.includes('blocked')) {
-        return 'Database access was blocked by browser settings.';
-      }
-
       return `Database error: ${error.message}`;
     }
-
-    return 'An unknown storage error occurred';
+    return 'Failed to initialize database';
   }
 }

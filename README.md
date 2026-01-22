@@ -1,131 +1,79 @@
 # MeData
 
-A personal data tracking application for logging meal macros, insulin doses, and BSL. Uses ML-powered food recognition to estimate macros from photos.
+Personal diabetes tracking app. Logs meals (with AI-powered macro estimation), insulin doses, BSL readings, and exercise. Offline-first with IndexedDB storage.
 
 ## Quick Start
 
 ```bash
 pnpm install
+cp .env.example .env.local
+```
+
+Generate secrets and add to `.env.local`:
+
+```bash
+# Session secret
+openssl rand -base64 32
+
+# Bootstrap token (remove after first enrollment)
+openssl rand -hex 16
+```
+
+```bash
 pnpm dev
 ```
 
-Build for production:
+Open http://localhost:5173, enter your bootstrap token, and register your security key.
+
+> [!TIP]
+> For development without hardware keys, enable Chrome DevTools → Application → WebAuthn → Virtual authenticator.
+
+## Vercel Deployment
+
+### 1. Create KV Store
+
 ```bash
-pnpm build
-pnpm preview
+vercel storage add kv medata-auth
 ```
 
-## Features
+### 2. Set Environment Variables
 
-| Feature | Route | Status |
-|---------|-------|--------|
-| Manual meal logging | `/log/meal` | Complete |
-| AI photo recognition | `/log/meal/photo` | Complete |
-| Nutrition label scan | `/log/meal/label` | Complete |
-| Volume estimation | `/log/meal/estimate` | Complete |
-| Insulin logging | `/log/insulin` | Complete |
-| Manual BSL entry | `/log/bsl` | Complete |
-| CSV BSL import | `/import/bsl` | Complete |
-| CGM graph import | `/import/cgm` | Complete |
-| Event history | `/history` | Complete |
-| Settings | `/settings` | Complete |
-
-## Development
-
-### Branch Structure
-
-```
-main                    # Stable releases
-└── dev-0               # Integration staging
-    ├── dev-1           # Workstream A: AI food recognition (merged)
-    ├── dev-2           # Workstream B: CGM graph capture (merged)
-    ├── dev-3           # Workstream C: Local estimation (merged)
-    └── dev-4           # Workstream D: BSL import (merged)
+```bash
+vercel env add AUTH_RP_ID production        # your-domain.vercel.app
+vercel env add AUTH_ORIGIN production       # https://your-domain.vercel.app
+vercel env add AUTH_SESSION_SECRET production
+vercel env add AUTH_BOOTSTRAP_TOKEN production
 ```
 
-### Key Directories
+### 3. Deploy
 
-```
-src/
-├── lib/
-│   ├── components/     # Svelte components by feature
-│   │   ├── ai/         # AI recognition components
-│   │   ├── cgm/        # CGM graph components
-│   │   ├── import/     # CSV import components
-│   │   ├── local-estimation/  # Volume estimation
-│   │   └── ui/         # Shared UI components
-│   ├── services/       # Business logic
-│   │   ├── ai/         # AI provider services
-│   │   ├── cgm/        # CGM extraction
-│   │   ├── import/     # CSV parsing
-│   │   └── local-estimation/  # Volume calculation
-│   ├── stores/         # Svelte 5 runes stores
-│   ├── types/          # TypeScript interfaces
-│   └── db/             # IndexedDB (Dexie)
-└── routes/             # SvelteKit routes
+```bash
+vercel --prod
 ```
 
-### Commands
+After enrolling your key, remove the bootstrap token:
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start dev server |
-| `pnpm build` | Production build |
-| `pnpm check` | Type checking |
-| `pnpm lint` | ESLint + Prettier |
-| `pnpm format` | Format code |
-| `pnpm generate-icons` | Regenerate PWA icons |
+```bash
+vercel env rm AUTH_BOOTSTRAP_TOKEN production && vercel --prod
+```
 
-## Configuration
+## Environment Sync
 
-### API Keys
+Push local env to Vercel:
 
-Set API keys in Settings (`/settings`) for AI features:
+```bash
+# Push all from .env.local to production
+cat .env.local | grep -v '^#' | grep '=' | while IFS='=' read -r key value; do
+  echo "$value" | vercel env add "$key" production
+done
+```
 
-- **OpenAI** - GPT-4 Vision for food recognition
-- **Google Gemini** - Alternative vision provider
-- **Anthropic Claude** - Alternative vision provider
+Pull Vercel env to local:
 
-Keys are stored in localStorage, never sent to any server except the respective AI provider.
-
-### Data Sources
-
-Events are tagged with their source:
-
-| Source | Description |
-|--------|-------------|
-| `manual` | User entered |
-| `ai` | AI photo recognition |
-| `local-estimation` | Volume-based estimation |
-| `cgm-image` | Extracted from CGM screenshot |
-| `csv-import` | Imported from CSV file |
-
-## Storage
-
-All data is stored locally in IndexedDB via Dexie.js. No server or cloud account required.
-
-### Troubleshooting
-
-**"Permission denied" or "Database access blocked":**
-
-1. Safari Private Browsing disables IndexedDB - use regular window
-2. Check browser privacy settings allow site data
-3. Free up device storage if quota exceeded
-
-**Data not persisting:**
-
-- Avoid private/incognito mode
-- iOS Safari: use "Add to Home Screen" for better persistence
-
-## Tech Stack
-
-- SvelteKit + Svelte 5 (runes)
-- TypeScript
-- Tailwind CSS v4
-- Dexie.js (IndexedDB)
-- Vercel adapter
+```bash
+vercel env pull .env.local
+```
 
 ## Documentation
 
-- [Requirements](docs/requirements.md) - Original specification
-- [Development Plan](docs/DEVELOPMENT_PLAN.md) - Workstream details
+See [docs/auth.md](docs/auth.md) for detailed authentication setup, Vercel KV configuration, and troubleshooting.

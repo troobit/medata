@@ -7,6 +7,7 @@
  * Extraction methods:
  * - ML-assisted: Uses cloud vision APIs (OpenAI, Claude, Gemini, Ollama, Foundry)
  * - Local CV: Uses browser-based computer vision (no API required)
+ * - Direct API: Connects to CGM cloud services (LibreLink, Dexcom Share)
  *
  * Device-specific parsers:
  * - LibreGraphParser: Optimized for Freestyle Libre screenshots
@@ -21,11 +22,18 @@ export {
 } from './CGMImageProcessor';
 
 // Local computer vision extractor (Phase 2)
-export {
-  LocalCurveExtractor,
-  createLocalCurveExtractor
-} from './LocalCurveExtractor';
+export { LocalCurveExtractor, createLocalCurveExtractor } from './LocalCurveExtractor';
 
 // Device-specific parsers (Phase 2)
 export { LibreGraphParser, createLibreGraphParser } from './LibreGraphParser';
 export { DexcomGraphParser, createDexcomGraphParser } from './DexcomGraphParser';
+
+// Direct CGM API Services (Task 22)
+export { LibreLinkApiService, createLibreLinkApiService } from './LibreLinkApiService';
+export { DexcomShareApiService, createDexcomShareApiService } from './DexcomShareApiService';
+export {
+  createCGMApiService,
+  isCGMApiConfigured,
+  getCGMProviderName,
+  CGM_PROVIDERS
+} from './CGMApiFactory';

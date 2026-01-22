@@ -71,7 +71,8 @@
     <div class="space-y-2">
       {#each strategies as strategy (strategy.value)}
         <label
-          class="flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors {selectedStrategy === strategy.value
+          class="flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors {selectedStrategy ===
+          strategy.value
             ? 'border-brand-accent bg-brand-accent/10'
             : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}"
         >

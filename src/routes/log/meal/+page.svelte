@@ -2,16 +2,33 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { Button } from '$lib/components/ui';
-  import { eventsStore } from '$lib/stores';
+  import { eventsStore, presetsStore } from '$lib/stores';
+  import type { AlcoholType, MealPreset } from '$lib/types';
 
   let carbs = $state(0);
   let protein = $state<number | undefined>(undefined);
   let fat = $state<number | undefined>(undefined);
   let description = $state('');
-  let photoUrl = $state<string | undefined>(undefined);
   let saving = $state(false);
   let recentCarbs = $state<number[]>([]);
   let loadingRecent = $state(true);
+
+  // Alcohol tracking
+  let alcoholUnits = $state<number | undefined>(undefined);
+  let alcoholType = $state<AlcoholType | undefined>(undefined);
+
+  // Preset management
+  let showSavePreset = $state(false);
+  let presetName = $state('');
+
+  // Alcohol type options
+  const alcoholTypeOptions: Array<{ value: AlcoholType | ''; label: string }> = [
+    { value: '', label: 'Not specified' },
+    { value: 'beer', label: 'Beer / Cider' },
+    { value: 'wine', label: 'Wine' },
+    { value: 'spirit', label: 'Spirits' },
+    { value: 'mixed', label: 'Cocktails / Mixed' }
+  ];
 
   // Default quick-select values as fallback when no recent carbs exist
   const defaultCarbQuickSelect = [15, 30, 45, 60, 75, 90];
@@ -21,9 +38,28 @@
     { icon: '🍞', label: 'Bread', carbs: 15 },
     { icon: '🍕', label: 'Pizza', carbs: 30, fat: 12 },
     { icon: '🍔', label: 'Burger', carbs: 35, protein: 25, fat: 20 },
-    { icon: '🍺', label: 'Beer', carbs: 12 },
     { icon: '🍎', label: 'Apple', carbs: 25 },
     { icon: '🍚', label: 'Rice', carbs: 45 }
+  ];
+
+  // Drink shortcuts with carbs and alcohol units
+  const drinkShortcuts = [
+    { icon: '🍺', label: 'Pint', carbs: 12, alcoholUnits: 2.3, alcoholType: 'beer' as AlcoholType },
+    { icon: '🍷', label: 'Wine', carbs: 4, alcoholUnits: 2.1, alcoholType: 'wine' as AlcoholType },
+    {
+      icon: '🥃',
+      label: 'Spirit',
+      carbs: 0,
+      alcoholUnits: 1,
+      alcoholType: 'spirit' as AlcoholType
+    },
+    {
+      icon: '🍹',
+      label: 'Cocktail',
+      carbs: 20,
+      alcoholUnits: 2,
+      alcoholType: 'mixed' as AlcoholType
+    }
   ];
 
   // Load recent carb values
@@ -36,6 +72,7 @@
 
   onMount(() => {
     loadRecentCarbs();
+    presetsStore.loadRecent(5);
   });
 
   function adjustCarbs(amount: number) {
@@ -50,36 +87,35 @@
     if (food.protein) protein = food.protein;
     if (food.fat) fat = food.fat;
     description = food.label;
+    // Clear alcohol when selecting food
+    alcoholUnits = undefined;
+    alcoholType = undefined;
   }
 
-  async function handlePhotoCapture() {
-    // Create a file input for photo selection
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment'; // Use back camera on mobile
-
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        // Convert to base64 data URL for storage
-        const reader = new FileReader();
-        reader.onload = () => {
-          photoUrl = reader.result as string;
-        };
-        reader.readAsDataURL(file);
-      }
-    };
-
-    input.click();
+  function applyDrinkShortcut(drink: (typeof drinkShortcuts)[0]) {
+    carbs = drink.carbs;
+    alcoholUnits = drink.alcoholUnits;
+    alcoholType = drink.alcoholType;
+    description = drink.label;
+    // Clear food macros when selecting drink
+    protein = undefined;
+    fat = undefined;
   }
 
-  function removePhoto() {
-    photoUrl = undefined;
+  function adjustAlcoholUnits(amount: number) {
+    const current = alcoholUnits ?? 0;
+    const newValue = Math.round((current + amount) * 10) / 10; // Round to 1 decimal
+    if (newValue >= 0 && newValue <= 50) {
+      alcoholUnits = newValue > 0 ? newValue : undefined;
+    }
   }
+
+  // Check if this is primarily an alcohol entry
+  let isAlcoholEntry = $derived((alcoholUnits ?? 0) > 0);
 
   async function save() {
-    if (carbs <= 0) return;
+    // Allow saving if carbs > 0 OR alcohol units > 0
+    if (carbs <= 0 && !isAlcoholEntry) return;
 
     saving = true;
     try {
@@ -87,7 +123,8 @@
         protein,
         fat,
         description: description || undefined,
-        photoUrl
+        alcoholUnits: alcoholUnits || undefined,
+        alcoholType: alcoholType || undefined
       });
       goto('/');
     } catch {
@@ -99,6 +136,43 @@
 
   // Use recent carbs if available, otherwise fall back to defaults
   const quickSelectValues = $derived(recentCarbs.length > 0 ? recentCarbs : defaultCarbQuickSelect);
+
+  function applyPreset(preset: MealPreset) {
+    carbs = preset.totalMacros.carbs;
+    protein = preset.totalMacros.protein || undefined;
+    fat = preset.totalMacros.fat || undefined;
+    description = preset.name;
+    // Clear alcohol when selecting preset
+    alcoholUnits = undefined;
+    alcoholType = undefined;
+    // Mark preset as recently used
+    presetsStore.markUsed(preset.id);
+  }
+
+  async function saveAsPreset() {
+    if (!presetName.trim() || carbs <= 0) return;
+
+    try {
+      await presetsStore.create({
+        name: presetName,
+        items: [
+          {
+            name: description || presetName,
+            macros: { carbs, protein: protein || 0, fat: fat || 0, calories: 0 }
+          }
+        ],
+        totalMacros: { carbs, protein: protein || 0, fat: fat || 0, calories: 0 }
+      });
+      presetName = '';
+      showSavePreset = false;
+    } catch {
+      // Error shown via store
+    }
+  }
+
+  async function deletePreset(id: string) {
+    await presetsStore.deletePreset(id);
+  }
 </script>
 
 <div class="flex min-h-[calc(100dvh-80px)] flex-col px-4 py-6">
@@ -113,69 +187,14 @@
   </header>
 
   <div class="flex flex-1 flex-col">
-    <!-- Smart Entry Options -->
+    <!-- Camera Entry - Unified smart entry point -->
     <div class="mb-6">
-      <span class="mb-2 block text-sm font-medium text-gray-400">Smart Entry</span>
-      <div class="grid grid-cols-3 gap-2">
-        <a
-          href="/log/meal/photo"
-          class="flex flex-col items-center rounded-lg bg-blue-500/10 p-3 text-center transition-colors hover:bg-blue-500/20"
-        >
-          <span class="mb-1 text-2xl">📷</span>
-          <span class="text-xs text-blue-400">AI Photo</span>
-        </a>
-        <a
-          href="/log/meal/estimate"
-          class="flex flex-col items-center rounded-lg bg-purple-500/10 p-3 text-center transition-colors hover:bg-purple-500/20"
-        >
-          <span class="mb-1 text-2xl">📐</span>
-          <span class="text-xs text-purple-400">Estimate</span>
-        </a>
-        <a
-          href="/log/meal/label"
-          class="flex flex-col items-center rounded-lg bg-green-500/10 p-3 text-center transition-colors hover:bg-green-500/20"
-        >
-          <span class="mb-1 text-2xl">🏷️</span>
-          <span class="text-xs text-green-400">Scan Label</span>
-        </a>
-      </div>
-    </div>
-
-    <!-- Divider -->
-    <div class="mb-6 flex items-center gap-3">
-      <div class="h-px flex-1 bg-gray-800"></div>
-      <span class="text-xs text-gray-500">or enter manually</span>
-      <div class="h-px flex-1 bg-gray-800"></div>
-    </div>
-
-    <!-- Photo Capture -->
-    <div class="mb-6">
-      {#if photoUrl}
-        <div class="relative">
-          <img src={photoUrl} alt="Food being logged" class="h-32 w-full rounded-lg object-cover" />
-          <button
-            type="button"
-            class="absolute right-2 top-2 rounded-full bg-gray-900/80 p-1 text-gray-300 hover:bg-gray-900"
-            onclick={removePhoto}
-            aria-label="Remove photo"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-      {:else}
-        <button
-          type="button"
-          class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-700 bg-gray-800/50 px-4 py-4 text-gray-400 transition-colors hover:border-gray-600 hover:bg-gray-800 hover:text-gray-300"
-          onclick={handlePhotoCapture}
-        >
-          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <a
+        href="/log/meal/camera"
+        class="flex w-full items-center gap-4 rounded-lg bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-green-500/10 p-4 transition-all hover:from-blue-500/20 hover:via-purple-500/20 hover:to-green-500/20"
+      >
+        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-gray-800">
+          <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -189,14 +208,58 @@
               d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-          <span>Add photo</span>
-        </button>
-      {/if}
+        </div>
+        <div class="flex-1">
+          <span class="block font-medium text-white">Use Camera</span>
+          <span class="text-sm text-gray-400">AI analysis, volume estimate, or label scan</span>
+        </div>
+        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
+    </div>
+
+    <!-- Saved Presets -->
+    {#if presetsStore.presets.length > 0}
+      <fieldset class="mb-4">
+        <legend class="mb-2 block text-sm font-medium text-gray-400">Saved Meals</legend>
+        <div class="flex flex-wrap gap-2">
+          {#each presetsStore.presets as preset}
+            <div
+              class="group relative flex items-center gap-2 rounded-full bg-purple-500/10 px-3 py-2 text-sm transition-colors hover:bg-purple-500/20"
+            >
+              <button
+                type="button"
+                class="flex items-center gap-2"
+                onclick={() => applyPreset(preset)}
+              >
+                <span class="text-purple-300">{preset.name}</span>
+                <span class="text-xs text-purple-400">{preset.totalMacros.carbs}g</span>
+              </button>
+              <button
+                type="button"
+                class="ml-1 hidden text-purple-400 hover:text-red-400 group-hover:inline"
+                onclick={() => deletePreset(preset.id)}
+                aria-label={`Delete ${preset.name}`}
+              >
+                &times;
+              </button>
+            </div>
+          {/each}
+        </div>
+      </fieldset>
+    {/if}
+
+    <!-- Divider -->
+    <div class="mb-6 flex items-center gap-3">
+      <div class="h-px flex-1 bg-gray-800"></div>
+      <span class="text-xs text-gray-500">or enter manually</span>
+      <div class="h-px flex-1 bg-gray-800"></div>
     </div>
 
     <!-- Food Shortcuts -->
-    <fieldset class="mb-6">
-      <legend class="mb-2 block text-sm font-medium text-gray-400">Quick add</legend>
+    <fieldset class="mb-4">
+      <legend class="mb-2 block text-sm font-medium text-gray-400">Quick add - Food</legend>
       <div class="flex flex-wrap gap-2">
         {#each foodShortcuts as food}
           <button
@@ -207,6 +270,24 @@
           >
             <span class="text-lg">{food.icon}</span>
             <span class="text-gray-300">{food.carbs}g</span>
+          </button>
+        {/each}
+      </div>
+    </fieldset>
+
+    <!-- Drink Shortcuts -->
+    <fieldset class="mb-6">
+      <legend class="mb-2 block text-sm font-medium text-gray-400">Quick add - Drinks</legend>
+      <div class="flex flex-wrap gap-2">
+        {#each drinkShortcuts as drink}
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-2 text-sm transition-colors hover:bg-amber-500/20"
+            onclick={() => applyDrinkShortcut(drink)}
+            aria-label={`Add ${drink.label} (${drink.carbs}g carbs, ${drink.alcoholUnits} units)`}
+          >
+            <span class="text-lg">{drink.icon}</span>
+            <span class="text-amber-300">{drink.alcoholUnits}u</span>
           </button>
         {/each}
       </div>
@@ -297,6 +378,70 @@
       </div>
     </fieldset>
 
+    <!-- Alcohol Logging Section -->
+    <details class="mb-6" open={isAlcoholEntry}>
+      <summary class="cursor-pointer text-sm font-medium text-amber-400 hover:text-amber-300">
+        Alcohol ({alcoholUnits ?? 0} units)
+      </summary>
+      <div class="mt-3 rounded-lg bg-amber-500/5 p-4">
+        <!-- Alcohol Units Input -->
+        <div class="mb-4">
+          <label for="alcohol-units" class="mb-2 block text-xs font-medium text-gray-400">
+            Standard drink units
+          </label>
+          <div class="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-800 text-lg text-amber-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+              onclick={() => adjustAlcoholUnits(-0.5)}
+              disabled={(alcoholUnits ?? 0) < 0.5}
+              aria-label="Decrease alcohol by 0.5 units"
+            >
+              -
+            </button>
+            <div class="w-20 text-center">
+              <input
+                id="alcohol-units"
+                type="number"
+                bind:value={alcoholUnits}
+                min="0"
+                max="50"
+                step="0.1"
+                placeholder="0"
+                class="w-full bg-transparent text-center text-3xl font-bold text-amber-300 placeholder-gray-600 focus:outline-none"
+              />
+              <span class="text-xs text-gray-400">units</span>
+            </div>
+            <button
+              type="button"
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-800 text-lg text-amber-300 transition-colors hover:bg-gray-700 active:bg-gray-600 disabled:opacity-40"
+              onclick={() => adjustAlcoholUnits(0.5)}
+              disabled={(alcoholUnits ?? 0) >= 50}
+              aria-label="Increase alcohol by 0.5 units"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        <!-- Alcohol Type Selector -->
+        <div>
+          <label for="alcohol-type" class="mb-2 block text-xs font-medium text-gray-400">
+            Drink type
+          </label>
+          <select
+            id="alcohol-type"
+            bind:value={alcoholType}
+            class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            {#each alcoholTypeOptions as option}
+              <option value={option.value || undefined}>{option.label}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+    </details>
+
     <!-- Optional Macros (collapsible) -->
     <details class="mb-6">
       <summary class="cursor-pointer text-sm font-medium text-gray-400 hover:text-gray-300">
@@ -344,6 +489,60 @@
       ></textarea>
     </div>
 
+    <!-- Save as Preset Option -->
+    {#if carbs > 0 && !isAlcoholEntry}
+      <div class="mb-4">
+        {#if showSavePreset}
+          <div class="flex items-center gap-2 rounded-lg bg-purple-500/10 p-3">
+            <input
+              type="text"
+              bind:value={presetName}
+              placeholder="Preset name"
+              class="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              onkeydown={(e) => e.key === 'Enter' && saveAsPreset()}
+            />
+            <button
+              type="button"
+              class="rounded-lg bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+              onclick={saveAsPreset}
+              disabled={!presetName.trim()}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-2 text-sm text-gray-400 transition-colors hover:text-gray-200"
+              onclick={() => {
+                showSavePreset = false;
+                presetName = '';
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        {:else}
+          <button
+            type="button"
+            class="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-700 px-3 py-2 text-sm text-gray-400 transition-colors hover:border-purple-500 hover:text-purple-400"
+            onclick={() => {
+              showSavePreset = true;
+              presetName = description || '';
+            }}
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+              />
+            </svg>
+            Save as preset
+          </button>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Error Display -->
     {#if eventsStore.error}
       <div class="mb-4 rounded-lg bg-red-500/20 px-4 py-3 text-red-400">
@@ -357,10 +556,16 @@
       size="lg"
       class="w-full"
       onclick={save}
-      disabled={carbs <= 0}
+      disabled={carbs <= 0 && !isAlcoholEntry}
       loading={saving}
     >
-      Log {carbs}g carbs
+      {#if isAlcoholEntry && carbs <= 0}
+        Log {alcoholUnits} units alcohol
+      {:else if isAlcoholEntry}
+        Log {carbs}g carbs + {alcoholUnits}u alcohol
+      {:else}
+        Log {carbs}g carbs
+      {/if}
     </Button>
   </div>
 </div>

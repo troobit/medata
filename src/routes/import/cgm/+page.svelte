@@ -10,7 +10,7 @@
    * 5. Data confirmation and import
    */
   import { goto } from '$app/navigation';
-  import { Button, LoadingSpinner } from '$lib/components/ui';
+  import { Button, Logo } from '$lib/components/ui';
   import {
     CGMImageCapture,
     AxisRangeInput,
@@ -31,7 +31,7 @@
   let error = $state<string | null>(null);
 
   // Check if ML is configured
-  const isConfigured = $derived(settingsStore.isMLConfigured);
+  const isConfigured = $derived(settingsStore.isAIConfigured);
 
   function handleImageSelected(file: File, previewUrl: string) {
     imageFile = file;
@@ -90,13 +90,17 @@
       const device = extractionResult?.deviceType || 'generic';
 
       for (const point of points) {
-        await eventsStore.logBSLWithMetadata(point.value, {
-          unit,
+        await eventsStore.logBSL(point.value, unit, point.timestamp, {
           source: 'cgm-image',
-          device: device === 'freestyle-libre' ? 'Freestyle Libre' :
-                  device === 'dexcom' ? 'Dexcom' :
-                  device === 'medtronic' ? 'Medtronic' : 'CGM'
-        }, point.timestamp);
+          device:
+            device === 'freestyle-libre'
+              ? 'Freestyle Libre'
+              : device === 'dexcom'
+                ? 'Dexcom'
+                : device === 'medtronic'
+                  ? 'Medtronic'
+                  : 'CGM'
+        });
       }
 
       step = 'complete';
@@ -143,17 +147,17 @@
       Back
     </a>
     <h1 class="text-2xl font-bold text-white">CGM Graph Import</h1>
-    <p class="mt-1 text-sm text-gray-400">
-      Extract BSL data from CGM app screenshots
-    </p>
+    <p class="mt-1 text-sm text-gray-400">Extract BSL data from CGM app screenshots</p>
   </header>
 
   <!-- Progress indicator -->
   {#if step !== 'upload' && step !== 'complete'}
     <div class="mb-6 flex items-center justify-center gap-2">
-      {#each ['upload', 'extracting', 'preview', 'confirm'] as s, i}
+      {#each ['upload', 'extracting', 'preview', 'confirm'] as _s, i}
         <div
-          class="h-2 w-2 rounded-full {['upload', 'extracting', 'preview', 'confirm'].indexOf(step) >= i
+          class="h-2 w-2 rounded-full {['upload', 'extracting', 'preview', 'confirm'].indexOf(
+            step
+          ) >= i
             ? 'bg-brand-accent'
             : 'bg-gray-700'}"
         ></div>
@@ -177,9 +181,7 @@
         <p class="mb-3 text-sm text-yellow-300/80">
           CGM graph extraction requires a cloud ML provider (OpenAI, Claude, Gemini, or Ollama).
         </p>
-        <Button href="/settings" variant="secondary" size="sm">
-          Configure in Settings
-        </Button>
+        <Button href="/settings" variant="secondary" size="sm">Configure in Settings</Button>
       </div>
     {/if}
 
@@ -199,7 +201,7 @@
   <!-- Step: Extracting -->
   {#if step === 'extracting'}
     <div class="flex flex-col items-center justify-center py-12">
-      <LoadingSpinner />
+      <Logo animated size="lg" />
       <p class="mt-4 text-lg font-medium text-white">Extracting BSL Data...</p>
       <p class="mt-2 text-sm text-gray-400">
         Analyzing graph with {settingsStore.configuredProvider || 'ML'}
@@ -218,9 +220,7 @@
       />
 
       <div class="flex gap-3">
-        <Button variant="secondary" class="flex-1" onclick={reset}>
-          Start Over
-        </Button>
+        <Button variant="secondary" class="flex-1" onclick={reset}>Start Over</Button>
         <Button variant="primary" class="flex-1" onclick={proceedToConfirm}>
           Review Data Points
         </Button>
@@ -241,7 +241,7 @@
   <!-- Step: Importing -->
   {#if step === 'importing'}
     <div class="flex flex-col items-center justify-center py-12">
-      <LoadingSpinner />
+      <Logo animated size="lg" />
       <p class="mt-4 text-lg font-medium text-white">Importing Data...</p>
       <p class="mt-2 text-sm text-gray-400">
         Saving {extractionResult?.dataPoints.length || 0} BSL readings
@@ -256,7 +256,12 @@
         class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20 text-4xl"
       >
         <svg class="h-10 w-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 13l4 4L19 7"
+          />
         </svg>
       </div>
 
@@ -266,12 +271,8 @@
       </p>
 
       <div class="flex gap-3">
-        <Button variant="secondary" onclick={reset}>
-          Import Another
-        </Button>
-        <Button variant="primary" onclick={goToHistory}>
-          View History
-        </Button>
+        <Button variant="secondary" onclick={reset}>Import Another</Button>
+        <Button variant="primary" onclick={goToHistory}>View History</Button>
       </div>
     </div>
   {/if}
