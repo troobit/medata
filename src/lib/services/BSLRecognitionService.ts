@@ -2,7 +2,7 @@ import type { BSLUnit } from '$lib/types';
 import type { ExtractedBSLReading, BSLExtractionResult } from '$lib/types/vision';
 import { VisionService, getVisionService, VisionServiceError } from './VisionService';
 
-const EXTRACTION_PROMPT = `Analyze this screenshot from a continuous glucose monitor (CGM) app like Freestyle Libre, Dexcom, or similar.
+const EXTRACTION_PROMPT = `Analyse this screenshot from a continuous glucose monitor (CGM) app like Freestyle Libre, Dexcom, or similar.
 
 Extract ALL visible blood sugar/glucose readings from the image. For each reading, provide:
 1. The glucose value (number)
@@ -57,7 +57,7 @@ export class BSLRecognitionService {
       }
       return {
         readings: [],
-        error: error instanceof Error ? error.message : 'Failed to analyze image'
+        error: error instanceof Error ? error.message : 'Failed to analyse image'
       };
     }
   }

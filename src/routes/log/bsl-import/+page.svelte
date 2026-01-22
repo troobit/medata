@@ -62,7 +62,7 @@
       pageState = 'reviewing';
     } catch (err) {
       pageState = 'error';
-      errorMessage = err instanceof Error ? err.message : 'Failed to analyze image';
+      errorMessage = err instanceof Error ? err.message : 'Failed to analyse image';
     }
   }
 

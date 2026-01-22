@@ -34,7 +34,7 @@ export class CSVParser implements IImportService {
   /**
    * Detect the format of a CSV file
    *
-   * @param file - CSV file to analyze
+   * @param file - CSV file to analyse
    * @returns Detected format type
    */
   async detectFormat(file: File): Promise<CSVFormatType> {

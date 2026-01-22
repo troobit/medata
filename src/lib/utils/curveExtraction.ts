@@ -360,7 +360,7 @@ export function findConnectedComponents(
         currentLabel++;
         labels[idx] = currentLabel;
       } else {
-        // Use minimum neighbor label
+        // Use minimum neighbour label
         const minLabel = Math.min(...neighbors);
         labels[idx] = minLabel;
 

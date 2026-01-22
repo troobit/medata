@@ -94,7 +94,7 @@ export function calculateInsulinActivity(
 }
 
 /**
- * Generate full activity curve for visualization
+ * Generate full activity curve for visualisation
  *
  * @param insulinType - Type of insulin
  * @param resolutionMinutes - Time resolution for curve points

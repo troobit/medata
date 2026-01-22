@@ -69,7 +69,7 @@
       disabled={processing}
       class="rounded-lg bg-blue-600 py-3 text-center font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
     >
-      {processing ? 'Analyzing...' : 'Analyze'}
+      {processing ? 'Analysing...' : 'Analyse'}
     </button>
   </div>
 </div>

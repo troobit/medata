@@ -1,7 +1,8 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 ---
+
 # Auth - Vercel File System Fix
 
 ## R1: Fix Vercel File System Error

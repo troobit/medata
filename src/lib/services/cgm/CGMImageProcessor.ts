@@ -26,7 +26,7 @@ import { DexcomGraphParser } from './DexcomGraphParser';
 /**
  * Prompt for CGM graph extraction via vision API
  */
-const CGM_EXTRACTION_PROMPT = `Analyze this CGM (Continuous Glucose Monitor) graph image and extract the blood sugar readings.
+const CGM_EXTRACTION_PROMPT = `Analyse this CGM (Continuous Glucose Monitor) graph image and extract the blood sugar readings.
 
 Instructions:
 1. Identify the graph type (Freestyle Libre, Dexcom, Medtronic, or other)

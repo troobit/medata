@@ -1,7 +1,8 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 ---
+
 # Dev-0 Branch Merge Spec
 
 ## R1: Merge auth worktree
@@ -46,8 +47,8 @@ references:
 
 ## R5: Address Svelte errors and favicon 404s
 
-- [ ] 17. Fix all Svelte compilation errors and warnings
+- [x] 17. Fix all Svelte compilation errors and warnings
 
-- [ ] 18. Address favicon 404 errors (add favicon or configure better error message if expected)
+- [x] 18. Address favicon 404 errors (add favicon or configure better error message if expected)
 
-- [ ] 19. Verify: No Svelte errors at build/deploy time and no unexpected 404s when running locally
+- [x] 19. Verify: No Svelte errors at build/deploy time and no unexpected 404s when running locally

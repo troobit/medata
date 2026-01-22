@@ -55,7 +55,7 @@ const BG_PARAMS = {
   dawnRiseEnd: 8, // Hour
   dawnRiseAmount: 1.5,
   // Noise
-  measurementNoise: 0.3,
+  measurementNoise: 0.3
 };
 
 // Utility functions
@@ -89,7 +89,7 @@ function calculateBG(
   exerciseTimes: Array<{ time: Date; duration: number; intensity: 'low' | 'moderate' | 'high' }>
 ): number {
   const hour = timestamp.getHours();
-  const minuteOfDay = hour * 60 + timestamp.getMinutes();
+  const _minuteOfDay = hour * 60 + timestamp.getMinutes();
 
   // Start with baseline
   let bg = BG_PARAMS.baselineFasting + randomNormal(0, BG_PARAMS.baselineVariation * 0.3);
@@ -108,7 +108,9 @@ function calculateBG(
     if (minutesSinceMeal > 0 && minutesSinceMeal < BG_PARAMS.mealDecayTime) {
       // Meal causes a rise that peaks and then decays
       const peakPhase = minutesSinceMeal / BG_PARAMS.mealPeakTime;
-      const decayPhase = (minutesSinceMeal - BG_PARAMS.mealPeakTime) / (BG_PARAMS.mealDecayTime - BG_PARAMS.mealPeakTime);
+      const decayPhase =
+        (minutesSinceMeal - BG_PARAMS.mealPeakTime) /
+        (BG_PARAMS.mealDecayTime - BG_PARAMS.mealPeakTime);
 
       let mealEffect = 0;
       if (minutesSinceMeal < BG_PARAMS.mealPeakTime) {
@@ -136,10 +138,10 @@ function calculateBG(
       const effect = insulin.units * 0.15; // ~0.15 mmol/L drop per unit
 
       if (minutesSinceInsulin < peakTime) {
-        bg -= effect * Math.sin((minutesSinceInsulin / peakTime) * Math.PI / 2);
+        bg -= effect * Math.sin(((minutesSinceInsulin / peakTime) * Math.PI) / 2);
       } else {
         const decayProgress = (minutesSinceInsulin - peakTime) / (duration - peakTime);
-        bg -= effect * Math.cos(decayProgress * Math.PI / 2);
+        bg -= effect * Math.cos((decayProgress * Math.PI) / 2);
       }
     }
 
@@ -157,7 +159,8 @@ function calculateBG(
 
     // During exercise and up to 2 hours after
     if (minutesSinceExercise > -30 && minutesSinceExercise < exerciseEnd + 120) {
-      const intensityFactor = exercise.intensity === 'high' ? 1.5 : exercise.intensity === 'moderate' ? 1.0 : 0.5;
+      const intensityFactor =
+        exercise.intensity === 'high' ? 1.5 : exercise.intensity === 'moderate' ? 1.0 : 0.5;
       const durationFactor = exercise.duration / 60;
       const effect = intensityFactor * durationFactor * 1.5;
 
@@ -208,11 +211,11 @@ function generateBGReadings(
       metadata: {
         unit: 'mmol/L',
         source: 'csv-import',
-        device: 'Test Data Generator',
+        device: 'Test Data Generator'
       },
       createdAt: timestamp,
       updatedAt: timestamp,
-      synced: false,
+      synced: false
     });
 
     currentTime = new Date(currentTime.getTime() + intervalMs);
@@ -236,11 +239,11 @@ function generateInsulinEvents(
       value: insulin.units,
       metadata: {
         type: insulin.type,
-        ...(insulin.reason && { reason: insulin.reason }),
+        ...(insulin.reason && { reason: insulin.reason })
       },
       createdAt: timestamp,
       updatedAt: timestamp,
-      synced: false,
+      synced: false
     };
   });
 }
@@ -263,7 +266,9 @@ function generateExerciseEvents(
     // Estimate calories burned based on intensity and duration
     const caloriesPerMinute =
       exercise.intensity === 'high' ? 12 : exercise.intensity === 'moderate' ? 8 : 5;
-    const caloriesBurned = Math.round(caloriesPerMinute * exercise.duration * randomInRange(0.9, 1.1));
+    const caloriesBurned = Math.round(
+      caloriesPerMinute * exercise.duration * randomInRange(0.9, 1.1)
+    );
 
     return {
       id: randomUUID(),
@@ -276,11 +281,11 @@ function generateExerciseEvents(
         category: exercise.category,
         durationMinutes: exercise.duration,
         caloriesBurned,
-        source: 'manual',
+        source: 'manual'
       },
       createdAt: timestamp,
       updatedAt: timestamp,
-      synced: false,
+      synced: false
     };
   });
 }
@@ -299,7 +304,12 @@ function generateTestData(): TestDataOutput {
   console.log(`Generating data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
   const mealTimes: Date[] = [];
-  const insulinTimes: Array<{ time: Date; type: 'bolus' | 'basal'; units: number; reason?: string }> = [];
+  const insulinTimes: Array<{
+    time: Date;
+    type: 'bolus' | 'basal';
+    units: number;
+    reason?: string;
+  }> = [];
   const exerciseTimes: Array<{
     time: Date;
     duration: number;
@@ -309,7 +319,7 @@ function generateTestData(): TestDataOutput {
   }> = [];
 
   // Generate meal, insulin, and exercise schedules for each day
-  let currentDay = new Date(startDate);
+  const currentDay = new Date(startDate);
   while (currentDay <= endDate) {
     const dayStart = new Date(currentDay);
     dayStart.setHours(0, 0, 0, 0);
@@ -364,7 +374,7 @@ function generateTestData(): TestDataOutput {
       time: new Date(breakfast.getTime() - 10 * 60000),
       type: 'bolus',
       units: Math.round(randomInRange(4, 8)),
-      reason: 'meal',
+      reason: 'meal'
     });
 
     // Bolus for lunch (5-10 units, ~10 min before)
@@ -372,7 +382,7 @@ function generateTestData(): TestDataOutput {
       time: new Date(lunch.getTime() - 10 * 60000),
       type: 'bolus',
       units: Math.round(randomInRange(5, 10)),
-      reason: 'meal',
+      reason: 'meal'
     });
 
     // Bolus for dinner (6-12 units, ~10 min before)
@@ -380,7 +390,7 @@ function generateTestData(): TestDataOutput {
       time: new Date(dinner.getTime() - 10 * 60000),
       type: 'bolus',
       units: Math.round(randomInRange(6, 12)),
-      reason: 'meal',
+      reason: 'meal'
     });
 
     // Bolus for snack if present (2-4 units)
@@ -389,7 +399,7 @@ function generateTestData(): TestDataOutput {
         time: new Date(snackTime.getTime() - 5 * 60000),
         type: 'bolus',
         units: Math.round(randomInRange(2, 4)),
-        reason: 'snack',
+        reason: 'snack'
       });
     }
 
@@ -399,7 +409,7 @@ function generateTestData(): TestDataOutput {
         time: new Date(liquorTime.getTime() - 5 * 60000),
         type: 'bolus',
         units: Math.round(randomInRange(1, 3)),
-        reason: 'liquor',
+        reason: 'liquor'
       });
     }
 
@@ -418,7 +428,7 @@ function generateTestData(): TestDataOutput {
           duration: 40,
           intensity: 'low',
           category: 'walking',
-          exerciseType: 'Walk',
+          exerciseType: 'Walk'
         });
       } else if (exerciseRoll < 0.66) {
         // Cycle - 20 minutes, medium intensity
@@ -427,7 +437,7 @@ function generateTestData(): TestDataOutput {
           duration: 20,
           intensity: 'moderate',
           category: 'cycling',
-          exerciseType: 'Cycle',
+          exerciseType: 'Cycle'
         });
       } else {
         // Swim - 1 hour, high intensity
@@ -436,7 +446,7 @@ function generateTestData(): TestDataOutput {
           duration: 60,
           intensity: 'high',
           category: 'swimming',
-          exerciseType: 'Swim',
+          exerciseType: 'Swim'
         });
       }
     }
@@ -467,7 +477,9 @@ function generateTestData(): TestDataOutput {
   // Count insulin events by type
   const basalCount = insulinEvents.filter((e) => e.metadata.type === 'basal').length;
   const bolusCount = insulinEvents.filter((e) => e.metadata.type === 'bolus').length;
-  console.log(`Generated ${insulinEvents.length} insulin events (${basalCount} basal, ${bolusCount} bolus)`);
+  console.log(
+    `Generated ${insulinEvents.length} insulin events (${basalCount} basal, ${bolusCount} bolus)`
+  );
 
   // Count exercise events by type
   const swimCount = exerciseEvents.filter((e) => e.metadata.category === 'swimming').length;
@@ -482,7 +494,7 @@ function generateTestData(): TestDataOutput {
     type: 'backup',
     createdAt: new Date().toISOString(),
     count: allEvents.length,
-    events: allEvents,
+    events: allEvents
   };
 }
 

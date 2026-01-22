@@ -128,7 +128,7 @@ export function validateGenericRows(rows: ParsedCSVRow[]): RowValidationResult[]
 /**
  * Auto-detect column mapping from CSV columns
  *
- * @param file - CSV file to analyze
+ * @param file - CSV file to analyse
  * @returns Suggested column mapping or null if unable to detect
  */
 export async function suggestColumnMapping(file: File): Promise<CSVColumnMapping | null> {
@@ -184,7 +184,7 @@ export async function suggestColumnMapping(file: File): Promise<CSVColumnMapping
 /**
  * Get available columns from a CSV file
  *
- * @param file - CSV file to analyze
+ * @param file - CSV file to analyse
  * @returns Array of column names
  */
 export async function getAvailableColumns(file: File): Promise<string[]> {

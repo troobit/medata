@@ -14,7 +14,13 @@
   let loading = $state(false);
   let clearing = $state(false);
   let message = $state<{ type: 'success' | 'error'; text: string } | null>(null);
-  let stats = $state<{ total: number; bsl: number; meal: number; insulin: number; exercise: number } | null>(null);
+  let stats = $state<{
+    total: number;
+    bsl: number;
+    meal: number;
+    insulin: number;
+    exercise: number;
+  } | null>(null);
 
   async function loadTestData() {
     loading = true;
@@ -86,10 +92,10 @@
       const allEvents = await eventsStore.exportAll();
       stats = {
         total: allEvents.length,
-        bsl: allEvents.filter(e => e.eventType === 'bsl').length,
-        meal: allEvents.filter(e => e.eventType === 'meal').length,
-        insulin: allEvents.filter(e => e.eventType === 'insulin').length,
-        exercise: allEvents.filter(e => e.eventType === 'exercise').length
+        bsl: allEvents.filter((e) => e.eventType === 'bsl').length,
+        meal: allEvents.filter((e) => e.eventType === 'meal').length,
+        insulin: allEvents.filter((e) => e.eventType === 'insulin').length,
+        exercise: allEvents.filter((e) => e.eventType === 'exercise').length
       };
     } catch {
       stats = null;
@@ -159,24 +165,22 @@
   <section class="mb-8">
     <h2 class="mb-4 text-lg font-semibold text-gray-200">Test Data</h2>
     <p class="mb-4 text-sm text-gray-400">
-      Load generated test data into the database. Run <code class="rounded bg-gray-700 px-1">npm run generate-test-data</code> first to create the test data file.
+      Load generated test data into the database. Run <code class="rounded bg-gray-700 px-1"
+        >npm run generate-test-data</code
+      > first to create the test data file.
     </p>
     <div class="flex gap-3">
-      <Button variant="primary" onclick={loadTestData} loading={loading} disabled={loading}>
+      <Button variant="primary" onclick={loadTestData} {loading} disabled={loading}>
         Load Test Data
       </Button>
-      <Button variant="secondary" onclick={refreshStats}>
-        Refresh Stats
-      </Button>
+      <Button variant="secondary" onclick={refreshStats}>Refresh Stats</Button>
     </div>
   </section>
 
   <!-- Danger Zone -->
   <section class="border-t border-gray-800 pt-6">
     <h2 class="mb-4 text-lg font-semibold text-red-400">Danger Zone</h2>
-    <p class="mb-4 text-sm text-gray-400">
-      These actions are destructive and cannot be undone.
-    </p>
+    <p class="mb-4 text-sm text-gray-400">These actions are destructive and cannot be undone.</p>
     <Button variant="secondary" onclick={clearDatabase} loading={clearing} disabled={clearing}>
       Clear All Data
     </Button>

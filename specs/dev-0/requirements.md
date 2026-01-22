@@ -14,6 +14,7 @@ Update documentation to match the current setup after merges are complete.
 ## Spelling
 
 Enforce Irish/British spelling throughout the codebase. Continuously check for and replace:
+
 - `color` → `colour`
 - `realize` → `realise`
 - `-ize` endings → `-ise` endings

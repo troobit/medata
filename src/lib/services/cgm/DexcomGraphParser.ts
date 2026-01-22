@@ -387,7 +387,7 @@ export class DexcomGraphParser {
     _graphRegion: GraphRegion,
     _imageHeight: number
   ): BSLUnit {
-    // Analyze y-position distribution
+    // Analyse y-position distribution
     // mg/dL typically uses larger range (40-400)
     // mmol/L typically uses smaller range (2.2-22.2)
 

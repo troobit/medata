@@ -1,7 +1,8 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 ---
+
 # Datagen Test Data Specification
 
 ## R1: Blood Glucose Data Generation

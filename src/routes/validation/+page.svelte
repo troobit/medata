@@ -25,8 +25,8 @@
   let importError = $state<string | null>(null);
   let importSuccess = $state<string | null>(null);
 
-  // File input ref
-  let fileInput: HTMLInputElement;
+  // File input ref - bound to DOM element (not reactive state)
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   const tabs: Array<{ id: TabId; label: string; icon: string }> = [
     { id: 'dataset', label: 'Test Data', icon: '📸' },

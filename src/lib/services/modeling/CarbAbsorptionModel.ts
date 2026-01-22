@@ -193,7 +193,7 @@ export function calculateCarbAbsorption(
 }
 
 /**
- * Generate full absorption curve for visualization
+ * Generate full absorption curve for visualisation
  *
  * @param totalCarbs - Total carbs in grams
  * @param glycemicIndex - Glycemic index
