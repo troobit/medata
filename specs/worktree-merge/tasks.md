@@ -1,7 +1,8 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 ---
+
 # Worktree Merge
 
 ## Phase 1: Validation

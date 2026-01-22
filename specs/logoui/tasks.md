@@ -1,9 +1,10 @@
 ---
 references:
-    - specs/logoui/requirements.md
-    - static/icon.svg
-    - src/lib/components/ui/LoadingSpinner.svelte
+  - specs/logoui/requirements.md
+  - static/icon.svg
+  - src/lib/components/ui/LoadingSpinner.svelte
 ---
+
 # Logo Component Implementation
 
 ## Phase 0: Recover work in progress - add to current commit (rebase was required)

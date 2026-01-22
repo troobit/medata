@@ -8,12 +8,12 @@ Merge three feature branches (`auth`, `logoui`, `dev-2`) back into `dev-0`, avoi
 
 ### Worktrees
 
-| Worktree | Branch | Commit | Status |
-|----------|--------|--------|--------|
-| `/Users/ronan/repos/beetus/medata` | `dev-0` | `661ba4f` | Base branch |
-| `/Users/ronan/repos/beetus/auth` | `auth` | `afbd711` | 5 commits ahead of dev-0 |
-| `/Users/ronan/repos/beetus/logoui` | `logoui` | `7af2e6d` | 6 commits ahead of dev-0 |
-| `/Users/ronan/repos/beetus/dev-2` | `dev-2` | `fc1c25e` | Older parallel implementation |
+| Worktree                           | Branch   | Commit    | Status                        |
+| ---------------------------------- | -------- | --------- | ----------------------------- |
+| `/Users/ronan/repos/beetus/medata` | `dev-0`  | `661ba4f` | Base branch                   |
+| `/Users/ronan/repos/beetus/auth`   | `auth`   | `afbd711` | 5 commits ahead of dev-0      |
+| `/Users/ronan/repos/beetus/logoui` | `logoui` | `7af2e6d` | 6 commits ahead of dev-0      |
+| `/Users/ronan/repos/beetus/dev-2`  | `dev-2`  | `fc1c25e` | Older parallel implementation |
 
 ### Branch Relationships
 
@@ -25,7 +25,9 @@ Merge three feature branches (`auth`, `logoui`, `dev-2`) back into `dev-0`, avoi
 ### Feature Completion Status
 
 #### auth branch - COMPLETE
+
 All 16 tasks completed:
+
 - Phase 1: Interface extraction & FileCredentialStore refactor
 - Phase 2: Vercel KV implementation (KVCredentialStore)
 - Phase 3: Store factory & integration with all API routes
@@ -33,11 +35,14 @@ All 16 tasks completed:
 - Phase 5: Testing & verification
 
 #### logoui branch - NEARLY COMPLETE
+
 36/42 tasks completed:
+
 - Phase 0-5: All complete (core component, animation, variants, favicons, integration)
 - Phase 6: Demo page partially complete (3 tasks remaining - verification only)
 
 #### dev-2 branch - SUPERSEDED
+
 - Contains earlier parallel implementation of logo component
 - All 33 tasks marked complete BUT lacks Phase 6 demo page
 - **Decision**: logoui is the canonical logo implementation; dev-2 can be archived
@@ -46,13 +51,14 @@ All 16 tasks completed:
 
 ### Files Modified by Multiple Branches
 
-| File | auth | logoui | Resolution Strategy |
-|------|------|--------|---------------------|
-| `.env.example` | Adds KV vars | Adds LOGO_VARIANT | Combine both additions |
-| `specs/logoui/tasks.md` | Earlier version | Latest version | Keep logoui version |
-| `src/lib/db/schema.ts` | Modified | Modified | Manual review needed |
+| File                    | auth            | logoui            | Resolution Strategy    |
+| ----------------------- | --------------- | ----------------- | ---------------------- |
+| `.env.example`          | Adds KV vars    | Adds LOGO_VARIANT | Combine both additions |
+| `specs/logoui/tasks.md` | Earlier version | Latest version    | Keep logoui version    |
+| `src/lib/db/schema.ts`  | Modified        | Modified          | Manual review needed   |
 
 ### auth-exclusive Changes (safe to merge)
+
 - `docs/auth.md` - new documentation
 - `src/lib/server/auth/*` - 8 new/modified files
 - `src/routes/api/auth/*` - all auth endpoints
@@ -60,6 +66,7 @@ All 16 tasks completed:
 - `src/routes/log/insulin/+page.svelte` - minor change
 
 ### logoui-exclusive Changes (safe to merge)
+
 - `src/lib/components/ui/Logo.svelte` - new component
 - `static/favicon-*.svg` - 3 new favicons
 - `static/apple-touch-icon-*.png` - 6 new icons
@@ -91,28 +98,35 @@ All 16 tasks completed:
 ## Requirements
 
 ### R1: Validate Branch Completeness
+
 Before merging, verify each branch is in a working state:
+
 - [ ] auth: All tests pass, KV integration verified
 - [ ] logoui: Build succeeds, logo renders correctly
 
 ### R2: Merge auth First
+
 - auth has the smallest diff from dev-0
 - No conflicts expected with pure fast-forward or clean merge
 - Brings in @vercel/kv dependency needed for deployment
 
 ### R3: Sync logoui with dev-0 for Continued Development
+
 - Merge dev-0 into logoui branch (brings auth into UI development environment)
 - Resolve any conflicts (primarily .env.example)
 - Keep logoui's version of `specs/logoui/tasks.md`
 - logoui worktree remains active for continued UI development with auth features
 
 ### R3a: Ongoing UI Development on logoui
+
 - logoui worktree can continue receiving UI-related work
 - Auth system is available for integration testing
 - Merge back to dev-0 when UI work reaches a milestone
 
 ### R4: Handle .env.example Merge
+
 Combine additions from both branches:
+
 ```env
 # Auth (from auth branch)
 KV_REST_API_URL=
@@ -123,20 +137,26 @@ PUBLIC_LOGO_VARIANT=default
 ```
 
 ### R5: Archive dev-2
+
 After successful merge:
+
 - Remove dev-2 worktree: `git worktree remove dev-2`
 - Delete branch: `git branch -D dev-2`
 - Document in commit message that logoui superseded dev-2
 
 ### R6: Clean Up Worktrees (Partial - Keep logoui Active)
+
 After auth merge complete:
+
 - Remove auth worktree: `git worktree remove auth`
 - **Keep logoui worktree active** for continued UI development
 - Remove logoui later when UI work complete and merged to dev-0
 - Archive dev-2 immediately (superseded)
 
 ### R7: Push to Remote
+
 After local merge verified:
+
 - Push dev-0 to origin
 - Delete remote tracking branches if any
 
@@ -150,12 +170,14 @@ After local merge verified:
 ## Validation Checklist
 
 ### After Auth Merge (dev-0)
+
 - [ ] `pnpm install` succeeds
 - [ ] `pnpm build` succeeds
 - [ ] `pnpm dev` starts without errors
 - [ ] Auth bootstrap flow works locally
 
 ### After Sync (logoui worktree)
+
 - [ ] `pnpm install` succeeds in logoui worktree
 - [ ] `pnpm build` succeeds with auth + logo features
 - [ ] `pnpm dev` starts without errors

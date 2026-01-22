@@ -83,6 +83,7 @@ On Vercel, credentials are stored in Vercel KV (a serverless Redis-compatible ke
 #### 1. Create a KV Store
 
 Using the Vercel Dashboard:
+
 1. Go to your project in the Vercel Dashboard
 2. Navigate to **Storage** tab
 3. Click **Create Database** → **KV**
@@ -91,6 +92,7 @@ Using the Vercel Dashboard:
 6. Click **Create**
 
 Or using the Vercel CLI:
+
 ```bash
 vercel storage add kv medata-auth
 ```
@@ -124,6 +126,7 @@ vercel env ls production
 ```
 
 For local development with KV (optional):
+
 ```bash
 # Pull KV credentials to local env
 vercel env pull .env.local
@@ -136,19 +139,19 @@ cat .env.local | grep KV_
 
 The app automatically detects the environment:
 
-| Environment | KV Variables Present? | Storage Used |
-|-------------|----------------------|--------------|
-| Local dev | No | File-based (`AUTH_CREDENTIALS_PATH`) |
-| Local dev | Yes (via `vercel env pull`) | Vercel KV |
-| Vercel production | Yes (auto-injected) | Vercel KV |
+| Environment       | KV Variables Present?       | Storage Used                         |
+| ----------------- | --------------------------- | ------------------------------------ |
+| Local dev         | No                          | File-based (`AUTH_CREDENTIALS_PATH`) |
+| Local dev         | Yes (via `vercel env pull`) | Vercel KV                            |
+| Vercel production | Yes (auto-injected)         | Vercel KV                            |
 
 ### Troubleshooting KV
 
-| Problem | Solution |
-|---------|----------|
-| `KV_REST_API_URL not found` | Run `vercel link` and `vercel env pull .env.local` |
-| `Unauthorized` KV errors | Regenerate KV credentials in Vercel Dashboard |
-| Credentials not persisting | Verify KV store is linked to the correct project |
+| Problem                         | Solution                                                       |
+| ------------------------------- | -------------------------------------------------------------- |
+| `KV_REST_API_URL not found`     | Run `vercel link` and `vercel env pull .env.local`             |
+| `Unauthorized` KV errors        | Regenerate KV credentials in Vercel Dashboard                  |
+| Credentials not persisting      | Verify KV store is linked to the correct project               |
 | Local dev using KV unexpectedly | Remove `KV_REST_API_URL` from `.env.local` to use file storage |
 
 ---
