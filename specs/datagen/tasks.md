@@ -1,46 +1,21 @@
 ---
 references:
-  - requirements.md
+    - requirements.md
 ---
+# Datagen Minimal Test Data
 
-# Datagen Test Data Specification
+## R1: Create Hardcoded Data Arrays
 
-## R1: Blood Glucose Data Generation
+- [x] 1. Create seed data file with BG readings array (~50 values, 4-12 mmol/L)
 
-- [x] 1. Investigate: Review existing data models and UI expectations for blood glucose
+- [x] 2. Add timestamps array (few days, 5-min intervals)
 
-- [x] 2. Implement: Generate 1 month of 5-minute interval BG readings in mmol/L with stochastic T1 variation
+- [x] 3. Add insulin array (basal + bolus entries)
 
-- [x] 3. Verify: Confirm BG data covers 1 month at 5-min intervals with realistic T1 ranges
+- [x] 4. Add exercise array (2-3 activities)
 
-## R2: Insulin Data (Basal & Bolus)
+## R2: Backend DB Seed Script
 
-- [x] 4. Investigate: Review insulin data model for basal and bolus entries
+- [ ] 5. Create seed script that loads arrays into DB
 
-- [x] 5. Implement: Generate basal shots (7am & 7pm, 15 units each)
-
-- [x] 6. Implement: Generate bolus shots for meals, liquor, and snacks
-
-- [x] 7. Verify: Confirm insulin data follows specified schedule and dosing
-
-## R3: Exercise Data Generation
-
-- [x] 8. Investigate: Review exercise data model and activity types
-
-- [x] 9. Implement: Generate swim activities (1hr, high intensity)
-
-- [x] 10. Implement: Generate cycle activities (20min, medium intensity)
-
-- [x] 11. Implement: Generate walk activities (40min, low intensity)
-
-- [x] 12. Verify: Confirm exercise data includes all activity types with correct durations/intensities
-
-## R4: Script & Data Freshness
-
-- [x] 13. Investigate: Determine output format and storage location for generated data
-
-- [x] 14. Implement: Create script that generates data ending a few minutes before current time
-
-- [x] 15. Implement: Add stochastic variation to ensure data differs on each run
-
-- [x] 16. Verify: Confirm script produces fresh, varied data suitable for local dev
+- [ ] 6. Verify data appears in UI
