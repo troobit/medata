@@ -18,17 +18,17 @@ references:
 
 - [x] 5. Implement: Set AUTH_RP_ID, AUTH_ORIGIN, AUTH_SESSION_SECRET in Vercel production environment
 
-- [ ] 6. Implement: Configure Vercel KV storage and link to project (MANUAL: See requirements.md for dashboard steps)
+- [x] 6. Implement: Configure Vercel KV storage and link to project (MANUAL: See requirements.md for dashboard steps)
 
-- [ ] 7. Verify: Confirm authentication works on deployed app without environment errors (BLOCKED: Depends on task 6)
+- [x] 7. Verify: Confirm authentication works on deployed app without environment errors (BLOCKED: Depends on task 6)
 
 ## R3: PWA Icon Assets
 
-- [ ] 8. Investigate: Review generate-icons.js script and required dependencies
+- [x] 8. Investigate: Review generate-icons.js script and required dependencies
 
-- [ ] 9. Implement: Run icon generation script to create missing PWA icons
+- [x] 9. Implement: Run icon generation script to create missing PWA icons
 
-- [ ] 10. Verify: Confirm no 404 errors for icon files in browser console
+- [x] 10. Verify: Confirm no 404 errors for icon files in browser console
 
 ## R4: Graceful Error Handling for Missing Config
 
