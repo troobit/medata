@@ -118,7 +118,7 @@ function createGaussianKernel(size: number, sigma: number): Float32Array {
     sum += kernel[i];
   }
 
-  // Normalize
+  // Normalise
   for (let i = 0; i < size; i++) {
     kernel[i] /= sum;
   }
@@ -178,7 +178,7 @@ export function nonMaximumSuppression(
       const mag = magnitude[idx];
       const dir = direction[idx];
 
-      // Quantize direction to 4 angles (0, 45, 90, 135 degrees)
+      // Quantise direction to 4 angles (0, 45, 90, 135 degrees)
       const angle = ((dir * 180) / Math.PI + 180) % 180;
 
       let neighbor1 = 0;

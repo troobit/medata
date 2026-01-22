@@ -54,7 +54,7 @@ export const GI_ESTIMATES: Record<string, number> = {
  * Calculate absorption parameters based on glycemic index
  */
 export function getAbsorptionParams(glycemicIndex: number): CarbAbsorptionParams {
-  // Normalize GI to 0-100 range
+  // Normalise GI to 0-100 range
   const gi = Math.max(0, Math.min(100, glycemicIndex));
 
   // Higher GI = faster absorption
@@ -150,7 +150,7 @@ export function calculateCarbAbsorption(
   // Shape parameter based on peak time
   const k = tPeak / τ;
 
-  // Calculate absorption rate (normalized)
+  // Calculate absorption rate (normalised)
   let rate: number;
   if (t < tPeak) {
     // Rising phase - power function

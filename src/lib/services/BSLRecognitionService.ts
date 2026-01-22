@@ -100,7 +100,7 @@ export class BSLRecognitionService {
   }
 
   /**
-   * Normalize and validate a single reading
+   * Normalise and validate a single reading
    */
   private normalizeReading(raw: Record<string, unknown>): ExtractedBSLReading | null {
     const value = typeof raw.value === 'number' ? raw.value : parseFloat(String(raw.value));
@@ -109,7 +109,7 @@ export class BSLRecognitionService {
       return null;
     }
 
-    // Normalize unit
+    // Normalise unit
     let unit: BSLUnit = 'mmol/L';
     if (typeof raw.unit === 'string') {
       const unitLower = raw.unit.toLowerCase();

@@ -1,8 +1,8 @@
 /**
  * Workstream B: Freestyle Libre Graph Parser
  *
- * Specialized parser for Freestyle Libre CGM screenshots.
- * Optimized for the Libre app's specific graph format:
+ * Specialised parser for Freestyle Libre CGM screenshots.
+ * Optimised for the Libre app's specific graph format:
  * - Yellow/orange glucose line on white/light background
  * - Target range bands (typically green shaded area)
  * - Time scale options: 8h, 12h, 24h
@@ -19,7 +19,7 @@ import type {
 import type { BSLUnit } from '$lib/types/events';
 
 /**
- * Libre-specific color definitions
+ * Libre-specific colour definitions
  */
 const LIBRE_COLORS = {
   // Yellow/orange glucose line
@@ -75,7 +75,7 @@ const _LIBRE_PRESETS: Record<
 };
 
 /**
- * LibreGraphParser - Specialized parser for Freestyle Libre screenshots
+ * LibreGraphParser - Specialised parser for Freestyle Libre screenshots
  */
 export class LibreGraphParser {
   private canvas: HTMLCanvasElement;
@@ -137,7 +137,7 @@ export class LibreGraphParser {
   }
 
   /**
-   * Check if pixel matches Libre glucose line color
+   * Check if pixel matches Libre glucose line colour
    */
   private isGlucoseLinePixel(r: number, g: number, b: number): boolean {
     const [h, s, l] = this.rgbToHsl(r, g, b);

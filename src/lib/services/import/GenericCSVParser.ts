@@ -61,7 +61,7 @@ export async function parseGenericCSV(
       }
     }
 
-    // Normalize to mmol/L
+    // Normalise to mmol/L
     const normalizedValue = rowUnit === 'mg/dL' ? value / 18.0182 : value;
 
     // Get device from row if column specified

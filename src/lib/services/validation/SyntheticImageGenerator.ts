@@ -45,11 +45,11 @@ export interface SyntheticImageConfig {
   heightPx: number;
   /** Reference object */
   reference: SyntheticReferenceType;
-  /** Position of reference (0-1 normalized) */
+  /** Position of reference (0-1 normalised) */
   referencePosition: { x: number; y: number };
   /** Food items to render */
   foods: SyntheticFoodConfig[];
-  /** Background color */
+  /** Background colour */
   backgroundColor: string;
 }
 

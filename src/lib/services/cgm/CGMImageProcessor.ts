@@ -619,7 +619,7 @@ export class CGMImageProcessor implements ICGMImageService {
    */
   async detectDeviceType(image: Blob): Promise<CGMDeviceType> {
     // For now, extract full data and return device type
-    // Could be optimized with a lighter-weight detection prompt
+    // Could be optimised with a lighter-weight detection prompt
     const result = await this.extractFromImage(image);
     return result.deviceType;
   }

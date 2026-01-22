@@ -107,7 +107,7 @@
     isDrawing = false;
 
     if (currentPoints.length >= 3) {
-      // Convert normalized coords to image pixel coords
+      // Convert normalised coords to image pixel coords
       const pixelPoints = currentPoints.map((p) => ({
         x: p.x * imageDimensions.width,
         y: p.y * imageDimensions.height
@@ -136,16 +136,16 @@
     onRegionsChange?.([]);
   }
 
-  // Convert normalized points to SVG path
-  function pointsToPath(points: Array<{ x: number; y: number }>, normalize: boolean): string {
+  // Convert normalised points to SVG path
+  function pointsToPath(points: Array<{ x: number; y: number }>, normalise: boolean): string {
     if (points.length < 2) return '';
 
     const first = points[0];
-    let d = normalize ? `M ${first.x * 100}% ${first.y * 100}%` : `M ${first.x} ${first.y}`;
+    let d = normalise ? `M ${first.x * 100}% ${first.y * 100}%` : `M ${first.x} ${first.y}`;
 
     for (let i = 1; i < points.length; i++) {
       const p = points[i];
-      d += normalize ? ` L ${p.x * 100}% ${p.y * 100}%` : ` L ${p.x} ${p.y}`;
+      d += normalise ? ` L ${p.x * 100}% ${p.y * 100}%` : ` L ${p.x} ${p.y}`;
     }
 
     return d + ' Z';

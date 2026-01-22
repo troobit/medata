@@ -64,16 +64,16 @@ export function calculateInsulinActivity(
   const τ1 = kinetics.halfLifeMinutes * 1.4; // Slower decay constant
   const τ2 = kinetics.onsetMinutes * 0.7; // Faster onset constant
 
-  // Calculate activity level (normalized)
+  // Calculate activity level (normalised)
   const exp1 = Math.exp(-minutesFromDose / τ1);
   const exp2 = Math.exp(-minutesFromDose / τ2);
   let activityLevel = exp1 - exp2;
 
-  // Find peak activity for normalization
+  // Find peak activity for normalisation
   const tPeak = (τ1 * τ2 * Math.log(τ1 / τ2)) / (τ1 - τ2);
   const peakActivity = Math.exp(-tPeak / τ1) - Math.exp(-tPeak / τ2);
 
-  // Normalize so peak = 1
+  // Normalise so peak = 1
   activityLevel = activityLevel / peakActivity;
 
   // Clamp to valid range
@@ -81,7 +81,7 @@ export function calculateInsulinActivity(
 
   // Calculate IOB using integral of remaining activity
   // IOB = ∫[t,∞] activity(s) ds / ∫[0,∞] activity(s) ds
-  // For biexponential: IOB ≈ (τ1*exp1 - τ2*exp2) / (τ1 - τ2) normalized
+  // For biexponential: IOB ≈ (τ1*exp1 - τ2*exp2) / (τ1 - τ2) normalised
 
   const totalArea = τ1 - τ2;
   const remainingArea = τ1 * exp1 - τ2 * exp2;
@@ -150,7 +150,7 @@ export function calculateActiveInsulin(
     const remainingIOB = units * activity.insulinOnBoard;
     const activityLevel = activity.activityLevel;
 
-    // Activity rate in units per hour (activity level is normalized 0-1)
+    // Activity rate in units per hour (activity level is normalised 0-1)
     // At peak, roughly 50% of dose is absorbed per hour for bolus
     const peakAbsorptionRate = units / (kinetics.durationMinutes / 60);
     const currentActivityRate = activityLevel * peakAbsorptionRate * 2;

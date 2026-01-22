@@ -1,8 +1,8 @@
 /**
  * Workstream B: Dexcom Graph Parser
  *
- * Specialized parser for Dexcom G6/G7 CGM screenshots.
- * Optimized for the Dexcom app's specific graph format:
+ * Specialised parser for Dexcom G6/G7 CGM screenshots.
+ * Optimised for the Dexcom app's specific graph format:
  * - Blue/teal glucose line on dark background
  * - Gray/white target range bands
  * - Time scale options: 3h, 6h, 12h, 24h
@@ -19,7 +19,7 @@ import type {
 import type { BSLUnit } from '$lib/types/events';
 
 /**
- * Dexcom-specific color definitions
+ * Dexcom-specific colour definitions
  */
 const DEXCOM_COLORS = {
   // Blue/teal glucose line
@@ -40,7 +40,7 @@ const DEXCOM_COLORS = {
     lightMin: 50,
     lightMax: 75
   },
-  // Green in-range color
+  // Green in-range colour
   inRangeGreen: {
     hueMin: 100,
     hueMax: 150,
@@ -81,7 +81,7 @@ const _DEXCOM_PRESETS = {
 };
 
 /**
- * DexcomGraphParser - Specialized parser for Dexcom screenshots
+ * DexcomGraphParser - Specialised parser for Dexcom screenshots
  */
 export class DexcomGraphParser {
   private canvas: HTMLCanvasElement;
@@ -143,7 +143,7 @@ export class DexcomGraphParser {
   }
 
   /**
-   * Check if pixel matches color range (handling hue wraparound)
+   * Check if pixel matches colour range (handling hue wraparound)
    */
   private matchesColorRange(
     r: number,

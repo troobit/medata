@@ -38,11 +38,11 @@ references:
 
 ## R4: Enforce Irish spelling
 
-- [ ] 14. Scan codebase for American spellings (color, realize, -ize endings)
+- [x] 14. Scan codebase for American spellings (color, realize, -ize endings)
 
-- [ ] 15. Replace American spellings with Irish/British equivalents
+- [x] 15. Replace American spellings with Irish/British equivalents
 
-- [ ] 16. Verify: No American spellings remain in codebase
+- [x] 16. Verify: No American spellings remain in codebase
 
 ## R5: Address Svelte errors and favicon 404s
 
