@@ -30,11 +30,11 @@ references:
 
 ## R3: Update documentation
 
-- [ ] 11. Review existing documentation for accuracy post-merge
+- [x] 11. Review existing documentation for accuracy post-merge
 
-- [ ] 12. Update outdated documentation to reflect current setup
+- [x] 12. Update outdated documentation to reflect current setup
 
-- [ ] 13. Verify: Documentation matches current setup
+- [x] 13. Verify: Documentation matches current setup
 
 ## R4: Enforce Irish spelling
 
