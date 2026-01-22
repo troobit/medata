@@ -1,54 +1,41 @@
 ---
 references:
-  - requirements.md
+    - requirements.md
 ---
-
 # Dev-0 Branch Merge Spec
 
-## R1: Merge auth worktree
+## R1: Merge auth worktree (HIGH priority)
 
-- [x] 1. Review auth branch changes at `/Users/ronan/repos/beetus/auth`
+- [x] 1. Review auth branch changes
 
-- [x] 2. Identify non-conflicting changes from auth
+- [x] 2. Merge auth branch into dev-0
 
-- [x] 3. Merge auth branch into dev-0
+- [x] 3. Resolve conflicts from auth merge
 
-- [x] 4. Resolve any conflicts from auth merge
-
-- [x] 5. Verify: auth changes integrated cleanly
+- [x] 4. Verify: auth changes integrated cleanly
 
 ## R2: Merge datagen worktree
 
-- [x] 6. Review datagen branch changes at `/Users/ronan/repos/beetus/datagen`
+- [ ] 5. Review datagen branch changes
 
-- [x] 7. Identify non-conflicting changes from datagen
+- [ ] 6. Merge datagen branch into dev-0
 
-- [x] 8. Merge datagen branch into dev-0
+- [ ] 7. Resolve conflicts from datagen merge
 
-- [x] 9. Resolve any conflicts from datagen merge
-
-- [x] 10. Verify: datagen changes integrated cleanly
+- [ ] 8. Verify: datagen changes integrated cleanly
 
 ## R3: Update documentation
 
-- [x] 11. Review existing documentation for accuracy post-merge
+- [ ] 9. Review existing documentation for accuracy post-merge
 
-- [x] 12. Update outdated documentation to reflect current setup
+- [ ] 10. Update outdated documentation to reflect current setup
 
-- [x] 13. Verify: Documentation matches current setup
+- [ ] 11. Verify: Documentation matches current setup
 
-## R4: Enforce Irish spelling
+## R4: Enforce Irish/British spelling
 
-- [x] 14. Scan codebase for American spellings (color, realize, -ize endings)
+- [ ] 12. Scan codebase for American spellings
 
-- [x] 15. Replace American spellings with Irish/British equivalents
+- [ ] 13. Replace American spellings with Irish/British equivalents
 
-- [x] 16. Verify: No American spellings remain in codebase
-
-## R5: Address Svelte errors and favicon 404s
-
-- [x] 17. Fix all Svelte compilation errors and warnings
-
-- [x] 18. Address favicon 404 errors (add favicon or configure better error message if expected)
-
-- [x] 19. Verify: No Svelte errors at build/deploy time and no unexpected 404s when running locally
+- [ ] 14. Verify: No American spellings remain in codebase
