@@ -222,6 +222,30 @@ function generateBGReadings(
 }
 
 /**
+ * Generate insulin events from the insulin schedule
+ */
+function generateInsulinEvents(
+  insulinTimes: Array<{ time: Date; type: 'bolus' | 'basal'; units: number; reason?: string }>
+): PhysiologicalEvent[] {
+  return insulinTimes.map((insulin) => {
+    const timestamp = insulin.time.toISOString();
+    return {
+      id: randomUUID(),
+      timestamp,
+      eventType: 'insulin' as const,
+      value: insulin.units,
+      metadata: {
+        type: insulin.type,
+        ...(insulin.reason && { reason: insulin.reason }),
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      synced: false,
+    };
+  });
+}
+
+/**
  * Generate test data for 1 month
  */
 function generateTestData(): TestDataOutput {
@@ -234,12 +258,8 @@ function generateTestData(): TestDataOutput {
 
   console.log(`Generating data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-  // For R1, we just need BG data
-  // Meals, insulin, and exercise will be added in later phases
-  // For now, generate random schedules for realistic BG patterns
-
   const mealTimes: Date[] = [];
-  const insulinTimes: Array<{ time: Date; type: 'bolus' | 'basal'; units: number }> = [];
+  const insulinTimes: Array<{ time: Date; type: 'bolus' | 'basal'; units: number; reason?: string }> = [];
   const exerciseTimes: Array<{ time: Date; duration: number; intensity: 'low' | 'moderate' | 'high' }> = [];
 
   // Generate meal, insulin, and exercise schedules for each day
@@ -263,38 +283,79 @@ function generateTestData(): TestDataOutput {
     dinner.setHours(18 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 60));
     mealTimes.push(dinner);
 
-    // Occasional snacks (~30% chance)
-    if (Math.random() < 0.3) {
-      const snack = new Date(dayStart);
-      snack.setHours(15 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 60));
-      mealTimes.push(snack);
+    // Occasional snacks (~30% chance, afternoon)
+    const hasSnack = Math.random() < 0.3;
+    let snackTime: Date | null = null;
+    if (hasSnack) {
+      snackTime = new Date(dayStart);
+      snackTime.setHours(15 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 60));
+      mealTimes.push(snackTime);
     }
 
-    // Basal insulin at 7am and 7pm (15 units each)
+    // Occasional liquor (~15% chance, evening)
+    const hasLiquor = Math.random() < 0.15;
+    let liquorTime: Date | null = null;
+    if (hasLiquor) {
+      liquorTime = new Date(dayStart);
+      liquorTime.setHours(20 + Math.floor(Math.random() * 3), Math.floor(Math.random() * 60));
+      mealTimes.push(liquorTime);
+    }
+
+    // ===== BASAL INSULIN =====
+    // 7am basal (15 units, with small timing variation)
     const basalMorning = new Date(dayStart);
     basalMorning.setHours(7, Math.floor(Math.random() * 15));
     insulinTimes.push({ time: basalMorning, type: 'basal', units: 15 });
 
+    // 7pm basal (15 units, with small timing variation)
     const basalEvening = new Date(dayStart);
     basalEvening.setHours(19, Math.floor(Math.random() * 15));
     insulinTimes.push({ time: basalEvening, type: 'basal', units: 15 });
 
-    // Bolus insulin with meals (varies by carb estimate)
+    // ===== BOLUS INSULIN =====
+    // Bolus for breakfast (4-8 units, ~10 min before)
     insulinTimes.push({
       time: new Date(breakfast.getTime() - 10 * 60000),
       type: 'bolus',
       units: Math.round(randomInRange(4, 8)),
+      reason: 'meal',
     });
+
+    // Bolus for lunch (5-10 units, ~10 min before)
     insulinTimes.push({
       time: new Date(lunch.getTime() - 10 * 60000),
       type: 'bolus',
       units: Math.round(randomInRange(5, 10)),
+      reason: 'meal',
     });
+
+    // Bolus for dinner (6-12 units, ~10 min before)
     insulinTimes.push({
       time: new Date(dinner.getTime() - 10 * 60000),
       type: 'bolus',
       units: Math.round(randomInRange(6, 12)),
+      reason: 'meal',
     });
+
+    // Bolus for snack if present (2-4 units)
+    if (snackTime) {
+      insulinTimes.push({
+        time: new Date(snackTime.getTime() - 5 * 60000),
+        type: 'bolus',
+        units: Math.round(randomInRange(2, 4)),
+        reason: 'snack',
+      });
+    }
+
+    // Bolus for liquor if present (1-3 units for mixers/carbs)
+    if (liquorTime) {
+      insulinTimes.push({
+        time: new Date(liquorTime.getTime() - 5 * 60000),
+        type: 'bolus',
+        units: Math.round(randomInRange(1, 3)),
+        reason: 'liquor',
+      });
+    }
 
     // Exercise ~3-4 times per week
     if (Math.random() < 0.5) {
@@ -322,17 +383,31 @@ function generateTestData(): TestDataOutput {
   // Generate BG readings
   const bgEvents = generateBGReadings(startDate, endDate, mealTimes, insulinTimes, exerciseTimes);
 
+  // Generate insulin events
+  const insulinEvents = generateInsulinEvents(insulinTimes);
+
+  // Combine all events
+  const allEvents = [...bgEvents, ...insulinEvents];
+
+  // Sort by timestamp
+  allEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
   console.log(`Generated ${bgEvents.length} BG readings`);
   console.log(
     `BG range: ${Math.min(...bgEvents.map((e) => e.value)).toFixed(1)} - ${Math.max(...bgEvents.map((e) => e.value)).toFixed(1)} mmol/L`
   );
 
+  // Count insulin events by type
+  const basalCount = insulinEvents.filter((e) => e.metadata.type === 'basal').length;
+  const bolusCount = insulinEvents.filter((e) => e.metadata.type === 'bolus').length;
+  console.log(`Generated ${insulinEvents.length} insulin events (${basalCount} basal, ${bolusCount} bolus)`);
+
   return {
     version: '1.0',
     type: 'backup',
     createdAt: new Date().toISOString(),
-    count: bgEvents.length,
-    events: bgEvents,
+    count: allEvents.length,
+    events: allEvents,
   };
 }
 

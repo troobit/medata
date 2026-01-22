@@ -14,13 +14,13 @@ references:
 
 ## R2: Insulin Data (Basal & Bolus)
 
-- [ ] 4. Investigate: Review insulin data model for basal and bolus entries
+- [x] 4. Investigate: Review insulin data model for basal and bolus entries
 
-- [ ] 5. Implement: Generate basal shots (7am & 7pm, 15 units each)
+- [x] 5. Implement: Generate basal shots (7am & 7pm, 15 units each)
 
-- [ ] 6. Implement: Generate bolus shots for meals, liquor, and snacks
+- [x] 6. Implement: Generate bolus shots for meals, liquor, and snacks
 
-- [ ] 7. Verify: Confirm insulin data follows specified schedule and dosing
+- [x] 7. Verify: Confirm insulin data follows specified schedule and dosing
 
 ## R3: Exercise Data Generation
 
