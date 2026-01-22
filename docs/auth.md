@@ -91,11 +91,7 @@ Using the Vercel Dashboard:
 5. Select your preferred region
 6. Click **Create**
 
-Or using the Vercel CLI:
-
-```bash
-vercel storage add kv medata-auth
-```
+Note: The `vercel storage` CLI command is not available. Use the dashboard method above.
 
 #### 2. Link KV to Your Project
 
@@ -339,9 +335,7 @@ For Vercel deployments, MeData uses **Vercel KV** for credential storage instead
 
 **Via Vercel CLI:**
 
-```bash
-vercel storage add kv medata-auth
-```
+Note: The `vercel storage` command is not available in the CLI. Use the dashboard method above.
 
 #### 2. Link KV Store to Project
 

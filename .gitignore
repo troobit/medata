@@ -50,3 +50,4 @@ static/test-data.json
 # Orbit task management
 **/.orbit/
 .vercel
+.env*.local
