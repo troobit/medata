@@ -246,6 +246,46 @@ function generateInsulinEvents(
 }
 
 /**
+ * Generate exercise events from the exercise schedule
+ */
+function generateExerciseEvents(
+  exerciseTimes: Array<{
+    time: Date;
+    duration: number;
+    intensity: 'low' | 'moderate' | 'high';
+    category: 'swimming' | 'cycling' | 'walking';
+    exerciseType: string;
+  }>
+): PhysiologicalEvent[] {
+  return exerciseTimes.map((exercise) => {
+    const timestamp = exercise.time.toISOString();
+
+    // Estimate calories burned based on intensity and duration
+    const caloriesPerMinute =
+      exercise.intensity === 'high' ? 12 : exercise.intensity === 'moderate' ? 8 : 5;
+    const caloriesBurned = Math.round(caloriesPerMinute * exercise.duration * randomInRange(0.9, 1.1));
+
+    return {
+      id: randomUUID(),
+      timestamp,
+      eventType: 'exercise' as const,
+      value: exercise.duration,
+      metadata: {
+        intensity: exercise.intensity,
+        exerciseType: exercise.exerciseType,
+        category: exercise.category,
+        durationMinutes: exercise.duration,
+        caloriesBurned,
+        source: 'manual',
+      },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      synced: false,
+    };
+  });
+}
+
+/**
  * Generate test data for 1 month
  */
 function generateTestData(): TestDataOutput {
@@ -260,7 +300,13 @@ function generateTestData(): TestDataOutput {
 
   const mealTimes: Date[] = [];
   const insulinTimes: Array<{ time: Date; type: 'bolus' | 'basal'; units: number; reason?: string }> = [];
-  const exerciseTimes: Array<{ time: Date; duration: number; intensity: 'low' | 'moderate' | 'high' }> = [];
+  const exerciseTimes: Array<{
+    time: Date;
+    duration: number;
+    intensity: 'low' | 'moderate' | 'high';
+    category: 'swimming' | 'cycling' | 'walking';
+    exerciseType: string;
+  }> = [];
 
   // Generate meal, insulin, and exercise schedules for each day
   let currentDay = new Date(startDate);
@@ -364,16 +410,34 @@ function generateTestData(): TestDataOutput {
       exerciseTime.setHours(exerciseHour, Math.floor(Math.random() * 30));
 
       // Random exercise type
-      const exerciseType = Math.random();
-      if (exerciseType < 0.33) {
-        // Walk
-        exerciseTimes.push({ time: exerciseTime, duration: 40, intensity: 'low' });
-      } else if (exerciseType < 0.66) {
-        // Cycle
-        exerciseTimes.push({ time: exerciseTime, duration: 20, intensity: 'moderate' });
+      const exerciseRoll = Math.random();
+      if (exerciseRoll < 0.33) {
+        // Walk - 40 minutes, low intensity
+        exerciseTimes.push({
+          time: exerciseTime,
+          duration: 40,
+          intensity: 'low',
+          category: 'walking',
+          exerciseType: 'Walk',
+        });
+      } else if (exerciseRoll < 0.66) {
+        // Cycle - 20 minutes, medium intensity
+        exerciseTimes.push({
+          time: exerciseTime,
+          duration: 20,
+          intensity: 'moderate',
+          category: 'cycling',
+          exerciseType: 'Cycle',
+        });
       } else {
-        // Swim
-        exerciseTimes.push({ time: exerciseTime, duration: 60, intensity: 'high' });
+        // Swim - 1 hour, high intensity
+        exerciseTimes.push({
+          time: exerciseTime,
+          duration: 60,
+          intensity: 'high',
+          category: 'swimming',
+          exerciseType: 'Swim',
+        });
       }
     }
 
@@ -386,8 +450,11 @@ function generateTestData(): TestDataOutput {
   // Generate insulin events
   const insulinEvents = generateInsulinEvents(insulinTimes);
 
+  // Generate exercise events
+  const exerciseEvents = generateExerciseEvents(exerciseTimes);
+
   // Combine all events
-  const allEvents = [...bgEvents, ...insulinEvents];
+  const allEvents = [...bgEvents, ...insulinEvents, ...exerciseEvents];
 
   // Sort by timestamp
   allEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -401,6 +468,14 @@ function generateTestData(): TestDataOutput {
   const basalCount = insulinEvents.filter((e) => e.metadata.type === 'basal').length;
   const bolusCount = insulinEvents.filter((e) => e.metadata.type === 'bolus').length;
   console.log(`Generated ${insulinEvents.length} insulin events (${basalCount} basal, ${bolusCount} bolus)`);
+
+  // Count exercise events by type
+  const swimCount = exerciseEvents.filter((e) => e.metadata.category === 'swimming').length;
+  const cycleCount = exerciseEvents.filter((e) => e.metadata.category === 'cycling').length;
+  const walkCount = exerciseEvents.filter((e) => e.metadata.category === 'walking').length;
+  console.log(
+    `Generated ${exerciseEvents.length} exercise events (${swimCount} swims, ${cycleCount} cycles, ${walkCount} walks)`
+  );
 
   return {
     version: '1.0',

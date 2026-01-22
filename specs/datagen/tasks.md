@@ -24,15 +24,15 @@ references:
 
 ## R3: Exercise Data Generation
 
-- [ ] 8. Investigate: Review exercise data model and activity types
+- [x] 8. Investigate: Review exercise data model and activity types
 
-- [ ] 9. Implement: Generate swim activities (1hr, high intensity)
+- [x] 9. Implement: Generate swim activities (1hr, high intensity)
 
-- [ ] 10. Implement: Generate cycle activities (20min, medium intensity)
+- [x] 10. Implement: Generate cycle activities (20min, medium intensity)
 
-- [ ] 11. Implement: Generate walk activities (40min, low intensity)
+- [x] 11. Implement: Generate walk activities (40min, low intensity)
 
-- [ ] 12. Verify: Confirm exercise data includes all activity types with correct durations/intensities
+- [x] 12. Verify: Confirm exercise data includes all activity types with correct durations/intensities
 
 ## R4: Script & Data Freshness
 
