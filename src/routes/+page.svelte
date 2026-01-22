@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, EmptyState } from '$lib/components/ui';
+  import { Button, EmptyState, Logo } from '$lib/components/ui';
   import { eventsStore } from '$lib/stores';
   import { onMount } from 'svelte';
 
@@ -33,8 +33,11 @@
 <div class="px-4 py-6">
   <!-- Header -->
   <header class="mb-8">
-    <h1 class="text-2xl font-bold text-white">MeData</h1>
-    <p class="mt-1 text-gray-400">Track your health data</p>
+    <div class="flex items-center gap-3">
+      <Logo size="md" />
+      <h1 class="text-2xl font-bold text-white">MeData</h1>
+    </div>
+    <p class="mt-1 text-gray-400">Medical Data. For Me.</p>
   </header>
 
   <!-- Quick Actions -->
@@ -78,9 +81,7 @@
 
     {#if eventsStore.loading}
       <div class="flex justify-center py-8">
-        <div
-          class="h-8 w-8 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
-        ></div>
+        <Logo animated size="md" />
       </div>
     {:else if eventsStore.events.length === 0}
       <EmptyState

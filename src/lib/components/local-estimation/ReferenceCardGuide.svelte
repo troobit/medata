@@ -18,11 +18,7 @@
 
   // Determine colors based on detection state
   const borderColor = $derived(
-    detected
-      ? confidence > 0.7
-        ? 'border-green-500'
-        : 'border-yellow-500'
-      : 'border-white/50'
+    detected ? (confidence > 0.7 ? 'border-green-500' : 'border-yellow-500') : 'border-white/50'
   );
 
   const bgColor = $derived(
@@ -48,7 +44,9 @@
         <!-- Center crosshair -->
         <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <div class="h-6 w-px bg-white/30"></div>
-          <div class="absolute left-1/2 top-1/2 h-px w-6 -translate-x-1/2 -translate-y-1/2 bg-white/30"></div>
+          <div
+            class="absolute left-1/2 top-1/2 h-px w-6 -translate-x-1/2 -translate-y-1/2 bg-white/30"
+          ></div>
         </div>
 
         <!-- Card chip indicator -->
@@ -76,7 +74,9 @@
           class="h-16 w-16 rounded-full border-2 border-dashed transition-colors duration-300 {borderColor} {bgColor}"
         >
           <!-- Center dot -->
-          <div class="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30"></div>
+          <div
+            class="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30"
+          ></div>
         </div>
       </div>
 

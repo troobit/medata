@@ -79,6 +79,29 @@
     </a>
 
     <a
+      href="/log/exercise"
+      class="flex items-center gap-4 rounded-xl bg-gray-800 p-4 transition-colors hover:bg-gray-700"
+    >
+      <span class="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/20">
+        <svg class="h-6 w-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 10V3L4 14h7v7l9-11h-7z"
+          />
+        </svg>
+      </span>
+      <div class="flex-1">
+        <h2 class="text-lg font-medium text-gray-200">Exercise</h2>
+        <p class="text-sm text-gray-400">Log workout or activity</p>
+      </div>
+      <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    </a>
+
+    <a
       href="/log/bsl-import"
       class="flex items-center gap-4 rounded-xl bg-gray-800 p-4 transition-colors hover:bg-gray-700"
     >

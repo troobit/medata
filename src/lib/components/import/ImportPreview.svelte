@@ -54,13 +54,21 @@
     </div>
     <div class="rounded-lg bg-gray-800 p-4">
       <p class="text-sm text-gray-400">Invalid</p>
-      <p class="text-2xl font-bold {preview.invalidRows.length > 0 ? 'text-red-400' : 'text-gray-500'}">
+      <p
+        class="text-2xl font-bold {preview.invalidRows.length > 0
+          ? 'text-red-400'
+          : 'text-gray-500'}"
+      >
         {preview.invalidRows.length}
       </p>
     </div>
     <div class="rounded-lg bg-gray-800 p-4">
       <p class="text-sm text-gray-400">Duplicates</p>
-      <p class="text-2xl font-bold {preview.duplicates.length > 0 ? 'text-yellow-400' : 'text-gray-500'}">
+      <p
+        class="text-2xl font-bold {preview.duplicates.length > 0
+          ? 'text-yellow-400'
+          : 'text-gray-500'}"
+      >
         {preview.duplicates.length}
       </p>
     </div>

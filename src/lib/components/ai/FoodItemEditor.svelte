@@ -5,11 +5,11 @@
    *
    * Allows editing individual food item macros.
    */
-  import type { RecognizedFoodItem } from '$lib/types/ai';
+  import type { RecognisedFoodItem } from '$lib/types/ai';
 
   interface Props {
-    item: RecognizedFoodItem;
-    onUpdate: (item: RecognizedFoodItem) => void;
+    item: RecognisedFoodItem;
+    onUpdate: (item: RecognisedFoodItem) => void;
     onRemove: () => void;
   }
 

@@ -16,7 +16,9 @@ import type {
   ExtractedDataPoint
 } from '$lib/types/cgm';
 import type { BSLUnit } from '$lib/types/events';
-import type { MLProvider, UserSettings } from '$lib/types/settings';
+import type { UserSettings } from '$lib/types/settings';
+
+type MLProvider = 'openai' | 'claude' | 'gemini' | 'ollama' | 'foundry';
 import { LocalCurveExtractor } from './LocalCurveExtractor';
 import { LibreGraphParser } from './LibreGraphParser';
 import { DexcomGraphParser } from './DexcomGraphParser';
@@ -140,18 +142,18 @@ export class CGMImageProcessor implements ICGMImageService {
     if (this.settings.geminiApiKey) {
       return { provider: 'gemini', apiKey: this.settings.geminiApiKey };
     }
-    if (this.settings.foundryEndpoint && this.settings.foundryApiKey) {
+    if (this.settings.foundryConfig?.endpoint && this.settings.foundryConfig?.apiKey) {
       return {
         provider: 'foundry',
-        apiKey: this.settings.foundryApiKey,
-        endpoint: this.settings.foundryEndpoint
+        apiKey: this.settings.foundryConfig.apiKey,
+        endpoint: this.settings.foundryConfig.endpoint
       };
     }
-    if (this.settings.ollamaEndpoint) {
+    if (this.settings.localModelConfig?.endpoint) {
       return {
         provider: 'ollama',
         apiKey: '',
-        endpoint: this.settings.ollamaEndpoint
+        endpoint: this.settings.localModelConfig.endpoint
       };
     }
     return null;
@@ -326,10 +328,7 @@ export class CGMImageProcessor implements ICGMImageService {
   /**
    * Call Ollama Vision API (local)
    */
-  private async callOllama(
-    imageBase64: string,
-    endpoint: string
-  ): Promise<MLExtractionResponse> {
+  private async callOllama(imageBase64: string, endpoint: string): Promise<MLExtractionResponse> {
     // Extract base64 data from data URL
     const matches = imageBase64.match(/^data:[^;]+;base64,(.+)$/);
     if (!matches) {
@@ -337,7 +336,7 @@ export class CGMImageProcessor implements ICGMImageService {
     }
     const base64Data = matches[1];
 
-    const model = this.settings.ollamaModel || 'llava';
+    const model = this.settings.localModelConfig?.modelName || 'llava';
 
     const response = await fetch(`${endpoint}/api/generate`, {
       method: 'POST',
@@ -444,7 +443,8 @@ export class CGMImageProcessor implements ICGMImageService {
 
     // Determine extraction method
     const preferredMethod = options.preferredMethod || 'auto';
-    const useLocal = options.useLocalExtraction ||
+    const useLocal =
+      options.useLocalExtraction ||
       preferredMethod === 'local' ||
       (preferredMethod === 'auto' && !this.isConfigured());
 
@@ -463,7 +463,9 @@ export class CGMImageProcessor implements ICGMImageService {
         console.warn('No ML provider configured, falling back to local extraction.');
         return this.extractWithLocalCV(image, options);
       }
-      throw new Error('No ML provider configured. Please set up an API key in Settings or use local extraction.');
+      throw new Error(
+        'No ML provider configured. Please set up an API key in Settings or use local extraction.'
+      );
     }
 
     const imageBase64 = await this.blobToBase64(image);
@@ -496,9 +498,11 @@ export class CGMImageProcessor implements ICGMImageService {
 
     // Use manual axis ranges if provided
     const axisRanges: AxisRanges = {
-      timeStart: options.manualAxisRanges?.timeStart ||
+      timeStart:
+        options.manualAxisRanges?.timeStart ||
         new Date(today.getTime() + mlResponse.axisRanges.timeStartHours * 60 * 60 * 1000),
-      timeEnd: options.manualAxisRanges?.timeEnd ||
+      timeEnd:
+        options.manualAxisRanges?.timeEnd ||
         new Date(today.getTime() + mlResponse.axisRanges.timeEndHours * 60 * 60 * 1000),
       bslMin: options.manualAxisRanges?.bslMin ?? mlResponse.axisRanges.bslMin,
       bslMax: options.manualAxisRanges?.bslMax ?? mlResponse.axisRanges.bslMax,
@@ -515,7 +519,9 @@ export class CGMImageProcessor implements ICGMImageService {
     );
 
     for (const point of sortedPoints) {
-      const timestamp = new Date(axisRanges.timeStart.getTime() + point.minutesFromStart * 60 * 1000);
+      const timestamp = new Date(
+        axisRanges.timeStart.getTime() + point.minutesFromStart * 60 * 1000
+      );
 
       // Validate value is within expected range
       const isValid = point.value >= axisRanges.bslMin && point.value <= axisRanges.bslMax;

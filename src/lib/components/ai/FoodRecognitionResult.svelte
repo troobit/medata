@@ -5,14 +5,14 @@
    *
    * Displays AI recognition results with editable macro values.
    */
-  import type { FoodRecognitionResult, RecognizedFoodItem } from '$lib/types/ai';
+  import type { FoodRecognitionResult, RecognisedFoodItem } from '$lib/types/ai';
   import type { MacroData } from '$lib/types/events';
   import FoodItemEditor from './FoodItemEditor.svelte';
 
   interface Props {
     result: FoodRecognitionResult;
     imageUrl?: string;
-    onSave: (macros: MacroData, items: RecognizedFoodItem[]) => void;
+    onSave: (macros: MacroData, items: RecognisedFoodItem[]) => void;
     onCancel: () => void;
     saving?: boolean;
   }
@@ -20,7 +20,9 @@
   let { result, imageUrl, onSave, onCancel, saving = false }: Props = $props();
 
   // Make items editable - sync when result changes
-  let editedItems = $state<RecognizedFoodItem[]>([...result.items]);
+  // Using state + effect pattern since items are modified by user
+  // eslint-disable-next-line svelte/prefer-writable-derived
+  let editedItems = $state<RecognisedFoodItem[]>([...result.items]);
 
   // Sync editedItems when result prop changes (e.g., new recognition)
   $effect(() => {
@@ -41,7 +43,7 @@
     return totals;
   });
 
-  function handleItemUpdate(index: number, updated: RecognizedFoodItem) {
+  function handleItemUpdate(index: number, updated: RecognisedFoodItem) {
     editedItems = editedItems.map((item, i) => (i === index ? updated : item));
   }
 
@@ -115,7 +117,7 @@
   <div class="mb-4">
     <div class="mb-2 flex items-center justify-between">
       <span class="text-sm font-medium text-gray-400">
-        Recognized Items ({editedItems.length})
+        Recognised Items ({editedItems.length})
       </span>
       <span class="text-xs text-gray-500">Tap to edit</span>
     </div>
@@ -132,7 +134,7 @@
 
     {#if editedItems.length === 0}
       <div class="rounded-lg bg-gray-800/50 p-4 text-center text-gray-500">
-        No items recognized. Add manually below.
+        No items Recognised. Add manually below.
       </div>
     {/if}
   </div>

@@ -178,6 +178,7 @@
 
   <!-- Typical ranges hint -->
   <p class="text-xs text-gray-500">
-    Typical CGM range: {unitRanges[unit].typical.min} - {unitRanges[unit].typical.max} {unit}
+    Typical CGM range: {unitRanges[unit].typical.min} - {unitRanges[unit].typical.max}
+    {unit}
   </p>
 </div>

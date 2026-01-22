@@ -5,13 +5,15 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter({ runtime: 'nodejs22.x' }),
+    adapter: adapter({
+      runtime: 'nodejs22.x'
+    }),
     alias: {
       $lib: './src/lib'
     },
     prerender: {
       handleHttpError: ({ path, message }) => {
-        // Ignore 404s for static assets during prerendering
+        // Ignore 404s for static assets during prerender
         if (path === '/favicon.ico' || path === '/apple-touch-icon.png') {
           return;
         }

@@ -101,7 +101,9 @@
     tabindex="0"
     class="relative rounded-lg border-2 border-dashed transition-colors {isDragging
       ? 'border-brand-accent bg-brand-accent/10'
-      : 'border-gray-700 hover:border-gray-600'} {disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
+      : 'border-gray-700 hover:border-gray-600'} {disabled
+      ? 'opacity-50 cursor-not-allowed'
+      : 'cursor-pointer'}"
     ondragover={handleDragOver}
     ondragleave={handleDragLeave}
     ondrop={handleDrop}
@@ -118,10 +120,14 @@
 
     <div class="flex flex-col items-center justify-center px-6 py-10 text-center">
       {#if isDetecting}
-        <div class="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-brand-accent"></div>
+        <div
+          class="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-brand-accent"
+        ></div>
         <p class="text-gray-300">Detecting format...</p>
       {:else if selectedFile}
-        <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20 text-2xl">
+        <div
+          class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20 text-2xl"
+        >
           ✓
         </div>
         <p class="font-medium text-white">{selectedFile.name}</p>
@@ -139,7 +145,12 @@
           Choose different file
         </button>
       {:else}
-        <svg class="mb-4 h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="mb-4 h-12 w-12 text-gray-500"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"

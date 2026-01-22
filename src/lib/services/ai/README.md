@@ -23,5 +23,5 @@ Implement `IFoodRecognitionService` from `$lib/types/ai.ts`
 import { FoodServiceFactory } from '$lib/services/ai';
 
 const service = FoodServiceFactory.create(settings);
-const result = await service.recognizeFood(imageBlob);
+const result = await service.RecogniseFood(imageBlob);
 ```

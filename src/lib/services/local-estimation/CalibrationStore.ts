@@ -96,8 +96,7 @@ export class CalibrationStore {
       // Running average of correction factors
       // Weight newer corrections slightly more (exponential moving average)
       const alpha = 0.3; // Weight for new value
-      const updatedFactor =
-        alpha * newCorrectionFactor + (1 - alpha) * existing.correctionFactor;
+      const updatedFactor = alpha * newCorrectionFactor + (1 - alpha) * existing.correctionFactor;
 
       existing.correctionFactor = Math.round(updatedFactor * 1000) / 1000;
       existing.sampleCount += 1;
@@ -158,7 +157,7 @@ export class CalibrationStore {
         this.calibrations.set(entry.foodTypeId, entry);
       }
       this.save();
-    } catch (e) {
+    } catch {
       throw new Error('Invalid calibration data format');
     }
   }

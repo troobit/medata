@@ -31,9 +31,7 @@
   }
 
   // Display value based on selected unit
-  const displayValue = $derived(
-    unit === 'mmol/L' ? bslValue : Math.round(bslValue * MMOL_TO_MGDL)
-  );
+  const displayValue = $derived(unit === 'mmol/L' ? bslValue : Math.round(bslValue * MMOL_TO_MGDL));
 
   // Step sizes based on unit
   const smallStep = $derived(unit === 'mmol/L' ? 0.1 : 1);
@@ -135,7 +133,8 @@
 
     <!-- BSL Input with stepper controls -->
     <div class="mb-8 flex-1">
-      <label for="bsl-input" class="mb-2 block text-sm font-medium text-gray-400">Blood Sugar</label>
+      <label for="bsl-input" class="mb-2 block text-sm font-medium text-gray-400">Blood Sugar</label
+      >
       <div class="flex items-center justify-center gap-3">
         <!-- Large decrement button -->
         <button
@@ -195,7 +194,9 @@
 
     <!-- Finger Prick Toggle -->
     <div class="mb-8">
-      <label class="flex cursor-pointer items-center justify-between rounded-lg bg-gray-800 px-4 py-3">
+      <label
+        class="flex cursor-pointer items-center justify-between rounded-lg bg-gray-800 px-4 py-3"
+      >
         <div>
           <span class="font-medium text-white">Finger Prick Reading</span>
           <p class="text-sm text-gray-400">Higher accuracy than CGM</p>
@@ -218,7 +219,8 @@
           {#each recentValues as value (value)}
             <button
               type="button"
-              class="rounded-full px-4 py-2 text-sm font-medium transition-colors {bslValue === value
+              class="rounded-full px-4 py-2 text-sm font-medium transition-colors {bslValue ===
+              value
                 ? 'bg-yellow-500 text-white'
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}"
               onclick={() => selectRecentValue(value)}
@@ -246,7 +248,9 @@
       disabled={bslValue < 2 || bslValue > 30}
       loading={saving}
     >
-      Log {formatValue(bslValue)} {unit} {isFingerPrick ? '(finger prick)' : ''}
+      Log {formatValue(bslValue)}
+      {unit}
+      {isFingerPrick ? '(finger prick)' : ''}
     </Button>
   </div>
 </div>

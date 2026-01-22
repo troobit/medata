@@ -19,6 +19,8 @@
   let { dataPoints, axisRanges, onConfirm, onCancel, loading = false }: Props = $props();
 
   // State for editable points - initialized via $effect
+  // Using state + effect pattern since points are modified by user
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let editablePoints = $state<ExtractedDataPoint[]>([]);
   let showAllPoints = $state(false);
 
@@ -198,15 +200,11 @@
   </div>
 
   <!-- Note about source -->
-  <p class="text-center text-xs text-gray-500">
-    Data will be imported with source: "cgm-image"
-  </p>
+  <p class="text-center text-xs text-gray-500">Data will be imported with source: "cgm-image"</p>
 
   <!-- Action Buttons -->
   <div class="flex gap-3">
-    <Button variant="secondary" class="flex-1" onclick={onCancel} disabled={loading}>
-      Cancel
-    </Button>
+    <Button variant="secondary" class="flex-1" onclick={onCancel} disabled={loading}>Cancel</Button>
     <Button
       variant="primary"
       class="flex-1"

@@ -9,7 +9,7 @@ Svelte components for AI-powered food recognition UI.
 - `CameraCapture.svelte` - Camera/gallery capture with preview
 - `PhotoPreview.svelte` - Image preview with retake option
 - `RecognitionLoading.svelte` - Loading state during AI call
-- `FoodRecognitionResult.svelte` - Display recognized items
+- `FoodRecognitionResult.svelte` - Display Recognised items
 - `AnnotatedFoodImage.svelte` - Bounding box overlay
 - `FoodItemEditor.svelte` - Edit individual food items
 - `NutritionLabelScanner.svelte` - Label scanning flow

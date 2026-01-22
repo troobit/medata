@@ -37,14 +37,14 @@
     } catch (e) {
       if (e instanceof DOMException) {
         if (e.name === 'NotAllowedError') {
-          error = 'Camera access denied. Please enable camera permissions.';
+          error = 'Authorisation';
         } else if (e.name === 'NotFoundError') {
-          error = 'No camera found on this device.';
+          error = 'No Camera Found';
         } else {
-          error = `Camera error: ${e.message}`;
+          error = `Error: ${e.message}`;
         }
       } else {
-        error = 'Failed to access camera';
+        error = 'Camera <else> exception';
       }
     }
   }

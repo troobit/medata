@@ -8,7 +8,9 @@ import type {
   BSLDataSource,
   InsulinMetadata,
   BSLMetadata,
-  MealMetadata
+  MealMetadata,
+  ExerciseMetadata,
+  ExerciseIntensity
 } from '$lib/types';
 import type { IEventRepository } from '$lib/repositories';
 
@@ -101,6 +103,25 @@ export class EventService {
     });
   }
 
+  async logExercise(
+    durationMinutes: number,
+    intensity: ExerciseIntensity,
+    metadata: Partial<ExerciseMetadata> = {},
+    timestamp: Date = new Date()
+  ): Promise<PhysiologicalEvent> {
+    const fullMetadata: ExerciseMetadata = {
+      intensity,
+      durationMinutes,
+      ...metadata
+    };
+    return this.createEvent({
+      timestamp,
+      eventType: 'exercise',
+      value: durationMinutes,
+      metadata: fullMetadata
+    });
+  }
+
   /**
    * Log multiple BSL readings at once (e.g., from image import)
    */
@@ -180,6 +201,23 @@ export class EventService {
     for (const event of events) {
       uniqueValues.add(event.value);
       if (uniqueValues.size >= limit) break;
+    }
+
+    return Array.from(uniqueValues);
+  }
+
+  /**
+   * Get recent unique carb values from meals
+   */
+  async getRecentCarbValues(maxUnique: number = 6): Promise<number[]> {
+    const events = await this.repository.getByType('meal', 50);
+    const uniqueValues = new Set<number>();
+
+    for (const event of events) {
+      if (event.metadata && 'carbs' in event.metadata) {
+        uniqueValues.add(event.metadata.carbs as number);
+        if (uniqueValues.size >= maxUnique) break;
+      }
     }
 
     return Array.from(uniqueValues);

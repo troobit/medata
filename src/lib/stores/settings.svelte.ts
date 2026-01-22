@@ -1,5 +1,11 @@
 import { getSettingsService } from '$lib/services';
-import type { UserSettings, AIProvider, AzureConfig, BedrockConfig, LocalModelConfig } from '$lib/types';
+import type {
+  UserSettings,
+  AIProvider,
+  AzureConfig,
+  BedrockConfig,
+  LocalModelConfig
+} from '$lib/types';
 import { DEFAULT_SETTINGS } from '$lib/types';
 
 /**
@@ -176,7 +182,11 @@ function createSettingsStore() {
       case 'azure':
         return !!(s.azureConfig?.apiKey && s.azureConfig?.endpoint);
       case 'bedrock':
-        return !!(s.bedrockConfig?.accessKeyId && s.bedrockConfig?.secretAccessKey && s.bedrockConfig?.region);
+        return !!(
+          s.bedrockConfig?.accessKeyId &&
+          s.bedrockConfig?.secretAccessKey &&
+          s.bedrockConfig?.region
+        );
       case 'local':
         return !!s.localModelConfig?.endpoint;
       default:

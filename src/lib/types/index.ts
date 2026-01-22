@@ -4,6 +4,9 @@ export type {
   InsulinType,
   BSLUnit,
   ExerciseIntensity,
+  ExerciseCategory,
+  ExerciseDataSource,
+  AlcoholType,
   MacroData,
   MealMetadata,
   MealItem,
@@ -20,12 +23,7 @@ export type {
   CorrectionRecord
 } from './events';
 
-export {
-  isMealMetadata,
-  isInsulinMetadata,
-  isBSLMetadata,
-  isExerciseMetadata
-} from './events';
+export { isMealMetadata, isInsulinMetadata, isBSLMetadata, isExerciseMetadata } from './events';
 
 // Vision
 export type {
@@ -42,6 +40,7 @@ export type { MealPreset, CreatePresetInput, UpdatePresetInput } from './presets
 export type {
   AIProvider,
   UserSettings,
+  FoundryConfig,
   AzureConfig,
   BedrockConfig,
   LocalModelConfig
@@ -51,7 +50,7 @@ export { DEFAULT_SETTINGS, ENV_VAR_NAMES } from './settings';
 // Workstream A: AI Food Recognition
 export type {
   BoundingBox,
-  RecognizedFoodItem,
+  RecognisedFoodItem,
   FoodRecognitionResult,
   NutritionLabelResult,
   RecognitionOptions,
@@ -68,6 +67,23 @@ export type {
   CGMExtractionOptions,
   ICGMImageService
 } from './cgm';
+
+// CGM API Integration (Task 22)
+export type {
+  CGMApiProvider,
+  LibreLinkConfig,
+  DexcomShareConfig,
+  NightscoutConfig,
+  CGMApiConfig,
+  CGMAuthSession,
+  CGMGlucoseReading,
+  CGMTrendDirection,
+  CGMFetchResult,
+  CGMConnectionStatus,
+  CGMFetchOptions,
+  ICGMApiService
+} from './cgm-api';
+export { TREND_ARROWS, dexcomTrendToDirection, libreTrendToDirection } from './cgm-api';
 
 // Workstream C: Local Food Estimation
 export type {
@@ -96,3 +112,69 @@ export type {
   IImportService,
   IExportService
 } from './import';
+
+// AI Model Validation
+export type {
+  FoodCategory,
+  GroundTruthSource,
+  TestDatasetEntry,
+  ValidationResult,
+  MacroErrorMetrics,
+  AccuracyMetrics,
+  CorrectionHistoryEntry,
+  CorrectionPatternStats,
+  PromptEnhancement,
+  CreateTestDataInput,
+  UpdateTestDataInput,
+  TestDatasetExport,
+  USDAFoodEntry,
+  DatasetImportResult
+} from './validation';
+
+// Authentication (Task 24)
+export type {
+  User,
+  StoredCredential,
+  AuthSession,
+  AuthChallenge,
+  RegistrationOptions,
+  AuthenticationOptions,
+  RegistrationResult,
+  AuthenticationResult,
+  AuthConfig,
+  AuthErrorCode
+} from './auth';
+export {
+  DEFAULT_AUTH_CONFIG,
+  AuthError,
+  isWebAuthnSupported,
+  isPlatformAuthenticatorAvailable,
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+  generateChallenge
+} from './auth';
+
+// Regression & Modeling
+export type {
+  InsulinKinetics,
+  InsulinActivityPoint,
+  ActiveInsulinResult,
+  DoseContribution,
+  CarbAbsorptionParams,
+  CarbAbsorptionPoint,
+  ActiveCarbsResult,
+  MealContribution,
+  AlcoholMetabolismParams,
+  BloodAlcoholResult,
+  DrinkContribution,
+  CircadianFactors,
+  UserModelParameters,
+  BSLPrediction,
+  BSLPredictionFactors,
+  InsulinRecommendation,
+  DoseBreakdown,
+  MetabolicState,
+  BSLTimeSeries,
+  BSLTimeSeriesPoint,
+  EventWindow
+} from './modeling';

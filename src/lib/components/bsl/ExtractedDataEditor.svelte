@@ -15,6 +15,8 @@
   let { readings, onReadingsChange, class: className = '' }: Props = $props();
 
   // Convert readings to editable format
+  // Using state + effect pattern since readings are modified by user
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let editableReadings = $state<EditableReading[]>(readings.map((r) => ({ ...r, included: true })));
 
   // Sync when readings prop changes

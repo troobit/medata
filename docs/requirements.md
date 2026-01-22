@@ -82,7 +82,7 @@ These are the core system requirements and source of truth for the MeData projec
 
 ## 6. User Interface
 
-6.1. **Light-Touch Design**: Prioritize minimal clicks/taps for common actions (especially insulin logging).
+6.1. **Light-Touch Design**: Prioritise minimal clicks/taps for common actions (especially insulin logging).
 
 6.2. **Presets**: Allow users to save meal presets to avoid repeated photo uploads.
 
@@ -125,7 +125,7 @@ These patterns are recommended based on the data architecture review:
 - **Sorter Pattern**: Sort by timestamp within partitions.
 - **Bucket Pattern**: Colocate records by time-window hash for efficient 5-minute interval resampling.
 
-  9.4. **Stateful Sessionizer**: For decay function calculations, maintain state across intervals to accurately compute biological half-life effects across partitions.
+  9.4. **Stateful Sessioniser**: For decay function calculations, maintain state across intervals to accurately compute biological half-life effects across partitions.
 
   9.5. **Failure Mitigations**:
 

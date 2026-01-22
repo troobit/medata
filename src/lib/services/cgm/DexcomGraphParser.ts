@@ -71,8 +71,9 @@ const DEXCOM_COLORS = {
 
 /**
  * Common Dexcom graph configurations
+ * Note: Currently unused but kept for future preset detection
  */
-const DEXCOM_PRESETS = {
+const _DEXCOM_PRESETS = {
   '3h': { durationHours: 3, expectedDataPoints: 36 },
   '6h': { durationHours: 6, expectedDataPoints: 72 },
   '12h': { durationHours: 12, expectedDataPoints: 144 },
@@ -148,7 +149,14 @@ export class DexcomGraphParser {
     r: number,
     g: number,
     b: number,
-    range: { hueMin: number; hueMax: number; satMin: number; satMax: number; lightMin: number; lightMax: number }
+    range: {
+      hueMin: number;
+      hueMax: number;
+      satMin: number;
+      satMax: number;
+      lightMin: number;
+      lightMax: number;
+    }
   ): boolean {
     const [h, s, l] = this.rgbToHsl(r, g, b);
 
@@ -355,9 +363,9 @@ export class DexcomGraphParser {
   /**
    * Estimate time range from point density
    */
-  private estimateTimeRange(
-    curvePoints: Array<{ x: number; y: number }>
-  ): { durationHours: number } {
+  private estimateTimeRange(curvePoints: Array<{ x: number; y: number }>): {
+    durationHours: number;
+  } {
     // Dexcom typically has consistent point density
     // Estimate based on curve length
     if (curvePoints.length < 50) {
@@ -375,9 +383,9 @@ export class DexcomGraphParser {
    * Detect if using mg/dL or mmol/L based on typical value ranges
    */
   private detectUnit(
-    curvePoints: Array<{ x: number; y: number }>,
-    graphRegion: GraphRegion,
-    imageHeight: number
+    _curvePoints: Array<{ x: number; y: number }>,
+    _graphRegion: GraphRegion,
+    _imageHeight: number
   ): BSLUnit {
     // Analyze y-position distribution
     // mg/dL typically uses larger range (40-400)
@@ -527,7 +535,8 @@ export class DexcomGraphParser {
     const now = new Date();
     const axisRanges: AxisRanges = options.manualAxisRanges
       ? {
-          timeStart: options.manualAxisRanges.timeStart ||
+          timeStart:
+            options.manualAxisRanges.timeStart ||
             new Date(now.getTime() - timeEstimate.durationHours * 60 * 60 * 1000),
           timeEnd: options.manualAxisRanges.timeEnd || now,
           bslMin: options.manualAxisRanges.bslMin ?? (detectedUnit === 'mg/dL' ? 40 : 2.2),

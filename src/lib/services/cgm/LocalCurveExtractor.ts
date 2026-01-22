@@ -166,12 +166,7 @@ export class LocalCurveExtractor {
   /**
    * Check if a pixel matches the line color profile
    */
-  private matchesColorProfile(
-    r: number,
-    g: number,
-    b: number,
-    profile: ColorProfile
-  ): boolean {
+  private matchesColorProfile(r: number, g: number, b: number, profile: ColorProfile): boolean {
     const [h, s, l] = this.rgbToHsl(r, g, b);
 
     const { lineColor } = profile;
@@ -378,7 +373,7 @@ export class LocalCurveExtractor {
     linePixels: Array<{ x: number; y: number }>,
     graphRegion: GraphRegion,
     imageWidth: number,
-    imageHeight: number
+    _imageHeight: number
   ): Array<{ x: number; y: number }> {
     const regionX = Math.floor((graphRegion.x / 100) * imageWidth);
     const regionW = Math.floor((graphRegion.width / 100) * imageWidth);
@@ -458,9 +453,7 @@ export class LocalCurveExtractor {
       const xProgress = (point.x - regionX) / regionW;
       const yProgress = 1 - (point.y - regionY) / regionH; // Invert Y
 
-      const timestamp = new Date(
-        axisRanges.timeStart.getTime() + xProgress * timeRange
-      );
+      const timestamp = new Date(axisRanges.timeStart.getTime() + xProgress * timeRange);
       const value = axisRanges.bslMin + yProgress * bslRange;
 
       // Validate value is within expected range
