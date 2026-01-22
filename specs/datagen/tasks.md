@@ -36,10 +36,10 @@ references:
 
 ## R4: Script & Data Freshness
 
-- [ ] 13. Investigate: Determine output format and storage location for generated data
+- [x] 13. Investigate: Determine output format and storage location for generated data
 
-- [ ] 14. Implement: Create script that generates data ending a few minutes before current time
+- [x] 14. Implement: Create script that generates data ending a few minutes before current time
 
-- [ ] 15. Implement: Add stochastic variation to ensure data differs on each run
+- [x] 15. Implement: Add stochastic variation to ensure data differs on each run
 
-- [ ] 16. Verify: Confirm script produces fresh, varied data suitable for local dev
+- [x] 16. Verify: Confirm script produces fresh, varied data suitable for local dev
