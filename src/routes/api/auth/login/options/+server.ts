@@ -13,9 +13,17 @@ import { WebAuthnService, createWebAuthnConfig, getCredentialStore } from '$lib/
 
 export const POST: RequestHandler = async () => {
   try {
-    const config = createWebAuthnConfig(env);
+    const configResult = createWebAuthnConfig(env);
+
+    if (!configResult.success) {
+      return json(
+        { error: configResult.error, code: configResult.code },
+        { status: 503 }
+      );
+    }
+
     const store = getCredentialStore();
-    const service = new WebAuthnService(config);
+    const service = new WebAuthnService(configResult.config);
 
     // Get registered credentials
     const credentials = await store.getCredentials();

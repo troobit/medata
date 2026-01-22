@@ -32,13 +32,13 @@ references:
 
 ## R4: Graceful Error Handling for Missing Config
 
-- [ ] 11. Investigate: Review current error handling in auth API endpoints
+- [x] 11. Investigate: Review current error handling in auth API endpoints
 
-- [ ] 12. Implement: Update createWebAuthnConfig to return structured error instead of throwing
+- [x] 12. Implement: Update createWebAuthnConfig to return structured error instead of throwing
 
-- [ ] 13. Implement: Update auth endpoints to return user-friendly config error responses
+- [x] 13. Implement: Update auth endpoints to return user-friendly config error responses
 
-- [ ] 14. Verify: Test error responses when environment variables are missing
+- [x] 14. Verify: Test error responses when environment variables are missing
 
 ## R5: UI Style Consistency Audit
 

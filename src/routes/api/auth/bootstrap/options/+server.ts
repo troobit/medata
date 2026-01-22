@@ -23,7 +23,15 @@ interface BootstrapOptionsRequest {
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const config = createWebAuthnConfig(env);
+    const configResult = createWebAuthnConfig(env);
+
+    if (!configResult.success) {
+      return json(
+        { error: configResult.error, code: configResult.code },
+        { status: 503 }
+      );
+    }
+
     const store = getCredentialStore();
     const bootstrapConfig = createBootstrapConfig(env);
     const bootstrapService = new BootstrapService(store, bootstrapConfig);
@@ -44,7 +52,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Verify bootstrap is allowed
     await bootstrapService.verifyBootstrapAllowed(body.bootstrapToken);
 
-    const service = new WebAuthnService(config);
+    const service = new WebAuthnService(configResult.config);
 
     // Generate registration options (no existing credentials for bootstrap)
     const { options, challenge } = await service.generateRegistrationOptions([]);
