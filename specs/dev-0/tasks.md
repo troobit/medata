@@ -16,13 +16,13 @@ references:
 
 ## R2: Merge datagen worktree
 
-- [ ] 5. Review datagen branch changes
+- [x] 5. Review datagen branch changes
 
-- [ ] 6. Merge datagen branch into dev-0
+- [x] 6. Merge datagen branch into dev-0
 
-- [ ] 7. Resolve conflicts from datagen merge
+- [x] 7. Resolve conflicts from datagen merge
 
-- [ ] 8. Verify: datagen changes integrated cleanly
+- [x] 8. Verify: datagen changes integrated cleanly
 
 ## R3: Update documentation
 
