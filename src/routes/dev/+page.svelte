@@ -3,15 +3,18 @@
    * Developer Tools Page
    *
    * Provides utilities for local development including:
-   * - Loading test data
+   * - Loading seed data (hardcoded arrays for UI testing)
+   * - Loading test data (stochastic generation)
    * - Clearing database
    * - Viewing database stats
    */
   import { Button } from '$lib/components/ui';
   import { eventsStore } from '$lib/stores';
   import type { PhysiologicalEvent } from '$lib/types';
+  import { generateSeedEvents, SEED_DATA_COUNTS } from '$lib/data/seed-data';
 
-  let loading = $state(false);
+  let loadingSeed = $state(false);
+  let loadingTest = $state(false);
   let clearing = $state(false);
   let message = $state<{ type: 'success' | 'error'; text: string } | null>(null);
   let stats = $state<{
@@ -22,8 +25,39 @@
     exercise: number;
   } | null>(null);
 
+  /**
+   * Load hardcoded seed data - minimal dataset for UI testing.
+   * Uses pre-defined arrays from seed-data.ts (no external file needed).
+   */
+  async function loadSeedData() {
+    loadingSeed = true;
+    message = null;
+
+    try {
+      const events = generateSeedEvents();
+      await eventsStore.importEvents(events);
+      await refreshStats();
+
+      message = {
+        type: 'success',
+        text: `Imported ${events.length} seed events (${SEED_DATA_COUNTS.bsl} BSL, ${SEED_DATA_COUNTS.insulin} insulin, ${SEED_DATA_COUNTS.exercise} exercise)`
+      };
+    } catch (error) {
+      message = {
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to load seed data'
+      };
+    } finally {
+      loadingSeed = false;
+    }
+  }
+
+  /**
+   * Load stochastic test data - larger dataset generated via script.
+   * Requires running `npm run generate-test-data` first.
+   */
   async function loadTestData() {
-    loading = true;
+    loadingTest = true;
     message = null;
 
     try {
@@ -61,7 +95,7 @@
         text: error instanceof Error ? error.message : 'Failed to load test data'
       };
     } finally {
-      loading = false;
+      loadingTest = false;
     }
   }
 
@@ -161,19 +195,39 @@
     {/if}
   </section>
 
-  <!-- Test Data -->
+  <!-- Seed Data (Hardcoded) -->
   <section class="mb-8">
-    <h2 class="mb-4 text-lg font-semibold text-gray-200">Test Data</h2>
+    <h2 class="mb-4 text-lg font-semibold text-gray-200">Seed Data</h2>
     <p class="mb-4 text-sm text-gray-400">
-      Load generated test data into the database. Run <code class="rounded bg-gray-700 px-1"
+      Load minimal hardcoded seed data for UI testing. Contains {SEED_DATA_COUNTS.total} events ({SEED_DATA_COUNTS.bsl}
+      BSL readings, {SEED_DATA_COUNTS.insulin} insulin entries,
+      {SEED_DATA_COUNTS.exercise} exercise entries) spanning 3 days.
+    </p>
+    <div class="flex gap-3">
+      <Button variant="primary" onclick={loadSeedData} loading={loadingSeed} disabled={loadingSeed}>
+        Load Seed Data
+      </Button>
+      <Button variant="secondary" onclick={refreshStats}>Refresh Stats</Button>
+    </div>
+  </section>
+
+  <!-- Test Data (Generated) -->
+  <section class="mb-8">
+    <h2 class="mb-4 text-lg font-semibold text-gray-200">Test Data (Stochastic)</h2>
+    <p class="mb-4 text-sm text-gray-400">
+      Load larger generated test data into the database. Run <code class="rounded bg-gray-700 px-1"
         >npm run generate-test-data</code
       > first to create the test data file.
     </p>
     <div class="flex gap-3">
-      <Button variant="primary" onclick={loadTestData} {loading} disabled={loading}>
+      <Button
+        variant="secondary"
+        onclick={loadTestData}
+        loading={loadingTest}
+        disabled={loadingTest}
+      >
         Load Test Data
       </Button>
-      <Button variant="secondary" onclick={refreshStats}>Refresh Stats</Button>
     </div>
   </section>
 

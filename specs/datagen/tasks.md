@@ -16,6 +16,6 @@ references:
 
 ## R2: Backend DB Seed Script
 
-- [ ] 5. Create seed script that loads arrays into DB
+- [x] 5. Create seed script that loads arrays into DB
 
-- [ ] 6. Verify data appears in UI
+- [x] 6. Verify data appears in UI
