@@ -1,7 +1,8 @@
 ---
 references:
-    - requirements.md
+  - requirements.md
 ---
+
 # Datagen Minimal Test Data
 
 ## R1: Create Hardcoded Data Arrays
