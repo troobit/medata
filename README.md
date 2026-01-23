@@ -74,6 +74,18 @@ Pull Vercel env to local:
 vercel env pull .env.local
 ```
 
+## Development
+
+Generate test data (1 month of realistic T1D blood glucose data):
+
+```bash
+pnpm generate-test-data
+```
+
+Output: `static/test-data.json`
+
 ## Documentation
 
-See [docs/auth.md](docs/auth.md) for detailed authentication setup, Vercel KV configuration, and troubleshooting.
+- [docs/auth.md](docs/auth.md) - Authentication setup, Vercel KV configuration, and troubleshooting
+- [docs/design.md](docs/design.md) - Architectural decisions and design patterns
+- [docs/requirements.md](docs/requirements.md) - System requirements and features

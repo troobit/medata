@@ -36,7 +36,7 @@ import { interpolateCircadianFactors, estimateCircadianBSLDrift } from './Circad
 
 /**
  * Default user parameters if not provided
- * These are conservative estimates; users should personalize
+ * These are conservative estimates; users should personalise
  */
 export const DEFAULT_USER_PARAMETERS: UserModelParameters = {
   insulinToCarbRatio: 10, // 1 unit covers 10g carbs
@@ -306,7 +306,7 @@ export function generateBSLTimeSeries(
  * @param events - All physiological events
  * @param startTime - Window start
  * @param endTime - Window end
- * @returns Categorized event window
+ * @returns Categorised event window
  */
 export function buildEventWindow(
   events: PhysiologicalEvent[],

@@ -2,7 +2,7 @@ import type { BSLUnit } from '$lib/types';
 import type { ExtractedBSLReading, BSLExtractionResult } from '$lib/types/vision';
 import { VisionService, getVisionService, VisionServiceError } from './VisionService';
 
-const EXTRACTION_PROMPT = `Analyze this screenshot from a continuous glucose monitor (CGM) app like Freestyle Libre, Dexcom, or similar.
+const EXTRACTION_PROMPT = `Analyse this screenshot from a continuous glucose monitor (CGM) app like Freestyle Libre, Dexcom, or similar.
 
 Extract ALL visible blood sugar/glucose readings from the image. For each reading, provide:
 1. The glucose value (number)
@@ -57,7 +57,7 @@ export class BSLRecognitionService {
       }
       return {
         readings: [],
-        error: error instanceof Error ? error.message : 'Failed to analyze image'
+        error: error instanceof Error ? error.message : 'Failed to analyse image'
       };
     }
   }
@@ -100,7 +100,7 @@ export class BSLRecognitionService {
   }
 
   /**
-   * Normalize and validate a single reading
+   * Normalise and validate a single reading
    */
   private normalizeReading(raw: Record<string, unknown>): ExtractedBSLReading | null {
     const value = typeof raw.value === 'number' ? raw.value : parseFloat(String(raw.value));
@@ -109,7 +109,7 @@ export class BSLRecognitionService {
       return null;
     }
 
-    // Normalize unit
+    // Normalise unit
     let unit: BSLUnit = 'mmol/L';
     if (typeof raw.unit === 'string') {
       const unitLower = raw.unit.toLowerCase();

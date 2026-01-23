@@ -18,7 +18,7 @@
 
   let { dataPoints, axisRanges, onConfirm, onCancel, loading = false }: Props = $props();
 
-  // State for editable points - initialized via $effect
+  // State for editable points - initialised via $effect
   // Using state + effect pattern since points are modified by user
   // eslint-disable-next-line svelte/prefer-writable-derived
   let editablePoints = $state<ExtractedDataPoint[]>([]);
@@ -72,7 +72,7 @@
     onConfirm(editablePoints);
   }
 
-  // Confidence color coding
+  // Confidence colour coding
   function getConfidenceColor(confidence: number): string {
     if (confidence >= 0.8) return 'text-green-400';
     if (confidence >= 0.6) return 'text-yellow-400';

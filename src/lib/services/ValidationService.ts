@@ -230,7 +230,7 @@ export class ValidationService {
   }
 
   /**
-   * Analyze correction patterns by category
+   * Analyse correction patterns by category
    */
   async analyzeCorrectionPatterns(): Promise<CorrectionPatternStats[]> {
     const corrections = await this.repository.getAllCorrectionHistory();

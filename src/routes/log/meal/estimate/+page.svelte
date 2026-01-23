@@ -42,8 +42,8 @@
   let detecting = $state(false);
   let error = $state<string | null>(null);
 
-  // Camera state
-  let videoRef: HTMLVideoElement;
+  // Camera state - videoRef is bound to DOM element (not reactive state)
+  let videoRef = $state<HTMLVideoElement | null>(null);
   let stream: MediaStream | null = null;
   let cameraActive = $state(false);
   let cameraError = $state<string | null>(null);

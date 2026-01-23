@@ -297,7 +297,12 @@ interface FoodService {
 src/lib/
 ├── server/           # Server-only (never bundled to client)
 ├── services/         # Client-side service layer
-├── stores/           # Reactive state
+├── stores/           # Reactive state (Svelte 5 runes)
 ├── components/       # UI components
-└── types/            # Shared types
+├── types/            # Shared types
+├── config/           # Configuration constants
+├── data/             # Static data (USDA database, etc.)
+├── db/               # IndexedDB/Dexie database layer
+├── repositories/     # Data access layer
+└── utils/            # Shared utilities
 ```

@@ -367,7 +367,7 @@ export function suggestICRAdjustment(
 
     if (!postMealBSL) continue;
 
-    // Categorize outcome
+    // Categorise outcome
     let outcome: 'good' | 'high' | 'low';
     if (postMealBSL.value < 4.5) outcome = 'low';
     else if (postMealBSL.value > 9.0) outcome = 'high';

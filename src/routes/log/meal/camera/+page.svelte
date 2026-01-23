@@ -50,8 +50,8 @@
     icon: string;
     label: string;
     description: string;
-    color: string;
-    bgColor: string;
+    colour: string;
+    bgColour: string;
     requiresAI: boolean;
   }> = [
     {
@@ -59,8 +59,8 @@
       icon: '🤖',
       label: 'AI Analysis',
       description: 'AI identifies food and estimates macros',
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/10 hover:bg-blue-500/20',
+      colour: 'text-blue-400',
+      bgColour: 'bg-blue-500/10 hover:bg-blue-500/20',
       requiresAI: true
     },
     {
@@ -68,8 +68,8 @@
       icon: '📐',
       label: 'Volume Estimate',
       description: 'Use reference card for local calculation',
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/10 hover:bg-purple-500/20',
+      colour: 'text-purple-400',
+      bgColour: 'bg-purple-500/10 hover:bg-purple-500/20',
       requiresAI: false
     },
     {
@@ -77,8 +77,8 @@
       icon: '🏷️',
       label: 'Scan Label',
       description: 'Read nutrition facts from packaging',
-      color: 'text-green-400',
-      bgColor: 'bg-green-500/10 hover:bg-green-500/20',
+      colour: 'text-green-400',
+      bgColour: 'bg-green-500/10 hover:bg-green-500/20',
       requiresAI: true
     }
   ];
@@ -478,7 +478,7 @@
     {#if flowState !== 'mode-select'}
       <div class="mt-2 flex items-center gap-2">
         <span class="text-lg">{modes.find((m) => m.id === selectedMode)?.icon}</span>
-        <span class={modes.find((m) => m.id === selectedMode)?.color}>
+        <span class={modes.find((m) => m.id === selectedMode)?.colour}>
           {modes.find((m) => m.id === selectedMode)?.label}
         </span>
         {#if flowState === 'capture'}
@@ -512,7 +512,7 @@
           {#each modes as mode}
             <button
               type="button"
-              class="flex w-full items-start gap-4 rounded-lg p-4 text-left transition-colors {mode.bgColor} {selectedMode ===
+              class="flex w-full items-start gap-4 rounded-lg p-4 text-left transition-colors {mode.bgColour} {selectedMode ===
               mode.id
                 ? 'ring-2 ring-white/20'
                 : ''}"
@@ -522,7 +522,7 @@
               <span class="text-3xl">{mode.icon}</span>
               <div class="flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="font-medium {mode.color}">{mode.label}</span>
+                  <span class="font-medium {mode.colour}">{mode.label}</span>
                   {#if mode.requiresAI && !aiConfigured}
                     <span class="rounded bg-yellow-500/20 px-1.5 py-0.5 text-xs text-yellow-400">
                       Needs API key
@@ -532,7 +532,7 @@
                 <p class="mt-1 text-sm text-gray-400">{mode.description}</p>
               </div>
               <svg
-                class="h-5 w-5 {mode.color} mt-1"
+                class="h-5 w-5 {mode.colour} mt-1"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

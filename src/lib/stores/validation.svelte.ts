@@ -200,7 +200,7 @@ function createValidationStore() {
     try {
       correctionPatterns = await service.analyzeCorrectionPatterns();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to analyze correction patterns';
+      error = e instanceof Error ? e.message : 'Failed to analyse correction patterns';
     } finally {
       loading = false;
     }

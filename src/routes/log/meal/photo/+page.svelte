@@ -3,7 +3,7 @@
    * AI Food Photo Recognition Page
    * Workstream A: AI-Powered Food Recognition
    *
-   * Full flow: Capture -> Preview -> Analyze -> Edit -> Save
+   * Full flow: Capture -> Preview -> Analyse -> Edit -> Save
    */
   import { goto } from '$app/navigation';
   import { CameraCapture, PhotoPreview, FoodRecognitionResult } from '$lib/components/ai';

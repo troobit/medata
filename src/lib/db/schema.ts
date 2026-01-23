@@ -43,7 +43,7 @@ export class MeDataDB extends Dexie {
 }
 
 /**
- * Lazy-initialized singleton database instance
+ * Lazy-initialised singleton database instance
  * Prevents SSR issues by only creating the database in the browser
  */
 let _db: MeDataDB | null = null;
@@ -91,6 +91,6 @@ export async function checkDatabaseAvailability(): Promise<string | null> {
       }
       return `Database error: ${error.message}`;
     }
-    return 'Failed to initialize database';
+    return 'Failed to initialise database';
   }
 }

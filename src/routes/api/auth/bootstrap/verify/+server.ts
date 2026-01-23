@@ -28,7 +28,12 @@ interface BootstrapVerifyRequest {
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
-    const config = createWebAuthnConfig(env);
+    const configResult = createWebAuthnConfig(env);
+
+    if (!configResult.success) {
+      return json({ error: configResult.error, code: configResult.code }, { status: 503 });
+    }
+
     const store = getCredentialStore();
     const bootstrapConfig = createBootstrapConfig(env);
     const bootstrapService = new BootstrapService(store, bootstrapConfig);
@@ -72,7 +77,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       );
     }
 
-    const service = new WebAuthnService(config);
+    const service = new WebAuthnService(configResult.config);
 
     // Verify the registration response
     const credential = await service.verifyRegistration(

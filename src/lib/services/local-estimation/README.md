@@ -1,15 +1,13 @@
-# Workstream C: Local Food Volume Estimation Services
+# Local Food Volume Estimation Services
 
-**Branch**: `workstream-c/local-food`
-
-This directory contains browser-local food volume estimation services.
+Browser-local food volume estimation services.
 No cloud API calls - all processing happens on device.
 
 ## Interface
 
-Implement `IVolumeEstimationService` from `$lib/types/local-estimation.ts`
+Implements `IVolumeEstimationService` from `$lib/types/local-estimation.ts`
 
-## Files to create
+## Files
 
 - `ReferenceDetector.ts` - Credit card/coin detection for scale
 - `VolumeCalculator.ts` - Volume estimation from 2D regions

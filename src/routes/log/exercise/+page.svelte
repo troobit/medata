@@ -58,7 +58,7 @@
     }
   }
 
-  // Get intensity color class
+  // Get intensity colour class
   function getIntensityColor(i: ExerciseIntensity): string {
     switch (i) {
       case 'low':

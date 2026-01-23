@@ -434,7 +434,7 @@ export class ReferenceDetector {
 
             if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
 
-            // Quantize to reduce number of candidates
+            // Quantise to reduce number of candidates
             const qx = Math.round(cx / 5) * 5;
             const qy = Math.round(cy / 5) * 5;
             const qr = Math.round(r / radiusStep) * radiusStep;

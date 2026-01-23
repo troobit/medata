@@ -19,8 +19,8 @@
   let dbChecked = $state(false);
 
   // Favicon variant from build-time environment variable
-  type LogoVariant = 'default' | 'pride' | 'contrast';
-  const validVariants: LogoVariant[] = ['default', 'pride', 'contrast'];
+  type LogoVariant = 'default' | 'colour' | 'contrast';
+  const validVariants: LogoVariant[] = ['default', 'colour', 'contrast'];
   const envVariant = env.PUBLIC_LOGO_VARIANT;
   const faviconVariant: LogoVariant = validVariants.includes(envVariant as LogoVariant)
     ? (envVariant as LogoVariant)

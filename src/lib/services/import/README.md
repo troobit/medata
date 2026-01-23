@@ -1,20 +1,19 @@
-# Workstream D: BSL Data Import Services
+# BSL Data Import Services
 
-**Branch**: `workstream-d/bsl-import`
-
-This directory contains services for importing BSL data from CSV files.
+Services for importing BSL data from CSV files.
 
 ## Interfaces
 
-Implement `IImportService` and `IExportService` from `$lib/types/import.ts`
+Implements `IImportService` and `IExportService` from `$lib/types/import.ts`
 
-## Files to create
+## Files
 
 - `CSVParser.ts` - Base CSV parsing utilities
 - `LibreCSVParser.ts` - Freestyle Libre export format parser
 - `DexcomCSVParser.ts` - Dexcom Clarity export format parser
 - `GenericCSVParser.ts` - Generic CSV with column mapping
 - `DuplicateDetector.ts` - Duplicate event detection
+- `ExportService.ts` - Export data to various formats
 
 ## Supported CSV Formats
 

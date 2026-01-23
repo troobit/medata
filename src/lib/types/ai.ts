@@ -12,10 +12,10 @@ import type { MacroData, MealItem } from './events';
  * Bounding box for visual annotation of Recognised food
  */
 export interface BoundingBox {
-  x: number; // top-left x (0-1 normalized)
-  y: number; // top-left y (0-1 normalized)
-  width: number; // width (0-1 normalized)
-  height: number; // height (0-1 normalized)
+  x: number; // top-left x (0-1 normalised)
+  y: number; // top-left y (0-1 normalised)
+  width: number; // width (0-1 normalised)
+  height: number; // height (0-1 normalised)
 }
 
 /**

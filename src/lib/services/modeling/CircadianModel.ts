@@ -222,7 +222,7 @@ export function estimateCircadianBSLDrift(startTime: Date, endTime: Date): numbe
 }
 
 /**
- * Generate circadian sensitivity curve for visualization
+ * Generate circadian sensitivity curve for visualisation
  *
  * @param userAdjustments - Optional user adjustments
  * @returns Array of sensitivity values for each hour

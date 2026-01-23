@@ -28,8 +28,8 @@
   let imageLoaded = $state(false);
   let imageDimensions = $state({ width: 0, height: 0 });
 
-  // Colors for different regions
-  const regionColors = [
+  // Colours for different regions
+  const regionColours = [
     'rgba(124, 58, 237, 0.3)', // purple
     'rgba(34, 197, 94, 0.3)', // green
     'rgba(59, 130, 246, 0.3)', // blue
@@ -107,7 +107,7 @@
     isDrawing = false;
 
     if (currentPoints.length >= 3) {
-      // Convert normalized coords to image pixel coords
+      // Convert normalised coords to image pixel coords
       const pixelPoints = currentPoints.map((p) => ({
         x: p.x * imageDimensions.width,
         y: p.y * imageDimensions.height
@@ -136,16 +136,16 @@
     onRegionsChange?.([]);
   }
 
-  // Convert normalized points to SVG path
-  function pointsToPath(points: Array<{ x: number; y: number }>, normalize: boolean): string {
+  // Convert normalised points to SVG path
+  function pointsToPath(points: Array<{ x: number; y: number }>, normalise: boolean): string {
     if (points.length < 2) return '';
 
     const first = points[0];
-    let d = normalize ? `M ${first.x * 100}% ${first.y * 100}%` : `M ${first.x} ${first.y}`;
+    let d = normalise ? `M ${first.x * 100}% ${first.y * 100}%` : `M ${first.x} ${first.y}`;
 
     for (let i = 1; i < points.length; i++) {
       const p = points[i];
-      d += normalize ? ` L ${p.x * 100}% ${p.y * 100}%` : ` L ${p.x} ${p.y}`;
+      d += normalise ? ` L ${p.x * 100}% ${p.y * 100}%` : ` L ${p.x} ${p.y}`;
     }
 
     return d + ' Z';
@@ -203,8 +203,8 @@
       {#each regions as region, i (region.id)}
         <path
           d={pixelPointsToSvgPath(region.boundary)}
-          fill={regionColors[i % regionColors.length]}
-          stroke={regionColors[i % regionColors.length].replace('0.3', '1')}
+          fill={regionColours[i % regionColours.length]}
+          stroke={regionColours[i % regionColours.length].replace('0.3', '1')}
           stroke-width="0.5"
           vector-effect="non-scaling-stroke"
         />
@@ -234,7 +234,7 @@
         <button
           type="button"
           class="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-white shadow-lg"
-          style="background-color: {regionColors[i % regionColors.length].replace('0.3', '0.9')}"
+          style="background-color: {regionColours[i % regionColours.length].replace('0.3', '0.9')}"
           onclick={() => removeRegion(region.id)}
         >
           Region {i + 1}

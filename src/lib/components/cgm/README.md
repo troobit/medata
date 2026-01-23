@@ -1,10 +1,8 @@
-# Workstream B: CGM Graph Capture Components
-
-**Branch**: `workstream-b/cgm-capture`
+# CGM Graph Capture Components
 
 Svelte components for CGM graph image capture and extraction UI.
 
-## Components to create
+## Components
 
 - `CGMImageCapture.svelte` - Screenshot upload/capture
 - `GraphRegionSelector.svelte` - Manual graph region selection

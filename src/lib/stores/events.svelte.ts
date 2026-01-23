@@ -204,6 +204,44 @@ function createEventsStore() {
     }
   }
 
+  async function importEvents(eventsToImport: PhysiologicalEvent[]) {
+    loading = true;
+    error = null;
+    try {
+      await service.importEvents(eventsToImport);
+      // Reload events after import
+      await loadRecent(20);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to import events';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function exportAll() {
+    try {
+      return await service.exportAllEvents();
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to export events';
+      throw e;
+    }
+  }
+
+  async function clearAll() {
+    loading = true;
+    error = null;
+    try {
+      await service.clearAllEvents();
+      events = [];
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Failed to clear events';
+      throw e;
+    } finally {
+      loading = false;
+    }
+  }
+
   return {
     get events() {
       return events;
@@ -227,7 +265,10 @@ function createEventsStore() {
     updateEvent,
     getRecentInsulinDoses,
     getRecentBSLValues,
-    getRecentCarbValues
+    getRecentCarbValues,
+    importEvents,
+    exportAll,
+    clearAll
   };
 }
 

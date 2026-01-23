@@ -1,10 +1,8 @@
-# Workstream D: BSL Entry Components
+# BSL Entry Components
 
-**Branch**: `workstream-d/bsl-import`
+Svelte components for BSL data entry and image preview.
 
-Svelte components for manual BSL data entry.
+## Components
 
-## Components to create
-
-- `BSLQuickLog.svelte` - Quick BSL entry with stepper
-- `BSLHistoryInput.svelte` - Historical BSL with timestamp picker
+- `ImagePreview.svelte` - Preview BSL images before extraction
+- `ExtractedDataEditor.svelte` - Edit extracted BSL data points

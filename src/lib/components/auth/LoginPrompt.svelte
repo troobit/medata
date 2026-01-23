@@ -1,6 +1,6 @@
 <script lang="ts">
   import { authStore } from '$lib/stores';
-  import { Button } from '$lib/components/ui';
+  import { Button, Logo } from '$lib/components/ui';
   import { startRegistration } from '@simplewebauthn/browser';
 
   let showBootstrap = $state(false);
@@ -90,7 +90,7 @@
   <div class="w-full max-w-sm space-y-8 text-center">
     <div class="space-y-2">
       <h1 class="text-3xl font-bold text-white">MeData</h1>
-      <p class="text-gray-400">Personal health data tracking</p>
+      <p class="text-gray-400">data tracking</p>
     </div>
 
     <div class="space-y-4">
@@ -113,16 +113,11 @@
             </svg>
           </div>
 
-          <h2 class="mb-2 text-lg font-semibold text-white">First-Time Setup</h2>
-          <p class="mb-4 text-sm text-gray-300">
-            No credentials registered. Enter your bootstrap token to enroll your first security key.
-          </p>
-
           <div class="mb-4">
             <input
               type="password"
               bind:value={bootstrapToken}
-              placeholder="Bootstrap token"
+              placeholder="token"
               class="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-white placeholder-gray-400 focus:border-brand-accent focus:outline-none"
             />
           </div>
@@ -144,7 +139,7 @@
               loading={bootstrapLoading}
               onclick={handleBootstrap}
             >
-              Enroll Key
+              Add Key
             </Button>
           </div>
         </div>
@@ -160,9 +155,15 @@
       {:else}
         <!-- Normal Login Flow -->
         <div class="rounded-lg border border-gray-700 bg-gray-800/50 p-6">
-          <div class="mb-4 flex justify-center">
+          <Button
+            variant="primary"
+            size="lg"
+            class="w-full"
+            loading={authStore.loading}
+            onclick={handleLogin}
+          >
             <svg
-              class="h-16 w-16 text-brand-accent"
+              class="h-16 w-16 text-red-400"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -173,20 +174,8 @@
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <circle cx="12" cy="16" r="1" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-
-          <p class="mb-6 text-sm text-gray-300">Insert your security key and tap to authenticate</p>
-
-          <Button
-            variant="primary"
-            size="lg"
-            class="w-full"
-            loading={authStore.loading}
-            onclick={handleLogin}
+            </svg></Button
           >
-            Authenticate with Security Key
-          </Button>
         </div>
 
         {#if authStore.error}
@@ -206,6 +195,6 @@
       {/if}
     </div>
 
-    <p class="text-xs text-gray-500">Requires a registered FIDO2 security key</p>
+    <p class="text-xs text-gray-500"><Logo /></p>
   </div>
 </div>

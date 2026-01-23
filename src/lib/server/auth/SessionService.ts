@@ -161,11 +161,9 @@ export class SessionService {
 /**
  * Create session config from environment variables
  * Returns null if AUTH_SESSION_SECRET is not available (e.g., during prerender)
+ * @param env - Environment variables from $env/dynamic/private
  */
-export function createSessionConfig(env: {
-  AUTH_SESSION_SECRET?: string;
-  NODE_ENV?: string;
-}): SessionConfig | null {
+export function createSessionConfig(env: Record<string, string | undefined>): SessionConfig | null {
   const secret = env.AUTH_SESSION_SECRET;
 
   // Return null during prerender/build when env vars aren't available

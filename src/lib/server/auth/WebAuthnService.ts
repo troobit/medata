@@ -25,7 +25,8 @@ import type {
   StoredCredential,
   RegistrationOptionsResponse,
   StoredChallenge,
-  AuthenticationOptionsResponse
+  AuthenticationOptionsResponse,
+  ConfigResult
 } from './types';
 
 // Challenge expiry time: 5 minutes
@@ -249,22 +250,28 @@ export class WebAuthnService {
 /**
  * Create WebAuthn config from environment variables
  * @param env - Environment variables from $env/dynamic/private
+ * @returns ConfigResult with either the config or an error
  */
-export function createWebAuthnConfig(env: Record<string, string | undefined>): WebAuthnConfig {
+export function createWebAuthnConfig(
+  env: Record<string, string | undefined>
+): ConfigResult<WebAuthnConfig> {
   const rpId = env.AUTH_RP_ID;
   const origin = env.AUTH_ORIGIN;
 
-  if (!rpId) {
-    throw new Error('AUTH_RP_ID environment variable is required');
-  }
-
-  if (!origin) {
-    throw new Error('AUTH_ORIGIN environment variable is required');
+  if (!rpId || !origin) {
+    return {
+      success: false,
+      error: 'Authentication is not configured. Please contact the administrator.',
+      code: 'AUTH_NOT_CONFIGURED'
+    };
   }
 
   return {
-    rpId,
-    rpName: 'Beetus',
-    origin
+    success: true,
+    config: {
+      rpId,
+      rpName: 'Beetus',
+      origin
+    }
   };
 }
