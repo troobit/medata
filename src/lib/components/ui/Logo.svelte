@@ -37,7 +37,7 @@
     ? (envVariant as LogoVariant)
     : 'default';
 
-  // Variant color schemes
+  // Variant colour schemes
   const variantColors = {
     default: { main: '#63ff00', dot: '#63ff00' },
     contrast: { main: '#000000', dot: '#ffcc00' },

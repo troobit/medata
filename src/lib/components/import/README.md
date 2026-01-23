@@ -1,10 +1,8 @@
-# Workstream D: BSL Data Import Components
-
-**Branch**: `workstream-d/bsl-import`
+# BSL Data Import Components
 
 Svelte components for CSV import and BSL data entry UI.
 
-## Components to create
+## Components
 
 - `CSVUpload.svelte` - File upload with drag-drop
 - `ColumnMapper.svelte` - Generic CSV column mapping

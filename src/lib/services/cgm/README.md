@@ -1,20 +1,20 @@
-# Workstream B: CGM Graph Image Capture Services
+# CGM Graph Image Capture Services
 
-**Branch**: `workstream-b/cgm-capture`
-
-This directory contains services for extracting BSL data from CGM app screenshots.
+Services for extracting BSL data from CGM app screenshots.
 
 ## Interface
 
-Implement `ICGMImageService` from `$lib/types/cgm.ts`
+Implements `ICGMImageService` from `$lib/types/cgm.ts`
 
-## Files to create
+## Files
 
 - `CGMImageProcessor.ts` - Main processing orchestrator
 - `LibreGraphParser.ts` - Freestyle Libre graph format parser
 - `DexcomGraphParser.ts` - Dexcom graph format parser
-- `CurveExtractor.ts` - Curve tracing algorithms
-- `AxisDetector.ts` - OCR and axis range detection
+- `LocalCurveExtractor.ts` - Curve tracing algorithms
+- `CGMApiFactory.ts` - Factory for CGM API services
+- `LibreLinkApiService.ts` - LibreLink API integration
+- `DexcomShareApiService.ts` - Dexcom Share API integration
 
 ## Supported Formats
 

@@ -33,7 +33,7 @@ export class VisionService {
   }
 
   /**
-   * Analyze an image using GPT-4o Vision
+   * Analyse an image using GPT-4o Vision
    * @param imageBase64 Base64-encoded image data (without data URL prefix)
    * @param prompt The prompt to send with the image
    * @param options Optional configuration

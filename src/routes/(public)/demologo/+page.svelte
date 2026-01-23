@@ -84,7 +84,7 @@
     <p class="mt-2 text-gray-400">
       Available variants: <code class="text-sm text-green-400">default</code>,
       <code class="text-sm text-yellow-400">contrast</code>,
-      <code class="text-sm text-pink-400">pride</code>
+      <code class="text-sm text-pink-400">colour</code>
     </p>
   </section>
 </div>

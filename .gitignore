@@ -44,6 +44,10 @@ static/icon-*.png
 static/apple-touch-icon.png
 static/favicon.ico
 
+# Generated test data
+static/test-data.json
+
 # Orbit task management
 **/.orbit/
 .vercel
+.env*.local

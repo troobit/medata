@@ -91,11 +91,7 @@ Using the Vercel Dashboard:
 5. Select your preferred region
 6. Click **Create**
 
-Or using the Vercel CLI:
-
-```bash
-vercel storage add kv medata-auth
-```
+Note: The `vercel storage` CLI command is not available. Use the dashboard method above.
 
 #### 2. Link KV to Your Project
 
@@ -182,10 +178,10 @@ vercel link
 ```bash
 # Set the production domain (replace with your actual domain)
 vercel env add AUTH_RP_ID production
-# Enter: your-domain.vercel.app
+# Enter: medata-rtob.vercel.app
 
 vercel env add AUTH_ORIGIN production
-# Enter: https://your-domain.vercel.app
+# Enter: https://medata-rtob.vercel.app
 
 # Set the session secret (mark as sensitive)
 vercel env add AUTH_SESSION_SECRET production
@@ -204,7 +200,7 @@ vercel --prod
 
 ### Step 5: Enroll Your YubiKey on Production
 
-1. Open https://your-domain.vercel.app in your browser
+1. Open https://medata-rtob.vercel.app in your browser
 2. Click "Authenticate with Security Key"
 3. Enter your production bootstrap token
 4. Insert your YubiKey and tap it
@@ -278,8 +274,8 @@ vercel --prod
 
 | Variable                | Local Dev                     | Production                                    |
 | ----------------------- | ----------------------------- | --------------------------------------------- |
-| `AUTH_RP_ID`            | `localhost`                   | `your-domain.vercel.app`                      |
-| `AUTH_ORIGIN`           | `http://localhost:5173`       | `https://your-domain.vercel.app`              |
+| `AUTH_RP_ID`            | `localhost`                   | `medata-rtob.vercel.app`                      |
+| `AUTH_ORIGIN`           | `http://localhost:5173`       | `https://medata-rtob.vercel.app`              |
 | `AUTH_SESSION_SECRET`   | Random 32+ char base64        | Random 32+ char base64 (different from local) |
 | `AUTH_BOOTSTRAP_TOKEN`  | Temporary, remove after setup | Temporary, remove after setup                 |
 | `AUTH_CREDENTIALS_PATH` | `./data/credentials.json`     | (optional, defaults to same)                  |
@@ -339,9 +335,7 @@ For Vercel deployments, MeData uses **Vercel KV** for credential storage instead
 
 **Via Vercel CLI:**
 
-```bash
-vercel storage add kv medata-auth
-```
+Note: The `vercel storage` command is not available in the CLI. Use the dashboard method above.
 
 #### 2. Link KV Store to Project
 

@@ -109,6 +109,13 @@ export interface AuthErrorResponse {
 }
 
 /**
+ * Result type for configuration functions that may fail
+ */
+export type ConfigResult<T> =
+  | { success: true; config: T }
+  | { success: false; error: string; code: string };
+
+/**
  * Authentication options response sent to client
  */
 export interface AuthenticationOptionsResponse {

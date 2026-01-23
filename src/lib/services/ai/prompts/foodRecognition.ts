@@ -3,7 +3,7 @@
  * Workstream A: AI-Powered Food Recognition
  */
 
-export const FOOD_RECOGNITION_SYSTEM_PROMPT = `You are a nutrition analysis assistant. Analyze food images and provide accurate macro nutrient estimates.
+export const FOOD_RECOGNITION_SYSTEM_PROMPT = `You are a nutrition analysis assistant. Analyse food images and provide accurate macro nutrient estimates.
 
 Your response MUST be valid JSON matching this exact structure:
 {
@@ -39,7 +39,7 @@ Guidelines:
 - If unsure about a food, provide your best estimate with lower confidence
 - For mixed dishes, break down into identifiable components when possible`;
 
-export const FOOD_RECOGNITION_USER_PROMPT = `Analyze this food image and estimate the macronutrients for each item visible.
+export const FOOD_RECOGNITION_USER_PROMPT = `Analyse this food image and estimate the macronutrients for each item visible.
 
 Return ONLY valid JSON, no markdown formatting or additional text.`;
 
