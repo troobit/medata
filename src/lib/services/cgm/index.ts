@@ -10,8 +10,8 @@
  * - Direct API: Connects to CGM cloud services (LibreLink, Dexcom Share)
  *
  * Device-specific parsers:
- * - LibreGraphParser: Optimized for Freestyle Libre screenshots
- * - DexcomGraphParser: Optimized for Dexcom G6/G7 screenshots
+ * - LibreGraphParser: Optimised for Freestyle Libre screenshots
+ * - DexcomGraphParser: Optimised for Dexcom G6/G7 screenshots
  */
 
 // Main processor with ML and local CV support

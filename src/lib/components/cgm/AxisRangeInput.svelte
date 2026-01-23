@@ -16,7 +16,7 @@
 
   let { ranges, onRangesChanged, disabled = false }: Props = $props();
 
-  // Local state for form inputs - initialized empty, synced via $effect
+  // Local state for form inputs - initialised empty, synced via $effect
   let timeStartStr = $state('');
   let timeEndStr = $state('');
   let bslMin = $state(0);

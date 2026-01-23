@@ -17,7 +17,7 @@
 
   let expanded = $state(false);
 
-  // Local editing state - initialized from props and synced via effects
+  // Local editing state - initialised from props and synced via effects
   let name = $state(item.name);
   let quantity = $state(item.quantity ?? 1);
   let unit = $state(item.unit ?? 'serving');

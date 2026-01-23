@@ -49,7 +49,10 @@ When completing a spec:
 
 ## History Index
 
-| Spec                                                  | Branch | Status   | Description                                                      |
-| ----------------------------------------------------- | ------ | -------- | ---------------------------------------------------------------- |
-| [Core Features](core-features.md)                     | dev-0  | Complete | UI, AI validation, local estimation, modelling, component system |
-| [WebAuthn Authentication](webauthn-authentication.md) | dev-1  | Complete | Server-side WebAuthn with YubiKey support                        |
+| Spec                                                        | Branch  | Status   | Description                                                      |
+| ----------------------------------------------------------- | ------- | -------- | ---------------------------------------------------------------- |
+| [Core Features](core-features.md)                           | dev-0   | Complete | UI, AI validation, local estimation, modelling, component system |
+| [WebAuthn Authentication](webauthn-authentication.md)       | dev-1   | Complete | Server-side WebAuthn with YubiKey support                        |
+| [Auth Production Deployment](auth-production-deployment.md) | auth    | Complete | Vercel deployment fixes, PWA icons, graceful errors, UI styling  |
+| [Datagen Test Data](datagen-test-data.md)                   | datagen | Complete | Minimal hardcoded seed data for UI development                   |
+| [Dev-0 Consolidation](dev-0-consolidation.md)               | dev-0   | Complete | Merged auth/datagen branches, enforced British spelling          |

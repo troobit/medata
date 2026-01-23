@@ -1,8 +1,8 @@
 /**
- * Workstream D: Date Normalization Utilities
+ * Workstream D: Date Normalisation Utilities
  * Branch: dev-4
  *
- * Handles parsing and normalizing dates from various CSV formats.
+ * Handles parsing and normalising dates from various CSV formats.
  */
 
 /**
@@ -67,7 +67,7 @@ export function parseISODate(dateStr: string): Date | null {
  * @returns Parsed Date or null if invalid
  */
 export function parseDexcomDate(dateStr: string): Date | null {
-  // Dexcom uses space instead of T, so normalize it
+  // Dexcom uses space instead of T, so normalise it
   const normalized = dateStr.replace(' ', 'T');
   return parseISODate(normalized);
 }

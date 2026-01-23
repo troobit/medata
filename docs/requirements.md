@@ -105,7 +105,7 @@ These are the core system requirements and source of truth for the MeData projec
 
 8.1. **Phase 1 (Development)**: Single user, no authentication required.
 
-8.2. **Phase 2 (Future)**: Implement 1:1 certificate, YubiKey, or FIDO authentication for secure access and potential data encryption/decryption.
+8.2. **Phase 2 (Implemented)**: WebAuthn/FIDO2 authentication with hardware security keys (YubiKey). See [docs/auth.md](auth.md) for setup details.
 
 ---
 

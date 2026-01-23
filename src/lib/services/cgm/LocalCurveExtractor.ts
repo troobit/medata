@@ -5,7 +5,7 @@
  * computer vision algorithms (no cloud API required).
  *
  * Techniques used:
- * - Color-based line detection (filter by CGM line color)
+ * - Colour-based line detection (filter by CGM line colour)
  * - Edge detection for curve tracing
  * - Canvas-based pixel analysis
  */
@@ -21,11 +21,11 @@ import type {
 import type { BSLUnit } from '$lib/types/events';
 
 /**
- * Color profiles for different CGM devices
+ * Colour profiles for different CGM devices
  */
 interface ColorProfile {
   name: string;
-  /** HSL ranges for the glucose line color */
+  /** HSL ranges for the glucose line colour */
   lineColor: {
     hueMin: number;
     hueMax: number;
@@ -164,7 +164,7 @@ export class LocalCurveExtractor {
   }
 
   /**
-   * Check if a pixel matches the line color profile
+   * Check if a pixel matches the line colour profile
    */
   private matchesColorProfile(r: number, g: number, b: number, profile: ColorProfile): boolean {
     const [h, s, l] = this.rgbToHsl(r, g, b);
@@ -203,8 +203,8 @@ export class LocalCurveExtractor {
     let minY = height;
     let maxY = 0;
 
-    // Simple approach: find where color variation is highest
-    // This typically excludes solid color UI bars
+    // Simple approach: find where colour variation is highest
+    // This typically excludes solid colour UI bars
 
     const rowVariance: number[] = [];
     const colVariance: number[] = [];
@@ -332,7 +332,7 @@ export class LocalCurveExtractor {
   }
 
   /**
-   * Extract line pixels from graph using color filtering
+   * Extract line pixels from graph using colour filtering
    */
   private extractLinePixels(
     imageData: ImageData,
@@ -349,7 +349,7 @@ export class LocalCurveExtractor {
 
     const linePixels: Array<{ x: number; y: number }> = [];
 
-    // Scan for pixels matching the line color
+    // Scan for pixels matching the line colour
     for (let y = regionY; y < regionY + regionH; y++) {
       for (let x = regionX; x < regionX + regionW; x++) {
         const idx = (y * width + x) * 4;
@@ -535,7 +535,7 @@ export class LocalCurveExtractor {
     // Detect graph region
     const graphRegion = this.detectGraphRegion(imageData);
 
-    // Extract line pixels using color filtering
+    // Extract line pixels using colour filtering
     const linePixels = this.extractLinePixels(imageData, graphRegion, profile);
 
     if (linePixels.length < 50) {

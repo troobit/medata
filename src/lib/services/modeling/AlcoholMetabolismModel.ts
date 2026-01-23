@@ -79,7 +79,7 @@ export const BODY_DISTRIBUTION_FACTOR = 0.6; // Average for mixed/unknown sex
 
 /**
  * Adjust elimination rate based on body weight
- * Larger bodies metabolize slightly faster (more liver mass)
+ * Larger bodies metabolise slightly faster (more liver mass)
  *
  * @param baseRate - Base elimination rate in g/hour
  * @param bodyWeightKg - Body weight in kg

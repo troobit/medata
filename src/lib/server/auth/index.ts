@@ -27,5 +27,6 @@ export type {
   AuthenticationVerifyResponse,
   SessionData,
   SessionStatusResponse,
-  SessionConfig
+  SessionConfig,
+  ConfigResult
 } from './types';
