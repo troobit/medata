@@ -1,5 +1,15 @@
-import adapter from '@sveltejs/adapter-vercel';
+import adapterVercel from '@sveltejs/adapter-vercel';
+import adapterNode from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+const adapterProvider = process.env.ADAPTER_PROVIDER || 'vercel';
+
+function getAdapter() {
+  if (adapterProvider === 'node') {
+    return adapterNode();
+  }
+  return adapterVercel({ runtime: 'nodejs22.x' });
+}
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -18,9 +28,7 @@ const config = {
     }
   },
   kit: {
-    adapter: adapter({
-      runtime: 'nodejs22.x'
-    }),
+    adapter: getAdapter(),
     alias: {
       $lib: './src/lib'
     },
