@@ -34,8 +34,8 @@ references:
 
 ## R4: Enforce Irish/British spelling
 
-- [ ] 12. Scan codebase for American spellings
+- [x] 12. Scan codebase for American spellings
 
-- [ ] 13. Replace American spellings with Irish/British equivalents
+- [x] 13. Replace American spellings with Irish/British equivalents
 
-- [ ] 14. Verify: No American spellings remain in codebase
+- [x] 14. Verify: No American spellings remain in codebase

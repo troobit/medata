@@ -609,7 +609,7 @@
             <h3 class="mb-3 font-semibold text-white">Requirement: 5% Accuracy Target</h3>
             {#if validationStore.accuracyMetrics.sampleCount > 0}
               <div class="space-y-2">
-                {#each [{ label: 'Carbs', value: validationStore.accuracyMetrics.mape.carbs, color: 'green' }, { label: 'Protein', value: validationStore.accuracyMetrics.mape.protein, color: 'blue' }, { label: 'Fat', value: validationStore.accuracyMetrics.mape.fat, color: 'yellow' }, { label: 'Calories', value: validationStore.accuracyMetrics.mape.calories, color: 'gray' }] as metric}
+                {#each [{ label: 'Carbs', value: validationStore.accuracyMetrics.mape.carbs, colour: 'green' }, { label: 'Protein', value: validationStore.accuracyMetrics.mape.protein, colour: 'blue' }, { label: 'Fat', value: validationStore.accuracyMetrics.mape.fat, colour: 'yellow' }, { label: 'Calories', value: validationStore.accuracyMetrics.mape.calories, colour: 'gray' }] as metric}
                   <div class="flex items-center gap-3">
                     <span class="w-20 text-sm text-gray-400">{metric.label}</span>
                     <div class="flex-1 h-2 rounded-full bg-gray-700">

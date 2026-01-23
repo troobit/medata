@@ -25,7 +25,7 @@ export interface SyntheticFoodConfig {
   name: string;
   category: FoodCategory;
   shape: FoodShapeType;
-  color: string;
+  colour: string;
   /** Width in mm */
   widthMm: number;
   /** Height in mm (for rectangle/oval) */
@@ -50,7 +50,7 @@ export interface SyntheticImageConfig {
   /** Food items to render */
   foods: SyntheticFoodConfig[];
   /** Background colour */
-  backgroundColor: string;
+  backgroundColour: string;
 }
 
 /**
@@ -70,7 +70,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
     name: 'Apple (medium)',
     category: 'fruit',
     shape: 'circle',
-    color: '#dc2626',
+    colour: '#dc2626',
     widthMm: 75,
     depthMm: 70,
     macros: { calories: 95, carbs: 25, protein: 0.5, fat: 0.3 }
@@ -79,7 +79,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
     name: 'Banana',
     category: 'fruit',
     shape: 'oval',
-    color: '#fbbf24',
+    colour: '#fbbf24',
     widthMm: 180,
     heightMm: 35,
     depthMm: 35,
@@ -89,7 +89,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
     name: 'Slice of bread',
     category: 'grain',
     shape: 'rectangle',
-    color: '#d97706',
+    colour: '#d97706',
     widthMm: 120,
     heightMm: 100,
     depthMm: 12,
@@ -99,7 +99,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
     name: 'Chicken breast (150g)',
     category: 'protein',
     shape: 'oval',
-    color: '#fef3c7',
+    colour: '#fef3c7',
     widthMm: 140,
     heightMm: 80,
     depthMm: 25,
@@ -109,7 +109,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
     name: 'Broccoli floret',
     category: 'vegetable',
     shape: 'irregular',
-    color: '#16a34a',
+    colour: '#16a34a',
     widthMm: 50,
     depthMm: 60,
     macros: { calories: 15, carbs: 3, protein: 1.3, fat: 0.2 }
@@ -118,7 +118,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
     name: 'Rice (1 cup cooked)',
     category: 'grain',
     shape: 'oval',
-    color: '#fefce8',
+    colour: '#fefce8',
     widthMm: 100,
     heightMm: 80,
     depthMm: 30,
@@ -130,7 +130,7 @@ export const SYNTHETIC_FOOD_PRESETS: SyntheticFoodConfig[] = [
  * Generate an SVG synthetic test image
  */
 export function generateSyntheticSVG(config: SyntheticImageConfig): string {
-  const { widthPx, heightPx, reference, referencePosition, foods, backgroundColor } = config;
+  const { widthPx, heightPx, reference, referencePosition, foods, backgroundColour } = config;
 
   // Calculate scale (pixels per mm) based on reference object
   const refDims = REFERENCE_DIMENSIONS[reference];
@@ -145,7 +145,7 @@ export function generateSyntheticSVG(config: SyntheticImageConfig): string {
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="0 0 ${widthPx} ${heightPx}">`;
 
   // Background
-  svg += `<rect width="100%" height="100%" fill="${backgroundColor}"/>`;
+  svg += `<rect width="100%" height="100%" fill="${backgroundColour}"/>`;
 
   // Reference object
   if (reference === 'credit-card') {
@@ -169,18 +169,18 @@ export function generateSyntheticSVG(config: SyntheticImageConfig): string {
 
     switch (food.shape) {
       case 'circle':
-        svg += `<circle cx="${foodX + foodWidthPx / 2}" cy="${foodY + foodWidthPx / 2}" r="${foodWidthPx / 2}" fill="${food.color}" stroke="#00000033" stroke-width="2"/>`;
+        svg += `<circle cx="${foodX + foodWidthPx / 2}" cy="${foodY + foodWidthPx / 2}" r="${foodWidthPx / 2}" fill="${food.colour}" stroke="#00000033" stroke-width="2"/>`;
         break;
       case 'oval':
-        svg += `<ellipse cx="${foodX + foodWidthPx / 2}" cy="${foodY + foodHeightPx / 2}" rx="${foodWidthPx / 2}" ry="${foodHeightPx / 2}" fill="${food.color}" stroke="#00000033" stroke-width="2"/>`;
+        svg += `<ellipse cx="${foodX + foodWidthPx / 2}" cy="${foodY + foodHeightPx / 2}" rx="${foodWidthPx / 2}" ry="${foodHeightPx / 2}" fill="${food.colour}" stroke="#00000033" stroke-width="2"/>`;
         break;
       case 'rectangle':
-        svg += `<rect x="${foodX}" y="${foodY}" width="${foodWidthPx}" height="${foodHeightPx}" rx="3" fill="${food.color}" stroke="#00000033" stroke-width="2"/>`;
+        svg += `<rect x="${foodX}" y="${foodY}" width="${foodWidthPx}" height="${foodHeightPx}" rx="3" fill="${food.colour}" stroke="#00000033" stroke-width="2"/>`;
         break;
       case 'irregular': {
         // Blob-like shape
         const points = generateIrregularPath(foodX, foodY, foodWidthPx, foodHeightPx);
-        svg += `<path d="${points}" fill="${food.color}" stroke="#00000033" stroke-width="2"/>`;
+        svg += `<path d="${points}" fill="${food.colour}" stroke="#00000033" stroke-width="2"/>`;
         break;
       }
     }
@@ -284,7 +284,7 @@ export function generateSyntheticTestBatch(): CreateTestDataInput[] {
         reference: 'credit-card',
         referencePosition: { x: 0.05, y: 0.7 },
         foods: [food],
-        backgroundColor: '#1f2937'
+        backgroundColour: '#1f2937'
       })
     );
   }
@@ -297,7 +297,7 @@ export function generateSyntheticTestBatch(): CreateTestDataInput[] {
       reference: 'credit-card',
       referencePosition: { x: 0.05, y: 0.7 },
       foods: [SYNTHETIC_FOOD_PRESETS[2], SYNTHETIC_FOOD_PRESETS[3]], // Bread + chicken
-      backgroundColor: '#1f2937'
+      backgroundColour: '#1f2937'
     })
   );
 
@@ -308,7 +308,7 @@ export function generateSyntheticTestBatch(): CreateTestDataInput[] {
       reference: 'coin-au-dollar',
       referencePosition: { x: 0.1, y: 0.8 },
       foods: [SYNTHETIC_FOOD_PRESETS[5], SYNTHETIC_FOOD_PRESETS[4]], // Rice + broccoli
-      backgroundColor: '#1f2937'
+      backgroundColour: '#1f2937'
     })
   );
 

@@ -28,8 +28,8 @@
   let imageLoaded = $state(false);
   let imageDimensions = $state({ width: 0, height: 0 });
 
-  // Colors for different regions
-  const regionColors = [
+  // Colours for different regions
+  const regionColours = [
     'rgba(124, 58, 237, 0.3)', // purple
     'rgba(34, 197, 94, 0.3)', // green
     'rgba(59, 130, 246, 0.3)', // blue
@@ -203,8 +203,8 @@
       {#each regions as region, i (region.id)}
         <path
           d={pixelPointsToSvgPath(region.boundary)}
-          fill={regionColors[i % regionColors.length]}
-          stroke={regionColors[i % regionColors.length].replace('0.3', '1')}
+          fill={regionColours[i % regionColours.length]}
+          stroke={regionColours[i % regionColours.length].replace('0.3', '1')}
           stroke-width="0.5"
           vector-effect="non-scaling-stroke"
         />
@@ -234,7 +234,7 @@
         <button
           type="button"
           class="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-white shadow-lg"
-          style="background-color: {regionColors[i % regionColors.length].replace('0.3', '0.9')}"
+          style="background-color: {regionColours[i % regionColours.length].replace('0.3', '0.9')}"
           onclick={() => removeRegion(region.id)}
         >
           Region {i + 1}
