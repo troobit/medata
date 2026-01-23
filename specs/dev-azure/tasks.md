@@ -26,13 +26,13 @@ references:
 
 ## R3: Build Container Workflow
 
-- [ ] 9. Investigate: Review sanarte build-container workflow
+- [x] 9. Investigate: Review sanarte build-container workflow
 
-- [ ] 10. Implement: Create .github/workflows/build-container.yml with Buildx, GHCR login, metadata extraction
+- [x] 10. Implement: Create .github/workflows/build-container.yml with Buildx, GHCR login, metadata extraction
 
-- [ ] 11. Implement: Configure workflow_dispatch trigger
+- [x] 11. Implement: Configure workflow_dispatch trigger
 
-- [ ] 12. Verify: Test workflow manually via workflow_dispatch
+- [x] 12. Verify: Test workflow manually via workflow_dispatch
 
 ## R4: Deploy Container App Workflow
 
