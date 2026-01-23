@@ -16,13 +16,13 @@ references:
 
 ## R2: ACA Configuration File
 
-- [ ] 5. Investigate: Review sanarte repo ACA config pattern
+- [x] 5. Investigate: Review sanarte repo ACA config pattern
 
-- [ ] 6. Implement: Create config/medata-ca.yaml with ingress, scaling, and env vars
+- [x] 6. Implement: Create config/medata-ca.yaml with ingress, scaling, and env vars
 
-- [ ] 7. Implement: Define secrets placeholders for KV_REST_API_URL, KV_REST_API_TOKEN, cr-password
+- [x] 7. Implement: Define secrets placeholders for KV_REST_API_URL, KV_REST_API_TOKEN, cr-password
 
-- [ ] 8. Verify: Validate YAML structure against az containerapp schema
+- [x] 8. Verify: Validate YAML structure against az containerapp schema
 
 ## R3: Build Container Workflow
 

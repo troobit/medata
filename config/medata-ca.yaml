@@ -1,0 +1,47 @@
+---
+properties:
+  environmentId: "/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/managedEnvironments/${ENVIRONMENT_NAME}"
+  configuration:
+    secrets:
+      - name: kv-rest-api-url
+        value: "${KV_REST_API_URL}"
+      - name: kv-rest-api-token
+        value: "${KV_REST_API_TOKEN}"
+      - name: cr-password
+        value: "${CR_PASSWORD}"
+    registries:
+      - server: ghcr.io
+        username: troobit
+        passwordSecretRef: cr-password
+    ingress:
+      external: true
+      targetPort: 3000
+      traffic:
+        - weight: 100
+          latestRevision: true
+    maxInactiveRevisions: 1
+  template:
+    containers:
+      - image: ghcr.io/troobit/medata:latest
+        name: medata
+        resources:
+          cpu: 0.25
+          memory: 0.5Gi
+          ephemeralStorage: 1Gi
+        env:
+          - name: KV_REST_API_URL
+            secretRef: kv-rest-api-url
+          - name: KV_REST_API_TOKEN
+            secretRef: kv-rest-api-token
+          - name: ORIGIN
+            value: "${ORIGIN}"
+          - name: BODY_SIZE_LIMIT
+            value: "Infinity"
+    scale:
+      minReplicas: 0
+      maxReplicas: 5
+      rules:
+        - name: http-scale-rule
+          http:
+            metadata:
+              concurrentRequests: "10"
