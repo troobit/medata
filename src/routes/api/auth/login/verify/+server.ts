@@ -15,7 +15,8 @@ import {
   createWebAuthnConfig,
   getCredentialStore,
   createSessionConfig,
-  getSessionService
+  getSessionService,
+  isAuthEnabled
 } from '$lib/server/auth';
 
 interface VerifyRequestBody {
@@ -24,14 +25,6 @@ interface VerifyRequestBody {
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
-    const configResult = createWebAuthnConfig(env);
-
-    if (!configResult.success) {
-      return json({ error: configResult.error, code: configResult.code }, { status: 503 });
-    }
-
-    const store = getCredentialStore();
-    const service = new WebAuthnService(configResult.config);
     const sessionConfig = createSessionConfig(env);
 
     if (!sessionConfig) {
@@ -46,6 +39,34 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const sessionService = getSessionService(sessionConfig);
+
+    // Bypass WebAuthn verification when AUTH_MODE=off
+    if (!isAuthEnabled(env)) {
+      const { token, expiresAt } = sessionService.createSession('dev-bypass');
+      const cookieOptions = sessionService.getCookieOptions();
+      cookies.set(cookieOptions.name, token, {
+        path: cookieOptions.path,
+        httpOnly: cookieOptions.httpOnly,
+        secure: cookieOptions.secure,
+        sameSite: cookieOptions.sameSite,
+        maxAge: cookieOptions.maxAge
+      });
+
+      return json({
+        verified: true,
+        expiresAt: new Date(expiresAt * 1000).toISOString()
+      });
+    }
+
+    // WebAuthn verification path (AUTH_MODE=on)
+    const configResult = createWebAuthnConfig(env);
+
+    if (!configResult.success) {
+      return json({ error: configResult.error, code: configResult.code }, { status: 503 });
+    }
+
+    const store = getCredentialStore();
+    const service = new WebAuthnService(configResult.config);
 
     // Parse request body
     const body = (await request.json()) as VerifyRequestBody;
