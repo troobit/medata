@@ -1,0 +1,84 @@
+name: Destroy Container App
+
+on:
+  workflow_dispatch:
+    inputs:
+      rg_name:
+        description: "Resource group name to delete"
+        required: true
+        default: "rg-medata-prod"
+        type: string
+      app_name:
+        description: "Container app name to delete (optional, deletes only the app)"
+        required: false
+        type: string
+      delete_resource_group:
+        description: "Delete entire resource group (including all resources)"
+        required: false
+        default: false
+        type: boolean
+      confirm_destroy:
+        description: "Type 'DESTROY' to confirm deletion"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy Azure Resources
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Validate confirmation
+        if: ${{ github.event.inputs.confirm_destroy != 'DESTROY' }}
+        run: |
+          echo "::error::Confirmation failed. You must type 'DESTROY' to confirm deletion."
+          exit 1
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          auth-type: "IDENTITY"
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          allow-no-subscriptions: true
+
+      - name: Delete Container App
+        if: ${{ github.event.inputs.app_name != '' && github.event.inputs.delete_resource_group != 'true' }}
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az containerapp delete \
+              --resource-group ${{ github.event.inputs.rg_name }} \
+              --name ${{ github.event.inputs.app_name }} \
+              --yes
+
+      - name: Delete Resource Group
+        if: ${{ github.event.inputs.delete_resource_group == 'true' }}
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az group delete \
+              --name ${{ github.event.inputs.rg_name }} \
+              --yes \
+              --no-wait
+
+      - name: Generate destruction summary
+        run: |
+          echo "## Destruction Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.delete_resource_group }}" == "true" ]; then
+            echo "### Deleted Resource Group" >> $GITHUB_STEP_SUMMARY
+            echo "- **Resource Group**: ${{ github.event.inputs.rg_name }} (deletion in progress)" >> $GITHUB_STEP_SUMMARY
+          elif [ -n "${{ github.event.inputs.app_name }}" ]; then
+            echo "### Deleted Container App" >> $GITHUB_STEP_SUMMARY
+            echo "- **Resource Group**: ${{ github.event.inputs.rg_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Container App**: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+          fi

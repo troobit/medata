@@ -1,0 +1,71 @@
+name: Deploy Container to AzCApp
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Container image and tag to deploy (e.g., ghcr.io/troobit/medata:main-a1b2c3d)"
+        required: true
+        default: "ghcr.io/troobit/medata:latest"
+        type: string
+      rg_name:
+        description: "Resource group name for deployment"
+        required: true
+        default: "rg-medata-prod"
+        type: string
+      app_name:
+        description: "Container app name for deployment"
+        required: true
+        default: "ca-medata-prod"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Deploy Container App
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Substitute image tag in config
+        run: |
+          yq e ".properties.template.containers[0].image = \"${{ github.event.inputs.image }}\"" $GITHUB_WORKSPACE/config/medata-ca.yaml -i
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          auth-type: "IDENTITY"
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          allow-no-subscriptions: true
+
+      - name: Deploy to Azure Container App
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az containerapp update \
+              --resource-group ${{ github.event.inputs.rg_name }} \
+              --name ${{ github.event.inputs.app_name }} \
+              --yaml "$GITHUB_WORKSPACE/config/medata-ca.yaml"
+
+      - name: Generate deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed Image" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo '${{ github.event.inputs.image }}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Target" >> $GITHUB_STEP_SUMMARY
+          echo "- **Resource Group**: ${{ github.event.inputs.rg_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Container App**: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY

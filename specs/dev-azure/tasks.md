@@ -36,21 +36,21 @@ references:
 
 ## R4: Deploy Container App Workflow
 
-- [ ] 13. Investigate: Review sanarte deploy-container-app workflow
+- [x] 13. Investigate: Review sanarte deploy-container-app workflow
 
-- [ ] 14. Implement: Create .github/workflows/deploy-container-app.yml with OIDC Azure login
+- [x] 14. Implement: Create .github/workflows/deploy-container-app.yml with OIDC Azure login
 
-- [ ] 15. Implement: Add workflow_dispatch inputs for image tag, rg_name, app_name
+- [x] 15. Implement: Add workflow_dispatch inputs for image tag, rg_name, app_name
 
-- [ ] 16. Implement: Add step to substitute image tag in config file before az containerapp update
+- [x] 16. Implement: Add step to substitute image tag in config file before az containerapp update
 
-- [ ] 17. Verify: Test deploy workflow against Azure environment
+- [-] 17. Verify: Test deploy workflow against Azure environment
 
-- [ ] 18. Implement: Create .github/workflows/destroy-container-app.yml with OIDC Azure login
+- [x] 18. Implement: Create .github/workflows/destroy-container-app.yml with OIDC Azure login
 
-- [ ] 19. Implement: Add workflow_dispatch inputs for image tag, rg_name, app_name
+- [x] 19. Implement: Add workflow_dispatch inputs for image tag, rg_name, app_name
 
-- [ ] 20. Implement: Add step to substitute image tag in config file before az containerapp update
+- [x] 20. Implement: Add step to substitute image tag in config file before az containerapp update
 
 - [ ] 21. Verify: Test deploy workflow against Azure environment
 
