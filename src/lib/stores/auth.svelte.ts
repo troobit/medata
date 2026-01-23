@@ -11,6 +11,7 @@ function createAuthStore() {
   let expiresAt = $state<string | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(false);
+  let authRequired = $state(true); // Whether WebAuthn is required (AUTH_MODE=on)
 
   const client = getServerAuthClient();
 
@@ -23,6 +24,7 @@ function createAuthStore() {
 
     try {
       const status = await client.getSessionStatus();
+      authRequired = status.authRequired;
       if (status.authenticated) {
         state = 'authenticated';
         expiresAt = status.expiresAt;
@@ -41,24 +43,33 @@ function createAuthStore() {
   }
 
   /**
-   * Perform full login flow with YubiKey.
-   * Gets authentication options from server, prompts for YubiKey, verifies with server.
+   * Perform login flow.
+   * When AUTH_MODE=off: bypasses WebAuthn and creates session directly.
+   * When AUTH_MODE=on: full WebAuthn flow with YubiKey.
    */
   async function login(): Promise<boolean> {
     loading = true;
     error = null;
 
     try {
-      // Get authentication options from server
-      const options = await client.getLoginOptions();
+      let result;
 
-      // Prompt for YubiKey authentication via WebAuthn browser API
-      const credential = await startAuthentication({
-        optionsJSON: options
-      });
+      if (!authRequired) {
+        // AUTH_MODE=off: bypass WebAuthn
+        result = await client.bypassLogin();
+      } else {
+        // AUTH_MODE=on: full WebAuthn flow
+        // Get authentication options from server
+        const options = await client.getLoginOptions();
 
-      // Verify credential with server
-      const result = await client.verifyLogin(credential);
+        // Prompt for YubiKey authentication via WebAuthn browser API
+        const credential = await startAuthentication({
+          optionsJSON: options
+        });
+
+        // Verify credential with server
+        result = await client.verifyLogin(credential);
+      }
 
       if (result.verified) {
         state = 'authenticated';
@@ -138,6 +149,9 @@ function createAuthStore() {
     },
     get isChecking() {
       return isChecking;
+    },
+    get authRequired() {
+      return authRequired;
     },
     checkSession,
     login,

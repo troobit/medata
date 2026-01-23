@@ -21,9 +21,9 @@ references:
 
 ## R2: Deployed dev with auth mode option
 
-- [ ] 5. Verify: Deploy to Vercel with AUTH_MODE=off → login bypasses Yubikey
+- [x] 5. Verify: Deploy to Vercel with AUTH_MODE=off → login bypasses Yubikey
 
-- [ ] 6. Verify: Deploy to Vercel with AUTH_MODE=on → Yubikey required
+- [x] 6. Verify: Deploy to Vercel with AUTH_MODE=on → Yubikey required
 
 ## R3: Simple mode switching
 
