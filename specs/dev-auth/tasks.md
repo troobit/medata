@@ -27,8 +27,8 @@ references:
 
 ## R3: Simple mode switching
 
-- [ ] 7. Add pnpm scripts for local mode switching
+- [x] 7. Add pnpm scripts for local mode switching
   - `"dev": "AUTH_MODE=off vite dev"`
   - `"dev:auth": "AUTH_MODE=on vite dev"`
 
-- [ ] 8. Verify: `pnpm dev` bypasses auth, `pnpm dev:auth` requires Yubikey
+- [x] 8. Verify: `pnpm dev` bypasses auth, `pnpm dev:auth` requires Yubikey
