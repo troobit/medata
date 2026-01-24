@@ -8,7 +8,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 
-import { createSessionConfig, getSessionService } from '$lib/server/auth';
+import { createSessionConfig, getSessionService, isAuthEnabled } from '$lib/server/auth';
 import type { SessionStatusResponse } from '$lib/server/auth';
 
 export const GET: RequestHandler = async ({ cookies }) => {
@@ -32,10 +32,13 @@ export const GET: RequestHandler = async ({ cookies }) => {
     const cookieOptions = sessionService.getCookieOptions();
     const token = cookies.get(cookieOptions.name);
 
+    const authRequired = isAuthEnabled(env);
+
     if (!token) {
       const response: SessionStatusResponse = {
         authenticated: false,
-        expiresAt: null
+        expiresAt: null,
+        authRequired
       };
       return json(response);
     }
@@ -46,14 +49,16 @@ export const GET: RequestHandler = async ({ cookies }) => {
     if (!sessionData) {
       const response: SessionStatusResponse = {
         authenticated: false,
-        expiresAt: null
+        expiresAt: null,
+        authRequired
       };
       return json(response);
     }
 
     const response: SessionStatusResponse = {
       authenticated: true,
-      expiresAt: new Date(sessionData.expiresAt * 1000).toISOString()
+      expiresAt: new Date(sessionData.expiresAt * 1000).toISOString(),
+      authRequired
     };
 
     return json(response);

@@ -2,6 +2,7 @@
  * Server-side authentication module
  */
 
+export { getAuthMode, isAuthEnabled, type AuthMode } from './config';
 export { WebAuthnService, createWebAuthnConfig } from './WebAuthnService';
 export { FileCredentialStore, getFileCredentialStore } from './FileCredentialStore';
 export { KVCredentialStore, getKVCredentialStore } from './KVCredentialStore';

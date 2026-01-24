@@ -153,6 +153,7 @@ export interface SessionData {
 export interface SessionStatusResponse {
   authenticated: boolean;
   expiresAt: string | null; // ISO timestamp
+  authRequired: boolean; // Whether WebAuthn auth is required (AUTH_MODE=on)
 }
 
 /**

@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "AUTH_MODE=off vite dev",
+    "dev:auth": "AUTH_MODE=on vite dev",
     "build": "node scripts/generate-icons.js && vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
