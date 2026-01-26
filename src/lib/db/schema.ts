@@ -84,10 +84,10 @@ export async function checkDatabaseAvailability(): Promise<string | null> {
     if (error instanceof Error) {
       // Check for common IndexedDB errors
       if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
-        return 'Storage quota exceeded. Please free up some space.';
+        return 'Storage quota exceeded.';
       }
       if (error.message.includes('private browsing') || error.message.includes('Private mode')) {
-        return 'Private/Incognito browsing mode detected. Please use a regular browser window.';
+        return 'Private/Incognito browsing will not work for Dexie DB';
       }
       return `Database error: ${error.message}`;
     }

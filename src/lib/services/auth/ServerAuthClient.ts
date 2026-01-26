@@ -114,6 +114,29 @@ export class ServerAuthClient {
   }
 
   /**
+   * Bypass login when AUTH_MODE=off.
+   * Calls verify endpoint without a credential to create a dev session.
+   * @returns Verification result with session expiry
+   */
+  async bypassLogin(): Promise<LoginVerifyResponse> {
+    const response = await fetch('/api/auth/login/verify', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+
+    if (!response.ok) {
+      const error = (await response.json()) as AuthErrorResponse;
+      throw new ServerAuthClientError(error.error, error.code, response.status);
+    }
+
+    return response.json() as Promise<LoginVerifyResponse>;
+  }
+
+  /**
    * Logout and clear the session.
    * @returns Logout result
    */
