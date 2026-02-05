@@ -8,37 +8,37 @@ references:
 
 ## Phase 1: Project Scaffold & Branding
 
-- [ ] 1. Initialize SvelteKit project with Svelte 5 and TypeScript strict mode
+- [x] 1. Initialize SvelteKit project with Svelte 5 and TypeScript strict mode
   - Research SvelteKit best practices before setup
   - Configure tsconfig.json with strict mode per constitution §6.4
   - Verify npm run dev starts successfully
 
-- [ ] 2. Configure Tailwind CSS 4.x with brand colours
+- [x] 2. Configure Tailwind CSS 4.x with brand colours
   - Brand accent: #63ff00 (neon green)
   - Brand background: #064e3b (dark teal)
   - Primary background: #0a0a0a (gray-950)
   - Per constitution §10
 
-- [ ] 3. Create PWA manifest.json with existing static assets
+- [x] 3. Create PWA manifest.json with existing static assets
   - Req NF.5: PWA installable
   - Use static/icon.svg as primary icon
   - Use static/favicon.ico as fallback
   - Set theme_color to #63ff00
   - Set background_color to #0a0a0a
 
-- [ ] 4. Configure app.html with favicons and manifest link
+- [x] 4. Configure app.html with favicons and manifest link
   - Link favicon-default.svg as primary icon
   - Link favicon.ico as alternate
   - Add manifest link
   - Add theme-color meta tag
   - Add apple-mobile-web-app-capable meta
 
-- [ ] 5. Create AppShell layout component with logo
+- [x] 5. Create AppShell layout component with logo
   - Req 9.1, 9.2, 9.4: Mobile-first responsive layout
   - Integrate static/icon.svg in header
   - 44px minimum tap targets
 
-- [ ] 6. Create home page with action buttons
+- [x] 6. Create home page with action buttons
   - Req 9.1, 9.2: Mobile-first UI
   - Capture Meal button
   - Manual Entry button
@@ -46,12 +46,13 @@ references:
   - Empty logbook placeholder
   - Per design §7.5 first-run experience
 
-- [ ] 7. Create .env.example with required environment variables
+- [x] 7. Create .env.example with required environment variables
   - Req 11.1: Load API keys from env vars
-  - AI provider API keys placeholder
-  - Azure Cosmos DB connection string
-  - Azure Blob Storage connection string
-  - Document all required vars
+  - ANTHROPIC_API_KEY - Claude API key for food recognition
+  - AZURE_COSMOS_CONNECTION_STRING - Cosmos DB connection string
+  - AZURE_BLOB_STORAGE_URL - Blob storage container URL with SAS token
+  - Document all required vars with descriptions
+  - Note: .env.local should be updated to use these standardised names
 
 ## Phase 2: Photo Capture & AI Recognition
 
@@ -73,11 +74,12 @@ references:
   - Property: Empty array returns zeros
   - Property: Single item returns same values
   - Per design §6.3
+  - Test-first: write before implementation
 
 - [ ] 11. Implement sumMacros utility function
   - Calculate totals from FoodItem array
   - Used before saving meals (D-DES-012)
-  - Must pass property-based tests
+  - Must pass property-based tests from task 10
 
 - [ ] 12. Create CameraCapture component
   - Req 1.1: Use rear-facing camera via MediaDevices API
@@ -96,10 +98,11 @@ references:
   - isConfigured() method
   - getProviderName() method
 
-- [ ] 15. Research AI prompt design for food recognition
+- [ ] 15. [RESEARCH] AI prompt design for food recognition
+  - RESEARCH TASK - no code changes
   - Per design §1.5 research tasks
   - Test prompts with various food photos
-  - Document final prompt template
+  - Document final prompt template in specs/
   - Ensure structured JSON output (D-DES-001)
 
 - [ ] 16. Implement Claude food recognition service
@@ -107,6 +110,7 @@ references:
   - Req 2.6: 10-second timeout (D-DES-013)
   - Use structured JSON mode (D-DES-001)
   - Return RecognisedFoodItem array
+  - Depends on research task 15
 
 - [ ] 17. Create POST /api/ai/recognise endpoint
   - Per design §4.4
@@ -159,25 +163,31 @@ references:
   - Req 9.3: Complete in 3 or fewer actions
   - Photo → Review → Save flow
   - Convert RecognisedFoodItem to FoodItem (discard quantity/unit per D-DES-014)
+  - Integrates tasks 12, 13, 17, 18, 22
 
 - [ ] 26. Write integration tests for meal creation flow
   - Test Zod validation rejects negative macros
   - Test totals are calculated correctly
   - Test timestamp is stored as UTC Unix ms
+  - Depends on tasks 9, 11, 20
 
 ## Phase 4: Meal Storage & History
 
-- [ ] 27. Research Cosmos DB partition strategy for day-based queries
+- [ ] 27. [RESEARCH] Cosmos DB partition strategy for day-based queries
+  - RESEARCH TASK - no code changes
   - Per design §1.5 research tasks
   - Validate day-based partition key (YYYY-MM-DD)
   - Test date range query performance
-  - Document findings and update design if needed
+  - Document findings in specs/ and update design if needed
+  - Azure credentials configured - ready to test
 
-- [ ] 28. Research image upload orchestration best practices
+- [ ] 28. [RESEARCH] Image upload orchestration best practices
+  - RESEARCH TASK - no code changes
   - Per design §1.5 research tasks
   - Best practice for capture → upload → AI → save flow
   - Per D-DES-010: Server-side upload using @azure/storage-blob
-  - Document sequence and update design if needed
+  - Document sequence in specs/ and update design if needed
+  - Azure credentials configured - ready to test
 
 - [ ] 29. Create IMealRepository interface
   - Per design §3.3
@@ -189,6 +199,7 @@ references:
   - Use YYYY-MM-DD partition key (D-DES-007)
   - Req 10.1, 10.2: Set createdAt and updatedAt timestamps
   - Use @azure/cosmos SDK
+  - Uses AZURE_COSMOS_CONNECTION_STRING from .env.local
 
 - [ ] 31. Create IImageRepository interface
   - Per design §3.3
@@ -198,8 +209,9 @@ references:
 - [ ] 32. Implement Azure Blob Storage image repository
   - Req 4.3, 11.2: Secure server-side upload
   - Per design §4.3: images/meals/ and images/labels/ folders
-  - D-DES-002: Configure 30-day TTL via lifecycle policy
+  - D-DES-002: 30-day TTL via lifecycle policy (configure in Azure portal)
   - Max 10MB image size
+  - Uses AZURE_BLOB_STORAGE_URL from .env.local
 
 - [ ] 33. Create POST /api/images/upload endpoint
   - Per design §3.4
@@ -248,6 +260,7 @@ references:
   - Test getByDay returns correct meals
   - Test update modifies updatedAt
   - Test delete removes meal
+  - Depends on tasks 30, 34
 
 ## Phase 5: Manual Entry Mode
 
@@ -288,6 +301,7 @@ references:
   - Per design §4.2
   - Use /category partition key
   - presets container in medata database
+  - Uses AZURE_COSMOS_CONNECTION_STRING from .env.local
 
 - [ ] 48. Create preset API endpoints
   - POST /api/presets - create
@@ -331,6 +345,7 @@ references:
   - Test create with emoji name
   - Test getByCategory returns correct presets
   - Test update and delete
+  - Depends on tasks 47, 48
 
 ## Phase 7: Label Scanning (Unified Flow)
 
@@ -364,3 +379,4 @@ references:
   - Curate test photos of Australian nutrition labels
   - Test per-serving and per-100g extraction
   - Verify portion estimation from food photo
+  - Manual testing per design §6.2
