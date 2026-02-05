@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- FoodItemCard component for inline editing of food items with large tap targets (44px minimum)
+- MealEditor component for editing AI results before saving with auto-recalculating totals
+- Timestamp adjustment in MealEditor defaulting to current time with backdating support
+- Toast notification component for visual confirmation on save
+- ToastContainer component and toast store for global notification management
+- Full capture flow wiring: CameraCapture → AI Recognition → MealEditor → Save
+- /capture route implementing the complete photo-to-save flow
+- Integration tests for meal creation flow validating Zod schemas and timestamp handling
+
 - Core TypeScript types for meals and food items (FoodItem, MacroData, RecognisedFoodItem, Meal, Preset)
 - Zod validation schemas for food items with non-negative macro validation
 - Property-based tests for macro calculation utility using fast-check

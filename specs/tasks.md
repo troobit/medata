@@ -131,41 +131,41 @@ references:
 
 ## Phase 3: Edit, Review & Save Flow
 
-- [ ] 20. Create Meal type and CreateMealInput schema
+- [x] 20. Create Meal type and CreateMealInput schema
   - Per design §4.1
   - Include totalCarbs, totalProtein, totalFat (D-DES-012)
   - Zod schema for validation
   - Req 4.1: timestamp, items, totals, source, imageUrl
 
-- [ ] 21. Create FoodItemCard component
+- [x] 21. Create FoodItemCard component
   - Req 3.7, 9.2: Large tap targets (44px minimum)
   - Req 5.2: Inline editing of name, carbs, protein, fat
   - Req 5.3: Remove item button
   - Optional confidence badge display
 
-- [ ] 22. Create MealEditor component
+- [x] 22. Create MealEditor component
   - Req 3.6, 5.1: Editable AI results before saving
   - Req 3.2, 5.4: Add new food items
   - Req 3.3, 5.5: Auto-recalculate totals on change
   - Req 5.6: Preserve original AI confidence scores
 
-- [ ] 23. Add timestamp adjustment to MealEditor
+- [x] 23. Add timestamp adjustment to MealEditor
   - Req 4.4: Default to current time
   - Req 4.5: Allow backdating meals
   - Req 4.7: Store as UTC Unix milliseconds
 
-- [ ] 24. Create Toast notification component
+- [x] 24. Create Toast notification component
   - Req 4.6: Visual confirmation on save
   - Req 9.7: Direct messages without apologies
   - Show Meal saved on successful save
 
-- [ ] 25. Wire capture flow: CameraCapture → AI → MealEditor → Save
+- [x] 25. Wire capture flow: CameraCapture → AI → MealEditor → Save
   - Req 9.3: Complete in 3 or fewer actions
   - Photo → Review → Save flow
   - Convert RecognisedFoodItem to FoodItem (discard quantity/unit per D-DES-014)
   - Integrates tasks 12, 13, 17, 18, 22
 
-- [ ] 26. Write integration tests for meal creation flow
+- [x] 26. Write integration tests for meal creation flow
   - Test Zod validation rejects negative macros
   - Test totals are calculated correctly
   - Test timestamp is stored as UTC Unix ms
