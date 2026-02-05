@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- IPresetRepository interface for preset data persistence with CRUD operations (Req 6.1-6.8)
+- CosmosPresetRepository implementing Azure Cosmos DB storage with category-based partition keys
+- POST /api/presets endpoint for creating new presets
+- GET /api/presets endpoint for listing all presets
+- GET/PUT/DELETE /api/presets/[id] endpoints for preset retrieval, update, and deletion
+- PresetCard component displaying preset name, category, and macro totals with edit/delete actions
+- PresetList component grouping presets by category (meal/snack) with tap-to-apply functionality
+- Preset API client service (preset-api.ts) for client-side API calls
+- /presets route for viewing, applying, editing, and deleting presets
+- "Save as Preset" button in MealEditor with modal for name and category input
+- Apply preset flow creating new meals with source: 'preset' and allowing modification before save
+- Integration tests for preset repository CRUD operations (20 tests including emoji-only names)
+
+### Changed
+- MealEditor component now accepts optional onSaveAsPreset callback for preset creation
+- Components index exports PresetCard and PresetList
+- Services index exports preset API functions
+- Repositories index exports IPresetRepository and CosmosPresetRepository
+
+---
+
+### Added
 - ManualEntryForm component for quick manual food entry with minimal form (name, carbs, protein, fat)
 - Multiple items support in ManualEntryForm with Add Item button and auto-calculated aggregate totals
 - /manual route implementing ManualEntryForm → MealEditor → Save flow

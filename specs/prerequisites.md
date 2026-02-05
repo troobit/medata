@@ -6,36 +6,35 @@ These tasks must be completed by the user before or during implementation. They 
 
 ## Before Starting
 
-- [ ] **AI Provider API Key** - Obtain API key for at least one AI provider
-  - Claude API key from Anthropic (recommended)
-  - OR OpenAI API key
-  - OR Gemini API key
-  - Store securely - will be added to environment variables
+- [x] **AI Provider API Key** - Obtain API key for at least one AI provider *(COMPLETED)*
+  - Claude API key from Anthropic (recommended) - configured as `CLAUDE_API_KEY`
+  - ~~OR OpenAI API key~~
+  - ~~OR Gemini API key~~
+  - Stored in `.env.local`
 
 ---
 
 ## Before Phase 4 (Meal Storage & History)
 
-- [ ] **Azure Cosmos DB Setup**
-  - Create Azure account if not exists
-  - Create Cosmos DB account (free tier available)
-  - Create database named `medata`
-  - Create containers: `meals` (partition key: `/partitionKey`) and `presets` (partition key: `/category`)
-  - Copy connection string for environment variables
+- [x] **Azure Cosmos DB Setup** *(COMPLETED)*
+  - Azure account exists
+  - Cosmos DB account configured at `dbmedata.documents.azure.com`
+  - Database and containers to be created on first use (or verify exist)
+  - Connection string configured as `PRIMARY_CONNECTION_STRING` in `.env.local`
   - **Blocks tasks:** 30, 47
 
-- [ ] **Azure Blob Storage Setup**
-  - Create Storage Account in Azure
-  - Create container named `images`
-  - Configure lifecycle management policy for 30-day TTL on images
-  - Copy connection string for environment variables
+- [x] **Azure Blob Storage Setup** *(COMPLETED)*
+  - Storage Account: `medatablobs`
+  - Container: `images`
+  - SAS token configured as `BLOB_SAS_TOKEN` and `BLOB_SAS_URL` in `.env.local`
+  - Note: 30-day TTL lifecycle policy should be configured in Azure portal
   - **Blocks tasks:** 32, 33
 
-- [ ] **Environment Variables Configuration**
-  - Copy `.env.example` to `.env.local`
-  - Add AI provider API key: `ANTHROPIC_API_KEY` or equivalent
-  - Add Cosmos DB connection string: `COSMOS_CONNECTION_STRING`
-  - Add Blob Storage connection string: `BLOB_STORAGE_CONNECTION_STRING`
+- [x] **Environment Variables Configuration** *(COMPLETED - needs renaming)*
+  - `.env.local` exists with credentials (rename variables during task 7):
+    - `CLAUDE_API_KEY` → `ANTHROPIC_API_KEY`
+    - `AZURE_DB_URI`, `PRIMARY_KEY`, `PRIMARY_CONNECTION_STRING` → `AZURE_COSMOS_CONNECTION_STRING`
+    - `BLOB_SAS_TOKEN`, `BLOB_SAS_URL` → `AZURE_BLOB_STORAGE_URL`
   - **Blocks tasks:** 16, 30, 32
 
 ---

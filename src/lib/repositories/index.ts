@@ -4,8 +4,10 @@
 
 // Interfaces
 export type { IMealRepository } from './meal-repository.js';
+export type { IPresetRepository } from './preset-repository.js';
 export type { IImageRepository, ImageFolder } from './image-repository.js';
 
 // Implementations
 export { CosmosMealRepository, getMealRepository } from './cosmos-meal-repository.js';
+export { CosmosPresetRepository, getPresetRepository } from './cosmos-preset-repository.js';
 export { BlobImageRepository, getImageRepository } from './blob-image-repository.js';

@@ -287,61 +287,61 @@ references:
 
 ## Phase 6: Meal Presets
 
-- [ ] 45. Create Preset type and Zod schemas
+- [x] 45. Create Preset type and Zod schemas
   - Per design §4.1
   - Req 6.1: Allow emoji-only names
   - Req 6.2: name, category (meal/snack), items, totals
   - PresetCategory type: meal | snack
 
-- [ ] 46. Create IPresetRepository interface
+- [x] 46. Create IPresetRepository interface
   - Per design §3.3
   - create, getById, getAll, getByCategory, update, delete methods
 
-- [ ] 47. Implement Cosmos DB preset repository
+- [x] 47. Implement Cosmos DB preset repository
   - Per design §4.2
   - Use /category partition key
   - presets container in medata database
   - Uses AZURE_COSMOS_CONNECTION_STRING from .env.local
 
-- [ ] 48. Create preset API endpoints
+- [x] 48. Create preset API endpoints
   - POST /api/presets - create
   - GET /api/presets - list all
   - GET /api/presets/[id] - get by ID
   - PUT /api/presets/[id] - update
   - DELETE /api/presets/[id] - delete
 
-- [ ] 49. Add Save as Preset button to MealEditor
+- [x] 49. Add Save as Preset button to MealEditor
   - Req 6.1: Save any meal as named preset
   - Prompt for name and category
   - Save via POST /api/presets
 
-- [ ] 50. Create PresetCard component
+- [x] 50. Create PresetCard component
   - Display preset name and total macros
   - Tap to apply
   - Edit/delete actions
 
-- [ ] 51. Create PresetList component
+- [x] 51. Create PresetList component
   - Req 6.3: List all presets
   - Group by category (meal/snack)
   - Tap preset to apply
 
-- [ ] 52. Implement apply preset functionality
+- [x] 52. Implement apply preset functionality
   - Req 6.3: Create new meal in single action
   - Req 6.8: Allow modification before saving
   - Navigate PresetList → MealEditor with preset data
   - Save with source: preset
 
-- [ ] 53. Implement edit/delete preset functionality
+- [x] 53. Implement edit/delete preset functionality
   - Req 6.6: Edit preset details after creation
   - Req 6.7: Delete presets
   - Confirmation before delete
 
-- [ ] 54. Connect From Preset button on home page
+- [x] 54. Connect From Preset button on home page
   - Navigate to PresetList
   - Show No presets yet when empty
   - Return to home after applying preset
 
-- [ ] 55. Write integration tests for preset CRUD operations
+- [x] 55. Write integration tests for preset CRUD operations
   - Test create with emoji name
   - Test getByCategory returns correct presets
   - Test update and delete
