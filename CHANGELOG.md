@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- IMealRepository interface for meal data persistence with CRUD operations
+- CosmosMealRepository implementing Azure Cosmos DB storage with day-based partition keys
+- IImageRepository interface for blob storage operations
+- BlobImageRepository implementing Azure Blob Storage for meal images
+- POST /api/images/upload endpoint for server-side image uploads
+- POST /api/meals endpoint for creating new meals
+- GET /api/meals/day/[date] endpoint for retrieving meals by day
+- GET/PUT/DELETE /api/meals/[id] endpoints for meal retrieval, update, and deletion
+- LogbookList component displaying meal history with expandable cards grouped by date
+- MealDetail component for full meal detail view with image display and action buttons
+- Meal API client service (meal-api.ts) for client-side API calls
+- Integration tests for meal repository operations using in-memory implementation
+- Decision log entries D-DES-016 (Image Upload Orchestration) and D-DES-017 (Cosmos DB Partition Strategy Validation)
+- Home page now displays recent meals logbook with edit/delete functionality
+
+### Changed
+- Home page updated to load and display recent meals from API with loading and error states
+- Added @azure/cosmos and @azure/storage-blob dependencies for Azure services
+- Added @types/node for Node.js type definitions
+
 - FoodItemCard component for inline editing of food items with large tap targets (44px minimum)
 - MealEditor component for editing AI results before saving with auto-recalculating totals
 - Timestamp adjustment in MealEditor defaulting to current time with backdating support

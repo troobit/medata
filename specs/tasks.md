@@ -173,7 +173,7 @@ references:
 
 ## Phase 4: Meal Storage & History
 
-- [ ] 27. [RESEARCH] Cosmos DB partition strategy for day-based queries
+- [x] 27. [RESEARCH] Cosmos DB partition strategy for day-based queries
   - RESEARCH TASK - no code changes
   - Per design §1.5 research tasks
   - Validate day-based partition key (YYYY-MM-DD)
@@ -181,7 +181,7 @@ references:
   - Document findings in specs/ and update design if needed
   - Azure credentials configured - ready to test
 
-- [ ] 28. [RESEARCH] Image upload orchestration best practices
+- [x] 28. [RESEARCH] Image upload orchestration best practices
   - RESEARCH TASK - no code changes
   - Per design §1.5 research tasks
   - Best practice for capture → upload → AI → save flow
@@ -189,38 +189,38 @@ references:
   - Document sequence in specs/ and update design if needed
   - Azure credentials configured - ready to test
 
-- [ ] 29. Create IMealRepository interface
+- [x] 29. Create IMealRepository interface
   - Per design §3.3
   - create, getById, getByDay, getByDateRange, update, delete methods
   - Req 4.8: Never delete without explicit user action
 
-- [ ] 30. Implement Cosmos DB meal repository
+- [x] 30. Implement Cosmos DB meal repository
   - Per design §4.2
   - Use YYYY-MM-DD partition key (D-DES-007)
   - Req 10.1, 10.2: Set createdAt and updatedAt timestamps
   - Use @azure/cosmos SDK
   - Uses AZURE_COSMOS_CONNECTION_STRING from .env.local
 
-- [ ] 31. Create IImageRepository interface
+- [x] 31. Create IImageRepository interface
   - Per design §3.3
   - upload(image, folder, filename) returns URL
   - delete(url) method
 
-- [ ] 32. Implement Azure Blob Storage image repository
+- [x] 32. Implement Azure Blob Storage image repository
   - Req 4.3, 11.2: Secure server-side upload
   - Per design §4.3: images/meals/ and images/labels/ folders
   - D-DES-002: 30-day TTL via lifecycle policy (configure in Azure portal)
   - Max 10MB image size
   - Uses AZURE_BLOB_STORAGE_URL from .env.local
 
-- [ ] 33. Create POST /api/images/upload endpoint
+- [x] 33. Create POST /api/images/upload endpoint
   - Per design §3.4
   - Accept multipart/form-data
   - Validate JPEG/PNG and size limit
   - Return imageUrl
   - Req 11.5: Credentials server-side only
 
-- [ ] 34. Create meal API endpoints
+- [x] 34. Create meal API endpoints
   - Per design §4.4
   - POST /api/meals - create meal
   - GET /api/meals/day/[date] - get by day
@@ -228,34 +228,34 @@ references:
   - PUT /api/meals/[id] - update
   - DELETE /api/meals/[id] - delete
 
-- [ ] 35. Create LogbookList component
+- [x] 35. Create LogbookList component
   - Req 8.1: Chronological list, newest first
   - Req 8.2: Show timestamp, total carbs, item count
   - Per design §3.2: Expandable cards
 
-- [ ] 36. Create MealDetail component
+- [x] 36. Create MealDetail component
   - Req 8.3: Expand to view full details
   - Req 8.6: Display associated photo if available
   - D-DES-004: Show placeholder on image 404
   - Edit and Delete action buttons
 
-- [ ] 37. Implement edit saved meal functionality
+- [x] 37. Implement edit saved meal functionality
   - Req 8.4: Edit saved meals after storage
   - Open MealEditor with existing data
   - Update via PUT /api/meals/[id]
   - Update updatedAt timestamp
 
-- [ ] 38. Implement delete meal functionality
+- [x] 38. Implement delete meal functionality
   - Req 8.5: Delete from logbook
   - Confirmation before delete
   - Delete via DELETE /api/meals/[id]
 
-- [ ] 39. Wire logbook into home page
+- [x] 39. Wire logbook into home page
   - Show recent meals on home page
   - Navigate to full logbook view
   - Per design §7.5: Logbook: No meals yet when empty
 
-- [ ] 40. Write integration tests for meal CRUD operations
+- [x] 40. Write integration tests for meal CRUD operations
   - Test create returns 201 with all fields
   - Test getByDay returns correct meals
   - Test update modifies updatedAt

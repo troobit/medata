@@ -10,3 +10,5 @@ export { default as FoodItemCard } from './FoodItemCard.svelte';
 export { default as MealEditor } from './MealEditor.svelte';
 export { default as Toast } from './Toast.svelte';
 export { default as ToastContainer } from './ToastContainer.svelte';
+export { default as LogbookList } from './LogbookList.svelte';
+export { default as MealDetail } from './MealDetail.svelte';

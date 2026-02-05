@@ -253,6 +253,48 @@ This document records all decisions made during the requirements and design phas
 **Rationale:** Image retention is nice-to-have, not need-to-have. The 30-day TTL will clean up orphans. Adding transactional rollback adds complexity without significant benefit.
 **Impact:** No rollback mechanism needed. Server-side logging for monitoring orphaned images.
 
+### D-DES-016: Image Upload Orchestration
+**Date:** 2026-02-05
+**Question:** What is the best practice for capture → upload → AI → save flow with Azure Blob Storage?
+**Decision:** Server-side upload using @azure/storage-blob SDK with SAS tokens.
+**Research Findings:**
+- Upload flow: Client sends multipart/form-data to SvelteKit server action
+- Server receives file as `File` from `request.formData()`
+- Server generates short-lived SAS token (3 min expiry) for upload
+- Upload uses `BlockBlobClient.uploadData(Buffer.from(await file.arrayBuffer()))`
+- Security: Storage account keys never exposed to client, HTTPS only
+**Recommended Flow:**
+1. Client: `POST /api/images/upload` with multipart/form-data
+2. Server: Validate JPEG/PNG, check size limit (10MB)
+3. Server: Generate unique filename (UUID)
+4. Server: Upload to Azure Blob using connection string (simpler than SAS for server-side)
+5. Server: Return blob URL to client
+6. Client: Include imageUrl in meal save request
+**Implementation Notes:**
+- Use `AZURE_BLOB_STORAGE_CONNECTION_STRING` env var (contains account name + key)
+- Container: `images` with subfolders `meals/` and `labels/`
+- Configure 30-day lifecycle policy in Azure portal (D-DES-002)
+- No client-side upload to avoid exposing credentials
+**Impact:** Server-side upload endpoint required. Use @azure/storage-blob SDK.
+**Sources:** [SvelteKit Azure Blob Upload](https://lojeda.co/blog/file-upload-svelte/), [Microsoft Azure Best Practices](https://learn.microsoft.com/en-us/azure/well-architected/service-guides/azure-blob-storage)
+
+### D-DES-017: Cosmos DB Partition Strategy Validation
+**Date:** 2026-02-05
+**Question:** Is YYYY-MM-DD partition key appropriate for day-based meal queries?
+**Decision:** Yes. YYYY-MM-DD partition key is validated for the MVP use case.
+**Research Findings:**
+- Azure recommends high cardinality partition keys (hundreds/thousands of distinct values)
+- For small-scale apps (<30,000 RU/s, <100 GB), partition strategy is less critical
+- Cross-partition queries add 2-3 RU/s per physical partition scanned
+- Day-based keys work well when:
+  1. Primary query pattern is by day (which matches our logbook/history view)
+  2. Data volume per day is reasonable (<50 GB limit per logical partition)
+  3. Application is single-user with moderate write volume
+- For larger scale, hierarchical keys (userId + date) would be preferred
+**Rationale:** Single-user MVP with day-based views. A typical user logs ~5-10 meals/day. Even over years, data per partition stays well under limits. Day-based queries (getByDay) are efficiently served by single partition reads.
+**Impact:** Use `/partitionKey` with YYYY-MM-DD format. Design validated, no changes needed.
+**Sources:** [Microsoft Partitioning Overview](https://learn.microsoft.com/en-us/azure/cosmos-db/partitioning-overview)
+
 ---
 
 ## Architecture Decisions
