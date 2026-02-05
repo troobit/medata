@@ -264,23 +264,23 @@ references:
 
 ## Phase 5: Manual Entry Mode
 
-- [ ] 41. Create ManualEntryForm component
+- [x] 41. Create ManualEntryForm component
   - Req 3.1: Minimal form with name, carbs, protein, fat
   - Req 3.5: Works without requiring a photo
   - Req 3.7: Large tap targets for quick adjustment
   - Optional photo attachment
 
-- [ ] 42. Add multiple items support to ManualEntryForm
+- [x] 42. Add multiple items support to ManualEntryForm
   - Req 3.2: Add multiple food items to single meal
   - Req 3.3: Auto-calculate aggregate totals
   - Add Item button
 
-- [ ] 43. Wire ManualEntryForm to MealEditor and save flow
+- [x] 43. Wire ManualEntryForm to MealEditor and save flow
   - Req 4.2: Record source as manual
   - Navigate ManualEntryForm → MealEditor → Save
   - Save with source: manual
 
-- [ ] 44. Connect Manual Entry button on home page
+- [x] 44. Connect Manual Entry button on home page
   - Navigate to ManualEntryForm
   - Return to home after save
   - Toast confirmation on save

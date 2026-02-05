@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ManualEntryForm component for quick manual food entry with minimal form (name, carbs, protein, fat)
+- Multiple items support in ManualEntryForm with Add Item button and auto-calculated aggregate totals
+- /manual route implementing ManualEntryForm → MealEditor → Save flow
+- Manual entry records source as 'manual' per Req 4.2
+
+### Changed
+- Components index exports ManualEntryForm
+
+---
+
+### Added
 - IMealRepository interface for meal data persistence with CRUD operations
 - CosmosMealRepository implementing Azure Cosmos DB storage with day-based partition keys
 - IImageRepository interface for blob storage operations
