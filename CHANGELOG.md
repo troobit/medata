@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Core TypeScript types for meals and food items (FoodItem, MacroData, RecognisedFoodItem, Meal, Preset)
+- Zod validation schemas for food items with non-negative macro validation
+- Property-based tests for macro calculation utility using fast-check
+- sumMacros utility function for calculating total macros from food items array
+- CameraCapture component with MediaDevices API support for rear-facing camera and gallery fallback
+- ImagePreview component for displaying captured image with confirm/retake options
+- IFoodRecognitionService interface for AI food recognition providers
+- ClaudeFoodRecognitionService implementing Claude API integration with 10-second timeout
+- POST /api/ai/recognise endpoint accepting base64 images and returning structured food recognition results
+- FoodRecognitionResult component displaying itemised food list with macros and confidence scores
+- AIErrorFallback component for handling AI recognition errors with retry and manual entry options
+- AI prompt design documentation in specs/ai-prompt-design.md with Claude vision best practices
+- Vitest configuration for unit testing with jsdom environment
+
+### Changed
+- Updated vite.config.ts to use vitest/config for test configuration
+
 - Initial SvelteKit project scaffold with Svelte 5 and TypeScript strict mode
 - Tailwind CSS 4.x configuration with brand colours (#63ff00 accent, #064e3b background, #0a0a0a primary)
 - PWA manifest.json with app icons and theme colours

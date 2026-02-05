@@ -56,19 +56,19 @@ references:
 
 ## Phase 2: Photo Capture & AI Recognition
 
-- [ ] 8. Create core TypeScript types for meals and food items
+- [x] 8. Create core TypeScript types for meals and food items
   - FoodItem interface (name, carbs, protein, fat)
   - MacroData interface
   - MealDataSource type
   - RecognisedFoodItem interface (with quantity/unit for AI response)
   - Per design §4.1
 
-- [ ] 9. Create Zod validation schemas for food items
+- [x] 9. Create Zod validation schemas for food items
   - Req 3.4: Validate non-negative numbers
   - Req 10.3, 10.5: Raw grams, no artificial ranges
   - FoodItemSchema with nonnegative() validation
 
-- [ ] 10. Write property-based tests for macro calculation utility
+- [x] 10. Write property-based tests for macro calculation utility
   - Use fast-check for PBT
   - Property: Sum is always non-negative
   - Property: Empty array returns zeros
@@ -76,55 +76,55 @@ references:
   - Per design §6.3
   - Test-first: write before implementation
 
-- [ ] 11. Implement sumMacros utility function
+- [x] 11. Implement sumMacros utility function
   - Calculate totals from FoodItem array
   - Used before saving meals (D-DES-012)
   - Must pass property-based tests from task 10
 
-- [ ] 12. Create CameraCapture component
+- [x] 12. Create CameraCapture component
   - Req 1.1: Use rear-facing camera via MediaDevices API
   - Req 1.2: Accept JPEG and PNG only
   - Req 1.5: Mobile-first
   - Req 1.6: Gallery upload fallback via file input
 
-- [ ] 13. Create ImagePreview component
+- [x] 13. Create ImagePreview component
   - Req 1.3: Display preview before AI analysis
   - Req 1.4: Allow retake if unsatisfactory
   - Confirm and Cancel buttons
 
-- [ ] 14. Create IFoodRecognitionService interface
+- [x] 14. Create IFoodRecognitionService interface
   - Per design §3.3
   - recognise(image, labelContext?) method
   - isConfigured() method
   - getProviderName() method
 
-- [ ] 15. [RESEARCH] AI prompt design for food recognition
+- [x] 15. [RESEARCH] AI prompt design for food recognition
   - RESEARCH TASK - no code changes
   - Per design §1.5 research tasks
   - Test prompts with various food photos
   - Document final prompt template in specs/
   - Ensure structured JSON output (D-DES-001)
 
-- [ ] 16. Implement Claude food recognition service
+- [x] 16. Implement Claude food recognition service
   - Req 2.1, 2.8: Send images to Claude API
   - Req 2.6: 10-second timeout (D-DES-013)
   - Use structured JSON mode (D-DES-001)
   - Return RecognisedFoodItem array
   - Depends on research task 15
 
-- [ ] 17. Create POST /api/ai/recognise endpoint
+- [x] 17. Create POST /api/ai/recognise endpoint
   - Per design §4.4
   - Accept imageBase64 and mimeType
   - Return items, totalMacros, confidence, provider, processingTimeMs
   - Handle timeout and errors per design §5.1
 
-- [ ] 18. Create FoodRecognitionResult component
+- [x] 18. Create FoodRecognitionResult component
   - Req 2.2: Display itemised list with macros
   - Req 2.3: Show confidence score for each item
   - Req 2.4: Show all results regardless of confidence
   - Req 2.5: Calculate and display aggregate totals
 
-- [ ] 19. Implement AI error handling with manual entry fallback
+- [x] 19. Implement AI error handling with manual entry fallback
   - Req 2.7: On failure, show error and offer manual entry
   - Req 2.10: On zero items, offer retry or manual entry
   - D-DES-013: Show Try Again and Enter Manually buttons on timeout
