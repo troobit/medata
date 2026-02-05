@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Nutrition label scanning integrated into capture flow (Req 7.1-7.6)
+- CameraCapture component now supports optional label photo capture after food photo
+- Label option screen with "Add Label Photo", "Choose Label from Gallery", "Continue Without Label" buttons
+- Label image passed to AI recognition endpoint for improved macro accuracy on packaged foods
+- Meal source set to 'label_scan' when label image is provided (Req 4.2)
+- Australian nutrition label format supported with per-serving and per-100g extraction
+
+---
+
+### Added
 - IPresetRepository interface for preset data persistence with CRUD operations (Req 6.1-6.8)
 - CosmosPresetRepository implementing Azure Cosmos DB storage with category-based partition keys
 - POST /api/presets endpoint for creating new presets

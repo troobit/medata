@@ -28,6 +28,7 @@
 
 	// Captured image data
 	let capturedImage: Blob | null = $state(null);
+	let labelImage: Blob | null = $state(null); // Optional nutrition label image (Req 7.1)
 	let imageUrl: string | null = $state(null);
 
 	// AI recognition results
@@ -44,9 +45,11 @@
 
 	/**
 	 * Handle image capture from camera or gallery.
+	 * Now supports optional label image (Req 7.1)
 	 */
-	function handleCapture(result: { foodImage: Blob; source: 'camera' | 'gallery' }) {
+	function handleCapture(result: { foodImage: Blob; labelImage?: Blob; source: 'camera' | 'gallery' }) {
 		capturedImage = result.foodImage;
+		labelImage = result.labelImage ?? null;
 		flowState = 'preview';
 	}
 
@@ -72,11 +75,13 @@
 	 */
 	function handleRetake() {
 		capturedImage = null;
+		labelImage = null;
 		flowState = 'capture';
 	}
 
 	/**
 	 * Perform AI recognition.
+	 * Supports optional label image for improved accuracy (Req 7.1-7.5)
 	 */
 	async function performRecognition() {
 		if (!capturedImage) return;
@@ -86,13 +91,27 @@
 			const base64 = await blobToBase64(capturedImage);
 			const mimeType = capturedImage.type as 'image/jpeg' | 'image/png';
 
+			// Build request body with optional label image
+			const requestBody: {
+				imageBase64: string;
+				mimeType: 'image/jpeg' | 'image/png';
+				labelBase64?: string;
+				labelMimeType?: 'image/jpeg' | 'image/png';
+			} = {
+				imageBase64: base64,
+				mimeType
+			};
+
+			// Add label image if provided (Req 7.1)
+			if (labelImage) {
+				requestBody.labelBase64 = await blobToBase64(labelImage);
+				requestBody.labelMimeType = labelImage.type as 'image/jpeg' | 'image/png';
+			}
+
 			const response = await fetch('/api/ai/recognise', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					imageBase64: base64,
-					mimeType
-				})
+				body: JSON.stringify(requestBody)
 			});
 
 			if (!response.ok) {
@@ -225,6 +244,9 @@
 	// Get confidences array for editor
 	let confidences = $derived(recognitionItems.map((item) => item.confidence));
 
+	// Determine meal source based on whether label was used (Req 4.2)
+	let mealSource = $derived<'ai_image' | 'label_scan'>(labelImage ? 'label_scan' : 'ai_image');
+
 	// Cleanup on unmount
 	$effect(() => {
 		return () => {
@@ -278,7 +300,7 @@
 				initialItems={foodItems}
 				initialConfidences={confidences}
 				{imageUrl}
-				source="ai_image"
+				source={mealSource}
 				overallConfidence={recognitionConfidence}
 				onSave={handleSave}
 				onCancel={handleEditorCancel}
@@ -287,7 +309,7 @@
 			<MealEditor
 				initialItems={foodItems}
 				initialConfidences={confidences}
-				source="ai_image"
+				source={mealSource}
 				overallConfidence={recognitionConfidence}
 				onSave={handleSave}
 				onCancel={handleEditorCancel}

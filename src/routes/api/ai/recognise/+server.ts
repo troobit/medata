@@ -8,7 +8,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod/v4';
-import { ClaudeFoodRecognitionService, FoodRecognitionError } from '$lib/services/index.js';
+import { ClaudeFoodRecognitionService } from '$lib/services/claude-food-recognition.js';
+import { FoodRecognitionError } from '$lib/services/food-recognition.js';
 
 // Request schema per design section 4.4
 const RecogniseRequestSchema = z.object({

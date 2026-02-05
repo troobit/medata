@@ -331,17 +331,19 @@
 
 			<!-- Category selection -->
 			<div class="mb-6">
-				<label class="block text-sm text-white/70 mb-2">Category</label>
-				<div class="flex gap-3">
+				<span class="block text-sm text-white/70 mb-2">Category</span>
+				<div class="flex gap-3" role="group" aria-label="Category">
 					<button
 						onclick={() => presetCategory = 'meal'}
 						class="flex-1 rounded-lg py-3 text-base font-medium min-h-[44px] {presetCategory === 'meal' ? 'bg-brand-accent text-black' : 'bg-white/5 text-white/70 border border-white/10'}"
+						aria-pressed={presetCategory === 'meal'}
 					>
 						Meal
 					</button>
 					<button
 						onclick={() => presetCategory = 'snack'}
 						class="flex-1 rounded-lg py-3 text-base font-medium min-h-[44px] {presetCategory === 'snack' ? 'bg-brand-accent text-black' : 'bg-white/5 text-white/70 border border-white/10'}"
+						aria-pressed={presetCategory === 'snack'}
 					>
 						Snack
 					</button>

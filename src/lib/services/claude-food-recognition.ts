@@ -223,6 +223,8 @@ export class ClaudeFoodRecognitionService implements IFoodRecognitionService {
 		}
 
 		const startTime = Date.now();
+		const imageSize = (image.size / 1024).toFixed(1);
+		console.log(`[claude] Starting recognition - food image: ${imageSize}KB${labelContext ? ', with label' : ''}`);
 
 		// Build content array - images before text per best practices
 		const content: Anthropic.MessageCreateParams['messages'][0]['content'] = [];
@@ -279,6 +281,8 @@ export class ClaudeFoodRecognitionService implements IFoodRecognitionService {
 			);
 
 			clearTimeout(timeoutId);
+			const apiTime = Date.now() - startTime;
+			console.log(`[claude] API response received in ${apiTime}ms - tokens: ${response.usage.input_tokens}in/${response.usage.output_tokens}out`);
 
 			// Extract JSON from response
 			const textContent = response.content.find((c) => c.type === 'text');
@@ -321,6 +325,7 @@ export class ClaudeFoodRecognitionService implements IFoodRecognitionService {
 
 			const totalMacros: MacroData = sumMacros(items);
 			const processingTimeMs = Date.now() - startTime;
+			console.log(`[claude] Recognition complete in ${processingTimeMs}ms - ${items.length} item(s), confidence: ${parsed.overallConfidence.toFixed(2)}`);
 
 			return {
 				items,
@@ -330,6 +335,9 @@ export class ClaudeFoodRecognitionService implements IFoodRecognitionService {
 				processingTimeMs
 			};
 		} catch (error) {
+			const elapsed = Date.now() - startTime;
+			console.error(`[claude] Recognition failed after ${elapsed}ms:`, error instanceof Error ? error.message : error);
+
 			// Handle timeout
 			if (error instanceof Error && error.name === 'AbortError') {
 				throw new FoodRecognitionError(

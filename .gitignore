@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.svelte-kit/
+
+# Deployment
+.vercel/
+.netlify/
+.cloudflare/
+.firebase/
+.amplify/
+.output/
+.wrangler/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local data
+*.sqlite
+*.db
+data/
+
+# Generated icons (only icon.svg is source of truth)
+static/icon-*.png
+static/apple-touch-icon.png
+static/favicon.ico
+
+# Generated test data
+static/test-data.json
+
+# Orbit task management
+**/.orbit/
+.vercel
+.env*.local

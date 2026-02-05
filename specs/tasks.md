@@ -349,33 +349,33 @@ references:
 
 ## Phase 7: Label Scanning (Unified Flow)
 
-- [ ] 56. Add Add Label button to CameraCapture
+- [x] 56. Add Add Label button to CameraCapture
   - Req 7.1: Accept photos of nutrition labels
   - Optional - user photographs food first, then can add label
   - Per D-DES-006: Unified flow, not separate workflow
 
-- [ ] 57. Create LabelContext interface and capture flow
+- [x] 57. Create LabelContext interface and capture flow
   - Per design §3.3: LabelContext with labelImage
   - Capture food image first, then optional label image
   - Pass both to AI endpoint
 
-- [ ] 58. Update AI prompt for label-enhanced recognition
+- [x] 58. Update AI prompt for label-enhanced recognition
   - Req 7.2: Extract serving size, carbs, protein, fat from Australian labels
   - Req 7.4: Estimate servings from food photo
   - Req 7.5: Calculate macros from servings × per-serving values
   - Per design §3.3 prompt template
 
-- [ ] 59. Update /api/ai/recognise to accept optional label image
+- [x] 59. Update /api/ai/recognise to accept optional label image
   - Accept labelBase64 and labelMimeType optional fields
   - Pass to AI service as LabelContext
   - Same response format with improved accuracy
 
-- [ ] 60. Implement label parsing fallback to manual entry
+- [x] 60. Implement label parsing fallback to manual entry
   - Req 7.6: On parse failure, offer manual entry
   - Same error handling as standard recognition
   - User can still save with manual macros
 
-- [ ] 61. Test label scanning with Australian nutrition labels
+- [x] 61. Test label scanning with Australian nutrition labels
   - Curate test photos of Australian nutrition labels
   - Test per-serving and per-100g extraction
   - Verify portion estimation from food photo
