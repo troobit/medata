@@ -29,18 +29,16 @@ export const FoodItemSchema = z.object({
 
 /**
  * Schema for AI-recognised food item.
- * Includes quantity/unit which are discarded on save (D-DES-014).
+ * Extends FoodItemSchema with a confidence score.
  */
 export const RecognisedFoodItemSchema = FoodItemSchema.extend({
-	quantity: z.number().positive(),
-	unit: z.string().min(1),
 	confidence: z.number().min(0).max(1)
 });
 
 /**
  * Schema for meal data source.
  */
-export const MealDataSourceSchema = z.enum(['manual', 'ai_image', 'label_scan', 'preset']);
+export const MealDataSourceSchema = z.enum(['manual', 'ai_image', 'preset']);
 
 /**
  * Schema for preset category.

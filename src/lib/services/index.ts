@@ -7,5 +7,6 @@
  *   import { ClaudeFoodRecognitionService } from '$lib/services/claude-food-recognition.js';
  */
 export * from './food-recognition.js';
+export * from './recognition.js';
 export * from './meal-api.js';
 export * from './preset-api.js';

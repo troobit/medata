@@ -15,3 +15,5 @@ export { default as MealDetail } from './MealDetail.svelte';
 export { default as ManualEntryForm } from './ManualEntryForm.svelte';
 export { default as PresetCard } from './PresetCard.svelte';
 export { default as PresetList } from './PresetList.svelte';
+export { default as MockModeBanner } from './MockModeBanner.svelte';
+export { default as ManualEntryCTA } from './ManualEntryCTA.svelte';

@@ -26,11 +26,9 @@ export interface FoodItem {
 
 /**
  * A food item as returned by AI recognition.
- * Includes quantity/unit which are used for display but discarded on save (D-DES-014).
+ * Extends FoodItem with a confidence score.
  */
 export interface RecognisedFoodItem extends FoodItem {
-	quantity: number;
-	unit: string;
 	confidence: number; // 0-1
 }
 
@@ -38,7 +36,7 @@ export interface RecognisedFoodItem extends FoodItem {
  * Source of meal data.
  * Req 4.2: Record the data source for each meal.
  */
-export type MealDataSource = 'manual' | 'ai_image' | 'label_scan' | 'preset';
+export type MealDataSource = 'manual' | 'ai_image' | 'preset';
 
 /**
  * Category for meal presets.

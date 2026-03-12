@@ -2,7 +2,7 @@
  * POST /api/ai/recognise endpoint
  * Per design section 4.4
  * Accept imageBase64 and mimeType
- * Return items, totalMacros, confidence, provider, processingTimeMs
+ * Return items and confidence
  * Handle timeout and errors per design section 5.1
  */
 import { json, error } from '@sveltejs/kit';
@@ -94,10 +94,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({
 			data: {
 				items: result.items,
-				totalMacros: result.totalMacros,
-				confidence: result.confidence,
-				provider: result.provider,
-				processingTimeMs: result.processingTimeMs
+				confidence: result.confidence
 			}
 		});
 	} catch (e) {

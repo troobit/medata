@@ -1076,13 +1076,75 @@ pnpm add @google/generative-ai
 | Change loading spinner | `src/routes/capture/+page.svelte` | Lines 269-277 |
 | Add new component | Create in `src/lib/components/` | Export from `index.ts` |
 
-### Running the Development Server
+### Getting Started
+
+1. **Clone and install:**
+   ```bash
+   git clone <repo-url> && cd medata
+   pnpm install
+   ```
+
+2. **Copy environment file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Configure food recognition backend** — choose one:
+
+   **Option A — Local Ollama (free, no account needed):**
+   ```bash
+   # Install Ollama: https://ollama.com
+   # Pull a vision model:
+   ollama pull llava
+
+   # .env settings:
+   RECOGNITION_BASE_URL=http://localhost:11434
+   RECOGNITION_MODEL=llava
+   # RECOGNITION_API_KEY=        (not needed for local)
+   RECOGNITION_MOCK_MODE=false
+   RECOGNITION_TIMEOUT_MS=60000  # increase for large models on first inference
+   ```
+
+   **Option B — Cloud model (DeepSeek, Claude via proxy, etc.):**
+   ```bash
+   RECOGNITION_BASE_URL=https://api.deepseek.com
+   RECOGNITION_MODEL=deepseek-chat
+   RECOGNITION_API_KEY=sk-your-key-here
+   RECOGNITION_MOCK_MODE=false
+   RECOGNITION_TIMEOUT_MS=10000
+   ```
+
+   **Option C — Mock mode (no backend needed):**
+   ```bash
+   RECOGNITION_MOCK_MODE=true
+   # All other RECOGNITION_* vars are ignored in mock mode.
+   # Returns realistic fake food data with a simulated 500-1500ms delay.
+   ```
+
+4. **Azure credentials** (for data persistence):
+   ```bash
+   AZURE_COSMOS_CONNECTION_STRING=your-connection-string
+   AZURE_BLOB_STORAGE_URL=your-blob-url-with-sas-token
+   ```
+
+5. **Start the dev server:**
+   ```bash
+   pnpm dev
+   ```
+   The server starts at **`https://localhost:5173`** (HTTPS is required for camera access).
+
+6. **Mobile testing:**
+   - Find your LAN IP: `ipconfig getifaddr en0` (macOS) or `hostname -I` (Linux)
+   - On your phone, visit `https://192.168.x.x:5173`
+   - Accept the self-signed certificate warning
+   - Camera and all features work over LAN
+
+> **Tip:** If using a large local model (Ollama 7B+), increase `RECOGNITION_TIMEOUT_MS` to `30000`-`60000`. First inference is slower while the model loads into memory.
+
+### Running Commands
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Start dev server (hot reload)
+# Start dev server (hot reload, HTTPS)
 pnpm dev
 
 # Run tests
@@ -1097,21 +1159,19 @@ pnpm build
 
 ### Environment Variables
 
-Required in `.env.local`:
+See `.env.example` for the full list with comments. Key variables:
 
-```bash
-# AI Provider
-ANTHROPIC_API_KEY=sk-ant-...
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `RECOGNITION_BASE_URL` | Yes* | OpenAI-compatible endpoint URL |
+| `RECOGNITION_MODEL` | Yes* | Model name for the endpoint |
+| `RECOGNITION_API_KEY` | No | API key (omit for local endpoints) |
+| `RECOGNITION_MOCK_MODE` | No | Set `true` to skip real API calls |
+| `RECOGNITION_TIMEOUT_MS` | No | Request timeout, default 10000ms |
+| `AZURE_COSMOS_CONNECTION_STRING` | Yes | Cosmos DB connection string |
+| `AZURE_BLOB_STORAGE_URL` | Yes | Blob storage URL with SAS token |
 
-# Azure Cosmos DB
-COSMOS_ENDPOINT=https://your-account.documents.azure.com:443/
-COSMOS_KEY=your-cosmos-key
-COSMOS_DATABASE=medata
-
-# Azure Blob Storage
-AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
-AZURE_STORAGE_CONTAINER=meal-images
-```
+*Not required when `RECOGNITION_MOCK_MODE=true`.
 
 ---
 

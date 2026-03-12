@@ -76,8 +76,6 @@
 				return '📷';
 			case 'manual':
 				return '✏️';
-			case 'label_scan':
-				return '🏷️';
 			case 'preset':
 				return '📋';
 			default:

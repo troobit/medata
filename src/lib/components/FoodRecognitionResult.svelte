@@ -6,14 +6,12 @@
 	 * Req 2.4: Show all results regardless of confidence
 	 * Req 2.5: Calculate and display aggregate totals
 	 */
-	import type { RecognisedFoodItem, MacroData } from '$lib/types/index.js';
+	import type { RecognisedFoodItem } from '$lib/types/index.js';
+	import { sumMacros } from '$lib/utils/index.js';
 
 	interface Props {
 		items: RecognisedFoodItem[];
-		totalMacros: MacroData;
 		confidence: number;
-		provider: string;
-		processingTimeMs: number;
 		onConfirm: (items: RecognisedFoodItem[]) => void;
 		onRetry?: () => void;
 		onManualEntry?: () => void;
@@ -21,14 +19,13 @@
 
 	let {
 		items,
-		totalMacros,
 		confidence,
-		provider,
-		processingTimeMs,
 		onConfirm,
 		onRetry,
 		onManualEntry
 	}: Props = $props();
+
+	let totalMacros = $derived(sumMacros(items));
 
 	/**
 	 * Format confidence as a percentage.
@@ -59,7 +56,6 @@
 			<span class="rounded px-2 py-0.5 {getConfidenceColour(confidence)}">
 				{formatConfidence(confidence)}
 			</span>
-			<span>{provider}</span>
 		</div>
 	</div>
 
@@ -74,9 +70,6 @@
 							<span class="rounded px-1.5 py-0.5 text-xs {getConfidenceColour(item.confidence)}">
 								{formatConfidence(item.confidence)}
 							</span>
-						</div>
-						<div class="mt-1 text-sm text-white/70">
-							{item.quantity} {item.unit}
 						</div>
 					</div>
 				</div>
@@ -115,11 +108,6 @@
 				<span class="ml-1 text-xl font-bold">{totalMacros.fat}g</span>
 			</div>
 		</div>
-	</div>
-
-	<!-- Processing info -->
-	<div class="text-xs text-white/40 text-center">
-		Processed in {(processingTimeMs / 1000).toFixed(1)}s
 	</div>
 
 	<!-- Action buttons -->

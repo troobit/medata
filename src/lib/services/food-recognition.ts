@@ -2,7 +2,7 @@
  * Food recognition service interface and types.
  * Per design section 3.3.
  */
-import type { RecognisedFoodItem, MacroData } from '$lib/types/index.js';
+import type { RecognisedFoodItem } from '$lib/types/index.js';
 
 /**
  * Optional context from a nutrition label scan.
@@ -17,10 +17,7 @@ export interface LabelContext {
  */
 export interface FoodRecognitionResult {
 	items: RecognisedFoodItem[];
-	totalMacros: MacroData;
 	confidence: number; // Overall confidence 0-1
-	provider: string; // e.g., 'claude', 'openai', 'gemini'
-	processingTimeMs: number;
 }
 
 /**

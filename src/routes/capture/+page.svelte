@@ -12,7 +12,7 @@
 		AIErrorFallback,
 		MealEditor
 	} from '$lib/components/index.js';
-	import type { RecognisedFoodItem, MacroData, FoodItem, CreateMealInput } from '$lib/types/index.js';
+	import type { RecognisedFoodItem, FoodItem, CreateMealInput } from '$lib/types/index.js';
 	import { toastStore } from '$lib/stores/index.js';
 
 	// Flow states
@@ -33,10 +33,7 @@
 
 	// AI recognition results
 	let recognitionItems: RecognisedFoodItem[] = $state([]);
-	let recognitionTotalMacros: MacroData = $state({ carbs: 0, protein: 0, fat: 0 });
 	let recognitionConfidence = $state(0);
-	let recognitionProvider = $state('');
-	let recognitionProcessingTimeMs = $state(0);
 
 	// Error state
 	let errorType: 'timeout' | 'no_items' | 'ai_failure' | 'generic' = $state('generic');
@@ -140,10 +137,7 @@
 			const { data } = await response.json();
 
 			recognitionItems = data.items;
-			recognitionTotalMacros = data.totalMacros;
 			recognitionConfidence = data.confidence;
-			recognitionProvider = data.provider;
-			recognitionProcessingTimeMs = data.processingTimeMs;
 
 			flowState = 'results';
 		} catch {
@@ -231,7 +225,7 @@
 		goto('/');
 	}
 
-	// Convert RecognisedFoodItem to FoodItem (discard quantity/unit per D-DES-014)
+	// Convert RecognisedFoodItem to FoodItem (strip confidence)
 	let foodItems = $derived<FoodItem[]>(
 		recognitionItems.map(({ name, carbs, protein, fat }) => ({
 			name,
@@ -244,8 +238,8 @@
 	// Get confidences array for editor
 	let confidences = $derived(recognitionItems.map((item) => item.confidence));
 
-	// Determine meal source based on whether label was used (Req 4.2)
-	let mealSource = $derived<'ai_image' | 'label_scan'>(labelImage ? 'label_scan' : 'ai_image');
+	// Meal source is always ai_image for the capture flow
+	let mealSource = 'ai_image' as const;
 
 	// Cleanup on unmount
 	$effect(() => {
@@ -278,10 +272,7 @@
 	{:else if flowState === 'results'}
 		<FoodRecognitionResult
 			items={recognitionItems}
-			totalMacros={recognitionTotalMacros}
 			confidence={recognitionConfidence}
-			provider={recognitionProvider}
-			processingTimeMs={recognitionProcessingTimeMs}
 			onConfirm={handleResultsConfirm}
 			onRetry={handleRetry}
 			onManualEntry={handleManualEntry}

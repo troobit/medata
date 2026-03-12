@@ -136,7 +136,7 @@ describe('CreateMealInputSchema', () => {
 			totalFat: 5
 		};
 
-		const sources = ['manual', 'ai_image', 'label_scan', 'preset'] as const;
+		const sources = ['manual', 'ai_image', 'preset'] as const;
 		for (const source of sources) {
 			const result = CreateMealInputSchema.safeParse({ ...baseInput, source });
 			expect(result.success).toBe(true);

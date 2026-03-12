@@ -5,14 +5,13 @@
  * D-DES-001: Use structured JSON mode
  */
 import Anthropic from '@anthropic-ai/sdk';
-import type { RecognisedFoodItem, MacroData } from '$lib/types/index.js';
+import type { RecognisedFoodItem } from '$lib/types/index.js';
 import {
 	type IFoodRecognitionService,
 	type FoodRecognitionResult,
 	type LabelContext,
 	FoodRecognitionError
 } from './food-recognition.js';
-import { sumMacros } from '$lib/utils/index.js';
 import { env } from '$env/dynamic/private';
 
 // Prompt templates from specs/ai-prompt-design.md
@@ -315,24 +314,18 @@ export class ClaudeFoodRecognitionService implements IFoodRecognitionService {
 			// Transform response to our format
 			const items: RecognisedFoodItem[] = parsed.items.map((item) => ({
 				name: item.name,
-				quantity: item.quantity,
-				unit: item.unit,
 				carbs: Math.max(0, item.carbs),
 				protein: Math.max(0, item.protein),
 				fat: Math.max(0, item.fat),
 				confidence: Math.min(1, Math.max(0, item.confidence))
 			}));
 
-			const totalMacros: MacroData = sumMacros(items);
 			const processingTimeMs = Date.now() - startTime;
 			console.log(`[claude] Recognition complete in ${processingTimeMs}ms - ${items.length} item(s), confidence: ${parsed.overallConfidence.toFixed(2)}`);
 
 			return {
 				items,
-				totalMacros,
-				confidence: Math.min(1, Math.max(0, parsed.overallConfidence)),
-				provider: this.getProviderName(),
-				processingTimeMs
+				confidence: Math.min(1, Math.max(0, parsed.overallConfidence))
 			};
 		} catch (error) {
 			const elapsed = Date.now() - startTime;

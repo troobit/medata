@@ -44,8 +44,6 @@
 				return 'Photo capture';
 			case 'manual':
 				return 'Manual entry';
-			case 'label_scan':
-				return 'Label scan';
 			case 'preset':
 				return 'Preset';
 			default:

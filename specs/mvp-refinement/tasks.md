@@ -187,7 +187,7 @@ references:
 
 ## Frontend Components
 
-- [ ] 16. Implement MockModeBanner.svelte component <!-- id:1ximgn1 -->
+- [x] 16. Implement MockModeBanner.svelte component <!-- id:1ximgn1 -->
   - Create src/lib/components/MockModeBanner.svelte
   - Static display component — no props needed
   - Amber/yellow visual styling to clearly distinguish from production UI
@@ -195,7 +195,7 @@ references:
   - Stream: 2
   - Requirements: [5.5](requirements.md#5.5)
 
-- [ ] 17. Implement ManualEntryCTA.svelte component <!-- id:1ximgn2 -->
+- [x] 17. Implement ManualEntryCTA.svelte component <!-- id:1ximgn2 -->
   - Create src/lib/components/ManualEntryCTA.svelte
   - Static display component — no props needed
   - Shows message: Food recognition is not configured.
@@ -205,7 +205,7 @@ references:
   - Stream: 2
   - Requirements: [4.4](requirements.md#4.4)
 
-- [ ] 18. Write failing tests for CameraCapture.svelte stream cleanup and camera detection <!-- id:1ximgn3 -->
+- [x] 18. Write failing tests for CameraCapture.svelte stream cleanup and camera detection <!-- id:1ximgn3 -->
   - Create or extend src/lib/components/CameraCapture.test.ts
   - Test stream tracks are stopped on component destroy (mock MediaStream)
   - Test camera-available check returns false when enumerateDevices has no videoinput
@@ -272,7 +272,7 @@ references:
 
 ## Config & Docs
 
-- [ ] 24. Update vite.config.ts: add HTTPS via @vitejs/plugin-basic-ssl and LAN binding <!-- id:1ximgn9 -->
+- [x] 24. Update vite.config.ts: add HTTPS via @vitejs/plugin-basic-ssl and LAN binding <!-- id:1ximgn9 -->
   - Run: pnpm add -D @vitejs/plugin-basic-ssl
   - Import basicSsl from @vitejs/plugin-basic-ssl in vite.config.ts
   - Add basicSsl() to plugins array
@@ -281,7 +281,7 @@ references:
   - Stream: 3
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3)
 
-- [ ] 25. Update .env.example with provider-agnostic recognition env vars <!-- id:1ximgna -->
+- [x] 25. Update .env.example with provider-agnostic recognition env vars <!-- id:1ximgna -->
   - Replace ANTHROPIC_API_KEY with new recognition env vars
   - Add RECOGNITION_BASE_URL= with comment showing examples (Ollama, DeepSeek, custom)
   - Add RECOGNITION_MODEL= with comment
@@ -292,7 +292,7 @@ references:
   - Stream: 3
   - Requirements: [4.2](requirements.md#4.2), [5.1](requirements.md#5.1)
 
-- [ ] 26. Update developer docs with provider-agnostic setup guide <!-- id:1ximgnb -->
+- [x] 26. Update developer docs with provider-agnostic setup guide <!-- id:1ximgnb -->
   - Add or update setup section in README.md or docs/setup.md
   - Step-by-step: pnpm install, cp .env.example .env, configure recognition backend
   - Option A: Local Ollama (free, no account) with example config
