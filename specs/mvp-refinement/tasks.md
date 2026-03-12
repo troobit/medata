@@ -8,7 +8,7 @@ references:
 
 ## Foundation
 
-- [ ] 1. Update meal types: remove quantity/unit from AnalysedFoodItem, remove totalMacros/provider/processingTimeMs from FoodAnalysisResult, remove label_scan from MealDocument.source <!-- id:1ximgmm -->
+- [x] 1. Update meal types: remove quantity/unit from AnalysedFoodItem, remove totalMacros/provider/processingTimeMs from FoodAnalysisResult, remove label_scan from MealDocument.source <!-- id:1ximgmm -->
   - In src/lib/types/meal.ts, remove quantity and unit fields from AnalysedFoodItem (or RecognisedFoodItem)
   - Remove totalMacros, provider, processingTimeMs from FoodAnalysisResult (or FoodRecognitionResult)
   - Remove label_scan from MealDocument.source union type
@@ -16,7 +16,7 @@ references:
   - Stream: 1
   - Requirements: [6.3](requirements.md#6.3)
 
-- [ ] 2. Define IRecognitionService interface, RecognitionError class, and canonical types in src/lib/services/recognition.ts <!-- id:1ximgmn -->
+- [x] 2. Define IRecognitionService interface, RecognitionError class, and canonical types in src/lib/services/recognition.ts <!-- id:1ximgmn -->
   - Create src/lib/services/recognition.ts with IRecognitionService interface: analyse(image: Blob), isReady(), getBackendType()
   - Define FoodAnalysisResult: { items: AnalysedFoodItem[], overallConfidence: number, notes?: string }
   - Define AnalysedFoodItem: { name: string, carbs: number, protein: number, fat: number, confidence: number }
@@ -215,7 +215,7 @@ references:
   - Stream: 2
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
 
-- [ ] 19. Update CameraCapture.svelte: stream cleanup, enumerateDevices detection, gallery preview parity <!-- id:1ximgn4 -->
+- [x] 19. Update CameraCapture.svelte: stream cleanup, enumerateDevices detection, gallery preview parity <!-- id:1ximgn4 -->
   - Add onDestroy + beforeNavigate handlers to stop MediaStream tracks (Req 2.4)
   - Replace UA-string detection with enumerateDevices() videoinput feature detection (D-MVR-011, D-MVR-018)
   - If no camera device detected: render gallery-only input — no viewfinder shown
@@ -225,7 +225,7 @@ references:
   - Stream: 2
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
 
-- [ ] 20. Write failing tests for MealEditor.svelte mockMode prop and save failure state retention <!-- id:1ximgn5 -->
+- [x] 20. Write failing tests for MealEditor.svelte mockMode prop and save failure state retention <!-- id:1ximgn5 -->
   - Extend src/lib/components/MealEditor.test.ts
   - Test MockModeBanner renders when mockMode=true prop is passed
   - Test MockModeBanner does not render when mockMode=false or undefined
@@ -306,7 +306,7 @@ references:
 
 ## Validation Tests
 
-- [ ] 27. Extend macros.test.ts with property-based tests using fast-check <!-- id:1ximgnc -->
+- [x] 27. Extend macros.test.ts with property-based tests using fast-check <!-- id:1ximgnc -->
   - Extend src/lib/utils/macros.test.ts with fast-check property tests
   - Property: sumMacros(items).totalCarbs === sum of all item.carbs for any valid item array
   - Property: sumMacros([]) returns zero totals
@@ -315,7 +315,7 @@ references:
   - Stream: 1
   - Requirements: [6.3](requirements.md#6.3)
 
-- [ ] 28. Write component tests for manual entry flow <!-- id:1ximgnd -->
+- [x] 28. Write component tests for manual entry flow <!-- id:1ximgnd -->
   - Create or extend src/routes/manual/+page.test.ts
   - Test form renders with name, carbs, protein, fat fields (Req 7.1)
   - Test multiple items can be added before save (Req 7.2)
@@ -324,7 +324,7 @@ references:
   - Stream: 2
   - Requirements: [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3)
 
-- [ ] 29. Write component tests for logbook display and meal edit/delete <!-- id:1ximgne -->
+- [x] 29. Write component tests for logbook display and meal edit/delete <!-- id:1ximgne -->
   - Create or extend src/routes/+page.test.ts
   - Test meals render ordered by timestamp DESC (Req 8.1)
   - Test each entry shows total carbs, protein, fat, source, timestamp (Req 8.2)
@@ -334,7 +334,7 @@ references:
   - Stream: 2
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4), [8.5](requirements.md#8.5)
 
-- [ ] 30. Write component tests for preset save, apply, edit, and delete <!-- id:1ximgnf -->
+- [x] 30. Write component tests for preset save, apply, edit, and delete <!-- id:1ximgnf -->
   - Create or extend src/routes/presets/+page.test.ts
   - Test save as preset: POST /api/presets with name and category (Req 9.1)
   - Test presets page: presets grouped by meal/snack category (Req 9.2)

@@ -10,12 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `IRecognitionService` interface, `RecognitionError` class, and canonical types in `src/lib/services/recognition.ts` — provider-agnostic recognition layer (D-MVR-013, D-MVR-015)
 - `MockModeBanner.svelte` component — amber banner indicating mock mode is active
 - `ManualEntryCTA.svelte` component — call-to-action when recognition is not configured
-- `CameraCapture.test.ts` — tests for stream cleanup, camera detection via `enumerateDevices`, and gallery upload parity (3 tests intentionally failing until Task 19 implements `enumerateDevices`)
+- `CameraCapture.test.ts` — tests for stream cleanup, camera detection via `enumerateDevices`, and gallery upload parity
+- Property-based tests for `sumMacros` using `fast-check` — validates macro sum identity, zero totals, and non-negativity invariants
+- `MealEditor.test.ts` — test-first tests for `mockMode` prop and save failure state retention (intentionally failing until implementation task)
+- `src/routes/manual/+page.test.ts` — manual entry flow tests (Req 7.1–7.3)
+- `src/routes/+page.test.ts` — logbook display, meal edit/delete tests (Req 8.1–8.5)
+- `src/routes/presets/+page.test.ts` — preset save, apply, edit, delete tests (Req 9.1–9.4)
 - HTTPS dev server via `@vitejs/plugin-basic-ssl` with LAN binding (`server.host: true`) for mobile camera access (Req 1.1, 1.2)
 - Provider-agnostic environment variables: `RECOGNITION_BASE_URL`, `RECOGNITION_MODEL`, `RECOGNITION_API_KEY`, `RECOGNITION_MOCK_MODE`, `RECOGNITION_TIMEOUT_MS`
 - Developer setup guide with Ollama, cloud model, and mock mode configuration options
 
 ### Changed
+- `CameraCapture.svelte` — replaced UA-string detection with `enumerateDevices()` feature detection; added `onDestroy`/`beforeNavigate` stream cleanup (Req 2.4, D-MVR-011, D-MVR-018); gallery-only mode when no camera detected
 - `RecognisedFoodItem` no longer extends with `quantity` and `unit` fields (D-MVR-017)
 - `FoodRecognitionResult` no longer includes `totalMacros`, `provider`, or `processingTimeMs` fields
 - `MealDataSource` type removes `label_scan` value — label scanning deferred (D-MVR-017)

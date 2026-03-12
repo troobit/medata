@@ -70,17 +70,15 @@ describe("CameraCapture", () => {
       value: {
         mediaDevices: {
           getUserMedia: vi.fn().mockResolvedValue(mockStream),
-          enumerateDevices: vi
-            .fn()
-            .mockResolvedValue([
-              {
-                kind: "videoinput",
-                deviceId: "cam-1",
-                label: "Front Camera",
-                groupId: "1",
-                toJSON: vi.fn(),
-              },
-            ]),
+          enumerateDevices: vi.fn().mockResolvedValue([
+            {
+              kind: "videoinput",
+              deviceId: "cam-1",
+              label: "Front Camera",
+              groupId: "1",
+              toJSON: vi.fn(),
+            },
+          ]),
         },
       },
       writable: true,
@@ -117,6 +115,10 @@ describe("CameraCapture", () => {
         props: { onCapture },
       });
 
+      // Wait for async camera detection to complete
+      await flushPromises();
+      await tick();
+
       // Start the camera by clicking the button
       const openButton = getByText("Open Camera");
       await fireEvent.click(openButton);
@@ -150,17 +152,15 @@ describe("CameraCapture", () => {
   describe("camera detection via enumerateDevices", () => {
     it("reports camera unavailable when enumerateDevices returns no videoinput devices", async () => {
       // Mock enumerateDevices to return only audioinput (no videoinput)
-      navigator.mediaDevices.enumerateDevices = vi
-        .fn()
-        .mockResolvedValue([
-          {
-            kind: "audioinput",
-            deviceId: "mic-1",
-            label: "Microphone",
-            groupId: "1",
-            toJSON: vi.fn(),
-          },
-        ]);
+      navigator.mediaDevices.enumerateDevices = vi.fn().mockResolvedValue([
+        {
+          kind: "audioinput",
+          deviceId: "mic-1",
+          label: "Microphone",
+          groupId: "1",
+          toJSON: vi.fn(),
+        },
+      ]);
 
       const onCapture = vi.fn();
       const { queryByText } = render(CameraCapture, {
@@ -226,6 +226,10 @@ describe("CameraCapture", () => {
       const { container } = render(CameraCapture, {
         props: { onCapture },
       });
+
+      // Wait for async camera detection to complete
+      await flushPromises();
+      await tick();
 
       // Find the hidden file input
       const fileInput = container.querySelector(

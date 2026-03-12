@@ -5,8 +5,12 @@
 	 * Req 1.2: Accept JPEG and PNG only
 	 * Req 1.5: Mobile-first
 	 * Req 1.6: Gallery upload fallback via file input
+	 * Req 2.4: Cleanup MediaStream tracks on destroy/navigate
 	 * Req 7.1: Accept photos of nutrition labels (optional)
 	 */
+	import { onDestroy } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
+	import ImagePreview from './ImagePreview.svelte';
 
 	interface CaptureResult {
 		foodImage: Blob;
@@ -29,11 +33,43 @@
 	let error: string | null = $state(null);
 	let isCameraActive = $state(false);
 
+	// Camera detection state (Req 2.4: enumerateDevices instead of UA sniffing)
+	let hasCamera = $state<boolean | null>(null); // null = still detecting
+	let detectionComplete = $state(false);
+
 	// Label capture state
 	let foodImage: Blob | null = $state(null);
 	let labelImage: Blob | null = $state(null);
 	let captureSource: 'camera' | 'gallery' = $state('camera');
 	let showLabelOption = $state(false); // Show after food photo captured
+
+	// Gallery preview state — for gallery path using ImagePreview
+	let galleryPreviewBlob: Blob | null = $state(null);
+
+	/**
+	 * Detect camera availability using enumerateDevices() (Req 2.4).
+	 * Replaces UA-string detection with proper feature detection.
+	 */
+	async function detectCamera() {
+		try {
+			if (!navigator?.mediaDevices?.enumerateDevices) {
+				hasCamera = false;
+				detectionComplete = true;
+				return;
+			}
+
+			const devices = await navigator.mediaDevices.enumerateDevices();
+			hasCamera = devices.some((d) => d.kind === 'videoinput');
+		} catch {
+			hasCamera = false;
+		}
+		detectionComplete = true;
+	}
+
+	// Run camera detection on mount
+	$effect(() => {
+		detectCamera();
+	});
 
 	async function startCamera() {
 		error = null;
@@ -176,6 +212,7 @@
 		foodImage = null;
 		labelImage = null;
 		showLabelOption = false;
+		galleryPreviewBlob = null;
 	}
 
 	/**
@@ -209,6 +246,7 @@
 		foodImage = null;
 		labelImage = null;
 		showLabelOption = false;
+		galleryPreviewBlob = null;
 		onCancel?.();
 	}
 
@@ -222,7 +260,17 @@
 		showLabelOption = false;
 	}
 
-	// Cleanup on unmount
+	// Req 2.4: Stop MediaStream tracks on destroy
+	onDestroy(() => {
+		stopCamera();
+	});
+
+	// Req 2.4: Stop MediaStream tracks before navigation
+	beforeNavigate(() => {
+		stopCamera();
+	});
+
+	// Cleanup on unmount via $effect as well (belt and suspenders)
 	$effect(() => {
 		return () => {
 			stopCamera();
@@ -261,16 +309,18 @@
 			</p>
 
 			<div class="flex flex-col gap-3">
-				<button
-					onclick={startLabelCamera}
-					class="w-full rounded-lg bg-white/10 py-4 text-lg font-semibold text-white min-h-[44px] flex items-center justify-center gap-2"
-				>
-					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-					</svg>
-					Add Label Photo
-				</button>
+				{#if hasCamera}
+					<button
+						onclick={startLabelCamera}
+						class="w-full rounded-lg bg-white/10 py-4 text-lg font-semibold text-white min-h-[44px] flex items-center justify-center gap-2"
+					>
+						<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+						</svg>
+						Add Label Photo
+					</button>
+				{/if}
 				<button
 					onclick={openLabelGallery}
 					class="w-full rounded-lg bg-white/10 py-4 text-lg font-semibold text-white min-h-[44px] flex items-center justify-center gap-2"
@@ -351,8 +401,13 @@
 				Cancel
 			</button>
 		</div>
-	{:else}
-		<!-- Initial state - choose camera or gallery -->
+	{:else if !detectionComplete}
+		<!-- Camera detection in progress -->
+		<div class="flex items-center justify-center py-8">
+			<div class="animate-spin h-6 w-6 border-2 border-brand-accent border-t-transparent rounded-full"></div>
+		</div>
+	{:else if hasCamera}
+		<!-- Camera detected - show camera + gallery options -->
 		<div class="flex flex-col gap-3">
 			<button
 				onclick={startCamera}
@@ -363,6 +418,37 @@
 			<button
 				onclick={openGallery}
 				class="w-full rounded-lg bg-white/10 py-4 text-lg font-semibold text-white min-h-[44px]"
+			>
+				Choose from Gallery
+			</button>
+			{#if onCancel}
+				<button
+					onclick={handleCancel}
+					class="w-full rounded-lg border border-white/20 py-4 text-lg font-semibold text-white/70 min-h-[44px]"
+				>
+					Cancel
+				</button>
+			{/if}
+		</div>
+
+		<!-- Hidden file input for gallery selection -->
+		<!-- Req 1.2: Accept JPEG and PNG only -->
+		<input
+			bind:this={fileInputRef}
+			type="file"
+			accept="image/jpeg,image/png"
+			onchange={handleFileSelect}
+			class="hidden"
+		/>
+	{:else}
+		<!-- No camera detected - gallery-only mode -->
+		<div class="flex flex-col gap-3">
+			<p class="text-center text-white/60 text-sm">
+				No camera detected. Upload a photo from your gallery.
+			</p>
+			<button
+				onclick={openGallery}
+				class="w-full rounded-lg bg-brand-accent py-4 text-lg font-semibold text-black min-h-[44px]"
 			>
 				Choose from Gallery
 			</button>
