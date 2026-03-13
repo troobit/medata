@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - HTTPS dev server via `@vitejs/plugin-basic-ssl` with LAN binding (`server.host: true`) for mobile camera access (Req 1.1, 1.2)
 - Provider-agnostic environment variables: `RECOGNITION_BASE_URL`, `RECOGNITION_MODEL`, `RECOGNITION_API_KEY`, `RECOGNITION_MOCK_MODE`, `RECOGNITION_TIMEOUT_MS`
 - Developer setup guide with Ollama, cloud model, and mock mode configuration options
+- `HttpRecognitionService` implementation (`src/lib/services/http-recognition.ts`) — OpenAI-compatible `/v1/chat/completions` client with configurable timeout, optional auth, and AbortController support (Req 4.3, 11.2)
+- `parseAnalysisResult()` function — validates and extracts `FoodAnalysisResult` from OpenAI-compat response envelopes, handles markdown-fenced JSON and pre-parsed objects
+- `http-recognition.test.ts` — 23 unit tests covering `parseAnalysisResult` (JSON extraction, markdown fence stripping, schema validation, error codes) and `HttpRecognitionService` (isReady, auth headers, request shape, timeout, backend errors)
 
 ### Changed
 - `CameraCapture.svelte` — replaced UA-string detection with `enumerateDevices()` feature detection; added `onDestroy`/`beforeNavigate` stream cleanup (Req 2.4, D-MVR-011, D-MVR-018); gallery-only mode when no camera detected

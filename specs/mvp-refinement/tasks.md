@@ -53,7 +53,7 @@ references:
 
 ## HTTP Recognition Service
 
-- [ ] 5. Write failing unit tests for parseAnalysisResult <!-- id:1ximgmq -->
+- [x] 5. Write failing unit tests for parseAnalysisResult <!-- id:1ximgmq -->
   - Create tests in src/lib/services/http-recognition.test.ts
   - Test extracts JSON from markdown-fenced response (strips ```json wrapper)
   - Test throws RecognitionError(INVALID_RESPONSE) when content is not parseable JSON
@@ -65,7 +65,7 @@ references:
   - Stream: 1
   - Requirements: [6.2](requirements.md#6.2)
 
-- [ ] 6. Implement parseAnalysisResult function <!-- id:1ximgmr -->
+- [x] 6. Implement parseAnalysisResult function <!-- id:1ximgmr -->
   - Add parseAnalysisResult() to src/lib/services/http-recognition.ts
   - Extract content string from choices[0].message.content
   - If content starts with ``` (markdown fence), strip the fence
@@ -78,7 +78,7 @@ references:
   - Stream: 1
   - Requirements: [6.2](requirements.md#6.2)
 
-- [ ] 7. Write failing unit tests for HttpRecognitionService <!-- id:1ximgms -->
+- [x] 7. Write failing unit tests for HttpRecognitionService <!-- id:1ximgms -->
   - Add tests to src/lib/services/http-recognition.test.ts
   - Test isReady() returns false when RECOGNITION_BASE_URL or RECOGNITION_MODEL unset
   - Test isReady() returns true when both are set
@@ -92,7 +92,7 @@ references:
   - Stream: 1
   - Requirements: [4.3](requirements.md#4.3), [11.2](requirements.md#11.2)
 
-- [ ] 8. Implement HttpRecognitionService <!-- id:1ximgmt -->
+- [x] 8. Implement HttpRecognitionService <!-- id:1ximgmt -->
   - Create src/lib/services/http-recognition.ts
   - Implement IRecognitionService: reads RECOGNITION_BASE_URL, RECOGNITION_MODEL, RECOGNITION_API_KEY, RECOGNITION_TIMEOUT_MS from $env/dynamic/private
   - isReady(): true when baseUrl and model are non-empty
