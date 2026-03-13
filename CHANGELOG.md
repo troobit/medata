@@ -12,7 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `ManualEntryCTA.svelte` component — call-to-action when recognition is not configured
 - `CameraCapture.test.ts` — tests for stream cleanup, camera detection via `enumerateDevices`, and gallery upload parity
 - Property-based tests for `sumMacros` using `fast-check` — validates macro sum identity, zero totals, and non-negativity invariants
-- `MealEditor.test.ts` — test-first tests for `mockMode` prop and save failure state retention (intentionally failing until implementation task)
+- `MockRecognitionService` implementation (`src/lib/services/mock-recognition.ts`) — returns realistic fake food data with 500–1500ms simulated delay (Req 5.1–5.5)
+- `mock-recognition.test.ts` — unit tests for `MockRecognitionService` covering schema, delay, notes prefix, and macro validity
+- `MealEditor.svelte` — `mockMode` prop with `MockModeBanner` rendering, error toast with state retention on failed save (Req 5.5, 11.1)
 - `src/routes/manual/+page.test.ts` — manual entry flow tests (Req 7.1–7.3)
 - `src/routes/+page.test.ts` — logbook display, meal edit/delete tests (Req 8.1–8.5)
 - `src/routes/presets/+page.test.ts` — preset save, apply, edit, delete tests (Req 9.1–9.4)

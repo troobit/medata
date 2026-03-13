@@ -10,6 +10,7 @@
 	import type { FoodItem, MealDataSource, CreateMealInput, CreatePresetInput, PresetCategory } from '$lib/types/index.js';
 	import { sumMacros } from '$lib/utils/index.js';
 	import FoodItemCard from './FoodItemCard.svelte';
+	import MockModeBanner from './MockModeBanner.svelte';
 
 	interface EditableFoodItem extends FoodItem {
 		id: string;
@@ -25,6 +26,7 @@
 		onSave: (meal: CreateMealInput) => void;
 		onCancel?: () => void;
 		onSaveAsPreset?: (preset: CreatePresetInput) => void;
+		mockMode?: boolean;
 	}
 
 	let {
@@ -35,7 +37,8 @@
 		overallConfidence,
 		onSave,
 		onCancel,
-		onSaveAsPreset
+		onSaveAsPreset,
+		mockMode = false
 	}: Props = $props();
 
 	/**
@@ -69,6 +72,9 @@
 
 	// Track if we have any items
 	let hasItems = $derived(items.length > 0);
+
+	// Error state for failed saves
+	let saveError = $state<string | null>(null);
 
 	// Preset modal state
 	let showPresetModal = $state(false);
@@ -138,7 +144,12 @@
 			...(overallConfidence !== undefined ? { confidence: overallConfidence } : {})
 		};
 
-		onSave(meal);
+		try {
+			saveError = null;
+			onSave(meal);
+		} catch {
+			saveError = 'Service unavailable — meal not saved.';
+		}
 	}
 
 	/**
@@ -200,6 +211,17 @@
 </script>
 
 <div class="flex flex-col gap-4">
+	{#if mockMode}
+		<MockModeBanner />
+	{/if}
+
+	<!-- Error toast -->
+	{#if saveError}
+		<div role="alert" class="rounded-lg border border-red-500/40 bg-red-900/30 px-4 py-3 text-center text-sm font-medium text-red-200">
+			{saveError}
+		</div>
+	{/if}
+
 	<!-- Image preview if available -->
 	{#if imageUrl}
 		<div class="relative rounded-lg overflow-hidden aspect-video bg-white/5">
@@ -233,20 +255,23 @@
 		</div>
 
 		{#each items as item (item.id)}
-			{#if item.confidence !== undefined}
-				<FoodItemCard
-					{item}
-					confidence={item.confidence}
-					onUpdate={(updated) => updateItem(item.id, updated)}
-					onRemove={() => removeItem(item.id)}
-				/>
-			{:else}
-				<FoodItemCard
-					{item}
-					onUpdate={(updated) => updateItem(item.id, updated)}
-					onRemove={() => removeItem(item.id)}
-				/>
-			{/if}
+			<div aria-label={item.name}>
+				<span class="sr-only">{item.name}</span>
+				{#if item.confidence !== undefined}
+					<FoodItemCard
+						{item}
+						confidence={item.confidence}
+						onUpdate={(updated) => updateItem(item.id, updated)}
+						onRemove={() => removeItem(item.id)}
+					/>
+				{:else}
+					<FoodItemCard
+						{item}
+						onUpdate={(updated) => updateItem(item.id, updated)}
+						onRemove={() => removeItem(item.id)}
+					/>
+				{/if}
+			</div>
 		{/each}
 
 		<!-- Add item button -->

@@ -28,7 +28,7 @@ references:
 
 ## Mock Recognition Service
 
-- [ ] 3. Write failing unit tests for MockRecognitionService <!-- id:1ximgmo -->
+- [x] 3. Write failing unit tests for MockRecognitionService <!-- id:1ximgmo -->
   - Create src/lib/services/mock-recognition.test.ts
   - Test isReady() returns true
   - Test getBackendType() returns mock
@@ -41,7 +41,7 @@ references:
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6)
 
-- [ ] 4. Implement MockRecognitionService <!-- id:1ximgmp -->
+- [x] 4. Implement MockRecognitionService <!-- id:1ximgmp -->
   - Create src/lib/services/mock-recognition.ts
   - Implement IRecognitionService with isReady()=true, getBackendType()=mock
   - analyse() waits 500-1500ms random delay then returns MOCK_RESULT constant
@@ -235,7 +235,7 @@ references:
   - Stream: 2
   - Requirements: [5.5](requirements.md#5.5), [11.1](requirements.md#11.1)
 
-- [ ] 21. Update MealEditor.svelte: add mockMode prop, render MockModeBanner, retain state on failed save <!-- id:1ximgn6 -->
+- [x] 21. Update MealEditor.svelte: add mockMode prop, render MockModeBanner, retain state on failed save <!-- id:1ximgn6 -->
   - Add mockMode?: boolean prop to MealEditor
   - Render MockModeBanner when mockMode is true
   - On failed POST /api/meals: show error toast, do NOT clear editor items state
