@@ -29,7 +29,6 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.72.1",
 		"@azure/cosmos": "^4.9.1",
 		"@azure/storage-blob": "^12.30.0",
 		"zod": "^4.3.6"

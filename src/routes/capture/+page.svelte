@@ -28,7 +28,6 @@
 
 	// Captured image data
 	let capturedImage: Blob | null = $state(null);
-	let labelImage: Blob | null = $state(null); // Optional nutrition label image (Req 7.1)
 	let imageUrl: string | null = $state(null);
 
 	// AI recognition results
@@ -42,11 +41,9 @@
 
 	/**
 	 * Handle image capture from camera or gallery.
-	 * Now supports optional label image (Req 7.1)
 	 */
-	function handleCapture(result: { foodImage: Blob; labelImage?: Blob; source: 'camera' | 'gallery' }) {
+	function handleCapture(result: { foodImage: Blob; source: 'camera' | 'gallery' }) {
 		capturedImage = result.foodImage;
-		labelImage = result.labelImage ?? null;
 		flowState = 'preview';
 	}
 
@@ -72,13 +69,11 @@
 	 */
 	function handleRetake() {
 		capturedImage = null;
-		labelImage = null;
 		flowState = 'capture';
 	}
 
 	/**
-	 * Perform AI recognition.
-	 * Supports optional label image for improved accuracy (Req 7.1-7.5)
+	 * Perform AI recognition via the provider-agnostic /api/recognition/analyse endpoint.
 	 */
 	async function performRecognition() {
 		if (!capturedImage) return;
@@ -86,34 +81,17 @@
 		try {
 			// Convert Blob to base64
 			const base64 = await blobToBase64(capturedImage);
-			const mimeType = capturedImage.type as 'image/jpeg' | 'image/png';
+			const mimeType = capturedImage.type || 'image/jpeg';
 
-			// Build request body with optional label image
-			const requestBody: {
-				imageBase64: string;
-				mimeType: 'image/jpeg' | 'image/png';
-				labelBase64?: string;
-				labelMimeType?: 'image/jpeg' | 'image/png';
-			} = {
-				imageBase64: base64,
-				mimeType
-			};
-
-			// Add label image if provided (Req 7.1)
-			if (labelImage) {
-				requestBody.labelBase64 = await blobToBase64(labelImage);
-				requestBody.labelMimeType = labelImage.type as 'image/jpeg' | 'image/png';
-			}
-
-			const response = await fetch('/api/ai/recognise', {
+			const response = await fetch('/api/recognition/analyse', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(requestBody)
+				body: JSON.stringify({ imageBase64: base64, mimeType })
 			});
 
 			if (!response.ok) {
 				const errorBody = await response.json().catch(() => ({}));
-				const message = errorBody.message || 'Recognition failed.';
+				const message = errorBody.error || 'Recognition failed.';
 
 				// Determine error type from status code
 				if (response.status === 504) {
@@ -134,10 +112,10 @@
 				return;
 			}
 
-			const { data } = await response.json();
+			const result = await response.json();
 
-			recognitionItems = data.items;
-			recognitionConfidence = data.confidence;
+			recognitionItems = result.items;
+			recognitionConfidence = result.overallConfidence;
 
 			flowState = 'results';
 		} catch {

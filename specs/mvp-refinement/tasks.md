@@ -173,7 +173,7 @@ references:
 
 ## Cleanup
 
-- [ ] 15. Remove old Anthropic SDK, old services, old API routes, and label scanning code <!-- id:1ximgn0 -->
+- [x] 15. Remove old Anthropic SDK, old services, old API routes, and label scanning code <!-- id:1ximgn0 -->
   - Run: pnpm remove @anthropic-ai/sdk
   - Delete src/lib/services/claude-food-recognition.ts
   - Delete or gut src/lib/services/food-recognition.ts (replaced by recognition.ts)
@@ -246,7 +246,7 @@ references:
 
 ## Frontend Integration
 
-- [ ] 22. Write failing tests for capture page status detection and conditional rendering <!-- id:1ximgn7 -->
+- [x] 22. Write failing tests for capture page status detection and conditional rendering <!-- id:1ximgn7 -->
   - Create or extend src/routes/capture/+page.test.ts
   - Test skeleton/loading state shown while /api/recognition/status is in-flight
   - Test ManualEntryCTA renders when status returns { configured: false, mockMode: false }

@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `src/routes/capture/page.test.ts` — 7 tests for capture page status detection and conditional rendering: skeleton/loading state, ManualEntryCTA for unconfigured/error states, MockModeBanner for mock mode, recognition path for configured state (Task 22)
+
+### Removed
+- `@anthropic-ai/sdk` dependency — removed from `package.json` and `pnpm-lock.yaml` (D-MVR-013)
+- `src/lib/services/claude-food-recognition.ts` — old Anthropic SDK-based service (replaced by `HttpRecognitionService`)
+- `src/lib/services/food-recognition.ts` — old interface with `LabelContext`, `IFoodRecognitionService` (replaced by `recognition.ts`)
+- `src/routes/api/ai/recognise/+server.ts` — old API route (replaced by `/api/recognition/analyse`)
+
+### Changed
+- `src/routes/capture/+page.svelte` — updated to call `/api/recognition/analyse` instead of `/api/ai/recognise`, removed label scanning references
+- `src/lib/services/index.ts` — removed barrel exports for deleted `food-recognition` and `claude-food-recognition` modules
+- Renamed route test files from `+page.test.ts` to `page.test.ts` to fix SvelteKit build compatibility
+
+### Previously added
 - `createRecognitionService()` factory in `src/lib/services/recognition.ts` — returns `MockRecognitionService` when `RECOGNITION_MOCK_MODE=true`, `HttpRecognitionService` otherwise
 - `recognition.test.ts` — unit tests for `createRecognitionService()` factory (3 tests)
 - `/api/recognition/status` endpoint (`src/routes/api/recognition/status/+server.ts`) — returns `{ configured, mockMode }` with fail-safe default on error
