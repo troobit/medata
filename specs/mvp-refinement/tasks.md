@@ -344,7 +344,7 @@ references:
   - Stream: 2
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4)
 
-- [ ] 31. Audit and fix Irish English spelling in all user-facing strings <!-- id:1ximgng -->
+- [x] 31. Audit and fix Irish English spelling in all user-facing strings <!-- id:1ximgng -->
   - Search all .svelte and +server.ts files for US English spellings: recognized, organization, color, canceled, etc.
   - Fix to Irish English equivalents: recognised, organisation, colour, cancelled
   - Key files: capture page, MealEditor, manual entry, logbook, API error responses in analyse and meals endpoints

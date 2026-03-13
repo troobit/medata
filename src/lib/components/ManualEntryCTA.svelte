@@ -20,6 +20,6 @@
 		To enable AI food recognition, set <code class="rounded bg-white/10 px-1 py-0.5">RECOGNITION_BASE_URL</code>
 		and <code class="rounded bg-white/10 px-1 py-0.5">RECOGNITION_MODEL</code> in your
 		<code class="rounded bg-white/10 px-1 py-0.5">.env</code> file.
-		See the <a href="/docs/setup" class="underline hover:text-white/70">setup guide</a> for details.
+		See <code class="rounded bg-white/10 px-1 py-0.5">.env.example</code> for details.
 	</p>
 </div>
