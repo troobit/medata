@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- `src/routes/capture/+page.svelte` — full capture page wiring: fetch `/api/recognition/status` on mount with skeleton loading state, conditional ManualEntryCTA/MockModeBanner rendering, 10MB client-side image size check, `handleSave()` wired to `POST /api/meals` with Blob Storage image upload (Req 6.4, 11.1, 11.3)
+
 ### Added
 - `src/routes/capture/page.test.ts` — 7 tests for capture page status detection and conditional rendering: skeleton/loading state, ManualEntryCTA for unconfigured/error states, MockModeBanner for mock mode, recognition path for configured state (Task 22)
 

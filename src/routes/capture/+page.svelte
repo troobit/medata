@@ -5,15 +5,24 @@
 	 * Req 9.3: Complete in 3 or fewer actions (Photo → Review → Save)
 	 */
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import {
 		CameraCapture,
 		ImagePreview,
 		FoodRecognitionResult,
 		AIErrorFallback,
-		MealEditor
+		MealEditor,
+		MockModeBanner,
+		ManualEntryCTA
 	} from '$lib/components/index.js';
 	import type { RecognisedFoodItem, FoodItem, CreateMealInput } from '$lib/types/index.js';
 	import { toastStore } from '$lib/stores/index.js';
+	import { createMeal, uploadImage } from '$lib/services/meal-api.js';
+
+	// Recognition status from /api/recognition/status
+	let statusLoading = $state(true);
+	let recognitionConfigured = $state(false);
+	let mockMode = $state(false);
 
 	// Flow states
 	type FlowState =
@@ -39,6 +48,31 @@
 	let errorMessage = $state('');
 	let isRetrying = $state(false);
 
+	// Save state
+	let isSaving = $state(false);
+
+	// Max image size: 10MB
+	const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+	/**
+	 * Fetch recognition status on mount.
+	 * Defaults to { configured: false, mockMode: false } on error.
+	 */
+	onMount(async () => {
+		try {
+			const response = await fetch('/api/recognition/status');
+			if (response.ok) {
+				const data = await response.json();
+				recognitionConfigured = data.configured ?? false;
+				mockMode = data.mockMode ?? false;
+			}
+		} catch {
+			// Safe default: treat as unconfigured
+		} finally {
+			statusLoading = false;
+		}
+	});
+
 	/**
 	 * Handle image capture from camera or gallery.
 	 */
@@ -59,6 +93,12 @@
 	 */
 	async function handlePreviewConfirm() {
 		if (!capturedImage) return;
+
+		// Client-side 10MB image size check
+		if (capturedImage.size > MAX_IMAGE_SIZE) {
+			toastStore.error('Image is too large. Please use a photo under 10MB.');
+			return;
+		}
 
 		flowState = 'recognising';
 		await performRecognition();
@@ -178,19 +218,50 @@
 	}
 
 	/**
-	 * Handle meal save.
+	 * Handle meal save — POST /api/meals + image upload to Blob Storage.
+	 * Req 6.4: Image uploaded to Blob Storage, meal persisted to Cosmos DB.
+	 * Req 11.3: If image upload fails, meal saves without image.
 	 */
 	async function handleSave(meal: CreateMealInput) {
-		// For now, just show toast and go home
-		// TODO: Wire to actual save API when meal storage is implemented
-		toastStore.success('Meal saved');
+		if (isSaving) return;
+		isSaving = true;
 
-		// Cleanup
-		if (imageUrl) {
-			URL.revokeObjectURL(imageUrl);
+		try {
+			// Attempt image upload if we have a captured image (Req 6.4)
+			// If upload fails, save meal without image (Req 11.3)
+			let uploadedImageUrl: string | undefined;
+			if (capturedImage) {
+				try {
+					const mimeType = capturedImage.type || 'image/jpeg';
+					const extension = mimeType === 'image/png' ? 'png' : 'jpg';
+					const file = new File([capturedImage], `capture.${extension}`, { type: mimeType });
+					uploadedImageUrl = await uploadImage(file);
+				} catch {
+					// Req 11.3: Image upload failure is non-fatal — meal saves without image
+				}
+			}
+
+			// Build final meal input with uploaded image URL
+			const mealInput: CreateMealInput = {
+				...meal,
+				...(uploadedImageUrl ? { imageUrl: uploadedImageUrl } : {})
+			};
+
+			await createMeal(mealInput);
+			toastStore.success('Meal saved');
+
+			// Cleanup
+			if (imageUrl) {
+				URL.revokeObjectURL(imageUrl);
+			}
+
+			goto('/');
+		} catch {
+			toastStore.error('Service unavailable — meal not saved.');
+			// Req 11.1: Editor state retained on failed save — don't navigate away
+		} finally {
+			isSaving = false;
 		}
-
-		goto('/');
 	}
 
 	/**
@@ -230,59 +301,81 @@
 </script>
 
 <div class="pb-4">
-	{#if flowState === 'capture'}
-		<CameraCapture onCapture={handleCapture} onCancel={handleCaptureCancel} />
-	{:else if flowState === 'preview' && capturedImage}
-		<ImagePreview
-			image={capturedImage}
-			onConfirm={handlePreviewConfirm}
-			onRetake={handleRetake}
-		/>
-	{:else if flowState === 'recognising'}
-		<div class="flex flex-col items-center justify-center gap-4 py-12">
-			<div class="animate-pulse">
-				<div class="h-16 w-16 rounded-full bg-brand-accent/20 flex items-center justify-center">
-					<div class="h-8 w-8 rounded-full bg-brand-accent animate-ping"></div>
-				</div>
+	{#if statusLoading}
+		<!-- Skeleton loading state during status fetch (prevents layout shift) -->
+		<div class="flex flex-col gap-4 py-8">
+			<div class="animate-pulse space-y-4">
+				<div class="h-48 rounded-lg bg-white/5"></div>
+				<div class="h-12 rounded-lg bg-white/5"></div>
 			</div>
-			<p class="text-white/70">Analysing your meal...</p>
 		</div>
-	{:else if flowState === 'results'}
-		<FoodRecognitionResult
-			items={recognitionItems}
-			confidence={recognitionConfidence}
-			onConfirm={handleResultsConfirm}
-			onRetry={handleRetry}
-			onManualEntry={handleManualEntry}
-		/>
-	{:else if flowState === 'error'}
-		<AIErrorFallback
-			{errorType}
-			{errorMessage}
-			onRetry={handleRetry}
-			onManualEntry={handleManualEntry}
-			{isRetrying}
-		/>
-	{:else if flowState === 'editing'}
-		{#if imageUrl}
-			<MealEditor
-				initialItems={foodItems}
-				initialConfidences={confidences}
-				{imageUrl}
-				source={mealSource}
-				overallConfidence={recognitionConfidence}
-				onSave={handleSave}
-				onCancel={handleEditorCancel}
+	{:else if !recognitionConfigured && !mockMode}
+		<!-- Recognition not configured — show ManualEntryCTA -->
+		<ManualEntryCTA />
+	{:else}
+		<!-- Recognition available — show capture flow -->
+		{#if mockMode}
+			<div class="mb-4">
+				<MockModeBanner />
+			</div>
+		{/if}
+
+		{#if flowState === 'capture'}
+			<CameraCapture onCapture={handleCapture} onCancel={handleCaptureCancel} />
+		{:else if flowState === 'preview' && capturedImage}
+			<ImagePreview
+				image={capturedImage}
+				onConfirm={handlePreviewConfirm}
+				onRetake={handleRetake}
 			/>
-		{:else}
-			<MealEditor
-				initialItems={foodItems}
-				initialConfidences={confidences}
-				source={mealSource}
-				overallConfidence={recognitionConfidence}
-				onSave={handleSave}
-				onCancel={handleEditorCancel}
+		{:else if flowState === 'recognising'}
+			<div class="flex flex-col items-center justify-center gap-4 py-12">
+				<div class="animate-pulse">
+					<div class="h-16 w-16 rounded-full bg-brand-accent/20 flex items-center justify-center">
+						<div class="h-8 w-8 rounded-full bg-brand-accent animate-ping"></div>
+					</div>
+				</div>
+				<p class="text-white/70">Analysing your meal...</p>
+			</div>
+		{:else if flowState === 'results'}
+			<FoodRecognitionResult
+				items={recognitionItems}
+				confidence={recognitionConfidence}
+				onConfirm={handleResultsConfirm}
+				onRetry={handleRetry}
+				onManualEntry={handleManualEntry}
 			/>
+		{:else if flowState === 'error'}
+			<AIErrorFallback
+				{errorType}
+				{errorMessage}
+				onRetry={handleRetry}
+				onManualEntry={handleManualEntry}
+				{isRetrying}
+			/>
+		{:else if flowState === 'editing'}
+			{#if imageUrl}
+				<MealEditor
+					initialItems={foodItems}
+					initialConfidences={confidences}
+					{imageUrl}
+					source={mealSource}
+					overallConfidence={recognitionConfidence}
+					onSave={handleSave}
+					onCancel={handleEditorCancel}
+					{mockMode}
+				/>
+			{:else}
+				<MealEditor
+					initialItems={foodItems}
+					initialConfidences={confidences}
+					source={mealSource}
+					overallConfidence={recognitionConfidence}
+					onSave={handleSave}
+					onCancel={handleEditorCancel}
+					{mockMode}
+				/>
+			{/if}
 		{/if}
 	{/if}
 </div>

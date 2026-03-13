@@ -257,7 +257,7 @@ references:
   - Stream: 2
   - Requirements: [4.4](requirements.md#4.4), [5.5](requirements.md#5.5)
 
-- [ ] 23. Update /capture/+page.svelte: fetch status, conditional rendering, wire handleSave, image size check <!-- id:1ximgn8 -->
+- [x] 23. Update /capture/+page.svelte: fetch status, conditional rendering, wire handleSave, image size check <!-- id:1ximgn8 -->
   - On page mount: fetch GET /api/recognition/status; store result as { configured, mockMode }
   - Show skeleton/loading state during status fetch (prevents layout shift)
   - On fetch error: default to { configured: false, mockMode: false }
