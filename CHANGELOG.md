@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `createRecognitionService()` factory in `src/lib/services/recognition.ts` — returns `MockRecognitionService` when `RECOGNITION_MOCK_MODE=true`, `HttpRecognitionService` otherwise
+- `recognition.test.ts` — unit tests for `createRecognitionService()` factory (3 tests)
+- `/api/recognition/status` endpoint (`src/routes/api/recognition/status/+server.ts`) — returns `{ configured, mockMode }` with fail-safe default on error
+- `/api/recognition/status` tests — 5 tests covering configured/unconfigured/mock/error scenarios
+- `/api/recognition/analyse` endpoint (`src/routes/api/recognition/analyse/+server.ts`) — POST handler with image size validation, base64→Blob conversion, `RecognitionError` → HTTP status mapping, Irish English error messages (Req 11.4)
+- `/api/recognition/analyse` tests — 9 tests covering success, 503/504/422/413/429/502 error codes, and Irish English spelling validation
 - `IRecognitionService` interface, `RecognitionError` class, and canonical types in `src/lib/services/recognition.ts` — provider-agnostic recognition layer (D-MVR-013, D-MVR-015)
 - `MockModeBanner.svelte` component — amber banner indicating mock mode is active
 - `ManualEntryCTA.svelte` component — call-to-action when recognition is not configured

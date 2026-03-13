@@ -108,7 +108,7 @@ references:
 
 ## Factory & API Layer
 
-- [ ] 9. Write failing unit tests for createRecognitionService() factory <!-- id:1ximgmu -->
+- [x] 9. Write failing unit tests for createRecognitionService() factory <!-- id:1ximgmu -->
   - Add tests to src/lib/services/recognition.test.ts
   - Test returns MockRecognitionService when RECOGNITION_MOCK_MODE=true
   - Test returns HttpRecognitionService when RECOGNITION_MOCK_MODE=false
@@ -117,7 +117,7 @@ references:
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [5.6](requirements.md#5.6)
 
-- [ ] 10. Implement createRecognitionService() factory <!-- id:1ximgmv -->
+- [x] 10. Implement createRecognitionService() factory <!-- id:1ximgmv -->
   - In src/lib/services/recognition.ts, implement createRecognitionService()
   - Import env from $env/dynamic/private (server-side only)
   - Return new MockRecognitionService() when env[RECOGNITION_MOCK_MODE] === true
@@ -126,7 +126,7 @@ references:
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [5.6](requirements.md#5.6)
 
-- [ ] 11. Write failing unit tests for /api/recognition/status endpoint <!-- id:1ximgmw -->
+- [x] 11. Write failing unit tests for /api/recognition/status endpoint <!-- id:1ximgmw -->
   - Create src/routes/api/recognition/status/+server.test.ts
   - Test returns { configured: true, mockMode: false } when base URL and model are set
   - Test returns { configured: false, mockMode: false } when base URL or model missing
@@ -136,7 +136,7 @@ references:
   - Stream: 1
   - Requirements: [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [5.5](requirements.md#5.5)
 
-- [ ] 12. Implement /api/recognition/status endpoint <!-- id:1ximgmx -->
+- [x] 12. Implement /api/recognition/status endpoint <!-- id:1ximgmx -->
   - Create src/routes/api/recognition/status/+server.ts
   - GET handler calls createRecognitionService()
   - Returns json({ configured: service.isReady(), mockMode: service.getBackendType() === mock })
@@ -145,7 +145,7 @@ references:
   - Stream: 1
   - Requirements: [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [5.1](requirements.md#5.1), [5.5](requirements.md#5.5)
 
-- [ ] 13. Write failing unit tests for /api/recognition/analyse endpoint <!-- id:1ximgmy -->
+- [x] 13. Write failing unit tests for /api/recognition/analyse endpoint <!-- id:1ximgmy -->
   - Create src/routes/api/recognition/analyse/+server.test.ts
   - Test returns 503 when service is not configured (not ready)
   - Test returns 504 on RecognitionError(TIMEOUT)
@@ -158,7 +158,7 @@ references:
   - Stream: 1
   - Requirements: [4.3](requirements.md#4.3), [6.6](requirements.md#6.6), [11.2](requirements.md#11.2), [11.4](requirements.md#11.4)
 
-- [ ] 14. Implement /api/recognition/analyse endpoint <!-- id:1ximgmz -->
+- [x] 14. Implement /api/recognition/analyse endpoint <!-- id:1ximgmz -->
   - Create src/routes/api/recognition/analyse/+server.ts
   - POST handler: parse request body { imageBase64, mimeType }
   - Validate image size: reject if imageBase64.length > 14,000,000 with 413

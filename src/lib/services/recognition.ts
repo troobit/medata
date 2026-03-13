@@ -2,6 +2,8 @@
  * Recognition service interface and canonical types.
  * Defines the contract for food image analysis backends.
  */
+import { MockRecognitionService } from "./mock-recognition.js";
+import { HttpRecognitionService } from "./http-recognition.js";
 
 /**
  * Interface for food recognition services.
@@ -58,9 +60,12 @@ export class RecognitionError extends Error {
 }
 
 /**
- * Factory stub for creating a recognition service.
- * Will be implemented in a later task.
+ * Factory for creating the appropriate recognition service based on environment config.
+ * Server-side only — reads from process.env.
  */
 export function createRecognitionService(): IRecognitionService {
-  throw new Error("createRecognitionService() not yet implemented");
+  if (process.env["RECOGNITION_MOCK_MODE"] === "true") {
+    return new MockRecognitionService();
+  }
+  return new HttpRecognitionService();
 }
