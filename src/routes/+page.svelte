@@ -1,179 +1,290 @@
 <script lang="ts">
-  import { Button, EmptyState, Logo } from '$lib/components/ui';
-  import { eventsStore } from '$lib/stores';
-  import { onMount } from 'svelte';
+	/**
+	 * Home page with action buttons and recent meals logbook.
+	 * Per design section 7.5: Show recent meals on home page
+	 */
+	import { goto } from '$app/navigation';
+	import { LogbookList, MealDetail, MealEditor, ToastContainer } from '$lib/components/index.js';
+	import { toastStore } from '$lib/stores/toast.svelte.js';
+	import { getMealsByDay, updateMeal, deleteMeal } from '$lib/services/index.js';
+	import type { Meal, UpdateMealInput } from '$lib/types/index.js';
+	import { sumMacros } from '$lib/utils/index.js';
 
-  onMount(() => {
-    eventsStore.loadToday();
-  });
+	// Load recent meals (today and yesterday)
+	let meals = $state<Meal[]>([]);
+	let loading = $state(true);
+	let error = $state<string | null>(null);
 
-  // Get today's stats from events
-  const todayStats = $derived.by(() => {
-    const events = eventsStore.events;
-    const insulinEvents = events.filter((e) => e.eventType === 'insulin');
-    const mealEvents = events.filter((e) => e.eventType === 'meal');
-    const bslEvents = events.filter((e) => e.eventType === 'bsl');
+	// Modal state
+	let selectedMeal = $state<Meal | null>(null);
+	let editingMeal = $state<Meal | null>(null);
+	let deleteConfirmMeal = $state<Meal | null>(null);
 
-    const totalInsulin = insulinEvents.reduce((sum, e) => sum + e.value, 0);
-    const totalCarbs = mealEvents.reduce((sum, e) => sum + e.value, 0);
-    const avgBSL =
-      bslEvents.length > 0
-        ? bslEvents.reduce((sum, e) => sum + e.value, 0) / bslEvents.length
-        : null;
+	/**
+	 * Load recent meals from API.
+	 */
+	async function loadMeals() {
+		loading = true;
+		error = null;
 
-    return {
-      totalInsulin,
-      totalCarbs,
-      avgBSL,
-      eventCount: events.length
-    };
-  });
+		try {
+			const today = new Date();
+			const yesterday = new Date(today);
+			yesterday.setDate(yesterday.getDate() - 1);
+
+			// Fetch meals for today and yesterday in parallel
+			const [todayMeals, yesterdayMeals] = await Promise.all([
+				getMealsByDay(today),
+				getMealsByDay(yesterday)
+			]);
+
+			// Combine and sort by timestamp descending
+			meals = [...todayMeals, ...yesterdayMeals].sort((a, b) => b.timestamp - a.timestamp);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load meals';
+			console.error('Load meals error:', e);
+		} finally {
+			loading = false;
+		}
+	}
+
+	// Load meals on mount
+	$effect(() => {
+		loadMeals();
+	});
+
+	/**
+	 * Handle meal selection (view details).
+	 */
+	function handleSelectMeal(meal: Meal) {
+		selectedMeal = meal;
+	}
+
+	/**
+	 * Handle edit meal action.
+	 */
+	function handleEditMeal(meal: Meal) {
+		selectedMeal = null;
+		editingMeal = meal;
+	}
+
+	/**
+	 * Handle delete meal action.
+	 */
+	function handleDeleteMeal(mealId: string) {
+		const meal = meals.find((m) => m.id === mealId);
+		if (meal) {
+			selectedMeal = null;
+			deleteConfirmMeal = meal;
+		}
+	}
+
+	/**
+	 * Confirm deletion.
+	 */
+	async function confirmDelete() {
+		if (!deleteConfirmMeal) return;
+
+		try {
+			await deleteMeal(deleteConfirmMeal.id);
+			meals = meals.filter((m) => m.id !== deleteConfirmMeal!.id);
+			toastStore.success('Meal deleted');
+			deleteConfirmMeal = null;
+		} catch (e) {
+			toastStore.error(e instanceof Error ? e.message : 'Delete failed');
+		}
+	}
+
+	/**
+	 * Handle save edited meal.
+	 */
+	async function handleSaveEdit(input: {
+		timestamp: number;
+		items: import('$lib/types/index.js').FoodItem[];
+		totalCarbs: number;
+		totalProtein: number;
+		totalFat: number;
+		source: import('$lib/types/index.js').MealDataSource;
+		imageUrl?: string;
+		confidence?: number;
+	}) {
+		if (!editingMeal) return;
+
+		const updates: UpdateMealInput = {
+			timestamp: input.timestamp,
+			items: input.items,
+			totalCarbs: input.totalCarbs,
+			totalProtein: input.totalProtein,
+			totalFat: input.totalFat
+		};
+
+		// Only add imageUrl if defined
+		if (input.imageUrl !== undefined) {
+			updates.imageUrl = input.imageUrl;
+		}
+
+		try {
+			const updated = await updateMeal(editingMeal.id, updates);
+			meals = meals.map((m) => (m.id === updated.id ? updated : m));
+			toastStore.success('Meal updated');
+			editingMeal = null;
+		} catch (e) {
+			toastStore.error(e instanceof Error ? e.message : 'Update failed');
+		}
+	}
+
+	/**
+	 * Close all modals.
+	 */
+	function closeModals() {
+		selectedMeal = null;
+		editingMeal = null;
+		deleteConfirmMeal = null;
+	}
 </script>
 
-<div class="px-4 py-6">
-  <!-- Header -->
-  <header class="mb-8">
-    <div class="flex items-center gap-3">
-      <Logo size="md" />
-      <h1 class="text-2xl font-bold text-white">MeData</h1>
-    </div>
-    <p class="mt-1 text-gray-400">Medical Data. For Me.</p>
-  </header>
+<div class="flex flex-col gap-4">
+	<!-- Action buttons -->
+	<a
+		href="/capture"
+		class="flex items-center justify-center gap-2 min-h-[44px] px-6 py-4 bg-brand-accent text-primary-background font-semibold rounded-lg hover:opacity-90 transition-opacity"
+	>
+		Capture Meal
+	</a>
 
-  <!-- Quick Actions -->
-  <section class="mb-8">
-    <h2 class="mb-4 text-lg font-semibold text-gray-200">Quick Log</h2>
-    <div class="grid grid-cols-2 gap-3">
-      <a
-        href="/log/insulin"
-        class="flex min-h-[80px] flex-col items-center justify-center rounded-xl bg-gray-800 p-4 transition-colors hover:bg-gray-700"
-      >
-        <svg class="h-8 w-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-          />
-        </svg>
-        <span class="mt-2 text-sm font-medium text-gray-200">Insulin</span>
-      </a>
-      <a
-        href="/log/meal"
-        class="flex min-h-[80px] flex-col items-center justify-center rounded-xl bg-gray-800 p-4 transition-colors hover:bg-gray-700"
-      >
-        <svg class="h-8 w-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-          />
-        </svg>
-        <span class="mt-2 text-sm font-medium text-gray-200">Meal</span>
-      </a>
-    </div>
-  </section>
+	<a
+		href="/manual"
+		class="flex items-center justify-center gap-2 min-h-[44px] px-6 py-4 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors"
+	>
+		Manual Entry
+	</a>
 
-  <!-- Today's Summary -->
-  <section>
-    <h2 class="mb-4 text-lg font-semibold text-gray-200">Today</h2>
+	<a
+		href="/presets"
+		class="flex items-center justify-center gap-2 min-h-[44px] px-6 py-4 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors"
+	>
+		From Preset
+	</a>
 
-    {#if eventsStore.loading}
-      <div class="flex justify-center py-8">
-        <Logo animated size="md" />
-      </div>
-    {:else if eventsStore.events.length === 0}
-      <EmptyState
-        title="No entries yet"
-        description="Start tracking by logging your first insulin dose or meal."
-      >
-        {#snippet action()}
-          <Button href="/log" variant="primary">Log Entry</Button>
-        {/snippet}
-      </EmptyState>
-    {:else}
-      <div class="grid grid-cols-3 gap-3">
-        <div class="rounded-lg bg-gray-800 p-4 text-center">
-          <p class="text-2xl font-bold text-blue-400">{todayStats.totalInsulin}</p>
-          <p class="mt-1 text-xs text-gray-400">units insulin</p>
-        </div>
-        <div class="rounded-lg bg-gray-800 p-4 text-center">
-          <p class="text-2xl font-bold text-green-400">{todayStats.totalCarbs}</p>
-          <p class="mt-1 text-xs text-gray-400">g carbs</p>
-        </div>
-        <div class="rounded-lg bg-gray-800 p-4 text-center">
-          <p class="text-2xl font-bold text-yellow-400">
-            {todayStats.avgBSL !== null ? todayStats.avgBSL.toFixed(1) : '-'}
-          </p>
-          <p class="mt-1 text-xs text-gray-400">avg BSL</p>
-        </div>
-      </div>
+	<hr class="border-white/10 my-4" />
 
-      <!-- Recent Events -->
-      <div class="mt-6">
-        <h3 class="mb-3 text-sm font-medium text-gray-400">Recent entries</h3>
-        <ul class="space-y-2">
-          {#each eventsStore.events.slice(0, 5) as event}
-            <li class="flex items-center justify-between rounded-lg bg-gray-800/50 px-4 py-3">
-              <div class="flex items-center gap-3">
-                <span
-                  class="flex h-8 w-8 items-center justify-center rounded-full {event.eventType ===
-                  'insulin'
-                    ? 'bg-blue-500/20 text-blue-400'
-                    : event.eventType === 'meal'
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-yellow-500/20 text-yellow-400'}"
-                >
-                  {#if event.eventType === 'insulin'}
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-                      />
-                    </svg>
-                  {:else if event.eventType === 'meal'}
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                      />
-                    </svg>
-                  {:else}
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                      />
-                    </svg>
-                  {/if}
-                </span>
-                <div>
-                  <p class="text-sm font-medium text-gray-200">
-                    {event.eventType === 'insulin'
-                      ? `${event.value} units`
-                      : event.eventType === 'meal'
-                        ? `${event.value}g carbs`
-                        : `${event.value} mmol/L`}
-                  </p>
-                  <p class="text-xs text-gray-500">
-                    {new Date(event.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-              </div>
-            </li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
-  </section>
+	<!-- Logbook section -->
+	<section>
+		<h2 class="text-lg font-medium text-white/70 mb-3">Recent Meals</h2>
+
+		{#if loading}
+			<div class="flex items-center justify-center py-8">
+				<div class="animate-spin h-6 w-6 border-2 border-brand-accent border-t-transparent rounded-full"></div>
+			</div>
+		{:else if error}
+			<div class="text-center py-8">
+				<p class="text-red-400 mb-2">{error}</p>
+				<button
+					onclick={loadMeals}
+					class="text-brand-accent hover:underline"
+				>
+					Try again
+				</button>
+			</div>
+		{:else}
+			<LogbookList
+				{meals}
+				onSelect={handleSelectMeal}
+				onEdit={handleEditMeal}
+				onDelete={handleDeleteMeal}
+			/>
+		{/if}
+	</section>
 </div>
+
+<!-- Meal detail modal -->
+{#if selectedMeal}
+	<MealDetail
+		meal={selectedMeal}
+		onEdit={() => handleEditMeal(selectedMeal!)}
+		onDelete={() => handleDeleteMeal(selectedMeal!.id)}
+		onClose={closeModals}
+	/>
+{/if}
+
+<!-- Edit meal modal -->
+{#if editingMeal}
+	<div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+		<!-- Backdrop -->
+		<button class="absolute inset-0 bg-black/80" onclick={closeModals} aria-label="Close"></button>
+
+		<!-- Modal content -->
+		<div class="relative w-full max-w-lg bg-gray-900 rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto p-4">
+			<h2 class="text-lg font-semibold text-white mb-4">Edit Meal</h2>
+			{#if editingMeal.imageUrl !== undefined && editingMeal.confidence !== undefined}
+				{@const editorImageUrl = editingMeal.imageUrl}
+				{@const editorConfidence = editingMeal.confidence}
+				<MealEditor
+					initialItems={editingMeal.items}
+					imageUrl={editorImageUrl}
+					source={editingMeal.source}
+					overallConfidence={editorConfidence}
+					onSave={handleSaveEdit}
+					onCancel={closeModals}
+				/>
+			{:else if editingMeal.imageUrl !== undefined}
+				{@const editorImageUrl = editingMeal.imageUrl}
+				<MealEditor
+					initialItems={editingMeal.items}
+					imageUrl={editorImageUrl}
+					source={editingMeal.source}
+					onSave={handleSaveEdit}
+					onCancel={closeModals}
+				/>
+			{:else if editingMeal.confidence !== undefined}
+				{@const editorConfidence = editingMeal.confidence}
+				<MealEditor
+					initialItems={editingMeal.items}
+					source={editingMeal.source}
+					overallConfidence={editorConfidence}
+					onSave={handleSaveEdit}
+					onCancel={closeModals}
+				/>
+			{:else}
+				<MealEditor
+					initialItems={editingMeal.items}
+					source={editingMeal.source}
+					onSave={handleSaveEdit}
+					onCancel={closeModals}
+				/>
+			{/if}
+		</div>
+	</div>
+{/if}
+
+<!-- Delete confirmation modal -->
+{#if deleteConfirmMeal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center">
+		<!-- Backdrop -->
+		<button class="absolute inset-0 bg-black/80" onclick={closeModals} aria-label="Close"></button>
+
+		<!-- Modal content -->
+		<div class="relative w-full max-w-sm bg-gray-900 rounded-2xl p-6">
+			<h2 class="text-lg font-semibold text-white mb-2">Delete Meal?</h2>
+			<p class="text-white/70 mb-6">
+				This will permanently delete this meal with {deleteConfirmMeal.items.length} item{deleteConfirmMeal.items.length !== 1 ? 's' : ''}.
+			</p>
+			<div class="flex gap-3">
+				<button
+					onclick={closeModals}
+					class="flex-1 py-3 px-4 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 min-h-[44px]"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={confirmDelete}
+					class="flex-1 py-3 px-4 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 min-h-[44px]"
+				>
+					Delete
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<ToastContainer />

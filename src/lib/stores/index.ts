@@ -1,5 +1,4 @@
-export { authStore, type AuthState } from './auth.svelte';
-export { eventsStore } from './events.svelte';
-export { settingsStore } from './settings.svelte';
-export { validationStore } from './validation.svelte';
-export { presetsStore } from './presets.svelte';
+/**
+ * Re-export all stores from the stores directory.
+ */
+export { toastStore, type ToastMessage, type ToastType } from './toast.svelte.js';
