@@ -1,0 +1,12 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+message ClassPalette {
+    repeated string food_classes = 1;           // 24 entries per Req 8.4
+    int32 background = 2;
+    int32 unknown_food = 3;
+    int32 unsupported_liquid = 4;
+    string version = 5;                         // matches database edition per Req 11.4
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+// Per-class palette migration entry. to_class_id_or_unmappable carries the destination
+// class id, OR the literal string "unmappable" when no v2 equivalent exists.
+message ClassMapping {
+    string to_class_id_or_unmappable = 1;
+}
+
+// Schema for class_mapping_v1_v2.json (Req 11.10, design §6.12).
+message ClassMappingFile {
+    string from_palette = 1;                    // e.g. "v1"
+    string to_palette = 2;                      // e.g. "v2"
+    map<string, ClassMapping> mappings = 3;     // v1_class_id → mapping
+}

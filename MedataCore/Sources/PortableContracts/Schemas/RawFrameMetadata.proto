@@ -1,0 +1,15 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+message RawFrameMetadata {
+    string view_id = 1;                         // 'nadir' | 'oblique'
+    string image_filename = 2;
+    string depth_filename = 3;                  // empty when no LiDAR
+    string confidence_filename = 4;             // empty when no LiDAR
+    string mask_filename = 5;
+    string probs_filename = 6;
+    int32 image_width = 7;
+    int32 image_height = 8;
+}

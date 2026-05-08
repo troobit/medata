@@ -1,0 +1,19 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "VoxelGridSummary.proto";
+
+option swift_prefix = "Pb";
+
+enum CapturePath {
+    CAPTURE_PATH_UNSPECIFIED = 0;
+    CAPTURE_PATH_SINGLE_VIEW_LIDAR = 1;
+    CAPTURE_PATH_TWO_VIEW_SFS = 2;
+}
+
+message VolumeResult {
+    map<string, float> per_class_volumes_cm3 = 1;
+    float ambiguous_voxel_fraction = 2;         // two-view path only
+    map<string, float> lidar_coverage_fraction = 3; // single-view path only
+    VoxelGridSummary voxel_grid_summary = 4;
+}

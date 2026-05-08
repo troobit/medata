@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+# Swift sources
+*.swift text diff=swift
+*.proto text
+
+# Generated Swift sources from protoc — committed (per design §4.3) but not author-edited.
+MedataCore/Sources/PortableContracts/Generated/**/*.swift linguist-generated=true
+
+# Binary fixture artefacts tracked via Git LFS (per task 1).
+MedataCore/Tests/Fixtures/**/*.image filter=lfs diff=lfs merge=lfs -text
+MedataCore/Tests/Fixtures/**/*.depth_mm filter=lfs diff=lfs merge=lfs -text
+MedataCore/Tests/Fixtures/**/*.confidence filter=lfs diff=lfs merge=lfs -text
+MedataCore/Tests/Fixtures/**/*.mask filter=lfs diff=lfs merge=lfs -text
+MedataCore/Tests/Fixtures/**/*.probs filter=lfs diff=lfs merge=lfs -text
+MedataCore/Tests/Fixtures/**/*.png filter=lfs diff=lfs merge=lfs -text
+MedataCore/Tests/Fixtures/**/*.mlpackage filter=lfs diff=lfs merge=lfs -text
+MedataCore/Resources/segmenter.mlpackage filter=lfs diff=lfs merge=lfs -text

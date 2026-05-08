@@ -1,0 +1,12 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+// Computed but not surfaced in v1 per Req 12.6.
+message ClinicalMacros {
+    float energy_kj = 1;
+    float protein_g = 2;
+    float fat_g = 3;
+    float fibre_g = 4;
+}

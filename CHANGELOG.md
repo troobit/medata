@@ -6,7 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `Package.swift`, `MedataCore/Sources/{12 modules}/`, `HarnessCLI/main.swift` — Swift Package skeleton per design §2.1 (research tasks 1, 7); twelve module targets plus a macOS executable target and three test bundles, building with `swift build` and `swift test` on macOS 14 / iOS 17.
+- `MedataCore/Sources/PortableContracts/Schemas/*.proto` — 27 canonical schemas covering every record that crosses a module boundary per design §4.3 and Decision 31; `generate.sh` regenerates the committed `Generated/*.pb.swift` sources via `protoc-gen-swift` (research tasks 2, 3).
+- `MedataCore/Sources/PortableContracts/{Vec3,Mat4,Projection}.swift` — Swift-ergonomic types per design §3.1 with right-handed cross product, column-major Mat4 storage, `−Z`-forward projection, and bridges to/from the generated `Pb*` types (research task 5).
+- `MedataCore/Sources/CaptureKit/SimdAdapter.swift` — `simd_float3` ↔ `Vec3` and `simd_float4x4` ↔ `Mat4` conversions, scoped to `CaptureKit` only per the design boundary rule.
+- `MedataCore/Sources/CaptureKit/MetalContext.swift` — `@unchecked Sendable` shared device/queue/library context per design §3.1.1; falls back to an empty in-memory library so the lifecycle test runs on hosts without a bundled metallib (research tasks 6, 7).
+- `MedataCore/Tests/PortableContractsTests/` — 21 round-trip and convention tests covering protobuf binary, deterministic protobuf-JSON, Vec3/Mat4 conventions, and the `Pb` ↔ Swift bridge (research tasks 2, 4).
+- `MedataCore/Tests/CaptureKitTests/` — 5 tests covering simd interop and the MetalContext lifecycle (research tasks 4, 6); skip gracefully when no Metal device is available.
+- `.swiftformat`, `.gitattributes` — Swift formatting config and Git LFS rules for fixture artefacts and the bundled segmenter package per task 1.
+- `docs/agent-notes/swift-package.md` — agent context note describing the package topology, generated-protobuf naming, and build/test entry points.
+
 ### Changed
+- `.gitignore` — added Swift / Xcode build artefact patterns (`.build/`, `.swiftpm/`, `DerivedData/`, `*.xcodeproj/xcuserdata/`, `Package.resolved`).
+- `specs/research/tasks.md` — Foundation phase tasks 1–7 marked complete.
+
+### Previously added
 - `src/routes/capture/+page.svelte` — full capture page wiring: fetch `/api/recognition/status` on mount with skeleton loading state, conditional ManualEntryCTA/MockModeBanner rendering, 10MB client-side image size check, `handleSave()` wired to `POST /api/meals` with Blob Storage image upload (Req 6.4, 11.1, 11.3)
 
 ### Added

@@ -53,3 +53,11 @@ static/test-data.json
 **/.orbit/
 .vercel
 .env*.local
+
+# Swift / Xcode build artefacts
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+Package.resolved

@@ -8,47 +8,47 @@ references:
 
 ## Foundation
 
-- [ ] 1. Create Swift Package + Xcode project skeleton <!-- id:0f06zz7 -->
+- [x] 1. Create Swift Package + Xcode project skeleton <!-- id:0f06zz7 -->
   - Create `MedataCore` Swift Package with module folders for CaptureKit, CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Foods, Macros, Confidence, Persistence, PortableContracts, Pipeline (per design §2.1).
   - Create iOS app target referencing MedataCore; Swift 5.9+, deployment target iOS 17.
   - Create `HarnessCLI` SPM executable target for macOS.
   - Add Package.swift, .xcodeproj, .swiftformat, .gitattributes (Git LFS for fixtures dir convention).
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [18.1](requirements.md#18.1), [18.2](requirements.md#18.2)
 
-- [ ] 2. Write .proto schemas and round-trip tests for portable contracts <!-- id:0f06zz3 -->
+- [x] 2. Write .proto schemas and round-trip tests for portable contracts <!-- id:0f06zz3 -->
   - Author all 24 .proto files listed in design §4.3 under `MedataCore/Sources/PortableContracts/Schemas/`.
   - Write XCTest cases: encode → decode → bit-equal for each top-level message (RawFrame, MealRecord, MealFixture, ProbabilityTensor, etc.).
   - Verify protobuf-JSON round-trip is deterministic (camelCase keys, RFC 7159 stable ordering) per Decision 31.
   - Tests will fail until task 3 generates the Swift sources.
   - Requirements: [18.1](requirements.md#18.1), [18.2](requirements.md#18.2), [14.4](requirements.md#14.4), [15.1](requirements.md#15.1)
 
-- [ ] 3. Generate Swift sources from .proto and integrate `swift-protobuf` <!-- id:0f06zz4 -->
+- [x] 3. Generate Swift sources from .proto and integrate `swift-protobuf` <!-- id:0f06zz4 -->
   - Run `protoc --swift_out` against the schemas; commit generated sources to `PortableContracts/Generated/`.
   - Add `swift-protobuf` Package.swift dependency.
   - Confirm round-trip tests from task 2 pass.
   - Blocked-by: 0f06zz3 (Write .proto schemas and round-trip tests for portable contracts)
   - Requirements: [18.2](requirements.md#18.2)
 
-- [ ] 4. Write tests for `Vec3` / `Mat4` conventions and `simd` interop <!-- id:0f06zz5 -->
+- [x] 4. Write tests for `Vec3` / `Mat4` conventions and `simd` interop <!-- id:0f06zz5 -->
   - Test column-major layout, right-handed cross product, projection sign per design §6.0.
   - Test simd_float3↔Vec3 and simd_float4x4↔Mat4 conversion round-trip is bit-equal.
   - Test sign convention of `project(K, p)` for −Z forward.
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [18.1](requirements.md#18.1)
 
-- [ ] 5. Implement `Vec3` / `Mat4` extension operators and `simd` adapters <!-- id:0f06zz6 -->
+- [x] 5. Implement `Vec3` / `Mat4` extension operators and `simd` adapters <!-- id:0f06zz6 -->
   - Operator overloads for `+`, `-`, dot, cross, normalise, projection per design §6.0.
   - Adapter in `CaptureKit` only — every other module consumes the generated protobuf types directly.
   - Blocked-by: 0f06zz5 (Write tests for `Vec3` / `Mat4` conventions and `simd` interop)
   - Requirements: [18.1](requirements.md#18.1)
 
-- [ ] 6. Write tests for `MetalContext` lifecycle <!-- id:0f06zz8 -->
+- [x] 6. Write tests for `MetalContext` lifecycle <!-- id:0f06zz8 -->
   - Test device init succeeds, command queue creation, library loading from .metal files.
   - Test `Sendable` conformance under `@unchecked` contract per design §3.1.1.
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
   - Requirements: [18.1](requirements.md#18.1)
 
-- [ ] 7. Implement `MetalContext.shared` singleton with device/queue/libraries <!-- id:0f06zz9 -->
+- [x] 7. Implement `MetalContext.shared` singleton with device/queue/libraries <!-- id:0f06zz9 -->
   - Load `segmenterLibrary` and `volumeLibrary` MTLLibraries at app launch.
   - Inject into `CoreMLSegmenter`, `VoxelCarvingEstimator`, `HeightFieldEstimator`.
   - Blocked-by: 0f06zz8 (Write tests for `MetalContext` lifecycle)
@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [ ] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [ ] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -347,7 +347,7 @@ references:
 - [ ] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [ ] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

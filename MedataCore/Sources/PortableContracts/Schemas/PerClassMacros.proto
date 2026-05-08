@@ -1,0 +1,16 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "BetaCorrectionTable.proto";
+
+option swift_prefix = "Pb";
+
+message PerClassMacros {
+    float volume_cm3 = 1;                       // β-corrected
+    float mass_g = 2;                           // V · ρ
+    float carbs_g = 3;                          // m · κ / 100
+    string density_source = 4;
+    string coefficient_source = 5;
+    float beta_used = 6;
+    BetaCalibrationStatus beta_status = 7;
+}

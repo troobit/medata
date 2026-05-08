@@ -1,0 +1,35 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "CameraIntrinsics.proto";
+import "DepthMap.proto";
+import "Math.proto";
+
+option swift_prefix = "Pb";
+
+enum PixelFormat {
+    PIXEL_FORMAT_UNSPECIFIED = 0;
+    PIXEL_FORMAT_RGB8 = 1;
+    PIXEL_FORMAT_BGRA8 = 2;
+    PIXEL_FORMAT_RGBA8 = 3;
+}
+
+enum ColourSpace {
+    COLOUR_SPACE_UNSPECIFIED = 0;
+    COLOUR_SPACE_SRGB = 1;
+    COLOUR_SPACE_LINEAR = 2;
+}
+
+message RawFrame {
+    bytes image_bytes = 1;                      // pixel data, format per pixel_format
+    PixelFormat pixel_format = 2;
+    ColourSpace colour_space = 3;
+    int32 orientation = 4;                      // EXIF style 1..8
+    int32 image_width = 5;
+    int32 image_height = 6;
+    int64 timestamp_monotonic_ns = 7;           // monotonic, no wall-clock semantics (§6.0)
+    CameraIntrinsics intrinsics = 8;
+    Vec3 gravity = 9;                           // unit vector in camera frame
+    Mat4 world_from_camera = 10;
+    DepthMap depth = 11;                        // optional; absent when no LiDAR
+}

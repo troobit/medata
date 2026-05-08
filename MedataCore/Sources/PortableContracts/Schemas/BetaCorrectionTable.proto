@@ -1,0 +1,21 @@
+syntax = "proto3";
+package medata.research.v1;
+
+option swift_prefix = "Pb";
+
+enum BetaCalibrationStatus {
+    BETA_CALIBRATION_STATUS_UNSPECIFIED = 0;
+    BETA_CALIBRATION_STATUS_CALIBRATED = 1;
+    BETA_CALIBRATION_STATUS_UNCALIBRATED_POOLED = 2;
+    BETA_CALIBRATION_STATUS_UNCALIBRATED_UNITY = 3;
+}
+
+message BetaEntry {
+    float beta = 1;
+    BetaCalibrationStatus status = 2;
+}
+
+message BetaCorrectionTable {
+    map<string, BetaEntry> entries = 1;
+    string database_edition = 2;
+}

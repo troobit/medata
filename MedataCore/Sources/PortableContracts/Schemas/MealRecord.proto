@@ -1,0 +1,30 @@
+syntax = "proto3";
+package medata.research.v1;
+
+import "BetaCorrectionTable.proto";
+import "CameraIntrinsics.proto";
+import "ConfidenceResult.proto";
+import "MacroResult.proto";
+import "MetricScale.proto";
+import "RawFrameMetadata.proto";
+import "SupportPlane.proto";
+import "UserCorrection.proto";
+import "VolumeResult.proto";
+
+option swift_prefix = "Pb";
+
+message MealRecord {
+    string id = 1;                              // UUID string
+    int64 created_at_ms = 2;                    // unix epoch ms
+    CapturePath capture_path = 3;
+    string database_edition = 4;
+    repeated RawFrameMetadata frames = 5;
+    CameraIntrinsics calibration = 6;
+    SupportPlane support_plane = 7;
+    MetricScale scale = 8;
+    VolumeResult volumes = 9;
+    MacroResult macros = 10;
+    ConfidenceResult confidence = 11;
+    map<string, BetaCalibrationStatus> per_class_calibration = 12;
+    UserCorrection user_correction = 13;        // optional
+}
