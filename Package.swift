@@ -100,6 +100,21 @@ let package = Package(
             name: "SegmentationTests",
             dependencies: ["Segmentation"],
             path: "MedataCore/Tests/SegmentationTests"
+        ),
+        .testTarget(
+            name: "CardDetectionTests",
+            dependencies: ["CardDetection", "CaptureKit", "PortableContracts"],
+            path: "MedataCore/Tests/CardDetectionTests"
+        ),
+        .testTarget(
+            name: "SupportPlaneTests",
+            dependencies: ["SupportPlane", "CaptureKit", "PortableContracts"],
+            path: "MedataCore/Tests/SupportPlaneTests"
+        ),
+        .testTarget(
+            name: "MetricScaleTests",
+            dependencies: ["MetricScale", "CardDetection", "SupportPlane", "PortableContracts"],
+            path: "MedataCore/Tests/MetricScaleTests"
         )
     ]
 )

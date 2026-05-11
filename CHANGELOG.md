@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `MedataCore/Sources/CaptureKit/{RawFrame,Bridges,CaptureSession,ARKitCaptureEngine,MockCaptureEngine}.swift` — Swift-ergonomic `RawFrame` (Int64 ns timestamps, explicit `PixelFormat`/`ColourSpace`, EXIF-style orientation), Pb-bridge extensions, `CaptureSession` actor with a 200 ms `stop()` ceiling per Req 2.5, an iOS-only ARKit + Core Motion engine that maps `ARConfidenceLevel.{low,medium,high}` to UInt8 `{0,127,255}` and refuses devices without rear LiDAR per Req 1.3, and a `MockCaptureEngine` for tests/HarnessCLI (research tasks 8, 9).
+- `MedataCore/Sources/CardDetection/{LinearAlgebra,CardPoseSolver}.swift` — Accelerate-backed SVD wrapper (`sgesvd_` + 3×3 helpers, made `public` so SupportPlane can reuse) and a custom no-OpenCV P4P solver per design §6.1: 8×9 DLT with the −Z-forward sign convention, sign-of-λ enforcement, SO(3) projection with `det(UV^T)` fix-up, edge-on refusal at `|r3·ẑ_cam| < 0.2`, and an SVD numerical-stability gate at σ_min/σ_max < 1e−6 (research tasks 10, 11).
+- `MedataCore/Sources/SupportPlane/{SupportPlane,Hash,LiDARPlaneFitter,CardOnlyPlaneFitter}.swift` — `SupportPlane` Swift struct + `BinaryMask`, an FNV-1a-based deterministic seed and `SplitMix64` RNG for the §6.0 reproducibility requirement, a 256-iteration RANSAC fitter per design §6.2 with gravity-bias filtering and inlier-covariance stability gate, and the iterative card-only fixed-point per §6.3 with strict-1mm convergence and best-of-5 fallback (research tasks 13, 14, 15, 16).
+- `MedataCore/Sources/MetricScale/MetricScaleResolver.swift` — pure-function symmetric agreement formula per design §6.4 (M4 fix; symmetric in inputs), σ_s clamped to [ε, 1] per Req 13.1, and a `LiDARScaleAdapter.mmPerPx(fromMetresPerPx:)` helper that performs the m/px → mm/px conversion at the resolver boundary per §6.4 (research tasks 17, 18).
+- `MedataCore/Tests/CaptureKitTests/{RawFrameTests,CaptureSessionTests}.swift` — 11 new tests covering portable RawFrame/protobuf round-trip, the simd boundary rule, `LidarConfidenceLevel` mapping, and the 200 ms `stop()` budget under both fast and slow engines.
+- `MedataCore/Tests/CardDetectionTests/{CardPoseSolverTests,CardPosePropertyTests}.swift` — 10 tests covering noise-robustness (≤1 px → < 2 mm), sign-of-λ, SO(3) properness, cardTooOblique refusal, degenerate H, scale at the card plane, and 400 deterministic property-based round-trip samples in a realistic intrinsics/pose envelope.
+- `MedataCore/Tests/SupportPlaneTests/{LiDARPlaneFitterTests,CardOnlyPlaneFitterTests}.swift` — 8 tests covering plane recovery within 1°/2 mm of ground truth, deterministic-seed reproducibility, degenerate-covariance refusal, residual-cap refusal, h_food=0/π_sup-at-card-depth initialisation, 5-iteration convergence, best-of-5 fallback, and iterationDiverged refusal.
+- `MedataCore/Tests/MetricScaleTests/MetricScaleResolverTests.swift` — 7 tests covering all four cases of Req 7, symmetric-agreement input-swap invariance, the noScaleAvailable refusal, the LiDARScaleAdapter unit conversion, and σ_s floor/ceiling clamping.
 - `Package.swift`, `MedataCore/Sources/{12 modules}/`, `HarnessCLI/main.swift` — Swift Package skeleton per design §2.1 (research tasks 1, 7); twelve module targets plus a macOS executable target and three test bundles, building with `swift build` and `swift test` on macOS 14 / iOS 17.
 - `MedataCore/Sources/PortableContracts/Schemas/*.proto` — 27 canonical schemas covering every record that crosses a module boundary per design §4.3 and Decision 31; `generate.sh` regenerates the committed `Generated/*.pb.swift` sources via `protoc-gen-swift` (research tasks 2, 3).
 - `MedataCore/Sources/PortableContracts/{Vec3,Mat4,Projection}.swift` — Swift-ergonomic types per design §3.1 with right-handed cross product, column-major Mat4 storage, `−Z`-forward projection, and bridges to/from the generated `Pb*` types (research task 5).
@@ -18,8 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `docs/agent-notes/swift-package.md` — agent context note describing the package topology, generated-protobuf naming, and build/test entry points.
 
 ### Changed
+- `Package.swift` — added three test targets (`CardDetectionTests`, `SupportPlaneTests`, `MetricScaleTests`) for the Capture and Detection phase.
 - `.gitignore` — added Swift / Xcode build artefact patterns (`.build/`, `.swiftpm/`, `DerivedData/`, `*.xcodeproj/xcuserdata/`, `Package.resolved`).
-- `specs/research/tasks.md` — Foundation phase tasks 1–7 marked complete.
+- `docs/agent-notes/swift-package.md` — appended a "Capture and Detection phase is complete" section documenting the new modules, key gotchas (−Z-forward DLT signs, FNV-1a vs xxh64, residual-threshold testability), and the next phase's entry point.
+- `specs/research/tasks.md` — Foundation phase tasks 1–7 and Capture and Detection tasks 8–18 marked complete.
 
 ### Previously added
 - `src/routes/capture/+page.svelte` — full capture page wiring: fetch `/api/recognition/status` on mount with skeleton loading state, conditional ManualEntryCTA/MockModeBanner rendering, 10MB client-side image size check, `handleSave()` wired to `POST /api/meals` with Blob Storage image upload (Req 6.4, 11.1, 11.3)

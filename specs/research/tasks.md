@@ -56,14 +56,14 @@ references:
 
 ## Capture and Detection
 
-- [ ] 8. Write tests for `CaptureKit` configuration and `RawFrame` portable contract <!-- id:0f06zza -->
+- [x] 8. Write tests for `CaptureKit` configuration and `RawFrame` portable contract <!-- id:0f06zza -->
   - Test `RawFrame` carries `pixelFormat`, `colourSpace`, `orientation`, `timestampMonotonicNs` (no `TimeInterval`); per design §3.1.
   - Test simd→Vec3/Mat4 conversion at module boundary.
   - Test capture session releases within 200 ms (mocked AVCaptureSession).
   - Blocked-by: 0f06zz6 (Implement `Vec3` / `Mat4` extension operators and `simd` adapters), 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries)
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6)
 
-- [ ] 9. Implement `CaptureKit` (AVFoundation + ARKit + Core Motion bridge) <!-- id:0f06zzb -->
+- [x] 9. Implement `CaptureKit` (AVFoundation + ARKit + Core Motion bridge) <!-- id:0f06zzb -->
   - Capture nadir + oblique frames; record intrinsics, gravity, world transform, LiDAR depth via `ARFrame.sceneDepth`.
   - Convert iOS-private `simd_*` types to portable `Vec3`/`Mat4` before exposing `RawFrame`.
   - Map ARKit `ARConfidenceLevel.{low,medium,high}` to UInt8 `{0,127,255}` per design §6.0.
@@ -71,7 +71,7 @@ references:
   - Blocked-by: 0f06zza (Write tests for `CaptureKit` configuration and `RawFrame` portable contract)
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5)
 
-- [ ] 10. Write tests for ID-1 P4P card-pose recovery (§6.1) <!-- id:0f06zzc -->
+- [x] 10. Write tests for ID-1 P4P card-pose recovery (§6.1) <!-- id:0f06zzc -->
   - Synthesise known card poses; perturb image points by ≤1 px noise; assert recovered translation < 2 mm.
   - Test sign-of-λ enforcement (M3): if t_z ≥ 0 after first solve, λ flipped; if both signs land behind camera, throw `degenerateCardPose`.
   - Test SO(3) projection with `det(UV^T)` fix-up.
@@ -80,21 +80,21 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7)
 
-- [ ] 11. Implement P4P card-pose recovery (custom SVD-based, no OpenCV) <!-- id:0f06zzd -->
+- [x] 11. Implement P4P card-pose recovery (custom SVD-based, no OpenCV) <!-- id:0f06zzd -->
   - `VNDetectRectanglesRequest` + custom DLT homography decomposition using Accelerate's LAPACK.
   - Recover both `s_card_init` (card-plane scale, used by §6.3) and the scale at the food plane (used by §6.4) per design §6.1.
   - Persist PnP residual as informational sub-confidence input (not consumed by σ_meal in v1).
   - Blocked-by: 0f06zzc (Write tests for ID-1 P4P card-pose recovery (§6.1))
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7)
 
-- [ ] 12. Write property-based tests for P4P round-trip <!-- id:0f06zze -->
+- [x] 12. Write property-based tests for P4P round-trip <!-- id:0f06zze -->
   - Use `SwiftCheck` generators for camera intrinsics and card poses in a realistic envelope.
   - Property: `recover(project(pose))` returns a pose within ε of original (per design §7.2).
   - Adjacent to task 11; PBT augments example-based tests with broader input coverage.
   - Blocked-by: 0f06zzd (Implement P4P card-pose recovery (custom SVD-based, no OpenCV))
   - Requirements: [5.1](requirements.md#5.1)
 
-- [ ] 13. Write tests for LiDAR support-plane RANSAC fit (§6.2) <!-- id:0f06zzf -->
+- [x] 13. Write tests for LiDAR support-plane RANSAC fit (§6.2) <!-- id:0f06zzf -->
   - Synthesise plane + outliers; assert recovered normal within 1° of gravity, distance within 2 mm.
   - Test deterministic seed from `xxh64(depth.bytes)` — two runs on same fixture produce identical inlier set.
   - Test `lidarFitDegenerate` refusal when inlier covariance is singular.
@@ -102,27 +102,27 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6)
 
-- [ ] 14. Implement LiDAR support-plane RANSAC fitter <!-- id:0f06zzg -->
+- [x] 14. Implement LiDAR support-plane RANSAC fitter <!-- id:0f06zzg -->
   - Resample depth + confidence to colour-image grid (bilinear / nearest); apply confidence threshold τ_conf = 0.66 per §6.0.
   - Project lower-edge band points to camera-1 frame (mm); 256 RANSAC iterations with gravity bias 15°.
   - Refine via least-squares fit on inliers; persist residual_mm.
   - Blocked-by: 0f06zzf (Write tests for LiDAR support-plane RANSAC fit (§6.2))
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6)
 
-- [ ] 15. Write tests for card-only iterative support-plane fit (§6.3) <!-- id:0f06zzh -->
+- [x] 15. Write tests for card-only iterative support-plane fit (§6.3) <!-- id:0f06zzh -->
   - Test h_food_(0) = 0 initialisation; π_sup_(0) at card-centre depth.
   - Test 1 mm convergence within 5 iterations; best-of-5 fallback at residual ≤ 1.5 mm.
   - Test `iterationDiverged` refusal when best residual > 1.5 mm.
   - Blocked-by: 0f06zzd (Implement P4P card-pose recovery (custom SVD-based, no OpenCV))
   - Requirements: [4.1](requirements.md#4.1), [4.3](requirements.md#4.3)
 
-- [ ] 16. Implement card-only iterative support-plane fitter <!-- id:0f06zzi -->
+- [x] 16. Implement card-only iterative support-plane fitter <!-- id:0f06zzi -->
   - Three-unknown fixed-point: s_card → π_sup → h_food, per design §6.3.
   - Track best-residual across iterations; return best-of-5 when strict 1 mm not reached but ≤ 1.5 mm achieved.
   - Blocked-by: 0f06zzh (Write tests for card-only iterative support-plane fit (§6.3))
   - Requirements: [4.1](requirements.md#4.1), [4.3](requirements.md#4.3)
 
-- [ ] 17. Write tests for metric scale resolver (§6.4) and σ_s <!-- id:0f06zzj -->
+- [x] 17. Write tests for metric scale resolver (§6.4) and σ_s <!-- id:0f06zzj -->
   - Test all four cases of Req 7 (both signals, lidar-only, card-only, neither).
   - Test symmetric agreement formula `disagreement = |s_lidar - s_card| / ((s_lidar + s_card) / 2)` (M4): swapping inputs gives identical σ_s.
   - Test refusal `noScaleAvailable` when neither signal present.
@@ -130,7 +130,7 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [7.6](requirements.md#7.6)
 
-- [ ] 18. Implement metric scale resolver (pure function) <!-- id:0f06zzk -->
+- [x] 18. Implement metric scale resolver (pure function) <!-- id:0f06zzk -->
   - Symmetric agreement formula per design §6.4.
   - Output `MetricScale` struct with σ_s ∈ [ε, 1] and per-source availability flags.
   - Blocked-by: 0f06zzj (Write tests for metric scale resolver (§6.4) and σ_s)
@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [ ] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [ ] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -347,7 +347,7 @@ references:
 - [ ] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [ ] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

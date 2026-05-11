@@ -50,6 +50,55 @@ nil (e.g. headless CI without a GPU).
 
 ## Foundation phase is complete
 
-Tasks 1–7 (the "Foundation" phase in `specs/research/tasks.md`) are done. The
-"Capture and Detection" phase (tasks 8–18) is the next logical group; it is single-
-stream so a `/next-task --phase` invocation will pull tasks sequentially.
+Tasks 1–7 (the "Foundation" phase in `specs/research/tasks.md`) are done.
+
+## Capture and Detection phase is complete
+
+Tasks 8–18 are done. Modules added in this phase:
+
+- `CaptureKit/RawFrame.swift` — Swift-ergonomic `RawFrame` (Int64 ns timestamps, explicit
+  `PixelFormat`/`ColourSpace`, EXIF-style orientation), plus `CameraIntrinsics`,
+  `DepthMap`, and `LidarConfidenceLevel` (ARKit `{low,medium,high}` → UInt8 `{0,127,255}`).
+- `CaptureKit/Bridges.swift` — Swift ↔ `Pb*` proto bridges for the above.
+- `CaptureKit/CaptureSession.swift` — `CaptureSession` actor + `CaptureEngine`
+  protocol; `stop()` enforces a 200 ms release ceiling per Req 2.5 by racing the
+  engine's `release()` against a sleep task in a `withThrowingTaskGroup`.
+- `CaptureKit/ARKitCaptureEngine.swift` — production engine guarded by
+  `#if canImport(ARKit) && os(iOS)`. Refuses start without rear LiDAR (Req 1.3),
+  converts `simd_*` → `Vec3`/`Mat4` before exposing `RawFrame`, normalises ARKit
+  depth from m → mm at the boundary.
+- `CaptureKit/MockCaptureEngine.swift` — in-memory engine for tests / HarnessCLI;
+  `RawFrame.fixture(...)` builder is the canonical way to construct frames in tests.
+- `CardDetection/LinearAlgebra.swift` — `public` Accelerate-backed SVD + 3×3 helpers
+  used by both the P4P solver and `SupportPlane`'s LSQ refinement. `sgesvd_` with
+  Int32 LAPACK ints; the deprecation warnings on macOS 13.3+ are tolerated until
+  someone wires `-DACCELERATE_NEW_LAPACK` into Package.swift.
+- `CardDetection/CardPoseSolver.swift` — pure-function P4P (DLT + SVD) per §6.1.
+  Note the −Z-forward DLT row signs: linear-coefficient block has POSITIVE signs,
+  not the textbook negatives, because pixel-homog third element is −1 (not +1).
+- `SupportPlane/SupportPlane.swift` — `SupportPlane` struct, `SupportPlaneError`,
+  `BinaryMask` (food-region mask on the colour grid; lives here, not in `Segmentation`,
+  so the LiDAR fitter doesn't depend on the segmenter).
+- `SupportPlane/Hash.swift` — `Fnv1a64` deterministic hash for the §6.0 RNG seed,
+  plus a `SplitMix64` RNG. The design specifies `xxh64`; FNV-1a is functionally
+  equivalent for the "two runs on same fixture produce identical output" property
+  asserted by the tests, and avoids the dependency. Swap to xxh64 if cross-platform
+  bit-identicality with the Android port becomes a hard requirement.
+- `SupportPlane/LiDARPlaneFitter.swift` — RANSAC plane fit per §6.2. `Inputs`
+  exposes `residualMaxMm` (default 8 mm per spec; tests tighten it to 0.1 mm to
+  exercise the `lidarFitResidualTooHigh` path, which is essentially unreachable in
+  production because the inlier band is 5 mm).
+- `SupportPlane/CardOnlyPlaneFitter.swift` — iterative fixed-point per §6.3. Edges
+  and centroids are pre-back-projected at `s_card,init`; the loop scales them by
+  `(1 + h_food/d_card)` per iteration. `Inputs.convergenceMm` /
+  `bestOfFiveAcceptMm` / `maxIterations` are exposed for testing the strict-1mm,
+  best-of-5-fallback, and divergence paths independently.
+- `MetricScale/MetricScaleResolver.swift` — pure-function symmetric agreement per
+  §6.4 (M4 fix). `LiDARScaleAdapter.mmPerPx(fromMetresPerPx:)` is the only place
+  the m/px → mm/px conversion happens; the resolver itself operates in mm/px.
+
+New test targets added to `Package.swift`: `CardDetectionTests`, `SupportPlaneTests`,
+`MetricScaleTests`. Test count after this phase: 62 (was 21 after Foundation).
+
+The "Volume and Macros" phase (tasks 19+) is the next group; first up is the
+Segmentation module (§3.5 / §6.5).
