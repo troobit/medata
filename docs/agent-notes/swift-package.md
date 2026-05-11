@@ -100,5 +100,67 @@ Tasks 8–18 are done. Modules added in this phase:
 New test targets added to `Package.swift`: `CardDetectionTests`, `SupportPlaneTests`,
 `MetricScaleTests`. Test count after this phase: 62 (was 21 after Foundation).
 
-The "Volume and Macros" phase (tasks 19+) is the next group; first up is the
-Segmentation module (§3.5 / §6.5).
+## Segmentation phase is complete
+
+Tasks 19–23 are done. Modules added in this phase:
+
+- `Segmentation/ClassPalette.swift` — Swift palette + `Pb*` bridges. Convention:
+  `foodClasses[i]` is the class name for index `i`; special classes (background,
+  unknown_food, unsupported_liquid) occupy the indices declared via the dedicated
+  Int fields. `isFoodClass(_:)` excludes the three specials.
+- `Segmentation/SegmentationTypes.swift` — `ProbabilityTensor`, `ArgmaxMap`,
+  `SegmentationResult`, and `SegmentationError`. The `bytes`-as-portable-contract
+  invariant lives in the `ProbabilityTensor` precondition (`H × W × C × 2`).
+- `Segmentation/FP16Bytes.swift` — `FP16Bytes.encode` / `decode` via the native
+  `Float16` type. Apple Silicon and modern Intel Macs store `Float16` LE natively,
+  so a memcpy is correct on every platform this package targets.
+- `Segmentation/PreProcessing.swift` — §6.5 steps 1–7. Pixel-format canonicalisation
+  (BGRA8 / RGBA8 → RGB8) is the platform-invariant point (P3 / P9). Bilinear resize
+  + ImageNet normalisation are fused into a single FP32 pass — both are linear so
+  the order is equivalent and we avoid an extra buffer. Pad value is the per-channel
+  post-normalisation black (`(0 − mean[c]) / std[c]`), identical to what the network
+  sees for a true-black input, so padding is indistinguishable from real black pixels.
+- `Segmentation/PostProcessing.swift` — §6.5 steps 8–13. Softmax in FP32 with the
+  standard max-subtraction trick, crop letterbox → bilinear resize back to original
+  W × H using pixel-centre alignment (PyTorch / coremltools / ai-edge-torch default
+  with `align_corners=False`). Refusal predicate is `(1 − q[bg]) ≥ τ_sil` (silhouette
+  test), NOT `argmax = bg` — a pixel where bg argmax is 0.45 still keeps the meal
+  alive even though it doesn't contribute to σ_seg. σ_seg averages the **top class
+  probability over all classes** (M8 pin), restricted to pixels that (a) pass the
+  silhouette test AND (b) argmax to a food class (so bg / unknown_food /
+  unsupported_liquid are excluded).
+- `Segmentation/CoreMLSegmenter.swift` — `SegmenterInferenceEngine` protocol +
+  `CoreMLSegmenter` wrapper + production `CoreMLInferenceEngine`. The wrapper
+  takes a path **string** (not URL — P8). `CoreMLInferenceEngine` auto-detects
+  CHW vs HWC input/output layout from the model's `MLMultiArrayConstraint.shape`
+  by stripping leading 1s and locating the channel-3 / target-size dims; this lets
+  the same wrapper consume models exported by `coremltools` (typically CHW) and
+  `ai-edge-torch` (typically HWC) without per-export-tool code paths. Compute units
+  default to `.all` for ANE eligibility; dev builds may force `.cpuOnly` for repro.
+- `Segmentation/CoreMLSegmenter.swift` also hosts `SegmenterWeightsBudget` which
+  walks `.mlpackage` directories recursively to enforce Req 8.2 (≤ 10 MB).
+- `tools/segmenter/export.py` — PyTorch DeepLabV3 + MobileNetV3-Large → Core ML
+  (`coremltools.convert`) → `MedataCore/Resources/segmenter.mlpackage`; the same
+  checkpoint also exports to TFLite via `ai-edge-torch`. ONNX hop is bypassed
+  (decision 28). A reference image is run through both artefacts and per-pixel
+  argmax agreement asserted >99% with max-abs logit error <0.05 — disagreement
+  fails the export.
+
+`SegmentationTests` target now depends on `Segmentation`, `CaptureKit`,
+`PortableContracts`. Test count after this phase: 86 (was 62 after Capture and
+Detection).
+
+## Decisions / Gotchas captured this phase
+
+- σ_seg includes the silhouette filter AND the food-argmax filter. The two are
+  independent: silhouette excludes bg-dominated pixels (q[bg] > 0.5); the argmax
+  filter excludes unknown_food / unsupported_liquid even when their probability
+  is below 0.5. A pixel where q[bg] = 0.45 is in silhouette but argmax = bg
+  contributes neither to σ_seg nor to perClassMeanProb.
+- Float16 precondition violation: the test `testLetterboxPad_HoldsPostNormalisationBlack`
+  uses an accuracy tolerance of 5e-3 because the FP16 round-trip of values like
+  −2.11790 (the green channel pad value) introduces rounding noise on the order
+  of 1e-3. Don't tighten this tolerance without recomputing FP16 bounds.
+- `bilinearResizeRGB8ToNormalisedFP32` is hot-path code; the inner loop manually
+  unrolls the three channels rather than iterating `for c in 0..<3` because the
+  Swift optimiser does not consistently unroll the trivial loop.

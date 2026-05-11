@@ -98,7 +98,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SegmentationTests",
-            dependencies: ["Segmentation"],
+            dependencies: ["Segmentation", "CaptureKit", "PortableContracts"],
             path: "MedataCore/Tests/SegmentationTests"
         ),
         .testTarget(

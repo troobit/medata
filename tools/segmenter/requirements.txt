@@ -1,0 +1,7 @@
+torch>=2.4
+torchvision>=0.19
+coremltools>=8.0
+ai-edge-torch>=0.2
+tensorflow>=2.16
+pillow>=10.0
+numpy>=1.26

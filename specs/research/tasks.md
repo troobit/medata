@@ -138,7 +138,7 @@ references:
 
 ## Segmentation
 
-- [ ] 19. Write tests for segmenter pre/post-processing (§6.5) <!-- id:0f06zzl -->
+- [x] 19. Write tests for segmenter pre/post-processing (§6.5) <!-- id:0f06zzl -->
   - Test pixel-format canonicalisation: BGRA8→RGB8 swap, RGBA8→RGB8 alpha drop, RGB8 no-op (P3, P9).
   - Test letterbox resize + post-normalisation padding `pad[c] = (0 - mean[c]) / std[c]`.
   - Test resize-back to (W,H) with pixel-centre alignment.
@@ -147,28 +147,28 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [8.1](requirements.md#8.1), [8.4](requirements.md#8.4), [8.7](requirements.md#8.7), [8.8](requirements.md#8.8), [8.9](requirements.md#8.9), [13.1](requirements.md#13.1)
 
-- [ ] 20. Implement segmenter pre/post-processing pipeline <!-- id:0f06zzm -->
+- [x] 20. Implement segmenter pre/post-processing pipeline <!-- id:0f06zzm -->
   - Steps 1–13 in design §6.5 verbatim; all FP32 internally before final FP16 cast.
   - Construct portable `ProbabilityTensor.bytes` (FP16 LE, HWC row-major) and `ArgmaxMap`.
   - Compute `perClassMeanProb` (informational) alongside σ_seg.
   - Blocked-by: 0f06zzl (Write tests for segmenter pre/post-processing (§6.5))
   - Requirements: [8.1](requirements.md#8.1), [8.6](requirements.md#8.6), [8.7](requirements.md#8.7), [8.8](requirements.md#8.8), [13.1](requirements.md#13.1)
 
-- [ ] 21. Write tests for `CoreMLSegmenter` wrapper (model loading + inference) <!-- id:0f06zzn -->
+- [x] 21. Write tests for `CoreMLSegmenter` wrapper (model loading + inference) <!-- id:0f06zzn -->
   - Test model loads from bundled file path (string, not URL per P8).
   - Test segmentation produces ProbabilityTensor with portable byte layout regardless of MTLBuffer backing.
   - Test segmenter weights file size ≤ 10 MB (Req 8.2).
   - Blocked-by: 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries), 0f06zzm (Implement segmenter pre/post-processing pipeline)
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
 
-- [ ] 22. Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor <!-- id:0f06zzo -->
+- [x] 22. Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor <!-- id:0f06zzo -->
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
-- [ ] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
+- [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
   - Python script in `tools/segmenter/export.py`: torchvision DeepLabV3+MobileNetV3-Large checkpoint → `coremltools.convert(...)` → Core ML; same checkpoint → `ai-edge-torch` → TFLite (validation only in v1).
   - Verify both exports produce numerically equivalent output on a reference image.
   - Save Core ML weights into `MedataCore/Resources/segmenter.mlpackage` (bundled per Decision 27).
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [ ] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -347,7 +347,7 @@ references:
 - [ ] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [ ] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

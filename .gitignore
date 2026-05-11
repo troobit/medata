@@ -61,3 +61,12 @@ DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 Package.resolved
+
+# Segmenter / database artefacts (built locally or by CI, bundled at build time)
+MedataCore/Resources/segmenter.mlpackage/
+MedataCore/Resources/segmenter.mlmodel
+MedataCore/Resources/segmenter.mlmodelc/
+MedataCore/Resources/food_db.sqlite
+MedataCore/Resources/ifcdb_overlay.sqlite
+tools/segmenter/build/
+tools/segmenter/.venv/
