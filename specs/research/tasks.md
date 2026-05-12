@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -178,7 +178,7 @@ references:
 
 ## Volume Estimation
 
-- [ ] 24. Write tests for two-view voxel carving Metal kernel (§6.6) <!-- id:0f06zzq -->
+- [x] 24. Write tests for two-view voxel carving Metal kernel (§6.6) <!-- id:0f06zzq -->
   - Synthetic cube of known side length: assert volume within 5% of analytical, in cm³ (M5 unit conversion verified).
   - Test silhouette test on `(1 - q[bg]) ≥ τ_sil` not argmax=bg (DB2).
   - Test FP32 product promotion for ownership argmax (§6.0 reproducibility).
@@ -189,15 +189,15 @@ references:
   - Blocked-by: 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries), 0f06zzm (Implement segmenter pre/post-processing pipeline)
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8), [9.9](requirements.md#9.9)
 
-- [ ] 25. Implement two-view voxel carving Metal kernel + Swift dispatcher <!-- id:0f06zzr -->
+- [x] 25. Implement two-view voxel carving Metal kernel + Swift dispatcher <!-- id:0f06zzr -->
   - Metal kernel in `Volume/Kernels/voxel_carve.metal`; one thread per voxel, 8×8×8 threadgroups.
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
-- [ ] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
+- [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
   - Synthetic dome with known LiDAR depth: assert volume within 3% of analytical, cm³.
   - Test 1/cos³θ off-axis correction (M1) — corner pixels get ~54% larger area at 73° HFoV.
   - Test per-class `lidarCoverageFraction` tracking.
@@ -206,33 +206,33 @@ references:
   - Blocked-by: 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries), 0f06zzm (Implement segmenter pre/post-processing pipeline)
   - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8), [13.2](requirements.md#13.2)
 
-- [ ] 27. Implement single-view height-field Metal kernel + Swift dispatcher <!-- id:0f06zzt -->
+- [x] 27. Implement single-view height-field Metal kernel + Swift dispatcher <!-- id:0f06zzt -->
   - Metal kernel in `Volume/Kernels/height_field.metal`; one thread per nadir-view pixel.
   - Pixel area `a(p) = z_t² / (f_x · f_y · cos³θ_p)` with `cosθ_p = f / sqrt(f² + (u-c_x)² + (v-c_y)²)` (Decision 29).
   - Atomic accumulator per class; inter-class occlusion detection in same kernel (single-pass 4-neighbour scan) per design §6.8.
   - Blocked-by: 0f06zzs (Write tests for single-view height-field integration (§6.7))
   - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
-- [ ] 28. Write property-based tests for voxel ownership disjointness <!-- id:0f06zzu -->
+- [x] 28. Write property-based tests for voxel ownership disjointness <!-- id:0f06zzu -->
   - PBT generator for arbitrary probability tensor pairs.
   - Property: union of per-class O_c sets is pairwise disjoint (no voxel mass appears in two classes).
   - Blocked-by: 0f06zzr (Implement two-view voxel carving Metal kernel + Swift dispatcher)
   - Requirements: [9.5](requirements.md#9.5)
 
-- [ ] 29. Write tests for inter-class occlusion detector (§6.8) <!-- id:0f06zzv -->
+- [x] 29. Write tests for inter-class occlusion detector (§6.8) <!-- id:0f06zzv -->
   - Single-pass O(W·H) 4-neighbour scan.
   - Synthesise depth-discontinuity boundary > 10 mm between two food classes; assert detector returns true.
   - Assert returns false on flat or single-class boundaries.
   - Blocked-by: 0f06zzt (Implement single-view height-field Metal kernel + Swift dispatcher)
   - Requirements: [13.2](requirements.md#13.2)
 
-- [ ] 30. Implement inter-class occlusion detector inside height-field kernel <!-- id:0f06zzw -->
+- [x] 30. Implement inter-class occlusion detector inside height-field kernel <!-- id:0f06zzw -->
   - Lives inside the §6.7 Metal kernel so depth + label data are already in GPU memory.
   - Returns boolean flag consumed by σ_occl in §6.8.
   - Blocked-by: 0f06zzv (Write tests for inter-class occlusion detector (§6.8))
   - Requirements: [13.2](requirements.md#13.2)
 
-- [ ] 31. Write tests for voxel-grid sizing (§6.10) <!-- id:0f06zzx -->
+- [x] 31. Write tests for voxel-grid sizing (§6.10) <!-- id:0f06zzx -->
   - Test bbox back-projection through π_sup using ray–plane intersection.
   - Test `ceil(extent/edge/8)*8` rounding (multiples of 8 for Metal threadgroups).
   - Test gravity-aligned axes: axis_z = −gravity, axis_y = axis_z × axis_x.
@@ -241,19 +241,19 @@ references:
   - Blocked-by: 0f06zzk (Implement metric scale resolver (pure function))
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3)
 
-- [ ] 32. Implement voxel-grid sizing function <!-- id:0f06zzy -->
+- [x] 32. Implement voxel-grid sizing function <!-- id:0f06zzy -->
   - Pure function consumed by both two-view and single-view paths to define grid extents and origin.
   - Returns `VoxelGridSummary` ready for persistence.
   - Blocked-by: 0f06zzx (Write tests for voxel-grid sizing (§6.10))
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3)
 
-- [ ] 33. Write tests for mask matching across views (§6.11) <!-- id:0f06zzz -->
+- [x] 33. Write tests for mask matching across views (§6.11) <!-- id:0f06zzz -->
   - Test classes_in_view_1 ∩ classes_in_view_2 → matched_classes.
   - Test symmetric difference → single_view_only_classes flagged with σ_view = 0.75 per Req 10.2.
   - Blocked-by: 0f06zzm (Implement segmenter pre/post-processing pipeline)
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.4](requirements.md#10.4)
 
-- [ ] 34. Implement mask matching (class-equivalence) <!-- id:0f07000 -->
+- [x] 34. Implement mask matching (class-equivalence) <!-- id:0f07000 -->
   - Pure function; simple class-label matching only (no Hungarian / spatial matching in v1).
   - Output consumed by §6.6 voxel kernel and §6.8 confidence factors.
   - Blocked-by: 0f06zzz (Write tests for mask matching across views (§6.11))
@@ -347,7 +347,7 @@ references:
 - [ ] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [ ] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

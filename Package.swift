@@ -50,8 +50,11 @@ let package = Package(
         ),
         .target(
             name: "Volume",
-            dependencies: ["PortableContracts", "Segmentation", "MetricScale"],
-            path: "MedataCore/Sources/Volume"
+            dependencies: ["PortableContracts", "CaptureKit", "Segmentation", "SupportPlane", "MetricScale"],
+            path: "MedataCore/Sources/Volume",
+            resources: [
+                .copy("Kernels")
+            ]
         ),
         .target(
             name: "Foods",
@@ -115,6 +118,11 @@ let package = Package(
             name: "MetricScaleTests",
             dependencies: ["MetricScale", "CardDetection", "SupportPlane", "PortableContracts"],
             path: "MedataCore/Tests/MetricScaleTests"
+        ),
+        .testTarget(
+            name: "VolumeTests",
+            dependencies: ["Volume", "Segmentation", "SupportPlane", "CaptureKit", "PortableContracts"],
+            path: "MedataCore/Tests/VolumeTests"
         )
     ]
 )
