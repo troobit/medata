@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .library(name: "MedataCore", targets: ["Pipeline"]),
+        .library(name: "HarnessCore", targets: ["HarnessCore"]),
         .executable(name: "HarnessCLI", targets: ["HarnessCLI"])
     ],
     dependencies: [
@@ -97,9 +98,25 @@ let package = Package(
             ],
             path: "MedataCore/Sources/Pipeline"
         ),
+        .target(
+            name: "HarnessCore",
+            dependencies: [
+                "Pipeline",
+                "CaptureKit",
+                "Segmentation",
+                "SupportPlane",
+                "Volume",
+                "Macros",
+                "Foods",
+                "PortableContracts",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .product(name: "GRDB", package: "GRDB.swift")
+            ],
+            path: "HarnessCore"
+        ),
         .executableTarget(
             name: "HarnessCLI",
-            dependencies: ["Pipeline"],
+            dependencies: ["HarnessCore", "Pipeline"],
             path: "HarnessCLI"
         ),
         .testTarget(
@@ -169,6 +186,17 @@ let package = Package(
             name: "PipelineTests",
             dependencies: ["Pipeline", "Persistence", "PortableContracts"],
             path: "MedataCore/Tests/PipelineTests"
+        ),
+        .testTarget(
+            name: "HarnessCLITests",
+            dependencies: [
+                "HarnessCore",
+                "Segmentation",
+                "Foods",
+                "PortableContracts",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
+            ],
+            path: "MedataCore/Tests/HarnessCLITests"
         )
     ]
 )

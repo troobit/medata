@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -347,7 +347,7 @@ references:
 - [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -407,19 +407,19 @@ references:
 
 ## Harness and Calibration
 
-- [ ] 55. Write tests for `MealFixture` .proto round-trip <!-- id:0f0700l -->
+- [x] 55. Write tests for `MealFixture` .proto round-trip <!-- id:0f0700l -->
   - Test encode → decode → bit-equal for `MealFixture.proto` per design §7.3.
   - Test `segmenter_checkpoint_sha256` guard: fixture refused if hash mismatches bundled segmenter.
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [20.1](requirements.md#20.1), [21.1](requirements.md#21.1)
 
-- [ ] 56. Implement `HarnessCLI` fixture loader <!-- id:0f0700m -->
+- [x] 56. Implement `HarnessCLI` fixture loader <!-- id:0f0700m -->
   - SPM executable target on macOS reads MealFixture batches from `medata-fixtures` repo.
   - Exposes `--fixtures-dir`, `--edge`, `--checkpoint-sha256` CLI flags.
   - Blocked-by: 0f0700l (Write tests for `MealFixture` .proto round-trip)
   - Requirements: [20.1](requirements.md#20.1), [21.1](requirements.md#21.1), [21.5](requirements.md#21.5), [21.7](requirements.md#21.7)
 
-- [ ] 57. Write tests for β_c calibration log-residual closed form (§6.9) <!-- id:0f0700n -->
+- [x] 57. Write tests for β_c calibration log-residual closed form (§6.9) <!-- id:0f0700n -->
   - Synthetic dataset where ground-truth β is known; assert recovered β_c within 5% (Decision 30 log-residual form).
   - Test path-specific clamp: (0, 1] for two-view, (0, 1.5] for single-view (M7).
   - Test 30-meal minimum per class → `calibrated`; below → `uncalibrated_pooled` with β_pool fallback.
@@ -428,47 +428,47 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [11.7](requirements.md#11.7), [21.4](requirements.md#21.4)
 
-- [ ] 58. Implement β_c calibration in `HarnessCLI` <!-- id:0f0700o -->
+- [x] 58. Implement β_c calibration in `HarnessCLI` <!-- id:0f0700o -->
   - Stratified 60/40 cal/eval split per meal (path + dominant class).
   - Per-class log-residual fit; pooled fallback if applicable.
   - Emit new `food_db.sqlite` with calibrated β_c values + new edition string.
   - Blocked-by: 0f0700n (Write tests for β_c calibration log-residual closed form (§6.9)), 0f0700m (Implement `HarnessCLI` fixture loader), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
   - Requirements: [11.4](requirements.md#11.4), [11.7](requirements.md#11.7), [21.4](requirements.md#21.4)
 
-- [ ] 59. Write tests for accuracy harness (MAPE, MAE, per-class breakdown) <!-- id:0f0700p -->
+- [x] 59. Write tests for accuracy harness (MAPE, MAE, per-class breakdown) <!-- id:0f0700p -->
   - Test point-estimate MAPE and MAE computation (Decision 23: bar is point estimate, CI is informational).
   - Test per-class breakdown distinguishes calibrated / uncalibrated_pooled / uncalibrated_unity (Req 21.4).
   - Test per-stage latency stats are produced for both `capturePath` values (Req 21.5).
   - Blocked-by: 0f0700m (Implement `HarnessCLI` fixture loader)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
-- [ ] 60. Implement accuracy harness mode in `HarnessCLI` <!-- id:0f0700q -->
+- [x] 60. Implement accuracy harness mode in `HarnessCLI` <!-- id:0f0700q -->
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
-- [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
+- [x] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
   - Run β_c calibration on cached fixtures; evaluate full pipeline on disjoint eval subset.
   - Assert MAPE and MAE bar met on synthetic test set with known ground truth.
   - Blocked-by: 0f0700o (Implement β_c calibration in `HarnessCLI`), 0f0700q (Implement accuracy harness mode in `HarnessCLI`)
   - Requirements: [11.7](requirements.md#11.7), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4)
 
-- [ ] 62. Implement calibration round-trip mode in `HarnessCLI` <!-- id:0f0700s -->
+- [x] 62. Implement calibration round-trip mode in `HarnessCLI` <!-- id:0f0700s -->
   - `harness calibrate-and-eval` subcommand: end-to-end calibration → emit DB → run accuracy harness against the new DB.
   - Catches segmenter retrain → β_c invalidation regressions (per design §6.13).
   - Blocked-by: 0f0700r (Write tests for calibration round-trip (§6.13))
   - Requirements: [11.7](requirements.md#11.7), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4)
 
-- [ ] 63. Write tests for segmenter mIoU bench (Req 8.9) <!-- id:0f0700t -->
+- [x] 63. Write tests for segmenter mIoU bench (Req 8.9) <!-- id:0f0700t -->
   - Test mean IoU over 24 food classes (excludes background, unknown_food, unsupported_liquid per Decision 14).
   - Test per-class IoU and confusion matrix output.
   - Test CI failure when mean food-class mIoU < 0.60.
   - Blocked-by: 0f06zzo (Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor)
   - Requirements: [8.9](requirements.md#8.9)
 
-- [ ] 64. Implement segmenter mIoU bench mode in `HarnessCLI` <!-- id:0f0700u -->
+- [x] 64. Implement segmenter mIoU bench mode in `HarnessCLI` <!-- id:0f0700u -->
   - `harness seg-bench` subcommand consuming a held-out segmenter test set.
   - Reports IoU + confusion matrix; fails CI on mIoU regression.
   - Blocked-by: 0f0700t (Write tests for segmenter mIoU bench (Req 8.9))

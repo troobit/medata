@@ -36,6 +36,24 @@ public struct ClassPalette: Sendable, Equatable {
 }
 
 public extension ClassPalette {
+    // The 24-food-class v1 palette matching tools/food_db/generate.py and design §3.5.
+    // Indices 0–23: food classes; 24: background; 25: unknown_food; 26: unsupported_liquid.
+    static let v1Standard = ClassPalette(
+        foodClasses: [
+            "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
+            "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
+            "pork", "fish_white", "egg", "cheese", "salad_leaves",
+            "broccoli", "carrot", "peas", "beans_baked", "lentils",
+            "apple", "banana", "tomato", "mixed_vegetables"
+        ],
+        background: 24,
+        unknownFood: 25,
+        unsupportedLiquid: 26,
+        version: "v1"
+    )
+}
+
+public extension ClassPalette {
     init(pb: PbClassPalette) {
         self.init(
             foodClasses: pb.foodClasses,
