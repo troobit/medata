@@ -164,6 +164,11 @@ let package = Package(
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
             path: "MedataCore/Tests/PersistenceTests"
+        ),
+        .testTarget(
+            name: "PipelineTests",
+            dependencies: ["Pipeline", "Persistence", "PortableContracts"],
+            path: "MedataCore/Tests/PipelineTests"
         )
     ]
 )

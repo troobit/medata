@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -347,7 +347,7 @@ references:
 - [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -366,40 +366,40 @@ references:
 
 ## Pipeline and App Shell
 
-- [ ] 49. Write tests for capture-path dispatch (§2.3) <!-- id:0f0700f -->
+- [x] 49. Write tests for capture-path dispatch (§2.3) <!-- id:0f0700f -->
   - Test LiDAR available + plane detected + ≥80% LiDAR coverage → `single_view_lidar`.
   - Test otherwise → `two_view_sfs`.
   - Test `capturePath` field is persisted on every meal record (Req 3.8).
   - Blocked-by: 0f06zzb (Implement `CaptureKit` (AVFoundation + ARKit + Core Motion bridge)), 0f06zzg (Implement LiDAR support-plane RANSAC fitter)
   - Requirements: [3.5](requirements.md#3.5), [3.8](requirements.md#3.8), [6.5](requirements.md#6.5)
 
-- [ ] 50. Implement `Pipeline.estimate(_:)` orchestration <!-- id:0f0700g -->
+- [x] 50. Implement `Pipeline.estimate(_:)` orchestration <!-- id:0f0700g -->
   - Async pipeline running stages C–L from design §2.2 sequentially; short-circuit on refusal.
   - Dispatch volume estimator by `capturePath`.
   - Wire MetalContext.shared, FoodDatabase, Persistence, Macros, Confidence into orchestrator.
   - Blocked-by: 0f0700f (Write tests for capture-path dispatch (§2.3)), 0f06zzd (Implement P4P card-pose recovery (custom SVD-based, no OpenCV)), 0f06zzi (Implement card-only iterative support-plane fitter), 0f06zzk (Implement metric scale resolver (pure function)), 0f06zzo (Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor), 0f06zzr (Implement two-view voxel carving Metal kernel + Swift dispatcher), 0f06zzt (Implement single-view height-field Metal kernel + Swift dispatcher), 0f06zzy (Implement voxel-grid sizing function), 0f07000 (Implement mask matching (class-equivalence)), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay)), 0f07004 (Implement `Macros` module (per-class formulas + meal totals)), 0f07006 (Implement `Confidence` combination function), 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
   - Requirements: [1.5](requirements.md#1.5), [3.5](requirements.md#3.5), [3.8](requirements.md#3.8), [6.5](requirements.md#6.5), [16.1](requirements.md#16.1), [16.4](requirements.md#16.4)
 
-- [ ] 51. Write tests for `EstimationFailure` error mapping (§5) <!-- id:0f0700h -->
+- [x] 51. Write tests for `EstimationFailure` error mapping (§5) <!-- id:0f0700h -->
   - Each failure case from design §5 throws the expected enum value end-to-end.
   - Verify `Pipeline.estimate` is `async throws -> MealRecord` (not `Result<...>`).
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5)
 
-- [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
+- [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
-- [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
+- [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
   - `App.swift`, `CaptureFlowView`, `ResultView`, `SettingsView` as placeholders (UI design deferred to specs/ui per design §10).
   - Expose `CaptureFlowDelegate` protocol (didUpdateTilt, didUpdateLiDARCoverage, didDetectInterClassOcclusion, didProduceEstimate).
   - Confirm app builds and launches on iPhone 12 Pro+ device.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [1.1](requirements.md#1.1), [3.1](requirements.md#3.1), [3.5](requirements.md#3.5), [13.5](requirements.md#13.5)
 
-- [ ] 54. Implement Settings view (retention period, IFCDB overlay toggle) <!-- id:0f0700k -->
+- [x] 54. Implement Settings view (retention period, IFCDB overlay toggle) <!-- id:0f0700k -->
   - Retention period picker: 30 / 90 / 365 days / indefinite per Req 17.4.
   - IFCDB overlay toggle persisted via `UserDefaults`; consumed by `FoodDatabase` ATTACH on next launch.
   - Blocked-by: 0f0700j (Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate`)
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

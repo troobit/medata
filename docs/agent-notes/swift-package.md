@@ -213,3 +213,62 @@ Tasks 35–40 are done. Test count: 167 (was 86 after Segmentation + Volume phas
 - σ_plane penalty (×0.9): only when BOTH `cardOnlyPath == true` AND `cardOnlyIterations == 5`.
 - σ_occl = 0.80 only on `.singleViewLidar` path with `interClassOcclusionDetected`.
   Two-view paths always get 1.00 (oblique view recovers occluded regions).
+
+## Persistence and Migration phase is complete
+
+Tasks 41–48 are done. Test count: 189 (was 167 after Database/Macros/Confidence).
+
+See previous notes for details on GRDBPersistenceStore, PaletteMigrator, RetentionScheduler.
+
+## Pipeline and App Shell phase is complete
+
+Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
+
+### Pipeline module (tasks 49–52)
+
+- `Pipeline/CapturePathDispatch.swift` — `LiDARStatus`, `SupportPlaneCandidate`,
+  `selectCapturePath(lidar:supportPlane:)`. Returns `.singleViewLidar` only when all
+  three conditions hold: LiDAR available, plane detected, coverage ≥ 80%.
+- `CardDetection/CardDetector.swift` — `CardDetector` protocol accepting `[PixelCorner]?`.
+  Lives in the CardDetection module so Vision-based implementations stay in the App
+  target (MedataCore is platform-agnostic).
+- `Pipeline/EstimationFailure.swift` — closed enum with 13 cases, one-to-one with
+  design §5 table. Each case has an Irish-English `.localisedMessage` (task 52).
+  `lidarCoverageTooLow([String])` carries the affected class names.
+- `Pipeline/CaptureResult.swift` — input bundle: capturePath, lidar status, nadir +
+  oblique frames, databaseEdition, paletteVersion.
+- `Pipeline/CaptureFlowDelegate.swift` — `CaptureFlowDelegate` protocol:
+  `didUpdateTilt`, `didUpdateLiDARCoverage`, `didDetectInterClassOcclusion`,
+  `didProduceEstimate`.
+- `Pipeline/PipelineBridges.swift` — bridges from Swift module types to Pb* wire types:
+  `pbSupportPlane`, `pbMetricScale`, `pbMacroResult`, `pbConfidenceResult`,
+  `pbVolumeResult(singleView:)`, `pbVolumeResult(twoView:)`. Also contains
+  `rigidInverse(_:)` / `multiply(_:_:)` / `transform1To2(nadir:oblique:)` for
+  computing T_{1→2} from ARKit worldFromCamera matrices (design §6.0).
+- `Pipeline/Pipeline.swift` — orchestrates stages C–L from design §2.2.
+  Injects `CardDetector`, `CoreMLSegmenter`, `FoodDatabase`, `PersistenceStore`.
+  LiDAR plane fit uses a full-image rough mask before segmentation; card-only fallback
+  back-projects lower two card corners as edge-point proxy (approximation; Canny
+  extraction is a future enhancement). Delta between single/two-view: HeightFieldEstimator
+  vs VoxelCarveEstimator dispatch; two-view computes T_{1→2} and VoxelGrid first.
+
+### App shell (tasks 53–54)
+
+- `App/App.swift` — `@main MedataApp`.
+- `App/CaptureFlowView.swift` — placeholder with `CaptureFlowViewModel: CaptureFlowDelegate`
+  using `@MainActor` + `nonisolated` callbacks.
+- `App/ResultView.swift` — displays `totalCarbsG` and `sigmaMeal` from `MealRecord`.
+- `App/SettingsView.swift` — `@AppStorage` retention picker (30/90/365/indefinite)
+  and IFCDB overlay `Toggle`. Keys in `SettingsKeys` namespace.
+
+### Gotchas
+
+- `PbClinicalMacros.energyKJ` proto field is `energyKj` (lowercase j) in Swift —
+  proto uses `energy_kj_100` which camelCases to `energyKj`.
+- `MetricScale.metresPerVoxelEdgeMm` (Swift struct field, stores mm/px) bridges to
+  `PbMetricScale.metresPerVoxelEdge` (proto field; name predates mm renaming — keep as is).
+- Module-name = type-name ambiguity (`Macros.compute`, `Confidence.combine`): after
+  `import Macros`/`import Confidence`, unqualified `Macros.compute(…)` and
+  `Confidence.combine(…)` resolve to the static method on the enum. Works in practice.
+- `MealRecord` is in `Persistence` module, not `Pipeline`. Test files that use it via
+  `@testable import Pipeline` must also add an explicit `import Persistence`.
