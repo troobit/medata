@@ -13,7 +13,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.0.0")
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.0.0"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19")
     ],
     targets: [
         .target(
@@ -81,7 +82,11 @@ let package = Package(
         ),
         .target(
             name: "Persistence",
-            dependencies: ["PortableContracts"],
+            dependencies: [
+                "PortableContracts",
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "ZIPFoundation", package: "ZIPFoundation")
+            ],
             path: "MedataCore/Sources/Persistence"
         ),
         .target(
@@ -149,6 +154,16 @@ let package = Package(
             name: "ConfidenceTests",
             dependencies: ["Confidence", "PortableContracts"],
             path: "MedataCore/Tests/ConfidenceTests"
+        ),
+        .testTarget(
+            name: "PersistenceTests",
+            dependencies: [
+                "Persistence",
+                "PortableContracts",
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "ZIPFoundation", package: "ZIPFoundation")
+            ],
+            path: "MedataCore/Tests/PersistenceTests"
         )
     ]
 )

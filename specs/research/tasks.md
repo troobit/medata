@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -308,7 +308,7 @@ references:
 
 ## Persistence and Migration
 
-- [ ] 41. Write tests for SQLite schema + `MealRecord` save/load round-trip <!-- id:0f07007 -->
+- [x] 41. Write tests for SQLite schema + `MealRecord` save/load round-trip <!-- id:0f07007 -->
   - Test creation of meals / meal_classes / meal_artefacts / corrections / meta tables on first launch.
   - Test save → reload → deep-equal MealRecord (protobuf-JSON encoding, Decision 31).
   - Test denormalised columns (sigma_meal, total_carbs_g, capture_path, database_edition, palette_version) populated from MealRecord at write time.
@@ -317,14 +317,14 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [14.1](requirements.md#14.1), [14.2](requirements.md#14.2), [14.3](requirements.md#14.3), [14.4](requirements.md#14.4), [15.1](requirements.md#15.1), [15.2](requirements.md#15.2), [15.3](requirements.md#15.3), [15.4](requirements.md#15.4), [15.5](requirements.md#15.5), [15.6](requirements.md#15.6), [15.7](requirements.md#15.7), [18.4](requirements.md#18.4)
 
-- [ ] 42. Implement `Persistence` module (SQLite via GRDB + protobuf-JSON) <!-- id:0f07008 -->
+- [x] 42. Implement `Persistence` module (SQLite via GRDB + protobuf-JSON) <!-- id:0f07008 -->
   - Schema migration on first launch; handle `meals.sqlite.corrupt-{ts}` quarantine path per design §5.
   - `PersistenceStore` protocol implementation per design §3.8.
   - Write meal artefacts (image, depth, mask, probs) to per-meal directory; never as SQLite blobs.
   - Blocked-by: 0f07007 (Write tests for SQLite schema + `MealRecord` save/load round-trip)
   - Requirements: [14.1](requirements.md#14.1), [14.2](requirements.md#14.2), [14.3](requirements.md#14.3), [14.4](requirements.md#14.4), [15.1](requirements.md#15.1), [15.2](requirements.md#15.2), [15.3](requirements.md#15.3), [15.4](requirements.md#15.4), [15.5](requirements.md#15.5), [15.6](requirements.md#15.6), [15.7](requirements.md#15.7), [18.4](requirements.md#18.4)
 
-- [ ] 43. Write tests for `RetentionScheduler` (Req 17) <!-- id:0f07009 -->
+- [x] 43. Write tests for `RetentionScheduler` (Req 17) <!-- id:0f07009 -->
   - Test 30-day default retention with sweep at `now`-stamped meals 29/30/31 days old.
   - Test foreground `sweepIfDue()` advances `last_sweep_at_ms` and is idempotent across two consecutive sweeps within 24h.
   - Test 90-day / 365-day / indefinite settings.
@@ -332,32 +332,32 @@ references:
   - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
 
-- [ ] 44. Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback <!-- id:0f0700a -->
+- [x] 44. Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback <!-- id:0f0700a -->
   - Register `BackgroundTasks` identifier; schedule daily refresh.
   - `Persistence.sweepIfDue()` runs on app foregrounding and at end of every `Pipeline.estimate(_:)` if `last_sweep_at_ms` > 24 hours old.
   - Blocked-by: 0f07009 (Write tests for `RetentionScheduler` (Req 17))
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
 
-- [ ] 45. Write tests for archive export (zip) <!-- id:0f0700b -->
+- [x] 45. Write tests for archive export (zip) <!-- id:0f0700b -->
   - Test export produces single zip containing `meals.sqlite` + per-meal artefact directories.
   - Test archive is consumable (verify by re-extracting and reading back via independent SQLite tool).
   - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
   - Requirements: [15.8](requirements.md#15.8)
 
-- [ ] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
+- [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
-- [ ] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
+- [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
   - Test v1→v2 mapping with one mappable + one unmappable class: original retained, shadow record created, mapping path persisted.
   - Test refusal when `class_mapping_v1_v2.json` is missing or malformed.
   - Test `m_c' = V_c · ρ_new · β_new / (ρ_old · β_old)` correctly cancels old β baked into persisted V_c.
   - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON)), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
   - Requirements: [11.10](requirements.md#11.10)
 
-- [ ] 48. Implement `PaletteMigrator` with `ClassMappingFile` schema <!-- id:0f0700e -->
+- [x] 48. Implement `PaletteMigrator` with `ClassMappingFile` schema <!-- id:0f0700e -->
   - Load `class_mapping_v1_v2.json` per `ClassMappingFile.proto` schema.
   - Per-class mapping decision: re-derive, retain-as-old-edition, or unmappable (preserve provenance per Decision 24).
   - Surface UI message: 'N classes re-derived under v2; M classes retained under v1.'
@@ -389,7 +389,7 @@ references:
 - [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
