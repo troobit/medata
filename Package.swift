@@ -12,7 +12,8 @@ let package = Package(
         .executable(name: "HarnessCLI", targets: ["HarnessCLI"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0")
+        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.0.0")
     ],
     targets: [
         .target(
@@ -58,8 +59,15 @@ let package = Package(
         ),
         .target(
             name: "Foods",
-            dependencies: ["PortableContracts"],
-            path: "MedataCore/Sources/Foods"
+            dependencies: [
+                "PortableContracts",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ],
+            path: "MedataCore/Sources/Foods",
+            resources: [
+                .copy("Resources/food_db.sqlite"),
+                .copy("Resources/ifcdb_overlay.sqlite")
+            ]
         ),
         .target(
             name: "Macros",
@@ -123,6 +131,24 @@ let package = Package(
             name: "VolumeTests",
             dependencies: ["Volume", "Segmentation", "SupportPlane", "CaptureKit", "PortableContracts"],
             path: "MedataCore/Tests/VolumeTests"
+        ),
+        .testTarget(
+            name: "FoodsTests",
+            dependencies: [
+                "Foods",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ],
+            path: "MedataCore/Tests/FoodsTests"
+        ),
+        .testTarget(
+            name: "MacrosTests",
+            dependencies: ["Macros", "Foods", "Volume", "PortableContracts"],
+            path: "MedataCore/Tests/MacrosTests"
+        ),
+        .testTarget(
+            name: "ConfidenceTests",
+            dependencies: ["Confidence", "PortableContracts"],
+            path: "MedataCore/Tests/ConfidenceTests"
         )
     ]
 )

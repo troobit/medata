@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -261,7 +261,7 @@ references:
 
 ## Database Macros and Confidence
 
-- [ ] 35. Write tests for `FoodDatabase` queries with IFCDB overlay merge <!-- id:0f07001 -->
+- [x] 35. Write tests for `FoodDatabase` queries with IFCDB overlay merge <!-- id:0f07001 -->
   - Test CoFID-only lookup returns base values.
   - Test ATTACH + COALESCE merge query from design §4.1 returns overlay-where-present, base-otherwise.
   - Test `entry(for:edition:)` honours per-meal database edition (Decision 24).
@@ -269,14 +269,14 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9), [11.10](requirements.md#11.10)
 
-- [ ] 36. Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay) <!-- id:0f07002 -->
+- [x] 36. Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay) <!-- id:0f07002 -->
   - GRDB connection to bundled `food_db.sqlite`; ATTACH `ifcdb_overlay.sqlite` when overlay enabled in settings.
   - Build CoFID + IFCDB SQLite assets from authoritative source data; bundle in app binary (Decision 27).
   - Persist `BetaCorrectionTable` integration: read β_c and `betaCalibrationStatus` per class per edition.
   - Blocked-by: 0f07001 (Write tests for `FoodDatabase` queries with IFCDB overlay merge)
   - Requirements: [10.1](requirements.md#10.1), [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9)
 
-- [ ] 37. Write tests for `Macros` calculation (Req 12) <!-- id:0f07003 -->
+- [x] 37. Write tests for `Macros` calculation (Req 12) <!-- id:0f07003 -->
   - Test per-class `m_c = V_c · ρ_c` (cm³ × g/cm³ = g).
   - Test `C_c = m_c · κ_c / 100`.
   - Test meal-total `C_meal = Σ C_c` displayed rounded to 1 g (Req 12.4) but persisted at full precision (Req 12.5).
@@ -284,13 +284,13 @@ references:
   - Blocked-by: 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
   - Requirements: [12.1](requirements.md#12.1), [12.2](requirements.md#12.2), [12.3](requirements.md#12.3), [12.4](requirements.md#12.4), [12.5](requirements.md#12.5), [12.6](requirements.md#12.6), [12.7](requirements.md#12.7), [12.8](requirements.md#12.8)
 
-- [ ] 38. Implement `Macros` module (per-class formulas + meal totals) <!-- id:0f07004 -->
+- [x] 38. Implement `Macros` module (per-class formulas + meal totals) <!-- id:0f07004 -->
   - Pure function module per design §3.8 / §6 macronutrient formulas.
   - Output `MacroResult` with per-class breakdown and clinical totals.
   - Blocked-by: 0f07003 (Write tests for `Macros` calculation (Req 12))
   - Requirements: [12.1](requirements.md#12.1), [12.2](requirements.md#12.2), [12.3](requirements.md#12.3), [12.4](requirements.md#12.4), [12.5](requirements.md#12.5), [12.6](requirements.md#12.6), [12.7](requirements.md#12.7), [12.8](requirements.md#12.8)
 
-- [ ] 39. Write tests for `Confidence` combination (§6.8) <!-- id:0f07005 -->
+- [x] 39. Write tests for `Confidence` combination (§6.8) <!-- id:0f07005 -->
   - Test geometric mean `(σ_s_tilde · σ_seg_tilde · σ_geom_tilde)^(1/3)`.
   - Test ε = 0.05 floor per top-level input; σ_geom is product of three sub-factors NOT individually floored.
   - Test σ_geom_view lookup table for both capture paths per Req 13.2.
@@ -300,7 +300,7 @@ references:
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [13.1](requirements.md#13.1), [13.2](requirements.md#13.2), [13.3](requirements.md#13.3), [13.4](requirements.md#13.4), [13.5](requirements.md#13.5), [13.6](requirements.md#13.6)
 
-- [ ] 40. Implement `Confidence` combination function <!-- id:0f07006 -->
+- [x] 40. Implement `Confidence` combination function <!-- id:0f07006 -->
   - Pure function consuming σ_s, σ_seg, plane fit residual, view-coverage state, and occlusion flag.
   - Persist all sub-factors to `ConfidenceResult` per Req 13.4.
   - Blocked-by: 0f07005 (Write tests for `Confidence` combination (§6.8))
@@ -347,7 +347,7 @@ references:
 - [ ] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [ ] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [ ] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [ ] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -446,7 +446,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

@@ -164,3 +164,52 @@ Detection).
 - `bilinearResizeRGB8ToNormalisedFP32` is hot-path code; the inner loop manually
   unrolls the three channels rather than iterating `for c in 0..<3` because the
   Swift optimiser does not consistently unroll the trivial loop.
+
+## Volume Estimation phase is complete
+
+Tasks 24–34 are done. See earlier history if needed.
+
+## Database, Macros, and Confidence phase is complete
+
+Tasks 35–40 are done. Test count: 167 (was 86 after Segmentation + Volume phases).
+
+### Foods module (tasks 35–36)
+
+- `Foods/FoodEntry.swift` — `FoodEntry` struct (density, all macro coefficients per 100g,
+  β calibration, provenance source fields). `BetaCalibrationStatus` is a String raw-value
+  enum: `.calibrated`, `.uncalibratedPooled`, `.uncalibratedUnity`.
+- `Foods/FoodDatabase.swift` — protocol: `version`, `entry(for:)`, `entry(for:edition:)`,
+  `availableEditions()`.
+- `Foods/GRDBFoodDatabase.swift` — GRDB.swift v6.29.3. Two init paths:
+  - `bundled(overlayEnabled:)` resolves resources via `Bundle.module`
+  - `init(mainPath:overlayPath:)` takes file paths directly (used by FoodsTests)
+  The IFCDB overlay is ATTACHed via `Configuration.prepareDatabase` so every GRDB
+  connection automatically runs `ATTACH DATABASE ? AS overlay` at open time. The
+  canonical COALESCE query (`COALESCE(o.col, m.col)`) merges overlay onto CoFID base.
+  `entry(for:edition:)` delegates to `entry(for:)` in v1 (single bundled edition).
+- `tools/food_db/generate.py` — creates `food_db.sqlite` (24 food classes, CoFID 2024)
+  and `ifcdb_overlay.sqlite` (3 IFCDB override entries). Apostrophes in SQL strings
+  must go through parameterised `?` placeholders, not inline SQL literals.
+- Resources are in `MedataCore/Sources/Foods/Resources/` and declared with
+  `.copy(...)` in Package.swift (not `.process` — SQLite is a binary blob).
+
+### Macros module (tasks 37–38)
+
+- Pure stateless enum `Macros.compute(perClassVolumesCm3:database:edition:)`.
+- Formula: `massG = volume × density`, `carbsG = mass × carbsPer100g / 100`.
+- Classes absent from the DB are silently skipped (no error).
+- Clinical totals (energy, protein, fat, fibre) are computed but not displayed in v1.
+- `MacrosTests` uses `StubFoodDatabase` (in-memory, no SQLite) for determinism.
+
+### Confidence module (tasks 39–40)
+
+- `CapturePath` enum is in `PortableContracts` (cross-cutting: used by Confidence,
+  Volume, eventually Pipeline). File: `PortableContracts/CapturePath.swift`.
+- σ_meal = `max(ε, (max(ε,σ_s) × max(ε,σ_seg) × max(ε,σ_geom))^(1/3))`. The
+  outer `max(ε, …)` absorbs float rounding when all three inputs equal ε exactly
+  (`pow(0.05^3, 1/3)` yields 0.04999… without it).
+- σ_geom sub-factors (sigmaView, sigmaPlane, sigmaOccl) are NOT individually floored.
+  Only the product `sigmaGeom.product` is floored before entering the geometric mean.
+- σ_plane penalty (×0.9): only when BOTH `cardOnlyPath == true` AND `cardOnlyIterations == 5`.
+- σ_occl = 0.80 only on `.singleViewLidar` path with `interClassOcclusionDetected`.
+  Two-view paths always get 1.00 (oblique view recovers occluded regions).
