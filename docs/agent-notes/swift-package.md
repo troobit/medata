@@ -24,7 +24,9 @@ coexist while Foundation is being built; the Swift sources live in `MedataCore/`
 - `MedataCore/Sources/CaptureKit/MetalContext.swift` — `@unchecked Sendable` per
   design §3.1.1; falls back to an empty in-memory library when no bundled metallib.
 - `App/` — placeholder dir for the iOS app target; the Xcode project is created
-  interactively at task 53.
+  interactively at task 53. Step-by-step instructions for creating the project,
+  signing for a developer device, and the non-LiDAR DEBUG path are in
+  `docs/ios-device-setup.md`.
 
 ## Generated protobuf naming
 
@@ -64,9 +66,11 @@ Tasks 8–18 are done. Modules added in this phase:
   protocol; `stop()` enforces a 200 ms release ceiling per Req 2.5 by racing the
   engine's `release()` against a sleep task in a `withThrowingTaskGroup`.
 - `CaptureKit/ARKitCaptureEngine.swift` — production engine guarded by
-  `#if canImport(ARKit) && os(iOS)`. Refuses start without rear LiDAR (Req 1.3),
-  converts `simd_*` → `Vec3`/`Mat4` before exposing `RawFrame`, normalises ARKit
-  depth from m → mm at the boundary.
+  `#if canImport(ARKit) && os(iOS)`. Refuses start without rear LiDAR (Req 1.3)
+  in **release builds only**; debug builds run without `.sceneDepth` so devs can
+  exercise the two-view + ID-1 card path on non-LiDAR devices (e.g. iPhone 13
+  mini). See `docs/ios-device-setup.md`. Converts `simd_*` → `Vec3`/`Mat4` before
+  exposing `RawFrame`, normalises ARKit depth from m → mm at the boundary.
 - `CaptureKit/MockCaptureEngine.swift` — in-memory engine for tests / HarnessCLI;
   `RawFrame.fixture(...)` builder is the canonical way to construct frames in tests.
 - `CardDetection/LinearAlgebra.swift` — `public` Accelerate-backed SVD + 3×3 helpers

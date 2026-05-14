@@ -9,8 +9,12 @@ import simd
 // `#if canImport(ARKit) && os(iOS)`; the macOS HarnessCLI uses MockCaptureEngine.
 //
 // Responsibilities:
-//   • Refuse start() on devices without rear LiDAR (Req 1.3).
-//   • Run an ARKit world-tracking session with sceneDepth (LiDAR) enabled (Req 6).
+//   • Refuse start() on devices without rear LiDAR (Req 1.3) in RELEASE builds.
+//     DEBUG builds run without `.sceneDepth` so developers can exercise the
+//     two-view + ID-1 card path (Req 4.3, §7.4) on non-LiDAR hardware.
+//     See docs/ios-device-setup.md for device support details.
+//   • Run an ARKit world-tracking session with sceneDepth (LiDAR) enabled (Req 6)
+//     when the device supports it.
 //   • Convert iOS-private simd_* types to portable Vec3/Mat4 BEFORE constructing
 //     RawFrame, so no other module sees simd_* (design §6.0 boundary rule).
 //   • Map ARConfidenceLevel.{low,medium,high} → UInt8 {0,127,255} per §6.0.
@@ -26,11 +30,16 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
     }
 
     public func start() async throws {
-        guard ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) else {
+        let supportsLiDAR = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
+        #if !DEBUG
+        guard supportsLiDAR else {
             throw CaptureError.lidarUnavailable
         }
+        #endif
         let config = ARWorldTrackingConfiguration()
-        config.frameSemantics.insert(.sceneDepth)
+        if supportsLiDAR {
+            config.frameSemantics.insert(.sceneDepth)
+        }
         config.worldAlignment = .gravity
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
         if motion.isDeviceMotionAvailable {
