@@ -272,3 +272,42 @@ Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
   `Confidence.combine(…)` resolve to the static method on the enum. Works in practice.
 - `MealRecord` is in `Persistence` module, not `Pipeline`. Test files that use it via
   `@testable import Pipeline` must also add an explicit `import Persistence`.
+
+## Performance and Cleanup phase is complete
+
+Tasks 65–70 are done. Test count: 237 (was 207 after Harness and Calibration).
+
+### Performance tests (tasks 65–66)
+
+- `HarnessCLITests/PipelinePerformanceTests.swift` — XCTest performance tests using
+  `XCTClockMetric` + `measure` over 10 iterations. Single-view P95 ≤ 1000 ms and
+  two-view P95 ≤ 1800 ms assertions. Both tests skip on macOS via `XCTSkip` — they
+  only assert on a tethered iPhone 12 Pro per Req 16.7.
+- `HarnessCLITests` dependencies in `Package.swift` now include `Volume`, `CaptureKit`,
+  `SupportPlane`, and `Macros` so the tests can build synthetic fixtures directly.
+
+### OSSignpost instrumentation (task 67)
+
+- `Pipeline/Pipeline.swift` — `#if DEBUG` OSSignpost intervals around all 8 stages:
+  CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Macros, Confidence,
+  Persistence. Uses `OSSignposter(subsystem:"ie.medata.pipeline", category:"Stages")`.
+  All end-interval calls are duplicated on every throw path so Instruments never sees
+  unclosed intervals.
+
+### Spelling linter (tasks 68–69)
+
+- `tools/check_spelling.sh` — bash script scanning `*.swift` and `.xcstrings` files
+  under `MedataCore/Sources`, `HarnessCore`, `HarnessCLI`, `App` for US-English
+  spellings. Uses `\b` word-boundary `grep -E`. Exits 1 on any match.
+  `REPO_ROOT` can be overridden via environment variable (used by tests).
+- `SpellingLinterTests` — new test target (no dependencies). 23 XCTest cases that
+  create temp Swift files, run the linter script via `Process`, and assert exit codes.
+  Tests skip on iOS via `XCTSkip`.
+- Fixed `MealRecord.swift` comment: "denormalized" → "denormalised", "serialization"
+  → "serialisation" (caught by running the linter against the codebase).
+
+### SvelteKit legacy move (task 70)
+
+- `src/`, `static/`, `svelte.config.js`, `vite.config.ts`, `package.json`,
+  `pnpm-lock.yaml`, `tsconfig.json` moved to `legacy/svelte-mvp/` per Req 1.4.
+- `README.md` updated to describe the iOS-first project structure.

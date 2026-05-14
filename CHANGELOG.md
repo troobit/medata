@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Performance and Cleanup phase — tasks 65–70)
+- `MedataCore/Tests/HarnessCLITests/PipelinePerformanceTests.swift` — XCTest P95 latency assertions for single-view (≤ 1000 ms, task 65) and two-view (≤ 1800 ms, task 66) end-to-end pipelines; device-gated with `#if !os(iOS)` + `XCTSkip`; 10-iteration `XCTClockMetric` measurement with synthetic FP16 probability tensors, depth maps, and calibration fixtures built inline.
+- `tools/check_spelling.sh` — Irish/British English spelling linter (Req 19.2, task 69); scans `*.swift` files under `MedataCore/Sources`, `HarnessCore`, `HarnessCLI`, and `App`, plus `.xcstrings` catalogs; exits 0 if clean, 1 on violations; ~80 banned US-English words with `\b` word-boundary anchors; respects `REPO_ROOT` env-var override for test isolation.
+- `MedataCore/Tests/SpellingLinterTests/SpellingLinterTests.swift` — 23 XCTest cases for `check_spelling.sh` (task 68): rejected US spellings (recognized, color, fiber, …), accepted British/Irish equivalents (recognised, colour, fibre, …), word-boundary edge cases, empty file, and multiple-violation detection; uses `Process` with a temp-dir `REPO_ROOT` wrapper for isolation; macOS-only via `XCTSkip`.
+- `legacy/svelte-mvp/` — archived SvelteKit MVP (task 70, Req 1.4): moved from repo root to `legacy/` to make way for the iOS-native project structure.
+
+### Changed (Performance and Cleanup phase — tasks 65–70)
+- `MedataCore/Sources/Pipeline/Pipeline.swift` — added `#if DEBUG` OSSignpost instrumentation (`OSSignposter`, subsystem `ie.medata.pipeline`, category `Stages`) across all 8 pipeline stages (task 67, Req 16.5); each stage is wrapped with `beginInterval`/`endInterval` including on throw paths to prevent unclosed intervals in Instruments.
+- `Package.swift` — added `Volume`, `CaptureKit`, `SupportPlane`, `Macros` to `HarnessCLITests` dependencies for performance-test fixture construction; added new `SpellingLinterTests` target (no dependencies).
+- `README.md` — rewritten to describe the iOS-native project structure (task 70); includes module table, build commands, and CI-script reference.
+- `MedataCore/Sources/Persistence/MealRecord.swift` — fixed US spellings in comments: `denormalised`, `serialisation` (Req 19.2).
+
 ### Added (Volume Estimation phase — tasks 24–34)
 - `MedataCore/Sources/Volume/{VolumeTypes,VoxelCarveEstimator,HeightFieldEstimator,InterClassOcclusionDetector,VoxelGridSizer,MaskMatcher}.swift` — complete Volume module per design §6.6–6.11: shared types (`VoxelGrid`, `BetaCorrection`, `VolumeError`, `VoxelCarveView`/`VoxelCarveEstimate`/`HeightFieldEstimate`/`MaskMatchingResult`) plus internal helpers (`projectCamera1`, `applyMat4`, `signedDistanceToPlane`, `sampleDepthBilinearMm`, `sampleConfidenceUInt8`); two-view voxel-carving estimator with FP32-promoted per-pixel argmax, τ_sil/τ_v thresholds, single-view-only degraded fallback (silhouette extrusion at 30 mm prior height), and β-correction; single-view height-field integrator with 1/cos³θ off-axis pixel-area correction (Decision 29), per-class LiDAR-coverage tracking, and ≥50% coverage enforcement; inter-class occlusion detector (single-pass 4-neighbour scan, 10 mm depth-discontinuity threshold); gravity-aligned voxel-grid sizer with threadgroup-multiple rounding and 360 mm horizontal / 120 mm vertical caps; pure class-equivalence mask matcher producing matched/single-view-only class sets.
 - `MedataCore/Sources/Volume/Kernels/voxel_carve.metal` — GPU compute kernel (one thread per voxel, 8×8×8 threadgroups): two-view projection, silhouette test, FP32-product argmax, per-class `atomic_uint` counts, ambiguous-count and silhouette-count accumulators.

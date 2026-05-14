@@ -5,11 +5,22 @@ import Foods
 import Foundation
 import Macros
 import MetricScale
+#if DEBUG
+import os
+#endif
 import Persistence
 import PortableContracts
 import Segmentation
 import SupportPlane
 import Volume
+
+#if DEBUG
+// Dev-build-only signposter per Req 16.5 / 16.7. Visible in Instruments → Points of Interest.
+private let pipelineSignposter = OSSignposter(
+    subsystem: "ie.medata.pipeline",
+    category: "Stages"
+)
+#endif
 
 // Orchestrator for pipeline stages C–L per design §2.2.
 // Dependencies are injected at construction so the pipeline is fully testable.
@@ -37,28 +48,60 @@ public struct Pipeline: Sendable {
         let nadir = captureResult.nadirFrame
 
         // ── Stage C: Card detection ──────────────────────────────────────────────
+        #if DEBUG
+        let cardInterval = pipelineSignposter.beginInterval("CardDetection")
+        #endif
         let corners = await cardDetector.detect(in: nadir)
         let cardPose: CardPose?
         if let c = corners {
             do {
                 cardPose = try CardPoseSolver.solve(corners: c, intrinsics: nadir.intrinsics)
             } catch CardPoseError.degenerateCardPose {
+                #if DEBUG
+                pipelineSignposter.endInterval("CardDetection", cardInterval)
+                #endif
                 throw EstimationFailure.degenerateCardPose
             } catch CardPoseError.cardTooOblique {
+                #if DEBUG
+                pipelineSignposter.endInterval("CardDetection", cardInterval)
+                #endif
                 throw EstimationFailure.cardTooOblique
             } catch {
+                #if DEBUG
+                pipelineSignposter.endInterval("CardDetection", cardInterval)
+                #endif
                 throw EstimationFailure.degenerateCardPose
             }
         } else {
             cardPose = nil
         }
+        #if DEBUG
+        pipelineSignposter.endInterval("CardDetection", cardInterval)
+        #endif
 
         // ── Stage D: SupportPlane ────────────────────────────────────────────────
-        let plane = try fitSupportPlane(
-            nadir: nadir, cardPose: cardPose, corners: corners
-        )
+        #if DEBUG
+        let planeInterval = pipelineSignposter.beginInterval("SupportPlane")
+        #endif
+        let plane: SupportPlane
+        do {
+            plane = try fitSupportPlane(
+                nadir: nadir, cardPose: cardPose, corners: corners
+            )
+        } catch {
+            #if DEBUG
+            pipelineSignposter.endInterval("SupportPlane", planeInterval)
+            #endif
+            throw error
+        }
+        #if DEBUG
+        pipelineSignposter.endInterval("SupportPlane", planeInterval)
+        #endif
 
         // ── Stage E: MetricScale ─────────────────────────────────────────────────
+        #if DEBUG
+        let scaleInterval = pipelineSignposter.beginInterval("MetricScale")
+        #endif
         let lidarMmPerPx: Float?
         if nadir.depth != nil {
             let fMean = (nadir.intrinsics.fx + nadir.intrinsics.fy) / 2
@@ -73,22 +116,40 @@ public struct Pipeline: Sendable {
                 lidarScaleMmPerPx: lidarMmPerPx
             )
         } catch MetricScaleError.noScaleAvailable {
+            #if DEBUG
+            pipelineSignposter.endInterval("MetricScale", scaleInterval)
+            #endif
             throw EstimationFailure.noScaleAvailable
         }
+        #if DEBUG
+        pipelineSignposter.endInterval("MetricScale", scaleInterval)
+        #endif
 
         // ── Stage F: Segmentation ────────────────────────────────────────────────
+        #if DEBUG
+        let segInterval = pipelineSignposter.beginInterval("Segmentation")
+        #endif
         let nadirSeg: SegmentationResult
         do {
             nadirSeg = try await segmenter.segment(nadir)
         } catch SegmentationError.noFoodPixels {
+            #if DEBUG
+            pipelineSignposter.endInterval("Segmentation", segInterval)
+            #endif
             throw EstimationFailure.noFoodPixels
         }
+        #if DEBUG
+        pipelineSignposter.endInterval("Segmentation", segInterval)
+        #endif
         let palette = nadirSeg.probabilities.palette
 
         // β-correction table from database at current edition.
         let beta = buildBeta(palette: palette, edition: captureResult.databaseEdition)
 
         // ── Stages G/H/I: Volume ─────────────────────────────────────────────────
+        #if DEBUG
+        let volumeInterval = pipelineSignposter.beginInterval("Volume")
+        #endif
         let pbVolumes: PbVolumeResult
         let interClassOcclusion: Bool
         var viewCoverage: ViewCoverage
@@ -96,6 +157,9 @@ public struct Pipeline: Sendable {
         switch captureResult.capturePath {
         case .singleViewLidar:
             guard let depth = nadir.depth else {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.lidarUnavailableMidCapture
             }
             do {
@@ -116,19 +180,31 @@ public struct Pipeline: Sendable {
                 let minCov = est.lidarCoverageFraction.values.min() ?? 1
                 viewCoverage = minCov >= 0.80 ? .singleViewFull : .singleViewPartial
             } catch VolumeError.lidarCoverageTooLow(let classes) {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.lidarCoverageTooLow(classes)
             } catch VolumeError.noFoodVolumeRecovered {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.noFoodVolumeRecovered
             }
 
         case .twoViewSfS:
             guard let oblique = captureResult.obliqueFrame else {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.arWorldTrackingLost
             }
             let obliqueSeg: SegmentationResult
             do {
                 obliqueSeg = try await segmenter.segment(oblique)
             } catch SegmentationError.noFoodPixels {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.noFoodPixels
             }
             let matching = MaskMatcher.match(
@@ -147,6 +223,9 @@ public struct Pipeline: Sendable {
                     gravityCamera: nadir.gravity
                 ))
             } catch {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.noFoodVolumeRecovered
             }
             do {
@@ -168,18 +247,33 @@ public struct Pipeline: Sendable {
                 interClassOcclusion = false
                 viewCoverage = matching.singleViewOnlyClasses.isEmpty ? .twoViewFull : .twoViewPartial
             } catch VolumeError.noFoodVolumeRecovered {
+                #if DEBUG
+                pipelineSignposter.endInterval("Volume", volumeInterval)
+                #endif
                 throw EstimationFailure.noFoodVolumeRecovered
             }
         }
+        #if DEBUG
+        pipelineSignposter.endInterval("Volume", volumeInterval)
+        #endif
 
         // ── Stage J: Macros ──────────────────────────────────────────────────────
+        #if DEBUG
+        let macrosInterval = pipelineSignposter.beginInterval("Macros")
+        #endif
         let macros = Macros.compute(
             perClassVolumesCm3: pbVolumes.perClassVolumesCm3,
             database: database,
             edition: captureResult.databaseEdition
         )
+        #if DEBUG
+        pipelineSignposter.endInterval("Macros", macrosInterval)
+        #endif
 
         // ── Stage K: Confidence ──────────────────────────────────────────────────
+        #if DEBUG
+        let confidenceInterval = pipelineSignposter.beginInterval("Confidence")
+        #endif
         let confidence = Confidence.combine(
             sigmaScale: scale.sigmaScale,
             sigmaSeg: nadirSeg.sigmaSeg,
@@ -190,6 +284,9 @@ public struct Pipeline: Sendable {
             cardOnlyPath: nadir.depth == nil,
             cardOnlyIterations: plane.convergedIterations ?? 0
         )
+        #if DEBUG
+        pipelineSignposter.endInterval("Confidence", confidenceInterval)
+        #endif
 
         // ── Assemble MealRecord ──────────────────────────────────────────────────
         let perClassCalib: [String: PbBetaCalibrationStatus] = macros.perClass
@@ -209,7 +306,13 @@ public struct Pipeline: Sendable {
         )
 
         // ── Stage L: Persistence ─────────────────────────────────────────────────
+        #if DEBUG
+        let persistenceInterval = pipelineSignposter.beginInterval("Persistence")
+        #endif
         try await store.save(record, artefacts: [])
+        #if DEBUG
+        pipelineSignposter.endInterval("Persistence", persistenceInterval)
+        #endif
 
         delegate?.didProduceEstimate(record)
 

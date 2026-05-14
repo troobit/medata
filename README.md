@@ -1,4 +1,28 @@
 # MeData
 
-A personal data tracking application for logging meal macros, insulin doses, and BSL. Uses ML-powered food recognition to estimate macros from photos.
+A native iOS application that estimates the carbohydrate content of a meal from one or two photographs using on-device computer vision and a bundled food-composition database.
 
+## Project structure
+
+| Path | Description |
+|---|---|
+| `App/` | iOS SwiftUI application target |
+| `MedataCore/` | Swift Package — platform-neutral pipeline modules |
+| `HarnessCore/` | Offline test-set harness library |
+| `HarnessCLI/` | Command-line accuracy / calibration runner |
+| `specs/research/` | Requirements, design, and task specification |
+| `tools/` | Development and CI scripts |
+| `legacy/svelte-mvp/` | Archived SvelteKit MVP (superseded by iOS app per Req 1.4) |
+
+## Building
+
+```sh
+swift build
+swift test
+```
+
+## CI scripts
+
+```sh
+bash tools/check_spelling.sh   # Irish/British English spelling linter (Req 19.2)
+```

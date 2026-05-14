@@ -4,7 +4,7 @@ import SwiftProtobuf
 
 // Swift-ergonomic MealRecord. Uses Pb sub-types for all composite fields so
 // Persistence stays within the PortableContracts dependency boundary.
-// `paletteVersion` is SQL-only (denormalized column); it is NOT in PbMealRecord.
+// `paletteVersion` is SQL-only (denormalised column); it is NOT in PbMealRecord.
 public struct MealRecord: Sendable, Equatable {
     public let id: UUID
     public let createdAt: Date
@@ -74,7 +74,7 @@ public struct MealArtefact: Sendable, Equatable {
 // MARK: - PbMealRecord bridge
 
 public extension MealRecord {
-    // Converts to PbMealRecord for protobuf-JSON serialization.
+    // Converts to PbMealRecord for protobuf-JSON serialisation.
     // paletteVersion is omitted (SQL column only, not in proto).
     var pb: PbMealRecord {
         var out = PbMealRecord()
