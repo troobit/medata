@@ -12,7 +12,7 @@ A native iOS application that estimates the carbohydrate content of a meal from 
 | `HarnessCLI/` | Command-line accuracy / calibration runner |
 | `specs/research/` | Requirements, design, and task specification |
 | `tools/` | Development and CI scripts |
-| `legacy/svelte-mvp/` | Archived SvelteKit MVP (superseded by iOS app per Req 1.4) |
+| `static/` | Brand source assets (favicons / icons), inputs to per-target icon generation |
 
 ## Building
 

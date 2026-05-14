@@ -310,8 +310,15 @@ Tasks 65–70 are done. Test count: 237 (was 207 after Harness and Calibration).
 - Fixed `MealRecord.swift` comment: "denormalized" → "denormalised", "serialization"
   → "serialisation" (caught by running the linter against the codebase).
 
-### SvelteKit legacy move (task 70)
+### SvelteKit legacy move (task 70) and subsequent descope
 
 - `src/`, `static/`, `svelte.config.js`, `vite.config.ts`, `package.json`,
   `pnpm-lock.yaml`, `tsconfig.json` moved to `legacy/svelte-mvp/` per Req 1.4.
 - `README.md` updated to describe the iOS-first project structure.
+- **Post-descope (out-of-band of task 70):** `legacy/svelte-mvp/` was deleted
+  in full once SvelteKit was confirmed as completely descoped. The four brand
+  source assets (`favicon-default.svg`, `favicon-colour.svg`,
+  `favicon-contrast.svg`, `favicon.ico`) were retained at `static/` for
+  per-target icon generation (see `~/repos/rtob/scripts/generate-icons.js`
+  for the canonical sharp-based generator pattern). The rest of the SvelteKit
+  tree remains recoverable from earlier commits if needed.
