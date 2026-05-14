@@ -279,16 +279,19 @@ Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
 
 ## Performance and Cleanup phase is complete
 
-Tasks 65–70 are done. Test count: 237 (was 207 after Harness and Calibration).
+Tasks 65–70 are done. Test count: 239 (was 207 after Harness and Calibration).
 
 ### Performance tests (tasks 65–66)
 
 - `HarnessCLITests/PipelinePerformanceTests.swift` — XCTest performance tests using
   `XCTClockMetric` + `measure` over 10 iterations. Single-view P95 ≤ 1000 ms and
-  two-view P95 ≤ 1800 ms assertions. Both tests skip on macOS via `XCTSkip` — they
-  only assert on a tethered iPhone 12 Pro per Req 16.7.
-- `HarnessCLITests` dependencies in `Package.swift` now include `Volume`, `CaptureKit`,
-  `SupportPlane`, and `Macros` so the tests can build synthetic fixtures directly.
+  two-view P95 ≤ 1800 ms assertions. Both tests skip on macOS via `XCTSkip` (2 skipped
+  tests in the test suite) — they only assert on a tethered iPhone 12 Pro per Req 16.7.
+- P95 with 10 samples equals the maximum value (sorted[9]); so the assertion effectively
+  requires all 10 runs to complete within budget.
+- Transitive imports via `HarnessCore` dependency are sufficient — no `Package.swift`
+  changes needed. `CardDetection`, `CaptureKit`, `Persistence`, `Pipeline` are all
+  importable because `HarnessCore → Pipeline → {CardDetection, CaptureKit, Persistence}`.
 
 ### OSSignpost instrumentation (task 67)
 
