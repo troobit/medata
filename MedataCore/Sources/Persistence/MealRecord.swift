@@ -5,7 +5,7 @@ import SwiftProtobuf
 // Swift-ergonomic MealRecord. Uses Pb sub-types for all composite fields so
 // Persistence stays within the PortableContracts dependency boundary.
 // `paletteVersion` is SQL-only (denormalised column); it is NOT in PbMealRecord.
-public struct MealRecord: Sendable, Equatable {
+public struct MealRecord: Sendable, Equatable, Hashable {
     public let id: UUID
     public let createdAt: Date
     public let capturePath: CapturePath

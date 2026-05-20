@@ -1,10 +1,20 @@
 # App target — iOS SwiftUI shell
 
-Placeholder location for the iOS app target (design §2.1). The SwiftUI views
-(`App.swift`, `CaptureFlowView.swift`, `ResultView.swift`, `SettingsView.swift`)
-are wired up in **task 53**, after the Pipeline orchestrator (task 50) is in place.
+SwiftUI views for the iOS app (design §2.1). The Xcode project at
+`MeData/MeData.xcodeproj` (repo root) references these files in place via
+`../App/*.swift`; they live here, not duplicated into the project's source
+folder.
 
-The Xcode project itself is created interactively via Xcode's "New Project →
-App" template at task 53; this folder will hold the per-target Swift sources.
-The Swift Package (`Package.swift` at the repo root) provides `MedataCore` as
-a local dependency; the iOS app imports `Pipeline` only, per design §2.1.
+| File | Role |
+|---|---|
+| `App.swift` | `@main struct MedataApp` — app entry point, mounts `CaptureFlowView` |
+| `CaptureFlowView.swift` | Placeholder capture view + `CaptureFlowViewModel`; also hosts the **Run self-check** diagnostic button used to verify the SPM link at runtime |
+| `ResultView.swift` | Displays a finished `MealRecord` (carb estimate + confidence) |
+| `SettingsView.swift` | Retention / IFCDB overlay toggles via `@AppStorage` |
+
+The Swift Package at the repo root exposes `MedataCore` (the `Pipeline`
+target). The app uses `import Pipeline`; `Pipeline.swift` re-exports
+`Persistence` and `PortableContracts` so `MealRecord`, `EstimationFailure`,
+and the `Pb*` types are reachable through that single import.
+
+For build / run instructions see `docs/ios-device-setup.md`.

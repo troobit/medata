@@ -58,8 +58,8 @@ static/test-data.json
 .build/
 .swiftpm/
 DerivedData/
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
 Package.resolved
 
 # Segmenter / database artefacts (built locally or by CI, bundled at build time)

@@ -23,10 +23,42 @@ coexist while Foundation is being built; the Swift sources live in `MedataCore/`
   `simd_float4x4` are bridged to portable Vec3/Mat4 (design §6.0 boundary rule).
 - `MedataCore/Sources/CaptureKit/MetalContext.swift` — `@unchecked Sendable` per
   design §3.1.1; falls back to an empty in-memory library when no bundled metallib.
-- `App/` — placeholder dir for the iOS app target; the Xcode project is created
-  interactively at task 53. Step-by-step instructions for creating the project,
-  signing for a developer device, and the non-LiDAR DEBUG path are in
-  `docs/ios-device-setup.md`.
+- `App/` — SwiftUI views for the iOS shell (`App.swift`, `CaptureFlowView.swift`,
+  `ResultView.swift`, `SettingsView.swift`). Referenced into the Xcode project
+  via `../App/*.swift` (sourceTree = SOURCE_ROOT) — the files stay here, not
+  duplicated into the project's sources folder.
+- `MeData/MeData.xcodeproj` (repo root) — the committed iOS app project. Depends
+  on the local SPM via `XCLocalSwiftPackageReference` with `relativePath =
+  ../../medata` (resolves correctly because the repo root dir is literally named
+  `medata`). Bundle id and team are personal — overwrite on first open. See
+  `docs/ios-device-setup.md` for the full setup, including the recreate-from-
+  scratch appendix.
+
+## SPM ↔ iOS-app import boundary
+
+The Xcode app depends on the SPM via the `MedataCore` library product (an alias
+for the `Pipeline` target). `Pipeline.swift` re-exports two upstream modules so
+the app code can stay with just `import Pipeline`:
+
+```swift
+@_exported import Persistence       // MealRecord, MealArtefact
+@_exported import PortableContracts // Pb* generated types
+```
+
+If a new app-facing type lands in another module (e.g. `CaptureKit`,
+`Confidence`), either re-export it from `Pipeline` the same way, or add the
+matching local package product to the Xcode target. Do **not** rely on
+transitive imports — Swift requires explicit re-export for type names to be
+visible at the use site.
+
+`MealRecord` is `Sendable, Equatable, Hashable` — the Hashable conformance is
+required by `NavigationStack`'s `navigationDestination(for: MealRecord.self)`
+in `CaptureFlowView`. Synthesised; every nested field is itself Hashable
+(swift-protobuf generated types all are).
+
+App-side `ObservableObject` / `@Published` / `@StateObject` patterns require
+`import Combine` explicitly — Xcode 16+ no longer auto-imports Combine via
+SwiftUI.
 
 ## Generated protobuf naming
 
@@ -66,11 +98,15 @@ Tasks 8–18 are done. Modules added in this phase:
   protocol; `stop()` enforces a 200 ms release ceiling per Req 2.5 by racing the
   engine's `release()` against a sleep task in a `withThrowingTaskGroup`.
 - `CaptureKit/ARKitCaptureEngine.swift` — production engine guarded by
-  `#if canImport(ARKit) && os(iOS)`. Refuses start without rear LiDAR (Req 1.3)
-  in **release builds only**; debug builds run without `.sceneDepth` so devs can
-  exercise the two-view + ID-1 card path on non-LiDAR devices (e.g. iPhone 13
-  mini). See `docs/ios-device-setup.md`. Converts `simd_*` → `Vec3`/`Mat4` before
-  exposing `RawFrame`, normalises ARKit depth from m → mm at the boundary.
+  `#if canImport(ARKit) && os(iOS)`. Starts the AR session with `.sceneDepth`
+  when `ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)` is
+  true; on non-LiDAR devices it starts without depth in **both Debug and
+  Release** and the pipeline falls through to the two-view + ID-1 card path
+  (Req 4.3, §7.4) with `noLidarConfidence` set. Req 1.3 stays on the books but
+  is no longer enforced at this boundary. `CaptureError.lidarUnavailable` is
+  still defined in `CaptureSession.swift` but currently unused. See
+  `docs/ios-device-setup.md`. Converts `simd_*` → `Vec3`/`Mat4` before exposing
+  `RawFrame`, normalises ARKit depth from m → mm at the boundary.
 - `CaptureKit/MockCaptureEngine.swift` — in-memory engine for tests / HarnessCLI;
   `RawFrame.fixture(...)` builder is the canonical way to construct frames in tests.
 - `CardDetection/LinearAlgebra.swift` — `public` Accelerate-backed SVD + 3×3 helpers

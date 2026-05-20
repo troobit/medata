@@ -9,12 +9,13 @@ import simd
 // `#if canImport(ARKit) && os(iOS)`; the macOS HarnessCLI uses MockCaptureEngine.
 //
 // Responsibilities:
-//   • Refuse start() on devices without rear LiDAR (Req 1.3) in RELEASE builds.
-//     DEBUG builds run without `.sceneDepth` so developers can exercise the
-//     two-view + ID-1 card path (Req 4.3, §7.4) on non-LiDAR hardware.
-//     See docs/ios-device-setup.md for device support details.
-//   • Run an ARKit world-tracking session with sceneDepth (LiDAR) enabled (Req 6)
-//     when the device supports it.
+//   • Run an ARKit world-tracking session with `.sceneDepth` (LiDAR) enabled
+//     when the device supports it (Req 6). On non-LiDAR devices the session
+//     starts without depth and the pipeline falls through to the two-view +
+//     ID-1 card path (Req 4.3, §7.4), with `noLidarConfidence` set per §7.4.
+//     The hardware-floor refusal (Req 1.3) is no longer enforced at this
+//     boundary so non-LiDAR developer / test devices run the full app in both
+//     Debug and Release. See docs/ios-device-setup.md for device support.
 //   • Convert iOS-private simd_* types to portable Vec3/Mat4 BEFORE constructing
 //     RawFrame, so no other module sees simd_* (design §6.0 boundary rule).
 //   • Map ARConfidenceLevel.{low,medium,high} → UInt8 {0,127,255} per §6.0.
@@ -31,11 +32,6 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
 
     public func start() async throws {
         let supportsLiDAR = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
-        #if !DEBUG
-        guard supportsLiDAR else {
-            throw CaptureError.lidarUnavailable
-        }
-        #endif
         let config = ARWorldTrackingConfiguration()
         if supportsLiDAR {
             config.frameSemantics.insert(.sceneDepth)

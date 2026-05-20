@@ -8,8 +8,8 @@ import MetricScale
 #if DEBUG
 import os
 #endif
-import Persistence
-import PortableContracts
+@_exported import Persistence
+@_exported import PortableContracts
 import Segmentation
 import SupportPlane
 import Volume

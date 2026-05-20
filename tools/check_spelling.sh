@@ -141,7 +141,7 @@ if [[ -d "$XCSTRINGS_DIR" ]]; then
 fi
 
 if [[ $FOUND -ne 0 ]]; then
-    echo "FAIL: US-English spellings found. Use Irish/British English equivalents (Req 19.2)." >&2
+    echo "FAIL: US-English spellings found." >&2
     exit 1
 fi
 
