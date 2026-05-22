@@ -6,6 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (UI spec — end-to-end verification phase, tasks 26–28)
+- `MeData/UITests/RefusalFlowUITests.swift` — XCUITest for the refusal flow (task 26, Req 10.1–10.3, 12.1–12.2): drives the flow to a refusal, asserts the banner shows `EstimationFailure.noScaleAvailable.localisedMessage` verbatim, taps "Try Again", and asserts the banner dismisses and capture re-enters `.capturing` at the retry stage.
+- `MeData/UITests/BackgroundingUITests.swift` — XCUITest for §8.3 backgrounding (task 27, best-effort per Decision 12): enters `.estimating` via the `stall` pipeline, backgrounds with the Home button, foregrounds, and asserts the UI resets to `.initialising` (UI state only — a `MealRecord` may still persist).
+- `MeData/UITests/InterruptionUITests.swift` — XCUITest for AR-interruption recovery (task 28, Req 16.1): emits `.began` on the interruption stream and asserts `.trackingLost`, then `.ended` and asserts recovery to `.initialising`.
+
+### Changed (UI spec — end-to-end verification phase, tasks 26–28)
+- `App/App.swift` — added a `#if DEBUG` XCUITest harness (`UITestSupport`, `UITestHarness`, `UITestCaptureEngine`, `UITestControlPanel`) activated by the `-uitest` launch argument. The AR-gated flow can't reach `.ready` on the simulator, so the harness injects a gated `CaptureEngine`, a launch-arg-selected stub pipeline (`-uitestPipeline refuse|stall`), and an interruption `AsyncStream` it owns; hidden accessibility-identified controls drive the model's public commands. Not compiled into release builds.
+- `App/CaptureFlowView.swift`, `App/RefusalBanner.swift` — added accessibility identifiers (`shutter`, `hint.{initialising,trackingLost,estimating,capturing}`, `refusal.message`, `refusal.tryAgain`) so the XCUITests can query state.
+
+### Added (UI spec — UI components phase, tasks 12–24)
+- `App/CaptureFlowModel.swift` — `@Observable @MainActor` orchestrator conforming to `CaptureFlowDelegate` (tasks 12–13). Implements the full state machine from design.md, the path-hint freeze-at-shutter-tap rule, `Task`-wrapped estimation with `cancelInFlight()`, interruption-stream observation, scene-phase permission re-checks, and no-op delegate conformances (Decisions 9, 11).
+- `App/LiveSampleObserver.swift` — `@MainActor` observer iterating `engine.frames`, computing per-frame tilt/distance/coverage via a pure `LiveSampleMath` seam and write-gating on model state (task 15).
+- `App/ARPreviewView.swift` — `UIViewRepresentable` over `ARView` with `reassertDelegate()` called from both `makeUIView` and `updateUIView` to keep the engine the sole session delegate (task 17).
+- `App/RefusalBanner.swift` — inline refusal-banner overlay rendering `localisedMessage` verbatim; only "Try Again" dismisses it (task 18, Decision 5).
+- `App/LiveIndicatorView.swift` — child view rendering tilt/distance/coverage/path indicators from `LiveIndicatorModel` (task 19).
+- `MeData/Tests/{CaptureFlowModelTests,LiveSampleObserverTests,ARPreviewViewTests,ResultViewTests}.swift` — Swift Testing suites for the state machine (~18 transition rows plus freeze/debounce/backgrounding/permission/interruption cases), per-frame maths + write-gating, delegate-reassertion guard, and confidence-pill thresholds (tasks 12, 14, 16, 20).
+
+### Changed (UI spec — UI components phase, tasks 12–24)
+- `App/CaptureFlowView.swift` — rewritten as the `NavigationStack` root composing the AR preview, live indicators, shutter, refusal overlay, and settings entry, with the permission-denied branch and `MealRecord` navigation destination (task 23).
+- `App/ResultView.swift` — rewritten to show rounded total carbs and a three-state confidence pill with an uncertain-estimate Retake prompt below σ 0.60; no per-class breakdown or clinical macros (task 21, Decision 3).
+- `App/SettingsView.swift` — added the Export-archive control calling `PersistenceStore.exportArchive()` and presenting `ShareSheet` via `.sheet(item:)` (task 22).
+- `MeData/MeData.xcodeproj/project.pbxproj` — wired the new `App/*.swift` files into the `MeData` target.
+
+### Added (UI spec — asset generation phase, task 25)
+- `tools/appicon/generate.sh` — renders `static/icon.svg` to all Apple-required AppIcon sizes (40–1024 px) via `rsvg-convert`/`sips` and writes the matching `Contents.json` (task 25, Req 15.2).
+- `MeData/MeData/Assets.xcassets/AppIcon.appiconset/icon-*.png` — generated AppIcon PNGs (40, 58, 60, 80, 87, 120, 180, 1024).
+- `docs/agent-notes/appicon-pipeline.md` — notes on the icon-generation pipeline.
+
+### Added (UI spec — agent notes)
+- `docs/agent-notes/ui-capture-flow.md` — architecture, gotchas, test setup, and the build-path caveat for the `App/` capture flow.
+
+### Added (UI spec — UI building blocks phase, tasks 5–11)
+- `App/Colors.swift` — brand colour tokens (task 5, Req 15.1, 9.2): `Color.medataAccent = #63ff00`, plus `confidenceHigh` (= accent), `confidenceModerate` (.orange), and `confidenceLow` (.red) for the result-view confidence pill.
+- `App/GatingSnapshot.swift` — `struct GatingSnapshot: Equatable, Sendable` (task 6, Req 4.1, 7.2): carries `pathHint`, `tiltInRange`, `distanceCm`, `lidarCoveragePercent` plus `withPath(_:)` helper. Frozen at shutter-tap to satisfy the design's path-hint freeze rule.
+- `App/CaptureState.swift` — nine-case `CaptureState` enum plus `CaptureStage` and `PermissionSubject` sub-enums (task 7, Req 1.6, 5.5, 5.6, 13.3, 16.1). Manual `Equatable` conformance because `CaptureResult` (and its inner `RawFrame`) is not `Equatable`; the `.estimating` case compares case-only.
+- `MeData/Tests/CapturePathDeciderTests.swift` — Swift Testing boundary table for `CapturePathDecider.decide` (task 8, Req 4.1): five rows covering (no LiDAR), (LiDAR + 0% / 79.99% / 80% / 100% coverage).
+- `App/CapturePathDecider.swift` — pure decider `decide(supportsLiDAR:latestCoveragePercent:) -> CapturePath` (task 9, Req 4.1); returns `.singleViewLidar` only when LiDAR is present and coverage ≥ 80%, else `.twoViewSfS`.
+- `App/LiveIndicatorModel.swift` — `@Observable @MainActor final class LiveIndicatorModel` (task 10, Req 2.1, 3.1, 4.1) holding `liveTiltDegrees`, `liveDistanceCm`, `liveLiDARCoveragePercent`. Split from `CaptureFlowModel` per design.md so 60 Hz frame-stream writes don't retrigger `CaptureFlowView.body`.
+- `App/ShareSheet.swift` — `UIViewControllerRepresentable` wrapping `UIActivityViewController` (task 11, Req 11.4) for Settings → Export archive.
+
+### Changed (UI spec — UI building blocks phase, tasks 5–11)
+- `MeData/MeData.xcodeproj/project.pbxproj` — wired the six new `App/*.swift` files into the `MeData` target's `Sources` build phase (file references under `SOURCE_ROOT` via `../App/...`, matching the existing pattern for `App.swift`, `CaptureFlowView.swift`, etc.).
+- `specs/ui/tasks.md` — marked tasks 5–11 complete via `rune complete`.
+
+### Added (UI spec — SPM prerequisites phase, tasks 1–4)
+- `MedataCore/Tests/CaptureKitTests/ARKitCaptureEngineStreamsTests.swift` — contract tests for the new `ARKitCaptureEngine` accessors (task 1): delegate identity on init, identical `arSession` instance, delegate preservation after `frames` subscription, interruption ordering (`.began` → `.ended`), cancellation cleanup on both streams, and multi-subscriber fan-out. Guarded with `#if canImport(ARKit) && os(iOS)`. ARFrame end-to-end yield is documented as on-device-only because `ARFrame` has no public initialiser.
+- `MedataCore/Sources/Pipeline/PipelineEstimator.swift` — `public protocol PipelineEstimator: Sendable` with `func estimate(captureResult:) async throws -> MealRecord`, plus `extension Pipeline: PipelineEstimator {}` (task 3, Decision 13). Test seam used by `CaptureFlowModel` so unit tests can inject a mock without spinning up the real `Pipeline` / segmenter weights / `FoodDatabase`.
+- `static/icon.svg` — brand master logo ported from `main` (task 4, Decision 7); 1024×1024 SVG with `stroke="#63ff00"`, the canonical accent colour consumed by AppIcon generation (task 5) and SwiftUI `Color.medataAccent` (task 25).
+
+### Changed (UI spec — SPM prerequisites phase, tasks 1–4)
+- `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — added three additive public accessors per design §3.1 (task 2): `var arSession: ARSession` (for `ARView` preview binding), `var frames: AsyncStream<ARFrame>` and `var interruptions: AsyncStream<InterruptionEvent>` (both per-subscriber with `BufferingPolicy.bufferingNewest(1)`). Implemented `ARSessionObserver.sessionWasInterrupted/Ended` to feed the interruption stream and extended `session(_:didUpdate:)` to fan out to all frame subscribers alongside the existing single-shot capture continuation. New `public enum InterruptionEvent: Sendable, Equatable { case began, ended }`. The engine remains the sole `ARSessionDelegate`.
+
 ### Added (Performance and Cleanup phase — tasks 65–70)
 - `MedataCore/Tests/HarnessCLITests/PipelinePerformanceTests.swift` — XCTest P95 latency assertions for single-view (≤ 1000 ms, task 65) and two-view (≤ 1800 ms, task 66) end-to-end pipelines; device-gated with `#if !os(iOS)` + `XCTSkip`; 10-iteration `XCTClockMetric` measurement with synthetic FP16 probability tensors, depth maps, and calibration fixtures built inline.
 - `tools/check_spelling.sh` — Irish/British English spelling linter (Req 19.2, task 69); scans `*.swift` files under `MedataCore/Sources`, `HarnessCore`, `HarnessCLI`, and `App`, plus `.xcstrings` catalogs; exits 0 if clean, 1 on violations; ~80 banned US-English words with `\b` word-boundary anchors; respects `REPO_ROOT` env-var override for test isolation.

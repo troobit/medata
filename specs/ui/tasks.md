@@ -8,7 +8,7 @@ references:
 
 ## SPM prerequisites
 
-- [ ] 1. Write tests for ARKitCaptureEngine streams and interruption observer methods <!-- id:7pbwp43 -->
+- [x] 1. Write tests for ARKitCaptureEngine streams and interruption observer methods <!-- id:7pbwp43 -->
   - Add CaptureKitTests/ARKitCaptureEngineStreamsTests.swift
   - Assert frames stream emits ARFrame via simulated session(_:didUpdate:) calls
   - Assert latest-only delivery under BufferingPolicy.bufferingNewest(1)
@@ -18,7 +18,7 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [16.1](requirements.md#16.1)
 
-- [ ] 2. Implement ARKitCaptureEngine accessors arSession, frames, interruptions plus ARSessionObserver interruption methods <!-- id:7pbwp44 -->
+- [x] 2. Implement ARKitCaptureEngine accessors arSession, frames, interruptions plus ARSessionObserver interruption methods <!-- id:7pbwp44 -->
   - Edit MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift
   - Add public var arSession (returns the existing private session)
   - Add public var frames: AsyncStream<ARFrame> using AsyncStream.makeStream with bufferingNewest(1) per subscriber via a continuation-set actor
@@ -30,7 +30,7 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [16.1](requirements.md#16.1)
 
-- [ ] 3. Add PipelineEstimator protocol and Pipeline conformance <!-- id:7pbwp45 -->
+- [x] 3. Add PipelineEstimator protocol and Pipeline conformance <!-- id:7pbwp45 -->
   - Create MedataCore/Sources/Pipeline/PipelineEstimator.swift
   - Declare public protocol PipelineEstimator: Sendable with single func estimate(captureResult: CaptureResult) async throws -> MealRecord
   - Add extension Pipeline: PipelineEstimator {} (empty — Pipeline.estimate signature already matches)
@@ -39,7 +39,7 @@ references:
   - Stream: 1
   - Requirements: [8.1](requirements.md#8.1), [9.1](requirements.md#9.1), [10.1](requirements.md#10.1)
 
-- [ ] 4. Port brand assets icon.svg and favicon.ico from main branch <!-- id:7pbwp46 -->
+- [x] 4. Port brand assets icon.svg and favicon.ico from main branch <!-- id:7pbwp46 -->
   - git checkout main -- static/icon.svg static/favicon.ico
   - Verify the icon.svg stroke colour is #63ff00 (consumed by tasks 5 and 25)
   - Commit alongside other UI-spec work
@@ -50,14 +50,14 @@ references:
 
 ## UI building blocks
 
-- [ ] 5. Add App/Colors.swift with brand colour tokens <!-- id:7pbwp47 -->
+- [x] 5. Add App/Colors.swift with brand colour tokens <!-- id:7pbwp47 -->
   - extension Color { static let medataAccent = Color(red: 0x63/255, green: 0xFF/255, blue: 0x00/255); static let confidenceHigh = medataAccent; static let confidenceModerate = Color.orange; static let confidenceLow = Color.red }
   - Exempt from TDD — colour constants
   - Blocked-by: 7pbwp46 (Port brand assets icon.svg and favicon.ico from main branch)
   - Stream: 1
   - Requirements: [15.1](requirements.md#15.1), [9.2](requirements.md#9.2)
 
-- [ ] 6. Add App/GatingSnapshot.swift struct <!-- id:7pbwp48 -->
+- [x] 6. Add App/GatingSnapshot.swift struct <!-- id:7pbwp48 -->
   - struct GatingSnapshot: Equatable, Sendable with pathHint, tiltInRange, distanceCm, lidarCoveragePercent fields
   - Include withPath(_ newPath: CapturePath) -> GatingSnapshot helper
   - Per design.md state-machine section
@@ -65,7 +65,7 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [7.2](requirements.md#7.2)
 
-- [ ] 7. Add App/CaptureState.swift enum and PermissionSubject + CaptureStage sub-enums <!-- id:7pbwp49 -->
+- [x] 7. Add App/CaptureState.swift enum and PermissionSubject + CaptureStage sub-enums <!-- id:7pbwp49 -->
   - Define all 9 cases of CaptureState per design.md (initialising, permissionDenied(.camera|.motion), trackingLost, ready, forcingTwoView, capturing(stage, frozen), estimating(captureResult), showingResult(MealRecord), refused(EstimationFailure, retryStage))
   - Conform to Equatable
   - Define PermissionSubject and CaptureStage sub-enums
@@ -74,27 +74,27 @@ references:
   - Stream: 1
   - Requirements: [1.6](requirements.md#1.6), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [13.3](requirements.md#13.3), [16.1](requirements.md#16.1)
 
-- [ ] 8. Write tests for CapturePathDecider boundary table <!-- id:7pbwp4a -->
+- [x] 8. Write tests for CapturePathDecider boundary table <!-- id:7pbwp4a -->
   - MeData/Tests/CapturePathDeciderTests.swift
   - Table rows: (supportsLiDAR: false, coverage: 100, expected: .twoViewSfs), (true, 0, .twoViewSfs), (true, 79.99, .twoViewSfs), (true, 80, .singleViewLidar), (true, 100, .singleViewLidar)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1)
 
-- [ ] 9. Implement App/CapturePathDecider.swift <!-- id:7pbwp4b -->
+- [x] 9. Implement App/CapturePathDecider.swift <!-- id:7pbwp4b -->
   - enum CapturePathDecider { static func decide(supportsLiDAR: Bool, latestCoveragePercent: Float) -> CapturePath { supportsLiDAR && latestCoveragePercent >= 80 ? .singleViewLidar : .twoViewSfs } }
   - Make the tests from task 8 pass
   - Blocked-by: 7pbwp4a (Write tests for CapturePathDecider boundary table)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1)
 
-- [ ] 10. Add App/LiveIndicatorModel.swift child @Observable <!-- id:7pbwp4c -->
+- [x] 10. Add App/LiveIndicatorModel.swift child @Observable <!-- id:7pbwp4c -->
   - @Observable @MainActor final class LiveIndicatorModel with liveTiltDegrees: Float, liveDistanceCm: Float?, liveLiDARCoveragePercent: Float
   - Per design.md — split from CaptureFlowModel to bound CaptureFlowView body redraws against the 60Hz frame stream
   - Exempt from TDD — observable holder, no logic
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [3.1](requirements.md#3.1), [4.1](requirements.md#4.1)
 
-- [ ] 11. Add App/ShareSheet.swift UIViewControllerRepresentable wrapper <!-- id:7pbwp4d -->
+- [x] 11. Add App/ShareSheet.swift UIViewControllerRepresentable wrapper <!-- id:7pbwp4d -->
   - struct ShareSheet: UIViewControllerRepresentable wrapping UIActivityViewController(activityItems:applicationActivities: nil)
   - Exempt from TDD — straight UIKit-bridge boilerplate
   - Stream: 1
@@ -102,7 +102,7 @@ references:
 
 ## UI components
 
-- [ ] 12. Write tests for CaptureFlowModel state-machine transitions <!-- id:7pbwp4e -->
+- [x] 12. Write tests for CaptureFlowModel state-machine transitions <!-- id:7pbwp4e -->
   - MeData/Tests/CaptureFlowModelTests.swift
   - MockCaptureSession returning canned RawFrame; MockPipeline conforming to PipelineEstimator with programmable Result<MealRecord, Error>
   - One test per transition row from design.md state-machine table (~18 rows)
@@ -115,7 +115,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.6](requirements.md#1.6), [2.4](requirements.md#2.4), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [5.1](requirements.md#5.1), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [13.1](requirements.md#13.1), [13.2](requirements.md#13.2), [13.3](requirements.md#13.3), [14.3](requirements.md#14.3), [16.1](requirements.md#16.1)
 
-- [ ] 13. Implement App/CaptureFlowModel.swift orchestrator <!-- id:7pbwp4f -->
+- [x] 13. Implement App/CaptureFlowModel.swift orchestrator <!-- id:7pbwp4f -->
   - @Observable @MainActor final class CaptureFlowModel conforming to CaptureFlowDelegate
   - Holds CaptureSession, any PipelineEstimator, LiveIndicatorModel
   - Implements full state machine per design.md transition table
@@ -129,7 +129,7 @@ references:
   - Stream: 1
   - Requirements: [1.6](requirements.md#1.6), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [5.1](requirements.md#5.1), [5.3](requirements.md#5.3), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [13.3](requirements.md#13.3), [14.3](requirements.md#14.3), [16.1](requirements.md#16.1)
 
-- [ ] 14. Write tests for LiveSampleObserver per-frame computation and write-gating <!-- id:7pbwp4g -->
+- [x] 14. Write tests for LiveSampleObserver per-frame computation and write-gating <!-- id:7pbwp4g -->
   - MeData/Tests/LiveSampleObserverTests.swift
   - Synthesise CVPixelBuffer depth/confidence fixtures (reuse CaptureKitTests fixtures)
   - Assert tilt from frame.camera.transform gravity-aligned column
@@ -140,7 +140,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [4.1](requirements.md#4.1)
 
-- [ ] 15. Implement App/LiveSampleObserver.swift <!-- id:7pbwp4h -->
+- [x] 15. Implement App/LiveSampleObserver.swift <!-- id:7pbwp4h -->
   - @MainActor final class LiveSampleObserver
   - Iterates engine.frames AsyncStream
   - Writes to LiveIndicatorModel only when CaptureFlowModel.state is .ready or .forcingTwoView
@@ -150,7 +150,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [4.1](requirements.md#4.1)
 
-- [ ] 16. Write tests for ARPreviewView delegate-reassertion guard <!-- id:7pbwp4i -->
+- [x] 16. Write tests for ARPreviewView delegate-reassertion guard <!-- id:7pbwp4i -->
   - MeData/Tests/ARPreviewViewTests.swift
   - After ARPreviewView.makeUIView creates ARView with engine.arSession, assert engine.session.delegate === engine
   - After forcing updateUIView invocation, assert engine.session.delegate === engine still
@@ -159,7 +159,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1)
 
-- [ ] 17. Implement App/ARPreviewView.swift UIViewRepresentable <!-- id:7pbwp4j -->
+- [x] 17. Implement App/ARPreviewView.swift UIViewRepresentable <!-- id:7pbwp4j -->
   - struct ARPreviewView: UIViewRepresentable wrapping ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
   - makeUIView: assign arView.session = engine.arSession then re-assert engine.session.delegate = engine
   - updateUIView: re-assert engine.session.delegate = engine (idempotent property write)
@@ -168,7 +168,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1)
 
-- [ ] 18. Implement App/RefusalBanner.swift overlay view <!-- id:7pbwp4k -->
+- [x] 18. Implement App/RefusalBanner.swift overlay view <!-- id:7pbwp4k -->
   - struct RefusalBanner: View taking EstimationFailure and a retry closure
   - Sits in .overlay(alignment: .top) on CaptureFlowView
   - .allowsHitTesting(true) on banner ZStack; only Try Again control clears it (no tap-outside dismiss per Decision 5)
@@ -178,7 +178,7 @@ references:
   - Stream: 1
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [12.2](requirements.md#12.2)
 
-- [ ] 19. Implement App/LiveIndicatorView.swift child view <!-- id:7pbwp4l -->
+- [x] 19. Implement App/LiveIndicatorView.swift child view <!-- id:7pbwp4l -->
   - struct LiveIndicatorView: View taking LiveIndicatorModel via @Bindable
   - Renders tilt indicator (in-range visually distinct), distance state (measured cm or 30-40cm guidance), LiDAR coverage gauge, capture-path indicator label
   - Surface gating-mode-active hint per §3.3
@@ -187,7 +187,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [4.1](requirements.md#4.1)
 
-- [ ] 20. Write tests for ResultView confidence pill thresholds <!-- id:7pbwp4m -->
+- [x] 20. Write tests for ResultView confidence pill thresholds <!-- id:7pbwp4m -->
   - MeData/Tests/ResultViewTests.swift
   - Table over σ_meal ∈ {0.0, 0.59, 0.60, 0.74, 0.75, 1.0} → expected pill label (Low / Low / Moderate / Moderate / High / High)
   - Assert uncertain-prompt visibility when σ < 0.60
@@ -196,7 +196,7 @@ references:
   - Stream: 1
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.5](requirements.md#9.5)
 
-- [ ] 21. Rewrite App/ResultView.swift <!-- id:7pbwp4n -->
+- [x] 21. Rewrite App/ResultView.swift <!-- id:7pbwp4n -->
   - Display total carbs in grams rounded to nearest 1g (Int(record.macros.totalCarbsG.rounded()))
   - Three-state confidence pill keyed off record.confidence.sigmaMeal
   - Uncertain-estimate prompt with Retake control when σ < 0.60
@@ -207,7 +207,7 @@ references:
   - Stream: 1
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [12.1](requirements.md#12.1)
 
-- [ ] 22. Extend App/SettingsView.swift with Export archive control <!-- id:7pbwp4o -->
+- [x] 22. Extend App/SettingsView.swift with Export archive control <!-- id:7pbwp4o -->
   - Existing placeholder keeps the retention-period picker and IFCDB toggle (already wired)
   - Add Export archive button that calls PersistenceStore.exportArchive() async throws -> URL
   - Present the produced file via .sheet(item:) hosting ShareSheet
@@ -216,7 +216,7 @@ references:
   - Stream: 1
   - Requirements: [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4)
 
-- [ ] 23. Rewrite App/CaptureFlowView.swift root view <!-- id:7pbwp4p -->
+- [x] 23. Rewrite App/CaptureFlowView.swift root view <!-- id:7pbwp4p -->
   - NavigationStack(path: $model.navigationPath)
   - Composes ARPreviewView (preview), LiveIndicatorView (indicators), RefusalBanner (overlay), shutter button, settings navigation
   - .navigationDestination(for: MealRecord.self) { ResultView(record: $0) }
@@ -227,7 +227,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [9.4](requirements.md#9.4)
 
-- [ ] 24. Update App/App.swift for scenePhase forwarding to CaptureFlowModel <!-- id:7pbwp4q -->
+- [x] 24. Update App/App.swift for scenePhase forwarding to CaptureFlowModel <!-- id:7pbwp4q -->
   - @State private var model = CaptureFlowModel(...)
   - @Environment(\.scenePhase) and .onChange forwarding .active/.background/.inactive to model.scenePhaseChanged(_:)
   - .tint(.medataAccent) on the root view per §15.1
@@ -238,7 +238,7 @@ references:
 
 ## Asset generation
 
-- [ ] 25. Write SVG-to-PNG AppIcon generation script <!-- id:7pbwp4r -->
+- [x] 25. Write SVG-to-PNG AppIcon generation script <!-- id:7pbwp4r -->
   - Create tools/appicon/generate.sh
   - Use rsvg-convert (preferred) or sips to render static/icon.svg at all Apple-required sizes: 40, 58, 60, 80, 87, 120, 180, 1024 pixels square
   - Write each to MeData/MeData/Assets.xcassets/AppIcon.appiconset/icon-{size}.png
@@ -251,7 +251,7 @@ references:
 
 ## End-to-end verification
 
-- [ ] 26. Write XCUITest for refusal flow <!-- id:7pbwp4s -->
+- [x] 26. Write XCUITest for refusal flow <!-- id:7pbwp4s -->
   - MeData/UITests/RefusalFlowUITests.swift
   - Inject fixture that trips EstimationFailure.noScaleAvailable
   - Assert refusal banner appears with the localised Irish-English message
@@ -261,7 +261,7 @@ references:
   - Stream: 1
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [12.1](requirements.md#12.1), [12.2](requirements.md#12.2)
 
-- [ ] 27. Write XCUITest for backgrounding behaviour (best-effort §8.3) <!-- id:7pbwp4t -->
+- [x] 27. Write XCUITest for backgrounding behaviour (best-effort §8.3) <!-- id:7pbwp4t -->
   - MeData/UITests/BackgroundingUITests.swift
   - Tap shutter to enter .estimating
   - XCUIDevice.shared.press(.home)
@@ -272,7 +272,7 @@ references:
   - Stream: 1
   - Requirements: [8.3](requirements.md#8.3)
 
-- [ ] 28. Write XCUITest for AR interruption recovery <!-- id:7pbwp4u -->
+- [x] 28. Write XCUITest for AR interruption recovery <!-- id:7pbwp4u -->
   - MeData/UITests/InterruptionUITests.swift
   - Simulate ARSession sessionWasInterrupted via a test helper that emits .began on engine.interruptions stream
   - Assert state transitions to .trackingLost (UI shows tracking-lost banner)

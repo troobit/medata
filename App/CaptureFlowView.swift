@@ -1,91 +1,160 @@
-import ARKit
-import Combine
+import CaptureKit
 import Pipeline
 import SwiftUI
 
-// Placeholder capture-flow view. Full UI design deferred to specs/ui per design §10.
-// Implements CaptureFlowDelegate to receive pipeline events on the main actor.
-@MainActor
-final class CaptureFlowViewModel: ObservableObject, CaptureFlowDelegate {
-    @Published var tiltDegrees: Float = 0
-    @Published var lidarCoveragePercent: Float = 0
-    @Published var interClassOcclusionDetected = false
-    @Published var mealRecord: MealRecord?
-
-    nonisolated func didUpdateTilt(angleDegrees: Float) {
-        Task { @MainActor in tiltDegrees = angleDegrees }
-    }
-
-    nonisolated func didUpdateLiDARCoverage(percent: Float) {
-        Task { @MainActor in lidarCoveragePercent = percent }
-    }
-
-    nonisolated func didDetectInterClassOcclusion() {
-        Task { @MainActor in interClassOcclusionDetected = true }
-    }
-
-    nonisolated func didProduceEstimate(_ record: MealRecord) {
-        Task { @MainActor in mealRecord = record }
-    }
-}
-
+// Root view of the capture flow. Composes the AR preview, the live indicators,
+// the shutter, the refusal banner overlay, and the settings entry. Behaviour
+// lives in CaptureFlowModel; this is composition only.
 struct CaptureFlowView: View {
-    @StateObject private var viewModel = CaptureFlowViewModel()
-    @State private var diagnostics: [String] = []
+    @Bindable var model: CaptureFlowModel
+    let engine: ARKitCaptureEngine
+    let store: any PersistenceStore
+
+    @State private var observer: LiveSampleObserver?
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Text("Point the camera at the meal")
-                    .font(.headline)
-
-                Button("Run self-check") {
-                    runSelfCheck()
+        NavigationStack(path: $model.navigationPath) {
+            content
+                .navigationDestination(for: MealRecord.self) { record in
+                    ResultView(
+                        record: record,
+                        onNewCapture: { model.dismissResult() },
+                        onRetake: { model.dismissResult() }
+                    )
                 }
-                .buttonStyle(.borderedProminent)
-
-                if !diagnostics.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(diagnostics, id: \.self) { line in
-                            Text(line)
-                                .font(.system(.footnote, design: .monospaced))
+                .navigationTitle("Capture")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink {
+                            SettingsView(store: store)
+                        } label: {
+                            Image(systemName: "gearshape")
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-
-                if let record = viewModel.mealRecord {
-                    NavigationLink("View Result", value: record)
-                }
-
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Capture")
-            .navigationDestination(for: MealRecord.self) { record in
-                ResultView(record: record)
-            }
         }
     }
 
-    private func runSelfCheck() {
-        let device = UIDevice.current
-        let lidar = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
-        let pipelineProof = EstimationFailure.noLidarDevice.localisedMessage
+    @ViewBuilder
+    private var content: some View {
+        switch model.state {
+        case .permissionDenied(let subject):
+            PermissionDeniedView(subject: subject) { model.openSettings() }
+        default:
+            capture
+        }
+    }
 
-        let lines = [
-            "Device model: \(device.model)",
-            "iOS: \(device.systemVersion)",
-            "LiDAR available: \(lidar ? "yes" : "no")",
-            "Pipeline reachable: yes",
-            "  sample error string from Pipeline:",
-            "  \"\(pipelineProof)\""
-        ]
-        diagnostics = lines
-        print("[medata self-check]")
-        for line in lines { print("  \(line)") }
+    private var capture: some View {
+        ZStack {
+            ARPreviewView(engine: engine)
+                .ignoresSafeArea()
+
+            VStack {
+                topHints
+                Spacer()
+                LiveIndicatorView(
+                    model: model.indicators,
+                    supportsLiDAR: model.currentSnapshot?.distanceCm != nil,
+                    targetTiltDegrees: model.awaitingObliqueView ? 25 : 0
+                )
+                shutterButton
+                    .padding(.bottom, 24)
+            }
+        }
+        .overlay(alignment: .top) {
+            if case .refused(let failure, _) = model.state {
+                RefusalBanner(failure: failure) { model.tryAgain() }
+                    .padding(.top, 8)
+            }
+        }
+        .onAppear {
+            let obs = observer ?? LiveSampleObserver(model: model)
+            observer = obs
+            obs.start(frames: engine.frames)
+        }
+        .onDisappear { observer?.stop() }
+    }
+
+    @ViewBuilder
+    private var topHints: some View {
+        VStack(spacing: 6) {
+            switch model.state {
+            case .initialising:
+                Label("Initialising…", systemImage: "hourglass")
+                    .accessibilityIdentifier("hint.initialising")
+            case .trackingLost:
+                Label("Tracking lost — hold steady", systemImage: "arrow.triangle.2.circlepath")
+                    .accessibilityIdentifier("hint.trackingLost")
+            case .estimating:
+                Label("Estimating…", systemImage: "hourglass")
+                    .accessibilityIdentifier("hint.estimating")
+            case .capturing:
+                Label("Capturing…", systemImage: "camera")
+                    .accessibilityIdentifier("hint.capturing")
+            default:
+                if model.awaitingObliqueView {
+                    Text("Angled view — tilt to about 25°")
+                } else if model.currentSnapshot?.pathHint == .twoViewSfS {
+                    Text("Top-down view")
+                    Label("Include an ID-1 reference card, flat in the scene", systemImage: "creditcard")
+                        .font(.caption)
+                }
+            }
+        }
+        .font(.callout)
+        .padding(8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var shutterButton: some View {
+        VStack(spacing: 12) {
+            if case .ready(let snapshot) = model.state, snapshot.pathHint == .singleViewLidar {
+                Button("Use two views instead") { model.forceTwoView() }
+                    .font(.footnote)
+            }
+            Button {
+                model.shutter()
+            } label: {
+                Circle()
+                    .fill(model.canShutter ? Color.medataAccent : Color.gray.opacity(0.5))
+                    .frame(width: 72, height: 72)
+                    .overlay(Circle().stroke(.white, lineWidth: 4))
+            }
+            .disabled(!model.canShutter || model.isBusy)
+            .accessibilityIdentifier("shutter")
+        }
+    }
+}
+
+// Permission-denied branch with a deep link to the app's iOS Settings (§1.3).
+private struct PermissionDeniedView: View {
+    let subject: PermissionSubject
+    let openSettings: () -> Void
+
+    private var message: String {
+        switch subject {
+        case .camera:
+            return "MeData needs camera access to capture your meal. Enable it in Settings to continue."
+        case .motion:
+            return "MeData needs motion access for the tilt indicator. Enable it in Settings to continue."
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "camera.metering.unknown")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text(message)
+                .padding(.horizontal)
+            Button("Open Settings", action: openSettings)
+                .buttonStyle(.borderedProminent)
+                .tint(.medataAccent)
+        }
+        .padding()
     }
 }

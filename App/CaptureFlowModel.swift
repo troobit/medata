@@ -1,0 +1,388 @@
+import AVFoundation
+import CaptureKit
+import CoreMotion
+import Foundation
+import Observation
+import Pipeline
+import SwiftUI
+
+// Orchestrator for the capture flow per `specs/ui/design.md`. Owns the state
+// machine, drives the `CaptureSession` and `PipelineEstimator`, observes
+// AR-session interruptions, and re-evaluates permissions on scene-phase
+// transitions. `@MainActor` because every state read or write happens from
+// SwiftUI bodies; AR / Core Motion deliver on the main thread already.
+@Observable
+@MainActor
+final class CaptureFlowModel: CaptureFlowDelegate {
+    var state: CaptureState = .initialising
+    var lastMeal: MealRecord?
+    var navigationPath = NavigationPath()
+    let indicators: LiveIndicatorModel
+
+    private let session: CaptureSession
+    private let pipeline: any PipelineEstimator
+    private let supportsLiDAR: Bool
+    private let databaseEdition: String
+    private let paletteVersion: String
+    private let cameraAuthorisation: @Sendable () -> AVAuthorizationStatus
+    private let motionAvailable: @Sendable () -> Bool
+
+    private(set) var flowTask: Task<Void, Never>?
+    private var interruptionTask: Task<Void, Never>?
+    private var startTask: Task<Void, Never>?
+    private var firstFrame: RawFrame?
+
+    init(
+        session: CaptureSession,
+        pipeline: any PipelineEstimator,
+        indicators: LiveIndicatorModel,
+        interruptions: AsyncStream<ARKitCaptureEngine.InterruptionEvent>,
+        supportsLiDAR: Bool,
+        databaseEdition: String,
+        paletteVersion: String,
+        cameraAuthorisation: @escaping @Sendable () -> AVAuthorizationStatus = {
+            AVCaptureDevice.authorizationStatus(for: .video)
+        },
+        motionAvailable: @escaping @Sendable () -> Bool = {
+            CMMotionManager().isDeviceMotionAvailable
+        }
+    ) {
+        self.session = session
+        self.pipeline = pipeline
+        self.indicators = indicators
+        self.supportsLiDAR = supportsLiDAR
+        self.databaseEdition = databaseEdition
+        self.paletteVersion = paletteVersion
+        self.cameraAuthorisation = cameraAuthorisation
+        self.motionAvailable = motionAvailable
+
+        evaluatePermissions()
+        observeInterruptions(stream: interruptions)
+    }
+
+    // MARK: - Derived view state
+
+    // Shutter is armed only in .ready / .forcingTwoView with tilt in range and
+    // the distance gate satisfied, and no capture / estimation in flight (§7.2).
+    var canShutter: Bool {
+        switch state {
+        case .ready(let snapshot), .forcingTwoView(let snapshot):
+            return snapshot.tiltInRange && distanceGateOK(snapshot)
+        default:
+            return false
+        }
+    }
+
+    // The path hint currently surfaced to the user, if any (drives the ID-1
+    // card reminder and the force-two-view control).
+    var currentSnapshot: GatingSnapshot? {
+        switch state {
+        case .ready(let snapshot), .forcingTwoView(let snapshot), .capturing(_, let snapshot):
+            return snapshot
+        default:
+            return nil
+        }
+    }
+
+    var isBusy: Bool {
+        switch state {
+        case .capturing, .estimating: return true
+        default: return false
+        }
+    }
+
+    var awaitingObliqueView: Bool { firstFrame != nil }
+
+    // MARK: - Public commands
+
+    func shutter() {
+        if case let .ready(snapshot) = state {
+            guard snapshot.tiltInRange, distanceGateOK(snapshot) else { return }
+            if firstFrame != nil {
+                beginCapture(stage: .oblique, frozen: snapshot.withPath(.twoViewSfS))
+            } else {
+                beginCapture(stage: .nadir, frozen: snapshot)
+            }
+            return
+        }
+        if case let .forcingTwoView(snapshot) = state {
+            guard snapshot.tiltInRange, distanceGateOK(snapshot) else { return }
+            beginCapture(stage: .nadir, frozen: snapshot.withPath(.twoViewSfS))
+            return
+        }
+        // Any other state (including .capturing for rapid double-tap) is a no-op.
+    }
+
+    func forceTwoView() {
+        guard case let .ready(snapshot) = state, snapshot.pathHint == .singleViewLidar else { return }
+        state = .forcingTwoView(snapshot)
+    }
+
+    func tryAgain() {
+        guard case let .refused(_, retryStage) = state else { return }
+        let snapshot = freshSnapshot()
+        // Retake from the same stage. If retryStage is .oblique we keep firstFrame
+        // so the user does not have to retake the nadir view (req §5.4). If
+        // retryStage is .nadir, drop any previously captured nadir.
+        if retryStage == .nadir { firstFrame = nil }
+        beginCapture(stage: retryStage, frozen: snapshot.withPath(retryStage == .nadir ? snapshot.pathHint : .twoViewSfS))
+    }
+
+    func dismissResult() {
+        guard case .showingResult = state else { return }
+        navigationPath = NavigationPath()
+        firstFrame = nil
+        state = .ready(freshSnapshot())
+    }
+
+    func openSettings() {
+        #if canImport(UIKit)
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+        #endif
+    }
+
+    func scenePhaseChanged(_ phase: ScenePhase) {
+        switch phase {
+        case .background, .inactive:
+            cancelInFlight()
+            switch state {
+            case .capturing, .estimating:
+                state = .initialising
+                firstFrame = nil
+            default:
+                break
+            }
+            Task { [session] in try? await session.stop() }
+            startTask = nil
+        case .active:
+            evaluatePermissions()
+        @unknown default:
+            break
+        }
+    }
+
+    // Called by LiveSampleObserver per frame. `tiltDegrees` is the camera's
+    // angle from straight-down (0° = nadir). Per the write-gating rule in
+    // design.md the model drops live updates unless the user can actually act
+    // on them, preventing indicator flicker during capture / estimation.
+    func liveSampleDidUpdate(
+        tiltDegrees: Float,
+        distanceCm: Float?,
+        lidarCoveragePercent: Float,
+        trackingIsNormal: Bool
+    ) {
+        let pathHint = CapturePathDecider.decide(
+            supportsLiDAR: supportsLiDAR,
+            latestCoveragePercent: lidarCoveragePercent
+        )
+        // Lock path to twoViewSfS while awaiting the oblique view (Decision 5
+        // implication; design.md path-hint section).
+        let snapshot = GatingSnapshot(
+            pathHint: firstFrame != nil ? .twoViewSfS : pathHint,
+            tiltInRange: tiltInRange(degrees: tiltDegrees),
+            distanceCm: distanceCm,
+            lidarCoveragePercent: lidarCoveragePercent
+        )
+
+        // Indicator display values are written only in states where the user
+        // is acting on them; capture / estimation freeze them (no flicker).
+        switch state {
+        case .initialising where trackingIsNormal:
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            state = .ready(snapshot)
+        case .ready:
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            state = .ready(snapshot)
+        case .forcingTwoView:
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            state = .forcingTwoView(snapshot)
+        case .trackingLost where trackingIsNormal:
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            state = .ready(snapshot)
+        default:
+            break
+        }
+    }
+
+    private func writeIndicators(_ tilt: Float, _ distanceCm: Float?, _ coverage: Float) {
+        indicators.liveTiltDegrees = tilt
+        indicators.liveDistanceCm = distanceCm
+        indicators.liveLiDARCoveragePercent = coverage
+    }
+
+    // Hook for the engine to report tracking degraded outside of an in-flight
+    // capture. Distinct from the capture-time path which discards the frame.
+    func trackingDegraded() {
+        switch state {
+        case .ready, .forcingTwoView:
+            state = .trackingLost
+            firstFrame = nil
+        case .capturing(stage: .nadir, _):
+            cancelInFlight()
+            state = .trackingLost
+        default:
+            break
+        }
+    }
+
+    // MARK: - CaptureFlowDelegate (forward-compat no-ops per Decisions 9, 11)
+
+    nonisolated func didUpdateTilt(angleDegrees: Float) {}
+    nonisolated func didUpdateLiDARCoverage(percent: Float) {}
+    nonisolated func didDetectInterClassOcclusion() {}
+    nonisolated func didProduceEstimate(_ record: MealRecord) {}
+
+    // MARK: - Internals
+
+    func handleInterruption(_ event: ARKitCaptureEngine.InterruptionEvent) {
+        switch event {
+        case .began:
+            cancelInFlight()
+            firstFrame = nil
+            state = .trackingLost
+            Task { [session] in try? await session.stop() }
+            startTask = nil
+        case .ended:
+            state = .initialising
+            startTask = nil
+            evaluatePermissions()
+        }
+    }
+
+    private func evaluatePermissions() {
+        let camera = cameraAuthorisation()
+        if camera == .denied || camera == .restricted {
+            state = .permissionDenied(.camera)
+            return
+        }
+        if !motionAvailable() {
+            state = .permissionDenied(.motion)
+            return
+        }
+        if case .permissionDenied = state {
+            state = .initialising
+        }
+        if startTask == nil {
+            startTask = Task { [session] in try? await session.start() }
+        }
+    }
+
+    private func beginCapture(stage: CaptureStage, frozen: GatingSnapshot) {
+        state = .capturing(stage: stage, frozen: frozen)
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performFlow(stage: stage, frozen: frozen)
+        }
+        flowTask = task
+    }
+
+    private func performFlow(stage: CaptureStage, frozen: GatingSnapshot) async {
+        // Ensure the session has finished starting before we capture; the start
+        // is kicked off fire-and-forget on .initialising entry and CaptureSession
+        // throws .sessionNotStarted if captureNadir/Oblique races ahead of it.
+        await startTask?.value
+        do {
+            let frame = try await capture(stage: stage)
+            guard !Task.isCancelled else { return }
+            guard case .capturing = state else { return }
+
+            if stage == .nadir, frozen.pathHint == .twoViewSfS {
+                firstFrame = frame
+                state = .ready(frozen)
+                return
+            }
+
+            let captureResult = CaptureResult(
+                capturePath: frozen.pathHint,
+                lidar: LiDARStatus(
+                    available: supportsLiDAR,
+                    foodRegionCoveragePercent: frozen.lidarCoveragePercent
+                ),
+                nadirFrame: stage == .oblique ? (firstFrame ?? frame) : frame,
+                obliqueFrame: stage == .oblique ? frame : nil,
+                databaseEdition: databaseEdition,
+                paletteVersion: paletteVersion
+            )
+            await runEstimation(captureResult: captureResult, retryStage: stage)
+        } catch is CancellationError {
+            return
+        } catch CaptureError.worldTrackingDegraded {
+            state = .trackingLost
+        } catch let failure as EstimationFailure {
+            state = .refused(failure, retryStage: stage)
+        } catch {
+            state = .refused(.noScaleAvailable, retryStage: stage)
+        }
+    }
+
+    private func capture(stage: CaptureStage) async throws -> RawFrame {
+        switch stage {
+        case .nadir: return try await session.captureNadir()
+        case .oblique: return try await session.captureOblique()
+        }
+    }
+
+    private func runEstimation(captureResult: CaptureResult, retryStage: CaptureStage) async {
+        state = .estimating(captureResult: captureResult)
+        do {
+            let record = try await pipeline.estimate(captureResult: captureResult)
+            guard !Task.isCancelled else { return }
+            guard case .estimating = state else { return }
+            firstFrame = nil
+            lastMeal = record
+            state = .showingResult(record)
+            navigationPath.append(record)
+        } catch is CancellationError {
+            return
+        } catch let failure as EstimationFailure {
+            guard case .estimating = state else { return }
+            state = .refused(failure, retryStage: retryStage)
+        } catch {
+            guard case .estimating = state else { return }
+            state = .refused(.noScaleAvailable, retryStage: retryStage)
+        }
+    }
+
+    private func cancelInFlight() {
+        flowTask?.cancel()
+        flowTask = nil
+    }
+
+    private func freshSnapshot() -> GatingSnapshot {
+        GatingSnapshot(
+            pathHint: CapturePathDecider.decide(
+                supportsLiDAR: supportsLiDAR,
+                latestCoveragePercent: indicators.liveLiDARCoveragePercent
+            ),
+            tiltInRange: false,
+            distanceCm: indicators.liveDistanceCm,
+            lidarCoveragePercent: indicators.liveLiDARCoveragePercent
+        )
+    }
+
+    private func distanceGateOK(_ snapshot: GatingSnapshot) -> Bool {
+        // No LiDAR ⇒ distance is guidance-only and does not gate (§3.2).
+        guard let cm = snapshot.distanceCm else { return true }
+        return cm >= 25 && cm <= 50
+    }
+
+    // Nadir targets 0° ±5° (§2.2); the oblique view targets 25° ±5° (§2.3).
+    // We're targeting the oblique view once the nadir frame is stashed.
+    private func tiltInRange(degrees: Float) -> Bool {
+        let target: Float = firstFrame != nil ? 25 : 0
+        return abs(degrees - target) <= 5
+    }
+
+    private func observeInterruptions(
+        stream: AsyncStream<ARKitCaptureEngine.InterruptionEvent>
+    ) {
+        interruptionTask = Task { [weak self] in
+            for await event in stream {
+                guard let self else { return }
+                self.handleInterruption(event)
+            }
+        }
+    }
+}

@@ -1,10 +1,232 @@
+import ARKit
+import CaptureKit
+import Pipeline
 import SwiftUI
 
 @main
 struct MedataApp: App {
+    @State private var model: CaptureFlowModel
+    @State private var engine: ARKitCaptureEngine
+    private let store: any PersistenceStore
+    @Environment(\.scenePhase) private var scenePhase
+
+    #if DEBUG
+    @State private var uiTestHarness: UITestHarness?
+    #endif
+
+    init() {
+        let engine = ARKitCaptureEngine()
+        let store = Self.makeStore()
+        _engine = State(initialValue: engine)
+        self.store = store
+
+        #if DEBUG
+        if UITestSupport.isActive {
+            let harness = UITestHarness()
+            _model = State(initialValue: harness.model)
+            _uiTestHarness = State(initialValue: harness)
+            return
+        }
+        _uiTestHarness = State(initialValue: nil)
+        #endif
+
+        _model = State(initialValue: CaptureFlowModel(
+            session: CaptureSession(engine: engine),
+            pipeline: PendingPipeline(),
+            indicators: LiveIndicatorModel(),
+            interruptions: engine.interruptions,
+            supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v1"
+        ))
+    }
+
     var body: some Scene {
         WindowGroup {
-            CaptureFlowView()
+            ZStack {
+                CaptureFlowView(model: model, engine: engine, store: store)
+                #if DEBUG
+                if let uiTestHarness {
+                    UITestControlPanel(harness: uiTestHarness)
+                }
+                #endif
+            }
+            .tint(.medataAccent)
+            .onChange(of: scenePhase) { _, phase in
+                model.scenePhaseChanged(phase)
+            }
+        }
+    }
+
+    private static func makeStore() -> any PersistenceStore {
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        do {
+            return try GRDBPersistenceStore(
+                dbURL: base.appendingPathComponent("meals.sqlite"),
+                artefactsBaseURL: base
+            )
+        } catch {
+            fatalError("Failed to open the meal store: \(error)")
         }
     }
 }
+
+// Stand-in PipelineEstimator used until the segmenter-weights smolspec bundles
+// the Core ML model and a real `Pipeline` factory lands (Decision 13: the UI
+// spec ships independently of that work via the `PipelineEstimator` seam).
+// Capture, gating, and the refusal flow are fully exercisable; estimation
+// surfaces a refusal until the real pipeline is wired in.
+private struct PendingPipeline: PipelineEstimator {
+    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+        throw EstimationFailure.noScaleAvailable
+    }
+}
+
+#if DEBUG
+// MARK: - XCUITest harness (DEBUG only)
+//
+// The capture flow is AR-gated: the shutter only arms once a live ARSession
+// reaches `.ready`, and ARKit doesn't run on the simulator. So the XCUITests in
+// MeData/UITests/ launch the app with `-uitest` and drive the flow through this
+// deterministic harness instead of a real camera. None of this is compiled into
+// release builds.
+//
+// Activation:
+//   -uitest                    enable the harness
+//   -uitestPipeline refuse     estimation throws .noScaleAvailable (default)
+//   -uitestPipeline stall      estimation suspends so `.estimating` is observable
+//
+// `UITestControlPanel` exposes hidden buttons that call the model's public
+// commands — these are the only seam the tests need, mirroring what
+// LiveSampleObserver / the interruption stream would push at runtime.
+
+enum UITestSupport {
+    static var isActive: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uitest")
+    }
+
+    enum PipelineMode: String {
+        case refuse
+        case stall
+    }
+
+    static var pipelineMode: PipelineMode {
+        guard let raw = value(forArgument: "-uitestPipeline"),
+              let mode = PipelineMode(rawValue: raw) else { return .refuse }
+        return mode
+    }
+
+    static func makePipeline() -> any PipelineEstimator {
+        switch pipelineMode {
+        case .refuse: return PendingPipeline()
+        case .stall: return StallingPipeline()
+        }
+    }
+
+    private static func value(forArgument name: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
+}
+
+// CaptureEngine whose `captureFrame` blocks until the test releases it, so an
+// XCUITest can observe the transient `.capturing` state before the frame returns.
+private final class UITestCaptureEngine: CaptureEngine, @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending: CheckedContinuation<RawFrame, Error>?
+
+    func start() async throws {}
+
+    func captureFrame(target: CaptureTarget) async throws -> RawFrame {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            pending = continuation
+            lock.unlock()
+        }
+    }
+
+    func release() async {}
+
+    func releaseCapturedFrame() {
+        lock.lock()
+        let continuation = pending
+        pending = nil
+        lock.unlock()
+        continuation?.resume(returning: .fixture())
+    }
+}
+
+// Suspends long enough that `.estimating` is observable, then refuses. Backgrounding
+// cancels the wrapping Task (CancellationError), which the model swallows (Decision 12).
+private struct StallingPipeline: PipelineEstimator {
+    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+        try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+        throw EstimationFailure.noScaleAvailable
+    }
+}
+
+@MainActor
+final class UITestHarness {
+    let model: CaptureFlowModel
+    private let engine = UITestCaptureEngine()
+    private let interruptionContinuation: AsyncStream<ARKitCaptureEngine.InterruptionEvent>.Continuation
+
+    init() {
+        let (stream, continuation) =
+            AsyncStream<ARKitCaptureEngine.InterruptionEvent>.makeStream()
+        interruptionContinuation = continuation
+        model = CaptureFlowModel(
+            session: CaptureSession(engine: engine),
+            pipeline: UITestSupport.makePipeline(),
+            indicators: LiveIndicatorModel(),
+            interruptions: stream,
+            supportsLiDAR: true,
+            databaseEdition: "uitest",
+            paletteVersion: "uitest",
+            cameraAuthorisation: { .authorized },
+            motionAvailable: { true }
+        )
+    }
+
+    // Push the model from .initialising to .ready with in-range gating (tilt 0°,
+    // 35 cm, 90% coverage) so the shutter arms — what LiveSampleObserver would
+    // emit from a live ARFrame, which can't be synthesised on the simulator.
+    func driveToReady() {
+        model.liveSampleDidUpdate(
+            tiltDegrees: 0,
+            distanceCm: 35,
+            lidarCoveragePercent: 90,
+            trackingIsNormal: true
+        )
+    }
+
+    func releaseCapture() { engine.releaseCapturedFrame() }
+    func emitInterruptionBegan() { interruptionContinuation.yield(.began) }
+    func emitInterruptionEnded() { interruptionContinuation.yield(.ended) }
+}
+
+// Hidden trigger controls pinned to the leading edge (clear of the shutter and
+// the top banner) so XCUITests can drive transitions by accessibility identifier.
+struct UITestControlPanel: View {
+    let harness: UITestHarness
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Button("Ready") { harness.driveToReady() }
+                .accessibilityIdentifier("uitest.driveToReady")
+            Button("Release") { harness.releaseCapture() }
+                .accessibilityIdentifier("uitest.releaseCapture")
+            Button("Began") { harness.emitInterruptionBegan() }
+                .accessibilityIdentifier("uitest.interruptionBegan")
+            Button("Ended") { harness.emitInterruptionEnded() }
+                .accessibilityIdentifier("uitest.interruptionEnded")
+        }
+        .buttonStyle(.bordered)
+        .font(.caption2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(.leading, 4)
+        .accessibilityIdentifier("uitest.controlPanel")
+    }
+}
+#endif

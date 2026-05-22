@@ -20,14 +20,67 @@ import simd
 //     RawFrame, so no other module sees simd_* (design §6.0 boundary rule).
 //   • Map ARConfidenceLevel.{low,medium,high} → UInt8 {0,127,255} per §6.0.
 public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Sendable, ARSessionDelegate {
+    public enum InterruptionEvent: Sendable, Equatable {
+        case began
+        case ended
+    }
+
     private let session = ARSession()
     private let motion = CMMotionManager()
     private var latestFrameContinuation: CheckedContinuation<ARFrame, Error>?
+    private var frameContinuations: [UUID: AsyncStream<ARFrame>.Continuation] = [:]
+    private var interruptionContinuations: [UUID: AsyncStream<InterruptionEvent>.Continuation] = [:]
     private let stateQueue = DispatchQueue(label: "medata.captureengine.state")
 
     public override init() {
         super.init()
         session.delegate = self
+    }
+
+    /// The underlying ARSession. Exposed so an iOS-shell preview view can
+    /// render the camera feed by assigning it to ARView. The engine remains
+    /// the sole `ARSessionDelegate`; callers MUST NOT reassign
+    /// `session.delegate`.
+    public var arSession: ARSession { session }
+
+    /// Live AR frames observed by the engine's ARSessionDelegate hook, fanned
+    /// out for non-capture consumers (preview overlays, tilt indicator,
+    /// LiDAR-coverage gauge). The stream is per-subscriber and back-pressured
+    /// via `BufferingPolicy.bufferingNewest(1)` — slow consumers see the
+    /// latest frame, not a backlog. Cancelling the iteration unsubscribes.
+    public var frames: AsyncStream<ARFrame> {
+        let id = UUID()
+        let (stream, cont) = AsyncStream<ARFrame>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        stateQueue.async { [weak self] in
+            self?.frameContinuations[id] = cont
+        }
+        cont.onTermination = { [weak self] _ in
+            self?.stateQueue.async { [weak self] in
+                self?.frameContinuations.removeValue(forKey: id)
+            }
+        }
+        return stream
+    }
+
+    /// AR-session interruption events (phone call, screen lock, etc.) surfaced
+    /// from `ARSessionObserver.sessionWasInterrupted/Ended`. Per-subscriber,
+    /// back-pressured via `BufferingPolicy.bufferingNewest(1)`.
+    public var interruptions: AsyncStream<InterruptionEvent> {
+        let id = UUID()
+        let (stream, cont) = AsyncStream<InterruptionEvent>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        stateQueue.async { [weak self] in
+            self?.interruptionContinuations[id] = cont
+        }
+        cont.onTermination = { [weak self] _ in
+            self?.stateQueue.async { [weak self] in
+                self?.interruptionContinuations.removeValue(forKey: id)
+            }
+        }
+        return stream
     }
 
     public func start() async throws {
@@ -61,9 +114,14 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
 
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
         stateQueue.async { [weak self] in
-            guard let self, let cont = self.latestFrameContinuation else { return }
-            self.latestFrameContinuation = nil
-            cont.resume(returning: frame)
+            guard let self else { return }
+            for cont in self.frameContinuations.values {
+                cont.yield(frame)
+            }
+            if let cont = self.latestFrameContinuation {
+                self.latestFrameContinuation = nil
+                cont.resume(returning: frame)
+            }
         }
     }
 
@@ -72,6 +130,24 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             guard let self, let cont = self.latestFrameContinuation else { return }
             self.latestFrameContinuation = nil
             cont.resume(throwing: CaptureError.captureFailed(error.localizedDescription))
+        }
+    }
+
+    public func sessionWasInterrupted(_ session: ARSession) {
+        stateQueue.async { [weak self] in
+            guard let self else { return }
+            for cont in self.interruptionContinuations.values {
+                cont.yield(.began)
+            }
+        }
+    }
+
+    public func sessionInterruptionEnded(_ session: ARSession) {
+        stateQueue.async { [weak self] in
+            guard let self else { return }
+            for cont in self.interruptionContinuations.values {
+                cont.yield(.ended)
+            }
         }
     }
 
