@@ -90,7 +90,15 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             config.frameSemantics.insert(.sceneDepth)
         }
         config.worldAlignment = .gravity
-        session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        // Only re-run the session if it hasn't been configured yet (e.g., by ARPreviewView).
+        // If already configured, ensure frame semantics are updated.
+        if session.configuration == nil {
+            session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        } else if case let current as ARWorldTrackingConfiguration = session.configuration,
+                  !current.frameSemantics.contains(.sceneDepth) && supportsLiDAR {
+            // Update frame semantics if LiDAR support was added after initial config
+            session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        }
         if motion.isDeviceMotionAvailable {
             motion.deviceMotionUpdateInterval = 1.0 / 60.0
             motion.startDeviceMotionUpdates()

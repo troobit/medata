@@ -17,12 +17,29 @@ struct ARPreviewView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+        ensureSessionConfigured()
         reassertDelegate()
         return arView
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
         reassertDelegate()
+    }
+
+    // Ensure the ARSession is configured and running so the ARView can render.
+    // This runs synchronously to guarantee the camera is ready before the view
+    // attempts to display it. The engine owns the session lifecycle; this seam
+    // only ensures it's prepared for display.
+    private func ensureSessionConfigured() {
+        let session = engine.arSession
+        if session.configuration == nil {
+            let config = ARWorldTrackingConfiguration()
+            if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+                config.frameSemantics.insert(.sceneDepth)
+            }
+            config.worldAlignment = .gravity
+            session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        }
     }
 
     // Testable seam shared by makeUIView and updateUIView (the SwiftUI
