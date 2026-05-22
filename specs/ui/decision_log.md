@@ -465,3 +465,42 @@ Placing the protocol in MedataCore (not in `App/`) is cleaner because the abstra
 - Adds one public protocol to MedataCore that exists primarily for testability today.
 
 ---
+
+## Decision 14: Engine adopts the preview ARView's session (single-session correction)
+
+**Date**: 2026-05-23
+**Status**: accepted
+
+### Context
+
+Decision 11 specified that `ARKitCaptureEngine` owns the one `ARSession` and exposed `arSession` "for ARView preview binding". The implementation took that literally: the engine created its own `ARSession()` and the `ARPreviewView` created an `ARView` (which has its own internal session). `ARView.session` is get-only, so the engine's session could never be injected into the view — leaving two live `ARSession` instances. Two AR sessions contend for the single camera capture source, producing repeated `FigCaptureSourceRemote` failures (`err=-12784`, XPC `err=-17281`) and a `sessionWasInterrupted`/`sessionInterruptionEnded` loop that flashed the UI between `.initialising` and `.trackingLost`. The camera preview never stabilised.
+
+### Decision
+
+The engine adopts the ARView's session as the one authoritative `ARSession`. `ARKitCaptureEngine.bindPreviewSession(_:)` (called from `ARPreviewView.makeUIView`/`updateUIView`) takes ownership of the view's session: sets the engine as its sole delegate and runs the world-tracking config on it. The engine no longer runs its placeholder session; `start()` records intent and defers the `run` to bind time if the view is not yet up. A `isRunning` guard ensures repeated `updateUIView` binds re-assert the delegate without resetting tracking. All session access is on the main actor.
+
+### Rationale
+
+`ARView` always creates and renders from its own `ARSession` and never accepts an external one. The only way to have exactly one session while still using `ARView` for passthrough is to make that session the authoritative one and drive it from the engine. This preserves Decision 11's intent (one session, engine is sole owner/delegate) and removes the camera contention that was the root cause of the unstable preview.
+
+### Alternatives Considered
+
+- **Keep two sessions, only re-assert the engine delegate** (the prior code): Rejected — it cannot work; the view renders from a different session than the one the engine drives, and two sessions fight for the camera.
+- **Drop `ARView`, render `engine.frames` (capturedImage) in a custom Metal/AVSampleBufferDisplayLayer view**: Truly single-session and removes the RealityKit material warnings, but requires a YCbCr renderer (more code/risk) and discards future RealityKit overlay capability. Rejected as heavier than necessary.
+
+### Consequences
+
+**Positive:**
+- One camera capture source; the `FigCaptureSourceRemote` errors and interruption/flashing loop are eliminated.
+- Still uses `ARView` for passthrough; no custom renderer.
+- Honours Decision 11's single-session/sole-delegate intent.
+
+**Negative:**
+- The engine's session reference is now mutable and adopted lazily, so the engine has no running session until the preview view appears (acceptable: capture is gated behind `.ready`, which requires live frames from the bound session).
+- The benign `engine:BuiltinRenderGraphResources/AR/*.rematerial` warnings from RealityKit remain.
+
+### Impact
+
+`MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift`, `App/ARPreviewView.swift`, `MeData/Tests/ARPreviewViewTests.swift`.
+
+---

@@ -24,13 +24,27 @@ composition only; all behaviour is in the model and is unit-tested.
   Write-gating lives in `apply(_:)`: samples are dropped unless state is
   `.ready`/`.forcingTwoView`/`.initialising`/`.trackingLost`.
 - **ARPreviewView** — `UIViewRepresentable` over `ARView`. `ARView.session` is
-  get-only, so the engine's session can't be injected; the engine stays the
-  sole session owner/delegate and `reassertDelegate()` (called from both
-  makeUIView and updateUIView) keeps it wired. Tests drive `reassertDelegate()`
-  directly because the SwiftUI `Context` has no public init.
+  get-only, so the engine's own session can't be injected into the view.
+  Instead the engine **adopts the ARView's session** as the one authoritative
+  `ARSession` via `engine.bindPreviewSession(_:)` (called from both makeUIView
+  and updateUIView through the testable `bind(to:)` seam). The engine becomes
+  that session's sole delegate and runs the world-tracking config on it. This
+  is the single-session realisation of Decision 11/14. Tests drive `bind(to:)`
+  with a plain `ARSession` because the SwiftUI `Context` has no public init.
 
 ## Gotchas / non-obvious behaviour
 
+- **One ARSession only — the engine adopts the ARView's session.** A regression
+  (fixed, Decision 14) had `ARKitCaptureEngine` running its OWN `ARSession` while
+  `ARView` ran a second one. Two AR sessions contend for the single camera capture
+  source → repeated `FigCaptureSourceRemote` failures (`err=-12784`/`-17281` in the
+  device log) and a `sessionWasInterrupted ↔ Ended` loop that flashed the UI between
+  `.initialising`/`.trackingLost`. Fix: the engine no longer runs its placeholder
+  session; `bindPreviewSession(_:)` swaps in the ARView's session and runs the config
+  there (gated by `isRunning` so repeated `updateUIView` calls don't reset tracking).
+  `start()` records intent and defers the run to bind if the view isn't up yet. **Do
+  not reintroduce a second `ARSession`.** All session mutation happens on the main
+  actor (`bindPreviewSession`/`start`/`release` via `MainActor.run`).
 - **`performFlow` awaits `startTask` before capturing.** `CaptureSession`
   throws `.sessionNotStarted` if `captureNadir/Oblique` races ahead of the
   fire-and-forget `session.start()` kicked off on `.initialising` entry. In

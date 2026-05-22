@@ -25,7 +25,17 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
         case ended
     }
 
-    private let session = ARSession()
+    // The authoritative ARSession. Starts as a placeholder created off-screen;
+    // once the preview ARView exists, `bindPreviewSession` swaps in the view's
+    // session so there is exactly one session (one camera capture source). Only
+    // ever mutated/read on the main actor (see `bindPreviewSession`, `start`,
+    // `release`). The placeholder is never run — `applyRunStateIfNeeded` only
+    // runs config after a real session is bound.
+    private var session = ARSession()
+    private var runRequested = false
+    private var isBound = false
+    private var isRunning = false
+
     private let motion = CMMotionManager()
     private var latestFrameContinuation: CheckedContinuation<ARFrame, Error>?
     private var frameContinuations: [UUID: AsyncStream<ARFrame>.Continuation] = [:]
@@ -37,11 +47,50 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
         session.delegate = self
     }
 
-    /// The underlying ARSession. Exposed so an iOS-shell preview view can
-    /// render the camera feed by assigning it to ARView. The engine remains
-    /// the sole `ARSessionDelegate`; callers MUST NOT reassign
+    /// The single authoritative ARSession. Exposed for the iOS-shell preview
+    /// view to observe; the view does NOT assign it (ARView.session is get-only)
+    /// — instead the view hands the engine its session via `bindPreviewSession`.
+    /// The engine remains the sole `ARSessionDelegate`; callers MUST NOT reassign
     /// `session.delegate`.
     public var arSession: ARSession { session }
+
+    /// Adopt the preview `ARView`'s session as the one authoritative session.
+    ///
+    /// `ARView.session` is get-only, so the engine cannot inject its own session
+    /// into the view. Instead the engine takes ownership of the view's session:
+    /// it becomes that session's sole delegate and runs the world-tracking
+    /// config on it (Decision 11 — one ARSession, owned by the engine). This
+    /// replaces the earlier design that ran a SECOND, separate ARSession which
+    /// contended with the view's for the camera, producing repeated
+    /// capture-source failures and session-interruption churn.
+    ///
+    /// Idempotent: binding the same session again only re-asserts the delegate
+    /// (RealityKit may reattach itself on `updateUIView`) and never re-runs the
+    /// config, so live tracking is not reset.
+    @MainActor
+    public func bindPreviewSession(_ external: ARSession) {
+        if external !== session {
+            session.delegate = nil
+            session.pause()
+            session = external
+            isRunning = false
+        }
+        session.delegate = self
+        isBound = true
+        applyRunStateIfNeeded()
+    }
+
+    @MainActor
+    private func applyRunStateIfNeeded() {
+        guard isBound, runRequested, !isRunning else { return }
+        let config = ARWorldTrackingConfiguration()
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            config.frameSemantics.insert(.sceneDepth)
+        }
+        config.worldAlignment = .gravity
+        session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        isRunning = true
+    }
 
     /// Live AR frames observed by the engine's ARSessionDelegate hook, fanned
     /// out for non-capture consumers (preview overlays, tilt indicator,
@@ -84,20 +133,15 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
     }
 
     public func start() async throws {
-        let supportsLiDAR = ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
-        let config = ARWorldTrackingConfiguration()
-        if supportsLiDAR {
-            config.frameSemantics.insert(.sceneDepth)
-        }
-        config.worldAlignment = .gravity
-        // Only re-run the session if it hasn't been configured yet (e.g., by ARPreviewView).
-        // If already configured, ensure frame semantics are updated.
-        if session.configuration == nil {
-            session.run(config, options: [.resetTracking, .removeExistingAnchors])
-        } else if case let current as ARWorldTrackingConfiguration = session.configuration,
-                  !current.frameSemantics.contains(.sceneDepth) && supportsLiDAR {
-            // Update frame semantics if LiDAR support was added after initial config
-            session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        // Record intent and run the config only if the preview session is bound;
+        // otherwise the run is deferred to `bindPreviewSession`. This avoids
+        // starting the placeholder session (a second camera source) before the
+        // ARView's session is available. The model's start-task is fire-and-forget
+        // and only awaited at capture time, which can only happen after the
+        // preview (and therefore the bound, running session) exists.
+        await MainActor.run {
+            self.runRequested = true
+            self.applyRunStateIfNeeded()
         }
         if motion.isDeviceMotionAvailable {
             motion.deviceMotionUpdateInterval = 1.0 / 60.0
@@ -114,7 +158,11 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
     }
 
     public func release() async {
-        session.pause()
+        await MainActor.run {
+            self.runRequested = false
+            self.isRunning = false
+            self.session.pause()
+        }
         motion.stopDeviceMotionUpdates()
     }
 
