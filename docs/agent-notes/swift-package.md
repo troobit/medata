@@ -301,6 +301,11 @@ Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
 - `App/SettingsView.swift` — `@AppStorage` retention picker (30/90/365/indefinite)
   and IFCDB overlay `Toggle`. Keys in `SettingsKeys` namespace.
 
+> The placeholder `CaptureFlowView` / `CaptureFlowViewModel` and the result/settings
+> placeholders were subsequently rewritten by the UI spec (`specs/ui/`). For current
+> capture-flow architecture see [`ui-capture-flow.md`](ui-capture-flow.md) and
+> [`../architecture.md`](../architecture.md) §4.
+
 ### Gotchas
 
 - `PbClinicalMacros.energyKJ` proto field is `energyKj` (lowercase j) in Swift —

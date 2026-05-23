@@ -11,9 +11,9 @@ Build, sign, and side-load the MeData iOS shell to a developer-owned iPhone for 
   - [1. Quick start — committed project](#1-quick-start--committed-project)
   - [2. SPM ↔ Xcode-project boundary (background)](#2-spm--xcode-project-boundary-background)
   - [3. Code signing on a fresh clone](#3-code-signing-on-a-fresh-clone)
-  - [4. Info.plist privacy strings (deferred)](#4-infoplist-privacy-strings-deferred)
+  - [4. Info.plist privacy strings](#4-infoplist-privacy-strings)
   - [5. Trust the developer cert on the iPhone](#5-trust-the-developer-cert-on-the-iphone)
-  - [6. Self-check & useful shortcuts](#6-self-check--useful-shortcuts)
+  - [6. Useful shortcuts and debug aids](#6-useful-shortcuts-and-debug-aids)
   - [Troubleshooting](#troubleshooting)
   - [Appendix A — Recreate the Xcode project from scratch](#appendix-a--recreate-the-xcode-project-from-scratch)
   - [References](#references)
@@ -67,7 +67,7 @@ The repo ships a working Xcode project at `MeData/MeData.xcodeproj` (proper-case
 | 1.6 | Plug in your iPhone, trust the Mac when prompted, pick the phone in Xcode's destination menu (top toolbar). |
 | 1.7 | **⌘R** to build and run. First install triggers an "Untrusted Developer" dialog on the phone — see §5 below to clear it. After that, ⌘R again. |
 
-You should see the placeholder UI: navigation title **"Capture"**, the text **"Point the camera at the meal"**, and a **Run self-check** button. Tap it — the diagnostic readout appears on screen and in Xcode's debug area (⇧⌘Y).
+You should see the capture flow: navigation title **"Capture"**, the AR camera preview, live tilt / distance / LiDAR-coverage indicators, and the shutter button. On first launch the OS will prompt for camera and motion permissions; grant both. On a non-LiDAR device the coverage indicator stays at 0% and the path hint locks to the two-view + ID-1 card route — place a credit-card-sized ID-1 reference card in shot and capture both nadir and oblique views when prompted.
 
 Reference: [Adding capabilities to your app](https://developer.apple.com/documentation/xcode/adding-capabilities-to-your-app) · [Distributing your app to registered devices](https://developer.apple.com/documentation/xcode/distributing-your-app-to-registered-devices).
 
@@ -93,16 +93,30 @@ If §1.4–1.5 didn't already cover everything:
 
 Free Apple-ID signing works for personal devices. The cert lasts 7 days; the next ⌘R re-signs.
 
-## 4. Info.plist privacy strings (deferred)
+## 4. Info.plist privacy strings
 
-The current placeholder `CaptureFlowView` doesn't touch the camera or motion sensors, so the app launches without any privacy strings configured. **When the real capture flow is wired up**, add these via the project editor → target → **Info** tab → **Custom iOS Target Properties** (click `+`):
+The project uses Xcode's generated Info.plist (`GENERATE_INFOPLIST_FILE = YES`); the
+privacy strings live in the target build settings as `INFOPLIST_KEY_*` entries in
+`MeData/MeData.xcodeproj/project.pbxproj`:
 
-| Key | Type | Sample value | Reference |
-|---|---|---|---|
-| `NSCameraUsageDescription` | String | `MeData uses the camera to photograph your meal for carbohydrate estimation.` | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription) |
-| `NSMotionUsageDescription` | String | `MeData uses motion sensors to keep the camera level during capture.` | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription) |
-| `BGTaskSchedulerPermittedIdentifiers` | Array of String | One entry: `<your.bundle.id>.retention` (needed once `RetentionScheduler` is wired in) | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/bgtaskschedulerpermittedidentifiers) |
-| `UIRequiredDeviceCapabilities` | Array of String | Add `arkit` so the App Store only delivers to ARKit-capable devices. **Do not** add a LiDAR key — it does not exist, and the engine handles non-LiDAR devices at runtime by routing to the two-view + ID-1 card path. | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/uirequireddevicecapabilities) |
+| Key | Value | Reference |
+|---|---|---|
+| `INFOPLIST_KEY_NSCameraUsageDescription` | "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate." | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription) |
+| `INFOPLIST_KEY_NSMotionUsageDescription` | "MeData uses motion data to show how level the camera is while you capture your meal." | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription) |
+| `INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone` | `UIInterfaceOrientationPortrait` (portrait-only per `specs/ui/`) | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportedinterfaceorientations) |
+| `INFOPLIST_KEY_LSApplicationCategoryType` | `public.app-category.medical` | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/lsapplicationcategorytype) |
+
+To change a value, edit the target's **Build Settings** → search "INFOPLIST_KEY_" — Xcode
+exposes each `INFOPLIST_KEY_*` as a first-class setting. Do not add a hand-written
+`Info.plist` file alongside; the generated route is the source of truth.
+
+Not yet configured (add when the relevant work lands):
+
+- `BGTaskSchedulerPermittedIdentifiers` — needed once `RetentionScheduler` is registered
+  for background sweeps. One array entry: `<your.bundle.id>.retention`.
+- `UIRequiredDeviceCapabilities` containing `arkit` — restricts App Store delivery to
+  ARKit-capable devices. **Do not** add a LiDAR key — it does not exist; the engine
+  handles non-LiDAR devices at runtime via the two-view + ID-1 card path.
 
 Reference: [Information Property List](https://developer.apple.com/documentation/bundleresources/information-property-list) · [Background Tasks framework](https://developer.apple.com/documentation/backgroundtasks).
 
@@ -118,13 +132,27 @@ First-time installs from a personal team are quarantined until the user trusts t
 
 Reference: [Install a configuration profile on iPhone](https://support.apple.com/en-gb/guide/iphone/iph6c493b19/ios).
 
-## 6. Self-check & useful shortcuts
+## 6. Useful shortcuts and debug aids
 
-The placeholder `CaptureFlowView` includes a **Run self-check** button. Tapping it prints diagnostics (device model, iOS version, LiDAR availability, a sample string round-tripped through the linked `Pipeline` library) both on screen and to Xcode's debug area. Use it to verify the SPM is reachable at runtime, not just compile time.
+To see the app's console output, open the debug area: **View → Debug Area → Show Debug
+Area** (⇧⌘Y). The `Pipeline` target emits OSSignpost intervals around each stage in Debug
+builds (subsystem `ie.medata.pipeline`, category `Stages`) — attach Instruments and pick
+the **OSSignpost** template to inspect stage timings.
 
-To see the console output, open the debug area: **View → Debug Area → Show Debug Area** (⇧⌘Y). Look for lines starting with `[medata`.
+Both Debug and Release schemes run on non-LiDAR devices — the iOS-shell hardware-floor
+refusal in `ARKitCaptureEngine` has been removed; non-LiDAR sessions degrade to the
+two-view + ID-1 card path with `noLidarConfidence` set on every meal record.
+**Product → Scheme → Edit Scheme…** to inspect.
 
-Both Debug and Release schemes run on non-LiDAR devices — the iOS-shell hardware-floor refusal in `ARKitCaptureEngine` has been removed; non-LiDAR sessions degrade to the two-view + ID-1 card path with `noLidarConfidence` set. **Product → Scheme → Edit Scheme…** to inspect.
+### XCUITest harness
+
+The capture flow is AR-gated and ARKit does not run on the simulator. To exercise the
+flow without a real camera, launch with `-uitest` (and optionally `-uitestPipeline
+refuse|stall`) — `App.swift` activates a `#if DEBUG` harness that injects a gated
+`CaptureEngine`, a stub `PipelineEstimator`, and an interruption `AsyncStream`. Hidden
+controls along the leading edge drive the model's commands; query them by accessibility
+identifier (`uitest.driveToReady`, `uitest.releaseCapture`, etc.). See
+[`docs/agent-notes/ui-capture-flow.md`](agent-notes/ui-capture-flow.md) for the full list.
 
 Frequently-needed shortcuts:
 
@@ -151,7 +179,7 @@ Reference: [Running your app in Simulator or on a device](https://developer.appl
 | `Cannot find type 'MealRecord' in scope` / `Cannot find 'EstimationFailure' in scope` | `Pipeline` is missing the `@_exported import Persistence` / `@_exported import PortableContracts` lines in `MedataCore/Sources/Pipeline/Pipeline.swift` (or they've been reverted) | Restore the `@_exported` declarations; rebuild |
 | `Missing import of defining module 'Combine'` on `ObservableObject` / `@Published` / `@StateObject` | Xcode 16+ no longer auto-imports `Combine` via SwiftUI | Add `import Combine` at the top of the offending file |
 | `Type 'MealRecord' does not conform to protocol 'Hashable'` | `MealRecord` in `Persistence/MealRecord.swift` is `Equatable` only | Add `Hashable` to its conformance list — synthesised because every field is Hashable |
-| App crashes immediately on first sensor access | Missing `NSCameraUsageDescription` / `NSMotionUsageDescription` | [§4](#4-infoplist-privacy-strings-deferred) — add when wiring up real capture |
+| App crashes immediately on first sensor access | `INFOPLIST_KEY_NSCameraUsageDescription` / `INFOPLIST_KEY_NSMotionUsageDescription` removed from build settings | [§4](#4-infoplist-privacy-strings) — restore the keys in **Build Settings** |
 | ARKit session never returns frames on a non-LiDAR iPhone | `.sceneDepth` was requested on a device that doesn't support it (stale build cache) | Clean Build Folder (⇧⌘K) and rebuild — the current engine only inserts `.sceneDepth` when `ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)` is true |
 | Build error: `Sandbox: bash deny(1) file-write-create` for SPM build cache | Fresh checkout permissions | Clean Build Folder (⇧⌘K), retry |
 | `App installation failed: Unable to install MeData` | Provisioning profile mismatch | Toggle **Automatically manage signing** off and on, or delete `~/Library/MobileDevice/Provisioning\ Profiles/` and rebuild |

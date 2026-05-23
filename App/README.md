@@ -1,20 +1,40 @@
 # App target — iOS SwiftUI shell
 
-SwiftUI views for the iOS app (design §2.1). The Xcode project at
-`MeData/MeData.xcodeproj` (repo root) references these files in place via
-`../App/*.swift`; they live here, not duplicated into the project's source
-folder.
+The SwiftUI capture-flow shell for the iOS app (per `specs/ui/design.md`). The Xcode
+project at `MeData/MeData.xcodeproj` (repo root) references these files in place via
+`../App/*.swift`; they live here, not duplicated into the project's source folder.
+
+Behaviour lives in `CaptureFlowModel` (an `@Observable @MainActor` state machine);
+the views are composition only. See [`docs/agent-notes/ui-capture-flow.md`](../docs/agent-notes/ui-capture-flow.md)
+for module-level gotchas, and [`docs/architecture.md`](../docs/architecture.md) §4 for
+the architecture overview.
 
 | File | Role |
 |---|---|
-| `App.swift` | `@main struct MedataApp` — app entry point, mounts `CaptureFlowView` |
-| `CaptureFlowView.swift` | Placeholder capture view + `CaptureFlowViewModel`; also hosts the **Run self-check** diagnostic button used to verify the SPM link at runtime |
-| `ResultView.swift` | Displays a finished `MealRecord` (carb estimate + confidence) |
-| `SettingsView.swift` | Retention / IFCDB overlay toggles via `@AppStorage` |
+| `App.swift` | `@main MedataApp` — entry point, owns `CaptureFlowModel`, forwards `scenePhase` |
+| `CaptureFlowView.swift` | `NavigationStack` root composing AR preview, live indicators, shutter, refusal overlay, settings entry |
+| `CaptureFlowModel.swift` | The `@Observable @MainActor` state machine and `CaptureFlowDelegate` conformance |
+| `CaptureState.swift` | `CaptureState` enum (initialising, ready, capturing, estimating, showingResult, refused, …) |
+| `GatingSnapshot.swift` | Frozen-at-shutter snapshot of tilt / distance / coverage / path hint |
+| `CapturePathDecider.swift` | Pure decider: LiDAR + coverage ≥ 80% → `singleViewLidar`, else `twoViewSfs` |
+| `LiveIndicatorModel.swift` | Child `@Observable` holding ~60 Hz tilt / distance / coverage |
+| `LiveIndicatorView.swift` | Child view rendering those indicators |
+| `LiveSampleObserver.swift` | `@MainActor` observer iterating `engine.frames`, computing per-frame metrics |
+| `ARPreviewView.swift` | `UIViewRepresentable` over `ARView`; engine adopts the view's `ARSession` (one session only) |
+| `RefusalBanner.swift` | Inline `EstimationFailure.localisedMessage` banner with "Try Again" |
+| `ResultView.swift` | Total carbs (rounded) + three-state confidence pill; uncertain-estimate retake below σ 0.60 |
+| `SettingsView.swift` | Retention + IFCDB toggles via `@AppStorage`; Export archive → `ShareSheet` |
+| `ShareSheet.swift` | `UIViewControllerRepresentable` wrapping `UIActivityViewController` |
+| `Colors.swift` | Brand colour tokens (`medataAccent #63ff00`, confidence pill colours) |
 
-The Swift Package at the repo root exposes `MedataCore` (the `Pipeline`
-target). The app uses `import Pipeline`; `Pipeline.swift` re-exports
-`Persistence` and `PortableContracts` so `MealRecord`, `EstimationFailure`,
-and the `Pb*` types are reachable through that single import.
+## SPM import boundary
 
-For build / run instructions see `docs/ios-device-setup.md`.
+The Swift Package at the repo root exposes `MedataCore` (the `Pipeline` target). The app
+uses `import Pipeline`; `Pipeline.swift` re-exports `Persistence` and `PortableContracts`
+so `MealRecord`, `EstimationFailure`, and the `Pb*` proto types are reachable through that
+single import. `CaptureKit` is imported directly where the app needs `ARKitCaptureEngine`
+and `CaptureSession`.
+
+For build, sign, and side-load instructions see
+[`docs/ios-device-setup.md`](../docs/ios-device-setup.md).
+</content>
