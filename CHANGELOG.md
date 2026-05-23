@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed (ARView session config race — regression of earlier camera fix)
+
+- `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — `bindPreviewSession` now sets `runRequested = true` before calling `applyRunStateIfNeeded`, so the session config runs synchronously on bind rather than waiting for `CaptureFlowModel.start()` to fire. The previous `bindPreviewSession`-based fix (commit `4b67cbc`) inadvertently re-opened the race that `0e77e94` had closed: `applyRunStateIfNeeded` early-exited on `runRequested == false`, leaving ARView rendering a bound-but-unconfigured session and triggering paired `FigCaptureSourceRemote err=-12784` and `Fig err=-12710` log lines on iPhone 13 Pro Max at launch. The placeholder session remains protected by the `isBound` guard. See `specs/bugfixes/arview-session-config-race/report.md` and `docs/agent-notes/camera-input-fix.md`.
+- `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — `isRunning` flag relaxed from `private` to `internal` so the regression test can assert engine state directly (the iOS Simulator does not reliably set `ARSession.configuration` on `run(_:)` without a real camera).
+- `MedataCore/Tests/CaptureKitTests/ARKitCaptureEngineStreamsTests.swift` — added `testBindPreviewSessionRunsConfigImmediately` regression test.
+
 ### Fixed (Camera input rendering on iPhone 13 Pro Max)
 
 - `App/ARPreviewView.swift` — added `ensureSessionConfigured()` method called from `makeUIView()` to synchronously configure and run the ARSession before ARView attempts to render. This eliminates a race condition where the view tried to display camera input before the session was initialized, causing FigCapture errors (err=-12710, err=-12784, err=-17281) and blank camera feed.

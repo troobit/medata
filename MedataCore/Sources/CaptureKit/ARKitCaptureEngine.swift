@@ -34,7 +34,10 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
     private var session = ARSession()
     private var runRequested = false
     private var isBound = false
-    private var isRunning = false
+    // `internal` so `@testable import CaptureKit` can assert that
+    // `bindPreviewSession` ran the config without depending on
+    // `ARSession.configuration` (which is unreliable in the iOS Simulator).
+    internal var isRunning = false
 
     private let motion = CMMotionManager()
     private var latestFrameContinuation: CheckedContinuation<ARFrame, Error>?
@@ -77,6 +80,14 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
         }
         session.delegate = self
         isBound = true
+        // Binding a real session IS the run trigger — `CaptureFlowModel.start()`
+        // runs fire-and-forget and may not have flipped `runRequested` yet.
+        // Deferring leaves ARView rendering a bound-but-unconfigured session,
+        // which produces FigCaptureSourceRemote -12784 / Fig -12710 errors
+        // during the gap (see specs/bugfixes/arview-session-config-race/).
+        // The placeholder session is still protected by the `isBound` guard
+        // in `applyRunStateIfNeeded`.
+        runRequested = true
         applyRunStateIfNeeded()
     }
 
