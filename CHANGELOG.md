@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Fixed (ARView session config race — regression of earlier camera fix)
+### Added (Agent notes — pipeline factory wiring status)
+
+- `docs/agent-notes/pipeline-wiring-status.md` — records the parked state of the real `Pipeline` factory and the two upstream blockers discovered while scoping it: (1) no segmenter checkpoint exists (training pipeline in `tools/segmenter/` works, but the fine-tuned `.pt` doesn't exist and is days of ML work to produce), and (2) `RawFrame.imageBytes` is unusable for any RGB consumer because `ARKitCaptureEngine.copyPixelBufferBytes` reads `ARFrame.capturedImage` (biplanar YCbCr) as if it were chunky non-planar, and `detectPixelFormat` mis-reports YCbCr as `.bgra8`. Document includes ordered next steps (resolve YCbCr→RGB pipeline first, then train + export segmenter, then wire factory) with acceptance criteria for each, pointers to relevant source locations, and notes on why `VisionCardDetector` is optional on the v1 LiDAR-mandatory hardware floor.
 
 - `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — `bindPreviewSession` now sets `runRequested = true` before calling `applyRunStateIfNeeded`, so the session config runs synchronously on bind rather than waiting for `CaptureFlowModel.start()` to fire. The previous `bindPreviewSession`-based fix (commit `4b67cbc`) inadvertently re-opened the race that `0e77e94` had closed: `applyRunStateIfNeeded` early-exited on `runRequested == false`, leaving ARView rendering a bound-but-unconfigured session and triggering paired `FigCaptureSourceRemote err=-12784` and `Fig err=-12710` log lines on iPhone 13 Pro Max at launch. The placeholder session remains protected by the `isBound` guard. See `specs/bugfixes/arview-session-config-race/report.md` and `docs/agent-notes/camera-input-fix.md`.
 - `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — `isRunning` flag relaxed from `private` to `internal` so the regression test can assert engine state directly (the iOS Simulator does not reliably set `ARSession.configuration` on `run(_:)` without a real camera).
