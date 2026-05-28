@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference))
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6))
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -324,7 +324,7 @@ references:
   - Blocked-by: 0f07007 (Write tests for SQLite schema + `MealRecord` save/load round-trip)
   - Requirements: [14.1](requirements.md#14.1), [14.2](requirements.md#14.2), [14.3](requirements.md#14.3), [14.4](requirements.md#14.4), [15.1](requirements.md#15.1), [15.2](requirements.md#15.2), [15.3](requirements.md#15.3), [15.4](requirements.md#15.4), [15.5](requirements.md#15.5), [15.6](requirements.md#15.6), [15.7](requirements.md#15.7), [18.4](requirements.md#18.4)
 
-- [x] 43. Write tests for `RetentionScheduler` (Req 17) <!-- id:0f07009 -->
+- [x] 43. ~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44. <!-- id:0f07009 -->
   - Test 30-day default retention with sweep at `now`-stamped meals 29/30/31 days old.
   - Test foreground `sweepIfDue()` advances `last_sweep_at_ms` and is idempotent across two consecutive sweeps within 24h.
   - Test 90-day / 365-day / indefinite settings.
@@ -332,7 +332,7 @@ references:
   - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
 
-- [x] 44. Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback <!-- id:0f0700a -->
+- [x] 44. ~~Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Photos now live in the user's Photos library (Task 72); the app no longer has a retention sweep. Source files to delete in follow-up. <!-- id:0f0700a -->
   - Register `BackgroundTasks` identifier; schedule daily refresh.
   - `Persistence.sweepIfDue()` runs on app foregrounding and at end of every `Pipeline.estimate(_:)` if `last_sweep_at_ms` > 24 hours old.
   - Blocked-by: 0f07009 (Write tests for `RetentionScheduler` (Req 17))
@@ -347,7 +347,7 @@ references:
 - [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip))
   - Requirements: [15.8](requirements.md#15.8)
 
 - [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5))
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -399,13 +399,10 @@ references:
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [1.1](requirements.md#1.1), [3.1](requirements.md#3.1), [3.5](requirements.md#3.5), [13.5](requirements.md#13.5)
 
-- [x] 54. Implement Settings view (retention period, IFCDB overlay toggle) <!-- id:0f0700k -->
-  - Retention period picker: 30 / 90 / 365 days / indefinite per Req 17.4.
-  - IFCDB overlay toggle persisted via `UserDefaults`; consumed by `FoodDatabase` ATTACH on next launch.
+- [x] 54. ~~Implement Settings view (retention period, IFCDB overlay toggle)~~ **SUPERSEDED by Task 73** per §0 (May 2026). Retention and IFCDB toggle removed; Settings view rewritten in Task 73. <!-- id:0f0700k -->
   - Blocked-by: 0f0700j (Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate`)
-  - Requirements: [17.4](requirements.md#17.4), [11.3](requirements.md#11.3)
 
-## Harness and Calibration
+## Harness and Calibration — DEFERRED (REMOVED in v1)
 
 - [x] 55. Write tests for `MealFixture` .proto round-trip <!-- id:0f0700l -->
   - Test encode → decode → bit-equal for `MealFixture.proto` per design §7.3.
@@ -446,7 +443,7 @@ references:
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report consumed by CI: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - CI fails if MAPE ≥ 20% OR MAE > 10 g (point estimate).
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Implement β_c calibration in `HarnessCLI`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8)
 
 - [x] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
@@ -476,20 +473,20 @@ references:
 
 ## Performance and Cleanup
 
-- [x] 65. Write XCTest performance assertion: single-view P95 ≤ 1000 ms <!-- id:0f0700v -->
+- [x] 65. ~~Write XCTest performance assertion: single-view P95 ≤ 1000 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700v -->
   - On-device XCTest with `XCTClockMetric` over 10 runs against a fixture batch.
   - Per Req 16.1 / 16.2 single-view path budget.
   - Mark test as device-only; CI runs on tethered iPhone 12 Pro per Req 16.7.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [16.1](requirements.md#16.1), [16.2](requirements.md#16.2), [16.7](requirements.md#16.7), [21.5](requirements.md#21.5)
 
-- [x] 66. Write XCTest performance assertion: two-view P95 ≤ 1800 ms <!-- id:0f0700w -->
+- [x] 66. ~~Write XCTest performance assertion: two-view P95 ≤ 1800 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700w -->
   - Same harness as task 65, two-view fixture batch.
   - Per Req 16.1 / 16.3 two-view path budget.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [16.1](requirements.md#16.1), [16.3](requirements.md#16.3), [16.7](requirements.md#16.7), [21.5](requirements.md#21.5)
 
-- [x] 67. Implement performance harness instrumentation (per-stage timing) <!-- id:0f0700x -->
+- [x] 67. ~~Implement performance harness instrumentation (per-stage timing)~~ **DEFERRED — REMOVED**: signpost intervals retained for ad-hoc Instruments inspection only; no XCTest assertions. <!-- id:0f0700x -->
   - OSSignpost intervals around each pipeline stage (CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Macros, Confidence, Persistence).
   - Surface to dev-build only (Req 16.5 CPU fallback / dev-build gates).
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
@@ -512,3 +509,45 @@ references:
   - Update root README to point at the new iOS app.
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
   - Requirements: [1.4](requirements.md#1.4)
+
+## v1 Adjustments — New Tasks (May 2026)
+
+- [ ] 71. Replace auto-derived capture path with persistent `CaptureMode` toggle
+  - Add `CaptureMode` enum (`single`, `double`) in `MedataCore`.
+  - Add `SettingsKeys.captureMode` UserDefaults key; default `.double` on first install.
+  - Capture view: persistent segmented control above the shutter, single tap to switch; ignores in-flight estimations (matches §7.4 behaviour).
+  - `Pipeline.estimate(_:mode:)` takes mode explicitly; `MealRecord.capturePath` copied from `mode` at capture time.
+  - Single mode disabled (greyed) on non-LiDAR hardware; selecting it with no LiDAR returns the existing Irish-English refusal.
+  - Delete `derivePathHint` / LiDAR-coverage threshold dispatch and the prior `.forcingTwoView` transient state.
+  - Tests: round-trip UserDefaults persistence; control reflects current mode; Pipeline receives the correct mode for each capture; switching mode mid-session is ignored during in-flight estimation.
+  - Requirements: [3.5](requirements.md#3.5), [3.8](requirements.md#3.8)
+  - Decision: 35
+
+- [ ] 72. Migrate photo storage to PhotoKit (`PHAsset.localIdentifier`)
+  - On successful capture, persist the original RGB nadir frame to the user's Photos library via `PHPhotoLibrary.shared().performChanges`; record the returned `PHAsset.localIdentifier` as `MealRecord.photoAssetID` and `meals.photo_asset_id`.
+  - Request `PHAuthorizationStatus(for: .addOnly)` on first capture; show Irish-English permission-denied banner if refused (estimation still completes; `photoAssetID = ""`).
+  - SQLite migration: add `photo_asset_id TEXT NOT NULL DEFAULT ''` column to `meals`; drop `image` artefact rows from existing meals (they remain on disk; cleanup is a separate dev task).
+  - Remove image-bytes write from `Persistence` and from `RawFrameMetadata.imageFilename`.
+  - Result view: fetch `PHAsset` by identifier; render thumbnail via `PHImageManager` if the user has full Photos access; otherwise show a placeholder.
+  - Tests: PhotoKit add succeeds → identifier persisted and re-fetchable; user denies → meal saved with empty identifier; library access revoked between capture and history view → graceful placeholder.
+  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3)
+  - Decision: 37
+
+- [ ] 73. Rewrite Settings view; bundle CoFID + AFCD; remove IFCDB
+  - Delete `SettingsKeys.ifcdbOverlayEnabled`, `SettingsKeys.retentionDays`, the Settings retention picker, and the IFCDB toggle.
+  - Bundle `cofid_db.sqlite` and `afcd_db.sqlite` as fixed read-only assets; `FoodDatabase` ATTACHes both at launch and applies the CoFID-wins COALESCE lookup from design §4.1.
+  - About / Legal screen: list both source attributions ("Macros: CoFID 2024 + AFCD 2024" + the respective licence statements).
+  - Update `database_edition` string written into `MealRecord` and `meals.database_edition`.
+  - Delete the previous IFCDB overlay file from the bundle.
+  - Tests: lookup priority (CoFID wins for shared classes); lookup falls through to AFCD when CoFID lacks a class; database_edition string matches the bundled pair.
+  - Requirements: [11.1](requirements.md#11.1), [11.4](requirements.md#11.4)
+  - Decision: 39
+
+- [ ] 74. Narrow hardware floor + replace per-stage perf checks with single 30 s soft check
+  - Update Info.plist `MinimumOSVersion` to 26.5; deployment target → iOS 26.5.
+  - Remove the iPhone 12 Pro device-allow guard; document iPhone 13 Pro Max as the only supported device. Update Irish-English unsupported-device message.
+  - Delete tasks 65/66's per-path XCTClockMetric tests; add a single end-to-end XCTest that asserts `< 30 s` for both `single` and `double` modes on the v1 device.
+  - Keep `os_signpost` intervals around pipeline stages for ad-hoc Instruments inspection only (no assertions).
+  - Tests: end-to-end-under-30 s for both modes on the v1 device; unsupported-device guard surfaces the new message on simulator / earlier hardware.
+  - Requirements: [1.2](requirements.md#1.2), [16.1](requirements.md#16.1)
+  - Decision: 40

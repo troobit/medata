@@ -7,7 +7,7 @@
 
 ## Introduction
 
-This spec defines a low-compute, on-device system for estimating the carbohydrate content of a meal from one or two photographs taken on a modern iPhone. It supersedes the LLM-based MVP described in `specs/mvp-refinement` (see `decision_log.md` Decision 1) and grounds every step in the academic literature it inherits from:
+This spec is the root of the application. It defines a low-compute, on-device system for estimating the carbohydrate content of a meal from one or two photographs taken on a modern iPhone. It grounds every step in the academic literature it inherits from:
 
 - Anthimopoulos, M., et al. *A Food Recognition System for Diabetic Patients Based on an Optimized Bag of Features Model.* IEEE Journal of Biomedical and Health Informatics, 2014.
 - Dehais, J., Anthimopoulos, M., Shevchik, S., Mougiakakou, S. *Two-View 3D Reconstruction for Food Volume Estimation.* IEEE Transactions on Multimedia, 2017.
@@ -48,7 +48,7 @@ where:
 
 ### Hardware floor
 
-V1 hardware floor: iPhone 12 Pro and later Pro / Pro Max devices (any rear-LiDAR iPhone). V1 OS floor: iOS 17. The architecture is platform-portable so a future Android implementation can re-use the algorithms, data formats and segmenter without re-deriving the mathematics.
+V1 hardware floor: iPhone 12 Pro and later Pro Max devices (any rear-LiDAR iPhone). V1 OS floor: iOS 26.5. The architecture is platform-portable so a future Android implementation can re-use the algorithms, data formats and segmenter without re-deriving the mathematics.
 
 ### Spelling
 
@@ -58,6 +58,8 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 ## Requirements
 
+REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused by voxel carving process.
+
 ### 1. Native iOS Application Foundation
 
 **User Story:** As a developer, I want a clean native iOS Swift application as the only user-facing implementation, so that v1 ships with a deterministic on-device pipeline and no legacy code paths.
@@ -65,10 +67,8 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 **Acceptance Criteria:**
 
 1. <a name="1.1"></a>The system SHALL ship as a native iOS application written in Swift.
-2. <a name="1.2"></a>The application SHALL target iOS 17 or later and SHALL run on iPhone 12 Pro and later Pro / Pro Max devices that ship a rear-facing LiDAR scanner.
-3. <a name="1.3"></a>The application SHALL refuse to launch the capture flow on a device without a rear LiDAR scanner and SHALL surface an Irish-English message naming the supported device range.
-4. <a name="1.4"></a>The application SHALL NOT include or invoke any code path from the prior SvelteKit-based MVP. The Svelte source tree SHALL be moved to a `legacy/` directory (or a tagged historical branch) prior to v1 release.
-5. <a name="1.5"></a>The application SHALL operate entirely offline in its core estimation path. No network call SHALL be required for capture, segmentation, voxel carving, density lookup, or macronutrient calculation.
+2. <a name="1.2"></a>The application SHALL target iOS 26.5 or later and SHALL run on iPhone 13 Pro Max devices that ship a rear-facing LiDAR scanner.
+3. <a name="1.5"></a>The application SHALL operate entirely offline in its core estimation path. No network call SHALL be required for capture, segmentation, voxel carving, density lookup, or macronutrient calculation.
 
 **Portability Notes (iOS v1 implementation):** SwiftUI for UI, AVFoundation for camera capture, ARKit for scene tracking and LiDAR depth, Core Motion for IMU, Core ML for segmentation inference, and the Vision framework for classical detection. Section 1 is the iOS-shell specification; Sections 2–17 are platform-neutral and confine iOS API names to their own Portability Notes.
 
@@ -130,8 +130,7 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 3. <a name="5.3"></a>The recovered card pose SHALL yield two metric scale values: $s_{\text{card,init}}$ defined at the *card plane* (computed directly from the PnP solution, requires no support-plane knowledge) and $s_{\text{card}}$ defined at the *food plane* (lifted from the card plane by the food's mean height above $\pi_{\text{sup}}$, requires $\pi_{\text{sup}}$ to be known). $s_{\text{card,init}}$ is the input to the iterative support-plane fit in [4.3](#4.3); $s_{\text{card}}$ is the value passed to the metric scale resolver in [7](#7-metric-scale-establishment).
 4. <a name="5.4"></a>The card detector SHALL operate on every captured view. The detector behaviour SHALL be specified once in mathematical form and implemented identically across views.
 5. <a name="5.5"></a>IF no card is detected, THEN the detector SHALL return a "no-card" outcome rather than fail. The downstream pipeline SHALL treat this as a metric-scale degradation, not an error (see [7](#7-metric-scale-establishment)).
-6. <a name="5.6"></a>The card detector SHALL run in under 80 ms per view on the v1 hardware floor.
-7. <a name="5.7"></a>The card detector specification SHALL be expressible without reference to any iOS-only API; the iOS implementation MAY use the Vision framework.
+6. <a name="5.7"></a>The card detector specification SHALL be expressible without reference to any iOS-only API; the iOS implementation MAY use the Vision framework.
 
 ### 6. LiDAR Depth Acquisition
 
@@ -169,7 +168,7 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 1. <a name="8.1"></a>The segmenter SHALL be a single on-device convolutional semantic segmentation network producing a per-pixel class label and a per-pixel probability vector over classes.
 2. <a name="8.2"></a>The segmenter weights file, after post-training quantisation, SHALL be 10 MB or smaller.
 3. <a name="8.3"></a>The segmenter inference SHALL complete in under 250 ms per view on the v1 hardware floor.
-4. <a name="8.4"></a>The segmenter class palette SHALL contain exactly 24 food classes for v1 (curated jointly with the density coverage in [11](#11-density-and-macronutrient-database)) plus a `background` class, an `unknown_food` class, and an `unsupported_liquid` class.
+4. <a name="8.4"></a>The segmenter class palette SHALL contain at least 24, and mo more than 40 food classes for v1 (curated jointly with the density coverage in [11](#11-density-and-macronutrient-database)) plus a `background` class, an `unknown_food` class, and an `unsupported_liquid` class.
 5. <a name="8.5"></a>The segmenter SHALL be sourced from a single source-of-truth model that exports cleanly to both the iOS inference runtime and the Android inference runtime via ONNX or an equivalent intermediate representation.
 6. <a name="8.6"></a>IF a pixel is labelled `unknown_food`, THEN the pipeline SHALL include those voxels in volume estimation but SHALL flag the meal as containing unrecognised food, and the macro contribution from those voxels SHALL be reported as "unknown carbs" with a confidence of 0.
 7. <a name="8.7"></a>IF a pixel is labelled `unsupported_liquid`, THEN the pipeline SHALL exclude those voxels from volume estimation, SHALL flag the meal as containing an unsupported liquid, and SHALL surface an Irish-English message stating that standalone liquids are not estimated in v1. The `unsupported_liquid` class SHALL match *standalone* liquids only (a glass of water, a bowl of soup, a glass of milk); pourable accompaniments served on a solid food (curry sauce on rice, gravy on roast, baked-bean tomato sauce, pasta sauce on pasta) SHALL be assigned to the composite class for that dish per Decision 8 and estimated normally.
@@ -195,9 +194,8 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
    - **Two-view path** (`two_view_sfs`): For each voxel $v$ in the carved set, let $p_1(v), p_2(v)$ be its projections in views 1 and 2 with per-class probability vectors $\mathbf{q}_1(v), \mathbf{q}_2(v)$ from the segmenter. The voxel class SHALL be $c^*(v) = \arg\max_c [\mathbf{q}_1(v)]_c \cdot [\mathbf{q}_2(v)]_c$ (argmax of the per-class probability product across the two projections). IF $\max_c [\mathbf{q}_1(v)]_c \cdot [\mathbf{q}_2(v)]_c$ is below a documented threshold $\tau_v$ (default 0.04, equivalent to both views agreeing on a class with probability ≥ 0.2), THEN the voxel SHALL be discarded as a class-ambiguous voxel and its share SHALL contribute to a per-meal `ambiguousVoxelFraction` metric persisted with the meal record.
    - No voxel and no nadir-view pixel SHALL contribute mass to more than one class.
 6. <a name="9.6"></a>The volume estimator SHALL produce, per class, the corrected metric volume $V_c$ in cubic centimetres and a compressed bounding-set representation of the carved/integrated region for persistence.
-7. <a name="9.7"></a>The two-view voxel carver SHALL complete in under 300 ms per meal on the v1 hardware floor; the single-view height-field integrator SHALL complete in under 80 ms per meal.
-8. <a name="9.8"></a>The volume estimator algorithm SHALL be specified in pseudocode in the design document, with the back-projection equation, height-field integration equation, and ownership rule written explicitly, and SHALL NOT depend on any iOS-only API in its specification.
-9. <a name="9.9"></a>**Visual hull bias.** The two-view path produces the visual hull, which is provably an upper bound on the true volume (Laurentini 1994). The bulk-correction factor $\beta_c$ from [11.7](#11.7) is the v1 mechanism for compensating residual bias; the single-view path's LiDAR top surface compensates more directly but $\beta_c$ still applies to absorb packing fraction.
+7. <a name="9.8"></a>The volume estimator algorithm SHALL be specified in pseudocode in the design document, with the back-projection equation, height-field integration equation, and ownership rule written explicitly, and SHALL NOT depend on any iOS-only API in its specification.
+8. <a name="9.9"></a>**Visual hull bias.** The two-view path produces the visual hull, which is provably an upper bound on the true volume (Laurentini 1994). The bulk-correction factor $\beta_c$ from [11.7](#11.7) is the v1 mechanism for compensating residual bias; the single-view path's LiDAR top surface compensates more directly but $\beta_c$ still applies to absorb packing fraction.
 
 ### 10. Multi-View Mask Consistency
 
@@ -216,20 +214,19 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 **Acceptance Criteria:**
 
-1. <a name="11.1"></a>The application SHALL bundle a portable food composition database. The default source SHALL be the McCance and Widdowson CoFID dataset (latest published edition), released under the Open Government Licence v3 and bundled with attribution per OGL v3 terms. Attribution SHALL appear on the application's About / Legal screen and in every exported meal record.
+1. <a name="11.1"></a>The application SHALL bundle a portable food composition database. The default sources SHALL be the McCance and Widdowson CoFID dataset and the Australian Food Composition Database (AFCD)(latest published editions), released under the Open Government Licence v3 and bundled with attribution per OGL v3 terms. Attributions SHALL appear on the application's About / Legal screen.
 2. <a name="11.2"></a>FOR each segmenter class in [8.4](#8.4), the database SHALL contain at least: class name, served-portion bulk density $\rho$ in g/cm³, energy in kJ per 100 g, carbohydrate (monosaccharide-equivalent) in g per 100 g, protein in g per 100 g, fat in g per 100 g, fibre (AOAC) in g per 100 g, and the bulk-correction factor $\beta$ from [11.7](#11.7).
-3. <a name="11.3"></a>The database SHALL support an optional regional overlay. The IFCDB (Irish Food Composition Database) values SHALL be packaged as an overlay that can be loaded over CoFID without modifying the base table.
-4. <a name="11.4"></a>The segmenter class palette in [8.4](#8.4) SHALL be co-curated with this database so that every class has measured density and bulk-correction values; the palette and the database SHALL be released as a versioned pair.
-5. <a name="11.5"></a>Density and bulk-correction values SHALL be sourced from cited literature where available (Dehais 2017 Table II, Anthimopoulos 2014, FAO/INFOODS density tables) and from project-internal gravimetric measurement on the v1 test set otherwise. The decision log SHALL record the source for each value.
-6. <a name="11.6"></a>Carbohydrate values SHALL be expressed as monosaccharide equivalents per FSAI guidance. WHERE a source provides "available carbohydrate by difference", the value SHALL be converted to monosaccharide equivalents by the documented FSAI conversion before inclusion.
-7. <a name="11.7"></a>**Bulk-correction factor $\beta_c$.** For each class $c$, the database SHALL contain a unitless factor $\beta_c \in (0, 1]$ that scales the visual-hull volume to the corrected volume per [9.4](#9.4). $\beta_c$ SHALL be calibrated against the v1 test set by minimising MAE over carbohydrate totals for that class on the calibration subset only (per [21.4](#21.4)). The factor folds together: visual-hull concavity bias, packing fraction (for granular foods), and internal-void bias.
+3. <a name="11.4"></a>The segmenter class palette in [8.4](#8.4) SHALL be co-curated with these databases so that every class has measured density and bulk-correction values; the palette and the database SHALL be released as a versioned pair.
+4. <a name="11.5"></a>Density and bulk-correction values SHALL be sourced from cited literature where available (Dehais 2017 Table II, Anthimopoulos 2014, FAO/INFOODS density tables) and from project-internal gravimetric measurement on the v1 test set otherwise. The decision log SHALL record the source for each value.
+5. <a name="11.6"></a>Carbohydrate values SHOULD be expressed as monosaccharide equivalents. WHERE a source provides "available carbohydrate by difference", the value SHOULD be converted to monosaccharide equivalents.
+6. <a name="11.7"></a>**Bulk-correction factor $\beta_c$.** For each class $c$, the database SHALL contain a unitless factor $\beta_c \in (0, 1]$ that scales the visual-hull volume to the corrected volume per [9.4](#9.4). $\beta_c$ SHALL be calibrated against the v1 test set by minimising MAE over carbohydrate totals for that class on the calibration subset only (per [21.4](#21.4)). The factor folds together: visual-hull concavity bias, packing fraction (for granular foods), and internal-void bias.
 
    **Minimum calibration sample size.** A class $c$ SHALL be considered calibrated only if its calibration subset contains at least **30 meals** in which class $c$ is present and gravimetrically weighed. Classes that do not meet this bar SHALL receive $\beta_c = 1.0$ and SHALL be marked as `uncalibrated` in the bundled database. WHEN any class in a meal is `uncalibrated`, the meal record SHALL persist a per-class `betaCalibrationStatus` field with values `calibrated`, `uncalibrated_pooled` (using a class-pooled β as a fallback default — see below), or `uncalibrated_unity` (β = 1.0). Calibration procedure SHALL be specified in the design document.
 
    **Pooled fallback.** Where a class is `uncalibrated`, the design document MAY define a class-pooled β (a single β computed across all uncalibrated classes' calibration meals together) as a softer fallback than $\beta_c = 1.0$.
-8. <a name="11.8"></a>The database SHALL be packaged as a single SQLite file, which is the chosen portable format (FlatBuffers was considered and rejected for this v1 — see decision log). The schema SHALL be documented and usable verbatim on Android.
-9. <a name="11.9"></a>Each meal record SHALL persist the database edition / version identifier (e.g. "CoFID 2024 + IFCDB 2023 overlay") used to compute its macros, so that re-derivation across database updates is reproducible.
-10. <a name="11.10"></a>**Palette migration.** WHEN a newer palette / database version splits, merges, or renames classes, the system SHALL preserve the original class assignments on existing meal records and SHALL NOT silently remap them. Re-derivation of an existing meal under a newer palette is permitted only if the design document specifies an explicit class mapping (e.g. v1 `rice` → v2 `white_rice`) and the user is informed that the record has been re-derived. Meals whose original class has no mapping in the new palette SHALL remain on the old palette / database edition for that class.
+7. <a name="11.8"></a>The database SHALL be packaged as a single SQLite file, which is the chosen portable format (FlatBuffers was considered and rejected for this v1 — see decision log). The schema SHALL be documented and usable verbatim on Android.
+8. <a name="11.9"></a>Each meal record SHALL persist the database edition / version identifier (e.g. "CoFID 2024 + IFCDB 2023 overlay") used to compute its macros, so that re-derivation across database updates is reproducible.
+9.  <a name="11.10"></a>**Palette migration.** WHEN a newer palette / database version splits, merges, or renames classes, the system SHALL preserve the original class assignments on existing meal records and SHALL NOT silently remap them. Re-derivation of an existing meal under a newer palette is permitted only if the design document specifies an explicit class mapping (e.g. v1 `rice` → v2 `white_rice`) and the user is informed that the record has been re-derived. Meals whose original class has no mapping in the new palette SHALL remain on the old palette / database edition for that class.
 
 ### 12. Macronutrient Calculation
 
@@ -248,7 +245,7 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 ### 13. Confidence Reporting
 
-**User Story:** As a user, I want each carbohydrate estimate annotated with a confidence value, so that I know when to manually correct it.
+**User Story:** As a user, I want each carbohydrate estimate annotated with a confidence value, so that I know when to examine it.
 
 **Acceptance Criteria:**
 
@@ -293,19 +290,15 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 ### 16. Performance and Compute Budget
 
-**User Story:** As a user, I want the carbohydrate estimate displayed within one second of confirming the photograph in the LiDAR single-view path, so that the system is faster than manual estimation.
+**User Story:** As a user, I want the carbohydrate estimate displayed within 30 seconds of confirming the photograph in the LiDAR single-view path for usability. The primary target is accuracy and consistency of estimates, rather than speed.
 
 **Acceptance Criteria:**
 
-1. <a name="16.1"></a>End-to-end latency from confirming the captured photograph(s) to displaying the meal-level carbohydrate total SHALL be:
-   - **Single-view LiDAR path** (`capturePath = single_view_lidar`): under **1000 ms at the 95th percentile** on the v1 hardware floor.
-   - **Two-view canonical path** (`capturePath = two_view_sfs`): under **1800 ms at the 95th percentile** on the v1 hardware floor.
-2. <a name="16.2"></a>Per-stage P95 budgets, single-view path: card detect ≤ 80 ms, support plane fit ≤ 60 ms, segmentation ≤ 250 ms, height-field integration ≤ 80 ms, macro lookup ≤ 20 ms, persistence + UI commit ≤ 100 ms. Sum: 590 ms; remaining 410 ms absorbs P95 variance and unbudgeted overhead.
-3. <a name="16.3"></a>Per-stage P95 budgets, two-view path: card detect 2 × 80 = 160 ms, support plane fit ≤ 60 ms, segmentation 2 × 250 = 500 ms, mask matching ≤ 50 ms, voxel carving ≤ 300 ms, macro lookup ≤ 20 ms, persistence + UI commit ≤ 100 ms. Sum: 1190 ms; remaining 610 ms absorbs P95 variance.
-4. <a name="16.4"></a>The end-to-end path SHALL NOT issue any network call.
-5. <a name="16.5"></a>The segmenter SHALL run on the device's neural accelerator where available; CPU-only fallback SHALL be permitted for development builds only.
-6. <a name="16.6"></a>Memory peak per estimation SHALL not exceed 300 MB.
-7. <a name="16.7"></a>A performance harness SHALL record per-stage latencies in development builds and SHALL be runnable as a CI step against a fixture set.
+1. <a name="16.1"></a>End-to-end latency from confirming the captured photograph(s) to displaying the meal-level carbohydrate total SHOULD be under **30 seconds** on the v1 hardware floor for both `capturePath` values. This is a soft target — accuracy and consistency are the primary v1 acceptance criteria; the 30 s figure is a usability ceiling, not a CI gate.
+2. <a name="16.2"></a>Per-stage P95 budgets are not specified for v1. Per-stage timing MAY be captured via `os_signpost` intervals for ad-hoc Instruments inspection but SHALL NOT gate CI.
+3. <a name="16.4"></a>The end-to-end path SHALL NOT issue any network call.
+4. <a name="16.5"></a>The segmenter SHALL run on the device's neural accelerator where available; CPU-only fallback SHALL be permitted for development builds only.
+5. <a name="16.6"></a>Memory peak per estimation SHALL not exceed 300 MB.
 
 ### 17. Privacy and Photo Handling
 
@@ -315,9 +308,8 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 1. <a name="17.1"></a>Captured frames, depth maps, and segmentation masks SHALL be persisted only in the application's private container.
 2. <a name="17.2"></a>The application SHALL NOT upload, sync, or otherwise transmit any captured frame, depth map, mask or derived voxel grid to any network endpoint in the v1 core path.
-3. <a name="17.3"></a>The default photo, depth, and mask retention period SHALL be **30 days**, after which all artefacts in the per-meal artefact directory are deleted while the macro values, confidences, and meal metadata in the SQLite database are retained.
-4. <a name="17.4"></a>Users SHALL be able to set retention to 90 days, 365 days, or "retain indefinitely (clinical-track participation)" via a setting; users SHALL be able to delete any individual meal's artefacts manually at any time.
-5. <a name="17.5"></a>Optional cloud-validation fallback (Option D, deferred), if implemented in a future release, SHALL be off by default, opt-in per capture, and SHALL be specified separately.
+3. <a name="17.3"></a>The photo may remain on the device, and what is retained by the application is a pointer to the photo. Permissions can be managed at system level.
+4. <a name="17.5"></a>Optional cloud-validation fallback (Option D, deferred), if implemented in a future release, SHALL be off by default, opt-in per capture, and SHALL be specified separately.
 
 ### 18. Portable Pipeline Contracts
 
@@ -333,14 +325,13 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 ### 19. Localisation — Irish / British English
 
-**User Story:** As a user, I want all text in the app spelled in Irish / British English, so that the application reads correctly in its market.
+**User Story:** As a user, I want all text in the app spelled in Irish / British English.
 
 **Acceptance Criteria:**
 
 1. <a name="19.1"></a>All user-facing strings in the application, including UI labels, error messages, log lines, and bundled documentation, SHALL use Irish / British English spelling: "recognised", "fibre", "colour", "favourite", "centre", etc.
-2. <a name="19.2"></a>A linter or string audit step SHALL be part of the CI pipeline, rejecting common US-English spellings ("recognized", "color", "fiber", "favorite", "center").
-3. <a name="19.3"></a>Person-first language guidelines and HSE Language Matters terminology requirements are explicitly out of scope for v1 (Decision 4 in `decision_log.md`).
-4. <a name="19.4"></a>This requirement does NOT extend to Irish-specific clinical content or food databases beyond the optional IFCDB overlay; the application's primary market assumption is "English-speaking" not "Ireland-only".
+2. <a name="19.2"></a>A linter or string audit step SHALL be part of the CI pipeline, rejecting common US-English abberations ("recognized", "color", "fiber", "favorite", "center").
+3. <a name="19.3"></a>Person-first language are explicitly out of scope for v1 (Decision 4 in `decision_log.md`).
 
 ### 20. Training-Data Acquisition (Open Risk — Promoted from Open Items)
 
@@ -349,11 +340,11 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 **Acceptance Criteria:**
 
 1. <a name="20.1"></a>The project SHALL have a documented training-data acquisition plan before the segmenter base model is selected, covering: target images per class (initial bar: 1,000 labelled instances per class minimum), labelling protocol (polygon masks at the food/background boundary, class label per polygon), licensing of source images (own-photographed or permissively licensed), and split strategy (training / validation / held-out segmenter test).
-2. <a name="20.2"></a>The plan SHALL identify which existing public food-segmentation datasets (e.g. UECFOOD-256, Recipe1M+, FoodSeg103) overlap with the v1 class palette and which classes require new collection.
-3. <a name="20.3"></a>The plan's deliverable SHALL be reviewed and accepted before the design phase locks the segmenter architecture.
-4. <a name="20.4"></a>This requirement is the single largest project risk acknowledged at the spec level.
+2. <a name="20.2"></a>The plan SHALL identify which existing public food-segmentation datasets (e.g. UECFOOD-256, Recipe1M+, FoodSeg103) overlap with the v1 class palette and which classes require new collections.
 
 ### 21. Test Harness and Validation
+
+**Deferred from v1.** The MVP MUST operate without this requirement. Existing harness implementation MAY be removed from the v1 tree; the requirement will be redesigned and reintroduced in a future iteration. See `decision_log.md` Decision 34.
 
 **User Story:** As a maintainer, I want a documented test set and a numeric accuracy harness, so that the v1 accuracy target is measurable and the pipeline is regression-tested.
 
@@ -361,7 +352,7 @@ All user-facing strings, identifiers, comments and documentation use Irish / Bri
 
 1. <a name="21.1"></a>The project SHALL maintain a labelled internal test set of meal photographs with: (a) ground-truth per-class mass measured by gravimetric weighing on a calibrated scale, (b) ground-truth per-class carbohydrate computed from those masses and the bundled CoFID coefficients, and (c) ground-truth meal-total carbohydrate as the sum. Water displacement SHALL NOT be used for foods that absorb, float, dissolve, or contain voids.
 2. <a name="21.2"></a>The accuracy harness SHALL compute, on the test set: mean absolute percentage error (MAPE) of total carbohydrate, mean absolute error (MAE) in grams, and per-class breakdowns of the same.
-3. <a name="21.3"></a>The v1 acceptance bar SHALL be MAPE < 20% AND MAE ≤ 10 g of carbohydrate per meal photograph on the evaluation subset of the test set, expressed as a **point estimate** (not as a confidence-interval bound), with the bulk-correction factors $\beta_c$ from [11.7](#11.7) calibrated on the disjoint calibration subset per [21.4](#21.4). The reported confidence interval per [21.8](#21.8) is informational and SHALL accompany the point estimate but does not change the bar.
+3. <a name="21.3"></a>The v1 acceptance bar SHALL be MAPE < 20% AND MAE ≤ 25 g of carbohydrate per meal photograph on the evaluation subset of the test set, expressed as a **point estimate** (not as a confidence-interval bound), with the bulk-correction factors $\beta_c$ from [11.7](#11.7) calibrated on the disjoint calibration subset per [21.4](#21.4). The reported confidence interval per [21.8](#21.8) is informational and SHALL accompany the point estimate but does not change the bar.
 4. <a name="21.4"></a>$\beta_c$ calibration and the accuracy bar evaluation SHALL be performed on disjoint subsets of the test set to avoid trivially fitting $\beta_c$ to the eval set; the design document SHALL specify the cross-validation procedure. The calibration subset SHALL contain at least 30 meals per class for that class to be marked `calibrated` per [11.7](#11.7); classes not meeting this bar SHALL use $\beta_c = 1.0$ or the design-document-defined pooled fallback. The accuracy bar evaluation SHALL report per-class statistics that distinguish `calibrated` from `uncalibrated` classes so that the bar's interpretation reflects calibration coverage.
 5. <a name="21.5"></a>The harness SHALL also produce per-stage latency statistics matching [16.1](#16.1) for both `capturePath` values.
 6. <a name="21.6"></a>The harness SHALL also compute the segmenter mIoU bar from [8.9](#8.9) on the held-out segmenter test set.

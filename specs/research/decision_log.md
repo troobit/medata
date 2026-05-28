@@ -1148,3 +1148,204 @@ Portable contracts are the load-bearing mechanism for Decision 2. The v0.2 surfa
 Affects §3.1, §3.5, §3.6, §3.8, §4.1 (`record_json` encoding), §4.3 (.proto inventory), and §8 portability table. Implementation cost is concentrated in the `PortableContracts` module; downstream modules consume the generated types directly.
 
 ---
+
+## Decision 34: §21 test harness, β_c calibration, and segmenter mIoU bench deferred from v1
+
+**Date**: 2026-05-28
+**Status**: accepted
+
+### Context
+
+The requirements diff dated 2026-05-28 marks §21 (Test Harness and Validation) as deferred for v1 and relaxes the MAE bar from ≤ 10 g to ≤ 25 g. Initial wording said "existing work should NOT be removed"; the user subsequently decided to remove the harness from the v1 tree to reduce surface area. §21 was updated to "Implementation may be removed; will be redesigned in a future iteration." This decision records the consequences for the design.
+
+### Decision
+
+The following are removed from v1 and the design sections that specified them are marked deferred:
+
+- `HarnessCLI` SPM executable target and all subcommands (`accuracy`, `seg-bench`, `calibrate-and-eval`).
+- β_c calibration (design §6.9), calibration round-trip (§6.13), integration test harness (§7.3), per-stage on-device performance tests (§7.4 — replaced by single 30 s soft check), and segmenter mIoU bench (§7.5).
+- Source files: `HarnessCore/AccuracyHarness.swift`, `BetaCalibrator.swift`, `FixtureLoader.swift`, `FixtureRunner.swift`, `SegBench.swift` (already staged as deletions in git; commit them as part of this change).
+
+All bundled food classes ship with `β_c = 1.0` and `beta_status = uncalibrated_unity`. The accuracy bar (MAPE < 20% AND MAE ≤ 25 g) is documented but not gated in CI.
+
+### Rationale
+
+The harness depends on (a) a labelled internal test set Req §20 has not produced yet, and (b) a trained segmenter checkpoint, which is also not yet available. Keeping the harness in the tree without these inputs adds maintenance burden without producing signal. Deferring lets v1 focus on the capture → pipeline → meal-record path. The design sections are retained as the reintroduction specification.
+
+### Alternatives Considered
+
+- **Keep harness in tree, mark deferred**: Rejected by the user — adds carrying cost (build time, compile errors when surrounding APIs evolve) without v1 benefit.
+- **Soft-deprecate per file with `@available` annotations**: Rejected — Swift availability annotations are for OS minimums, not project phases.
+
+### Consequences
+
+**Positive:**
+- Smaller v1 surface area; fewer compile-time dependencies on a yet-untrained segmenter.
+- The `Pipeline.estimate` path is unchanged — the harness was only a test consumer.
+
+**Negative:**
+- v1 ships without a numeric accuracy gate; informal evaluation only.
+- Reintroduction in a future iteration requires re-implementing the harness from the (preserved) design sections.
+
+### Impact
+
+`MedataCore/Tests/HarnessCLI/` deleted; design.md §6.9, §6.13, §7.3, §7.4, §7.5 prepended with deferred notes; requirements.md §21 preamble updated.
+
+---
+
+## Decision 35: Capture path is user-selected via persistent toggle, not auto-derived
+
+**Date**: 2026-05-28
+**Status**: accepted
+
+### Context
+
+The v0.3 design auto-derived the capture path from device LiDAR support and live LiDAR coverage ≥ 80%, displayed as a floating hint above the capture view with a force-two-view control. User feedback after iPhone 13 Pro Max field testing: the floating modal was disruptive, switching mid-session felt unpredictable, and users wanted to commit to one path explicitly.
+
+### Decision
+
+The capture path is selected via a persistent segmented control (`Single` / `Double`) on the capture view, bound to `SettingsKeys.captureMode` in `UserDefaults`. The chosen mode persists across app launches. Default on first install = `Double` (most robust: includes the ID-1 card so metric scale is always recoverable). `CaptureMode` is read at shutter-tap time; subsequent toggle changes during an in-flight estimation are ignored until the result view is shown. Single mode is greyed out on non-LiDAR hardware.
+
+### Rationale
+
+A persistent setting is discoverable, predictable, and survives across sessions, addressing the documented UX complaints. Defaulting to Double biases the app toward the more reliable scale-recovery path; users with LiDAR hardware can opt into Single once.
+
+### Alternatives Considered
+
+- **Settings-only toggle**: Rejected — two-tap path discouraged exploration of the more accurate Double mode.
+- **Capture-view toggle, default Single**: Rejected — Single mode is fragile when LiDAR coverage degrades (occlusion, glare), and the previous auto-fallback was the source of the floating-modal complaint.
+- **Status-quo auto-derive with a less-disruptive indicator**: Rejected — user explicitly asked for explicit selection, not better indication.
+
+### Consequences
+
+**Positive:**
+- Predictable per-capture behaviour; no mid-session path swap.
+- Removes the `.forcingTwoView` transient UI state and `CapturePathDecider`.
+
+**Negative:**
+- Users on LiDAR hardware who would have got Single mode automatically must now opt in.
+- The chosen mode is not always the path with the highest measured confidence — a savvy user could pick Single when LiDAR coverage is below 80%.
+
+### Impact
+
+UI spec §4, §5, §6 rewritten; UI design state machine drops `.forcingTwoView` and `CapturePathDecider`; research design §2.3 rewritten; research tasks 71 added.
+
+---
+
+## Decision 37: Photo storage delegated to PhotoKit (PHAsset.localIdentifier)
+
+**Date**: 2026-05-28
+**Status**: accepted
+
+### Context
+
+The new Req §17.3 reads "The photo may remain on the device, and what is retained by the application is a pointer to the photo. Permissions can be managed at system level." The prior implementation wrote the captured RGB nadir frame into the app's private container and managed retention with an in-app scheduler (30/90/365 days). The user wants Photos-library-based storage so that the system's Photos permissions and lifecycle govern image access.
+
+### Decision
+
+The captured original RGB nadir frame is saved to the user's Photos library via `PHPhotoLibrary.shared().performChanges` after a successful estimation. `MealRecord.photoAssetID` and `meals.photo_asset_id` store the returned `PHAsset.localIdentifier`. The app private container retains only the depth maps and mask/probability tensors (algorithm-private artefacts not displayable as photographs). The retention scheduler and the 30/90/365-day setting are removed.
+
+`PHAuthorizationStatus(for: .addOnly)` is requested on first capture; if the user denies it, the meal is still saved with `photoAssetID = ""` and the result view shows a placeholder.
+
+### Rationale
+
+Delegating to PhotoKit matches the requirement text and follows iOS convention. Users already manage their Photos retention via the Photos app; duplicating that in our Settings was awkward. PHAsset identifiers are stable across app launches; revocation of Photos access leaves the meal record intact (the photo reference simply fails to resolve at view time).
+
+### Alternatives Considered
+
+- **Keep image bytes in app container**: Rejected — interprets "pointer" loosely and contradicts "permissions can be managed at system level."
+- **Hybrid (PhotoKit when granted; app container when denied)**: Rejected — doubles the storage paths and the result-view rendering logic. Empty identifier + placeholder is simpler.
+
+### Consequences
+
+**Positive:**
+- App private container shrinks substantially (image bytes were the largest per-meal artefact).
+- Photos lifecycle (delete, iCloud sync, export) is governed by the user's Photos library.
+- No in-app retention scheduler to test or maintain.
+
+**Negative:**
+- Result view depends on Photos access for the original-image preview; meals captured with denied access show a placeholder forever.
+- Archive export (Req §15.8) cannot embed the original photos directly; users must export Photos separately.
+
+### Impact
+
+Research design §3.8 (MealRecord, RawFrameMetadata), §4.1 (meals schema, retention removed), §17 (referenced via §0); research tasks 43–44 marked removed, 72 added; UI spec §11 settings rewritten.
+
+---
+
+## Decision 39: Macros sourced from CoFID + AFCD; IFCDB overlay removed
+
+**Date**: 2026-05-28
+**Status**: accepted
+
+### Context
+
+Req §11.1 was updated to specify CoFID + AFCD (Australian Food Composition Database) as the bundled sources. The previous design used CoFID as the primary with IFCDB as an opt-in overlay (toggle in Settings, `ATTACH DATABASE` at launch). The user wants both bundled by default with no toggle.
+
+### Decision
+
+Bundle `cofid_db.sqlite` and `afcd_db.sqlite` in the app binary. At launch `FoodDatabase` ATTACHes the AFCD database and queries both with a CoFID-wins COALESCE join (design §4.1). The `ifcdbOverlayEnabled` setting and the Settings IFCDB toggle are removed. The About / Legal screen lists both attributions. `MealRecord.databaseEdition` reflects the bundled pair (e.g. "CoFID 2024 + AFCD 2024").
+
+### Rationale
+
+Two always-on sources widen class coverage (CoFID for British staples, AFCD for items missing from CoFID) without a user-facing setting. CoFID-wins priority matches the v1 calibration history (β_c values were originally fitted against CoFID coefficients) — picking AFCD as primary would invalidate them, though β_c is moot in v1 per Decision 34.
+
+### Alternatives Considered
+
+- **Keep IFCDB overlay, add AFCD as a third source**: Rejected — Ireland-specific bias is no longer required (Req §19 changed to "English-speaking" market assumption, not Ireland-only).
+- **User-facing primary-source picker (CoFID / AFCD)**: Rejected — most-flexible-most-confusing; users have no basis to choose.
+
+### Consequences
+
+**Positive:**
+- Simpler Settings; one less feature flag.
+- Wider class coverage on first run (no opt-in).
+
+**Negative:**
+- Bundle size grows by the AFCD SQLite file (TBD; expected < 5 MB compressed).
+- Future per-region overlays will need a new mechanism.
+
+### Impact
+
+Research design §3.7, §4.1; research tasks 73 added; UI spec §11.3 settings IFCDB toggle removed.
+
+---
+
+## Decision 40: 30 s end-to-end soft target; per-stage P95 budgets removed
+
+**Date**: 2026-05-28
+**Status**: accepted
+
+### Context
+
+Req §16's user story changed from "within one second on the LiDAR single-view path" to "within 30 seconds … the primary target is accuracy and consistency, rather than speed." Per-stage P95 budgets (former §16.2 / §16.3 for card-detect, segmentation, voxel carving, etc.) were deleted from the requirements diff.
+
+### Decision
+
+A single soft check asserts end-to-end pipeline latency < 30 s for both `single` and `double` modes on the v1 hardware floor (iPhone 13 Pro Max, iOS 26.5). Per-stage `XCTClockMetric` tests are removed. `os_signpost` intervals around pipeline stages remain (no assertions) for ad-hoc Instruments inspection.
+
+### Rationale
+
+The v1 target is accuracy on a low-volume usage profile (a few meals per day). 30 s is generous enough to accommodate a Core ML cold-start, a sub-optimal letterboxing path, or thermal throttling without flaking the test suite. The per-stage budgets were premature optimisation given the segmenter is not yet trained.
+
+### Alternatives Considered
+
+- **Keep per-stage budgets, relax thresholds**: Rejected — the budgets pinned design choices (e.g. card detect ≤ 80 ms motivated the Vision-based detector) that v1 no longer needs to enforce.
+- **No latency check at all**: Rejected — a 30 s cap catches catastrophic regressions (infinite loops, memory pressure) without being prescriptive.
+
+### Consequences
+
+**Positive:**
+- CI does not flake on per-stage variance.
+- Implementation has headroom for legibility (e.g. using higher-level Core ML APIs without micromanaging buffer reuse).
+
+**Negative:**
+- A pipeline that takes 25 s passes the gate even if 20 s of it is spent on a single avoidable stage.
+- Future tightening of the budget will require reintroducing per-stage instrumentation.
+
+### Impact
+
+Research design §0 hardware-floor + perf table; research design §7.4 rewritten; research tasks 65–67 deferred; task 74 added.
+
+---
+

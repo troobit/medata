@@ -58,15 +58,17 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 2. <a name="3.2"></a>WHERE LiDAR is unavailable, the capture view SHALL display a static 30–40 cm guidance hint and SHALL NOT gate the shutter on distance.  
 3. <a name="3.3"></a>The capture view SHALL surface which gating mode is active (measured vs guidance) so the user understands why the shutter is or isn't enabled.  
 
-### 4. Capture-path indicator
+### 4. Capture-mode toggle (persistent, user-selected)
 
-**User Story:** As a user, I want to see whether the app is using its faster LiDAR shortcut or its two-view path, so that I understand what's being asked of me.
+**User Story:** As a user, I want a persistent toggle on the capture view to choose between single-photo (LiDAR) and double-photo (with reference card) capture, so I'm not surprised by a floating modal mid-session and the chosen mode survives across launches.
 
 **Acceptance Criteria:**
 
-1. <a name="4.1"></a>The capture view SHALL display a capture-path hint with one of two values — `single_view_lidar` or `two_view_sfs` — computed before each capture from (a) the device's LiDAR-supported state and (b) the latest LiDAR coverage observed from the live AR frame stream. The path hint SHALL show `single_view_lidar` only when the device supports LiDAR and the latest observed coverage is ≥ 80% (research Req 3.5).  
-2. <a name="4.2"></a>WHEN the path hint is `single_view_lidar`, THEN the capture view SHALL display a control that forces the next capture onto the two-view path regardless of LiDAR coverage (research Req 3.5).  
-3. <a name="4.3"></a>WHEN `Pipeline.estimate(_:)` completes successfully, THEN the system SHALL treat `MealRecord.capturePath` as the authoritative path actually used and SHALL pass it to the result view (§9).  
+1. <a name="4.1"></a>The capture view SHALL display a persistent segmented control with exactly two options, `Single` and `Double`, bound to `SettingsKeys.captureMode` in `UserDefaults`. The default for a fresh install SHALL be `Double`. The chosen mode SHALL persist across app launches (research Decision 35).
+2. <a name="4.2"></a>WHEN the device does not support LiDAR, THEN the `Single` segment SHALL be disabled (greyed) and a single-line hint SHALL state that Single mode requires a LiDAR-equipped iPhone. Tapping the disabled segment SHALL NOT change the mode.
+3. <a name="4.3"></a>WHEN the user taps the shutter, THEN the active `CaptureMode` SHALL be passed to `Pipeline.estimate(_:mode:)` and `MealRecord.capturePath` SHALL be `single_view_lidar` for `Single`, `two_view_sfs` for `Double`.
+4. <a name="4.4"></a>WHILE `Pipeline.estimate(_:mode:)` is in flight (§8), the segmented control SHALL be visually disabled and SHALL ignore taps. Mode switches SHALL only take effect for the next capture, never mid-pipeline.
+5. <a name="4.5"></a>The previously-specified floating capture-path hint and the inline "force two-view" control SHALL NOT be displayed. The mode toggle is the single source of truth.
 
 ### 5. Two-view capture sequence
 
@@ -74,7 +76,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 **Acceptance Criteria:**
 
-1. <a name="5.1"></a>WHEN the active capture path is `two_view_sfs`, THEN the system SHALL prompt the user for the nadir view first, then the oblique view.  
+1. <a name="5.1"></a>WHEN the active `CaptureMode` is `Double` (resulting in `two_view_sfs`), THEN the system SHALL prompt the user for the nadir view first, then the oblique view.
 2. <a name="5.2"></a>Each view's prompt SHALL show a single-line instruction in Irish-English (e.g. "Top-down view", "Angled view").  
 3. <a name="5.3"></a>The capture stage SHALL advance to the next view (or to estimation) only after a successful capture completes; no auto-advance from a non-captured state.  
 4. <a name="5.4"></a>WHEN the user has captured the first view AND a refusal subsequently occurs at the second view, THEN the system SHALL allow the user to retry the second view without retaking the first.  
@@ -87,8 +89,8 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 **Acceptance Criteria:**
 
-1. <a name="6.1"></a>WHEN the capture-path hint from §4.1 is `two_view_sfs`, THEN the capture view SHALL display a single-line reminder to include an ID-1 reference card flat in the scene. This covers both non-LiDAR devices and LiDAR devices whose current LiDAR coverage falls below the §4.1 threshold (research Req 4.3, 5).  
-2. <a name="6.2"></a>WHEN the capture-path hint from §4.1 is `single_view_lidar`, THEN the card reminder SHALL NOT be shown.  
+1. <a name="6.1"></a>WHEN the active `CaptureMode` (§4.1) is `Double`, THEN the capture view SHALL display a single-line reminder to include an ID-1 reference card flat in the scene (research Req 4.3, 5).
+2. <a name="6.2"></a>WHEN the active `CaptureMode` (§4.1) is `Single`, THEN the card reminder SHALL NOT be shown.
 
 ### 7. Shutter button
 
@@ -135,14 +137,14 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 ### 11. Settings
 
-**User Story:** As a user, I want a settings screen to choose how long meals are kept and to export my data, so that I have control over local storage.
+**User Story:** As a user, I want a settings screen to see which macro databases the app uses and to export my data, so that I have control over my dataset.
 
 **Acceptance Criteria:**
 
-1. <a name="11.1"></a>The app SHALL expose a Settings view reachable from the capture view via a single navigation control.  
-2. <a name="11.2"></a>The Settings view SHALL contain a retention-period picker with the values 30 / 90 / 365 days and Indefinite (research Req 17.4), bound to `SettingsKeys.retentionDays`.  
-3. <a name="11.3"></a>The Settings view SHALL contain an IFCDB-overlay toggle bound to `SettingsKeys.ifcdbOverlayEnabled`; a change SHALL take effect on the next app launch (research Req 11.3).  
-4. <a name="11.4"></a>The Settings view SHALL contain an "Export archive" control that invokes the persistence-layer archive export (research Req 15.8) and presents the produced file via the standard iOS share sheet.  
+1. <a name="11.1"></a>The app SHALL expose a Settings view reachable from the capture view via a single navigation control.
+2. <a name="11.2"></a>The Settings view SHALL contain a read-only "Macros" row stating which macronutrient databases are bundled (e.g. "CoFID 2024 + AFCD 2024", per research Req 11.1). No retention picker SHALL be shown (research Req 17.3, May 2026: retention removed).
+3. <a name="11.3"></a>The previous IFCDB-overlay toggle SHALL NOT be present. The Settings view SHALL NOT expose any food-database toggle (research Decision 39, May 2026).
+4. <a name="11.4"></a>The Settings view SHALL contain an "Export archive" control that invokes the persistence-layer archive export (research Req 15.8) and presents the produced file via the standard iOS share sheet. The archive SHALL reference photos by `PHAsset.localIdentifier`, not embed image bytes (research Req 17.3).
 
 ### 12. Localisation
 

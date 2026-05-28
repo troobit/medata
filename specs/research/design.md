@@ -1,17 +1,36 @@
 # Research — Design
 
-**Version:** 0.3
-**Date:** 2026-05-07
-**Status:** Draft (round-3 revision: M1–M8 maths fixes, P1–P14 portability fixes, edge cases, reproducibility)
+**Version:** 0.4
+**Date:** 2026-05-28
+**Status:** Draft (round-4 revision: requirements diff May 2026 — see §0)
 **Branch:** research
 
-This document describes the implementation design for the requirements in `requirements.md` v0.3 and the decisions in `decision_log.md` (D1–D28). It does not restate requirements; it cites them by ID.
+This document describes the implementation design for the requirements in `requirements.md` v0.4 and the decisions in `decision_log.md` (D1–D40). It does not restate requirements; it cites them by ID.
+
+---
+
+## 0. v1 Adjustments (May 2026)
+
+Following the requirements diff dated 2026-05-28, the following design deltas apply across the whole document. WHERE a later section conflicts with this list, this list wins.
+
+| Area | Change | Origin |
+|---|---|---|
+| Hardware floor | iPhone 13 Pro Max only; iOS 26.5 minimum. iPhone 12 Pro and other LiDAR iPhones are no longer in scope. | Req §1.2 |
+| Capture-path selection | Replaced auto-derivation (LiDAR-coverage threshold) with a **persistent user-selected** `CaptureMode` (`single` / `double`). Default = `double`. Persisted in `UserDefaults` under `SettingsKeys.captureMode`. | Decision 35 |
+| Photo storage | Captured original image is saved to the system Photos library (PhotoKit); `MealRecord` stores `photoAssetID: String` (`PHAsset.localIdentifier`). The app private container no longer holds image bytes. Depth and mask artefacts continue to live in the app's container. | Decision 37, Req §17.3 |
+| Retention policy | All retention scheduler and 30/90/365-day settings are **removed**. Photo lifecycle is delegated to the user's Photos library; mask/depth artefacts persist for the meal's lifetime (deleted only on meal delete). | Req §17.3 |
+| Macro DB sources | CoFID + AFCD (Australian Food Composition Database) are **both** bundled and queried with a documented priority. IFCDB overlay and `ifcdbOverlayEnabled` setting are **removed**. | Decision 39, Req §11.1 |
+| Performance budget | Single 30 s end-to-end soft target (Req §16.1). Per-stage P95 budgets and `XCTClockMetric` per-stage tests are **removed**. | Decision 40, Req §16 |
+| MAE bar | Relaxed from ≤ 10 g to ≤ 25 g per meal. Acceptance harness is itself deferred. | Req §21.3 |
+| §21 harness + §6.9 β_c calibration + §6.13 calibration round-trip | **Deferred from v1**; harness code (`AccuracyHarness`, `BetaCalibrator`, `FixtureLoader`, `FixtureRunner`, `SegBench`) is removed from the tree. Sections below covering them are retained as historical specification for the future reintroduction. | Decision 34, Req §21 |
+| Class palette size | 24–40 food classes (inclusive range), not exactly 24. | Req §8.4 |
+| Localisation scope | `ifcdbOverlay`-driven Irish-specific path is removed; primary market assumption is "English-speaking" via CoFID + AFCD. | Req §19 |
 
 ---
 
 ## 1. Overview
 
-A native iOS application that estimates carbohydrate content of a single meal from one or two photographs using deterministic geometry, an on-device food segmenter, a bundled food-composition database, and per-class bulk-correction factors calibrated offline. Two capture paths share most modules and dispatch only at the volume-estimation stage.
+A native iOS application that estimates carbohydrate content of a single meal from one or two photographs using deterministic geometry, an on-device food segmenter, a bundled food-composition database, and per-class bulk-correction factors calibrated offline. Two capture paths share most modules and dispatch only at the volume-estimation stage. **The user selects the capture path explicitly via a persistent toggle on the capture view** (single = LiDAR-only nadir, double = nadir + oblique with ID-1 reference card).
 
 ---
 
@@ -34,15 +53,15 @@ medata/
     │   ├── MetricScale/          # Scale resolver, σ_s
     │   ├── Segmentation/         # Core ML wrapper, pre/post, ownership
     │   ├── Volume/               # Metal voxel carve + height-field integration
-    │   ├── Foods/                # GRDB.swift, CoFID + IFCDB overlay
+    │   ├── Foods/                # GRDB.swift, CoFID + AFCD (both bundled, per §0)
     │   ├── Macros/               # m_c, C_c per [12]
     │   ├── Confidence/           # σ_meal combination per [13]
-    │   ├── Persistence/          # SQLite meal records, artefact directory, retention
+    │   ├── Persistence/          # SQLite meal records, mask/depth artefact dir, PhotoKit asset reference
     │   ├── PortableContracts/    # Cross-platform record types
     │   └── Pipeline/             # Orchestrator that runs the per-path graph
     └── Tests/
-        ├── UnitTests/            # XCTest, runs on macOS + device
-        └── HarnessCLI/           # SwiftPM executable: offline test-set runner
+        └── UnitTests/            # XCTest, runs on macOS + device
+                                  # HarnessCLI removed per §0 (Req §21 deferred)
 ```
 
 The split keeps every algorithm module in `MedataCore` free of iOS-only types, satisfying [17] and Decision 2. The App target imports only the `Pipeline` module and a small SwiftUI surface.
@@ -73,27 +92,30 @@ Stages C through L run as a single `async` pipeline driven by `Pipeline.estimate
 
 ### 2.3 Capture-path dispatch
 
-Selected by `CaptureKit` *before* segmentation, based on:
+**User-selected, persistent (per §0).** The capture path is owned by a `CaptureMode` setting bound to a segmented control on the capture view:
 
 ```swift
-func selectPath(lidar: LiDARStatus, supportPlane: SupportPlaneCandidate) -> CapturePath {
-    guard lidar.available, supportPlane.detected,
-          lidar.coveragePercent(for: foodRegion) >= 80 else { return .twoViewSfS }
-    return .singleViewLidar
+public enum CaptureMode: String, Sendable, Codable, CaseIterable {
+    case single    // single_view_lidar
+    case double    // two_view_sfs (with ID-1 reference card)
 }
+
+// SettingsKeys.captureMode in UserDefaults; default = .double on first launch.
+// Pipeline.estimate(_:mode:) takes the active mode explicitly; no inference from LiDAR coverage.
 ```
 
-`capturePath` is persisted on the meal record per [3.8] and dispatches the volume-estimation stage. Confidence sub-confidences differ per path per [13.2].
+The path *capability* check still runs (Single mode requires LiDAR-supported hardware), but the threshold-based auto-fallback from prior revisions is gone — Single mode is either selectable (LiDAR present) or refused at capture time with an Irish-English message directing the user to switch to Double. The recorded `capturePath` on the `MealRecord` is the path actually executed, copied from `mode`. Confidence sub-confidences still differ per path per [13.2].
 
 ### 2.4 Integration points
 
 | What | Where |
 |---|---|
-| App-side entry | `Pipeline.estimate(captureResult:) async throws -> MealRecord` |
+| App-side entry | `Pipeline.estimate(captureResult:mode:) async throws -> MealRecord` (mode is the `CaptureMode` from §2.3) |
 | Capture session lifecycle | `CaptureKit.Session` owns the AVCaptureSession + ARSession; releases per [2.5] |
-| Background retention sweep | `Persistence.RetentionScheduler` uses `BackgroundTasks` framework, fires opportunistically (iOS does not guarantee daily). Foreground fallback: `Persistence.sweepIfDue()` runs on every app foregrounding and on `Pipeline.estimate(_:)` completion if `last_sweep_at_ms` (in `meta` table) is older than 24 hours. The fallback ensures retention deadlines are met even on rarely-used devices. |
+| Photo saving | `Persistence.savePhoto(_:)` writes the captured RGB nadir frame to the system Photos library via `PHPhotoLibrary` and returns a `photoAssetID` (`PHAsset.localIdentifier`). The app private container does not retain the original image bytes. (§0, Req §17.3) |
+| Retention | Removed per §0. Photos are kept until the user deletes them from the Photos app; mask/depth artefacts live for the meal's lifetime and are deleted only when the meal is deleted. |
 | User correction submission | `Persistence.appendCorrection(mealId:correction:)`, never mutates the original record per [14.2] |
-| Export | `Persistence.exportArchive() -> URL` zips the SQLite DB + artefact directory per [15.8] |
+| Export | `Persistence.exportArchive() -> URL` zips the SQLite DB + non-photo artefact directory per [15.8]; the export references photos by `photoAssetID` but does not embed image bytes (the user is responsible for exporting Photos separately). |
 
 ---
 
@@ -362,7 +384,7 @@ public protocol FoodDatabase {
 }
 ```
 
-Backed by GRDB.swift over a bundled SQLite file. The IFCDB overlay is loaded as an `ATTACH DATABASE`'d secondary file when the user enables the regional overlay setting.
+Backed by GRDB.swift over two bundled, read-only SQLite files: `cofid_db.sqlite` (primary) and `afcd_db.sqlite` (secondary). Per §0 and Decision 39 both are always present; a documented priority resolves class collisions (default: CoFID wins for class names present in both). The previous IFCDB overlay and the `ifcdbOverlayEnabled` user setting are removed.
 
 ### 3.8 Macros, Confidence, Persistence
 
@@ -412,12 +434,13 @@ public struct UserCorrection: Sendable, Codable {
 
 public struct RawFrameMetadata: Sendable, Codable {
     public let viewId: String                    // 'nadir' | 'oblique'
-    public let imageFilename: String
     public let depthFilename: String?
     public let confidenceFilename: String?
     public let maskFilename: String
     public let probsFilename: String
     public let imageWidth, imageHeight: Int
+    // imageFilename removed per §0: the original photo lives in the user's Photos library,
+    // referenced by MealRecord.photoAssetID.
 }
 
 public struct MealArtefact: Sendable, Codable {
@@ -431,16 +454,17 @@ public struct MealArtefact: Sendable, Codable {
 public struct MealRecord: Sendable, Codable {
     public let id: UUID
     public let createdAt: Date
-    public let capturePath: CapturePath
-    public let databaseEdition: String
-    public let frames: [RawFrameMetadata]        // depth/mask/image stored as artefact files
+    public let capturePath: CapturePath           // copied from CaptureMode at capture time
+    public let databaseEdition: String            // e.g. "CoFID 2024 + AFCD 2024" per §0
+    public let photoAssetID: String               // PHAsset.localIdentifier (§0, Req §17.3)
+    public let frames: [RawFrameMetadata]        // depth/mask only; imageFilename absent (image lives in Photos)
     public let calibration: CameraIntrinsics
     public let supportPlane: SupportPlane
     public let scale: MetricScale
     public let volumes: VolumeResult
     public let macros: MacroResult
     public let confidence: ConfidenceResult
-    public let perClassCalibration: [String: BetaCalibrationStatus]
+    public let perClassCalibration: [String: BetaCalibrationStatus]  // values are all .uncalibratedUnity in v1 per §0 (β calibration deferred)
     public let userCorrection: UserCorrection?
 }
 
@@ -475,9 +499,9 @@ Peak memory per estimation must stay under 300 MB ([16.6]). The pipeline frees b
 
 ## 4. Data Models
 
-### 4.1 SQLite schema (CoFID/IFCDB bundled DB and meal-record DB use separate files)
+### 4.1 SQLite schema (CoFID + AFCD bundled DBs and meal-record DB use separate files)
 
-`food_db.sqlite` — bundled, read-only:
+`cofid_db.sqlite` and `afcd_db.sqlite` — both bundled, read-only (per §0). The schema below is identical between the two; the runtime queries each by `class_id` with the documented CoFID-wins priority:
 
 ```sql
 CREATE TABLE foods (
@@ -497,39 +521,30 @@ CREATE TABLE foods (
 CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);   -- 'edition', 'palette_version', 'attribution'
 ```
 
-`ifcdb_overlay.sqlite` — bundled, optional, attached as `overlay`:
+**Canonical lookup (per §0).** AFCD is attached alongside CoFID; CoFID values win for any class_id present in both:
 
 ```sql
-CREATE TABLE foods_overlay (
-    class_id TEXT PRIMARY KEY,
-    density REAL, energy_kj_100 REAL, carbs_mono_100 REAL,
-    protein_100 REAL, fat_100 REAL, fibre_100 REAL,
-    beta REAL, beta_status TEXT, density_source TEXT, composition_source TEXT
-);
-```
-
-**Canonical merge query (P13).** Both iOS and Android implementations execute this exact SQL when the overlay is enabled:
-
-```sql
-ATTACH DATABASE '<overlay-path>' AS overlay;
+ATTACH DATABASE '<afcd-path>' AS afcd;
 
 SELECT
-    f.class_id,
-    f.name,
-    COALESCE(o.density,        f.density)        AS density,
-    COALESCE(o.energy_kj_100,  f.energy_kj_100)  AS energy_kj_100,
-    COALESCE(o.carbs_mono_100, f.carbs_mono_100) AS carbs_mono_100,
-    COALESCE(o.protein_100,    f.protein_100)    AS protein_100,
-    COALESCE(o.fat_100,        f.fat_100)        AS fat_100,
-    COALESCE(o.fibre_100,      f.fibre_100)      AS fibre_100,
-    COALESCE(o.beta,           f.beta)           AS beta,
-    COALESCE(o.beta_status,    f.beta_status)    AS beta_status,
-    COALESCE(o.density_source, f.density_source) AS density_source,
-    COALESCE(o.composition_source, f.composition_source) AS composition_source
-FROM foods f
-LEFT JOIN overlay.foods_overlay o USING (class_id)
-WHERE f.class_id = ?;
+    COALESCE(c.class_id, a.class_id)            AS class_id,
+    COALESCE(c.name, a.name)                    AS name,
+    COALESCE(c.density,        a.density)       AS density,
+    COALESCE(c.energy_kj_100,  a.energy_kj_100) AS energy_kj_100,
+    COALESCE(c.carbs_mono_100, a.carbs_mono_100) AS carbs_mono_100,
+    COALESCE(c.protein_100,    a.protein_100)   AS protein_100,
+    COALESCE(c.fat_100,        a.fat_100)       AS fat_100,
+    COALESCE(c.fibre_100,      a.fibre_100)     AS fibre_100,
+    COALESCE(c.beta,           a.beta)          AS beta,
+    COALESCE(c.beta_status,    a.beta_status)   AS beta_status,
+    COALESCE(c.density_source, a.density_source) AS density_source,
+    COALESCE(c.composition_source, a.composition_source) AS composition_source
+FROM foods c
+FULL OUTER JOIN afcd.foods a USING (class_id)
+WHERE COALESCE(c.class_id, a.class_id) = ?;
 ```
+
+In v1 all `beta_status` values are `uncalibrated_unity` and `beta = 1.0` (β calibration deferred per §0).
 
 `meals.sqlite` — created on first launch, app's private container:
 
@@ -538,12 +553,13 @@ CREATE TABLE meals (
     id              TEXT PRIMARY KEY,        -- UUID
     created_at      INTEGER NOT NULL,        -- unix epoch ms
     capture_path    TEXT NOT NULL,           -- 'single_view_lidar' | 'two_view_sfs'
-    database_edition TEXT NOT NULL,
+    database_edition TEXT NOT NULL,          -- e.g. 'CoFID 2024 + AFCD 2024'
     palette_version TEXT NOT NULL,
     sigma_meal      REAL NOT NULL,           -- denormalised for filtering / history sort
     total_carbs_g   REAL NOT NULL,           -- denormalised for history list display
+    photo_asset_id  TEXT NOT NULL,           -- PHAsset.localIdentifier (§0, Req §17.3); empty string if user denied Photos add
     record_json     BLOB NOT NULL,           -- compact JSON-encoded MealRecord (canonical)
-    artefacts_dir   TEXT NOT NULL            -- relative path under app's container
+    artefacts_dir   TEXT NOT NULL            -- relative path under app's container (depth + mask only)
 );
 
 CREATE TABLE meal_classes (                  -- denormalised for in-app filtering by class
@@ -574,7 +590,8 @@ CREATE TABLE corrections (
 
 CREATE INDEX meals_created_at ON meals(created_at);
 
-CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);    -- 'last_sweep_at_ms', 'schema_version', 'app_version'
+CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);    -- 'schema_version', 'app_version'
+                                                            -- (per §0: 'last_sweep_at_ms' removed; retention scheduler deleted)
 ```
 
 Storing the full `MealRecord` as a compact JSON BLOB keeps schema migration trivial and lets the design phase iterate on field shapes without an `ALTER TABLE` per change. Denormalised columns (`created_at`, `capture_path`, `database_edition`, `palette_version`, `sigma_meal`, `total_carbs_g`) support indexing and history queries without parsing the BLOB; the `meal_classes` join table supports per-class filtering ("show all meals containing class X" or "all meals with any uncalibrated class") without `json_extract`. **Queries against fields not denormalised (e.g. specific sub-confidences) use SQLite's `json_extract(record_json, '$.confidence.sigmaSeg')` pattern**; this satisfies Decision 19's debuggability rationale because the `sqlite3` CLI supports JSON1 natively. The .proto schemas in §4.3 remain the canonical record specification; the JSON BLOB is the on-disk encoding of those records.
@@ -1108,6 +1125,9 @@ O(W·H) total. Runs as a Metal kernel inside the height-field integrator so that
 
 ### 6.9 β_c calibration (offline, run on macOS via HarnessCLI)
 
+> **Deferred in v1 per §0 and Decision 34.** The harness binary that runs this algorithm has been removed; all classes are shipped with `β_c = 1.0` and `beta_status = uncalibrated_unity`. The algorithm specification below is retained as the reintroduction reference for a future iteration.
+
+
 ```
 Inputs:
     test_set: set of meals with ground-truth class masses {m_c^*}_c
@@ -1281,6 +1301,9 @@ public protocol PaletteMigrator {
 
 ### 6.13 β_c calibration round-trip (test obligation, see §7.3)
 
+> **Deferred in v1 per §0 and Decision 34.**
+
+
 The HarnessCLI accuracy mode performs an explicit round-trip assertion: starting from cached segmenter outputs and ground-truth gravimetric masses, run §6.9 to produce β_c values, then evaluate the full §6.6 / §6.7 pipeline on the eval subset, and assert that MAPE and MAE meet the Req 21.3 bar. This catches cases where β_c calibration converges but eval-set accuracy fails (e.g. distribution shift between calibration and eval, or class assignments unstable across the segmenter retrain that produced the calibration fixtures).
 
 ---
@@ -1319,6 +1342,9 @@ Properties suited to PBT:
 Generators are written for `CameraIntrinsics`, `SupportPlane`, and `SegmentationResult` in the `Tests/Generators/` target.
 
 ### 7.3 Integration tests (HarnessCLI on macOS)
+
+> **Deferred in v1 per §0 and Decision 34.** `HarnessCLI` is removed from the tree. The `MealFixture` schema and the integration-test approach below are preserved as historical specification for the future harness reintroduction.
+
 
 `HarnessCLI` is a Swift Package executable that:
 
@@ -1379,21 +1405,24 @@ Fixtures live in a separate Git LFS repository (`medata-fixtures`), versioned al
 
 ### 7.4 On-device performance tests (XCTest with `XCTMetric`)
 
-Per-stage latency assertions matching Req 16.2 / 16.3:
+Per §0 the per-stage P95 budgets and the corresponding `XCTClockMetric` assertions are removed. A single soft end-to-end check remains:
 
 ```swift
-func testSingleViewPathLatencyP95() {
-    measure(metrics: [XCTClockMetric()], options: opts) {
-        let result = try! pipeline.estimate(fixture)
-        XCTAssertEqual(result.value.capturePath, .singleViewLidar)
-    }
-    // CI threshold: P95 over 10 runs ≤ 1000 ms on iPhone 12 Pro
+func testEndToEndUnder30s() async throws {
+    let mode: CaptureMode = .single   // or .double; run both
+    let start = ContinuousClock.now
+    _ = try await pipeline.estimate(fixture, mode: mode)
+    let elapsed = start.duration(to: .now)
+    XCTAssertLessThan(elapsed, .seconds(30))   // Req §16.1
 }
 ```
 
-Run in CI on a tethered iPhone 12 Pro device per the Req 16.7 requirement.
+Run on an iPhone 13 Pro Max device (the v1 hardware floor per §0). No CI threshold gate; the 30 s bar is a soft target for v1 (Req §16.1 is "for usability", primary target is accuracy).
 
 ### 7.5 Segmenter mIoU bench (Req 8.9)
+
+> **Deferred in v1 per §0 and Decision 34.** Segmenter quality is currently assessed informally during model development; the formal `seg-bench` CLI is removed.
+
 
 `HarnessCLI seg-bench` mode loads the held-out segmenter test set, runs Core ML inference, and reports:
 

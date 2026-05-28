@@ -57,26 +57,23 @@ enum CaptureState: Equatable {
     case initialising                                       // AR not yet at .normal tracking
     case permissionDenied(PermissionSubject)                // camera or motion denied
     case trackingLost                                       // AR session lost normal tracking — discard any partial capture
-    case ready(GatingSnapshot)                              // shutter armed; snapshot frozen for §4.1 hint
-    case forcingTwoView(GatingSnapshot)                     // user tapped §4.2 override; next tap captures nadir into two_view_sfs
-    case capturing(stage: CaptureStage, frozen: GatingSnapshot)
-    case estimating(captureResult: CaptureResult)
+    case ready(GatingSnapshot)                              // shutter armed; snapshot frozen at tap-time
+    case capturing(stage: CaptureStage, frozen: GatingSnapshot, mode: CaptureMode)
+    case estimating(captureResult: CaptureResult, mode: CaptureMode)
     case showingResult(MealRecord)                          // NavigationStack pushed ResultView
     case refused(EstimationFailure, retryStage: CaptureStage)
 }
 
+// CaptureMode lives in MedataCore; bound to SettingsKeys.captureMode in UserDefaults.
+// Default = .double on first install. See research design §0.
+@AppStorage("captureMode") var captureMode: CaptureMode = .double
+
 enum CaptureStage: Equatable { case nadir, oblique }
 enum PermissionSubject: Equatable { case camera, motion }
 struct GatingSnapshot: Equatable, Sendable {
-    let pathHint: CapturePath
     let tiltInRange: Bool
     let distanceCm: Float?                                  // nil when LiDAR unavailable
     let lidarCoveragePercent: Float                         // 0 when LiDAR unavailable
-
-    func withPath(_ newPath: CapturePath) -> GatingSnapshot {
-        GatingSnapshot(pathHint: newPath, tiltInRange: tiltInRange,
-                       distanceCm: distanceCm, lidarCoveragePercent: lidarCoveragePercent)
-    }
 }
 ```
 
@@ -88,17 +85,16 @@ Transitions (exhaustive — every other input is a programmer error and triggers
 | `.initialising` | `CMMotionManager` reports motion denied | `.permissionDenied(.motion)` | §13.2, §13.3 |
 | `.initialising` | `ARSession` reports `.normal` tracking AND permissions granted | `.ready(snapshot)` | §1.6 |
 | `.permissionDenied` | user re-grants and re-enters app | `.initialising` | §13.3 |
-| `.ready(snapshot)` | live coverage/tilt write changes `snapshot` | `.ready(newSnapshot)` (re-emit) | §2.x, §4.1 |
-| `.ready(snapshot)` | shutter tap AND `snapshot.tiltInRange` AND distance gate OK | `.capturing(.nadir, frozen: snapshot)` | §7.2, §14.3 |
-| `.ready(snapshot)` | user taps §4.2 force-two-view control (only when hint == single_view_lidar) | `.forcingTwoView(snapshot)` | §4.2 |
-| `.forcingTwoView(snapshot)` | shutter tap | `.capturing(.nadir, frozen: snapshot.withPath(.twoViewSfs))` | §4.2 |
-| `.capturing(.nadir, frozen)` | nadir frame returned, frozen.pathHint == singleViewLidar | `.estimating(captureResult)` | — |
-| `.capturing(.nadir, frozen)` | nadir frame returned, frozen.pathHint == twoViewSfs | `.ready(snapshot)` (await oblique tap; pathHint locked to twoViewSfs) | §5.1, §5.3 |
-| `.capturing(stage, frozen)` | `CaptureSession.captureFrame` throws | `.refused(.captureFailed(...), retryStage: stage)` | §10.1 |
-| `.capturing(.nadir, _)` | AR tracking degrades during/after capture | `.trackingLost` (discard nadir) | §5.6 |
-| `.ready` (after first view, awaiting oblique) | AR tracking degrades | `.trackingLost` (discard first view) | §5.5 |
-| `.capturing(.oblique, frozen)` | oblique frame returned | `.estimating(captureResult)` | — |
-| `.estimating` | `Pipeline.estimate` returns success | `.showingResult(record)` (also writes `lastMeal = record`) | §9.1 |
+| `.ready(snapshot)` | live coverage/tilt write changes `snapshot` | `.ready(newSnapshot)` (re-emit) | §2.x |
+| `.ready(snapshot)` | shutter tap AND `snapshot.tiltInRange` AND distance gate OK | `.capturing(.nadir, frozen: snapshot, mode: captureMode)` | §7.2, §14.3 |
+| `.ready(_)` | user toggles `captureMode` segmented control | `.ready(_)` (model writes UserDefaults; no state change; mode is read at tap-time) | §4.1, §4.4 |
+| `.capturing(.nadir, _, mode: .single)` | nadir frame returned | `.estimating(captureResult, mode: .single)` | — |
+| `.capturing(.nadir, snap, mode: .double)` | nadir frame returned | `.ready(snap)` (await oblique tap; mode locked to .double for the rest of this capture) | §5.1, §5.3 |
+| `.capturing(stage, _, _)` | `CaptureSession.captureFrame` throws | `.refused(.captureFailed(...), retryStage: stage)` | §10.1 |
+| `.capturing(.nadir, _, _)` | AR tracking degrades during/after capture | `.trackingLost` (discard nadir) | §5.6 |
+| `.ready` (after first view, awaiting oblique, mode locked .double) | AR tracking degrades | `.trackingLost` (discard first view) | §5.5 |
+| `.capturing(.oblique, _, .double)` | oblique frame returned | `.estimating(captureResult, mode: .double)` | — |
+| `.estimating(_, mode)` | `Pipeline.estimate(_, mode:)` returns success | `.showingResult(record)` (also writes `lastMeal = record`) | §9.1 |
 | `.estimating` | `Pipeline.estimate` throws | `.refused(failure, retryStage:)` | §10.1 |
 | `.showingResult` | user dismisses result view (back button or "New capture") | `.ready(freshSnapshot)` | §9.4 |
 | `.refused` | user taps "Try again" | `.capturing(retryStage, frozen: freshSnapshot)` | §10.2 |
@@ -107,9 +103,9 @@ Transitions (exhaustive — every other input is a programmer error and triggers
 | any | `ARSession.sessionWasInterrupted` (phone call, lock) | release engine; on `sessionInterruptionEnded` re-call `engine.start()` and reset to `.initialising` | §16.1 |
 | any | rapid second tap before state leaves `.capturing` | ignored (no-op) | §7.4 |
 
-**Path-hint freeze rule.** When the user taps the shutter while `.ready(snapshot)`, the model transitions to `.capturing(.nadir, frozen: snapshot)` **synchronously on the same MainActor tick as the tap**. The frozen snapshot is the value the pipeline uses; subsequent live writes to coverage / tilt do not affect the in-progress capture. This is the §14.3 tap-to-busy guarantee — the synchronous state-write happens before any `await`.
+**Tap-time mode freeze rule.** When the user taps the shutter while `.ready(snapshot)`, the model reads the current `captureMode` from `UserDefaults` and transitions to `.capturing(.nadir, frozen: snapshot, mode: captureMode)` **synchronously on the same MainActor tick as the tap**. The frozen snapshot AND the mode are the values the pipeline uses; subsequent toggle changes do not affect the in-progress capture. This is the §14.3 tap-to-busy guarantee + the §4.4 mid-flight mode-immutability guarantee.
 
-**LiveIndicatorModel write-gating.** The `frames` stream uses `BufferingPolicy.bufferingNewest(1)` which means a frame may already be buffered when the model transitions out of `.ready`. `LiveSampleObserver` checks `model.state` before each write; if not in `.ready` / `.forcingTwoView`, the frame is dropped. Prevents indicator flicker mid-capture without requiring stream-drain coordination.
+**LiveIndicatorModel write-gating.** The `frames` stream uses `BufferingPolicy.bufferingNewest(1)` which means a frame may already be buffered when the model transitions out of `.ready`. `LiveSampleObserver` checks `model.state` before each write; if not `.ready`, the frame is dropped. Prevents indicator flicker mid-capture without requiring stream-drain coordination.
 
 **`engine.start()` idempotency.** The existing `ARKitCaptureEngine.start()` is idempotent by construction: `session.run(_:options:)` with `.resetTracking | .removeExistingAnchors` is safe to call multiple times, and `CMMotionManager.startDeviceMotionUpdates()` no-ops on the second call. The model calls `start()` unconditionally on `.initialising` entry; documented here so re-entry from `sessionInterruptionEnded` or cold-launch take the same path.
 
@@ -135,7 +131,7 @@ Transitions (exhaustive — every other input is a programmer error and triggers
 | `App/SettingsView.swift` | Extend placeholder with "Export archive" button → `ShareSheet`. |
 | `App/ShareSheet.swift` | **New** — `UIViewControllerRepresentable` wrapping `UIActivityViewController`. |
 | `App/Colors.swift` | **New** — brand colour tokens. |
-| `App/CapturePathDecider.swift` | **New** — pure func: `(supportsLiDAR: Bool, latestCoveragePercent: Float) -> CapturePath`. |
+| `App/CaptureModeToggle.swift` | **New** — `View` rendering the persistent `Single` / `Double` segmented control bound to `@AppStorage("captureMode")`. Disables `Single` when `!supportsLiDAR`. Disabled visually while `model.state` is anything other than `.ready` / `.refused` / `.permissionDenied` / `.trackingLost`. |
 | `App/CaptureFlowModel.swift` | **New** — `@Observable @MainActor` state model + `CaptureFlowDelegate` conformance (no-op for `didUpdateTilt`/`didUpdateLiDARCoverage`; routes `didProduceEstimate` and `didDetectInterClassOcclusion`). |
 | `App/LiveIndicatorModel.swift` | **New** — child `@Observable` holding `liveTiltDegrees`, `liveDistanceCm`, `liveLiDARCoveragePercent`. Owned by `CaptureFlowModel`, passed to `LiveIndicatorView` only. |
 | `MeData/MeData.xcodeproj/project.pbxproj` | New files added to the `MeData` target. `Info.plist` keys: `NSCameraUsageDescription`, `NSMotionUsageDescription`, `UIRequiredDeviceCapabilities = [arkit]`, `UISupportedInterfaceOrientations = [UIInterfaceOrientationPortrait]`. |
@@ -152,21 +148,30 @@ Behavioural contracts not visible in signatures:
 
 - **Estimation is wrapped in a `Task` stored on the model** so the model's `cancelInFlight()` can be called from scene-phase hooks. The model writes `lastMeal` only on `Pipeline.estimate` *returning*. ⚠️ §8.3 caveat per Decision 12: MedataCore's `Pipeline.estimate` has no cooperative cancellation points; `Task.cancel()` from the UI does NOT actually interrupt the in-flight pipeline. The UI's contribution to §8.3 is limited to (a) ignoring the result if a cancellation was requested before the pipeline returns, and (b) showing the `.initialising` state on foreground. A `MealRecord` may still appear in the persisted store; correcting that requires the sibling Pipeline-cancellation spec.
 - **`databaseEdition` and `paletteVersion`** are read once at app launch and cached on the model. Sources: `FoodDatabase.currentEdition` and the bundled segmenter palette. Read via a small `AppEnvironment` helper instantiated in the model's initialiser.
-- **Live observation runs only while `state` is `.ready` or `.forcingTwoView`.** When state enters `.capturing`, `.estimating`, `.showingResult`, `.refused`, `.permissionDenied`, or `.trackingLost`, the model cancels its `frames` iteration task. On return to `.ready`, a fresh iteration task is launched.
-- **Path-hint recomputation** happens on every `LiveIndicatorModel.liveLiDARCoveragePercent` write while `state == .ready`. If the hint changes, `state` re-emits `.ready(newSnapshot)`. The hint is **frozen at shutter-tap time** per the rule in the State Machine section above.
+- **Live observation runs only while `state` is `.ready`.** When state enters `.capturing`, `.estimating`, `.showingResult`, `.refused`, `.permissionDenied`, or `.trackingLost`, the model cancels its `frames` iteration task. On return to `.ready`, a fresh iteration task is launched.
+- **`captureMode` is read at shutter-tap time, not derived.** The persistent segmented control is the single source of truth; there is no `CapturePathDecider` and no auto-derivation from LiDAR coverage. The previous floating capture-path hint and `.forcingTwoView` transient state are removed per research design §0.
 - **`didDetectInterClassOcclusion` and the live-signal protocol methods (`didUpdateTilt`, `didUpdateLiDARCoverage`) are no-ops** in the v1 model (Decisions 9 and 11). The protocol conformance exists for forward compatibility.
 
-### `CapturePathDecider` — pure function
+### `CaptureModeToggle` — persistent segmented control
 
 ```swift
-enum CapturePathDecider {
-    static func decide(supportsLiDAR: Bool, latestCoveragePercent: Float) -> CapturePath {
-        supportsLiDAR && latestCoveragePercent >= 80 ? .singleViewLidar : .twoViewSfs
+struct CaptureModeToggle: View {
+    @AppStorage("captureMode") private var mode: CaptureMode = .double
+    let supportsLiDAR: Bool
+    let interactive: Bool   // false while .capturing/.estimating
+
+    var body: some View {
+        Picker("Capture mode", selection: $mode) {
+            Text("Single").tag(CaptureMode.single).disabled(!supportsLiDAR)
+            Text("Double").tag(CaptureMode.double)
+        }
+        .pickerStyle(.segmented)
+        .disabled(!interactive)
     }
 }
 ```
 
-Single source of truth for the `single_view_lidar` vs `two_view_sfs` rule per requirements §4.1. Tested exhaustively with one example per boundary (false; true & 0; true & 79.99; true & 80; true & 100).
+Single source of truth for the active capture path per requirements §4. `@AppStorage` persists across launches; the `CaptureMode` value is read at shutter-tap time by `CaptureFlowModel`. Tested for: persistence across re-instantiation; Single is disabled when `supportsLiDAR == false`; the control is non-interactive while a capture or estimation is in flight (§4.4).
 
 ### `LiveSampleObserver`
 
