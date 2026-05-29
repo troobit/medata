@@ -504,3 +504,133 @@ The engine adopts the ARView's session as the one authoritative `ARSession`. `AR
 `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift`, `App/ARPreviewView.swift`, `MeData/Tests/ARPreviewViewTests.swift`.
 
 ---
+
+## Decision 15: Three-tab `TabView` shell (Photo / Meals / Settings); persistent meal history added to v1.1 UI scope
+
+**Date**: 2026-05-29
+**Status**: accepted
+
+### Context
+
+The v1.0 UI spec was framed as a single-screen capture flow with Out-of-Scope items for "Persistent meal-history list / browsing" and "Liquid Glass / iOS 26-specific styling". On 2026-05-29 the developer asked to add a tab bar at the bottom of the device, following Apple's "Organize your features" tutorial pattern (<https://developer.apple.com/tutorials/develop-in-swift/organize-your-features>): Photo (default), Meals (history), Settings. The Photo tab hosts the existing capture flow; the Meals tab is a new history screen; the Settings tab consolidates the previously buried settings affordance.
+
+The trigger is concrete: with research Phase 1 (device MVP, decision 42) producing real meal records on the device — albeit with placeholder macros from the dev stub — the developer has no in-app way to confirm that meals are actually persisting, no way to delete a placeholder run, and the Settings entry point on the capture view is awkward in practice. The Apple tutorial's tab pattern is the standard answer.
+
+### Decision
+
+Revise `specs/ui` in place to v1.1. Replace the capture-view single-screen root with `AppRoot`, a `TabView` containing exactly three tabs: Photo (selected on first launch), Meals, Settings. Each tab is rooted in its own `NavigationStack`. Tab selection persists via `@AppStorage("selectedTab")`. The capture flow lives inside the Photo tab unchanged from v1.0 except for two new lifecycle rules:
+
+1. When the user switches away from the Photo tab while not in `.estimating`, the engine is released within 200 ms (same ceiling as backgrounding).
+2. When the user switches away during `.estimating`, the in-flight `Pipeline.estimate(_:mode:)` is NOT cancelled; on return to the Photo tab the model presents `.showingResult(record)`.
+
+The Meals tab is a new screen: `List` of `MealRecord`s sorted by `capturedAt` desc, with thumbnail, timestamp, carbohydrate total, confidence pill, and a yellow "Placeholder" chip when `record.segmenterSource == "dev_stub"` (research Req §23.6 / §19.3). Row tap pushes `ResultView` in `.historyDetail` presentation mode. Trailing swipe action deletes the meal row and its artefact directory; the associated `PHAsset` is NOT deleted (the user owns their Photos library — research Req §17.3).
+
+The Settings tab content is the v1.0 surface (CoFID + AFCD attribution, export archive button). Data import, model/inference info, and debug info are explicitly out of scope for v1.1.
+
+Liquid Glass styling is in scope for the tab bar — the system-default `TabView` material on iOS 26.5 is used as-is, with no custom tab-bar appearance.
+
+### Rationale
+
+The Apple tutorial pattern is the conventional iOS answer for "three top-level surfaces with no inherent hierarchy." A custom navigation chrome would add iOS-specific code that does not advance any research-spec requirement and would diverge from the platform's tab-bar behaviours (re-tap to pop, automatic state preservation, Liquid Glass material). One `NavigationStack` per tab is required by SwiftUI's navigation rules — sharing a stack across tabs would make tab-tap-to-pop-to-root ambiguous and break the system's per-tab state preservation.
+
+The estimating-survives-tab-switch carve-out (point 2 above) is important: a typical capture takes seconds, the user often wants to look at past meals while waiting, and cancelling the estimation on tab-switch would force a recapture for a behaviour that has no upside. The implementation cost is small — the model already handles state across `scenePhase` transitions; tab transitions reuse the same machinery with a different branch for `.estimating`.
+
+Surfacing the placeholder chip on the meal-history row (read from the persisted `segmenterSource`, not the build flag) carries the dev-stub provenance into the history view, so a developer who comes back to inspect old meals after Phase 3 ships still sees which estimates were placeholders. This matches research Decision 42's reasoning for the result-view banner.
+
+Settings tab content is intentionally minimal. The user explicitly excluded data import, model/inference info, and debug info from v1.1 when asked. Surfacing those would expand scope without an immediate use case; the placeholder banner already carries the dev-stub provenance, and the developer has Xcode for debug inspection.
+
+### Alternatives Considered
+
+- **Keep the v1.0 single-screen root; reach Meals via a `NavigationLink` from the capture view**: Rejected — would crowd the capture view with non-capture chrome, conflicts with §1.1's "live AR feed + indicators + shutter only" framing, and the capture view's `NavigationStack` is already used for `.navigationDestination(for: MealRecord.self) -> ResultView` after a fresh capture. Splitting "just captured" vs "history detail" presentation in the same stack creates ambiguity.
+- **Split into separate specs (`specs/ui` for capture + `specs/navigation` for tabs + history)**: Rejected — the tab shell, history list, and settings tab are one cohesive UX concern; tracking them in three places adds coordination cost without separating real concerns.
+- **Surface meal history as a sheet from the capture view rather than a tab**: Rejected — sheets are for one-shot modals; a history list is a persistent surface the user returns to. The Apple tutorial pattern explicitly contrasts sheets vs tabs along this axis.
+- **Add model/inference and debug info panels to Settings now**: Rejected per user direction. The placeholder chip and result-view banner already carry dev-stub provenance; full diagnostic panels are scope-expansion without an immediate use case.
+
+### Consequences
+
+**Positive:**
+- The developer can confirm meals are persisting and clean up placeholder runs from inside the app, removing a friction point during Phase 1 device-MVP work.
+- Standard iOS navigation conventions (tab-tap pop-to-root, per-tab state preservation, Liquid Glass tab-bar material) are inherited from the framework with no custom code.
+- The placeholder chip in the meal history carries the dev-stub provenance forward into Phase 3, matching the architecture established by research Decision 42.
+- v1.1 work can proceed in parallel with research Phase 1: Phase 1 tasks touch `MedataCore` (Pipeline, Segmentation, Persistence); v1.1 tasks touch `App/`. The shared surface is the new `segmenter_source` SQLite column from research task 82 and the additive `PersistenceStore` methods (`allMeals`, `deleteMeal`, `mealsDidChange`), both of which Phase 1 and v1.1 can land without colliding.
+
+**Negative:**
+- The previously frozen v1.0 capture-only framing is no longer accurate; readers must read v1.1 to see what currently applies. The diff against v1.0 is preserved by git rather than by a separate spec.
+- `PersistenceStore` gains three additive methods (`allMeals`, `deleteMeal`, `mealsDidChange`). The `mealsDidChange` stream requires the GRDB conformer to emit on every write, which is a small but new coordination point.
+- The `MealHistoryModel` uses `PHImageManager` to fetch thumbnails; a user who denies Photos access sees fork-knife placeholders in the list. This is the same fallback the result view uses (research task 73) but it is now visible in two places.
+
+### Impact
+
+- `specs/ui/requirements.md` revised to v1.1: Out-of-Scope items for "Persistent meal-history list / browsing" and "Liquid Glass / iOS 26-specific styling" removed; replaced with "Data import", "Model / inference info panel", "Debug info panel". §1.1, §1.2, §1.3, §1.4 updated to reference the Photo tab; §1.7 added for tab-switch lifecycle. §11.1 updated to reference the Settings tab; §11.5 added to fence off the new Out-of-Scope items. §18 (Tab navigation shell) and §19 (Meals tab) added.
+- `specs/ui/design.md` revised to v1.1: new "Tab shell (`AppRoot`)" subsection in Architecture; new entries in the file-map table for `AppRoot.swift`, `MealsTabView.swift`, `MealListView.swift`, `MealRow.swift`, `MealHistoryModel.swift`, additive `PersistenceStore` methods; new "Meals tab" component subsection; testing-strategy additions for tab persistence, capture lifecycle across tab switches, history refresh, placeholder chip, delete, empty state, presentation-mode toggle on `ResultView`, and re-tap pop-to-root; Out-of-Scope consistency table revised.
+- `specs/ui/tasks.md` will gain a new "v1.1 — Tab navigation + Meals tab" phase with the implementation tasks.
+- Cross-spec: research task 82 (segmenter_source persistence) and research task 83 (result-view placeholder banner) are pre-requisites for the Meals tab's placeholder chip rendering. The Meals tab is functional without them — the chip simply never renders — so the dependency is on display correctness, not on the tab shell itself.
+
+---
+
+## Decision 16: Clean capture aesthetic; tokens live in `design-system/MASTER.md`; v1.0 indicator and refusal layouts superseded
+
+**Date**: 2026-05-29
+**Status**: accepted
+
+### Context
+
+After Decision 15 introduced the tab shell, the visual design across the three tabs was still implicit: brand accent colour and a few iOS-defaults. On 2026-05-29 the developer asked for the camera capture screen to look "clean and professional" — chrome that stays out of the way of the AR preview. The UI/UX Pro Max design-intelligence skill surfaced three style layers that match that brief: Exaggerated Minimalism (oversized type, single accent), Dark Mode OLED (`#000000` background on camera/result), and Flat Design Mobile (zero shadow, instant press feedback, ≥48pt targets).
+
+The v1.0 spec's three-corner live-indicator layout, top-anchored refusal banner, and standard segmented capture-mode control were appropriate for the v1.0 functional spec but visually busy: they compete with the AR preview for attention rather than letting the food in the viewfinder be the focal element.
+
+### Decision
+
+Adopt a three-layer visual style: OLED-black backgrounds on the Photo tab and ResultView, flat touch-first chrome everywhere, and exaggerated-minimal type on the carbohydrate total. All visual tokens (colour, type, spacing, motion) live in `design-system/MASTER.md` with per-screen overrides in `design-system/pages/<screen>.md`. The implementation consumes those tokens verbatim and does not introduce parallel inline values. New Req §20 (Visual design — clean capture aesthetic) carries the acceptance criteria.
+
+Three v1.0 view components are superseded:
+
+1. `LiveIndicatorView` (three-corner layout) → `LiveIndicatorBadge` (single consolidated chip with auto-hide).
+2. `RefusalBanner` (top overlay) → `RefusalSheet` (bottom sheet with detents and drag indicator).
+3. `CaptureModeToggle` segmented-control rendering → capsule pill with animated inner accent pill.
+
+The shutter button is extracted into its own view (`ShutterButton`) with a 76pt diameter and 100ms-shrink-then-spring press feedback. The Meals tab is rendered as a photo-led list (full-width 4:3 photo per row with carb + confidence + timestamp caption below) rather than a 3-column thumbnail grid — the macro context (carbs, confidence) is essential and a grid would hide it. The ResultView places the carbohydrate total at 72pt heavy monospaced over a dimmed full-bleed photo, with the research-spec placeholder chip rendered as a small pill (not a full-width banner) when `segmenterSource == "dev_stub"`.
+
+The tab bar uses the system-default Liquid Glass material on iOS 26.5 and is visible on all three tabs (Photo tab does not hide it during capture — keeping the standard tab-bar persistence avoids forcing a custom dismiss gesture).
+
+### Rationale
+
+Tokenising the design (rather than embedding colour and type values in views) is the standard answer to "make every screen feel like the same product" and is the only way the placeholder chip on the Meals row can stay visually identical to the ResultView placeholder chip without coordination — both read the same token. Putting overrides in `design-system/pages/<screen>.md` lets a single context-aware retrieval (per the UI/UX Pro Max skill's hierarchical pattern) pick up the right rules when implementing a specific screen.
+
+Superseding the three v1.0 components is cheaper than retrofitting them: their interfaces were designed for the old layout (e.g. `RefusalBanner` is an `.overlay(alignment: .top)`-shaped view; converting it to a sheet means a different presentation API and a different state shape). A clean replacement keeps the supersession explicit in the spec and the file map, so a reader can trace what changed between v1.0 and v1.1.
+
+The photo-led Meals list (versus a thumbnail grid) is a deliberate choice: the meal's carbohydrate value and confidence pill are first-order metadata, not decorations on the photo. A grid hides those; a photo-led list preserves them as immediate caption text. The photo remains the dominant element, but the data the user came to see is one glance away.
+
+Keeping the tab bar visible during capture is the platform convention on iPhone. Hiding it would force a custom dismiss gesture to return to the other tabs, which would conflict with system gesture navigation. The cost is one chrome row at the bottom of the AR preview; the cost of hiding it would be a non-standard navigation model. Persistence wins.
+
+### Alternatives Considered
+
+- **Keep the v1.0 visual layout; only adopt the tab shell from Decision 15**: Rejected — the v1.0 layout is functional but visually busy; the three-corner indicators and top-anchored refusal banner compete with the AR preview.
+- **Embed colour/type values inline in views, no design-system files**: Rejected — would force coordination via copy-paste between `ResultView` and `MealRow` for the placeholder chip, the confidence pill, and the OLED background. A token layer eliminates that coordination.
+- **Glassmorphism on the Photo-tab chrome (translucent capsules over the AR feed)**: Rejected — re-blurs an already busy AR preview and reduces legibility of the indicator chip. Flat semi-transparent backgrounds (`captureChromeBG` at 0.10 opacity) preserve preview clarity.
+- **3-column thumbnail grid for the Meals tab**: Rejected — hides the carbohydrate total and confidence pill, which are the use case. Photo-led row preserves them.
+- **Hide the tab bar during capture**: Rejected — conflicts with iPhone platform convention and would require a custom dismiss gesture. The translucent system tab bar at the bottom is the smaller cost.
+
+### Consequences
+
+**Positive:**
+- Visual language is centralised in a small set of files (`MASTER.md` + two page overrides), so a future addition of a new screen (e.g. a Trends tab in a later release) inherits the tokens for free.
+- The placeholder chip in three places (ResultView, MealRow, MealsDetail) reads from one token pair (`placeholderBG` / `placeholderFG`); they cannot drift visually.
+- Reducing chrome on the capture screen lets the AR preview be the focal element, which is what the user is actually looking at while framing the meal.
+- Flat touch-first chrome plus ≥48pt targets meets the touch-and-interaction CRITICAL category in the UI/UX Pro Max quick-reference checklist without per-control review.
+
+**Negative:**
+- Three v1.0 views are superseded; their tests are obsolete and must be rewritten against the new components. The v1.0 tasks remain "Completed" in tasks.md (they were completed when written); new tasks supersede the corresponding work.
+- The carb-total `display`-scale 72pt monospaced type forces a Dynamic Type clamp at AX5 to avoid running off-screen, which is a small accessibility compromise documented in Req §20.12.
+- The persistent tab bar during capture means the shutter must sit ≥24pt above the tab-bar top edge, which marginally compresses the AR preview vertically. Acceptable given the platform-convention rationale.
+- Future screens that need a non-token-aligned visual choice (e.g. a one-off marketing card) must either add a new token or document a deliberate page-specific override. The discipline this requires is real but is the point of having tokens at all.
+
+### Impact
+
+- `specs/ui/requirements.md` v1.1 gains §20 (Visual design — clean capture aesthetic) with twelve acceptance criteria covering token discipline, OLED backgrounds, flat chrome, consolidated indicator chip, capsule capture-mode pill, shutter dimensions and feedback, bottom-sheet refusal, exaggerated-minimal carb total, photo-led Meals row, touch targets, reduced-motion fallback, and Dynamic Type clamp.
+- `specs/ui/design.md` v1.1: new "Visual design" paragraph in Overview pointing at the design-system files; file map adds `CaptureTopBar.swift`, `LiveIndicatorBadge.swift`, `ShutterButton.swift`, `ConfidencePill.swift`, `RefusalSheet.swift`; marks `LiveIndicatorView.swift` and `RefusalBanner.swift` as superseded; modifies `CaptureModeToggle.swift` to render the pill style.
+- `design-system/MASTER.md` (new) carries the global tokens. `design-system/pages/photo-tab.md` and `design-system/pages/meals-tab.md` (new) carry per-screen overrides and layout diagrams.
+- `specs/ui/tasks.md` gains a "v1.1 — Visual design" phase with the implementation tasks. The previous v1.1 phase ("Tab navigation + Meals tab") remains the structural work; the visual phase depends on it for some tasks (e.g. `MealRow` styling depends on the row existing).
+- No `MedataCore` changes. The supersession affects only the App target.
+
+---

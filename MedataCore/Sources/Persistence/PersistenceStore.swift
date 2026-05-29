@@ -19,4 +19,14 @@ public protocol PersistenceStore: Sendable {
     // pipeline returns and the photo save completes; pre-existing rows have
     // photo_asset_id = '' until this is invoked.
     func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws
+
+    // v1.1 Meals tab — additive surface per UI Decision 15.
+    // `allMeals` returns rows sorted by `createdAt` descending. `deleteMeal`
+    // removes the SQLite row plus the per-meal artefact directory (best-effort)
+    // and DOES NOT touch the user's Photos library. `mealsDidChange` emits a
+    // tick after every successful write; subscribers see the latest event under
+    // `BufferingPolicy.bufferingNewest(1)`.
+    func allMeals() async throws -> [MealRecord]
+    func deleteMeal(id: UUID) async throws
+    var mealsDidChange: AsyncStream<Void> { get }
 }

@@ -1,14 +1,54 @@
 # UI — Design
 
-**Version:** 1.0
-**Date:** 2026-05-20
-**Status:** Draft
+**Version:** 1.1
+**Date:** 2026-05-29
+**Status:** Draft (v1.1 — tab navigation, Meals tab, Settings tab; follows the Apple "Organize your features" tutorial pattern for the TabView root)
 
 ## Overview
 
-iOS SwiftUI capture-flow shell that drives `MedataCore`'s `CaptureSession` + `Pipeline.estimate(_:)`. New code lives in `App/` (iOS-shell only); the SPM is touched only via a small additive extension to `ARKitCaptureEngine` for a shared-session accessor. State is owned by a single `@Observable` `CaptureFlowModel` that the SwiftUI views consume.
+iOS SwiftUI tab shell with three tabs (Photo / Meals / Settings) driving `MedataCore`'s `CaptureSession` + `Pipeline.estimate(_:mode:)`. The Photo tab hosts the capture flow specified in v1.0; the Meals tab is a new history list reading from the same `meals.sqlite` the Pipeline writes to; the Settings tab consolidates the v1.0 settings surface. New code lives in `App/` (iOS-shell only); the SPM is touched only via the v1.0 additive extensions to `ARKitCaptureEngine` and `PipelineEstimator`. Capture state remains owned by `CaptureFlowModel`; tab selection state lives on a new `AppRoot` owner.
+
+**Visual design.** All visual tokens (colour, type, spacing, motion) live in `design-system/MASTER.md` and the page-specific overrides `design-system/pages/photo-tab.md` and `design-system/pages/meals-tab.md`. The implementation SHALL consume those tokens (Req §20.1); this design document SHALL NOT duplicate the token definitions. The styling brief is a clean, professional capture aesthetic — content-first OLED-black capture/result screens, a single consolidated indicator chip, a capsule capture-mode pill, photo-led Meals rows. The v1.0 `RefusalBanner` and three-corner indicator layout are explicitly superseded by Req §20.4 / §20.7.
 
 ## Architecture
+
+### Tab shell (`AppRoot`)
+
+Root of the SwiftUI scene becomes `AppRoot`, owning a `TabView` with three tabs. One `NavigationStack` per tab — the iOS rule that pushed views must come from a stack inside the current tab applies here (see swift.md "Toolbar Placement in NavigationSplitView" / per-tab NavigationStack guidance).
+
+```swift
+@MainActor struct AppRoot: View {
+    @AppStorage("selectedTab") private var selectedTab: Tab = .photo
+    @State private var captureModel: CaptureFlowModel
+    @State private var historyModel: MealHistoryModel
+    let engine: ARKitCaptureEngine
+    let store: any PersistenceStore
+
+    enum Tab: String, Hashable { case photo, meals, settings }
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            CaptureFlowView(model: captureModel, engine: engine, store: store)
+                .tabItem { Label("Photo", systemImage: "camera.fill") }
+                .tag(Tab.photo)
+            MealsTabView(model: historyModel, store: store)
+                .tabItem { Label("Meals", systemImage: "fork.knife") }
+                .tag(Tab.meals)
+            SettingsView(store: store)
+                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .tag(Tab.settings)
+        }
+        .tint(.medataAccent)
+        .onChange(of: selectedTab) { _, new in captureModel.tabSelectionChanged(to: new) }
+    }
+}
+```
+
+**Capture-session lifecycle vs tab switching.** `CaptureFlowModel.tabSelectionChanged(to:)` follows the same logic as `scenePhaseChanged(.background)`: if the new tab is not `.photo`, release the engine and reset the model to `.initialising`; on `.photo` re-entry, re-acquire. Exception per Req §1.7: when state is `.estimating`, do NOT cancel — let the in-flight `Pipeline.estimate(_:mode:)` complete, persist the result, and present it on next `.photo` entry by transitioning to `.showingResult(record)` instead of `.initialising`.
+
+**Why one stack per tab.** Each `NavigationStack` is rooted inside its `tabItem` view. Sharing a single stack across tabs would (a) make a `popToRoot` on tab-tap (Req §18.5) ambiguous, and (b) break the per-tab navigation state preservation the system provides by default. The Photo tab's `NavigationStack` is needed for `.navigationDestination(for: MealRecord.self) -> ResultView`; the Meals tab's stack is needed for the list → detail push (Req §19.4); the Settings tab's stack carries the share-sheet sheet from §11.4.
+
+**Tab-tap pop-to-root.** Req §18.5 is the system's default `TabView` behaviour on iOS 18+ (re-tapping the selected tab pops its `NavigationStack` to root) — no custom code required. Tested via XCUITest hitting the active tab item twice and asserting the visible view.
 
 ### ARSession ownership and the live-frame stream
 
@@ -126,15 +166,29 @@ Transitions (exhaustive — every other input is a programmer error and triggers
 | `App/LiveIndicatorView.swift` | **New** — child SwiftUI view consuming a child `@Observable LiveIndicatorModel` (split from the main model) to isolate 60Hz redraws from the rest of the capture view. Renders tilt indicator, distance state, LiDAR coverage gauge, capture-path indicator. |
 | `App/LiveSampleObserver.swift` | **New** — `@MainActor` actor that iterates `engine.frames` (the new AsyncStream), computes per-frame tilt + distance + LiDAR coverage, writes to `LiveIndicatorModel`. Stops iteration when `CaptureFlowModel.state` enters `.capturing` or `.estimating` (subscribed via Observation tracking). |
 | `App/ARPreviewView.swift` | **New** — `UIViewRepresentable` wrapping `ARView(frame:.zero, cameraMode:.ar, automaticallyConfigureSession: false)`. In `makeUIView`, assigns `arView.session = engine.arSession` and immediately re-asserts `engine.session.delegate = engine` to guard against `ARView` reassigning the delegate (test asserts this on init — see Test Strategy). |
-| `App/RefusalBanner.swift` | **New** — overlay banner SwiftUI view. Sits in a `.overlay(alignment: .top)` on `CaptureFlowView`. Blocks tap-through to the shutter (`.allowsHitTesting(true)` on the banner ZStack) but does not occlude the live preview. |
+| `App/RefusalBanner.swift` | **Superseded in v1.1** by `App/RefusalSheet.swift` per Req §20.7. The v1.0 top-banner overlay is removed. |
+| `App/RefusalSheet.swift` | **New (v1.1)** — bottom-sheet view presented via `.sheet(item: $model.refusal)` with `.presentationDetents([.fraction(0.35)])` and `.presentationDragIndicator(.visible)`. SF Symbol + title + one-line copy + single "Try again" CTA. Spec: `design-system/pages/photo-tab.md` §"Refusal banner". |
+| `App/CaptureTopBar.swift` | **New (v1.1)** — minimal top-chrome view per `design-system/pages/photo-tab.md` §"Top chrome". Hosts the close (`xmark`) button and the flash/torch toggle. White SF Symbols in 40pt `captureChromeBG` capsules. |
+| `App/LiveIndicatorBadge.swift` | **New (v1.1)** — single consolidated indicator chip replacing the v1.0 three-corner `LiveIndicatorView`. Inline tilt / distance / LiDAR-coverage sub-elements. Auto-hide after 5 s in-range `.ready`, re-show on tap or out-of-range. Spec: `design-system/pages/photo-tab.md` §"Indicator badge". |
+| `App/LiveIndicatorView.swift` | **Superseded in v1.1** by `LiveIndicatorBadge.swift` per Req §20.4. The v1.0 three-corner layout is removed; the `LiveIndicatorModel` change-tracking surface is preserved and consumed by the new badge view. |
+| `App/CaptureModeToggle.swift` | **Modified (v1.1)** — capsule pill with an animated inner accent pill, replacing the v1.0 segmented control. Same `@AppStorage("captureMode")` binding. Spec: `design-system/pages/photo-tab.md` §"Capture-mode pill". |
+| `App/ShutterButton.swift` | **New (v1.1)** — 76pt circular shutter extracted out of `CaptureFlowView`. Press feedback per Req §20.6. Spec: `design-system/pages/photo-tab.md` §"Shutter". |
+| `App/ConfidencePill.swift` | **New (v1.1)** — shared view rendering the three-tier confidence pill (icon + label + value) reused by `ResultView` and `MealRow`. SF Symbols added per the `color-not-only` rule. |
 | `App/ResultView.swift` | Rewrite from placeholder; consumes `MealRecord`. |
 | `App/SettingsView.swift` | Extend placeholder with "Export archive" button → `ShareSheet`. |
 | `App/ShareSheet.swift` | **New** — `UIViewControllerRepresentable` wrapping `UIActivityViewController`. |
 | `App/Colors.swift` | **New** — brand colour tokens. |
 | `App/CaptureModeToggle.swift` | **New** — `View` rendering the persistent `Single` / `Double` segmented control bound to `@AppStorage("captureMode")`. Disables `Single` when `!supportsLiDAR`. Disabled visually while `model.state` is anything other than `.ready` / `.refused` / `.permissionDenied` / `.trackingLost`. |
-| `App/CaptureFlowModel.swift` | **New** — `@Observable @MainActor` state model + `CaptureFlowDelegate` conformance (no-op for `didUpdateTilt`/`didUpdateLiDARCoverage`; routes `didProduceEstimate` and `didDetectInterClassOcclusion`). |
+| `App/CaptureFlowModel.swift` | **New** — `@Observable @MainActor` state model + `CaptureFlowDelegate` conformance (no-op for `didUpdateTilt`/`didUpdateLiDARCoverage`; routes `didProduceEstimate` and `didDetectInterClassOcclusion`). Adds `tabSelectionChanged(to:)` method per Architecture §"Tab shell". |
 | `App/LiveIndicatorModel.swift` | **New** — child `@Observable` holding `liveTiltDegrees`, `liveDistanceCm`, `liveLiDARCoveragePercent`. Owned by `CaptureFlowModel`, passed to `LiveIndicatorView` only. |
-| `MeData/MeData.xcodeproj/project.pbxproj` | New files added to the `MeData` target. `Info.plist` keys: `NSCameraUsageDescription`, `NSMotionUsageDescription`, `UIRequiredDeviceCapabilities = [arkit]`, `UISupportedInterfaceOrientations = [UIInterfaceOrientationPortrait]`. |
+| `App/AppRoot.swift` | **New** (v1.1) — `TabView` owner per Architecture §"Tab shell". Owns `CaptureFlowModel` and `MealHistoryModel`. Replaces the v1.0 entry point where `App.swift` directly presented `CaptureFlowView`. |
+| `App/MealsTabView.swift` | **New** (v1.1) — Meals tab root: `NavigationStack` wrapping `MealListView` and a `.navigationDestination(for: MealRecord.self) { ResultView(record: $0, mode: .historyDetail) }`. |
+| `App/MealListView.swift` | **New** (v1.1) — `List` of `MealRow` over `model.meals` with `swipeActions(edge: .trailing)` providing Delete (Req §19.7), and an empty-state placeholder (Req §19.5). |
+| `App/MealRow.swift` | **New** (v1.1) — list-row view: thumbnail (resolved via `PHImageManager.requestImage(for:targetSize:contentMode:options:resultHandler:)` keyed on `record.photoAssetID`), timestamp, carbohydrate total, confidence pill (shared component reused from `ResultView`), and the yellow "Placeholder" chip when `record.segmenterSource == "dev_stub"` (Req §19.3). |
+| `App/MealHistoryModel.swift` | **New** (v1.1) — `@Observable @MainActor` model owning `meals: [MealRecord]`. Subscribes to `PersistenceStore.mealsDidChange: AsyncStream<Void>` (new — see below) to refresh within 500 ms of a new meal landing (Req §19.6). Loads initial state via `store.allMeals()` on first appearance. |
+| `MedataCore/Sources/Persistence/PersistenceStore.swift` | **Additive (v1.1)** — new methods `func allMeals() async throws -> [MealRecord]` (sorted by `capturedAt` desc), `func deleteMeal(id: UUID) async throws` (removes row + artefact directory; does NOT touch the `PHAsset`), and a `var mealsDidChange: AsyncStream<Void>` change-notification stream emitted on every `appendMeal` and `deleteMeal`. ~50 lines. The GRDB-backed conformer implements all three. |
+| `App/SettingsView.swift` | Extend placeholder with "Export archive" button → `ShareSheet`. v1.1: the previous in-capture-view navigation entry is removed; the view is reached only via the Settings tab (Req §11.1). |
+| `MeData/MeData.xcodeproj/project.pbxproj` | New files added to the `MeData` target. `Info.plist` keys: `NSCameraUsageDescription`, `NSMotionUsageDescription`, `NSPhotoLibraryUsageDescription` (for `PHImageManager` thumbnail fetches per Req §19.2), `UIRequiredDeviceCapabilities = [arkit]`, `UISupportedInterfaceOrientations = [UIInterfaceOrientationPortrait]`. |
 
 Asset pipeline (`static/icon.svg` → `Assets.xcassets/AppIcon.appiconset/*.png`) is a one-off shell-script task captured in `tasks.md`, not a code-time concern.
 
@@ -210,6 +264,50 @@ The existing placeholder already binds retention + IFCDB toggles. New additions:
 
 - **"Export archive" button** — calls into `PersistenceStore.exportArchive() async throws -> URL`, then presents `ShareSheet(items: [url])` via `.sheet(item:)`. `ShareSheet` is `UIViewControllerRepresentable` wrapping `UIActivityViewController(activityItems:applicationActivities:)`.
 
+### Meals tab (v1.1)
+
+`MealHistoryModel` is `@Observable @MainActor`:
+
+```swift
+@Observable @MainActor final class MealHistoryModel {
+    var meals: [MealRecord] = []
+    private let store: any PersistenceStore
+    private var changeSubscription: Task<Void, Never>?
+
+    init(store: any PersistenceStore) { self.store = store }
+
+    func start() async {
+        meals = (try? await store.allMeals()) ?? []
+        changeSubscription = Task { [weak self] in
+            guard let stream = self?.store.mealsDidChange else { return }
+            for await _ in stream {
+                self?.meals = (try? await self?.store.allMeals()) ?? []
+            }
+        }
+    }
+
+    func delete(_ record: MealRecord) async {
+        try? await store.deleteMeal(id: record.id)
+        // mealsDidChange will re-fire and refresh meals
+    }
+}
+```
+
+`MealRow` shares the confidence-pill rendering code with `ResultView` — both consume a `ConfidencePill(sigmaMeal:)` view extracted into a small shared component. The placeholder chip is rendered conditionally on `record.segmenterSource == "dev_stub"` (Req §19.3) using the same yellow background as the result-view placeholder banner (research Req 23.3).
+
+`ResultView` is reused as the meal-detail view in the Meals tab. It already takes a `MealRecord`; no new view is introduced. The "New capture" button is hidden when the result view is presented from the Meals tab (it's only meaningful right after a capture). A presentation-context enum drives this:
+
+```swift
+enum ResultPresentation { case justCaptured, historyDetail }
+struct ResultView: View {
+    let record: MealRecord
+    let mode: ResultPresentation
+    // ...
+}
+```
+
+Photos-library reads. `MealRow` and `ResultView` request thumbnails via `PHImageManager.default().requestImage(for:targetSize:contentMode:options:resultHandler:)`. When the user has denied or limited Photos access, `requestImage` returns `nil` for the image and the row/result view fall back to a `photo.fill` SF Symbol placeholder. No additional permission prompt is triggered by the Meals tab; the `.addOnly` request from research task 73 is the only Photos prompt the app makes in v1.
+
 ### Colour tokens
 
 ```swift
@@ -268,14 +366,27 @@ AR-session interruption is consumed via the `interruptions: AsyncStream<Interrup
 - **End-to-end on-device** — manual; not automated in this spec. Performance assertions (requirements §14) are covered by research-spec tasks 65 / 66's `XCTClockMetric` harness on the iPhone 13 Pro test device.
 - **Property-based tests** — not appropriate here: the state machine has a finite, small transition graph (better covered by exhaustive example tests); no parsers, serialisers, or invariants that benefit from PBT.
 
+**v1.1 additions:**
+
+- **`AppRoot` tab persistence (Req §18.6)** — XCUITest: launch app, switch to Meals tab, kill app, relaunch; assert Meals tab is selected. Reset `@AppStorage("selectedTab")` between tests via launch argument.
+- **Tab-switch capture lifecycle (Req §1.7, §18.7)** — XCTest: model in `.ready`, switch tab away → assert `.initialising` on Photo re-entry and `engine.release()` was called within 200 ms; model in `.estimating`, switch away → assert `Pipeline.estimate` is NOT cancelled and the resulting `MealRecord` lands; on Photo re-entry the state SHALL be `.showingResult(record)`.
+- **`MealHistoryModel` change-stream refresh (Req §19.6)** — XCTest with a fake `PersistenceStore` exposing a controllable `mealsDidChange` continuation; emit a tick, assert `model.meals` reloads within 500 ms.
+- **`MealRow` placeholder chip (Req §19.3)** — XCTest: render `MealRow` with `segmenterSource = "dev_stub"` and `segmenterSource = "coreml_v0.1"`; assert chip presence/absence via accessibility-identifier visibility.
+- **Meal delete (Req §19.7)** — XCTest: seed two meals, call `MealHistoryModel.delete(meals[0])`; assert `store.allMeals()` returns one row, the corresponding artefact directory is removed, and `PHPhotoLibrary` is NOT touched (mock `PHPhotoLibrary` to assert no `performChanges` call).
+- **Meals empty state (Req §19.5)** — XCUITest: launch on a fresh container, switch to Meals tab, assert the empty-state copy and fork-knife icon are visible; no list rows present.
+- **Result-view presentation mode (design §"Meals tab")** — XCTest: render `ResultView(record:, mode: .historyDetail)` and assert the "New capture" button is hidden; render with `mode: .justCaptured` and assert it is shown.
+- **Tab-bar re-tap pop-to-root (Req §18.5)** — XCUITest: Meals tab → tap a row to push the detail view → re-tap Meals tab item; assert the list view is visible (detail popped).
+
 ## Out of Scope (consistency check vs requirements Non-Goals)
 
 | Non-goal | Design verifies absent |
 |---|---|
 | Accessibility / VoiceOver | No `accessibilityLabel`/`accessibilityValue`/`accessibilityElement` modifiers specified beyond what SwiftUI ships by default. |
 | Corrections UI | `ResultView` carries no editable fields. `PersistenceStore.appendCorrection` is not called from the UI. |
-| History list | No `List`/`NavigationLink` from any view to past meals. `NavigationStack` paths: capture → result; settings is a sheet. |
+| Data import | No code path consumes the export archive format. Settings tab exposes only `exportArchive()`; no `importArchive(_:)` button. |
+| Model / inference info panel | No `SettingsView` row reads `MealRecord.segmenterSource` or any `Pipeline` introspection — the persisted `segmenterSource` is surfaced only via the per-row placeholder chip (Req §19.3) and result-view banner (research Req §23.3). |
+| Debug info panel | No `SettingsView` row reads compile-flag state, build configuration, or `EstimationFailure` history. |
 | Per-class breakdown / clinical macros | `ResultView` body shows only `record.macros.totalCarbsG` (rounded) + `record.confidence.sigmaMeal` pill. |
 | iPad / Watch layouts | No size-class checks; portrait-only constraint set via Info.plist `UISupportedInterfaceOrientations` (iPhone only). |
-| Onboarding flow | App root scene is `CaptureFlowView`. No pre-capture intro view. |
-| Liquid Glass / iOS 26 styling | All SwiftUI APIs used (Form, NavigationStack, NavigationLink, `.tint`, `.sheet`, `.task`, `@Observable`) are iOS 17+. No `if #available(iOS 26)` branches. |
+| Onboarding flow | App root scene is `AppRoot` (TabView with Photo tab selected). No pre-tab intro view. |
+| Meal-list search / filter / multi-select | `MealListView` is a plain `List(model.meals)` with one trailing `swipeActions` delete. No `.searchable`, no `EditButton`, no selection binding. |

@@ -94,3 +94,66 @@ All existing tests pass:
 - `App/ARPreviewView.swift` — camera preview view wrapper
 - `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — ARKit session orchestrator
 - `App/CaptureFlowModel.swift` — flow state machine and async session startup
+
+---
+
+## 2026-05-23 — Regression and re-fix (`arview-session-config-race`)
+
+The errors above returned after commit `4b67cbc` refactored `ARPreviewView.ensureSessionConfigured()` into engine-owned `ARKitCaptureEngine.bindPreviewSession`. Logged on iPhone 13 Pro Max:
+
+```
+(Fig) signalled err=-12710 at <>:601
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:276) - (err=-12784)
+<<<< FigCaptureSourceRemote >>>> Fig assert: "err == 0 " at bail (FigCaptureSourceRemote.m:513) - (err=-12784)
+```
+
+### Why it regressed
+
+The refactor introduced three internal flags on the engine: `runRequested`, `isBound`, `isRunning`. The session-run logic moved into:
+
+```swift
+private func applyRunStateIfNeeded() {
+    guard isBound, runRequested, !isRunning else { return }
+    // … session.run(config, options:) …
+}
+```
+
+`bindPreviewSession` set `isBound = true` and called this helper, but **did not** set `runRequested`. `runRequested` was only flipped by `start()` (called fire-and-forget from `CaptureFlowModel.evaluatePermissions()` via `Task { try? await session.start() }`).
+
+At launch, `ARPreviewView.makeUIView` (synchronous main-actor) ran before the scheduled `start()` task. Result: `bindPreviewSession` → `applyRunStateIfNeeded` early-exit → `ARView` displayed for milliseconds rendering a bound-but-not-running `ARSession`. The Fig / FigCaptureSourceRemote errors are emitted during that gap.
+
+The `runRequested` flag had originally been added to prevent running the *placeholder* `ARSession()` the engine creates in its `init` before any view has bound a real session. That precondition is still needed, but it's already covered by `isBound`.
+
+### Fix
+
+In `bindPreviewSession`, set `runRequested = true` immediately before the call to `applyRunStateIfNeeded`:
+
+```swift
+@MainActor
+public func bindPreviewSession(_ external: ARSession) {
+    if external !== session {
+        session.delegate = nil
+        session.pause()
+        session = external
+        isRunning = false
+    }
+    session.delegate = self
+    isBound = true
+    // Binding a real session IS the run trigger — `CaptureFlowModel.start()`
+    // runs fire-and-forget and may not have flipped `runRequested` yet.
+    runRequested = true
+    applyRunStateIfNeeded()
+}
+```
+
+The placeholder session is still protected by the `isBound` guard inside `applyRunStateIfNeeded` — if `start()` is called before any `bindPreviewSession`, the helper still early-exits.
+
+### Regression test
+
+`MedataCore/Tests/CaptureKitTests/ARKitCaptureEngineStreamsTests.swift::testBindPreviewSessionRunsConfigImmediately` — asserts `engine.isRunning == true` immediately after `bindPreviewSession`. The test relies on `isRunning` being `internal` rather than `private`; `@testable import CaptureKit` reaches it.
+
+The test asserts on the engine's `isRunning` flag rather than `ARSession.configuration`. The latter looks tempting (Apple docs say `run(_:options:)` updates `configuration` immediately) but in the iOS Simulator, without a real camera, `configuration` stays nil and a `configuration != nil` assertion is unreliable. `isRunning` is the engine-internal post-condition that proves `applyRunStateIfNeeded` cleared its guard and called `session.run`.
+
+### Bug report
+
+Full report: `specs/bugfixes/arview-session-config-race/report.md`.

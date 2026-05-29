@@ -122,8 +122,13 @@ public extension MealRecord {
         return out
     }
 
-    // Reconstructs from PbMealRecord + the SQL-only paletteVersion.
-    init(pb: PbMealRecord, paletteVersion: String) throws {
+    // Reconstructs from PbMealRecord + the SQL-only columns.
+    init(
+        pb: PbMealRecord,
+        paletteVersion: String,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
+    ) throws {
         guard let uuid = UUID(uuidString: pb.id) else {
             throw PersistenceError.corruptRecord("invalid UUID: \(pb.id)")
         }
@@ -135,8 +140,12 @@ public extension MealRecord {
         self.capturePath = capturePath
         self.databaseEdition = pb.databaseEdition
         self.paletteVersion = paletteVersion
-        self.photoAssetID = pb.photoAssetID
-        self.segmenterSource = pb.segmenterSource
+        // Prefer the SQLite column overrides when supplied (the columns are
+        // the index/filter view); otherwise fall back to the protobuf value.
+        // Both storage fields are non-optional so nil collapses to the pb
+        // value, matching the schema's NOT NULL DEFAULT ''.
+        self.photoAssetID = photoAssetID ?? pb.photoAssetID
+        self.segmenterSource = segmenterSource ?? pb.segmenterSource
         self.frames = pb.frames
         self.calibration = pb.calibration
         self.supportPlane = pb.supportPlane
@@ -153,10 +162,20 @@ public extension MealRecord {
         try pb.jsonString()
     }
 
-    // Decodes from protobuf-JSON string + the SQL-only paletteVersion.
-    static func from(jsonString: String, paletteVersion: String) throws -> MealRecord {
+    // Decodes from protobuf-JSON string + the SQL-only columns.
+    static func from(
+        jsonString: String,
+        paletteVersion: String,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
+    ) throws -> MealRecord {
         let pb = try PbMealRecord(jsonString: jsonString)
-        return try MealRecord(pb: pb, paletteVersion: paletteVersion)
+        return try MealRecord(
+            pb: pb,
+            paletteVersion: paletteVersion,
+            segmenterSource: segmenterSource,
+            photoAssetID: photoAssetID
+        )
     }
 }
 

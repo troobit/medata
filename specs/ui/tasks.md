@@ -281,3 +281,219 @@ references:
   - Blocked-by: 7pbwp4p (Rewrite App/CaptureFlowView.swift root view), 7pbwp4q (Update App/App.swift for scenePhase forwarding to CaptureFlowModel)
   - Stream: 1
   - Requirements: [16.1](requirements.md#16.1)
+
+## v1.1 — Tab navigation + Meals tab
+
+- [x] 29. Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange) <!-- id:7pbwp4v -->
+  - `allMeals()` returns rows sorted by `capturedAt` desc, including the new `segmenter_source` column from research task 82.
+  - `deleteMeal(id:)` removes the SQLite row, removes the per-meal artefact directory, and DOES NOT call any `PHPhotoLibrary` API.
+  - `mealsDidChange` yields a tick after `appendMeal` and after `deleteMeal`. Two subscribers both receive the tick (per-subscriber stream).
+  - Mock the artefact-directory FileManager calls; use an in-memory GRDB queue.
+  - Stream: 2
+  - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
+
+- [x] 30. Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore <!-- id:7pbwp4w -->
+  - Add three methods to the `PersistenceStore` protocol and implement them on `GRDBPersistenceStore`.
+  - `mealsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
+  - Artefact directory cleanup is best-effort: log and continue if a file is already gone.
+  - Decision: 15
+  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods
+  - Stream: 2
+  - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
+
+- [x] 31. Write tests for MealHistoryModel <!-- id:7pbwp4x -->
+  - Initial `start()` loads `meals` from a fake store; subsequent `mealsDidChange` tick triggers a reload.
+  - `delete(_:)` calls `store.deleteMeal(id:)`; the resulting `mealsDidChange` tick refreshes `meals`.
+  - Cancelling the model's subscription task removes the subscription without leaking the continuation.
+  - Stream: 2
+  - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
+
+- [x] 32. Implement MealHistoryModel <!-- id:7pbwp4y -->
+  - `@Observable @MainActor final class MealHistoryModel` in `App/MealHistoryModel.swift`. See `specs/ui/design.md` §"Meals tab" for the sketch.
+  - Subscription `Task` cancelled in `deinit` (use a `cancellable` reference).
+  - Blocked-by: 7pbwp4w (Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore), 7pbwp4x (Write tests for MealHistoryModel)
+  - Stream: 2
+  - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6)
+
+- [x] 33. Write tests for MealRow rendering <!-- id:7pbwp4z -->
+  - Placeholder chip is present when `record.segmenterSource == "dev_stub"` and absent otherwise (assert via accessibility identifier visibility).
+  - Confidence pill matches `ResultView`'s three-tier thresholds (reuse the `ConfidencePill` component extracted in task 36).
+  - Photo-denied fallback renders the `photo.fill` SF Symbol when `PHImageManager.requestImage` returns nil.
+  - Timestamp formatter matches `dd MMM yyyy, HH:mm` in `en_IE` locale.
+  - Stream: 2
+  - Requirements: [19.2](requirements.md#19.2), [19.3](requirements.md#19.3)
+
+- [x] 34. Implement MealRow view <!-- id:7pbwp50 -->
+  - `App/MealRow.swift`. Uses `PHImageManager.default().requestImage(for:targetSize:contentMode:options:resultHandler:)` for the thumbnail.
+  - The placeholder chip uses the same yellow background colour token as the result-view placeholder banner from research task 83.
+  - Blocked-by: 7pbwp4z (Write tests for MealRow rendering), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
+  - Stream: 2
+  - Requirements: [19.2](requirements.md#19.2), [19.3](requirements.md#19.3)
+
+- [x] 35. Write tests for ResultView presentation mode (justCaptured vs historyDetail) <!-- id:7pbwp51 -->
+  - `mode = .justCaptured` shows the "New capture" button; `mode = .historyDetail` hides it.
+  - Both modes show the carb total, confidence pill, thumbnail, and (where applicable) placeholder banner.
+  - Stream: 2
+  - Requirements: [19.4](requirements.md#19.4)
+
+- [x] 36. Add ResultPresentation parameter to ResultView; extract shared ConfidencePill <!-- id:7pbwp52 -->
+  - Add `enum ResultPresentation { case justCaptured, historyDetail }` and a `mode: ResultPresentation` field to `ResultView`.
+  - Extract `ConfidencePill(sigmaMeal:)` into a small shared component so `MealRow` can reuse the same rendering.
+  - Existing Photo-tab call site passes `.justCaptured`; new Meals-tab call site (task 37) passes `.historyDetail`.
+  - Blocked-by: 7pbwp51 (Write tests for ResultView presentation mode (justCaptured vs historyDetail))
+  - Stream: 2
+  - Requirements: [19.4](requirements.md#19.4)
+
+- [x] 37. Implement MealsTabView (list, empty state, swipe delete, navigation destination) <!-- id:7pbwp53 -->
+  - `App/MealsTabView.swift` wraps `MealListView` in its own `NavigationStack` with `.navigationDestination(for: MealRecord.self) { ResultView(record: $0, mode: .historyDetail) }`.
+  - `App/MealListView.swift` is a `List(model.meals) { MealRow(record: $0) }` with `swipeActions(edge: .trailing)` providing a single Delete action wired to `await model.delete(record)`.
+  - Empty state: when `model.meals.isEmpty`, render the Irish-English copy and `fork.knife` SF Symbol per Req §19.5 in place of the list.
+  - No `.searchable`, no `EditButton`, no selection binding (Req §19.8).
+  - Blocked-by: 7pbwp4y (Implement MealHistoryModel), 7pbwp50 (Implement MealRow view), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
+  - Stream: 2
+  - Requirements: [19.1](requirements.md#19.1), [19.4](requirements.md#19.4), [19.5](requirements.md#19.5), [19.7](requirements.md#19.7), [19.8](requirements.md#19.8)
+
+- [x] 38. Write tests for CaptureFlowModel.tabSelectionChanged <!-- id:7pbwp54 -->
+  - Switching away from `.photo` while state is `.ready` releases the engine within 200 ms and resets to `.initialising` on Photo re-entry.
+  - Switching away during `.estimating` DOES NOT cancel the pipeline; on Photo re-entry the state is `.showingResult(record)` once the pipeline completes.
+  - Switching to a non-photo tab while state is already `.refused` or `.permissionDenied` is a no-op.
+  - Stream: 2
+  - Requirements: [1.7](requirements.md#1.7), [18.7](requirements.md#18.7)
+
+- [x] 39. Add tabSelectionChanged(to:) method to CaptureFlowModel <!-- id:7pbwp55 -->
+  - Mirrors `scenePhaseChanged(.background)` for non-Photo tabs except: when state is `.estimating`, let the in-flight `Pipeline.estimate(_:mode:)` complete and route the result to `.showingResult(record)` for next Photo re-entry.
+  - Decision: 15
+  - Blocked-by: 7pbwp54 (Write tests for CaptureFlowModel.tabSelectionChanged)
+  - Stream: 2
+  - Requirements: [1.7](requirements.md#1.7), [18.7](requirements.md#18.7)
+
+- [x] 40. Implement AppRoot TabView + wire from App.swift; add NSPhotoLibraryUsageDescription <!-- id:7pbwp56 -->
+  - Create `App/AppRoot.swift` per design §"Tab shell (`AppRoot`)".
+  - `MedataApp.body` returns `AppRoot(engine:, store:)` instead of the v1.0 direct `CaptureFlowView` presentation.
+  - Add `NSPhotoLibraryUsageDescription` Info.plist string in Irish-English ("MeData reads thumbnails of your captured meal photos to show them in your meal history.").
+  - Do NOT set a custom tab-bar appearance — the system Liquid Glass material on iOS 26.5 is required (Req §18.4).
+  - Decision: 15
+  - Blocked-by: 7pbwp53 (Implement MealsTabView (list, empty state, swipe delete, navigation destination)), 7pbwp55 (Add tabSelectionChanged(to:) method to CaptureFlowModel)
+  - Stream: 2
+  - Requirements: [18.1](requirements.md#18.1), [18.2](requirements.md#18.2), [18.3](requirements.md#18.3), [18.4](requirements.md#18.4), [18.6](requirements.md#18.6)
+
+- [x] 41. Write XCUITest suite for v1.1 (tab persistence, re-tap pop, empty state, new-meal within 500 ms) <!-- id:7pbwp57 -->
+  - Tab persistence: launch, switch to Meals, terminate, relaunch — Meals is selected.
+  - Re-tap pop-to-root: Meals → tap row → detail visible → re-tap Meals tab item → list visible.
+  - Empty state: launch on a fresh container → switch to Meals → empty-state copy and icon visible.
+  - New-meal-within-500-ms: with the UITestHarness, drive a successful capture from the Photo tab; while on Meals, assert the new row appears within 500 ms of `mealsDidChange` emitting.
+  - Each XCUITest resets `@AppStorage("selectedTab")` via a launch argument.
+  - Blocked-by: 7pbwp56 (Implement AppRoot TabView + wire from App.swift; add NSPhotoLibraryUsageDescription)
+  - Stream: 2
+  - Requirements: [18.5](requirements.md#18.5), [18.6](requirements.md#18.6), [19.5](requirements.md#19.5), [19.6](requirements.md#19.6)
+
+## v1.1 — Visual design
+
+- [x] 42. Add Color tokens to App/Colors.swift per design-system/MASTER.md <!-- id:7pbwp58 -->
+  - Add token names (`captureBackground`, `captureChromeText`, `captureChromeBG`, `captureScrim`, `surfacePrimary`, `surfaceElevated`, `placeholderBG`, `placeholderFG`) per `design-system/MASTER.md` §"Colour tokens".
+  - Confidence pill colours move from inline values into named tokens (`confidenceHigh`, `confidenceModerate`, `confidenceLow`).
+  - Tests: a snapshot test verifies hex resolution under both light and dark mode for tokens that adapt; a static test asserts `medataAccent.cgColor` equals `#63FF00`.
+  - Decision: 16
+  - Stream: 2
+  - Requirements: [20.1](requirements.md#20.1), [20.2](requirements.md#20.2)
+
+- [x] 43. Implement ConfidencePill shared view (icon + label + value) <!-- id:7pbwp59 -->
+  - Extract `App/ConfidencePill.swift` consumed by `ResultView` and `MealRow`.
+  - Three-tier rendering: `checkmark.seal.fill` + "High" for σ ≥ 0.75; `exclamationmark.triangle.fill` + "Moderate" for 0.60 ≤ σ < 0.75; `xmark.octagon.fill` + "Low" for σ < 0.60. Icon satisfies the `color-not-only` accessibility rule.
+  - Body: pill (capsule shape), 28pt tall, `padding(.horizontal, 12)`, semibold body text.
+  - Tests: σ ∈ {0.0, 0.59, 0.60, 0.74, 0.75, 1.0} → expected (icon, label, background). Reuses the existing threshold-test fixture from task 20.
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md)
+  - Stream: 2
+  - Requirements: [20.8](requirements.md#20.8)
+
+- [x] 44. Write tests for LiveIndicatorBadge (consolidated chip, auto-hide, re-show on tap or out-of-range) <!-- id:7pbwp5a -->
+  - Initial render shows all three sub-elements (tilt, distance, LiDAR coverage) when `supportsLiDAR`; omits the latter two when not.
+  - After 5 s of in-range `.ready` state, the chip fades to opacity 0.0 (still hit-testable via 48pt `hitSlop`).
+  - Tap on the hidden chip re-shows it; an out-of-range tilt write also re-shows it.
+  - Sub-element tint is green when its value is in-range, white otherwise.
+  - Reduced-motion: the 5 s auto-hide becomes a snap-to-opacity-0 with no fade.
+  - Stream: 2
+  - Requirements: [20.4](requirements.md#20.4)
+
+- [x] 45. Implement LiveIndicatorBadge; supersede LiveIndicatorView <!-- id:7pbwp5b -->
+  - Create `App/LiveIndicatorBadge.swift` consuming `LiveIndicatorModel`.
+  - Layout per `design-system/pages/photo-tab.md` §"Indicator badge": single chip with three sub-elements separated by an 8pt hairline.
+  - Auto-hide via `Task.sleep(5_000_000_000)` started when state enters `.ready` and all values in-range; cancelled on any out-of-range write or tap.
+  - Delete `App/LiveIndicatorView.swift` and remove its references from `CaptureFlowView`.
+  - Decision: 16
+  - Blocked-by: 7pbwp5a (Write tests for LiveIndicatorBadge (consolidated chip, auto-hide, re-show on tap or out-of-range))
+  - Stream: 2
+  - Requirements: [20.3](requirements.md#20.3), [20.4](requirements.md#20.4)
+
+- [x] 46. Implement CaptureTopBar (close + flash/torch) <!-- id:7pbwp5c -->
+  - Create `App/CaptureTopBar.swift` per `design-system/pages/photo-tab.md` §"Top chrome".
+  - Close (`xmark`) button: SF Symbol, 24pt, white, in a 40pt `captureChromeBG` capsule. Action: pop the navigation stack if any view is presented above the capture view; otherwise no-op.
+  - Flash/torch toggle: SF Symbol `bolt.fill` / `bolt.slash.fill`, same capsule. Bound to `AVCaptureDevice.torchMode`. Hidden when the AR session is off or the device has no torch.
+  - Tests: close action behaviour with and without a presented sheet; torch toggle updates `AVCaptureDevice.torchMode`; both buttons announce VoiceOver labels in Irish-English.
+  - Stream: 2
+  - Requirements: [20.3](requirements.md#20.3)
+
+- [x] 47. Rewrite CaptureModeToggle as capsule pill <!-- id:7pbwp5d -->
+  - Replace the v1.0 segmented control rendering with the pill design per `design-system/pages/photo-tab.md` §"Capture-mode pill".
+  - Animated inner accent pill slides between Single and Double positions with spring `.bouncy(duration: 0.2)`.
+  - Same `@AppStorage("captureMode")` binding; no model changes.
+  - Disabled state for "Single" when `!supportsLiDAR`: label opacity 0.4, tap emits the existing Irish-English no-LiDAR refusal.
+  - Tests: tap toggles UserDefaults; disabled-Single tap emits refusal; reduced-motion replaces the slide with a crossfade.
+  - Stream: 2
+  - Requirements: [20.3](requirements.md#20.3), [20.5](requirements.md#20.5)
+
+- [x] 48. Implement ShutterButton (76pt circle, press feedback) <!-- id:7pbwp5e -->
+  - Extract shutter rendering out of `CaptureFlowView` into `App/ShutterButton.swift`.
+  - 76pt outer ring (4pt stroke white) + 60pt inner fill (white). On press: inner shrinks to 52pt + ring widens to 6pt over 100ms; on release: spring back over 150ms `.snappy`.
+  - Position: horizontally centred, ≥24pt above the tab bar top edge + safe area bottom.
+  - Disabled state: inner opacity 0.4, non-interactive.
+  - Accessibility: `accessibilityLabel("Capture meal")`, `accessibilityHint("Double-tap to take a photo")`, `accessibilityValue` differs per state (Ready / Capturing / Disabled).
+  - Tests: press-feedback timing under reduced-motion; layout never shifts surrounding chrome during the animation.
+  - Stream: 2
+  - Requirements: [20.3](requirements.md#20.3), [20.6](requirements.md#20.6), [20.10](requirements.md#20.10)
+
+- [x] 49. Replace RefusalBanner with RefusalSheet bottom sheet <!-- id:7pbwp5f -->
+  - Create `App/RefusalSheet.swift` per `design-system/pages/photo-tab.md` §"Refusal banner". Bottom sheet via `.sheet(item: $model.refusal)` with `.presentationDetents([.fraction(0.35)])` and `.presentationDragIndicator(.visible)`.
+  - Content: SF Symbol matching the failure, large title (Irish-English), one-line copy, single "Try again" primary CTA.
+  - Dismiss by swipe-down or "Try again" tap → `state = .capturing(retryStage, ...)`.
+  - Delete `App/RefusalBanner.swift` and its references in `CaptureFlowView`.
+  - Tests: each `EstimationFailure` case maps to a distinct symbol + copy; "Try again" returns to the right `retryStage`; swipe-down dismisses without state change.
+  - Decision: 16
+  - Stream: 2
+  - Requirements: [20.7](requirements.md#20.7)
+
+- [x] 50. Restyle ResultView to display-scale carb total + dimmed photo background <!-- id:7pbwp5g -->
+  - Layout per `design-system/pages/photo-tab.md` §"ResultView": full-bleed photo (via `PHImageManager`, dimmed by the top/bottom black-to-transparent scrim), centred carb total at 72pt heavy monospaced (`Color.captureChromeText`), confidence pill below, placeholder chip below that when `segmenterSource == "dev_stub"`.
+  - `.contentTransition(.numericText())` on the carb total; falls back to snap-in under reduced motion.
+  - Dynamic Type clamp at AX5: maximum display size 88pt to prevent overflow.
+  - Action row (`Retake` outline + `Done` solid) hidden in `mode == .historyDetail` (per task 36).
+  - Tests: numeric transition under reduced-motion; carb total clamps at AX5; placeholder chip presence/absence matches `segmenterSource`.
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp59 (Implement ConfidencePill shared view (icon + label + value)), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
+  - Stream: 2
+  - Requirements: [20.2](requirements.md#20.2), [20.8](requirements.md#20.8), [20.11](requirements.md#20.11), [20.12](requirements.md#20.12)
+
+- [x] 51. Restyle MealRow to feed-style layout <!-- id:7pbwp5h -->
+  - Replace the v1.1 compact row layout with the feed-style layout per `design-system/pages/meals-tab.md` §"`MealRow`": full-width 4:3 photo with `.clipShape(RoundedRectangle(cornerRadius: 14))`, then caption row (carb total at 24pt heavy mono + ConfidencePill + optional placeholder chip), then timestamp.
+  - 24pt gap between rows; `.listStyle(.plain)` on the parent List.
+  - Thumbnail target size = 2× row width, NOT `PHImageManagerMaximumSize`.
+  - Whole row is the navigation tap target; press feedback `.scale(0.98)` 100ms.
+  - Tests: photo aspect ratio is 4:3 for every row regardless of source asset shape; carb-total digits don't shift width on scroll-in (monospaced-digit); placeholder chip presence matches `segmenterSource`.
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp59 (Implement ConfidencePill shared view (icon + label + value)), 7pbwp50 (Implement MealRow view)
+  - Stream: 2
+  - Requirements: [20.9](requirements.md#20.9), [20.10](requirements.md#20.10)
+
+- [x] 52. Wire CaptureFlowView to the new chrome (CaptureTopBar, LiveIndicatorBadge, ShutterButton, RefusalSheet, restyled CaptureModeToggle) <!-- id:7pbwp5i -->
+  - Compose the new components into `App/CaptureFlowView.swift`. Black background, ARPreviewView full-bleed, top chrome via safe area, indicator badge via top-center overlay, capture-mode pill + shutter via bottom overlay.
+  - Refusal: `.sheet(item: $model.refusal) { failure in RefusalSheet(failure: failure, retry: { model.retry() }) }`.
+  - Delete dead references to `LiveIndicatorView` and `RefusalBanner`.
+  - Tests: XCUITest covers the close button, flash toggle, mode-pill switch, shutter armed state, refusal-sheet present/dismiss; existing v1.0 XCUITest for refusal copy is rewritten to expect the sheet, not the banner.
+  - Blocked-by: 7pbwp58 (Add Color tokens to App/Colors.swift per design-system/MASTER.md), 7pbwp5b (Implement LiveIndicatorBadge; supersede LiveIndicatorView), 7pbwp5c (Implement CaptureTopBar (close + flash/torch)), 7pbwp5d (Rewrite CaptureModeToggle as capsule pill), 7pbwp5e (Implement ShutterButton (76pt circle, press feedback)), 7pbwp5f (Replace RefusalBanner with RefusalSheet bottom sheet)
+  - Stream: 2
+  - Requirements: [20.2](requirements.md#20.2), [20.3](requirements.md#20.3), [20.4](requirements.md#20.4), [20.5](requirements.md#20.5), [20.6](requirements.md#20.6), [20.7](requirements.md#20.7)
+
+- [x] 53. Add design-system token assertions to CI <!-- id:7pbwp5j -->
+  - XCTest that asserts every `Color` referenced in the new views resolves through a `Color.<token>` named accessor in `App/Colors.swift` — guards against future inline `Color(red:green:blue:)` or hex string usage in view bodies.
+  - Implementation: a `swift-syntax`-based source-scan or a simple grep step in the test target's setUp; flag violations.
+  - Token coverage report listed in the test output.
+  - Stream: 2
+  - Requirements: [20.1](requirements.md#20.1)

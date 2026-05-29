@@ -2,21 +2,21 @@ import CaptureKit
 import Pipeline
 import SwiftUI
 
-// Root view of the capture flow. Composes the AR preview, the live indicators,
-// the persistent CaptureMode toggle (Decision 35), the shutter, the refusal
-// banner overlay, and the settings entry. Behaviour lives in CaptureFlowModel;
-// this is composition only.
+// Root of the Photo tab (UI Req §20 / Decision 16). Composes:
+//   • `CaptureTopBar`            — close + flash/torch (top chrome)
+//   • `LiveIndicatorBadge`       — consolidated tilt/distance/coverage chip
+//   • `CaptureModeToggle`        — capsule pill above the shutter
+//   • `ShutterButton`            — 76pt circle with press feedback
+//   • `RefusalSheet`             — bottom-sheet refusal surface
+// Behaviour lives in `CaptureFlowModel`; this is composition only.
+// CaptureMode (Decision 35) is read via `@AppStorage` so any UI toggle change
+// flows here without coupling.
 struct CaptureFlowView: View {
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
 
-    @AppStorage(SettingsKeys.captureMode) private var captureModeRaw: String = CaptureMode.double.rawValue
     @State private var observer: LiveSampleObserver?
-
-    private var mode: CaptureMode {
-        CaptureMode(rawValue: captureModeRaw) ?? .double
-    }
 
     var body: some View {
         NavigationStack(path: $model.navigationPath) {
@@ -24,21 +24,13 @@ struct CaptureFlowView: View {
                 .navigationDestination(for: MealRecord.self) { record in
                     ResultView(
                         record: record,
+                        mode: .justCaptured,
                         onNewCapture: { model.dismissResult() },
                         onRetake: { model.dismissResult() }
                     )
                 }
-                .navigationTitle("Capture")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink {
-                            SettingsView(store: store)
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                    }
-                }
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 
@@ -54,27 +46,29 @@ struct CaptureFlowView: View {
 
     private var capture: some View {
         ZStack {
-            ARPreviewView(engine: engine)
-                .ignoresSafeArea()
+            Color.captureBackground.ignoresSafeArea()
+            ARPreviewView(engine: engine).ignoresSafeArea()
 
-            VStack {
-                topHints
+            VStack(spacing: 0) {
+                CaptureTopBar()
+                    .padding(.top, 8)
+                Spacer().frame(height: 24)
+                if model.currentSnapshot != nil, !isInitialising {
+                    LiveIndicatorBadge(
+                        model: model.indicators,
+                        supportsLiDAR: model.supportsLiDAR,
+                        isReady: isReady,
+                        targetTiltDegrees: model.awaitingObliqueView ? 25 : 0
+                    )
+                } else {
+                    initialisingHint
+                }
                 Spacer()
-                LiveIndicatorView(
-                    model: model.indicators,
-                    supportsLiDAR: model.supportsLiDAR,
-                    activeMode: mode,
-                    targetTiltDegrees: model.awaitingObliqueView ? 25 : 0
-                )
-                shutterStack
-                    .padding(.bottom, 24)
+                bottomChrome
             }
         }
-        .overlay(alignment: .top) {
-            if case .refused(let failure, _) = model.state {
-                RefusalBanner(failure: failure) { model.tryAgain() }
-                    .padding(.top, 8)
-            }
+        .sheet(item: refusalBinding) { refusal in
+            RefusalSheet(failure: refusal.failure) { model.retry() }
         }
         .onAppear {
             let obs = observer ?? LiveSampleObserver(model: model)
@@ -84,78 +78,62 @@ struct CaptureFlowView: View {
         .onDisappear { observer?.stop() }
     }
 
+    private var bottomChrome: some View {
+        VStack(spacing: 16) {
+            CaptureModeToggle(supportsLiDAR: model.supportsLiDAR, interactive: !model.isBusy)
+                .padding(.horizontal, 48)
+            ShutterButton(state: shutterState) { model.shutter() }
+            Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
+        }
+    }
+
     @ViewBuilder
-    private var topHints: some View {
-        VStack(spacing: 6) {
+    private var initialisingHint: some View {
+        let hint: (text: String, identifier: String, symbol: String)? = {
             switch model.state {
-            case .initialising:
-                Label("Initialising…", systemImage: "hourglass")
-                    .accessibilityIdentifier("hint.initialising")
-            case .trackingLost:
-                Label("Tracking lost — hold steady", systemImage: "arrow.triangle.2.circlepath")
-                    .accessibilityIdentifier("hint.trackingLost")
-            case .estimating:
-                Label("Estimating…", systemImage: "hourglass")
-                    .accessibilityIdentifier("hint.estimating")
-            case .capturing:
-                Label("Capturing…", systemImage: "camera")
-                    .accessibilityIdentifier("hint.capturing")
-            default:
-                if model.awaitingObliqueView {
-                    Text("Angled view — tilt to about 25°")
-                } else if mode == .double {
-                    Text("Top-down view")
-                    Label("Include an ID-1 reference card, flat in the scene", systemImage: "creditcard")
-                        .font(.caption)
-                }
+            case .initialising: return ("Initialising…", "hint.initialising", "hourglass")
+            case .trackingLost: return ("Tracking lost — hold steady", "hint.trackingLost", "arrow.triangle.2.circlepath")
+            case .estimating: return ("Estimating…", "hint.estimating", "hourglass")
+            case .capturing: return ("Capturing…", "hint.capturing", "camera")
+            default: return nil
             }
-        }
-        .font(.callout)
-        .padding(8)
-        .background(.ultraThinMaterial, in: Capsule())
-        .padding(.top, 8)
-    }
-
-    @ViewBuilder
-    private var shutterStack: some View {
-        VStack(spacing: 12) {
-            captureModePicker
-            Button {
-                model.shutter()
-            } label: {
-                Circle()
-                    .fill(model.canShutter ? Color.medataAccent : Color.gray.opacity(0.5))
-                    .frame(width: 72, height: 72)
-                    .overlay(Circle().stroke(.white, lineWidth: 4))
-            }
-            .disabled(!model.canShutter || model.isBusy)
-            .accessibilityIdentifier("shutter")
+        }()
+        if let hint {
+            Label(hint.text, systemImage: hint.symbol)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.captureChromeText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.captureChromeBG, in: Capsule())
+                .accessibilityIdentifier(hint.identifier)
         }
     }
 
-    // Persistent segmented control above the shutter (Decision 35). Single mode
-    // is disabled on non-LiDAR hardware. Mid-session changes are persisted to
-    // UserDefaults but ignored by the in-flight estimation (the model freezes
-    // the mode at shutter-tap time).
-    @ViewBuilder
-    private var captureModePicker: some View {
-        Picker("Capture mode", selection: $captureModeRaw) {
-            Text("Single")
-                .tag(CaptureMode.single.rawValue)
-            Text("Double")
-                .tag(CaptureMode.double.rawValue)
-        }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("captureModePicker")
-        .frame(maxWidth: 240)
-        .disabled(model.isBusy)
-        .onAppear {
-            // Single mode requires LiDAR; force-fallback if persistence has a
-            // stale value on a non-LiDAR device.
-            if !model.supportsLiDAR, captureModeRaw == CaptureMode.single.rawValue {
-                captureModeRaw = CaptureMode.double.rawValue
-            }
-        }
+    private var isInitialising: Bool {
+        if case .initialising = model.state { return true }
+        return false
+    }
+
+    private var isReady: Bool {
+        if case .ready = model.state { return true }
+        return false
+    }
+
+    private var shutterState: ShutterButtonState {
+        if model.isBusy { return .capturing }
+        return model.canShutter ? .ready : .disabled
+    }
+
+    // Bridges `model.refusal` (read-only on the model side; setting `nil`
+    // currently has no effect) into a `Binding` for `.sheet(item:)`. A
+    // swipe-down on the sheet writes `nil` here, which is a no-op against the
+    // `.refused` state — the sheet re-presents on the next render if the
+    // model is still `.refused`, so we collapse the binding to a get-only.
+    private var refusalBinding: Binding<ActiveRefusal?> {
+        Binding(
+            get: { model.refusal },
+            set: { _ in }
+        )
     }
 }
 

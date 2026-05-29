@@ -100,5 +100,31 @@ final class ARKitCaptureEngineStreamsTests: XCTestCase {
         XCTAssertEqual(a, .began)
         XCTAssertEqual(b, .began)
     }
+
+    // Regression: bindPreviewSession must run the bound session immediately so
+    // that ARView has a configured, running session to render. Before the fix,
+    // bindPreviewSession deferred the run until CaptureFlowModel's async
+    // start() task set runRequested=true, leaving the view rendering a
+    // bound-but-unconfigured session and producing repeated
+    // FigCaptureSourceRemote err=-12784 / Fig err=-12710 log lines on
+    // iPhone 13 Pro Max during the gap.
+    //
+    // Asserts the engine's `isRunning` flag rather than `ARSession.configuration`
+    // because the simulator does not reliably set `configuration` on `run(_:)`
+    // without a camera; `isRunning` is the engine-internal post-condition that
+    // proves `applyRunStateIfNeeded` cleared its guard and called `session.run`.
+    @MainActor
+    func testBindPreviewSessionRunsConfigImmediately() {
+        let engine = ARKitCaptureEngine()
+        let external = ARSession()
+        XCTAssertFalse(engine.isRunning, "engine starts not-running")
+
+        engine.bindPreviewSession(external)
+
+        XCTAssertTrue(
+            engine.isRunning,
+            "bindPreviewSession must run the session immediately — deferring to the async start() task reopens the FigCaptureSourceRemote race"
+        )
+    }
 }
 #endif
