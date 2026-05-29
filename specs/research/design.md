@@ -21,8 +21,8 @@ Following the requirements diff dated 2026-05-28, the following design deltas ap
 | Retention policy | All retention scheduler and 30/90/365-day settings are **removed**. Photo lifecycle is delegated to the user's Photos library; mask/depth artefacts persist for the meal's lifetime (deleted only on meal delete). | Req §17.3 |
 | Macro DB sources | CoFID + AFCD (Australian Food Composition Database) are **both** bundled and queried with a documented priority. IFCDB overlay and `ifcdbOverlayEnabled` setting are **removed**. | Decision 39, Req §11.1 |
 | Performance budget | Single 30 s end-to-end soft target (Req §16.1). Per-stage P95 budgets and `XCTClockMetric` per-stage tests are **removed**. | Decision 40, Req §16 |
-| MAE bar | Relaxed from ≤ 10 g to ≤ 25 g per meal. Acceptance harness is itself deferred. | Req §21.3 |
-| §21 harness + §6.9 β_c calibration + §6.13 calibration round-trip | **Deferred from v1**; harness code (`AccuracyHarness`, `BetaCalibrator`, `FixtureLoader`, `FixtureRunner`, `SegBench`) is removed from the tree. Sections below covering them are retained as historical specification for the future reintroduction. | Decision 34, Req §21 |
+| MAE bar | Relaxed from ≤ 10 g to ≤ 25 g per meal. Informational only — the harness that measures it is feature-flagged off. | Req §21.3 |
+| §21 harness + §6.9 β_c calibration + §6.13 calibration round-trip + §7.3 integration tests + §7.5 mIoU bench | **Feature-flagged off in v1** via the `HARNESS_ENABLED` Swift compile flag. All harness source (`AccuracyHarness`, `BetaCalibrator`, `FixtureLoader`, `FixtureRunner`, `SegBench`, `HarnessCLI/main.swift`, and the `HarnessCLITests` target) is wrapped in `#if HARNESS_ENABLED`. The flag is defined only in the `HarnessCLI` SPM target's `swiftSettings`; the iOS app target never defines it, so the shipping app binary contains zero harness code. No CI gate on harness output. Developer runs the harness locally for pipeline validation. | Decision 41 (supersedes 34), Req §21 |
 | Class palette size | 24–40 food classes (inclusive range), not exactly 24. | Req §8.4 |
 | Localisation scope | `ifcdbOverlay`-driven Irish-specific path is removed; primary market assumption is "English-speaking" via CoFID + AFCD. | Req §19 |
 
@@ -45,23 +45,31 @@ medata/
 │   ├── CaptureFlowView.swift
 │   ├── ResultView.swift
 │   └── SettingsView.swift
-└── MedataCore/                   # Swift Package, no UIKit/SwiftUI imports
-    ├── Sources/
-    │   ├── CaptureKit/           # AVFoundation/ARKit/Core Motion bridge
-    │   ├── CardDetection/        # Vision rect detection + P4P
-    │   ├── SupportPlane/         # RANSAC + iterative card-only fit
-    │   ├── MetricScale/          # Scale resolver, σ_s
-    │   ├── Segmentation/         # Core ML wrapper, pre/post, ownership
-    │   ├── Volume/               # Metal voxel carve + height-field integration
-    │   ├── Foods/                # GRDB.swift, CoFID + AFCD (both bundled, per §0)
-    │   ├── Macros/               # m_c, C_c per [12]
-    │   ├── Confidence/           # σ_meal combination per [13]
-    │   ├── Persistence/          # SQLite meal records, mask/depth artefact dir, PhotoKit asset reference
-    │   ├── PortableContracts/    # Cross-platform record types
-    │   └── Pipeline/             # Orchestrator that runs the per-path graph
-    └── Tests/
-        └── UnitTests/            # XCTest, runs on macOS + device
-                                  # HarnessCLI removed per §0 (Req §21 deferred)
+├── MedataCore/                   # Swift Package, no UIKit/SwiftUI imports
+│   ├── Sources/
+│   │   ├── CaptureKit/           # AVFoundation/ARKit/Core Motion bridge
+│   │   ├── CardDetection/        # Vision rect detection + P4P
+│   │   ├── SupportPlane/         # RANSAC + iterative card-only fit
+│   │   ├── MetricScale/          # Scale resolver, σ_s
+│   │   ├── Segmentation/         # Core ML wrapper, pre/post, ownership
+│   │   ├── Volume/               # Metal voxel carve + height-field integration
+│   │   ├── Foods/                # GRDB.swift, CoFID + AFCD (both bundled, per §0)
+│   │   ├── Macros/               # m_c, C_c per [12]
+│   │   ├── Confidence/           # σ_meal combination per [13]
+│   │   ├── Persistence/          # SQLite meal records, mask/depth artefact dir, PhotoKit asset reference
+│   │   ├── PortableContracts/    # Cross-platform record types
+│   │   └── Pipeline/             # Orchestrator that runs the per-path graph
+│   └── Tests/
+│       ├── UnitTests/            # XCTest, runs on macOS + device
+│       └── HarnessCLITests/      # XCTest, gated #if HARNESS_ENABLED per §0 / Decision 41
+├── HarnessCore/                  # SPM library, gated #if HARNESS_ENABLED per §0 / Decision 41
+│   ├── AccuracyHarness.swift
+│   ├── BetaCalibrator.swift
+│   ├── FixtureLoader.swift
+│   ├── FixtureRunner.swift
+│   └── SegBench.swift
+└── HarnessCLI/                   # SPM executable, gated #if HARNESS_ENABLED per §0 / Decision 41
+    └── main.swift
 ```
 
 The split keeps every algorithm module in `MedataCore` free of iOS-only types, satisfying [17] and Decision 2. The App target imports only the `Pipeline` module and a small SwiftUI surface.
@@ -1125,7 +1133,7 @@ O(W·H) total. Runs as a Metal kernel inside the height-field integrator so that
 
 ### 6.9 β_c calibration (offline, run on macOS via HarnessCLI)
 
-> **Deferred in v1 per §0 and Decision 34.** The harness binary that runs this algorithm has been removed; all classes are shipped with `β_c = 1.0` and `beta_status = uncalibrated_unity`. The algorithm specification below is retained as the reintroduction reference for a future iteration.
+> **Feature-flagged in v1 per §0 and Decision 41.** This algorithm lives in `HarnessCore/BetaCalibrator.swift` behind `#if HARNESS_ENABLED`. The shipping app continues to bundle all classes with `β_c = 1.0` and `beta_status = uncalibrated_unity`. A developer running `swift build --target HarnessCLI` (which defines `HARNESS_ENABLED`) can produce a candidate `food_db.sqlite` for inspection; promoting it into the bundled assets is a deliberate developer step, not automatic.
 
 
 ```
@@ -1301,7 +1309,7 @@ public protocol PaletteMigrator {
 
 ### 6.13 β_c calibration round-trip (test obligation, see §7.3)
 
-> **Deferred in v1 per §0 and Decision 34.**
+> **Feature-flagged in v1 per §0 and Decision 41.** Built only when `-D HARNESS_ENABLED` is set; not compiled into the shipping app. The assertion is run by the developer against the internal test set.
 
 
 The HarnessCLI accuracy mode performs an explicit round-trip assertion: starting from cached segmenter outputs and ground-truth gravimetric masses, run §6.9 to produce β_c values, then evaluate the full §6.6 / §6.7 pipeline on the eval subset, and assert that MAPE and MAE meet the Req 21.3 bar. This catches cases where β_c calibration converges but eval-set accuracy fails (e.g. distribution shift between calibration and eval, or class assignments unstable across the segmenter retrain that produced the calibration fixtures).
@@ -1343,15 +1351,15 @@ Generators are written for `CameraIntrinsics`, `SupportPlane`, and `Segmentation
 
 ### 7.3 Integration tests (HarnessCLI on macOS)
 
-> **Deferred in v1 per §0 and Decision 34.** `HarnessCLI` is removed from the tree. The `MealFixture` schema and the integration-test approach below are preserved as historical specification for the future harness reintroduction.
+> **Feature-flagged in v1 per §0 and Decision 41.** `HarnessCLI` lives in the tree as an SPM executable target that defines `HARNESS_ENABLED` in its own `swiftSettings`. Every source file in `HarnessCore/` and the `HarnessCLITests` test target is wrapped in `#if HARNESS_ENABLED ... #endif`. No CI gate consumes harness output in v1; the developer runs the harness locally to validate the pipeline.
 
 
-`HarnessCLI` is a Swift Package executable that:
+`HarnessCLI` is a Swift Package executable that, when built under `-D HARNESS_ENABLED`:
 
 - Loads cached `MealFixture` records from a versioned `fixtures/` directory **outside** the app binary (per Req 20 dataset acquisition).
 - Runs the full pipeline excluding the camera and the segmenter (which are mocked from cached outputs).
 - Computes MAPE, MAE, per-class breakdowns, latency per stage.
-- Emits a JSON report consumed by CI.
+- Emits a JSON report for the developer to read.
 - Runs β_c calibration per §6.9.
 - Performs the calibration round-trip assertion per §6.13.
 
@@ -1421,7 +1429,7 @@ Run on an iPhone 13 Pro Max device (the v1 hardware floor per §0). No CI thresh
 
 ### 7.5 Segmenter mIoU bench (Req 8.9)
 
-> **Deferred in v1 per §0 and Decision 34.** Segmenter quality is currently assessed informally during model development; the formal `seg-bench` CLI is removed.
+> **Feature-flagged in v1 per §0 and Decision 41.** `seg-bench` lives in `HarnessCore/SegBench.swift` under `#if HARNESS_ENABLED`. The developer runs it on demand against the held-out segmenter test set; the mIoU floor of 0.60 is interpreted by the developer rather than enforced in CI.
 
 
 `HarnessCLI seg-bench` mode loads the held-out segmenter test set, runs Core ML inference, and reports:
@@ -1430,7 +1438,7 @@ Run on an iPhone 13 Pro Max device (the v1 hardware floor per §0). No CI thresh
 - Per-class IoU.
 - Confusion matrix.
 
-CI fails if mean food-class mIoU < 0.60.
+The mean food-class mIoU < 0.60 reference is the developer's quality bar for interpreting the output; it does not gate CI in v1.
 
 ---
 

@@ -1152,7 +1152,7 @@ Affects §3.1, §3.5, §3.6, §3.8, §4.1 (`record_json` encoding), §4.3 (.prot
 ## Decision 34: §21 test harness, β_c calibration, and segmenter mIoU bench deferred from v1
 
 **Date**: 2026-05-28
-**Status**: accepted
+**Status**: superseded by Decision 41
 
 ### Context
 
@@ -1346,6 +1346,63 @@ The v1 target is accuracy on a low-volume usage profile (a few meals per day). 3
 ### Impact
 
 Research design §0 hardware-floor + perf table; research design §7.4 rewritten; research tasks 65–67 deferred; task 74 added.
+
+---
+
+## Decision 41: Roll back harness removal; gate harness behind `HARNESS_ENABLED` compile flag
+
+**Date**: 2026-05-29
+**Status**: accepted (supersedes Decision 34)
+
+### Context
+
+Decision 34 (2026-05-28) removed the §21 accuracy harness, β_c calibration, calibration round-trip, and segmenter mIoU bench from the v1 tree, deleting `HarnessCore/AccuracyHarness.swift`, `BetaCalibrator.swift`, `FixtureLoader.swift`, `FixtureRunner.swift`, `SegBench.swift`, and the `HarnessCLI/main.swift` entry point. The framing was reviewer-driven: a concern that an accuracy harness shipped in the same tree as a carb-estimation app could be read as an implicit clinical-safety claim, and that an unmaintained harness could mislead end users.
+
+Two facts override that concern for this project:
+
+1. This application is currently used by **one developer** (the author). There is no end user other than that developer. There is no clinical surface, no patient population, and no downstream consumer interpreting the estimate as a safety-critical value. Interpretation of the carbohydrate total is the developer's responsibility.
+2. The pipeline still needs to be validated before broader use is even considered. Completely removing the harness eliminates the only mechanism the developer has to confirm the pipeline produces sensible numbers on the internal test set, and incurs reintroduction cost (re-derivation of the calibration / round-trip / mIoU code that was already specified and tested).
+
+The framing in Decision 34 conflated "ship a harness in the app binary" with "have a harness available locally". Those are different concerns. The harness is a developer-only validation tool, not a runtime feature of the app.
+
+### Decision
+
+Roll back the deletion. Restore `HarnessCore/AccuracyHarness.swift`, `BetaCalibrator.swift`, `FixtureLoader.swift`, `FixtureRunner.swift`, `SegBench.swift`, `HarnessCLI/main.swift`, and the corresponding test target. Gate every harness source file behind `#if HARNESS_ENABLED ... #endif`. Define `HARNESS_ENABLED` only in the `HarnessCLI` executable target's `swiftSettings` in `Package.swift` (`.define("HARNESS_ENABLED")`). The iOS app target SHALL NOT define `HARNESS_ENABLED` in any configuration. As a consequence, the iOS app binary contains zero harness code at link time, while `swift build --target HarnessCLI` (or running the harness Xcode scheme) compiles it.
+
+The harness has no CI gate in v1. The developer runs it on demand against the internal test set. The accuracy reference (Req 21.3: MAPE < 20%, MAE ≤ 25 g) is informational and used to interpret harness output, not enforced.
+
+Bundled food classes continue to ship with `β_c = 1.0` and `beta_status = uncalibrated_unity` (per Decision 20's minimum-sample bar — the internal test set still does not meet 30 meals per class). Running `HarnessCLI calibrate-and-eval` locally produces a candidate `food_db.sqlite` for the developer to inspect, but it is NOT bundled into the shipping app until a future iteration explicitly promotes it.
+
+### Rationale
+
+The compile-flag approach is the smallest mechanism that satisfies both the "no harness in the shipping app" and "keep validation available" constraints. `#if HARNESS_ENABLED` is enforced by the Swift compiler; the gated symbols literally do not exist in builds that do not define the flag, so there is no runtime check to bypass and no dead code to audit. Package.swift owns the flag definition for the `HarnessCLI` target, so adding the flag to a different target is a deliberate edit, not an accident. Reviewers who want to confirm the shipping app excludes the harness can grep `Package.swift` and confirm no app-targeted product defines the flag.
+
+### Alternatives Considered
+
+- **Keep Decision 34 (harness fully removed)**: Rejected — loses the only available pipeline validation tool and incurs full reintroduction cost later. The developer needs to be able to validate the pipeline before scoping any further work.
+- **Runtime `UserDefaults.harnessEnabled` toggle**: Rejected — ships harness code in the shipping app binary, which is exactly the surface the reviewer concern was about. A runtime flag also means the harness symbols are always linked and may pull in dependencies the app does not otherwise need.
+- **Separate SPM target with no app dependency, no compile flag**: Rejected as insufficient on its own — physical separation already exists (`HarnessCLI` is its own executable target), but without `#if HARNESS_ENABLED` the source files themselves are still in the repo without a per-file signal that they are not app code. Adding the flag is cheap and makes intent local.
+- **Soft-deprecate per file with `@available` annotations**: Rejected — Swift availability annotations are for OS minimums, not project phases (carried over from Decision 34's alternatives).
+
+### Consequences
+
+**Positive:**
+- Developer can validate the pipeline end-to-end against the internal test set before any further scope expansion.
+- The iOS app binary contains zero harness code, satisfying the spirit of the reviewer concern without losing capability.
+- Reintroducing a CI gate in a future iteration is a one-line `swiftSettings` change on the test target, not a re-derivation of the harness.
+- Documentation and source files line up: the design sections covering §6.9, §6.13, §7.3, §7.4, §7.5 stop carrying "Deferred / Removed in v1" markers and read as current specification.
+
+**Negative:**
+- The repo carries ~775 LOC of harness code that the shipping app never compiles. This is acceptable maintenance overhead given the validation value.
+- A developer who edits a non-harness file SHALL NOT silently break the harness; running the harness Xcode scheme periodically catches drift. (Equivalent to any other gated target — same risk as a Debug-only test target.)
+- The `HARNESS_ENABLED` flag becomes a contract: any file that depends on a harness type must itself be gated, or the build breaks under `-D HARNESS_ENABLED`. The tasks list covers this.
+
+### Impact
+
+- `specs/research/requirements.md` §21 preamble rewritten; new acceptance criterion §21.9 added covering the compile flag.
+- `specs/research/design.md` §0 row for §21 harness updated to "feature-flagged, not removed"; §6.9, §6.13, §7.3, §7.5 "Deferred in v1 per §0 and Decision 34" notes replaced with "Built only when `-D HARNESS_ENABLED` is set."
+- `specs/research/tasks.md` section "Harness and Calibration — DEFERRED (REMOVED in v1)" renamed; tasks 55–67 unchecked and rewritten to "restore + gate behind `#if HARNESS_ENABLED`"; new task added to define the compile flag in `Package.swift`.
+- Working tree restoration of the deleted files is the work described by the unchecked tasks; not done as part of this decision.
 
 ---
 
