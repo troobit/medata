@@ -1,16 +1,12 @@
 import Foundation
+import Pipeline
 import SwiftUI
 
-// Persistent user-selected capture mode (Single = single-view LiDAR, Double =
-// two-view SfS). Bound to `@AppStorage("captureMode")` per UI Req §4.1 / §20.5
-// / Decision 16. The model lives App-side because the toggle's persistence and
-// rendering is purely a UI concern; the pipeline reads `CapturePath` from
-// `CaptureResult` which is set when the model wires this through at shutter
-// time (task 52).
-enum CaptureMode: String, CaseIterable, Sendable, Hashable {
-    case single
-    case double
-
+// `CaptureMode` is defined in `PortableContracts` (Decision 35) and re-exported
+// by the `Pipeline` module. The App-side adds a UI label here so the toggle and
+// any future surfaces share the same string. Persistence is via
+// `@AppStorage("captureMode")` per UI Req §4.1 / §20.5 / Decision 16.
+extension CaptureMode {
     var label: String {
         switch self {
         case .single: return "Single"

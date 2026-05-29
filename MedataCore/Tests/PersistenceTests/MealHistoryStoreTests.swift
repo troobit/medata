@@ -171,8 +171,8 @@ private func awaitWithTimeout<T: Sendable>(
 
 private func makeMealRecord(
     createdAt: Date = Date(),
-    segmenterSource: String? = nil,
-    photoAssetID: String? = nil
+    segmenterSource: String = "",
+    photoAssetID: String = ""
 ) -> MealRecord {
     var confidence = PbConfidenceResult()
     confidence.sigmaMeal = 0.82
@@ -184,13 +184,13 @@ private func makeMealRecord(
         capturePath: .singleViewLidar,
         databaseEdition: "CoFID 2024",
         paletteVersion: "v1",
+        photoAssetID: photoAssetID,
+        segmenterSource: segmenterSource,
         calibration: PbCameraIntrinsics(),
         supportPlane: PbSupportPlane(),
         scale: PbMetricScale(),
         volumes: PbVolumeResult(),
         macros: macros,
-        confidence: confidence,
-        segmenterSource: segmenterSource,
-        photoAssetID: photoAssetID
+        confidence: confidence
     )
 }

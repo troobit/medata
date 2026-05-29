@@ -11,7 +11,11 @@ struct MealRowFormat {
     let record: MealRecord
 
     var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
-    var photoAssetID: String? { record.photoAssetID }
+    // Bridge "" → nil at the format boundary so the view's fallback path
+    // ("PHAsset missing or denied") collapses both unset and explicit-deny
+    // cases. The storage field stays non-optional to match the SQLite
+    // NOT NULL DEFAULT '' schema.
+    var photoAssetID: String? { record.photoAssetID.isEmpty ? nil : record.photoAssetID }
     var carbDisplay: String { "\(ResultFormat.carbsGrams(record.macros.totalCarbsG)) g" }
 
     var timestampString: String {
@@ -108,7 +112,8 @@ struct MealRow: View {
     }
 
     private func loadThumbnail() async {
-        guard let assetID = record.photoAssetID else { return }
+        let assetID = record.photoAssetID
+        guard !assetID.isEmpty else { return }
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil)
         guard let asset = assets.firstObject else { return }
         let options = PHImageRequestOptions()

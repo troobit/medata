@@ -25,7 +25,7 @@ struct MealRowTests {
 
     @Test("placeholder chip is absent when segmenterSource is nil (pre-task-82 fixtures)")
     func placeholderAbsentForNil() {
-        let row = MealRowFormat(record: makeMealRecord(segmenterSource: nil))
+        let row = MealRowFormat(record: makeMealRecord(segmenterSource: ""))
         #expect(!row.showsPlaceholderChip)
     }
 
@@ -53,7 +53,7 @@ struct MealRowTests {
         let withPhoto = MealRowFormat(record: makeMealRecord(photoAssetID: "PHA-1234"))
         #expect(withPhoto.photoAssetID == "PHA-1234")
 
-        let withoutPhoto = MealRowFormat(record: makeMealRecord(photoAssetID: nil))
+        let withoutPhoto = MealRowFormat(record: makeMealRecord(photoAssetID: ""))
         #expect(withoutPhoto.photoAssetID == nil)
     }
 }
@@ -61,8 +61,8 @@ struct MealRowTests {
 private func makeMealRecord(
     createdAt: Date = Date(),
     totalCarbsG: Float = 42,
-    segmenterSource: String? = nil,
-    photoAssetID: String? = nil
+    segmenterSource: String = "",
+    photoAssetID: String = ""
 ) -> MealRecord {
     var confidence = PbConfidenceResult()
     confidence.sigmaMeal = 0.82
@@ -73,13 +73,13 @@ private func makeMealRecord(
         capturePath: .singleViewLidar,
         databaseEdition: "CoFID 2024",
         paletteVersion: "v1",
+        photoAssetID: photoAssetID,
+        segmenterSource: segmenterSource,
         calibration: PbCameraIntrinsics(),
         supportPlane: PbSupportPlane(),
         scale: PbMetricScale(),
         volumes: PbVolumeResult(),
         macros: macros,
-        confidence: confidence,
-        segmenterSource: segmenterSource,
-        photoAssetID: photoAssetID
+        confidence: confidence
     )
 }

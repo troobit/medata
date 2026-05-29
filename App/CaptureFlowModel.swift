@@ -236,7 +236,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             state = .initialising
             Task { [session] in try? await session.stop() }
             startTask = nil
-        case .initialising, .ready, .forcingTwoView, .trackingLost, .showingResult:
+        case .initialising, .ready, .trackingLost, .showingResult:
             firstFrame = nil
             if case .estimating = state {} else { state = .initialising }
             Task { [session] in try? await session.stop() }

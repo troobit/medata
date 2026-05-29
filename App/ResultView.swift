@@ -200,7 +200,8 @@ struct ResultView: View {
     }
 
     private func loadPhoto() async {
-        guard let assetID = record.photoAssetID else { return }
+        let assetID = record.photoAssetID
+        guard !assetID.isEmpty else { return }
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil)
         guard let asset = assets.firstObject else { return }
         let options = PHImageRequestOptions()
