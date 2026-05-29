@@ -22,11 +22,27 @@ struct MealRowFormat {
     }
 }
 
-// Single row in the Meals tab list (UI Req §19.2 / §19.3 / Decision 15).
-// Thumbnail comes via `PHImageManager.requestImage(for:targetSize:contentMode:options:resultHandler:)`
-// using `record.photoAssetID`; the placeholder chip rides on
-// `record.segmenterSource == "dev_stub"` so the dev-stub provenance is visible
-// in the history even after Phase 3 ships.
+enum MealRowLayout {
+    // §19.2 / `design-system/pages/meals-tab.md` §"MealRow": 4:3 photo above
+    // a caption row.
+    static let photoAspectRatio: CGFloat = 4.0 / 3.0
+    static let photoCornerRadius: CGFloat = 14
+    static let rowSpacing: CGFloat = 24
+    // Target size is 2× the row width to keep `PHImageManager` allocations
+    // bounded (`PHImageManagerMaximumSize` is wasteful for a list cell).
+    static let thumbnailTargetMultiplier: CGFloat = 2
+
+    static func thumbnailTargetSize(rowWidth: CGFloat) -> CGSize {
+        let width = max(rowWidth, 1) * thumbnailTargetMultiplier
+        let height = width / photoAspectRatio
+        return CGSize(width: width, height: height)
+    }
+}
+
+// Single row in the Meals tab list (UI Req §19.2 / §19.3 / §20.9 /
+// Decision 16). Feed-style layout per `design-system/pages/meals-tab.md`:
+// full-width 4:3 photo with rounded corners, then a caption row (carb total
+// + confidence pill + optional placeholder chip), then the timestamp.
 struct MealRow: View {
     let record: MealRecord
 
@@ -35,52 +51,60 @@ struct MealRow: View {
     private var format: MealRowFormat { MealRowFormat(record: record) }
 
     var body: some View {
-        HStack(spacing: 12) {
-            thumbnailView
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(format.carbDisplay)
-                        .font(.headline.monospacedDigit())
-                    if format.showsPlaceholderChip {
-                        Text("Placeholder")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.yellow.opacity(0.25), in: Capsule())
-                            .overlay(Capsule().stroke(Color.yellow, lineWidth: 1))
-                            .accessibilityIdentifier("meal.placeholderChip")
-                    }
-                    ConfidencePill(sigmaMeal: record.confidence.sigmaMeal)
-                }
-                Text(format.timestampString)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        VStack(alignment: .leading, spacing: 12) {
+            photo
+            captionRow
+            Text(format.timestampString)
+                .font(.caption)
+                .foregroundStyle(Color.textSecondary)
+                .accessibilityIdentifier("meal.timestamp")
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, MealRowLayout.rowSpacing / 2)
         .task { await loadThumbnail() }
     }
 
-    @ViewBuilder
-    private var thumbnailView: some View {
-        if let thumbnail {
-            Image(uiImage: thumbnail)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-        } else {
+    private var photo: some View {
+        GeometryReader { geom in
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.secondary.opacity(0.15))
-                Image(systemName: "photo.fill")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
+                if let thumbnail {
+                    Image(uiImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color.surfaceElevated
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 32))
+                        .foregroundStyle(Color.textSecondary)
+                        .accessibilityIdentifier("meal.photoFallback")
+                }
             }
-            .frame(width: 64, height: 64)
-            .accessibilityIdentifier("meal.photoFallback")
+            .frame(width: geom.size.width, height: geom.size.width / MealRowLayout.photoAspectRatio)
+            .clipShape(RoundedRectangle(cornerRadius: MealRowLayout.photoCornerRadius))
         }
+        .aspectRatio(MealRowLayout.photoAspectRatio, contentMode: .fit)
+        .accessibilityIdentifier("meal.photo")
+    }
+
+    private var captionRow: some View {
+        HStack(spacing: 12) {
+            Text(format.carbDisplay)
+                .font(.system(size: 24, weight: .heavy, design: .default).monospacedDigit())
+                .foregroundStyle(Color.textPrimary)
+                .accessibilityIdentifier("meal.carbDisplay")
+            ConfidencePill(sigmaMeal: record.confidence.sigmaMeal)
+            if format.showsPlaceholderChip { placeholderChip }
+            Spacer()
+        }
+    }
+
+    private var placeholderChip: some View {
+        Text("Placeholder")
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.placeholderBG, in: Capsule())
+            .foregroundStyle(Color.placeholderFG)
+            .accessibilityIdentifier("meal.placeholderChip")
     }
 
     private func loadThumbnail() async {
@@ -91,10 +115,12 @@ struct MealRow: View {
         options.deliveryMode = .opportunistic
         options.isSynchronous = false
         options.isNetworkAccessAllowed = false
+        let rowWidth = await MainActor.run { UIScreen.main.bounds.width - 32 }
+        let target = MealRowLayout.thumbnailTargetSize(rowWidth: rowWidth)
         let image: UIImage? = await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: CGSize(width: 192, height: 192),
+                targetSize: target,
                 contentMode: .aspectFill,
                 options: options
             ) { result, _ in

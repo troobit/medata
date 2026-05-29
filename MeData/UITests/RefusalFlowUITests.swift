@@ -1,10 +1,12 @@
 import XCTest
 
-// Task 26 / design.md Testing Strategy: trip `EstimationFailure.noScaleAvailable`
-// via the launch-argument harness, assert the refusal banner shows the localised
-// Irish-English message verbatim (Req §10.1, §12.2), tap "Try Again", and assert
-// the banner dismisses and the flow re-enters `.capturing` at the nadir stage
-// (Req §10.2, §10.3).
+// Task 26 + Task 52 (v1.1 — Visual design): trip
+// `EstimationFailure.noScaleAvailable` via the launch-argument harness, assert
+// the refusal *sheet* shows the localised Irish-English message verbatim
+// (Req §10.1, §12.2 / Req §20.7), tap "Try again", and assert the sheet
+// dismisses and the flow re-enters `.capturing` at the nadir stage (Req §10.2,
+// §10.3). The v1.0 top-banner overlay is superseded by the bottom sheet per
+// Decision 16; this test was updated alongside that change.
 //
 // The capture flow is AR-gated and ARKit doesn't run on the simulator, so the app
 // is launched with `-uitest` and driven through the DEBUG harness in App.swift
@@ -19,7 +21,7 @@ final class RefusalFlowUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testRefusalBannerShowsLocalisedMessageAndTryAgainReturnsToCapturing() {
+    func testRefusalSheetShowsLocalisedMessageAndTryAgainReturnsToCapturing() {
         let app = XCUIApplication()
         app.launchArguments = ["-uitest", "-uitestPipeline", "refuse"]
         app.launch()
@@ -39,18 +41,19 @@ final class RefusalFlowUITests: XCTestCase {
 
         app.buttons["uitest.releaseCapture"].tap()
 
-        // Refusal banner appears with the verbatim localised message. The message
-        // Label and the Try Again button are the reliable accessibility elements;
-        // querying the message by its label text also asserts §12.2 verbatim copy.
+        // Refusal sheet appears with the verbatim localised message (Req §20.7).
+        // The message Text and the "Try again" CTA are the reliable accessibility
+        // elements; querying the message by its label text also asserts §12.2
+        // verbatim copy.
         let message = app.staticTexts[refusalMessage]
         XCTAssertTrue(
             message.waitForExistence(timeout: 5),
-            "Estimation failure must surface the refusal banner with the verbatim "
-                + "localised message (§10.1, §12.2)"
+            "Estimation failure must surface the refusal sheet with the verbatim "
+                + "localised message (§10.1, §12.2, §20.7)"
         )
         XCTAssertTrue(app.buttons["refusal.tryAgain"].exists)
 
-        // Try Again clears the banner and re-arms capture at the nadir stage.
+        // "Try again" clears the sheet and re-arms capture at the nadir stage.
         app.buttons["refusal.tryAgain"].tap()
 
         XCTAssertTrue(
@@ -59,7 +62,7 @@ final class RefusalFlowUITests: XCTestCase {
         )
         XCTAssertFalse(
             message.exists,
-            "Try Again should dismiss the refusal banner"
+            "Try again should dismiss the refusal sheet"
         )
     }
 }

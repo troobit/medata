@@ -21,7 +21,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     private let session: CaptureSession
     private let pipeline: any PipelineEstimator
-    private let supportsLiDAR: Bool
+    let supportsLiDAR: Bool
     private let databaseEdition: String
     private let paletteVersion: String
     private let cameraAuthorisation: @Sendable () -> AVAuthorizationStatus
@@ -93,6 +93,26 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     var awaitingObliqueView: Bool { firstFrame != nil }
 
+    // Wraps the current refusal in an Identifiable surface so the bottom-sheet
+    // refusal can bind to it via `.sheet(item:)` (Req §20.7 / Decision 16).
+    // The `id` derives from the underlying failure so consecutive presentations
+    // of the same failure don't trip SwiftUI's diffing. Setting `nil` clears
+    // the refusal back into `.ready` via the standard tryAgain path.
+    var refusal: ActiveRefusal? {
+        get {
+            if case let .refused(failure, stage) = state {
+                return ActiveRefusal(failure: failure, retryStage: stage)
+            }
+            return nil
+        }
+        set {
+            if newValue == nil, case .refused = state {
+                // Swipe-down dismisses without state change (still .refused);
+                // explicit retry uses `retry()` instead.
+            }
+        }
+    }
+
     // MARK: - Public commands
 
     func shutter() {
@@ -117,6 +137,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         guard case let .ready(snapshot) = state, snapshot.pathHint == .singleViewLidar else { return }
         state = .forcingTwoView(snapshot)
     }
+
+    // Alias for the bottom-sheet "Try again" CTA (Req §20.7 / Decision 16).
+    func retry() { tryAgain() }
 
     func tryAgain() {
         guard case let .refused(_, retryStage) = state else { return }

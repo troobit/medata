@@ -297,7 +297,7 @@ references:
   - `mealsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
   - Artefact directory cleanup is best-effort: log and continue if a file is already gone.
   - Decision: 15
-  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods
+  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
@@ -389,7 +389,7 @@ references:
 
 ## v1.1 — Visual design
 
-- [ ] 42. Add Color tokens to App/Colors.swift per design-system/MASTER.md <!-- id:7pbwp58 -->
+- [x] 42. Add Color tokens to App/Colors.swift per design-system/MASTER.md <!-- id:7pbwp58 -->
   - Add token names (`captureBackground`, `captureChromeText`, `captureChromeBG`, `captureScrim`, `surfacePrimary`, `surfaceElevated`, `placeholderBG`, `placeholderFG`) per `design-system/MASTER.md` §"Colour tokens".
   - Confidence pill colours move from inline values into named tokens (`confidenceHigh`, `confidenceModerate`, `confidenceLow`).
   - Tests: a snapshot test verifies hex resolution under both light and dark mode for tokens that adapt; a static test asserts `medataAccent.cgColor` equals `#63FF00`.
@@ -397,7 +397,7 @@ references:
   - Stream: 2
   - Requirements: [20.1](requirements.md#20.1), [20.2](requirements.md#20.2)
 
-- [ ] 43. Implement ConfidencePill shared view (icon + label + value) <!-- id:7pbwp59 -->
+- [x] 43. Implement ConfidencePill shared view (icon + label + value) <!-- id:7pbwp59 -->
   - Extract `App/ConfidencePill.swift` consumed by `ResultView` and `MealRow`.
   - Three-tier rendering: `checkmark.seal.fill` + "High" for σ ≥ 0.75; `exclamationmark.triangle.fill` + "Moderate" for 0.60 ≤ σ < 0.75; `xmark.octagon.fill` + "Low" for σ < 0.60. Icon satisfies the `color-not-only` accessibility rule.
   - Body: pill (capsule shape), 28pt tall, `padding(.horizontal, 12)`, semibold body text.
@@ -406,7 +406,7 @@ references:
   - Stream: 2
   - Requirements: [20.8](requirements.md#20.8)
 
-- [ ] 44. Write tests for LiveIndicatorBadge (consolidated chip, auto-hide, re-show on tap or out-of-range) <!-- id:7pbwp5a -->
+- [x] 44. Write tests for LiveIndicatorBadge (consolidated chip, auto-hide, re-show on tap or out-of-range) <!-- id:7pbwp5a -->
   - Initial render shows all three sub-elements (tilt, distance, LiDAR coverage) when `supportsLiDAR`; omits the latter two when not.
   - After 5 s of in-range `.ready` state, the chip fades to opacity 0.0 (still hit-testable via 48pt `hitSlop`).
   - Tap on the hidden chip re-shows it; an out-of-range tilt write also re-shows it.
@@ -415,7 +415,7 @@ references:
   - Stream: 2
   - Requirements: [20.4](requirements.md#20.4)
 
-- [ ] 45. Implement LiveIndicatorBadge; supersede LiveIndicatorView <!-- id:7pbwp5b -->
+- [x] 45. Implement LiveIndicatorBadge; supersede LiveIndicatorView <!-- id:7pbwp5b -->
   - Create `App/LiveIndicatorBadge.swift` consuming `LiveIndicatorModel`.
   - Layout per `design-system/pages/photo-tab.md` §"Indicator badge": single chip with three sub-elements separated by an 8pt hairline.
   - Auto-hide via `Task.sleep(5_000_000_000)` started when state enters `.ready` and all values in-range; cancelled on any out-of-range write or tap.
@@ -425,7 +425,7 @@ references:
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3), [20.4](requirements.md#20.4)
 
-- [ ] 46. Implement CaptureTopBar (close + flash/torch) <!-- id:7pbwp5c -->
+- [x] 46. Implement CaptureTopBar (close + flash/torch) <!-- id:7pbwp5c -->
   - Create `App/CaptureTopBar.swift` per `design-system/pages/photo-tab.md` §"Top chrome".
   - Close (`xmark`) button: SF Symbol, 24pt, white, in a 40pt `captureChromeBG` capsule. Action: pop the navigation stack if any view is presented above the capture view; otherwise no-op.
   - Flash/torch toggle: SF Symbol `bolt.fill` / `bolt.slash.fill`, same capsule. Bound to `AVCaptureDevice.torchMode`. Hidden when the AR session is off or the device has no torch.
@@ -433,7 +433,7 @@ references:
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3)
 
-- [ ] 47. Rewrite CaptureModeToggle as capsule pill <!-- id:7pbwp5d -->
+- [x] 47. Rewrite CaptureModeToggle as capsule pill <!-- id:7pbwp5d -->
   - Replace the v1.0 segmented control rendering with the pill design per `design-system/pages/photo-tab.md` §"Capture-mode pill".
   - Animated inner accent pill slides between Single and Double positions with spring `.bouncy(duration: 0.2)`.
   - Same `@AppStorage("captureMode")` binding; no model changes.
@@ -442,7 +442,7 @@ references:
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3), [20.5](requirements.md#20.5)
 
-- [ ] 48. Implement ShutterButton (76pt circle, press feedback) <!-- id:7pbwp5e -->
+- [x] 48. Implement ShutterButton (76pt circle, press feedback) <!-- id:7pbwp5e -->
   - Extract shutter rendering out of `CaptureFlowView` into `App/ShutterButton.swift`.
   - 76pt outer ring (4pt stroke white) + 60pt inner fill (white). On press: inner shrinks to 52pt + ring widens to 6pt over 100ms; on release: spring back over 150ms `.snappy`.
   - Position: horizontally centred, ≥24pt above the tab bar top edge + safe area bottom.
@@ -452,7 +452,7 @@ references:
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3), [20.6](requirements.md#20.6), [20.10](requirements.md#20.10)
 
-- [ ] 49. Replace RefusalBanner with RefusalSheet bottom sheet <!-- id:7pbwp5f -->
+- [x] 49. Replace RefusalBanner with RefusalSheet bottom sheet <!-- id:7pbwp5f -->
   - Create `App/RefusalSheet.swift` per `design-system/pages/photo-tab.md` §"Refusal banner". Bottom sheet via `.sheet(item: $model.refusal)` with `.presentationDetents([.fraction(0.35)])` and `.presentationDragIndicator(.visible)`.
   - Content: SF Symbol matching the failure, large title (Irish-English), one-line copy, single "Try again" primary CTA.
   - Dismiss by swipe-down or "Try again" tap → `state = .capturing(retryStage, ...)`.
@@ -462,7 +462,7 @@ references:
   - Stream: 2
   - Requirements: [20.7](requirements.md#20.7)
 
-- [ ] 50. Restyle ResultView to display-scale carb total + dimmed photo background <!-- id:7pbwp5g -->
+- [x] 50. Restyle ResultView to display-scale carb total + dimmed photo background <!-- id:7pbwp5g -->
   - Layout per `design-system/pages/photo-tab.md` §"ResultView": full-bleed photo (via `PHImageManager`, dimmed by the top/bottom black-to-transparent scrim), centred carb total at 72pt heavy monospaced (`Color.captureChromeText`), confidence pill below, placeholder chip below that when `segmenterSource == "dev_stub"`.
   - `.contentTransition(.numericText())` on the carb total; falls back to snap-in under reduced motion.
   - Dynamic Type clamp at AX5: maximum display size 88pt to prevent overflow.
@@ -472,7 +472,7 @@ references:
   - Stream: 2
   - Requirements: [20.2](requirements.md#20.2), [20.8](requirements.md#20.8), [20.11](requirements.md#20.11), [20.12](requirements.md#20.12)
 
-- [ ] 51. Restyle MealRow to feed-style layout <!-- id:7pbwp5h -->
+- [x] 51. Restyle MealRow to feed-style layout <!-- id:7pbwp5h -->
   - Replace the v1.1 compact row layout with the feed-style layout per `design-system/pages/meals-tab.md` §"`MealRow`": full-width 4:3 photo with `.clipShape(RoundedRectangle(cornerRadius: 14))`, then caption row (carb total at 24pt heavy mono + ConfidencePill + optional placeholder chip), then timestamp.
   - 24pt gap between rows; `.listStyle(.plain)` on the parent List.
   - Thumbnail target size = 2× row width, NOT `PHImageManagerMaximumSize`.
@@ -482,7 +482,7 @@ references:
   - Stream: 2
   - Requirements: [20.9](requirements.md#20.9), [20.10](requirements.md#20.10)
 
-- [ ] 52. Wire CaptureFlowView to the new chrome (CaptureTopBar, LiveIndicatorBadge, ShutterButton, RefusalSheet, restyled CaptureModeToggle) <!-- id:7pbwp5i -->
+- [x] 52. Wire CaptureFlowView to the new chrome (CaptureTopBar, LiveIndicatorBadge, ShutterButton, RefusalSheet, restyled CaptureModeToggle) <!-- id:7pbwp5i -->
   - Compose the new components into `App/CaptureFlowView.swift`. Black background, ARPreviewView full-bleed, top chrome via safe area, indicator badge via top-center overlay, capture-mode pill + shutter via bottom overlay.
   - Refusal: `.sheet(item: $model.refusal) { failure in RefusalSheet(failure: failure, retry: { model.retry() }) }`.
   - Delete dead references to `LiveIndicatorView` and `RefusalBanner`.
@@ -491,7 +491,7 @@ references:
   - Stream: 2
   - Requirements: [20.2](requirements.md#20.2), [20.3](requirements.md#20.3), [20.4](requirements.md#20.4), [20.5](requirements.md#20.5), [20.6](requirements.md#20.6), [20.7](requirements.md#20.7)
 
-- [ ] 53. Add design-system token assertions to CI <!-- id:7pbwp5j -->
+- [x] 53. Add design-system token assertions to CI <!-- id:7pbwp5j -->
   - XCTest that asserts every `Color` referenced in the new views resolves through a `Color.<token>` named accessor in `App/Colors.swift` — guards against future inline `Color(red:green:blue:)` or hex string usage in view bodies.
   - Implementation: a `swift-syntax`-based source-scan or a simple grep step in the test target's setUp; flag violations.
   - Token coverage report listed in the test output.

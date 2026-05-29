@@ -44,7 +44,9 @@ struct MealsTabView: View {
 }
 
 // Plain List with one trailing swipe action — no .searchable, no EditButton,
-// no selection binding (Req §19.8).
+// no selection binding (Req §19.8). Feed-style separators hidden per
+// `design-system/pages/meals-tab.md`: rows are visually separated by the 24pt
+// gap and the photo's rounded corners, not by a hairline rule (Req §20.9).
 struct MealListView: View {
     @Bindable var model: MealHistoryModel
 
@@ -54,6 +56,8 @@ struct MealListView: View {
                 NavigationLink(value: record) {
                     MealRow(record: record)
                 }
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.surfacePrimary)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
                         Task { await model.delete(record) }
@@ -65,5 +69,7 @@ struct MealListView: View {
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.surfacePrimary)
     }
 }

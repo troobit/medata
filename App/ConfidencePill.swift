@@ -1,21 +1,52 @@
 import Pipeline
 import SwiftUI
 
-// Shared three-tier confidence pill rendering (UI Req §9.2 / Decision 8 / §19.2).
-// Used by `ResultView` and `MealRow` so the visual treatment stays identical
-// between the just-captured surface and the meal-history row.
+// Shared three-tier confidence pill rendering (UI Req §9.2 / §19.2 / Decision 8
+// / Decision 16). Used by `ResultView` and `MealRow` so the visual treatment
+// stays identical between the just-captured surface and the meal-history row.
+//
+// The icon next to the label satisfies the `color-not-only` accessibility rule
+// — a colour-blind user can still distinguish High / Moderate / Low without
+// relying on hue alone.
 struct ConfidencePill: View {
     let sigmaMeal: Float
 
     private var level: ConfidenceLevel { .forSigma(sigmaMeal) }
 
     var body: some View {
-        Text(level.label)
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(level.colour.opacity(0.25), in: Capsule())
-            .overlay(Capsule().stroke(level.colour, lineWidth: 1.2))
-            .accessibilityLabel("Confidence \(level.label)")
+        Label {
+            Text(level.label)
+                .font(.body.weight(.semibold))
+        } icon: {
+            Image(systemName: level.iconName)
+        }
+        .labelStyle(.titleAndIcon)
+        .foregroundStyle(Color.captureChromeText)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .frame(minHeight: 28)
+        .background(level.colour.opacity(0.85), in: Capsule())
+        .accessibilityLabel("Confidence \(level.label)")
+        .accessibilityIdentifier("confidencePill.\(level.accessibilityToken)")
+    }
+}
+
+extension ConfidenceLevel {
+    // SF Symbol per design-system/pages/photo-tab.md §"ResultView" + the
+    // `color-not-only` rule referenced in MASTER.md.
+    var iconName: String {
+        switch self {
+        case .high: return "checkmark.seal.fill"
+        case .moderate: return "exclamationmark.triangle.fill"
+        case .low: return "xmark.octagon.fill"
+        }
+    }
+
+    var accessibilityToken: String {
+        switch self {
+        case .high: return "high"
+        case .moderate: return "moderate"
+        case .low: return "low"
+        }
     }
 }
