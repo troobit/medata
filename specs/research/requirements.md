@@ -1,8 +1,8 @@
 # Research — Requirements
 
-**Version:** 0.3
-**Date:** 2026-05-06
-**Status:** Draft (second-round review revision — NB1–NB5 + consistency fixes applied)
+**Version:** 0.4
+**Date:** 2026-05-29
+**Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter added)
 **Branch:** research
 
 ## Introduction
@@ -46,9 +46,17 @@ where:
 - `specs/cloud-validation` (future): the optional cloud cross-check fallback (Option D in Decision 3).
 - Liquids and semi-liquids (see assumption 4).
 
+### Delivery phases
+
+V1 work proceeds in three ordered phases. Each phase has an acceptance bar; later phases SHALL NOT block earlier ones. Numeric accuracy targets ([21.3](#21.3)) and segmenter quality targets ([8.9](#8.9)) apply to **Phase 3 only** — they are not gates on Phase 1 or Phase 2 sign-off.
+
+1. **Phase 1 — RUNNING DEVICE (current).** A working pipeline on the developer device (iPhone 13 Pro Max) end-to-end: capture → segmentation (dev-stub) → volume → macros → result. The segmenter is a development stub per [23](#23-phased-delivery-and-development-stubs); numeric outputs are placeholders. The capture flow, persistence, gating, refusal paths, and confidence combination are all real. Success: tap shutter on device, see a placeholder carbohydrate value on the result view, meal persists.
+2. **Phase 2 — UI/UX iteration.** Once Phase 1 is on device, the capture flow, gating affordances, result view, settings, and history view are refined against real-device usage. The dev-stub segmenter is still in use. No new pipeline algorithms.
+3. **Phase 3 — Data veracity and modelling.** The trained Core ML segmenter ([8](#8-food-semantic-segmentation)) is bundled, β_c calibration ([11.7](#11.7)) is run, the accuracy harness ([21](#21-test-harness-and-validation)) is exercised, and the [21.3](#21.3) reference is measured. The placeholder banner from [23.3](#23.3) is removed.
+
 ### Hardware floor
 
-V1 hardware floor: iPhone 12 Pro and later Pro Max devices (any rear-LiDAR iPhone). V1 OS floor: iOS 26.5. The architecture is platform-portable so a future Android implementation can re-use the algorithms, data formats and segmenter without re-deriving the mathematics.
+V1 hardware floor: iPhone 13 Pro Max. V1 OS floor: iOS 26.5. The architecture is platform-portable so a future Android implementation can re-use the algorithms, data formats and segmenter without re-deriving the mathematics.
 
 ### Spelling
 
@@ -97,10 +105,11 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 2. <a name="3.2"></a>The first view SHALL target nadir (0° from vertical, top-down). The system SHALL accept a capture only when the device tilt is within ±5° of vertical.
 3. <a name="3.3"></a>WHEN the canonical two-view path is in use, the second view SHALL target an oblique angle of 25° from vertical (within the 20°–30° envelope justified by Dehais 2017 §III.B). The system SHALL accept the second capture only when the device tilt is within ±5° of 25°.
 4. <a name="3.4"></a>The system SHALL prompt the user to hold the device at a working distance of 30–40 cm from the food. WHERE LiDAR depth is available, the system SHALL measure actual distance and refuse capture outside 25–50 cm.
-5. <a name="3.5"></a>WHEN LiDAR depth is available AND a support plane has been detected (see [4](#4-support-plane-detection-and-closure)) AND valid metric depth covers ≥80% of the food region, the system MAY skip the oblique view and proceed with the **single-view depth-augmented path** (see [9.4](#9.4)). The system SHALL surface a clear UI affordance for the user to opt back into a two-view capture.
+5. <a name="3.5"></a>The capture path SHALL be selected via a persistent user toggle (`Single` / `Double`) displayed on the capture view and bound to `SettingsKeys.captureMode` in `UserDefaults`. The default on first install is `Double`. `Single` mode SHALL be greyed out on devices without a rear LiDAR scanner. The mode SHALL be read at shutter-tap time; changes during an in-flight estimation SHALL be ignored until the result view is shown. Per Decision 35. See [3.9](#3.9) for the deferred auto-selection variant.
 6. <a name="3.6"></a>The two captured views, when both are taken, SHALL share a world coordinate frame so that the relative pose of the second view with respect to the first is recorded as a 6-DOF transform $T_{1 \to 2} \in SE(3)$.
 7. <a name="3.7"></a>IF world tracking confidence falls below the platform-defined "normal" threshold between the two views, THEN the system SHALL discard the second view and prompt the user to retake it.
 8. <a name="3.8"></a>The meal record SHALL persist a `capturePath` enum with values `single_view_lidar` or `two_view_sfs` so that downstream consumers can interpret the estimate's error characteristics.
+9. <a name="3.9"></a>[DEFERRED — compile flag `AUTO_CAPTURE_MODE`] When the `AUTO_CAPTURE_MODE` compile flag is enabled, the system SHALL automatically select the single-view path when LiDAR depth is available, a support plane has been detected, and valid metric depth covers ≥80% of the food region, overriding the user toggle. This logic is preserved in `CapturePathDecider` behind the compile flag for future activation. See [3.5](#3.5) for the v1 user-selected toggle behaviour.
 
 **Portability Notes:** iOS uses Core Motion gravity, ARKit world tracking, ARKit `sceneDepth` for LiDAR. Android uses `SensorManager` gravity, ARCore world tracking, ARCore Depth API (note: ARCore Depth on most Android devices is software-derived multi-view stereo, not LiDAR — the single-view shortcut in [3.5](#3.5) requires *true* time-of-flight depth and is currently iOS-only).
 
@@ -173,7 +182,8 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 6. <a name="8.6"></a>IF a pixel is labelled `unknown_food`, THEN the pipeline SHALL include those voxels in volume estimation but SHALL flag the meal as containing unrecognised food, and the macro contribution from those voxels SHALL be reported as "unknown carbs" with a confidence of 0.
 7. <a name="8.7"></a>IF a pixel is labelled `unsupported_liquid`, THEN the pipeline SHALL exclude those voxels from volume estimation, SHALL flag the meal as containing an unsupported liquid, and SHALL surface an Irish-English message stating that standalone liquids are not estimated in v1. The `unsupported_liquid` class SHALL match *standalone* liquids only (a glass of water, a bowl of soup, a glass of milk); pourable accompaniments served on a solid food (curry sauce on rice, gravy on roast, baked-bean tomato sauce, pasta sauce on pasta) SHALL be assigned to the composite class for that dish per Decision 8 and estimated normally.
 8. <a name="8.8"></a>The segmenter input SHALL be a fixed-size resized colour image (aspect-preserving with letterboxing); the resize procedure SHALL be specified once and applied identically on both platforms.
-9. <a name="8.9"></a>The segmenter SHALL meet a minimum mean Intersection-over-Union (mIoU) of **0.60 averaged across food classes** on the held-out segmenter test set, evaluated separately from the end-to-end accuracy bar in [21.3](#21.3).
+9. <a name="8.9"></a>The segmenter SHALL meet a minimum mean Intersection-over-Union (mIoU) of **0.60 averaged across food classes** on the held-out segmenter test set, evaluated separately from the end-to-end accuracy bar in [21.3](#21.3). This bar applies to the Phase 3 trained model only ([23](#23-phased-delivery-and-development-stubs)); Phase 1 ships with a dev-stub segmenter and does NOT meet this bar.
+10. <a name="8.10"></a>WHEN a Phase 1 build (per [23.1](#23.1)) is running, the segmenter implementation SHALL be the development stub from [23.2](#23.2). The dev stub SHALL satisfy the same `SegmenterInferenceEngine` contract as the real Core ML segmenter so that downstream stages (volume, ownership, macros, confidence) execute unchanged.
 
 **Portability Notes:** iOS runs the segmenter via Core ML on the Apple Neural Engine where available. Android runs the same model via TensorFlow Lite with the NNAPI / GPU delegate.
 
@@ -225,7 +235,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 
    **Pooled fallback.** Where a class is `uncalibrated`, the design document MAY define a class-pooled β (a single β computed across all uncalibrated classes' calibration meals together) as a softer fallback than $\beta_c = 1.0$.
 7. <a name="11.8"></a>The database SHALL be packaged as a single SQLite file, which is the chosen portable format (FlatBuffers was considered and rejected for this v1 — see decision log). The schema SHALL be documented and usable verbatim on Android.
-8. <a name="11.9"></a>Each meal record SHALL persist the database edition / version identifier (e.g. "CoFID 2024 + IFCDB 2023 overlay") used to compute its macros, so that re-derivation across database updates is reproducible.
+8. <a name="11.9"></a>Each meal record SHALL persist the database edition / version identifier (e.g. "CoFID 2024 + AFCD 2024") used to compute its macros, so that re-derivation across database updates is reproducible.
 9.  <a name="11.10"></a>**Palette migration.** WHEN a newer palette / database version splits, merges, or renames classes, the system SHALL preserve the original class assignments on existing meal records and SHALL NOT silently remap them. Re-derivation of an existing meal under a newer palette is permitted only if the design document specifies an explicit class mapping (e.g. v1 `rice` → v2 `white_rice`) and the user is informed that the record has been re-derived. Meals whose original class has no mapping in the new palette SHALL remain on the old palette / database edition for that class.
 
 ### 12. Macronutrient Calculation
@@ -310,6 +320,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 2. <a name="17.2"></a>The application SHALL NOT upload, sync, or otherwise transmit any captured frame, depth map, mask or derived voxel grid to any network endpoint in the v1 core path.
 3. <a name="17.3"></a>The photo may remain on the device, and what is retained by the application is a pointer to the photo. Permissions can be managed at system level.
 4. <a name="17.5"></a>Optional cloud-validation fallback (Option D, deferred), if implemented in a future release, SHALL be off by default, opt-in per capture, and SHALL be specified separately.
+5. <a name="17.6"></a>[DEFERRED — compile flag `RETENTION_SCHEDULER_ENABLED`] When the `RETENTION_SCHEDULER_ENABLED` compile flag is enabled, the application SHALL enforce configurable retention windows (30 / 90 / 365 days, or indefinite) for locally stored artefacts via `RetentionScheduler`, using a background sweep registered with `BGProcessingTask` and a foreground fallback. This feature is disabled in v1. It will be re-evaluated when cloud storage handoff (see [17.5](#17.5)) is designed; at that point the scheduler becomes the trigger for local-to-remote migration and on-device deletion.
 
 ### 18. Portable Pipeline Contracts
 
@@ -373,6 +384,19 @@ This application is a single-developer data and context tool. Interpretation of 
 3. <a name="22.3"></a>WHEN invoked, the fallback SHALL submit only the captured frames and the on-device macro estimate, never the segmentation masks, depth map, or voxel grid (to preserve forward portability).
 4. <a name="22.4"></a>The fallback's response SHALL never overwrite the on-device estimate; the cloud value SHALL be persisted as a parallel field for comparison and clinical-track use.
 5. <a name="22.5"></a>The interface to the fallback SHALL be specified as a separate spec in the future, not in this document.
+
+### 23. Phased Delivery and Development Stubs
+
+**User Story:** As the sole developer, I want the pipeline to run end-to-end on the device with a placeholder segmenter, so that capture, persistence, gating, and UI plumbing can be exercised on real hardware before the trained Core ML model is ready.
+
+**Acceptance Criteria:**
+
+1. <a name="23.1"></a>The application SHALL build and run on the v1 hardware floor ([1.2](#1.2)) without requiring a bundled trained `.mlpackage`. Phase 1 builds (as defined under "Delivery phases" in the introduction) are the default development configuration; they SHALL run the full pipeline using the dev stub from [23.2](#23.2).
+2. <a name="23.2"></a>A `StubInferenceEngine` SHALL exist in `MedataCore/Sources/Segmentation/` and conform to the same `SegmenterInferenceEngine` contract as `CoreMLInferenceEngine`. The stub SHALL emit a deterministic per-pixel probability tensor that assigns ≥0.99 probability to a single non-background class (default: `class index 0` from `ClassPalette.v1Standard`) and SHALL NOT depend on any external model file. It SHALL complete in under 50 ms per view on the v1 hardware floor.
+3. <a name="23.3"></a>WHEN the application is built with the dev stub active, the result view SHALL display a visible Irish-English banner stating that the macronutrient values are placeholders produced by a development segmenter. The banner SHALL be unmistakable (high-contrast colour, persistent above the carbohydrate total). It SHALL be removed only when the trained Core ML model is bundled per Phase 3.
+4. <a name="23.4"></a>Selection between the dev stub and the real Core ML segmenter SHALL be controlled by a compile-time mechanism (Swift compile flag) defined in `Package.swift` for the iOS app target. The flag SHALL be defined in Debug configurations by default and SHALL NOT be defined in Release configurations once the trained model is bundled. The selection SHALL NOT be a runtime toggle.
+5. <a name="23.5"></a>Phase 1 SHALL NOT modify any algorithm, data structure, or persisted contract specified in [2](#2-camera-capture-session-and-intrinsics) through [22](#22-optional-cloud-validation-fallback-deferred-non-core). The dev stub substitutes only the inference engine; pre-processing, post-processing, ownership ([9.5](#9.5)), confidence ([13](#13-confidence-reporting)), and persistence ([15](#15-persistence-and-data-model)) SHALL be the same code paths that Phase 3 will exercise.
+6. <a name="23.6"></a>Each meal record produced by a Phase 1 build SHALL persist a `segmenterSource` field with values `dev_stub` or `coreml_<modelVersion>` so that an audit can distinguish placeholder records from real ones. Phase 1 records SHALL NOT be admitted to any Phase 3 accuracy harness output.
 
 ---
 

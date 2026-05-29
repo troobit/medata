@@ -1220,7 +1220,7 @@ A persistent setting is discoverable, predictable, and survives across sessions,
 
 **Positive:**
 - Predictable per-capture behaviour; no mid-session path swap.
-- Removes the `.forcingTwoView` transient UI state and `CapturePathDecider`.
+- Removes the `.forcingTwoView` transient UI state; `CapturePathDecider` is preserved behind the `AUTO_CAPTURE_MODE` compile flag for a future auto-selection feature (Req 3.9).
 
 **Negative:**
 - Users on LiDAR hardware who would have got Single mode automatically must now opt in.
@@ -1228,7 +1228,7 @@ A persistent setting is discoverable, predictable, and survives across sessions,
 
 ### Impact
 
-UI spec §4, §5, §6 rewritten; UI design state machine drops `.forcingTwoView` and `CapturePathDecider`; research design §2.3 rewritten; research tasks 71 added.
+UI spec §4, §5, §6 rewritten; UI design state machine drops `.forcingTwoView`; `CapturePathDecider` feature-flagged behind `AUTO_CAPTURE_MODE`; research design §2.3 rewritten; research tasks 71 and 3.9 added.
 
 ---
 
@@ -1403,6 +1403,67 @@ The compile-flag approach is the smallest mechanism that satisfies both the "no 
 - `specs/research/design.md` §0 row for §21 harness updated to "feature-flagged, not removed"; §6.9, §6.13, §7.3, §7.5 "Deferred in v1 per §0 and Decision 34" notes replaced with "Built only when `-D HARNESS_ENABLED` is set."
 - `specs/research/tasks.md` section "Harness and Calibration — DEFERRED (REMOVED in v1)" renamed; tasks 55–67 unchecked and rewritten to "restore + gate behind `#if HARNESS_ENABLED`"; new task added to define the compile flag in `Package.swift`.
 - Working tree restoration of the deleted files is the work described by the unchecked tasks; not done as part of this decision.
+
+---
+
+## Decision 42: Phase 1 ships a dev-stub segmenter; phased delivery (device → UI/UX → data veracity)
+
+**Date**: 2026-05-29
+**Status**: accepted
+
+### Context
+
+After Decision 41 restored the harness behind a compile flag, the next concrete blocker for getting the application onto the developer device (iPhone 13 Pro Max) is the absence of a trained Core ML segmenter. The `Pipeline` orchestrator, the `SegmenterInferenceEngine` protocol, the `CoreMLSegmenter` wrapper, the Metal voxel-carving and height-field code, the food database, persistence, and the capture flow are all implemented; but `App.swift` wires a `PendingPipeline` stand-in that throws `EstimationFailure.noScaleAvailable` because the real `Pipeline` instance has no `.mlpackage` to load.
+
+Two facts shape the decision:
+
+1. The trained segmenter is far from ready. Producing it requires a training-data plan (Req §20), labelled images, training runs, and post-training quantisation. Blocking device runs until those exist would freeze every other workstream — capture UX, persistence, gating, result view, history view — for weeks.
+2. The pipeline seam that the trained model will eventually plug into already exists: `SegmenterInferenceEngine`. Tests in the repo already use stub engines (`ZeroLogitsEngine`, `FoodDominantEngine`, `StubInferenceEngine` in `CoreMLSegmenterTests.swift`) to exercise the wrapper. None of them are wired into the running app.
+
+There is also an active build error: `PipelineEstimator.estimate` declares `(captureResult:)` but every call site passes `(captureResult:mode:)`. Xcode catches it; `swift build` does not, because it does not link the iOS app target. This is unrelated to the segmenter but blocks first device boot regardless.
+
+### Decision
+
+Phase 1 of v1 (RUNNING DEVICE) ships a `StubInferenceEngine` in `MedataCore/Sources/Segmentation/` that conforms to `SegmenterInferenceEngine` and emits a deterministic per-pixel argmax to a single non-background class. It is selected at compile time by a new Swift flag, `DEV_STUB_SEGMENTER`, defined in the iOS app target's Debug `swiftSettings` in `Package.swift`. The flag is not defined in Release.
+
+`App.swift` constructs the real `Pipeline` via a new `Pipeline.makeForDevice(store:)` factory that branches on `#if DEV_STUB_SEGMENTER`. `PendingPipeline` is deleted. The factory stamps each `MealRecord` with a `segmenterSource: String` field (`"dev_stub"` or `"coreml_<modelVersion>"`); the result view shows a high-contrast Irish-English placeholder banner when the value is `"dev_stub"`, so a dev-stub estimate cannot be confused for a real one. The banner reads from the persisted field, not from the build flag, so Phase 1 records remain marked as placeholders when viewed under a later Phase 3 build.
+
+The `PipelineEstimator` protocol gains the `mode:` parameter so the protocol matches its call sites. The Xcode build error is resolved.
+
+The numeric accuracy targets in Req §21.3 (MAPE < 20%, MAE ≤ 25 g) and the segmenter mIoU bar in Req §8.9 (0.60) apply to Phase 3 (data veracity) only. Phase 1 success is: tap shutter on device, see a placeholder carbohydrate value on the result view, meal persists. Phase 2 (UI/UX iteration) happens on the device with the dev stub still active. Phase 3 bundles the trained model, removes the stub, and runs the harness from Decision 41.
+
+### Rationale
+
+The compile-flag approach matches the precedent set by Decision 41 for the harness. It is the smallest mechanism that keeps the stub code out of Release builds when the trained model is bundled later, and that prevents a runtime path from accidentally reaching the stub in a shipping build. Reusing the existing `SegmenterInferenceEngine` seam means no algorithm, no portable contract, and no persisted schema needs to change for Phase 1 — every downstream stage (volume, ownership, macros, confidence, persistence) runs the same code paths Phase 3 will exercise. The placeholder banner is read from the persisted `segmenterSource` field rather than computed from the current build flag, because a meal record produced in Phase 1 must continue to surface its provenance in any later Phase, including after the stub source is deleted from the tree.
+
+Phasing the delivery (Phase 1 RUNNING DEVICE → Phase 2 UI/UX → Phase 3 data veracity) reflects the actual cost curve: getting the pipeline executing on device is days of wiring work, UI/UX iteration is a continuous feedback loop on the device, and data veracity (training the segmenter, calibrating β_c, running the harness) is the largest chunk of remaining work and gates the numeric targets. Locking the user-facing accuracy bars to Phase 3 is honest about what Phase 1 produces.
+
+### Alternatives Considered
+
+- **Block all device work until the trained segmenter is ready**: Rejected — the trained model is many weeks out and would block capture UX, persistence, and result view work that requires real-device feedback to refine. The seams to swap in the real model are already designed.
+- **Runtime fallback inside the factory (try to load `.mlpackage`; fall back to stub if missing)**: Rejected for the same reason Decision 41 rejected a runtime harness toggle — it ships stub code in the Release binary and means the stub symbols are always linked. A compile flag eliminates the stub from Release builds and makes the selection auditable in `Package.swift`.
+- **Use one of the existing test stubs (`FoodDominantEngine`, `ZeroLogitsEngine`)**: Rejected — those live in test targets, not in `MedataCore`, and were designed for specific test scenarios rather than as a development substitute. Moving them into `MedataCore` would conflate test-double scope with dev-stub scope.
+- **Hand-export a trivial Core ML model to satisfy the bundled `.mlpackage` requirement**: Rejected — adds Core ML build/import friction (the export script `tools/segmenter/export.py` exists but expects a checkpoint that doesn't exist) and obscures the fact that the result is a placeholder. A clearly-named `StubInferenceEngine` in `MedataCore/Sources/Segmentation/` is more honest about what is running.
+
+### Consequences
+
+**Positive:**
+- Device boot is unblocked; the developer can iterate on capture UX, gating, persistence, settings, and history view on real hardware while the trained model is in flight.
+- The seam that Phase 3 will populate (`SegmenterInferenceEngine`) is exercised under real load, not just in unit tests — drift between the stub and the real engine surfaces immediately when the swap happens.
+- The placeholder banner reads from the persisted `segmenterSource` field, so any audit of historical records can distinguish dev-stub estimates from real ones, even after the stub code is removed from the tree.
+- The `PipelineEstimator` signature mismatch is corrected as part of this work, removing an Xcode-only build error.
+
+**Negative:**
+- Phase 1 meal records carry placeholder macronutrient values. These records are explicitly excluded from any Phase 3 harness output via the `segmenterSource` filter — if that filter is forgotten, dev-stub records would skew accuracy metrics. The harness's existing fixture-driven inputs do not pull from the production SQLite, so the risk is procedural rather than structural.
+- A future contributor who runs the app in Release without bundling a `.mlpackage` will hit a factory failure rather than a stubbed result. This is intentional — Release builds must not silently fall back to placeholder estimates — but the error must be diagnostic enough to point at the missing model file.
+- The placeholder banner is per-record, not per-build. If the user views many Phase 1 records later, the banner is on every one of them. This is the correct behaviour (those records ARE placeholders) but may visually clutter a history view; banner styling on history rows can be revisited in Phase 2.
+
+### Impact
+
+- `specs/research/requirements.md` introduction gains a "Delivery phases" subsection; new §23 "Phased Delivery and Development Stubs" added; §8.9 annotated as Phase-3-only; §8.10 added for the Phase-1 stub.
+- `specs/research/design.md` §0 gains three rows (Phase 1 segmenter, Pipeline wiring, Delivery phasing); §2.5 added documenting the `Pipeline.makeForDevice` factory and the `PipelineEstimator` signature fix; §3.5 Segmentation gains a `StubInferenceEngine` sketch and a paragraph on its compile-flag selection and `segmenterSource` provenance.
+- `specs/research/tasks.md` gains a "Phase 1 — Device MVP (RUNNING DEVICE)" phase with tasks 76–83 covering the signature fix, the stub engine, the compile flag, the factory, the App wiring, the `segmenterSource` persistence, and the placeholder banner. Task 72 (`CaptureMode` toggle, already implemented in `CaptureFlowModel.swift` + `SettingsKeys.swift`) marked complete.
+- No changes to portable contracts beyond the additive `segmenterSource: String` field on `MealRecord`. No changes to confidence combination, volume estimation, macros, or persistence other than the new column.
 
 ---
 

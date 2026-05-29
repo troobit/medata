@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference))
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6))
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -335,7 +335,7 @@ references:
 - [x] 44. ~~Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Photos now live in the user's Photos library (Task 72); the app no longer has a retention sweep. Source files to delete in follow-up. <!-- id:0f0700a -->
   - Register `BackgroundTasks` identifier; schedule daily refresh.
   - `Persistence.sweepIfDue()` runs on app foregrounding and at end of every `Pipeline.estimate(_:)` if `last_sweep_at_ms` > 24 hours old.
-  - Blocked-by: 0f07009 (Write tests for `RetentionScheduler` (Req 17))
+  - Blocked-by: 0f07009 (~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44.), deleted, deleted
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
 
 - [x] 45. Write tests for archive export (zip) <!-- id:0f0700b -->
@@ -347,7 +347,7 @@ references:
 - [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip))
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5))
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -404,53 +404,51 @@ references:
 
 ## Harness and Calibration — Feature-flagged off (`HARNESS_ENABLED`)
 
-> Per Decision 41 (supersedes 34) and Req 21.9: tasks 55–64 were previously marked complete and then deleted from the tree. They are now reopened. The harness SHALL be restored under `#if HARNESS_ENABLED` and gated by the Swift compile flag defined on the `HarnessCLI` SPM target only. The shipping iOS app never defines the flag. None of these tasks gate CI.
-
-- [ ] 54a. Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree <!-- id:0f0700aa -->
+- [ ] 55. Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree <!-- id:0f07011 -->
   - Add the `HarnessCLI` executable target back to `Package.swift` with `swiftSettings: [.define("HARNESS_ENABLED")]`.
   - Add the `HarnessCLITests` test target with the same `swiftSettings` define.
   - Add a `HarnessCore` library target consumed by both, with the same `.define("HARNESS_ENABLED")` so its sources compile under the flag when built as part of the harness graph.
   - Confirm the iOS app product (`App` / `MedataCore` library) has NO target that defines `HARNESS_ENABLED` in any configuration; reviewer-verifiable by grepping `Package.swift`.
   - Restore deleted files to the tree as empty stubs guarded by `#if HARNESS_ENABLED ... #endif`: `HarnessCore/AccuracyHarness.swift`, `BetaCalibrator.swift`, `FixtureLoader.swift`, `FixtureRunner.swift`, `SegBench.swift`, `HarnessCLI/main.swift`, and the `MedataCore/Tests/HarnessCLITests/` test files. The actual implementations are restored by tasks 55–64; this task only restores the file scaffolding and the gate.
   - Tests: `swift build` (iOS app) succeeds and links no harness symbols; `swift build --target HarnessCLI` succeeds and `nm` shows `AccuracyHarness` symbols only in the harness binary.
-  - Requirements: [21.9](requirements.md#21.9)
   - Decision: 41
+  - Requirements: [21.9](requirements.md#21.9)
 
-- [ ] 55. Write tests for `MealFixture` .proto round-trip <!-- id:0f0700l -->
+- [ ] 56. Write tests for `MealFixture` .proto round-trip <!-- id:0f0700l -->
   - Test encode → decode → bit-equal for `MealFixture.proto` per design §7.3.
   - Test `segmenter_checkpoint_sha256` guard: fixture refused if hash mismatches bundled segmenter.
   - All test sources wrapped in `#if HARNESS_ENABLED`; live in the `HarnessCLITests` target whose `swiftSettings` define `HARNESS_ENABLED`.
-  - Blocked-by: 0f0700{aa} (Define `HARNESS_ENABLED` compile flag in Package.swift), 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
+  - Blocked-by: 0f07011 (Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree), 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [20.1](requirements.md#20.1), [21.1](requirements.md#21.1), [21.9](requirements.md#21.9)
 
-- [ ] 56. Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED` <!-- id:0f0700m -->
+- [ ] 57. Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED` <!-- id:0f0700m -->
   - SPM executable target on macOS reads MealFixture batches from `medata-fixtures` repo.
   - Exposes `--fixtures-dir`, `--edge`, `--checkpoint-sha256` CLI flags.
   - Source file `HarnessCore/FixtureLoader.swift` wrapped in `#if HARNESS_ENABLED`; `HarnessCLI/main.swift` wrapped similarly.
   - Verify: `swift build` (iOS app product) succeeds without harness; `swift build --target HarnessCLI` succeeds with harness.
-  - Blocked-by: 0f0700{aa} (Define `HARNESS_ENABLED` compile flag in Package.swift), 0f0700l (Write tests for `MealFixture` .proto round-trip)
+  - Blocked-by: 0f07011 (Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree), 0f0700l (Write tests for `MealFixture` .proto round-trip)
   - Requirements: [20.1](requirements.md#20.1), [21.1](requirements.md#21.1), [21.5](requirements.md#21.5), [21.7](requirements.md#21.7), [21.9](requirements.md#21.9)
 
-- [ ] 57. Write tests for β_c calibration log-residual closed form (§6.9) <!-- id:0f0700n -->
+- [ ] 58. Write tests for β_c calibration log-residual closed form (§6.9) <!-- id:0f0700n -->
   - Synthetic dataset where ground-truth β is known; assert recovered β_c within 5% (Decision 30 log-residual form).
   - Test path-specific clamp: (0, 1] for two-view, (0, 1.5] for single-view (M7).
   - Test 30-meal minimum per class → `calibrated`; below → `uncalibrated_pooled` with β_pool fallback.
   - Test pooled fallback: pool meals from under-sampled classes; if pool < 30 meals, β = 1.0 with `uncalibrated_unity`.
   - Test `predicted < 1e-9` denominator-collapse refusal.
   - Test sources wrapped in `#if HARNESS_ENABLED`.
-  - Blocked-by: 0f0700{aa} (Define `HARNESS_ENABLED` compile flag in Package.swift), 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
+  - Blocked-by: 0f07011 (Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree), 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [11.7](requirements.md#11.7), [21.4](requirements.md#21.4), [21.9](requirements.md#21.9)
 
-- [ ] 58. Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700o -->
+- [ ] 59. Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700o -->
   - Stratified 60/40 cal/eval split per meal (path + dominant class).
   - Per-class log-residual fit; pooled fallback if applicable.
   - Emit new `food_db.sqlite` with calibrated β_c values + new edition string.
   - Output is for developer inspection only — promoting it into the shipping app's bundled assets is a deliberate later step, not automatic (per Decision 41).
   - `HarnessCore/BetaCalibrator.swift` wrapped in `#if HARNESS_ENABLED`.
-  - Blocked-by: 0f0700n (Write tests for β_c calibration log-residual closed form (§6.9)), 0f0700m (Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED`), 0f07002 (Implement `FoodDatabase` via GRDB.swift)
+  - Blocked-by: 0f0700n (Write tests for β_c calibration log-residual closed form (§6.9)), 0f0700m (Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED`), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
   - Requirements: [11.4](requirements.md#11.4), [11.7](requirements.md#11.7), [21.4](requirements.md#21.4), [21.9](requirements.md#21.9)
 
-- [ ] 59. Write tests for accuracy harness (MAPE, MAE, per-class breakdown) <!-- id:0f0700p -->
+- [ ] 60. Write tests for accuracy harness (MAPE, MAE, per-class breakdown) <!-- id:0f0700p -->
   - Test point-estimate MAPE and MAE computation (Decision 23: bar is point estimate, CI is informational).
   - Test per-class breakdown distinguishes calibrated / uncalibrated_pooled / uncalibrated_unity (Req 21.4).
   - Test per-stage latency stats are produced for both `capturePath` values (Req 21.5).
@@ -458,29 +456,29 @@ references:
   - Blocked-by: 0f0700m (Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8), [21.9](requirements.md#21.9)
 
-- [ ] 60. Restore accuracy harness mode in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700q -->
+- [ ] 61. Restore accuracy harness mode in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700q -->
   - Run full pipeline (camera + segmenter mocked from fixtures) over eval subset.
   - Emit JSON report for developer inspection: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - **No CI gate** in v1 (per Decision 41 and Req 21.7). The developer interprets the MAPE < 20% / MAE ≤ 25 g reference in Req 21.3 informationally.
   - `HarnessCore/AccuracyHarness.swift` and `FixtureRunner.swift` wrapped in `#if HARNESS_ENABLED`.
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8), [21.9](requirements.md#21.9)
 
-- [ ] 61. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
+- [ ] 62. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
   - Run β_c calibration on cached fixtures; evaluate full pipeline on disjoint eval subset.
   - Assert MAPE and MAE bar met on synthetic test set with known ground truth.
   - Test sources wrapped in `#if HARNESS_ENABLED`.
   - Blocked-by: 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`), 0f0700q (Restore accuracy harness mode in `HarnessCLI` under `#if HARNESS_ENABLED`)
   - Requirements: [11.7](requirements.md#11.7), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.9](requirements.md#21.9)
 
-- [ ] 62. Restore calibration round-trip mode in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700s -->
+- [ ] 63. Restore calibration round-trip mode in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700s -->
   - `harness calibrate-and-eval` subcommand: end-to-end calibration → emit DB → run accuracy harness against the new DB.
   - Catches segmenter retrain → β_c invalidation regressions (per design §6.13).
   - Subcommand wrapped in `#if HARNESS_ENABLED` along with the rest of `HarnessCLI/main.swift`.
   - Blocked-by: 0f0700r (Write tests for calibration round-trip (§6.13))
   - Requirements: [11.7](requirements.md#11.7), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.9](requirements.md#21.9)
 
-- [ ] 63. Write tests for segmenter mIoU bench (Req 8.9) <!-- id:0f0700t -->
+- [ ] 64. Write tests for segmenter mIoU bench (Req 8.9) <!-- id:0f0700t -->
   - Test mean IoU over 24 food classes (excludes background, unknown_food, unsupported_liquid per Decision 14).
   - Test per-class IoU and confusion matrix output.
   - Verify behaviour when mean food-class mIoU < 0.60 (warns the developer; does NOT fail CI per Decision 41).
@@ -488,7 +486,7 @@ references:
   - Blocked-by: 0f06zzo (Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor)
   - Requirements: [8.9](requirements.md#8.9), [21.9](requirements.md#21.9)
 
-- [ ] 64. Restore segmenter mIoU bench mode in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700u -->
+- [ ] 65. Restore segmenter mIoU bench mode in `HarnessCLI` under `#if HARNESS_ENABLED` <!-- id:0f0700u -->
   - `harness seg-bench` subcommand consuming a held-out segmenter test set.
   - Reports IoU + confusion matrix for developer inspection.
   - **No CI gate** in v1 — the 0.60 mIoU floor is the developer's quality reference, not enforced.
@@ -498,38 +496,38 @@ references:
 
 ## Performance and Cleanup
 
-- [x] 65. ~~Write XCTest performance assertion: single-view P95 ≤ 1000 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700v -->
+- [x] 66. ~~Write XCTest performance assertion: single-view P95 ≤ 1000 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700v -->
   - On-device XCTest with `XCTClockMetric` over 10 runs against a fixture batch.
   - Per Req 16.1 / 16.2 single-view path budget.
   - Mark test as device-only; CI runs on tethered iPhone 12 Pro per Req 16.7.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [16.1](requirements.md#16.1), [16.2](requirements.md#16.2), [16.7](requirements.md#16.7), [21.5](requirements.md#21.5)
 
-- [x] 66. ~~Write XCTest performance assertion: two-view P95 ≤ 1800 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700w -->
+- [x] 67. ~~Write XCTest performance assertion: two-view P95 ≤ 1800 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700w -->
   - Same harness as task 65, two-view fixture batch.
   - Per Req 16.1 / 16.3 two-view path budget.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [16.1](requirements.md#16.1), [16.3](requirements.md#16.3), [16.7](requirements.md#16.7), [21.5](requirements.md#21.5)
 
-- [x] 67. ~~Implement performance harness instrumentation (per-stage timing)~~ **DEFERRED — REMOVED**: signpost intervals retained for ad-hoc Instruments inspection only; no XCTest assertions. <!-- id:0f0700x -->
+- [x] 68. ~~Implement performance harness instrumentation (per-stage timing)~~ **DEFERRED — REMOVED**: signpost intervals retained for ad-hoc Instruments inspection only; no XCTest assertions. <!-- id:0f0700x -->
   - OSSignpost intervals around each pipeline stage (CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Macros, Confidence, Persistence).
   - Surface to dev-build only (Req 16.5 CPU fallback / dev-build gates).
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [16.2](requirements.md#16.2), [16.3](requirements.md#16.3), [16.5](requirements.md#16.5), [16.7](requirements.md#16.7)
 
-- [x] 68. Write tests for Irish/British English spelling linter <!-- id:0f0700y -->
+- [x] 69. Write tests for Irish/British English spelling linter <!-- id:0f0700y -->
   - Test rejects 'recognized', 'color', 'fiber', 'favorite', 'center'.
   - Test allows 'recognised', 'colour', 'fibre', 'favourite', 'centre'.
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
   - Requirements: [19.1](requirements.md#19.1), [19.2](requirements.md#19.2)
 
-- [x] 69. Implement spelling linter as CI step <!-- id:0f0700z -->
+- [x] 70. Implement spelling linter as CI step <!-- id:0f0700z -->
   - Shell script or Swift CLI scanning `*.swift` and bundled string catalogs.
   - Runs in CI; failure blocks merge.
   - Blocked-by: 0f0700y (Write tests for Irish/British English spelling linter)
   - Requirements: [19.1](requirements.md#19.1), [19.2](requirements.md#19.2)
 
-- [x] 70. Move SvelteKit MVP source to `legacy/` directory <!-- id:0f07010 -->
+- [x] 71. Move SvelteKit MVP source to `legacy/` directory <!-- id:0f07010 -->
   - Move existing Svelte source tree to `legacy/svelte-mvp/` (Req 1.4).
   - Update root README to point at the new iOS app.
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
@@ -537,7 +535,7 @@ references:
 
 ## v1 Adjustments — New Tasks (May 2026)
 
-- [ ] 71. Replace auto-derived capture path with persistent `CaptureMode` toggle
+- [x] 72. Replace auto-derived capture path with persistent `CaptureMode` toggle
   - Add `CaptureMode` enum (`single`, `double`) in `MedataCore`.
   - Add `SettingsKeys.captureMode` UserDefaults key; default `.double` on first install.
   - Capture view: persistent segmented control above the shutter, single tap to switch; ignores in-flight estimations (matches §7.4 behaviour).
@@ -545,34 +543,99 @@ references:
   - Single mode disabled (greyed) on non-LiDAR hardware; selecting it with no LiDAR returns the existing Irish-English refusal.
   - Delete `derivePathHint` / LiDAR-coverage threshold dispatch and the prior `.forcingTwoView` transient state.
   - Tests: round-trip UserDefaults persistence; control reflects current mode; Pipeline receives the correct mode for each capture; switching mode mid-session is ignored during in-flight estimation.
-  - Requirements: [3.5](requirements.md#3.5), [3.8](requirements.md#3.8)
   - Decision: 35
+  - Requirements: [3.5](requirements.md#3.5), [3.8](requirements.md#3.8)
 
-- [ ] 72. Migrate photo storage to PhotoKit (`PHAsset.localIdentifier`)
+- [ ] 73. Migrate photo storage to PhotoKit (`PHAsset.localIdentifier`)
   - On successful capture, persist the original RGB nadir frame to the user's Photos library via `PHPhotoLibrary.shared().performChanges`; record the returned `PHAsset.localIdentifier` as `MealRecord.photoAssetID` and `meals.photo_asset_id`.
   - Request `PHAuthorizationStatus(for: .addOnly)` on first capture; show Irish-English permission-denied banner if refused (estimation still completes; `photoAssetID = ""`).
   - SQLite migration: add `photo_asset_id TEXT NOT NULL DEFAULT ''` column to `meals`; drop `image` artefact rows from existing meals (they remain on disk; cleanup is a separate dev task).
   - Remove image-bytes write from `Persistence` and from `RawFrameMetadata.imageFilename`.
   - Result view: fetch `PHAsset` by identifier; render thumbnail via `PHImageManager` if the user has full Photos access; otherwise show a placeholder.
   - Tests: PhotoKit add succeeds → identifier persisted and re-fetchable; user denies → meal saved with empty identifier; library access revoked between capture and history view → graceful placeholder.
-  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3)
   - Decision: 37
+  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3)
 
-- [ ] 73. Rewrite Settings view; bundle CoFID + AFCD; remove IFCDB
+- [ ] 74. Rewrite Settings view; bundle CoFID + AFCD; remove IFCDB
   - Delete `SettingsKeys.ifcdbOverlayEnabled`, `SettingsKeys.retentionDays`, the Settings retention picker, and the IFCDB toggle.
   - Bundle `cofid_db.sqlite` and `afcd_db.sqlite` as fixed read-only assets; `FoodDatabase` ATTACHes both at launch and applies the CoFID-wins COALESCE lookup from design §4.1.
   - About / Legal screen: list both source attributions ("Macros: CoFID 2024 + AFCD 2024" + the respective licence statements).
   - Update `database_edition` string written into `MealRecord` and `meals.database_edition`.
   - Delete the previous IFCDB overlay file from the bundle.
   - Tests: lookup priority (CoFID wins for shared classes); lookup falls through to AFCD when CoFID lacks a class; database_edition string matches the bundled pair.
-  - Requirements: [11.1](requirements.md#11.1), [11.4](requirements.md#11.4)
   - Decision: 39
+  - Requirements: [11.1](requirements.md#11.1), [11.4](requirements.md#11.4)
 
-- [ ] 74. Narrow hardware floor + replace per-stage perf checks with single 30 s soft check
+- [ ] 75. Narrow hardware floor + replace per-stage perf checks with single 30 s soft check
   - Update Info.plist `MinimumOSVersion` to 26.5; deployment target → iOS 26.5.
   - Remove the iPhone 12 Pro device-allow guard; document iPhone 13 Pro Max as the only supported device. Update Irish-English unsupported-device message.
   - Delete tasks 65/66's per-path XCTClockMetric tests; add a single end-to-end XCTest that asserts `< 30 s` for both `single` and `double` modes on the v1 device.
   - Keep `os_signpost` intervals around pipeline stages for ad-hoc Instruments inspection only (no assertions).
   - Tests: end-to-end-under-30 s for both modes on the v1 device; unsupported-device guard surfaces the new message on simulator / earlier hardware.
-  - Requirements: [1.2](requirements.md#1.2), [16.1](requirements.md#16.1)
   - Decision: 40
+  - Requirements: [1.2](requirements.md#1.2), [16.1](requirements.md#16.1)
+
+## Phase 1 — Device MVP (RUNNING DEVICE)
+
+- [ ] 76. Fix `PipelineEstimator` protocol signature to include `mode:` <!-- id:0f07014 -->
+  - Add `mode: CaptureMode` parameter to `PipelineEstimator.estimate` in `MedataCore/Sources/Pipeline/PipelineEstimator.swift` so the protocol matches the call site in `CaptureFlowModel` and the stand-in in `App.swift`.
+  - Update `Pipeline.estimate` and any other conformers (`StallingPipeline`, test doubles in `Tests/PipelineTests/`).
+  - Tests: existing `Tests/PipelineTests/` and `Tests/CaptureFlowTests/` must compile against the protocol and continue to pass; Xcode build (not just `swift build`) succeeds.
+  - Decision: 42
+  - Requirements: [23.1](requirements.md#23.1), [23.5](requirements.md#23.5)
+
+- [ ] 77. Write StubInferenceEngine tests <!-- id:0f07012 -->
+  - In `MedataCore/Tests/SegmentationTests/StubInferenceEngineTests.swift`: probability tensor is deterministic across two runs with the same `ClassPalette`; argmax of every pixel equals `dominantClass`; mass at `dominantClass` ≥ 0.99 and remaining classes sum to ≤ 0.01.
+  - FP16 layout (HWC row-major) matches `ProbabilityTensor` portable contract from design §3.5.
+  - `infer(image:)` completes in under 50 ms on the v1 device (per Req §23.2).
+  - Decision: 42
+  - Requirements: [23.2](requirements.md#23.2), [23.5](requirements.md#23.5)
+
+- [ ] 78. Implement StubInferenceEngine <!-- id:0f07013 -->
+  - Implement `StubInferenceEngine` as a `struct: SegmenterInferenceEngine` in `MedataCore/Sources/Segmentation/StubInferenceEngine.swift`.
+  - Write the FP16 tensor directly without invoking image pre-processing (per design §3.5). No `.mlpackage`, no Core ML import.
+  - Holds `palette: ClassPalette` and `dominantClass: Int = 0`.
+  - Decision: 42
+  - Blocked-by: 0f07012 (Write StubInferenceEngine tests)
+  - Requirements: [23.2](requirements.md#23.2), [8.10](requirements.md#8.10)
+
+- [ ] 79. Define `DEV_STUB_SEGMENTER` Swift compile flag in `Package.swift` <!-- id:0f07015 -->
+  - In `Package.swift`, add `.define("DEV_STUB_SEGMENTER", .when(configuration: .debug))` to the iOS app target's `swiftSettings`. Do NOT define it in Release.
+  - Document the flag at the top of `Package.swift` alongside `HARNESS_ENABLED` (Decision 41).
+  - Tests: `swift build` succeeds with and without the flag; `#if DEV_STUB_SEGMENTER` blocks compile correctly in both modes.
+  - Decision: 42
+  - Requirements: [23.4](requirements.md#23.4)
+
+- [ ] 80. Implement `Pipeline.makeForDevice(store:)` factory <!-- id:0f07016 -->
+  - Add `static func makeForDevice(store: any PersistenceStore, palette: ClassPalette = .v1Standard) throws -> Pipeline` in `MedataCore/Sources/Pipeline/Pipeline.swift`.
+  - Selects engine via `#if DEV_STUB_SEGMENTER` -> `StubInferenceEngine`, else `CoreMLInferenceEngine`.
+  - Stamps `segmenterSource` as `"dev_stub"` or `"coreml_<modelVersion>"`. Constructs `GRDBFoodDatabase.bundled()`.
+  - Tests: under DEV_STUB_SEGMENTER, factory returns a Pipeline whose end-to-end estimate succeeds against a fixture `CaptureResult` and produces a `MealRecord` with `segmenterSource == "dev_stub"`; without the flag, factory throws on missing `food_segmenter.mlpackage` (Phase 3 will bundle the model).
+  - Decision: 42
+  - Blocked-by: 0f07014 (Fix `PipelineEstimator` protocol signature to include `mode:`), 0f07013 (Implement StubInferenceEngine), 0f07015 (Define `DEV_STUB_SEGMENTER` Swift compile flag in `Package.swift`)
+  - Requirements: [23.1](requirements.md#23.1), [23.5](requirements.md#23.5), [23.6](requirements.md#23.6)
+
+- [ ] 81. Replace `PendingPipeline` in App.swift with `Pipeline.makeForDevice` <!-- id:0f07017 -->
+  - Delete the `PendingPipeline` stand-in in `App/App.swift`.
+  - Replace `pipeline: PendingPipeline()` with `pipeline: try! Pipeline.makeForDevice(store: store)` in the `MedataApp.init` non-UI-test path.
+  - Keep the `UITestSupport` stand-ins (`StallingPipeline`) — they exercise model state transitions, not the pipeline contract.
+  - Tests: existing XCUITests in `MeData/UITests/` continue to pass under `-uitest`; app launches without crash on simulator and device.
+  - Decision: 42
+  - Blocked-by: 0f07016 (Implement `Pipeline.makeForDevice(store:)` factory)
+  - Requirements: [23.1](requirements.md#23.1)
+
+- [ ] 82. Persist `segmenterSource` on `MealRecord` and SQLite `meals` <!-- id:0f07018 -->
+  - Add `segmenterSource: String` to `MealRecord` (PortableContracts) and `segmenter_source TEXT NOT NULL DEFAULT ''` column to `meals` table via SQLite migration in `GRDBPersistenceStore`.
+  - `Pipeline` writes the factory-stamped value at persist time (per task 80). The .proto `MealRecord` definition gains the same field.
+  - Tests: round-trip write -> read of `segmenterSource` for both `dev_stub` and `coreml_v0.1` values; migration on an existing DB without the column adds the column with empty-string default; .proto round-trip serialises and reads the field.
+  - Decision: 42
+  - Requirements: [23.6](requirements.md#23.6)
+
+- [ ] 83. Add Irish-English placeholder banner on result view (gated on `segmenterSource == "dev_stub"`) <!-- id:0f07019 -->
+  - In `App/ResultView.swift`, render a high-contrast Irish-English banner (system .yellow background, .black foreground, top-of-screen, persistent) when `record.segmenterSource == "dev_stub"`.
+  - Copy: "Placeholder estimate. The food recogniser is a development stub — the carbohydrate value is not a real measurement."
+  - Banner is NOT computed from `#if DEV_STUB_SEGMENTER` so Phase 1 records still surface the banner when viewed under a later Phase 3 build (per design §3.5).
+  - Tests: `ResultView` shows the banner for a `MealRecord` with `segmenterSource = "dev_stub"`; banner is absent for `segmenterSource = "coreml_v0.1"`.
+  - Decision: 42
+  - Blocked-by: 0f07018 (Persist `segmenterSource` on `MealRecord` and SQLite `meals`)
+  - Requirements: [23.3](requirements.md#23.3)

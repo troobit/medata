@@ -1,11 +1,11 @@
 # Research — Design
 
-**Version:** 0.4
-**Date:** 2026-05-28
-**Status:** Draft (round-4 revision: requirements diff May 2026 — see §0)
+**Version:** 0.5
+**Date:** 2026-05-29
+**Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter; see §0 row "Phase 1 segmenter")
 **Branch:** research
 
-This document describes the implementation design for the requirements in `requirements.md` v0.4 and the decisions in `decision_log.md` (D1–D40). It does not restate requirements; it cites them by ID.
+This document describes the implementation design for the requirements in `requirements.md` v0.4 and the decisions in `decision_log.md` (D1–D42). It does not restate requirements; it cites them by ID.
 
 ---
 
@@ -25,6 +25,9 @@ Following the requirements diff dated 2026-05-28, the following design deltas ap
 | §21 harness + §6.9 β_c calibration + §6.13 calibration round-trip + §7.3 integration tests + §7.5 mIoU bench | **Feature-flagged off in v1** via the `HARNESS_ENABLED` Swift compile flag. All harness source (`AccuracyHarness`, `BetaCalibrator`, `FixtureLoader`, `FixtureRunner`, `SegBench`, `HarnessCLI/main.swift`, and the `HarnessCLITests` target) is wrapped in `#if HARNESS_ENABLED`. The flag is defined only in the `HarnessCLI` SPM target's `swiftSettings`; the iOS app target never defines it, so the shipping app binary contains zero harness code. No CI gate on harness output. Developer runs the harness locally for pipeline validation. | Decision 41 (supersedes 34), Req §21 |
 | Class palette size | 24–40 food classes (inclusive range), not exactly 24. | Req §8.4 |
 | Localisation scope | `ifcdbOverlay`-driven Irish-specific path is removed; primary market assumption is "English-speaking" via CoFID + AFCD. | Req §19 |
+| Phase 1 segmenter | Phase 1 (RUNNING DEVICE) ships with `StubInferenceEngine` instead of a trained `.mlpackage`. Selected at compile time by the `DEV_STUB_SEGMENTER` Swift flag (defined in the iOS app target's Debug config in `Package.swift`; undefined in Release). Stub emits deterministic per-pixel argmax to a single non-background class. Result view shows a high-contrast Irish-English placeholder banner so dev-stub estimates cannot be confused for real ones. Removed when Phase 3 bundles the trained model. | Decision 42, Req §23 |
+| Pipeline wiring | `App.swift`'s `PendingPipeline` stand-in is replaced with `Pipeline.makeForDevice(store:)`, a factory that constructs the real `Pipeline` instance backed by `StubInferenceEngine` (Phase 1) or `CoreMLInferenceEngine` (Phase 3). `PipelineEstimator` protocol signature aligned: `estimate(captureResult:mode:)` — fixes the Xcode-only build error where the protocol declared no `mode:` and the call site / stand-in passed one. | Decision 42, Req §23.1 |
+| Delivery phasing | Numeric accuracy (Req §21.3) and segmenter mIoU (Req §8.9) targets apply to Phase 3 only. Phase 1 success is "tap shutter on device, see placeholder carb value on result view, meal persists." Phase 2 is UI/UX iteration on device. | Req "Delivery phases", Req §23 |
 
 ---
 
@@ -124,6 +127,46 @@ The path *capability* check still runs (Single mode requires LiDAR-supported har
 | Retention | Removed per §0. Photos are kept until the user deletes them from the Photos app; mask/depth artefacts live for the meal's lifetime and are deleted only when the meal is deleted. |
 | User correction submission | `Persistence.appendCorrection(mealId:correction:)`, never mutates the original record per [14.2] |
 | Export | `Persistence.exportArchive() -> URL` zips the SQLite DB + non-photo artefact directory per [15.8]; the export references photos by `photoAssetID` but does not embed image bytes (the user is responsible for exporting Photos separately). |
+
+### 2.5 Pipeline factory and protocol contract
+
+`App.swift` constructs the `Pipeline` instance via a factory rather than importing each concrete component directly. This is where the segmenter implementation is selected at compile time:
+
+```swift
+// MedataCore/Sources/Pipeline/Pipeline.swift
+public protocol PipelineEstimator: Sendable {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord
+}
+
+extension Pipeline {
+    public static func makeForDevice(
+        store: any PersistenceStore,
+        palette: ClassPalette = .v1Standard
+    ) throws -> Pipeline {
+        let metal = try MetalContext.default()
+        #if DEV_STUB_SEGMENTER
+        let engine: SegmenterInferenceEngine = StubInferenceEngine(palette: palette)
+        let source = "dev_stub"
+        #else
+        let engine: SegmenterInferenceEngine = try CoreMLInferenceEngine(
+            modelURL: Bundle.main.url(forResource: "food_segmenter", withExtension: "mlpackage")!,
+            palette: palette
+        )
+        let source = "coreml_\(CoreMLInferenceEngine.modelVersion)"
+        #endif
+        return Pipeline(
+            segmenter: CoreMLSegmenter(engine: engine, palette: palette, metal: metal),
+            foods: try GRDBFoodDatabase.bundled(),
+            store: store,
+            segmenterSource: source
+        )
+    }
+}
+```
+
+**Protocol signature fix.** Before this revision, `PipelineEstimator.estimate` declared `(captureResult:)` but `CaptureFlowModel` and the `PendingPipeline` stand-in called `(captureResult:mode:)`. The Xcode build surfaced this as a compile error not caught by `swift build` (which doesn't link the app target). The protocol now declares `mode:` explicitly; all conforming types must accept it. Pipeline carries `mode` through to its volume-estimator dispatch (already present in §2.3).
+
+**Replacement of `PendingPipeline`.** `App.swift` initializer constructs `Pipeline.makeForDevice(store:)` directly. The `PendingPipeline` struct is deleted. The UI-test stand-ins (`StallingPipeline` in `#if DEBUG`) remain — they exercise model state transitions, not the pipeline contract.
 
 ---
 
@@ -309,9 +352,22 @@ public final class CoreMLSegmenter {
     public init(modelPath: String, palette: ClassPalette, metal: MetalContext) throws
     public func segment(_ frame: RawFrame) async throws -> SegmentationResult
 }
+
+// Phase 1 (Req §23.2). Conforms to the same `SegmenterInferenceEngine`
+// protocol as `CoreMLInferenceEngine`, emits a deterministic FP16 tensor
+// with ≥0.99 probability on `dominantClass` (default: palette class 0)
+// and ≤0.01/(N-1) spread elsewhere. No model file required.
+public struct StubInferenceEngine: SegmenterInferenceEngine, Sendable {
+    public init(palette: ClassPalette, dominantClass: Int = 0)
+    public func infer(image: RawFrame) async throws -> ProbabilityTensor
+}
 ```
 
 The full per-pixel probability tensor is retained in memory, not just the argmax label map, because the two-view voxel ownership rule in Req 9.5 needs the per-class probabilities at each voxel's two projected pixels. At 360×360 input × 27 classes × 2 bytes (FP16) ≈ 7 MB per view — comfortably inside the 300 MB peak budget [16.6]. P1 fix: `MTLBuffer` is no longer in the public type; the `bytes` field is the portable contract and the iOS GPU buffer is a private adaptor inside `Segmentation/`.
+
+**Phase 1 dev stub.** `StubInferenceEngine` (Req §23.2) substitutes for `CoreMLInferenceEngine` at the seam already defined by the `SegmenterInferenceEngine` protocol. It is selected at compile time, not at runtime, by the `DEV_STUB_SEGMENTER` Swift flag — the alternative (a runtime factory choice) was rejected because Phase 3 should remove the stub code entirely from Release builds, and a compile flag is the smallest mechanism that achieves that (same rationale as Decision 41 for the harness). The stub does NOT use the real Core ML pre-processing pipeline; it bypasses image resize/letterbox entirely and writes the tensor directly. Pre-processing is exercised in Phase 3 when the real engine is wired.
+
+The dev-stub estimate is surfaced to the user via `MealRecord.segmenterSource` (Req §23.6), a `String` written as `"dev_stub"` for Phase 1 records and `"coreml_<modelVersion>"` for Phase 3 records. The result view branches on this string to show or hide the placeholder banner (Req §23.3); the banner is NOT computed from the build configuration directly so that a Phase 1 record viewed in a later Phase 3 build still surfaces the banner.
 
 ### 3.6 Volume
 
@@ -385,7 +441,7 @@ public enum BetaCalibrationStatus: String, Codable {
 }
 
 public protocol FoodDatabase {
-    var version: String { get }                 // current shipped edition, e.g. "CoFID 2024 + IFCDB 2023"
+    var version: String { get }                 // current shipped edition, e.g. "CoFID 2024 + AFCD 2024"
     func entry(for classId: String) -> FoodEntry?
     func entry(for classId: String, edition: String) -> FoodEntry?    // honours per-meal edition lookup per §6.12
     func availableEditions() -> [String]        // editions bundled with the app version
@@ -1537,7 +1593,7 @@ The data needed by every UI requirement is already in `MealRecord` / `RawFrame` 
 - **Mask-matching algorithm**: simple class-equivalence on per-view label maps (§6.11); no Hungarian assignment in v1.
 - **Segmenter base architecture**: DeepLabV3 with MobileNetV3-Large backbone, FP16 weight-compressed, input 513² (Decision 25).
 - **Voxel-carving compute**: Metal compute shader, 8×8×8 threadgroups (Decision 26).
-- **Asset packaging**: Bundle weights + CoFID + IFCDB in app binary (Decision 27).
+- **Asset packaging**: Bundle weights + CoFID + AFCD in app binary (Decision 27, Decision 39).
 - **Training stack**: PyTorch + `coremltools` + `ai-edge-torch`; ONNX hop bypassed (Decision 28).
 - **Serialisation format**: SQLite + protobuf-JSON BLOB for meal records (Decision 31); `.proto` schemas for portable contracts at module boundaries.
 - **Pooled β_c fallback**: enabled in v1 per §6.9 step 3; under-sampled classes use `β_pool` if computable, else `β = 1.0`.
