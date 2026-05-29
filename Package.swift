@@ -8,9 +8,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "MedataCore", targets: ["Pipeline"]),
-        .library(name: "HarnessCore", targets: ["HarnessCore"]),
-        .executable(name: "HarnessCLI", targets: ["HarnessCLI"])
+        .library(name: "MedataCore", targets: ["Pipeline"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
@@ -98,27 +96,6 @@ let package = Package(
             ],
             path: "MedataCore/Sources/Pipeline"
         ),
-        .target(
-            name: "HarnessCore",
-            dependencies: [
-                "Pipeline",
-                "CaptureKit",
-                "Segmentation",
-                "SupportPlane",
-                "Volume",
-                "Macros",
-                "Foods",
-                "PortableContracts",
-                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .product(name: "GRDB", package: "GRDB.swift")
-            ],
-            path: "HarnessCore"
-        ),
-        .executableTarget(
-            name: "HarnessCLI",
-            dependencies: ["HarnessCore", "Pipeline"],
-            path: "HarnessCLI"
-        ),
         .testTarget(
             name: "PortableContractsTests",
             dependencies: ["PortableContracts"],
@@ -186,17 +163,6 @@ let package = Package(
             name: "PipelineTests",
             dependencies: ["Pipeline", "Persistence", "PortableContracts"],
             path: "MedataCore/Tests/PipelineTests"
-        ),
-        .testTarget(
-            name: "HarnessCLITests",
-            dependencies: [
-                "HarnessCore",
-                "Segmentation",
-                "Foods",
-                "PortableContracts",
-                .product(name: "SwiftProtobuf", package: "swift-protobuf")
-            ],
-            path: "MedataCore/Tests/HarnessCLITests"
         )
     ]
 )

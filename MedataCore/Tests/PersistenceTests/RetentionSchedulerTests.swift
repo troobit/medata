@@ -1,10 +1,11 @@
+#if RETENTION_SCHEDULER_ENABLED
 import Foundation
 import PortableContracts
 import XCTest
 @testable import Persistence
 
-// Tests for RetentionScheduler per design §5 / Req 17 / task 43.
-// Uses a StubPersistenceStore to avoid real SQLite during retention logic tests.
+// Tests for RetentionScheduler per Req 17.6 / task 43.
+// Gated behind RETENTION_SCHEDULER_ENABLED — scheduler is deferred in v1.
 
 final class RetentionSchedulerTests: XCTestCase {
 
@@ -94,3 +95,5 @@ private final class StubPersistenceStore: PersistenceStore, @unchecked Sendable 
         try await deleteArtefacts(olderThan: Date().addingTimeInterval(-30 * 24 * 60 * 60))
     }
 }
+
+#endif // RETENTION_SCHEDULER_ENABLED

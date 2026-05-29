@@ -1,12 +1,6 @@
 import Pipeline
 import SwiftUI
 
-// Keys kept in a single namespace to avoid stringly-typed UserDefaults access.
-enum SettingsKeys {
-    static let retentionDays = "medata.retentionDays"
-    static let ifcdbOverlayEnabled = "medata.ifcdbOverlayEnabled"
-}
-
 // Sentinel value for "keep forever" (Req 17.4).
 private let indefinite = -1
 

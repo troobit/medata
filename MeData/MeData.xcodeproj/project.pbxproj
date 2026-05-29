@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		111EC91C2FBD45B500272C1E /* HarnessCore in Frameworks */ = {isa = PBXBuildFile; productRef = 111EC91B2FBD45B500272C1E /* HarnessCore */; };
 		111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */ = {isa = PBXBuildFile; productRef = 111EC91D2FBD45B500272C1E /* MedataCore */; };
 		111EC9232FBD47A100272C1E /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC91F2FBD47A100272C1E /* App.swift */; };
 		111EC9242FBD47A100272C1E /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9212FBD47A100272C1E /* ResultView.swift */; };
@@ -16,7 +15,7 @@
 		111EC9272FBD47A100272C1E /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC92D2FBD47A100272C1E /* Colors.swift */; };
 		111EC9282FBD47A100272C1E /* GatingSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC92E2FBD47A100272C1E /* GatingSnapshot.swift */; };
 		111EC9292FBD47A100272C1E /* CaptureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC92F2FBD47A100272C1E /* CaptureState.swift */; };
-		111EC92A2FBD47A100272C1E /* CapturePathDecider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9302FBD47A100272C1E /* CapturePathDecider.swift */; };
+		111EC92A2FBD47A100272C1E /* SettingsKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9302FBD47A100272C1E /* SettingsKeys.swift */; };
 		111EC92B2FBD47A100272C1E /* LiveIndicatorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9312FBD47A100272C1E /* LiveIndicatorModel.swift */; };
 		111EC92C2FBD47A100272C1E /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9322FBD47A100272C1E /* ShareSheet.swift */; };
 		111ECA012FBD47A100272C1E /* CaptureFlowModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA022FBD47A100272C1E /* CaptureFlowModel.swift */; };
@@ -35,7 +34,7 @@
 		111EC92D2FBD47A100272C1E /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Colors.swift; path = ../App/Colors.swift; sourceTree = SOURCE_ROOT; };
 		111EC92E2FBD47A100272C1E /* GatingSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GatingSnapshot.swift; path = ../App/GatingSnapshot.swift; sourceTree = SOURCE_ROOT; };
 		111EC92F2FBD47A100272C1E /* CaptureState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureState.swift; path = ../App/CaptureState.swift; sourceTree = SOURCE_ROOT; };
-		111EC9302FBD47A100272C1E /* CapturePathDecider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CapturePathDecider.swift; path = ../App/CapturePathDecider.swift; sourceTree = SOURCE_ROOT; };
+		111EC9302FBD47A100272C1E /* SettingsKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsKeys.swift; path = ../App/SettingsKeys.swift; sourceTree = SOURCE_ROOT; };
 		111EC9312FBD47A100272C1E /* LiveIndicatorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveIndicatorModel.swift; path = ../App/LiveIndicatorModel.swift; sourceTree = SOURCE_ROOT; };
 		111EC9322FBD47A100272C1E /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShareSheet.swift; path = ../App/ShareSheet.swift; sourceTree = SOURCE_ROOT; };
 		111ECA022FBD47A100272C1E /* CaptureFlowModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureFlowModel.swift; path = ../App/CaptureFlowModel.swift; sourceTree = SOURCE_ROOT; };
@@ -58,7 +57,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				111EC91C2FBD45B500272C1E /* HarnessCore in Frameworks */,
 				111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -76,7 +74,7 @@
 				111EC92D2FBD47A100272C1E /* Colors.swift */,
 				111EC92E2FBD47A100272C1E /* GatingSnapshot.swift */,
 				111EC92F2FBD47A100272C1E /* CaptureState.swift */,
-				111EC9302FBD47A100272C1E /* CapturePathDecider.swift */,
+				111EC9302FBD47A100272C1E /* SettingsKeys.swift */,
 				111EC9312FBD47A100272C1E /* LiveIndicatorModel.swift */,
 				111EC9322FBD47A100272C1E /* ShareSheet.swift */,
 				111ECA022FBD47A100272C1E /* CaptureFlowModel.swift */,
@@ -117,7 +115,6 @@
 			);
 			name = MeData;
 			packageProductDependencies = (
-				111EC91B2FBD45B500272C1E /* HarnessCore */,
 				111EC91D2FBD45B500272C1E /* MedataCore */,
 			);
 			productName = MeData;
@@ -183,7 +180,7 @@
 				111EC9272FBD47A100272C1E /* Colors.swift in Sources */,
 				111EC9282FBD47A100272C1E /* GatingSnapshot.swift in Sources */,
 				111EC9292FBD47A100272C1E /* CaptureState.swift in Sources */,
-				111EC92A2FBD47A100272C1E /* CapturePathDecider.swift in Sources */,
+				111EC92A2FBD47A100272C1E /* SettingsKeys.swift in Sources */,
 				111EC92B2FBD47A100272C1E /* LiveIndicatorModel.swift in Sources */,
 				111EC92C2FBD47A100272C1E /* ShareSheet.swift in Sources */,
 				111ECA012FBD47A100272C1E /* CaptureFlowModel.swift in Sources */,
@@ -419,10 +416,6 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		111EC91B2FBD45B500272C1E /* HarnessCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = HarnessCore;
-		};
 		111EC91D2FBD45B500272C1E /* MedataCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MedataCore;

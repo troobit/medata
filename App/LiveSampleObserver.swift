@@ -46,7 +46,7 @@ final class LiveSampleObserver {
     // sample so the displayed values do not flicker mid-flight.
     func apply(_ sample: Sample) {
         switch model.state {
-        case .ready, .forcingTwoView, .initialising, .trackingLost:
+        case .ready, .initialising, .trackingLost:
             model.liveSampleDidUpdate(
                 tiltDegrees: sample.tiltDegrees,
                 distanceCm: sample.distanceCm,

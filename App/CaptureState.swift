@@ -10,12 +10,14 @@ enum PermissionSubject: Equatable, Sendable {
     case motion
 }
 
+// Capture-flow states. `.forcingTwoView` was removed per Decision 35 — the
+// user picks a single persistent CaptureMode and the in-flight flow no longer
+// observes mid-session mode changes.
 enum CaptureState: Equatable {
     case initialising
     case permissionDenied(PermissionSubject)
     case trackingLost
     case ready(GatingSnapshot)
-    case forcingTwoView(GatingSnapshot)
     case capturing(stage: CaptureStage, frozen: GatingSnapshot)
     case estimating(captureResult: CaptureResult)
     case showingResult(MealRecord)
@@ -28,8 +30,7 @@ enum CaptureState: Equatable {
             return true
         case let (.permissionDenied(a), .permissionDenied(b)):
             return a == b
-        case let (.ready(a), .ready(b)),
-             let (.forcingTwoView(a), .forcingTwoView(b)):
+        case let (.ready(a), .ready(b)):
             return a == b
         case let (.capturing(aStage, aFrozen), .capturing(bStage, bFrozen)):
             return aStage == bStage && aFrozen == bFrozen

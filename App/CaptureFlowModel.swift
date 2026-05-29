@@ -6,11 +6,25 @@ import Observation
 import Pipeline
 import SwiftUI
 
+// Resolves the persistent CaptureMode from UserDefaults; defaults to `.double`
+// on first install (Decision 35). Defined at file scope (not on the @MainActor
+// class) so it can be used as the default parameter for the @Sendable closure.
+@Sendable
+func defaultCaptureModeReader() -> CaptureMode {
+    let raw = UserDefaults.standard.string(forKey: SettingsKeys.captureMode)
+    return raw.flatMap(CaptureMode.init(rawValue:)) ?? .double
+}
+
 // Orchestrator for the capture flow per `specs/ui/design.md`. Owns the state
 // machine, drives the `CaptureSession` and `PipelineEstimator`, observes
 // AR-session interruptions, and re-evaluates permissions on scene-phase
 // transitions. `@MainActor` because every state read or write happens from
 // SwiftUI bodies; AR / Core Motion deliver on the main thread already.
+//
+// Decision 35: `CaptureMode` is a persistent user-selected toggle. It is read
+// at shutter-tap time (so mid-session changes don't affect an in-flight
+// estimation) via the injected `captureModeReader` closure, which production
+// resolves to UserDefaults under `SettingsKeys.captureMode`.
 @Observable
 @MainActor
 final class CaptureFlowModel: CaptureFlowDelegate {
@@ -18,19 +32,24 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     var lastMeal: MealRecord?
     var navigationPath = NavigationPath()
     let indicators: LiveIndicatorModel
+    let supportsLiDAR: Bool
 
     private let session: CaptureSession
     private let pipeline: any PipelineEstimator
-    private let supportsLiDAR: Bool
     private let databaseEdition: String
     private let paletteVersion: String
     private let cameraAuthorisation: @Sendable () -> AVAuthorizationStatus
     private let motionAvailable: @Sendable () -> Bool
+    private let captureModeReader: @Sendable () -> CaptureMode
 
     private(set) var flowTask: Task<Void, Never>?
     private var interruptionTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
     private var firstFrame: RawFrame?
+    // Mode frozen at the shutter-tap that began the in-flight capture. The
+    // pipeline runs against this value; mid-session toggle changes are
+    // ignored until the result view is shown.
+    private var inFlightMode: CaptureMode?
 
     init(
         session: CaptureSession,
@@ -45,7 +64,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         },
         motionAvailable: @escaping @Sendable () -> Bool = {
             CMMotionManager().isDeviceMotionAvailable
-        }
+        },
+        captureModeReader: @escaping @Sendable () -> CaptureMode = defaultCaptureModeReader
     ) {
         self.session = session
         self.pipeline = pipeline
@@ -55,6 +75,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         self.paletteVersion = paletteVersion
         self.cameraAuthorisation = cameraAuthorisation
         self.motionAvailable = motionAvailable
+        self.captureModeReader = captureModeReader
 
         evaluatePermissions()
         observeInterruptions(stream: interruptions)
@@ -62,22 +83,20 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     // MARK: - Derived view state
 
-    // Shutter is armed only in .ready / .forcingTwoView with tilt in range and
-    // the distance gate satisfied, and no capture / estimation in flight (§7.2).
+    // Shutter is armed only in .ready with tilt in range and the distance
+    // gate satisfied, and no capture / estimation in flight (§7.2).
     var canShutter: Bool {
         switch state {
-        case .ready(let snapshot), .forcingTwoView(let snapshot):
+        case .ready(let snapshot):
             return snapshot.tiltInRange && distanceGateOK(snapshot)
         default:
             return false
         }
     }
 
-    // The path hint currently surfaced to the user, if any (drives the ID-1
-    // card reminder and the force-two-view control).
     var currentSnapshot: GatingSnapshot? {
         switch state {
-        case .ready(let snapshot), .forcingTwoView(let snapshot), .capturing(_, let snapshot):
+        case .ready(let snapshot), .capturing(_, let snapshot):
             return snapshot
         default:
             return nil
@@ -96,26 +115,20 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // MARK: - Public commands
 
     func shutter() {
-        if case let .ready(snapshot) = state {
-            guard snapshot.tiltInRange, distanceGateOK(snapshot) else { return }
-            if firstFrame != nil {
-                beginCapture(stage: .oblique, frozen: snapshot.withPath(.twoViewSfS))
-            } else {
-                beginCapture(stage: .nadir, frozen: snapshot)
-            }
-            return
-        }
-        if case let .forcingTwoView(snapshot) = state {
-            guard snapshot.tiltInRange, distanceGateOK(snapshot) else { return }
-            beginCapture(stage: .nadir, frozen: snapshot.withPath(.twoViewSfS))
-            return
-        }
-        // Any other state (including .capturing for rapid double-tap) is a no-op.
-    }
+        guard case let .ready(snapshot) = state,
+              snapshot.tiltInRange, distanceGateOK(snapshot)
+        else { return }
 
-    func forceTwoView() {
-        guard case let .ready(snapshot) = state, snapshot.pathHint == .singleViewLidar else { return }
-        state = .forcingTwoView(snapshot)
+        // Pick up the persistent mode at the shutter tap and freeze it for the
+        // rest of the flow (mid-session toggle changes are ignored).
+        let mode = inFlightMode ?? captureModeReader()
+        inFlightMode = mode
+
+        if firstFrame != nil {
+            beginCapture(stage: .oblique, frozen: snapshot, mode: mode)
+        } else {
+            beginCapture(stage: .nadir, frozen: snapshot, mode: mode)
+        }
     }
 
     func tryAgain() {
@@ -125,13 +138,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // so the user does not have to retake the nadir view (req §5.4). If
         // retryStage is .nadir, drop any previously captured nadir.
         if retryStage == .nadir { firstFrame = nil }
-        beginCapture(stage: retryStage, frozen: snapshot.withPath(retryStage == .nadir ? snapshot.pathHint : .twoViewSfS))
+        let mode = inFlightMode ?? captureModeReader()
+        inFlightMode = mode
+        beginCapture(stage: retryStage, frozen: snapshot, mode: mode)
     }
 
     func dismissResult() {
         guard case .showingResult = state else { return }
         navigationPath = NavigationPath()
         firstFrame = nil
+        inFlightMode = nil
         state = .ready(freshSnapshot())
     }
 
@@ -151,6 +167,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             case .capturing, .estimating:
                 state = .initialising
                 firstFrame = nil
+                inFlightMode = nil
             default:
                 break
             }
@@ -173,14 +190,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         lidarCoveragePercent: Float,
         trackingIsNormal: Bool
     ) {
-        let pathHint = CapturePathDecider.decide(
-            supportsLiDAR: supportsLiDAR,
-            latestCoveragePercent: lidarCoveragePercent
-        )
-        // Lock path to twoViewSfS while awaiting the oblique view (Decision 5
-        // implication; design.md path-hint section).
         let snapshot = GatingSnapshot(
-            pathHint: firstFrame != nil ? .twoViewSfS : pathHint,
             tiltInRange: tiltInRange(degrees: tiltDegrees),
             distanceCm: distanceCm,
             lidarCoveragePercent: lidarCoveragePercent
@@ -195,9 +205,6 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         case .ready:
             writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
             state = .ready(snapshot)
-        case .forcingTwoView:
-            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
-            state = .forcingTwoView(snapshot)
         case .trackingLost where trackingIsNormal:
             writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
             state = .ready(snapshot)
@@ -216,7 +223,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // capture. Distinct from the capture-time path which discards the frame.
     func trackingDegraded() {
         switch state {
-        case .ready, .forcingTwoView:
+        case .ready:
             state = .trackingLost
             firstFrame = nil
         case .capturing(stage: .nadir, _):
@@ -241,6 +248,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         case .began:
             cancelInFlight()
             firstFrame = nil
+            inFlightMode = nil
             state = .trackingLost
             Task { [session] in try? await session.stop() }
             startTask = nil
@@ -269,16 +277,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
-    private func beginCapture(stage: CaptureStage, frozen: GatingSnapshot) {
+    private func beginCapture(stage: CaptureStage, frozen: GatingSnapshot, mode: CaptureMode) {
         state = .capturing(stage: stage, frozen: frozen)
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.performFlow(stage: stage, frozen: frozen)
+            await self.performFlow(stage: stage, frozen: frozen, mode: mode)
         }
         flowTask = task
     }
 
-    private func performFlow(stage: CaptureStage, frozen: GatingSnapshot) async {
+    private func performFlow(stage: CaptureStage, frozen: GatingSnapshot, mode: CaptureMode) async {
         // Ensure the session has finished starting before we capture; the start
         // is kicked off fire-and-forget on .initialising entry and CaptureSession
         // throws .sessionNotStarted if captureNadir/Oblique races ahead of it.
@@ -288,14 +296,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             guard !Task.isCancelled else { return }
             guard case .capturing = state else { return }
 
-            if stage == .nadir, frozen.pathHint == .twoViewSfS {
+            // Two-view (Double) mode: after the nadir tap, stash the frame
+            // and wait for the user to take the oblique tap.
+            if stage == .nadir, mode == .double {
                 firstFrame = frame
                 state = .ready(frozen)
                 return
             }
 
             let captureResult = CaptureResult(
-                capturePath: frozen.pathHint,
+                capturePath: mode.capturePath,
                 lidar: LiDARStatus(
                     available: supportsLiDAR,
                     foodRegionCoveragePercent: frozen.lidarCoveragePercent
@@ -305,7 +315,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
                 databaseEdition: databaseEdition,
                 paletteVersion: paletteVersion
             )
-            await runEstimation(captureResult: captureResult, retryStage: stage)
+            await runEstimation(captureResult: captureResult, mode: mode, retryStage: stage)
         } catch is CancellationError {
             return
         } catch CaptureError.worldTrackingDegraded {
@@ -324,13 +334,18 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
-    private func runEstimation(captureResult: CaptureResult, retryStage: CaptureStage) async {
+    private func runEstimation(
+        captureResult: CaptureResult,
+        mode: CaptureMode,
+        retryStage: CaptureStage
+    ) async {
         state = .estimating(captureResult: captureResult)
         do {
-            let record = try await pipeline.estimate(captureResult: captureResult)
+            let record = try await pipeline.estimate(captureResult: captureResult, mode: mode)
             guard !Task.isCancelled else { return }
             guard case .estimating = state else { return }
             firstFrame = nil
+            inFlightMode = nil
             lastMeal = record
             state = .showingResult(record)
             navigationPath.append(record)
@@ -352,10 +367,6 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     private func freshSnapshot() -> GatingSnapshot {
         GatingSnapshot(
-            pathHint: CapturePathDecider.decide(
-                supportsLiDAR: supportsLiDAR,
-                latestCoveragePercent: indicators.liveLiDARCoveragePercent
-            ),
             tiltInRange: false,
             distanceCm: indicators.liveDistanceCm,
             lidarCoveragePercent: indicators.liveLiDARCoveragePercent

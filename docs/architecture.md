@@ -30,7 +30,7 @@ photo(s) → silhouettes → visual hull H → V_c (volume per class)
 See `specs/research/requirements.md` for the full mathematical pipeline, modelling
 assumptions, and academic provenance.
 
-**Hardware floor:** iPhone 12 Pro and later (rear LiDAR). **OS floor:** iOS 17.
+**Hardware floor:** iPhone 13 Pro Max and later (rear LiDAR). **OS floor:** iOS 26.5.
 
 ---
 

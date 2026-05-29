@@ -4,21 +4,15 @@ import SwiftUI
 // Live-condition indicators consumed only by this view so the high-churn
 // per-frame writes (tilt / distance / coverage) don't retrigger the whole
 // capture view body. Renders the tilt indicator, distance state, LiDAR
-// coverage gauge, and the capture-path label, plus the gating-mode hint (§3.3).
+// coverage gauge, and the active capture-mode label.
 struct LiveIndicatorView: View {
     @Bindable var model: LiveIndicatorModel
     let supportsLiDAR: Bool
+    let activeMode: CaptureMode
     var targetTiltDegrees: Float = 0
 
     private var tiltInRange: Bool {
         abs(model.liveTiltDegrees - targetTiltDegrees) <= 5
-    }
-
-    private var pathHint: CapturePath {
-        CapturePathDecider.decide(
-            supportsLiDAR: supportsLiDAR,
-            latestCoveragePercent: model.liveLiDARCoveragePercent
-        )
     }
 
     var body: some View {
@@ -26,7 +20,7 @@ struct LiveIndicatorView: View {
             tiltRow
             distanceRow
             if supportsLiDAR { coverageRow }
-            pathRow
+            modeRow
         }
         .font(.footnote)
         .padding(12)
@@ -74,10 +68,10 @@ struct LiveIndicatorView: View {
         }
     }
 
-    private var pathRow: some View {
+    private var modeRow: some View {
         HStack {
-            Image(systemName: pathHint == .singleViewLidar ? "viewfinder" : "viewfinder.rectangular")
-            Text(pathHint == .singleViewLidar ? "Single-view (LiDAR)" : "Two-view")
+            Image(systemName: activeMode == .single ? "viewfinder" : "viewfinder.rectangular")
+            Text(activeMode == .single ? "Single-view (LiDAR)" : "Two-view")
             Spacer()
             // Surface which distance gating mode is active (§3.3).
             Text(supportsLiDAR ? "Measured" : "Guidance")

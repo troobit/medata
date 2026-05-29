@@ -3,14 +3,20 @@ import Pipeline
 import SwiftUI
 
 // Root view of the capture flow. Composes the AR preview, the live indicators,
-// the shutter, the refusal banner overlay, and the settings entry. Behaviour
-// lives in CaptureFlowModel; this is composition only.
+// the persistent CaptureMode toggle (Decision 35), the shutter, the refusal
+// banner overlay, and the settings entry. Behaviour lives in CaptureFlowModel;
+// this is composition only.
 struct CaptureFlowView: View {
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
 
+    @AppStorage(SettingsKeys.captureMode) private var captureModeRaw: String = CaptureMode.double.rawValue
     @State private var observer: LiveSampleObserver?
+
+    private var mode: CaptureMode {
+        CaptureMode(rawValue: captureModeRaw) ?? .double
+    }
 
     var body: some View {
         NavigationStack(path: $model.navigationPath) {
@@ -56,10 +62,11 @@ struct CaptureFlowView: View {
                 Spacer()
                 LiveIndicatorView(
                     model: model.indicators,
-                    supportsLiDAR: model.currentSnapshot?.distanceCm != nil,
+                    supportsLiDAR: model.supportsLiDAR,
+                    activeMode: mode,
                     targetTiltDegrees: model.awaitingObliqueView ? 25 : 0
                 )
-                shutterButton
+                shutterStack
                     .padding(.bottom, 24)
             }
         }
@@ -96,7 +103,7 @@ struct CaptureFlowView: View {
             default:
                 if model.awaitingObliqueView {
                     Text("Angled view — tilt to about 25°")
-                } else if model.currentSnapshot?.pathHint == .twoViewSfS {
+                } else if mode == .double {
                     Text("Top-down view")
                     Label("Include an ID-1 reference card, flat in the scene", systemImage: "creditcard")
                         .font(.caption)
@@ -110,12 +117,9 @@ struct CaptureFlowView: View {
     }
 
     @ViewBuilder
-    private var shutterButton: some View {
+    private var shutterStack: some View {
         VStack(spacing: 12) {
-            if case .ready(let snapshot) = model.state, snapshot.pathHint == .singleViewLidar {
-                Button("Use two views instead") { model.forceTwoView() }
-                    .font(.footnote)
-            }
+            captureModePicker
             Button {
                 model.shutter()
             } label: {
@@ -126,6 +130,31 @@ struct CaptureFlowView: View {
             }
             .disabled(!model.canShutter || model.isBusy)
             .accessibilityIdentifier("shutter")
+        }
+    }
+
+    // Persistent segmented control above the shutter (Decision 35). Single mode
+    // is disabled on non-LiDAR hardware. Mid-session changes are persisted to
+    // UserDefaults but ignored by the in-flight estimation (the model freezes
+    // the mode at shutter-tap time).
+    @ViewBuilder
+    private var captureModePicker: some View {
+        Picker("Capture mode", selection: $captureModeRaw) {
+            Text("Single")
+                .tag(CaptureMode.single.rawValue)
+            Text("Double")
+                .tag(CaptureMode.double.rawValue)
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("captureModePicker")
+        .frame(maxWidth: 240)
+        .disabled(model.isBusy)
+        .onAppear {
+            // Single mode requires LiDAR; force-fallback if persistence has a
+            // stale value on a non-LiDAR device.
+            if !model.supportsLiDAR, captureModeRaw == CaptureMode.single.rawValue {
+                captureModeRaw = CaptureMode.double.rawValue
+            }
         }
     }
 }

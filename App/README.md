@@ -16,7 +16,7 @@ the architecture overview.
 | `CaptureFlowModel.swift` | The `@Observable @MainActor` state machine and `CaptureFlowDelegate` conformance |
 | `CaptureState.swift` | `CaptureState` enum (initialising, ready, capturing, estimating, showingResult, refused, …) |
 | `GatingSnapshot.swift` | Frozen-at-shutter snapshot of tilt / distance / coverage / path hint |
-| `CapturePathDecider.swift` | Pure decider: LiDAR + coverage ≥ 80% → `singleViewLidar`, else `twoViewSfs` |
+| `CapturePathDecider.swift` | [AUTO_CAPTURE_MODE flag — deferred, Req 3.9] Auto-derives path from LiDAR coverage; inactive in v1 (Decision 35 uses user toggle instead) |
 | `LiveIndicatorModel.swift` | Child `@Observable` holding ~60 Hz tilt / distance / coverage |
 | `LiveIndicatorView.swift` | Child view rendering those indicators |
 | `LiveSampleObserver.swift` | `@MainActor` observer iterating `engine.frames`, computing per-frame metrics |

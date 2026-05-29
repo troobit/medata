@@ -77,7 +77,7 @@ struct MedataApp: App {
 // Capture, gating, and the refusal flow are fully exercisable; estimation
 // surfaces a refusal until the real pipeline is wired in.
 private struct PendingPipeline: PipelineEstimator {
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         throw EstimationFailure.noScaleAvailable
     }
 }
@@ -160,7 +160,7 @@ private final class UITestCaptureEngine: CaptureEngine, @unchecked Sendable {
 // Suspends long enough that `.estimating` is observable, then refuses. Backgrounding
 // cancels the wrapping Task (CancellationError), which the model swallows (Decision 12).
 private struct StallingPipeline: PipelineEstimator {
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         try await Task.sleep(nanoseconds: 30 * 1_000_000_000)
         throw EstimationFailure.noScaleAvailable
     }
