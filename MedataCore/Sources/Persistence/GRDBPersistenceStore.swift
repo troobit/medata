@@ -10,6 +10,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     private let queue: DatabaseQueue
     private let dbURL: URL
     private let artefactsBaseURL: URL
+    private let changeBroadcaster = ChangeBroadcaster()
 
     // Designated init. Pass a writable URL for the SQLite file and
     // a base directory for artefact sub-directories (design §4.2).
@@ -34,8 +35,9 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 sql: """
                     INSERT INTO meals
                         (id, created_at, capture_path, database_edition, palette_version,
-                         sigma_meal, total_carbs_g, record_json, artefacts_dir)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         sigma_meal, total_carbs_g, record_json, artefacts_dir,
+                         segmenter_source, photo_asset_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     record.id.uuidString,
@@ -46,7 +48,9 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                     sigmaMeal,
                     totalCarbsG,
                     json,
-                    artefactsDir
+                    artefactsDir,
+                    record.segmenterSource,
+                    record.photoAssetID
                 ]
             )
 
@@ -85,6 +89,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 )
             }
         }
+        changeBroadcaster.notify()
     }
 
     public func appendCorrection(mealId: UUID, correction: PbUserCorrection) async throws {
@@ -103,14 +108,71 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     public func meal(id: UUID) async throws -> MealRecord {
         let row = try await queue.read { db in
             try Row.fetchOne(db,
-                sql: "SELECT record_json, palette_version FROM meals WHERE id = ?",
+                sql: """
+                    SELECT record_json, palette_version, segmenter_source, photo_asset_id
+                    FROM meals WHERE id = ?
+                    """,
                 arguments: [id.uuidString])
         }
         guard let row else { throw PersistenceError.mealNotFound(id) }
         let json: String = row["record_json"]
         let paletteVersion: String = row["palette_version"]
-        return try MealRecord.from(jsonString: json, paletteVersion: paletteVersion)
+        let segmenterSource: String? = row["segmenter_source"]
+        let photoAssetID: String? = row["photo_asset_id"]
+        return try MealRecord.from(
+            jsonString: json,
+            paletteVersion: paletteVersion,
+            segmenterSource: segmenterSource,
+            photoAssetID: photoAssetID
+        )
     }
+
+    public func allMeals() async throws -> [MealRecord] {
+        let rows = try await queue.read { db in
+            try Row.fetchAll(db,
+                sql: """
+                    SELECT record_json, palette_version, segmenter_source, photo_asset_id
+                    FROM meals ORDER BY created_at DESC
+                    """)
+        }
+        return try rows.map { row in
+            let json: String = row["record_json"]
+            let paletteVersion: String = row["palette_version"]
+            let segmenterSource: String? = row["segmenter_source"]
+            let photoAssetID: String? = row["photo_asset_id"]
+            return try MealRecord.from(
+                jsonString: json,
+                paletteVersion: paletteVersion,
+                segmenterSource: segmenterSource,
+                photoAssetID: photoAssetID
+            )
+        }
+    }
+
+    public func deleteMeal(id: UUID) async throws {
+        let artefactsDir = try await queue.write { db -> String? in
+            let dir = try String.fetchOne(db,
+                sql: "SELECT artefacts_dir FROM meals WHERE id = ?",
+                arguments: [id.uuidString])
+            try db.execute(sql: "DELETE FROM meal_classes WHERE meal_id = ?",
+                           arguments: [id.uuidString])
+            try db.execute(sql: "DELETE FROM meal_artefacts WHERE meal_id = ?",
+                           arguments: [id.uuidString])
+            try db.execute(sql: "DELETE FROM corrections WHERE meal_id = ?",
+                           arguments: [id.uuidString])
+            try db.execute(sql: "DELETE FROM meals WHERE id = ?",
+                           arguments: [id.uuidString])
+            return dir
+        }
+        if let artefactsDir {
+            // Best-effort cleanup — log via stderr but swallow per design.md.
+            let url = artefactsBaseURL.appendingPathComponent(artefactsDir)
+            try? FileManager.default.removeItem(at: url)
+        }
+        changeBroadcaster.notify()
+    }
+
+    public var mealsDidChange: AsyncStream<Void> { changeBroadcaster.subscribe() }
 
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
@@ -215,7 +277,9 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 sigma_meal       REAL NOT NULL,
                 total_carbs_g    REAL NOT NULL,
                 record_json      BLOB NOT NULL,
-                artefacts_dir    TEXT NOT NULL
+                artefacts_dir    TEXT NOT NULL,
+                segmenter_source TEXT,
+                photo_asset_id   TEXT
             );
             CREATE TABLE IF NOT EXISTS meal_classes (
                 meal_id     TEXT NOT NULL,
@@ -246,6 +310,44 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         try db.execute(
             sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '1')"
         )
+        // v1.1 additive columns. Existing v1.0 databases need an ALTER; new
+        // databases already have them from the CREATE TABLE above so ignore
+        // the "duplicate column" error.
+        try? db.execute(sql: "ALTER TABLE meals ADD COLUMN segmenter_source TEXT")
+        try? db.execute(sql: "ALTER TABLE meals ADD COLUMN photo_asset_id TEXT")
+    }
+}
+
+// MARK: - Change broadcaster
+//
+// Per-subscriber `AsyncStream<Void>` fan-out. Each `subscribe()` returns a
+// stream whose continuation is held until iteration ends; `notify()` yields on
+// every active continuation. `BufferingPolicy.bufferingNewest(1)` means a slow
+// consumer sees the most recent tick, not a backlog (UI Decision 15).
+private final class ChangeBroadcaster: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [UUID: AsyncStream<Void>.Continuation] = [:]
+
+    func subscribe() -> AsyncStream<Void> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let id = UUID()
+            lock.lock()
+            continuations[id] = continuation
+            lock.unlock()
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.continuations.removeValue(forKey: id)
+                self.lock.unlock()
+            }
+        }
+    }
+
+    func notify() {
+        lock.lock()
+        let snapshot = Array(continuations.values)
+        lock.unlock()
+        for continuation in snapshot { continuation.yield() }
     }
 }
 

@@ -284,7 +284,7 @@ references:
 
 ## v1.1 — Tab navigation + Meals tab
 
-- [ ] 29. Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange) <!-- id:7pbwp4v -->
+- [x] 29. Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange) <!-- id:7pbwp4v -->
   - `allMeals()` returns rows sorted by `capturedAt` desc, including the new `segmenter_source` column from research task 82.
   - `deleteMeal(id:)` removes the SQLite row, removes the per-meal artefact directory, and DOES NOT call any `PHPhotoLibrary` API.
   - `mealsDidChange` yields a tick after `appendMeal` and after `deleteMeal`. Two subscribers both receive the tick (per-subscriber stream).
@@ -292,30 +292,30 @@ references:
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
-- [ ] 30. Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore <!-- id:7pbwp4w -->
+- [x] 30. Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore <!-- id:7pbwp4w -->
   - Add three methods to the `PersistenceStore` protocol and implement them on `GRDBPersistenceStore`.
   - `mealsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
   - Artefact directory cleanup is best-effort: log and continue if a file is already gone.
   - Decision: 15
-  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods
+  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
-- [ ] 31. Write tests for MealHistoryModel <!-- id:7pbwp4x -->
+- [x] 31. Write tests for MealHistoryModel <!-- id:7pbwp4x -->
   - Initial `start()` loads `meals` from a fake store; subsequent `mealsDidChange` tick triggers a reload.
   - `delete(_:)` calls `store.deleteMeal(id:)`; the resulting `mealsDidChange` tick refreshes `meals`.
   - Cancelling the model's subscription task removes the subscription without leaking the continuation.
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
-- [ ] 32. Implement MealHistoryModel <!-- id:7pbwp4y -->
+- [x] 32. Implement MealHistoryModel <!-- id:7pbwp4y -->
   - `@Observable @MainActor final class MealHistoryModel` in `App/MealHistoryModel.swift`. See `specs/ui/design.md` §"Meals tab" for the sketch.
   - Subscription `Task` cancelled in `deinit` (use a `cancellable` reference).
   - Blocked-by: 7pbwp4w (Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore), 7pbwp4x (Write tests for MealHistoryModel)
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6)
 
-- [ ] 33. Write tests for MealRow rendering <!-- id:7pbwp4z -->
+- [x] 33. Write tests for MealRow rendering <!-- id:7pbwp4z -->
   - Placeholder chip is present when `record.segmenterSource == "dev_stub"` and absent otherwise (assert via accessibility identifier visibility).
   - Confidence pill matches `ResultView`'s three-tier thresholds (reuse the `ConfidencePill` component extracted in task 36).
   - Photo-denied fallback renders the `photo.fill` SF Symbol when `PHImageManager.requestImage` returns nil.
@@ -323,20 +323,20 @@ references:
   - Stream: 2
   - Requirements: [19.2](requirements.md#19.2), [19.3](requirements.md#19.3)
 
-- [ ] 34. Implement MealRow view <!-- id:7pbwp50 -->
+- [x] 34. Implement MealRow view <!-- id:7pbwp50 -->
   - `App/MealRow.swift`. Uses `PHImageManager.default().requestImage(for:targetSize:contentMode:options:resultHandler:)` for the thumbnail.
   - The placeholder chip uses the same yellow background colour token as the result-view placeholder banner from research task 83.
   - Blocked-by: 7pbwp4z (Write tests for MealRow rendering), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
   - Stream: 2
   - Requirements: [19.2](requirements.md#19.2), [19.3](requirements.md#19.3)
 
-- [ ] 35. Write tests for ResultView presentation mode (justCaptured vs historyDetail) <!-- id:7pbwp51 -->
+- [x] 35. Write tests for ResultView presentation mode (justCaptured vs historyDetail) <!-- id:7pbwp51 -->
   - `mode = .justCaptured` shows the "New capture" button; `mode = .historyDetail` hides it.
   - Both modes show the carb total, confidence pill, thumbnail, and (where applicable) placeholder banner.
   - Stream: 2
   - Requirements: [19.4](requirements.md#19.4)
 
-- [ ] 36. Add ResultPresentation parameter to ResultView; extract shared ConfidencePill <!-- id:7pbwp52 -->
+- [x] 36. Add ResultPresentation parameter to ResultView; extract shared ConfidencePill <!-- id:7pbwp52 -->
   - Add `enum ResultPresentation { case justCaptured, historyDetail }` and a `mode: ResultPresentation` field to `ResultView`.
   - Extract `ConfidencePill(sigmaMeal:)` into a small shared component so `MealRow` can reuse the same rendering.
   - Existing Photo-tab call site passes `.justCaptured`; new Meals-tab call site (task 37) passes `.historyDetail`.
@@ -344,7 +344,7 @@ references:
   - Stream: 2
   - Requirements: [19.4](requirements.md#19.4)
 
-- [ ] 37. Implement MealsTabView (list, empty state, swipe delete, navigation destination) <!-- id:7pbwp53 -->
+- [x] 37. Implement MealsTabView (list, empty state, swipe delete, navigation destination) <!-- id:7pbwp53 -->
   - `App/MealsTabView.swift` wraps `MealListView` in its own `NavigationStack` with `.navigationDestination(for: MealRecord.self) { ResultView(record: $0, mode: .historyDetail) }`.
   - `App/MealListView.swift` is a `List(model.meals) { MealRow(record: $0) }` with `swipeActions(edge: .trailing)` providing a single Delete action wired to `await model.delete(record)`.
   - Empty state: when `model.meals.isEmpty`, render the Irish-English copy and `fork.knife` SF Symbol per Req §19.5 in place of the list.
@@ -353,21 +353,21 @@ references:
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.4](requirements.md#19.4), [19.5](requirements.md#19.5), [19.7](requirements.md#19.7), [19.8](requirements.md#19.8)
 
-- [ ] 38. Write tests for CaptureFlowModel.tabSelectionChanged <!-- id:7pbwp54 -->
+- [x] 38. Write tests for CaptureFlowModel.tabSelectionChanged <!-- id:7pbwp54 -->
   - Switching away from `.photo` while state is `.ready` releases the engine within 200 ms and resets to `.initialising` on Photo re-entry.
   - Switching away during `.estimating` DOES NOT cancel the pipeline; on Photo re-entry the state is `.showingResult(record)` once the pipeline completes.
   - Switching to a non-photo tab while state is already `.refused` or `.permissionDenied` is a no-op.
   - Stream: 2
   - Requirements: [1.7](requirements.md#1.7), [18.7](requirements.md#18.7)
 
-- [ ] 39. Add tabSelectionChanged(to:) method to CaptureFlowModel <!-- id:7pbwp55 -->
+- [x] 39. Add tabSelectionChanged(to:) method to CaptureFlowModel <!-- id:7pbwp55 -->
   - Mirrors `scenePhaseChanged(.background)` for non-Photo tabs except: when state is `.estimating`, let the in-flight `Pipeline.estimate(_:mode:)` complete and route the result to `.showingResult(record)` for next Photo re-entry.
   - Decision: 15
   - Blocked-by: 7pbwp54 (Write tests for CaptureFlowModel.tabSelectionChanged)
   - Stream: 2
   - Requirements: [1.7](requirements.md#1.7), [18.7](requirements.md#18.7)
 
-- [ ] 40. Implement AppRoot TabView + wire from App.swift; add NSPhotoLibraryUsageDescription <!-- id:7pbwp56 -->
+- [x] 40. Implement AppRoot TabView + wire from App.swift; add NSPhotoLibraryUsageDescription <!-- id:7pbwp56 -->
   - Create `App/AppRoot.swift` per design §"Tab shell (`AppRoot`)".
   - `MedataApp.body` returns `AppRoot(engine:, store:)` instead of the v1.0 direct `CaptureFlowView` presentation.
   - Add `NSPhotoLibraryUsageDescription` Info.plist string in Irish-English ("MeData reads thumbnails of your captured meal photos to show them in your meal history.").
@@ -377,7 +377,7 @@ references:
   - Stream: 2
   - Requirements: [18.1](requirements.md#18.1), [18.2](requirements.md#18.2), [18.3](requirements.md#18.3), [18.4](requirements.md#18.4), [18.6](requirements.md#18.6)
 
-- [ ] 41. Write XCUITest suite for v1.1 (tab persistence, re-tap pop, empty state, new-meal within 500 ms) <!-- id:7pbwp57 -->
+- [x] 41. Write XCUITest suite for v1.1 (tab persistence, re-tap pop, empty state, new-meal within 500 ms) <!-- id:7pbwp57 -->
   - Tab persistence: launch, switch to Meals, terminate, relaunch — Meals is selected.
   - Re-tap pop-to-root: Meals → tap row → detail visible → re-tap Meals tab item → list visible.
   - Empty state: launch on a fresh container → switch to Meals → empty-state copy and icon visible.

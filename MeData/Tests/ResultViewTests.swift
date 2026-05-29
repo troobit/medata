@@ -47,6 +47,20 @@ struct ResultViewTests {
         #expect(ResultFormat.carbsGrams(record.macros.totalCarbsG) == 30)
         #expect(ConfidenceLevel.forSigma(record.confidence.sigmaMeal) == .high)
     }
+
+    // §19.4 / design §"Meals tab": ResultView is reused as the meal-detail
+    // view from the Meals tab. A presentation mode controls whether the
+    // "New capture" action is shown — only the Photo tab's just-captured
+    // path needs it; the history-detail path is read-only.
+    @Test("justCaptured mode shows New capture action")
+    func justCapturedShowsNewCapture() {
+        #expect(ResultPresentation.justCaptured.showsNewCapture)
+    }
+
+    @Test("historyDetail mode hides New capture action")
+    func historyDetailHidesNewCapture() {
+        #expect(!ResultPresentation.historyDetail.showsNewCapture)
+    }
 }
 
 private func makeMealRecord(carbs: Float, sigma: Float) -> MealRecord {

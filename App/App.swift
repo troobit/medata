@@ -22,6 +22,7 @@ struct MedataApp: App {
 
         #if DEBUG
         if UITestSupport.isActive {
+            UITestSupport.applyLaunchOverrides()
             let harness = UITestHarness()
             _model = State(initialValue: harness.model)
             _uiTestHarness = State(initialValue: harness)
@@ -44,7 +45,7 @@ struct MedataApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                CaptureFlowView(model: model, engine: engine, store: store)
+                AppRoot(captureModel: model, engine: engine, store: store)
                 #if DEBUG
                 if let uiTestHarness {
                     UITestControlPanel(harness: uiTestHarness)
@@ -120,6 +121,16 @@ enum UITestSupport {
         switch pipelineMode {
         case .refuse: return PendingPipeline()
         case .stall: return StallingPipeline()
+        }
+    }
+
+    // Applies launch-arg overrides that must run before UserDefaults-backed
+    // state (e.g. `@AppStorage`) is read. Currently handles
+    // `-uitestResetSelectedTab`, which clears the persisted tab so the v1.1
+    // tab-navigation XCUITests start on the Photo tab.
+    static func applyLaunchOverrides() {
+        if ProcessInfo.processInfo.arguments.contains("-uitestResetSelectedTab") {
+            UserDefaults.standard.removeObject(forKey: "selectedTab")
         }
     }
 

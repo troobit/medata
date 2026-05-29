@@ -24,6 +24,12 @@
 		111ECA052FBD47A100272C1E /* ARPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA062FBD47A100272C1E /* ARPreviewView.swift */; };
 		111ECA072FBD47A100272C1E /* RefusalBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA082FBD47A100272C1E /* RefusalBanner.swift */; };
 		111ECA092FBD47A100272C1E /* LiveIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA0A2FBD47A100272C1E /* LiveIndicatorView.swift */; };
+		112B11C02FCE000000272C1E /* AppRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D02FCE000000272C1E /* AppRoot.swift */; };
+		112B11C12FCE000000272C1E /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D12FCE000000272C1E /* AppTab.swift */; };
+		112B11C22FCE000000272C1E /* ConfidencePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D22FCE000000272C1E /* ConfidencePill.swift */; };
+		112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D32FCE000000272C1E /* MealHistoryModel.swift */; };
+		112B11C42FCE000000272C1E /* MealRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D42FCE000000272C1E /* MealRow.swift */; };
+		112B11C52FCE000000272C1E /* MealsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D52FCE000000272C1E /* MealsTabView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +49,12 @@
 		111ECA062FBD47A100272C1E /* ARPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ARPreviewView.swift; path = ../App/ARPreviewView.swift; sourceTree = SOURCE_ROOT; };
 		111ECA082FBD47A100272C1E /* RefusalBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RefusalBanner.swift; path = ../App/RefusalBanner.swift; sourceTree = SOURCE_ROOT; };
 		111ECA0A2FBD47A100272C1E /* LiveIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveIndicatorView.swift; path = ../App/LiveIndicatorView.swift; sourceTree = SOURCE_ROOT; };
+		112B11D02FCE000000272C1E /* AppRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppRoot.swift; path = ../App/AppRoot.swift; sourceTree = SOURCE_ROOT; };
+		112B11D12FCE000000272C1E /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppTab.swift; path = ../App/AppTab.swift; sourceTree = SOURCE_ROOT; };
+		112B11D22FCE000000272C1E /* ConfidencePill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConfidencePill.swift; path = ../App/ConfidencePill.swift; sourceTree = SOURCE_ROOT; };
+		112B11D32FCE000000272C1E /* MealHistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealHistoryModel.swift; path = ../App/MealHistoryModel.swift; sourceTree = SOURCE_ROOT; };
+		112B11D42FCE000000272C1E /* MealRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealRow.swift; path = ../App/MealRow.swift; sourceTree = SOURCE_ROOT; };
+		112B11D52FCE000000272C1E /* MealsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealsTabView.swift; path = ../App/MealsTabView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -84,6 +96,12 @@
 				111ECA062FBD47A100272C1E /* ARPreviewView.swift */,
 				111ECA082FBD47A100272C1E /* RefusalBanner.swift */,
 				111ECA0A2FBD47A100272C1E /* LiveIndicatorView.swift */,
+				112B11D02FCE000000272C1E /* AppRoot.swift */,
+				112B11D12FCE000000272C1E /* AppTab.swift */,
+				112B11D22FCE000000272C1E /* ConfidencePill.swift */,
+				112B11D32FCE000000272C1E /* MealHistoryModel.swift */,
+				112B11D42FCE000000272C1E /* MealRow.swift */,
+				112B11D52FCE000000272C1E /* MealsTabView.swift */,
 				111EC90E2FBD327D00272C1E /* MeData */,
 				111EC90D2FBD327D00272C1E /* Products */,
 			);
@@ -191,6 +209,12 @@
 				111ECA052FBD47A100272C1E /* ARPreviewView.swift in Sources */,
 				111ECA072FBD47A100272C1E /* RefusalBanner.swift in Sources */,
 				111ECA092FBD47A100272C1E /* LiveIndicatorView.swift in Sources */,
+				112B11C02FCE000000272C1E /* AppRoot.swift in Sources */,
+				112B11C12FCE000000272C1E /* AppTab.swift in Sources */,
+				112B11C22FCE000000272C1E /* ConfidencePill.swift in Sources */,
+				112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */,
+				112B11C42FCE000000272C1E /* MealRow.swift in Sources */,
+				112B11C52FCE000000272C1E /* MealsTabView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -329,6 +353,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "MeData uses motion data to show how level the camera is while you capture your meal.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MeData reads thumbnails of your captured meal photos to show them in your meal history.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -365,6 +390,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "MeData uses motion data to show how level the camera is while you capture your meal.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MeData reads thumbnails of your captured meal photos to show them in your meal history.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

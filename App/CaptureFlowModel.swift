@@ -163,6 +163,41 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
+    // Tab-switch lifecycle per UI Req §1.7 / §18.7 (Decision 15). Mirrors
+    // `scenePhaseChanged(.background)` for non-Photo tabs with one carve-out:
+    // when the model is already in `.estimating`, the pipeline runs to
+    // completion and the result is presented on the next return to Photo.
+    // Permission-denied and refusal states are preserved across the switch so
+    // the user finds the same surface when they come back.
+    func tabSelectionChanged(to tab: AppTab) {
+        guard tab != .photo else { return }
+        switch state {
+        case .estimating:
+            // Let the pipeline finish; `flowTask` already routes the result
+            // into `.showingResult(record)`. Release the engine in the
+            // background (no AR session needed while we wait for the result).
+            Task { [session] in try? await session.stop() }
+            startTask = nil
+        case .permissionDenied, .refused:
+            // No engine to release (permission), or a banner the user will
+            // return to (refused). Leave the state alone.
+            return
+        case .capturing:
+            // Capture in flight but estimation hasn't started: cancel and
+            // reset to the same baseline as backgrounding.
+            cancelInFlight()
+            firstFrame = nil
+            state = .initialising
+            Task { [session] in try? await session.stop() }
+            startTask = nil
+        case .initialising, .ready, .forcingTwoView, .trackingLost, .showingResult:
+            firstFrame = nil
+            if case .estimating = state {} else { state = .initialising }
+            Task { [session] in try? await session.stop() }
+            startTask = nil
+        }
+    }
+
     // Called by LiveSampleObserver per frame. `tiltDegrees` is the camera's
     // angle from straight-down (0° = nadir). Per the write-gating rule in
     // design.md the model drops live updates unless the user can actually act

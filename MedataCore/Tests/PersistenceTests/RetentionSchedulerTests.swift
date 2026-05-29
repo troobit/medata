@@ -93,4 +93,8 @@ private final class StubPersistenceStore: PersistenceStore, @unchecked Sendable 
         sweepIfDueCalled = true
         try await deleteArtefacts(olderThan: Date().addingTimeInterval(-30 * 24 * 60 * 60))
     }
+
+    func allMeals() async throws -> [MealRecord] { [] }
+    func deleteMeal(id: UUID) async throws {}
+    var mealsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
 }

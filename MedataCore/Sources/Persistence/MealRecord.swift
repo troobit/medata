@@ -20,6 +20,14 @@ public struct MealRecord: Sendable, Equatable, Hashable {
     public let confidence: PbConfidenceResult
     public let perClassCalibration: [String: PbBetaCalibrationStatus]
     public let userCorrection: PbUserCorrection?
+    // SQL-only fields. `segmenterSource` carries the dev-stub provenance used by
+    // the Meals-tab placeholder chip (UI Req §19.3, research Decision 42).
+    // `photoAssetID` references a `PHAsset.localIdentifier` for thumbnail
+    // retrieval (UI Req §19.2). Both default to `nil` until the producing
+    // research tasks land — the Meals tab still renders, the chip and thumbnail
+    // just fall back per UI Decision 15.
+    public let segmenterSource: String?
+    public let photoAssetID: String?
 
     public init(
         id: UUID = UUID(),
@@ -35,7 +43,9 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         macros: PbMacroResult,
         confidence: PbConfidenceResult,
         perClassCalibration: [String: PbBetaCalibrationStatus] = [:],
-        userCorrection: PbUserCorrection? = nil
+        userCorrection: PbUserCorrection? = nil,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -51,6 +61,8 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         self.confidence = confidence
         self.perClassCalibration = perClassCalibration
         self.userCorrection = userCorrection
+        self.segmenterSource = segmenterSource
+        self.photoAssetID = photoAssetID
     }
 }
 
@@ -94,8 +106,13 @@ public extension MealRecord {
         return out
     }
 
-    // Reconstructs from PbMealRecord + the SQL-only paletteVersion.
-    init(pb: PbMealRecord, paletteVersion: String) throws {
+    // Reconstructs from PbMealRecord + the SQL-only columns.
+    init(
+        pb: PbMealRecord,
+        paletteVersion: String,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
+    ) throws {
         guard let uuid = UUID(uuidString: pb.id) else {
             throw PersistenceError.corruptRecord("invalid UUID: \(pb.id)")
         }
@@ -116,6 +133,8 @@ public extension MealRecord {
         self.confidence = pb.confidence
         self.perClassCalibration = pb.perClassCalibration
         self.userCorrection = pb.hasUserCorrection ? pb.userCorrection : nil
+        self.segmenterSource = segmenterSource
+        self.photoAssetID = photoAssetID
     }
 
     // Encodes to protobuf-JSON string per Decision 31.
@@ -123,10 +142,20 @@ public extension MealRecord {
         try pb.jsonString()
     }
 
-    // Decodes from protobuf-JSON string + the SQL-only paletteVersion.
-    static func from(jsonString: String, paletteVersion: String) throws -> MealRecord {
+    // Decodes from protobuf-JSON string + the SQL-only columns.
+    static func from(
+        jsonString: String,
+        paletteVersion: String,
+        segmenterSource: String? = nil,
+        photoAssetID: String? = nil
+    ) throws -> MealRecord {
         let pb = try PbMealRecord(jsonString: jsonString)
-        return try MealRecord(pb: pb, paletteVersion: paletteVersion)
+        return try MealRecord(
+            pb: pb,
+            paletteVersion: paletteVersion,
+            segmenterSource: segmenterSource,
+            photoAssetID: photoAssetID
+        )
     }
 }
 

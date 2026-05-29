@@ -18,21 +18,13 @@ struct CaptureFlowView: View {
                 .navigationDestination(for: MealRecord.self) { record in
                     ResultView(
                         record: record,
+                        mode: .justCaptured,
                         onNewCapture: { model.dismissResult() },
                         onRetake: { model.dismissResult() }
                     )
                 }
                 .navigationTitle("Capture")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink {
-                            SettingsView(store: store)
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                    }
-                }
         }
     }
 

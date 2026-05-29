@@ -43,25 +43,43 @@ enum ResultFormat {
     }
 }
 
+// Controls how `ResultView` is presented. The just-captured path (Photo tab)
+// shows the "New capture" action; the history-detail path (Meals tab) hides it
+// because the user got there from the list and the back button is the way out.
+enum ResultPresentation: Equatable {
+    case justCaptured
+    case historyDetail
+
+    var showsNewCapture: Bool {
+        switch self {
+        case .justCaptured: return true
+        case .historyDetail: return false
+        }
+    }
+}
+
 // Post-capture result. Shows only the carb total and the confidence pill —
 // no per-class breakdown, no clinical macros (Req §9.5, Decision 3).
 struct ResultView: View {
     let record: MealRecord
+    var mode: ResultPresentation = .justCaptured
     var onNewCapture: () -> Void = {}
     var onRetake: () -> Void = {}
 
     private var sigma: Float { record.confidence.sigmaMeal }
-    private var level: ConfidenceLevel { .forSigma(sigma) }
 
     var body: some View {
         VStack(spacing: 24) {
             carbs
-            pill
+            ConfidencePill(sigmaMeal: sigma)
             if ResultFormat.showsUncertainPrompt(sigma) { uncertainPrompt }
             Spacer()
-            Button("New Capture", action: onNewCapture)
-                .buttonStyle(.borderedProminent)
-                .tint(.medataAccent)
+            if mode.showsNewCapture {
+                Button("New Capture", action: onNewCapture)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.medataAccent)
+                    .accessibilityIdentifier("result.newCapture")
+            }
         }
         .padding()
         .navigationTitle("Result")
@@ -78,15 +96,6 @@ struct ResultView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 40)
-    }
-
-    private var pill: some View {
-        Text(level.label)
-            .font(.headline)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
-            .background(level.colour.opacity(0.25), in: Capsule())
-            .overlay(Capsule().stroke(level.colour, lineWidth: 1.5))
     }
 
     private var uncertainPrompt: some View {
