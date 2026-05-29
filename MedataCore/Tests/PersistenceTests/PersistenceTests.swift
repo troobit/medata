@@ -180,6 +180,100 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(reloaded.photoAssetID, "PHASSET-LOCAL-ID-12345")
     }
 
+    // MARK: - T82 segmenterSource round-trips through JSON BLOB and column
+
+    func testSegmenterSourceRoundTripsDevStub() async throws {
+        let record = makeMealRecord(segmenterSource: "dev_stub")
+        try await store.save(record, artefacts: [])
+
+        let reloaded = try await store.meal(id: record.id)
+        XCTAssertEqual(reloaded.segmenterSource, "dev_stub")
+
+        let dbURL = tempDir.appendingPathComponent("meals.sqlite")
+        let q = try DatabaseQueue(path: dbURL.path)
+        try await q.read { db in
+            guard let row = try Row.fetchOne(
+                db, sql: "SELECT segmenter_source FROM meals WHERE id = ?",
+                arguments: [record.id.uuidString]
+            ) else { return XCTFail("meal row not found") }
+            let source: String = row["segmenter_source"]
+            XCTAssertEqual(source, "dev_stub")
+        }
+    }
+
+    func testSegmenterSourceRoundTripsCoreML() async throws {
+        let record = makeMealRecord(segmenterSource: "coreml_v0.1")
+        try await store.save(record, artefacts: [])
+        let reloaded = try await store.meal(id: record.id)
+        XCTAssertEqual(reloaded.segmenterSource, "coreml_v0.1")
+    }
+
+    // MARK: - T82 Existing DB without segmenter_source column gets migrated
+
+    func testMigrationAddsSegmenterSourceColumnWithEmptyStringDefault() async throws {
+        // Build a legacy DB (pre-task-82) that lacks the segmenter_source column,
+        // then re-open it through GRDBPersistenceStore and verify migration runs.
+        let legacyDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LegacyDB-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: legacyDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: legacyDir) }
+        let legacyURL = legacyDir.appendingPathComponent("meals.sqlite")
+
+        // Create the v2-pre-task-82 schema (no segmenter_source column) and
+        // insert a representative row.
+        let q = try DatabaseQueue(path: legacyURL.path)
+        try await q.write { db in
+            try db.execute(sql: """
+                CREATE TABLE meals (
+                    id               TEXT PRIMARY KEY,
+                    created_at       INTEGER NOT NULL,
+                    capture_path     TEXT NOT NULL,
+                    database_edition TEXT NOT NULL,
+                    palette_version  TEXT NOT NULL,
+                    sigma_meal       REAL NOT NULL,
+                    total_carbs_g    REAL NOT NULL,
+                    photo_asset_id   TEXT NOT NULL DEFAULT '',
+                    record_json      BLOB NOT NULL,
+                    artefacts_dir    TEXT NOT NULL
+                );
+                """)
+            try db.execute(
+                sql: """
+                    INSERT INTO meals
+                        (id, created_at, capture_path, database_edition, palette_version,
+                         sigma_meal, total_carbs_g, photo_asset_id, record_json, artefacts_dir)
+                    VALUES ('legacy-meal-1', 0, 'single_view_lidar', 'CoFID 2024', 'v1',
+                            0.8, 30.0, '', '{}', 'meals/legacy')
+                    """
+            )
+        }
+
+        // Re-open through GRDBPersistenceStore — migration runs.
+        _ = try GRDBPersistenceStore(dbURL: legacyURL, artefactsBaseURL: legacyDir)
+
+        try await q.read { db in
+            let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(meals)")
+                .compactMap { $0["name"] as String? }
+            XCTAssertTrue(columns.contains("segmenter_source"),
+                          "migration should add segmenter_source column")
+            // Pre-existing rows default to empty string (provenance unknown).
+            let source: String? = try String.fetchOne(
+                db,
+                sql: "SELECT segmenter_source FROM meals WHERE id = 'legacy-meal-1'"
+            )
+            XCTAssertEqual(source, "")
+        }
+    }
+
+    // MARK: - T82 PbMealRecord round-trips segmenter_source through protobuf-JSON
+
+    func testProtobufJsonRoundTripsSegmenterSource() throws {
+        let record = makeMealRecord(segmenterSource: "dev_stub")
+        let json = try record.jsonString()
+        let reloaded = try MealRecord.from(jsonString: json, paletteVersion: record.paletteVersion)
+        XCTAssertEqual(reloaded.segmenterSource, "dev_stub")
+    }
+
     // MARK: - T41.6 meal_artefacts rows written for each artefact
 
     func testArtefactsWrittenToTable() async throws {
@@ -210,7 +304,8 @@ private func makeMealRecord(
     betaStatus: PbBetaCalibrationStatus = .calibrated,
     totalCarbsG: Float = 33.6,
     sigmaMeal: Float = 0.82,
-    photoAssetID: String = ""
+    photoAssetID: String = "",
+    segmenterSource: String = ""
 ) -> MealRecord {
     var confidence = PbConfidenceResult()
     confidence.sigmaMeal = sigmaMeal
@@ -236,6 +331,7 @@ private func makeMealRecord(
         databaseEdition: "CoFID 2024",
         paletteVersion: "v1",
         photoAssetID: photoAssetID,
+        segmenterSource: segmenterSource,
         calibration: PbCameraIntrinsics(),
         supportPlane: PbSupportPlane(),
         scale: PbMetricScale(),

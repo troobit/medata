@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Research spec — Phase 1 dev-stub segmenter, tasks 76–83)
+
+- `MedataCore/Sources/Segmentation/StubInferenceEngine.swift` — `public struct StubInferenceEngine: SegmenterInferenceEngine` per Req §23.2 / Decision 42. Bypasses image pre-processing and writes per-pixel FP32 logits (`+10` on `dominantClass`, `-10` elsewhere) so the post-processor's softmax places ≥ 0.99 mass on the dominant class. Phase 1 device-MVP runs the full Pipeline against this stub without bundling a `.mlpackage`.
+- `MedataCore/Sources/Pipeline/PipelineFactory.swift` — `Pipeline.makeForDevice(store:palette:) throws -> Pipeline` factory selects the inference engine via `#if DEV_STUB_SEGMENTER` (StubInferenceEngine in Debug; CoreMLInferenceEngine in Release, throwing `PipelineFactoryError.segmenterModelMissing` until Phase 3 bundles `food_segmenter.mlpackage`). Constructs `GRDBFoodDatabase.bundled()` and stamps `segmenterSource` accordingly. Includes a `NullCardDetector` placeholder until the Vision-backed detector lands.
+- `MedataCore/Tests/SegmentationTests/StubInferenceEngineTests.swift` — seven tests covering deterministic output across runs, input-byte independence, argmax = `dominantClass` for both default (0) and explicit (5) settings, ≥ 0.99 mass + ≤ 0.01 residual per pixel, FP16 HWC row-major byte-layout contract, and the < 50 ms per-view budget from Req §23.2.
+- `MedataCore/Tests/PipelineTests/PipelineFactoryTests.swift` — factory smoke test, dev-stub stamping assertion (read via `@testable` internal access to `Pipeline.segmenterSource`), and explicit-init propagation test.
+- `MedataCore/Tests/PersistenceTests/PersistenceTests.swift` — three new tests: `segmenterSource` round-trip via the JSON BLOB and the denormalised column for both `dev_stub` and `coreml_v0.1`, idempotent migration adding `segmenter_source` to a legacy pre-task-82 schema with empty-string default, and protobuf-JSON round-trip of the new field.
+- `MeData/Tests/ResultViewTests.swift` — three new tests: banner shown for `segmenterSource == "dev_stub"`, absent for `"coreml_v0.1"`, absent for `""`.
+
+### Changed (Research spec — Phase 1 dev-stub segmenter, tasks 76–83)
+
+- `MedataCore/Sources/Pipeline/PipelineEstimator.swift` — protocol gains `mode: CaptureMode` parameter on `estimate(captureResult:mode:)`, fixing the Xcode-only build error where the protocol declared no `mode:` while `CaptureFlowModel` / the App stand-ins passed one. `swift build` did not catch this because it does not link the app target.
+- `MedataCore/Sources/Pipeline/Pipeline.swift` — `estimate(captureResult:mode:)` dispatches volume estimation on `mode.capturePath` (authoritative input from §2.3 / Decision 35) and copies it to `MealRecord.capturePath`. Carries a new internal `segmenterSource` stored property stamped onto every produced `MealRecord`. `init` gains a `segmenterSource: String = ""` parameter, back-compatible with existing call sites.
+- `MedataCore/Sources/Segmentation/CoreMLSegmenter.swift` — `CoreMLInferenceEngine` exposes a `public static let modelVersion: String = "v0.1"` used by the factory to compose the Phase 3 `coreml_<modelVersion>` stamp.
+- `MedataCore/Sources/PortableContracts/Schemas/MealRecord.proto` — added `string segmenter_source = 15` carrying the Phase 1 / Phase 3 segmenter provenance identifier per Req §23.6.
+- `MedataCore/Sources/PortableContracts/Generated/*.pb.swift` — regenerated from the updated `.proto` schema via `Schemas/generate.sh` (only `MealRecord.pb.swift` gains the new field; the others are touched by the generator's deterministic emit and are byte-for-byte stable bar trailing whitespace).
+- `MedataCore/Sources/Persistence/MealRecord.swift` — added `segmenterSource: String` field plus pb round-trip wiring; `withPhotoAssetID(_:)` preserves the new field.
+- `MedataCore/Sources/Persistence/GRDBPersistenceStore.swift` — `meals` schema gains `segmenter_source TEXT NOT NULL DEFAULT ''`; idempotent `migrate(_:)` adds the column to pre-existing DBs alongside the existing `photo_asset_id` migration. `save(_:)` writes the column in addition to the JSON BLOB.
+- `Package.swift` — added `.define("DEV_STUB_SEGMENTER", .when(configuration: .debug))` to the `Pipeline` target's `swiftSettings` so Debug builds select the stub and Release builds bind the real Core ML engine. Top-of-file comment now documents both `HARNESS_ENABLED` and `DEV_STUB_SEGMENTER` flags.
+- `App/App.swift` — `PendingPipeline` stand-in deleted from the non-UI-test path; production `MedataApp.init` now constructs `try! Pipeline.makeForDevice(store: store)`. The XCUITest seam keeps `StallingPipeline` and renames the immediate-refuse double from `PendingPipeline` to `RefusingPipeline` (scoped to `#if DEBUG`).
+- `App/ResultView.swift` — added a top-of-screen, persistent, system-yellow / black-text placeholder banner reading "Placeholder estimate. The food recogniser is a development stub — the carbohydrate value is not a real measurement." (Req §23.3). Visibility is gated on the persisted `record.segmenterSource == "dev_stub"` value, NOT on `#if DEV_STUB_SEGMENTER`, so Phase 1 records still surface the banner when later viewed under a Phase 3 build. New `ResultFormat.showsPlaceholderBanner(segmenterSource:)` and `ResultFormat.placeholderBannerCopy` helpers used by the view and the tests.
+- `MedataCore/Tests/PipelineTests/EstimationFailureTests.swift` — `pipeline.estimate(captureResult:)` calls updated to pass `mode:` for the new signature.
+- `MedataCore/Tests/HarnessCLITests/PipelinePerformanceTests.swift` — same signature update on both `single` and `double` paths.
+- `MeData/Tests/{CaptureFlowModelTests,LiveSampleObserverTests}.swift` — `ProgrammablePipeline`, `StallingPipeline`, and `NoopPipeline` test doubles updated to the new `mode:` signature.
+- `MedataCore/Tests/SegmentationTests/CoreMLSegmenterTests.swift` — the existing test-local `StubInferenceEngine` test double renamed to `CannedInferenceEngine` to avoid name shadowing the new public `Segmentation.StubInferenceEngine`.
+
 ### Added (Research spec — v1 Adjustments phase, tasks 73–75)
 
 - `App/PhotoLibrarySaver.swift` — new `PhotoLibrarySaver` protocol and iOS `PhotoKitSaver` implementation. Wraps `PHPhotoLibrary.shared().performChanges` and `PHAuthorizationStatus(for: .addOnly)`. Returns the resulting `PHAsset.localIdentifier` or `""` when the user denies the prompt (Decision 37, Req §17.3).

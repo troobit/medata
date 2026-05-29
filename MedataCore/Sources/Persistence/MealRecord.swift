@@ -15,6 +15,9 @@ public struct MealRecord: Sendable, Equatable, Hashable {
     // the user's Photos library (Decision 37, Req §17.3). Empty string when
     // Photos add-only authorisation was denied or unavailable.
     public let photoAssetID: String
+    // Identifier for the segmenter that produced this meal (Decision 42, Req §23.6).
+    // "dev_stub" for Phase 1 records, "coreml_<modelVersion>" for Phase 3 records.
+    public let segmenterSource: String
     public let frames: [PbRawFrameMetadata]
     public let calibration: PbCameraIntrinsics
     public let supportPlane: PbSupportPlane
@@ -32,6 +35,7 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         databaseEdition: String,
         paletteVersion: String,
         photoAssetID: String = "",
+        segmenterSource: String = "",
         frames: [PbRawFrameMetadata] = [],
         calibration: PbCameraIntrinsics,
         supportPlane: PbSupportPlane,
@@ -48,6 +52,7 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         self.databaseEdition = databaseEdition
         self.paletteVersion = paletteVersion
         self.photoAssetID = photoAssetID
+        self.segmenterSource = segmenterSource
         self.frames = frames
         self.calibration = calibration
         self.supportPlane = supportPlane
@@ -67,6 +72,7 @@ public struct MealRecord: Sendable, Equatable, Hashable {
             id: id, createdAt: createdAt,
             capturePath: capturePath, databaseEdition: databaseEdition,
             paletteVersion: paletteVersion, photoAssetID: assetID,
+            segmenterSource: segmenterSource,
             frames: frames, calibration: calibration, supportPlane: supportPlane,
             scale: scale, volumes: volumes, macros: macros, confidence: confidence,
             perClassCalibration: perClassCalibration, userCorrection: userCorrection
@@ -103,6 +109,7 @@ public extension MealRecord {
         out.capturePath = capturePath.pb
         out.databaseEdition = databaseEdition
         out.photoAssetID = photoAssetID
+        out.segmenterSource = segmenterSource
         out.frames = frames
         out.calibration = calibration
         out.supportPlane = supportPlane
@@ -129,6 +136,7 @@ public extension MealRecord {
         self.databaseEdition = pb.databaseEdition
         self.paletteVersion = paletteVersion
         self.photoAssetID = pb.photoAssetID
+        self.segmenterSource = pb.segmenterSource
         self.frames = pb.frames
         self.calibration = pb.calibration
         self.supportPlane = pb.supportPlane

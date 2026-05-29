@@ -15,12 +15,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum PbCapturePath: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum PbCapturePath: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case singleViewLidar // = 1
@@ -58,7 +58,7 @@ public enum PbCapturePath: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-public struct PbVolumeResult: Sendable {
+public nonisolated struct PbVolumeResult: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -89,13 +89,13 @@ public struct PbVolumeResult: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "medata.research.v1"
+fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
-extension PbCapturePath: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbCapturePath: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CAPTURE_PATH_UNSPECIFIED\0\u{1}CAPTURE_PATH_SINGLE_VIEW_LIDAR\0\u{1}CAPTURE_PATH_TWO_VIEW_SFS\0")
 }
 
-extension PbVolumeResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbVolumeResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VolumeResult"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}per_class_volumes_cm3\0\u{3}ambiguous_voxel_fraction\0\u{3}lidar_coverage_fraction\0\u{3}voxel_grid_summary\0")
 

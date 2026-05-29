@@ -28,7 +28,7 @@ final class PipelinePerformanceTests: XCTestCase {
         let fixture   = makeSingleViewFixture()
 
         let start = Date.now
-        _ = try? await pipeline.estimate(captureResult: fixture)
+        _ = try? await pipeline.estimate(captureResult: fixture, mode: .single)
         let elapsed = Date.now.timeIntervalSince(start)
         XCTAssertLessThan(
             elapsed, 30.0,
@@ -45,7 +45,7 @@ final class PipelinePerformanceTests: XCTestCase {
         let fixture   = makeTwoViewFixture()
 
         let start = Date.now
-        _ = try? await pipeline.estimate(captureResult: fixture)
+        _ = try? await pipeline.estimate(captureResult: fixture, mode: .double)
         let elapsed = Date.now.timeIntervalSince(start)
         XCTAssertLessThan(
             elapsed, 30.0,

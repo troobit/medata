@@ -1,6 +1,20 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
+// Compile-time feature flags (Decisions 41, 42):
+//
+//   HARNESS_ENABLED       — Decision 41. Gates the AccuracyHarness, BetaCalibrator,
+//                           FixtureLoader/Runner, SegBench, the HarnessCLI executable
+//                           and the corresponding tests. Defined ONLY on the
+//                           HarnessCore / HarnessCLI / HarnessCLITests targets so
+//                           the shipping iOS app binary contains zero harness code.
+//
+//   DEV_STUB_SEGMENTER    — Decision 42, Req §23. Selects `StubInferenceEngine`
+//                           over `CoreMLInferenceEngine` inside
+//                           `Pipeline.makeForDevice` for Phase 1 device-MVP builds.
+//                           Defined on the `Pipeline` target in `.debug` only so
+//                           Release builds (Phase 3) bind the real Core ML model.
+
 let package = Package(
     name: "MedataCore",
     platforms: [
@@ -94,7 +108,12 @@ let package = Package(
                 "CaptureKit", "CardDetection", "SupportPlane", "MetricScale",
                 "Segmentation", "Volume", "Foods", "Macros", "Confidence", "Persistence"
             ],
-            path: "MedataCore/Sources/Pipeline"
+            path: "MedataCore/Sources/Pipeline",
+            // DEV_STUB_SEGMENTER per Decision 42 / Req §23.4: Debug builds
+            // bind StubInferenceEngine; Release builds bind CoreMLInferenceEngine.
+            swiftSettings: [
+                .define("DEV_STUB_SEGMENTER", .when(configuration: .debug))
+            ]
         ),
         // Harness targets — feature-flagged via HARNESS_ENABLED per Decision 41.
         // The iOS app target ("MedataCore" / "Pipeline") MUST NOT define HARNESS_ENABLED,

@@ -47,6 +47,24 @@ struct ResultViewTests {
         #expect(ResultFormat.carbsGrams(record.macros.totalCarbsG) == 30)
         #expect(ConfidenceLevel.forSigma(record.confidence.sigmaMeal) == .high)
     }
+
+    // Req §23.3 / Decision 42: the placeholder banner is gated on the persisted
+    // record value, NOT on the build flag, so Phase 1 records still surface the
+    // banner when later viewed under a Phase 3 build.
+    @Test("placeholder banner shown for dev_stub records")
+    func placeholderBannerShownForDevStub() {
+        #expect(ResultFormat.showsPlaceholderBanner(segmenterSource: "dev_stub"))
+    }
+
+    @Test("placeholder banner hidden for trained Core ML records")
+    func placeholderBannerHiddenForCoreML() {
+        #expect(!ResultFormat.showsPlaceholderBanner(segmenterSource: "coreml_v0.1"))
+    }
+
+    @Test("placeholder banner hidden for empty / unstamped records")
+    func placeholderBannerHiddenForUnstamped() {
+        #expect(!ResultFormat.showsPlaceholderBanner(segmenterSource: ""))
+    }
 }
 
 private func makeMealRecord(carbs: Float, sigma: Float) -> MealRecord {

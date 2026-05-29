@@ -41,6 +41,18 @@ enum ResultFormat {
     static func showsUncertainPrompt(_ sigma: Float) -> Bool {
         sigma < 0.60
     }
+
+    // Decision 42 / Req §23.3: placeholder banner shown only for meals stamped
+    // by the Phase 1 dev-stub segmenter. Gated on the persisted record value,
+    // NOT on the build flag, so a Phase 1 record viewed under a later Phase 3
+    // build still surfaces the banner per design §3.5.
+    static let devStubSegmenterSource = "dev_stub"
+    static func showsPlaceholderBanner(segmenterSource: String) -> Bool {
+        segmenterSource == devStubSegmenterSource
+    }
+
+    static let placeholderBannerCopy =
+        "Placeholder estimate. The food recogniser is a development stub — the carbohydrate value is not a real measurement."
 }
 
 // Post-capture result. Shows only the carb total and the confidence pill —
@@ -54,18 +66,39 @@ struct ResultView: View {
     private var level: ConfidenceLevel { .forSigma(sigma) }
 
     var body: some View {
-        VStack(spacing: 24) {
-            carbs
-            pill
-            if ResultFormat.showsUncertainPrompt(sigma) { uncertainPrompt }
-            Spacer()
-            Button("New Capture", action: onNewCapture)
-                .buttonStyle(.borderedProminent)
-                .tint(.medataAccent)
+        VStack(spacing: 0) {
+            if ResultFormat.showsPlaceholderBanner(segmenterSource: record.segmenterSource) {
+                placeholderBanner
+            }
+            VStack(spacing: 24) {
+                carbs
+                pill
+                if ResultFormat.showsUncertainPrompt(sigma) { uncertainPrompt }
+                Spacer()
+                Button("New Capture", action: onNewCapture)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.medataAccent)
+            }
+            .padding()
         }
-        .padding()
         .navigationTitle("Result")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // Req §23.3 / Decision 42: high-contrast (system .yellow / .black) banner
+    // pinned to the top of the screen above the carb total. Persistent — the
+    // user cannot dismiss it because the underlying record is not a real
+    // measurement. Removed only when Phase 3 ships the trained Core ML model.
+    private var placeholderBanner: some View {
+        Text(ResultFormat.placeholderBannerCopy)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(Color.black)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.yellow)
+            .accessibilityIdentifier("result.placeholderBanner")
     }
 
     private var carbs: some View {

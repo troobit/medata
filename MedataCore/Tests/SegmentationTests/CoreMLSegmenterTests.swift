@@ -3,9 +3,11 @@ import XCTest
 @testable import CaptureKit
 import PortableContracts
 
-/// Stub inference engine for Core ML segmenter tests. Returns canned logits so the test
-/// can drive the pre/post pipeline without loading a real Core ML model.
-final class StubInferenceEngine: SegmenterInferenceEngine, @unchecked Sendable {
+/// Canned inference engine for Core ML segmenter tests. Returns caller-supplied logits
+/// so the test can drive the pre/post pipeline without loading a real Core ML model.
+/// (Renamed from `StubInferenceEngine` to avoid clashing with the public
+/// `Segmentation.StubInferenceEngine` used by Phase 1 dev builds, Req §23.2.)
+final class CannedInferenceEngine: SegmenterInferenceEngine, @unchecked Sendable {
     let classes: Int
     let builder: (Int) -> [Float]
     private(set) var calls = 0
@@ -61,7 +63,7 @@ final class CoreMLSegmenterTests: XCTestCase {
 
     func testModelPathIsStringNotURL() {
         let palette = makeTestPalette()
-        let engine = StubInferenceEngine(classes: palette.totalClasses) { ts in
+        let engine = CannedInferenceEngine(classes: palette.totalClasses) { ts in
             [Float](repeating: 0, count: ts * ts * palette.totalClasses)
         }
         let path = "/some/bundled/segmenter.mlpackage"
@@ -75,7 +77,7 @@ final class CoreMLSegmenterTests: XCTestCase {
         let palette = makeTestPalette()
         let targetSize = 8
         let classes = palette.totalClasses
-        let engine = StubInferenceEngine(classes: classes) { ts in
+        let engine = CannedInferenceEngine(classes: classes) { ts in
             // All pixels favour food_0 (class 0).
             var logits = [Float](repeating: 0, count: ts * ts * classes)
             for i in 0..<(ts * ts) { logits[i * classes + 0] = 12 }
@@ -100,7 +102,7 @@ final class CoreMLSegmenterTests: XCTestCase {
         let palette = makeTestPalette()
         let targetSize = 32
         let classes = palette.totalClasses
-        let engine = StubInferenceEngine(classes: classes) { ts in
+        let engine = CannedInferenceEngine(classes: classes) { ts in
             var logits = [Float](repeating: 0, count: ts * ts * classes)
             for i in 0..<(ts * ts) { logits[i * classes + 0] = 12 }
             return logits

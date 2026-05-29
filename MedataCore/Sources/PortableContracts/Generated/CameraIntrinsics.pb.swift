@@ -15,14 +15,14 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// Distortion ordering: AVCameraCalibrationData order (iOS-canonical). Android adapter
 /// re-orders Camera2's LENS_DISTORTION coefficients into this order before constructing.
-public struct PbCameraIntrinsics: Sendable {
+public nonisolated struct PbCameraIntrinsics: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -49,9 +49,9 @@ public struct PbCameraIntrinsics: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "medata.research.v1"
+fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
-extension PbCameraIntrinsics: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbCameraIntrinsics: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CameraIntrinsics"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}fx\0\u{1}fy\0\u{1}cx\0\u{1}cy\0\u{1}distortion\0\u{3}image_width\0\u{3}image_height\0")
 

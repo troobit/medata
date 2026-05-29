@@ -29,23 +29,34 @@ public struct Pipeline: Sendable {
     private let segmenter: CoreMLSegmenter
     private let database: any FoodDatabase
     private let store: any PersistenceStore
+    // Stamped onto every MealRecord this pipeline produces (Decision 42, Req §23.6):
+    // "dev_stub" for Phase 1 device-MVP builds, "coreml_<modelVersion>" for Phase 3.
+    // Internal (not private) so tests can verify the factory stamps the correct
+    // value without running the full pipeline; production reads happen inside
+    // Pipeline.estimate.
+    let segmenterSource: String
     public weak var delegate: (any CaptureFlowDelegate)?
 
     public init(
         cardDetector: any CardDetector,
         segmenter: CoreMLSegmenter,
         database: any FoodDatabase,
-        store: any PersistenceStore
+        store: any PersistenceStore,
+        segmenterSource: String = ""
     ) {
         self.cardDetector = cardDetector
         self.segmenter = segmenter
         self.database = database
         self.store = store
+        self.segmenterSource = segmenterSource
     }
 
     // Main entry point per design §2.4.
-    public func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    // `mode` is the user-selected CaptureMode from §2.3 / Decision 35; it drives
+    // volume-estimator dispatch and is copied to MealRecord.capturePath.
+    public func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         let nadir = captureResult.nadirFrame
+        let capturePath = mode.capturePath
 
         // ── Stage C: Card detection ──────────────────────────────────────────────
         #if DEBUG
@@ -154,7 +165,7 @@ public struct Pipeline: Sendable {
         let interClassOcclusion: Bool
         var viewCoverage: ViewCoverage
 
-        switch captureResult.capturePath {
+        switch capturePath {
         case .singleViewLidar:
             guard let depth = nadir.depth else {
                 #if DEBUG
@@ -293,9 +304,10 @@ public struct Pipeline: Sendable {
             .mapValues { PipelineBridges.pbBetaStatus($0.betaStatus) }
 
         let record = MealRecord(
-            capturePath: captureResult.capturePath,
+            capturePath: capturePath,
             databaseEdition: captureResult.databaseEdition,
             paletteVersion: captureResult.paletteVersion,
+            segmenterSource: segmenterSource,
             calibration: nadir.intrinsics.pb,
             supportPlane: PipelineBridges.pbSupportPlane(plane),
             scale: PipelineBridges.pbMetricScale(scale),

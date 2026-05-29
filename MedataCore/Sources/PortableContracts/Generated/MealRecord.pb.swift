@@ -15,12 +15,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public struct PbMealRecord: @unchecked Sendable {
+public nonisolated struct PbMealRecord: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -129,6 +129,15 @@ public struct PbMealRecord: @unchecked Sendable {
     set {_uniqueStorage()._photoAssetID = newValue}
   }
 
+  /// Identifier for the segmenter that produced this meal (Decision 42, Req §23.6).
+  /// Phase 1 records carry "dev_stub"; Phase 3 records carry "coreml_<modelVersion>".
+  /// The result view branches on this string (not on the build flag) so a Phase 1
+  /// record viewed under a later Phase 3 build still surfaces the placeholder banner.
+  public var segmenterSource: String {
+    get {_storage._segmenterSource}
+    set {_uniqueStorage()._segmenterSource = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -138,11 +147,11 @@ public struct PbMealRecord: @unchecked Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "medata.research.v1"
+fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
-extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MealRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}created_at_ms\0\u{3}capture_path\0\u{3}database_edition\0\u{1}frames\0\u{1}calibration\0\u{3}support_plane\0\u{1}scale\0\u{1}volumes\0\u{1}macros\0\u{1}confidence\0\u{3}per_class_calibration\0\u{3}user_correction\0\u{3}photo_asset_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}created_at_ms\0\u{3}capture_path\0\u{3}database_edition\0\u{1}frames\0\u{1}calibration\0\u{3}support_plane\0\u{1}scale\0\u{1}volumes\0\u{1}macros\0\u{1}confidence\0\u{3}per_class_calibration\0\u{3}user_correction\0\u{3}photo_asset_id\0\u{3}segmenter_source\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -159,6 +168,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     var _perClassCalibration: Dictionary<String,PbBetaCalibrationStatus> = [:]
     var _userCorrection: PbUserCorrection? = nil
     var _photoAssetID: String = String()
+    var _segmenterSource: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -183,6 +193,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       _perClassCalibration = source._perClassCalibration
       _userCorrection = source._userCorrection
       _photoAssetID = source._photoAssetID
+      _segmenterSource = source._segmenterSource
     }
   }
 
@@ -215,6 +226,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
         case 12: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufEnumMap<SwiftProtobuf.ProtobufString,PbBetaCalibrationStatus>.self, value: &_storage._perClassCalibration) }()
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._userCorrection) }()
         case 14: try { try decoder.decodeSingularStringField(value: &_storage._photoAssetID) }()
+        case 15: try { try decoder.decodeSingularStringField(value: &_storage._segmenterSource) }()
         default: break
         }
       }
@@ -269,6 +281,9 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       if !_storage._photoAssetID.isEmpty {
         try visitor.visitSingularStringField(value: _storage._photoAssetID, fieldNumber: 14)
       }
+      if !_storage._segmenterSource.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._segmenterSource, fieldNumber: 15)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -292,6 +307,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
         if _storage._perClassCalibration != rhs_storage._perClassCalibration {return false}
         if _storage._userCorrection != rhs_storage._userCorrection {return false}
         if _storage._photoAssetID != rhs_storage._photoAssetID {return false}
+        if _storage._segmenterSource != rhs_storage._segmenterSource {return false}
         return true
       }
       if !storagesAreEqual {return false}

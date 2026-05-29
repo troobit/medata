@@ -30,9 +30,14 @@ struct MedataApp: App {
         _uiTestHarness = State(initialValue: nil)
         #endif
 
+        // Decision 42 / Req §23: real Pipeline backed by the dev-stub segmenter
+        // under DEV_STUB_SEGMENTER (Phase 1, Debug). Release builds will throw
+        // until Phase 3 bundles `food_segmenter.mlpackage`; `try!` is correct
+        // because a missing model at launch is a development error, not a
+        // recoverable runtime condition.
         _model = State(initialValue: CaptureFlowModel(
             session: CaptureSession(engine: engine),
-            pipeline: PendingPipeline(),
+            pipeline: try! Pipeline.makeForDevice(store: store),
             indicators: LiveIndicatorModel(),
             interruptions: engine.interruptions,
             supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
@@ -73,17 +78,6 @@ struct MedataApp: App {
     }
 }
 
-// Stand-in PipelineEstimator used until the segmenter-weights smolspec bundles
-// the Core ML model and a real `Pipeline` factory lands (Decision 13: the UI
-// spec ships independently of that work via the `PipelineEstimator` seam).
-// Capture, gating, and the refusal flow are fully exercisable; estimation
-// surfaces a refusal until the real pipeline is wired in.
-private struct PendingPipeline: PipelineEstimator {
-    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
-        throw EstimationFailure.noScaleAvailable
-    }
-}
-
 #if DEBUG
 // MARK: - XCUITest harness (DEBUG only)
 //
@@ -120,7 +114,7 @@ enum UITestSupport {
 
     static func makePipeline() -> any PipelineEstimator {
         switch pipelineMode {
-        case .refuse: return PendingPipeline()
+        case .refuse: return RefusingPipeline()
         case .stall: return StallingPipeline()
         }
     }
@@ -156,6 +150,16 @@ private final class UITestCaptureEngine: CaptureEngine, @unchecked Sendable {
         pending = nil
         lock.unlock()
         continuation?.resume(returning: .fixture())
+    }
+}
+
+// XCUITest pipeline that refuses immediately, used to exercise the
+// `.refused` state branch without spinning up the real pipeline (which would
+// need a working ARSession + LiDAR depth, neither of which the simulator
+// provides). The production refusal path is covered by `EstimationFailureTests`.
+private struct RefusingPipeline: PipelineEstimator {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
+        throw EstimationFailure.noScaleAvailable
     }
 }
 

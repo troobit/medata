@@ -414,7 +414,7 @@ private func makeMealRecord(capturePath: CapturePath = .singleViewLidar) -> Meal
 // of a real Pipeline (which would require the segmenter weights bundle).
 private final class ProgrammablePipeline: PipelineEstimator, @unchecked Sendable {
     var result: Result<MealRecord, Error> = .failure(EstimationFailure.noScaleAvailable)
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         switch result {
         case .success(let record): return record
         case .failure(let error): throw error
@@ -426,7 +426,7 @@ private final class ProgrammablePipeline: PipelineEstimator, @unchecked Sendable
 // trigger cancellation. Task.sleep throws CancellationError on cancel, which
 // the model swallows per Decision 12.
 private final class StallingPipeline: PipelineEstimator, @unchecked Sendable {
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         try await Task.sleep(nanoseconds: 10_000_000_000)
         throw EstimationFailure.noScaleAvailable
     }

@@ -37,8 +37,9 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 sql: """
                     INSERT INTO meals
                         (id, created_at, capture_path, database_edition, palette_version,
-                         sigma_meal, total_carbs_g, photo_asset_id, record_json, artefacts_dir)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         sigma_meal, total_carbs_g, photo_asset_id, segmenter_source,
+                         record_json, artefacts_dir)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     record.id.uuidString,
@@ -49,6 +50,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                     sigmaMeal,
                     totalCarbsG,
                     record.photoAssetID,
+                    record.segmenterSource,
                     json,
                     artefactsDir
                 ]
@@ -244,6 +246,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 sigma_meal       REAL NOT NULL,
                 total_carbs_g    REAL NOT NULL,
                 photo_asset_id   TEXT NOT NULL DEFAULT '',
+                segmenter_source TEXT NOT NULL DEFAULT '',
                 record_json      BLOB NOT NULL,
                 artefacts_dir    TEXT NOT NULL
             );
@@ -290,6 +293,15 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             // history view renders a placeholder rather than failing to fetch.
             try db.execute(
                 sql: "ALTER TABLE meals ADD COLUMN photo_asset_id TEXT NOT NULL DEFAULT ''"
+            )
+        }
+        if !columns.contains("segmenter_source") {
+            // Decision 42 / Req §23.6: Phase 1 records carry "dev_stub", Phase 3
+            // records carry "coreml_<modelVersion>". Existing rows default to
+            // '' (provenance unknown) so they are not retroactively attributed
+            // to either segmenter.
+            try db.execute(
+                sql: "ALTER TABLE meals ADD COLUMN segmenter_source TEXT NOT NULL DEFAULT ''"
             )
         }
         try db.execute(

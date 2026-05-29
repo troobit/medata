@@ -56,7 +56,7 @@ final class EstimationFailureTests: XCTestCase {
             database: EmptyFoodDatabase(),
             store: NoOpPersistenceStore()
         )
-        let _: (CaptureResult) async throws -> MealRecord = pipeline.estimate
+        let _: (CaptureResult, CaptureMode) async throws -> MealRecord = pipeline.estimate
         XCTAssertTrue(true)
     }
 
@@ -78,7 +78,7 @@ final class EstimationFailureTests: XCTestCase {
             paletteVersion: "v1"
         )
         do {
-            _ = try await pipeline.estimate(captureResult: captureResult)
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
             XCTFail("Expected EstimationFailure.noScaleAvailable")
         } catch EstimationFailure.noScaleAvailable {
             // expected
@@ -109,7 +109,7 @@ final class EstimationFailureTests: XCTestCase {
             paletteVersion: "v1"
         )
         do {
-            _ = try await pipeline.estimate(captureResult: captureResult)
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
             XCTFail("Expected EstimationFailure.arWorldTrackingLost")
         } catch EstimationFailure.arWorldTrackingLost {
             // expected
@@ -142,7 +142,7 @@ final class EstimationFailureTests: XCTestCase {
             paletteVersion: "v1"
         )
         do {
-            _ = try await pipeline.estimate(captureResult: captureResult)
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .single)
             XCTFail("Expected EstimationFailure.lidarUnavailableMidCapture")
         } catch EstimationFailure.lidarUnavailableMidCapture {
             // expected

@@ -15,12 +15,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum PbBetaCalibrationStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum PbBetaCalibrationStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case calibrated // = 1
@@ -62,7 +62,7 @@ public enum PbBetaCalibrationStatus: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-public struct PbBetaEntry: Sendable {
+public nonisolated struct PbBetaEntry: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -76,7 +76,7 @@ public struct PbBetaEntry: Sendable {
   public init() {}
 }
 
-public struct PbBetaCorrectionTable: Sendable {
+public nonisolated struct PbBetaCorrectionTable: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -92,13 +92,13 @@ public struct PbBetaCorrectionTable: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "medata.research.v1"
+fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
-extension PbBetaCalibrationStatus: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbBetaCalibrationStatus: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BETA_CALIBRATION_STATUS_UNSPECIFIED\0\u{1}BETA_CALIBRATION_STATUS_CALIBRATED\0\u{1}BETA_CALIBRATION_STATUS_UNCALIBRATED_POOLED\0\u{1}BETA_CALIBRATION_STATUS_UNCALIBRATED_UNITY\0")
 }
 
-extension PbBetaEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbBetaEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BetaEntry"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}beta\0\u{1}status\0")
 
@@ -133,7 +133,7 @@ extension PbBetaEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementati
   }
 }
 
-extension PbBetaCorrectionTable: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbBetaCorrectionTable: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BetaCorrectionTable"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}entries\0\u{3}database_edition\0")
 

@@ -110,6 +110,12 @@ public enum SegmenterWeightsBudget {
 // CHW [1, C, target, target] or HWC [1, target, target, C]. The output shape is
 // resolved at load time from the model description.
 public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked Sendable {
+    // Static identifier for the bundled segmenter checkpoint. Stamped on every
+    // Phase 3 MealRecord as `coreml_<modelVersion>` (Req §23.6, Decision 42).
+    // Bumped when the trained model is regenerated; Phase 1 ships without a
+    // bundled `.mlpackage`, so this value is reserved until Phase 3 wires it.
+    public static let modelVersion: String = "v0.1"
+
     private let model: MLModel
     private let inputName: String
     private let outputName: String

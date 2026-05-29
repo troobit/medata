@@ -184,7 +184,7 @@ private func makeSplitConfidenceBuffer(width: Int, height: Int) -> CVPixelBuffer
 }
 
 private final class NoopPipeline: PipelineEstimator, @unchecked Sendable {
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         throw EstimationFailure.noScaleAvailable
     }
 }

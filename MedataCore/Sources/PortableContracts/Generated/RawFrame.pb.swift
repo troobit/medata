@@ -20,12 +20,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum PbPixelFormat: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum PbPixelFormat: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case rgb8 // = 1
@@ -67,7 +67,7 @@ public enum PbPixelFormat: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-public enum PbColourSpace: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum PbColourSpace: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case unspecified // = 0
   case srgb // = 1
@@ -105,7 +105,7 @@ public enum PbColourSpace: SwiftProtobuf.Enum, Swift.CaseIterable {
 
 }
 
-public struct PbRawFrame: @unchecked Sendable {
+public nonisolated struct PbRawFrame: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -195,17 +195,17 @@ public struct PbRawFrame: @unchecked Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "medata.research.v1"
+fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
-extension PbPixelFormat: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbPixelFormat: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PIXEL_FORMAT_UNSPECIFIED\0\u{1}PIXEL_FORMAT_RGB8\0\u{1}PIXEL_FORMAT_BGRA8\0\u{1}PIXEL_FORMAT_RGBA8\0")
 }
 
-extension PbColourSpace: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbColourSpace: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0COLOUR_SPACE_UNSPECIFIED\0\u{1}COLOUR_SPACE_SRGB\0\u{1}COLOUR_SPACE_LINEAR\0")
 }
 
-extension PbRawFrame: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbRawFrame: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RawFrame"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}image_bytes\0\u{3}pixel_format\0\u{3}colour_space\0\u{1}orientation\0\u{3}image_width\0\u{3}image_height\0\u{3}timestamp_monotonic_ns\0\u{1}intrinsics\0\u{1}gravity\0\u{3}world_from_camera\0\u{1}depth\0")
 

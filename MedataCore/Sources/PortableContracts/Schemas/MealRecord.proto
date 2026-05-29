@@ -31,4 +31,9 @@ message MealRecord {
     // user's Photos library (Decision 37, Req §17.3). Empty string when the user
     // denied PHAuthorizationStatus(for: .addOnly) — estimation still completes.
     string photo_asset_id = 14;
+    // Identifier for the segmenter that produced this meal (Decision 42, Req §23.6).
+    // Phase 1 records carry "dev_stub"; Phase 3 records carry "coreml_<modelVersion>".
+    // The result view branches on this string (not on the build flag) so a Phase 1
+    // record viewed under a later Phase 3 build still surfaces the placeholder banner.
+    string segmenter_source = 15;
 }

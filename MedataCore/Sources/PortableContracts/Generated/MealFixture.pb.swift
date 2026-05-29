@@ -20,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// Off-line fixture used by HarnessCLI for accuracy-mode and β_c calibration. Per design §7.3.
-public struct PbMealFixture: @unchecked Sendable {
+public nonisolated struct PbMealFixture: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -167,9 +167,9 @@ public struct PbMealFixture: @unchecked Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "medata.research.v1"
+fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
-extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MealFixture"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}fixture_id\0\u{3}fixture_revision\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_checkpoint_sha256\0\u{3}nadir_image\0\u{3}oblique_image\0\u{3}nadir_depth\0\u{3}nadir_probs\0\u{3}oblique_probs\0\u{3}nadir_argmax\0\u{3}oblique_argmax\0\u{3}nadir_intrinsics\0\u{3}oblique_intrinsics\0\u{3}t_1_to_2\0\u{1}gravity\0\u{3}ground_truth_class_mass_g\0\u{3}ground_truth_total_carbs_g\0\u{3}capture_path_canonical\0")
 
