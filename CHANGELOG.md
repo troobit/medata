@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Research spec — Harness and Calibration phase, tasks 55–65)
+
+- `HarnessCore/AccuracyHarness.swift`, `BetaCalibrator.swift`, `FixtureLoader.swift`, `FixtureRunner.swift`, `SegBench.swift` — restored as `HarnessCore` SPM library target with every file wrapped in `#if HARNESS_ENABLED ... #endif`. Implements the §6.9 β_c log-residual calibration, §7.3 fixture-driven pipeline runner, §7.3 accuracy harness (MAPE, MAE, per-class breakdown, per-stage latency), and §7.5 segmenter mIoU bench per Decision 41.
+
+### Changed (Research spec — Harness and Calibration phase, tasks 55–65)
+
+- `Package.swift` — added `HarnessCore` library, `HarnessCLI` executable, and `HarnessCLITests` test target. All three define `HARNESS_ENABLED` only in their own `swiftSettings` so the iOS app product (`MedataCore` / `Pipeline`) links zero harness code (Decision 41). `HarnessCLITests` deps expanded to include `Pipeline`, `CardDetection`, `CaptureKit`, `Persistence` to satisfy the landed `PipelinePerformanceTests` imports.
+- `HarnessCLI/main.swift` — entire file wrapped in `#if HARNESS_ENABLED ... #endif`.
+- `MedataCore/Tests/HarnessCLITests/*.swift` (6 files) — wrapped in `#if HARNESS_ENABLED ... #endif` per Req 21.9.
+
 ### Fixed (Camera input rendering on iPhone 13 Pro Max)
 
 - `App/ARPreviewView.swift` — added `ensureSessionConfigured()` method called from `makeUIView()` to synchronously configure and run the ARSession before ARView attempts to render. This eliminates a race condition where the view tried to display camera input before the session was initialized, causing FigCapture errors (err=-12710, err=-12784, err=-17281) and blank camera feed.

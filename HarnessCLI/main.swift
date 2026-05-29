@@ -1,7 +1,11 @@
 // HarnessCLI — offline test-set runner per design §7.3.
 // Subcommands: accuracy, calibrate, seg-bench, calibrate-and-eval.
 // Usage: HarnessCLI <subcommand> [flags]
-
+//
+// Feature-flagged off in v1 per Decision 41. The entire file is gated on
+// HARNESS_ENABLED, defined only on the HarnessCLI SPM target. The shipping
+// iOS app never includes this binary.
+#if HARNESS_ENABLED
 import CaptureKit
 import Foods
 import Foundation
@@ -266,3 +270,4 @@ do {
     fputs("Error: \(error)\n", stderr)
     exit(1)
 }
+#endif

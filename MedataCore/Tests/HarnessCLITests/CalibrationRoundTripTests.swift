@@ -1,3 +1,4 @@
+#if HARNESS_ENABLED
 import XCTest
 import Foods
 import PortableContracts
@@ -122,3 +123,4 @@ final class CalibrationRoundTripTests: XCTestCase {
         }
     }
 }
+#endif

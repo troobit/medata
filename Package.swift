@@ -96,6 +96,33 @@ let package = Package(
             ],
             path: "MedataCore/Sources/Pipeline"
         ),
+        // Harness targets — feature-flagged via HARNESS_ENABLED per Decision 41.
+        // The iOS app target ("MedataCore" / "Pipeline") MUST NOT define HARNESS_ENABLED,
+        // so the shipping app binary links zero harness code. Only the three targets
+        // below set the compile flag, and the gate is enforced per-file via #if HARNESS_ENABLED.
+        .target(
+            name: "HarnessCore",
+            dependencies: [
+                "Pipeline",
+                "CaptureKit",
+                "Segmentation",
+                "SupportPlane",
+                "Volume",
+                "Macros",
+                "Foods",
+                "PortableContracts",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .product(name: "GRDB", package: "GRDB.swift")
+            ],
+            path: "HarnessCore",
+            swiftSettings: [.define("HARNESS_ENABLED")]
+        ),
+        .executableTarget(
+            name: "HarnessCLI",
+            dependencies: ["HarnessCore", "Pipeline"],
+            path: "HarnessCLI",
+            swiftSettings: [.define("HARNESS_ENABLED")]
+        ),
         .testTarget(
             name: "PortableContractsTests",
             dependencies: ["PortableContracts"],
@@ -163,6 +190,22 @@ let package = Package(
             name: "PipelineTests",
             dependencies: ["Pipeline", "Persistence", "PortableContracts"],
             path: "MedataCore/Tests/PipelineTests"
+        ),
+        .testTarget(
+            name: "HarnessCLITests",
+            dependencies: [
+                "HarnessCore",
+                "Pipeline",
+                "CardDetection",
+                "CaptureKit",
+                "Persistence",
+                "Segmentation",
+                "Foods",
+                "PortableContracts",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
+            ],
+            path: "MedataCore/Tests/HarnessCLITests",
+            swiftSettings: [.define("HARNESS_ENABLED")]
         )
     ]
 )

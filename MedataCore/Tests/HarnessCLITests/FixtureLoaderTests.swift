@@ -1,3 +1,4 @@
+#if HARNESS_ENABLED
 import XCTest
 import Foundation
 import PortableContracts
@@ -105,3 +106,4 @@ final class FixtureLoaderTests: XCTestCase {
         return fx
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if HARNESS_ENABLED
 import XCTest
 import CardDetection
 import CaptureKit
@@ -180,3 +181,4 @@ private struct FoodDominantEngine: SegmenterInferenceEngine {
         return (logits, classes)
     }
 }
+#endif

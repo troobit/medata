@@ -1,3 +1,4 @@
+#if HARNESS_ENABLED
 import XCTest
 import Segmentation
 @testable import HarnessCore
@@ -149,3 +150,4 @@ final class SegBenchTests: XCTestCase {
         )
     }
 }
+#endif
