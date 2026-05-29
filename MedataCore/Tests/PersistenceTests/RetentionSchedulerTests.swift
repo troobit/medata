@@ -85,6 +85,7 @@ private final class StubPersistenceStore: PersistenceStore, @unchecked Sendable 
     func appendCorrection(mealId: UUID, correction: PbUserCorrection) async throws {}
     func meal(id: UUID) async throws -> MealRecord { throw PersistenceError.mealNotFound(id) }
     func exportArchive() async throws -> String { "" }
+    func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {}
 
     func deleteArtefacts(olderThan date: Date) async throws {
         deleteCalls.append(date)

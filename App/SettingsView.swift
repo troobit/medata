@@ -1,46 +1,37 @@
 import Pipeline
 import SwiftUI
 
-// Sentinel value for "keep forever" (Req 17.4).
-private let indefinite = -1
-
 // Wraps the exported archive URL so it can drive `.sheet(item:)`.
 private struct ArchiveFile: Identifiable {
     let id = UUID()
     let url: URL
 }
 
+// Settings rewritten per Decisions 37 and 39. The retention picker and the
+// IFCDB toggle are gone; photo lifecycle is delegated to the user's Photos
+// library and macros are sourced from the bundled CoFID + AFCD pair with no
+// user override.
 struct SettingsView: View {
-    // Retention period: 30, 90, 365 days, or -1 for indefinite (Req 17.4).
-    @AppStorage(SettingsKeys.retentionDays) private var retentionDays: Int = 90
-    // IFCDB regional overlay toggle (FoodDatabase ATTACH on next launch).
-    @AppStorage(SettingsKeys.ifcdbOverlayEnabled) private var ifcdbOverlayEnabled: Bool = false
-
     let store: any PersistenceStore
 
     @State private var archiveFile: ArchiveFile?
     @State private var isExporting = false
     @State private var exportError: String?
 
-    private let retentionOptions: [(label: String, days: Int)] = [
-        ("30 days", 30),
-        ("90 days", 90),
-        ("365 days", 365),
-        ("Indefinite", indefinite)
-    ]
-
     var body: some View {
         Form {
-            Section("Meal History Retention") {
-                Picker("Keep meals for", selection: $retentionDays) {
-                    ForEach(retentionOptions, id: \.days) { option in
-                        Text(option.label).tag(option.days)
-                    }
-                }
+            Section("About macronutrient sources") {
+                Text("Carbohydrate, energy, protein, fat and fibre values are derived from the bundled CoFID 2024 and AFCD 2024 databases.")
+                    .font(.footnote)
+                Text("CoFID — McCance & Widdowson, Food Standards Agency, Crown Copyright, Open Government Licence v3.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text("AFCD — Australian Food Composition Database, Food Standards Australia New Zealand, CC-BY-4.0.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            Section("Database") {
-                Toggle("Enable Irish food composition overlay (IFCDB)", isOn: $ifcdbOverlayEnabled)
-                Text("When enabled the IFCDB regional values replace the CoFID defaults for matching foods. Takes effect after relaunch.")
+            Section("Photos") {
+                Text("Captured meal photos are saved to your Photos library and managed there. Removing a photo from Photos will remove the preview from the meal record, but the carbohydrate estimate is kept.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

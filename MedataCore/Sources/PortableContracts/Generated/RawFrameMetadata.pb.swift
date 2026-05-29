@@ -28,8 +28,6 @@ public struct PbRawFrameMetadata: Sendable {
   /// 'nadir' | 'oblique'
   public var viewID: String = String()
 
-  public var imageFilename: String = String()
-
   /// empty when no LiDAR
   public var depthFilename: String = String()
 
@@ -55,7 +53,7 @@ fileprivate let _protobuf_package = "medata.research.v1"
 
 extension PbRawFrameMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RawFrameMetadata"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}view_id\0\u{3}image_filename\0\u{3}depth_filename\0\u{3}confidence_filename\0\u{3}mask_filename\0\u{3}probs_filename\0\u{3}image_width\0\u{3}image_height\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}view_id\0\u{4}\u{2}depth_filename\0\u{3}confidence_filename\0\u{3}mask_filename\0\u{3}probs_filename\0\u{3}image_width\0\u{3}image_height\0\u{b}image_filename\0\u{c}\u{2}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -64,7 +62,6 @@ extension PbRawFrameMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.viewID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.imageFilename) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.depthFilename) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.confidenceFilename) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.maskFilename) }()
@@ -79,9 +76,6 @@ extension PbRawFrameMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.viewID.isEmpty {
       try visitor.visitSingularStringField(value: self.viewID, fieldNumber: 1)
-    }
-    if !self.imageFilename.isEmpty {
-      try visitor.visitSingularStringField(value: self.imageFilename, fieldNumber: 2)
     }
     if !self.depthFilename.isEmpty {
       try visitor.visitSingularStringField(value: self.depthFilename, fieldNumber: 3)
@@ -106,7 +100,6 @@ extension PbRawFrameMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
 
   public static func ==(lhs: PbRawFrameMetadata, rhs: PbRawFrameMetadata) -> Bool {
     if lhs.viewID != rhs.viewID {return false}
-    if lhs.imageFilename != rhs.imageFilename {return false}
     if lhs.depthFilename != rhs.depthFilename {return false}
     if lhs.confidenceFilename != rhs.confidenceFilename {return false}
     if lhs.maskFilename != rhs.maskFilename {return false}

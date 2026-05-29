@@ -8,83 +8,52 @@ import Pipeline
 import PortableContracts
 import Segmentation
 
-// XCTest on-device performance assertions for the full estimation pipeline
-// (tasks 65–66, Req 16.1, 16.7). Both tests skip on macOS — CI runs on a
-// tethered iPhone 12 Pro per Req 16.7.
+// Single end-to-end soft latency check per Decision 40 / Req §16.1: the full
+// pipeline must complete in under 30 s for both `single` and `double` modes on
+// the v1 hardware floor (iPhone 13 Pro Max, iOS 26.5). The per-stage P95
+// budgets from earlier revisions (tasks 65–66) are deleted; per-stage timing
+// is still emitted via `os_signpost` in DEBUG builds for ad-hoc Instruments
+// inspection but no per-stage assertion is made.
+//
+// The test runs on the developer device with `-D HARNESS_ENABLED`; CI is not
+// gated on harness output in v1.
 final class PipelinePerformanceTests: XCTestCase {
 
-    // MARK: - Task 65: Single-view P95 ≤ 1000 ms (Req 16.1, 16.2)
-
-    func testSingleViewP95LessThan1000ms() async throws {
+    func testSingleViewEndToEndUnderThirtySeconds() async throws {
         #if !os(iOS)
-        throw XCTSkip("Performance tests are device-only (tethered iPhone 12 Pro, Req 16.7)")
+        throw XCTSkip("End-to-end soft latency check is device-only (iPhone 13 Pro Max, Req §16.1)")
         #endif
 
         let pipeline = makePerformancePipeline()
         let fixture   = makeSingleViewFixture()
-        var durationsMs: [Double] = []
 
-        let options = XCTMeasureOptions()
-        options.iterationCount = 10
-        measure(metrics: [XCTClockMetric()], options: options) {
-            let t0   = Date.now
-            let sema = DispatchSemaphore(value: 0)
-            Task {
-                _ = try? await pipeline.estimate(captureResult: fixture)
-                sema.signal()
-            }
-            sema.wait()
-            durationsMs.append(Date.now.timeIntervalSince(t0) * 1000)
-        }
-
-        let p95 = p95ms(durationsMs)
-        XCTAssertLessThanOrEqual(
-            p95, 1000,
-            "Single-view P95 \(String(format: "%.0f", p95)) ms exceeds 1000 ms budget (Req 16.1)"
+        let start = Date.now
+        _ = try? await pipeline.estimate(captureResult: fixture)
+        let elapsed = Date.now.timeIntervalSince(start)
+        XCTAssertLessThan(
+            elapsed, 30.0,
+            "Single-view end-to-end \(String(format: "%.2f", elapsed)) s exceeds 30 s soft target (Req §16.1)"
         )
     }
 
-    // MARK: - Task 66: Two-view P95 ≤ 1800 ms (Req 16.1, 16.3)
-
-    func testTwoViewP95LessThan1800ms() async throws {
+    func testTwoViewEndToEndUnderThirtySeconds() async throws {
         #if !os(iOS)
-        throw XCTSkip("Performance tests are device-only (tethered iPhone 12 Pro, Req 16.7)")
+        throw XCTSkip("End-to-end soft latency check is device-only (iPhone 13 Pro Max, Req §16.1)")
         #endif
 
         let pipeline = makePerformancePipeline()
         let fixture   = makeTwoViewFixture()
-        var durationsMs: [Double] = []
 
-        let options = XCTMeasureOptions()
-        options.iterationCount = 10
-        measure(metrics: [XCTClockMetric()], options: options) {
-            let t0   = Date.now
-            let sema = DispatchSemaphore(value: 0)
-            Task {
-                _ = try? await pipeline.estimate(captureResult: fixture)
-                sema.signal()
-            }
-            sema.wait()
-            durationsMs.append(Date.now.timeIntervalSince(t0) * 1000)
-        }
-
-        let p95 = p95ms(durationsMs)
-        XCTAssertLessThanOrEqual(
-            p95, 1800,
-            "Two-view P95 \(String(format: "%.0f", p95)) ms exceeds 1800 ms budget (Req 16.1)"
+        let start = Date.now
+        _ = try? await pipeline.estimate(captureResult: fixture)
+        let elapsed = Date.now.timeIntervalSince(start)
+        XCTAssertLessThan(
+            elapsed, 30.0,
+            "Two-view end-to-end \(String(format: "%.2f", elapsed)) s exceeds 30 s soft target (Req §16.1)"
         )
     }
 
     // MARK: - Helpers
-
-    // P95 of n samples = sorted[ceil(0.95 × n) − 1].
-    // With n = 10 this equals sorted[9] = the maximum value.
-    private func p95ms(_ values: [Double]) -> Double {
-        guard !values.isEmpty else { return 0 }
-        let sorted = values.sorted()
-        let idx = min(sorted.count - 1, max(0, Int(ceil(0.95 * Double(sorted.count))) - 1))
-        return sorted[idx]
-    }
 
     private func makePerformancePipeline() -> Pipeline {
         let palette = ClassPalette(
@@ -110,7 +79,7 @@ final class PipelinePerformanceTests: XCTestCase {
             lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 90),
             nadirFrame: .fixture(timestampMonotonicNs: 1, depth: makeFlatDepthMap()),
             obliqueFrame: nil,
-            databaseEdition: "CoFID 2024",
+            databaseEdition: "CoFID 2024 + AFCD 2024",
             paletteVersion: "v1"
         )
     }
@@ -121,7 +90,7 @@ final class PipelinePerformanceTests: XCTestCase {
             lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 60),
             nadirFrame: .fixture(timestampMonotonicNs: 2, depth: makeFlatDepthMap()),
             obliqueFrame: .fixture(timestampMonotonicNs: 3),
-            databaseEdition: "CoFID 2024",
+            databaseEdition: "CoFID 2024 + AFCD 2024",
             paletteVersion: "v1"
         )
     }
@@ -165,10 +134,11 @@ private struct NoOpStore: PersistenceStore {
     func deleteArtefacts(olderThan date: Date) async throws {}
     func exportArchive() async throws -> String { "" }
     func sweepIfDue() async throws {}
+    func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {}
 }
 
 // Returns FP32 logits that make foodClasses[0] ("bread") dominate every pixel,
-// so the pipeline does not throw noFoodPixels during performance measurement.
+// so the pipeline does not throw noFoodPixels during latency measurement.
 private struct FoodDominantEngine: SegmenterInferenceEngine {
     let classes: Int
     func runInference(

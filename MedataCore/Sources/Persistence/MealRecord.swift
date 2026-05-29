@@ -11,6 +11,10 @@ public struct MealRecord: Sendable, Equatable, Hashable {
     public let capturePath: CapturePath
     public let databaseEdition: String
     public let paletteVersion: String
+    // PHAsset.localIdentifier for the original captured nadir frame stored in
+    // the user's Photos library (Decision 37, Req §17.3). Empty string when
+    // Photos add-only authorisation was denied or unavailable.
+    public let photoAssetID: String
     public let frames: [PbRawFrameMetadata]
     public let calibration: PbCameraIntrinsics
     public let supportPlane: PbSupportPlane
@@ -27,6 +31,7 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         capturePath: CapturePath,
         databaseEdition: String,
         paletteVersion: String,
+        photoAssetID: String = "",
         frames: [PbRawFrameMetadata] = [],
         calibration: PbCameraIntrinsics,
         supportPlane: PbSupportPlane,
@@ -42,6 +47,7 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         self.capturePath = capturePath
         self.databaseEdition = databaseEdition
         self.paletteVersion = paletteVersion
+        self.photoAssetID = photoAssetID
         self.frames = frames
         self.calibration = calibration
         self.supportPlane = supportPlane
@@ -51,6 +57,20 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         self.confidence = confidence
         self.perClassCalibration = perClassCalibration
         self.userCorrection = userCorrection
+    }
+
+    // Returns a copy of this record with photoAssetID replaced. Used after the
+    // capture flow saves the nadir frame to Photos and needs to stamp the
+    // resulting PHAsset.localIdentifier on the persisted record (Req §17.3).
+    public func withPhotoAssetID(_ assetID: String) -> MealRecord {
+        MealRecord(
+            id: id, createdAt: createdAt,
+            capturePath: capturePath, databaseEdition: databaseEdition,
+            paletteVersion: paletteVersion, photoAssetID: assetID,
+            frames: frames, calibration: calibration, supportPlane: supportPlane,
+            scale: scale, volumes: volumes, macros: macros, confidence: confidence,
+            perClassCalibration: perClassCalibration, userCorrection: userCorrection
+        )
     }
 }
 
@@ -82,6 +102,7 @@ public extension MealRecord {
         out.createdAtMs = Int64(createdAt.timeIntervalSince1970 * 1000)
         out.capturePath = capturePath.pb
         out.databaseEdition = databaseEdition
+        out.photoAssetID = photoAssetID
         out.frames = frames
         out.calibration = calibration
         out.supportPlane = supportPlane
@@ -107,6 +128,7 @@ public extension MealRecord {
         self.capturePath = capturePath
         self.databaseEdition = pb.databaseEdition
         self.paletteVersion = paletteVersion
+        self.photoAssetID = pb.photoAssetID
         self.frames = pb.frames
         self.calibration = pb.calibration
         self.supportPlane = pb.supportPlane

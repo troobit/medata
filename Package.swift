@@ -65,8 +65,8 @@ let package = Package(
             ],
             path: "MedataCore/Sources/Foods",
             resources: [
-                .copy("Resources/food_db.sqlite"),
-                .copy("Resources/ifcdb_overlay.sqlite")
+                .copy("Resources/cofid_db.sqlite"),
+                .copy("Resources/afcd_db.sqlite")
             ]
         ),
         .target(

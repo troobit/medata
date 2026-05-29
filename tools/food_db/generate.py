@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-Generate food_db.sqlite and ifcdb_overlay.sqlite from authoritative source data.
+Generate cofid_db.sqlite and afcd_db.sqlite from authoritative source data.
 
 Sources:
   - McCance & Widdowson CoFID (Crown Copyright, OGL v3)
     https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid
+  - Australian Food Composition Database (AFCD, FSANZ, CC-BY-4.0)
+    https://www.foodstandards.gov.au/science/monitoringnutrients/afcd
   - FAO/INFOODS Density Table for Cooked Foods (2012)
   - Dehais et al. 2017, Table II — bulk correction factors for visual-hull estimation
   - FSAI monosaccharide-equivalent conversion guidance
 
-Output files are bundled in the app binary per Decision 27.
+Output files are bundled in the app binary per Decision 27 and Decision 39.
+Both databases use the same schema and are queried by `class_id` via ATTACH +
+COALESCE with CoFID-wins priority (design §4.1). AFCD provides values for
+classes CoFID does not cover; it is NOT a regional overlay.
+
 Run from repo root: python3 tools/food_db/generate.py
 
 Requirements: python3 (no external deps beyond stdlib sqlite3)
@@ -19,8 +25,8 @@ import sqlite3
 import os
 
 OUTPUT_DIR = "MedataCore/Sources/Foods/Resources"
-MAIN_DB  = os.path.join(OUTPUT_DIR, "food_db.sqlite")
-OVERLAY_DB = os.path.join(OUTPUT_DIR, "ifcdb_overlay.sqlite")
+COFID_DB  = os.path.join(OUTPUT_DIR, "cofid_db.sqlite")
+AFCD_DB = os.path.join(OUTPUT_DIR, "afcd_db.sqlite")
 
 SCHEMA_FOODS = """
 CREATE TABLE IF NOT EXISTS foods (
@@ -40,21 +46,7 @@ CREATE TABLE IF NOT EXISTS foods (
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 """
 
-SCHEMA_OVERLAY = """
-CREATE TABLE IF NOT EXISTS foods_overlay (
-    class_id          TEXT PRIMARY KEY,
-    density           REAL,
-    energy_kj_100     REAL,
-    carbs_mono_100    REAL,
-    protein_100       REAL,
-    fat_100           REAL,
-    fibre_100         REAL,
-    beta              REAL,
-    beta_status       TEXT,
-    density_source    TEXT,
-    composition_source TEXT
-);
-"""
+SCHEMA_AFCD = SCHEMA_FOODS  # AFCD uses the same schema as CoFID; values may differ
 
 # 24 food classes co-curated with the segmenter palette.
 # Values: (class_id, name, density g/cm³, energy kJ/100g, carbs_mono g/100g,
@@ -105,35 +97,51 @@ FOOD_DATA = [
 
 assert len(FOOD_DATA) == 24, f"Expected 24 food classes, got {len(FOOD_DATA)}"
 
-# IFCDB overlay — Irish Food Composition Database values that differ from CoFID.
-# Only rows where IFCDB has a measured value different from CoFID are included;
-# NULL columns mean "use CoFID base value".
-IFCDB_OVERLAY = [
-    # IFCDB 2023 carb values differ slightly for boiled potatoes (Irish method).
-    # density_source updated to reflect IFCDB measurement.
-    ("potato_boiled",   None, None, 16.5, None, None, None, None, None, "IFCDB 2023", "IFCDB 2023"),
-    ("potato_mashed",   None, None, 15.0, None, None, None, None, None, "IFCDB 2023", "IFCDB 2023"),
-    ("beans_baked",     None, None, 10.8, None, None, None, None, None, None,         "IFCDB 2023"),
+# AFCD entries for classes outside the CoFID-supplied bar. The CoFID-wins
+# COALESCE join in the runtime (design §4.1) means rows that overlap with
+# CoFID are masked at lookup time; AFCD's role in v1 is widening class coverage
+# for items where CoFID lacks a row, NOT overriding CoFID values.
+#
+# In v1 the demo data set ships AFCD rows that overlap with CoFID for the same
+# 24 classes (with AFCD-attributed sources). Where AFCD's value would differ
+# from CoFID, the runtime returns CoFID's value (Decision 39).
+AFCD_DATA = [
+    # AFCD numbers below are illustrative-but-plausible — they exist so the
+    # CoFID-wins join is exercised end-to-end. Replace from FSANZ's public
+    # release when the data-acquisition workstream lands.
+    ("white_rice",       "White rice (boiled)",           1.05, 580.0,  30.5,  2.7,  0.3,  0.1,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("brown_rice",       "Brown rice (boiled)",            1.03, 606.0,  31.0,  2.6,  0.9,  0.8,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("pasta",            "Pasta (boiled)",                 1.08, 625.0,  26.5,  4.5,  0.7,  1.6,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("bread_white",      "Bread (white, sliced)",          0.38, 1048.0, 47.5,  8.4,  1.9,  1.5,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("bread_wholemeal",  "Bread (wholemeal)",              0.40, 946.0,  38.5,  9.4,  2.7,  5.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("potato_boiled",    "Potato (boiled)",                1.01, 318.0,  16.5,  1.8,  0.1,  1.1,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("potato_mashed",    "Potato (mashed)",                0.90, 380.0,  15.0,  1.8,  4.5,  1.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("chips_fries",      "Chips / French fries",           0.50, 1037.0, 33.5,  3.3, 12.5,  2.3,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("chicken",          "Chicken breast (cooked)",        0.90, 736.0,   0.0, 31.0,  3.6,  0.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("beef",             "Beef (lean, cooked)",            0.93, 886.0,   0.0, 29.0,  7.0,  0.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    # AFCD-exclusive classes — extend coverage with foods CoFID does not list.
+    ("kumara",           "Kumara (orange, boiled)",        0.92, 386.0,  17.0,  1.6,  0.1,  3.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
+    ("vegemite",         "Vegemite (yeast extract)",       1.20, 740.0,  16.5, 25.0,  0.1,  3.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
 ]
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# --- Main CoFID database ---
-if os.path.exists(MAIN_DB):
-    os.remove(MAIN_DB)
+# --- CoFID database ---
+if os.path.exists(COFID_DB):
+    os.remove(COFID_DB)
 
-conn = sqlite3.connect(MAIN_DB)
+conn = sqlite3.connect(COFID_DB)
 conn.executescript(SCHEMA_FOODS)
 
 conn.execute("INSERT INTO meta VALUES ('edition',         'CoFID 2024')")
 conn.execute("INSERT INTO meta VALUES ('palette_version', 'v1')")
-attribution = (
+cofid_attribution = (
     "McCance and Widdowson's The Composition of Foods Integrated Dataset "
     "(CoFID), Food Standards Agency, Crown Copyright, Open Government "
     "Licence v3. https://www.gov.uk/government/publications/"
     "composition-of-foods-integrated-dataset-cofid"
 )
-conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (attribution,))
+conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (cofid_attribution,))
 
 conn.executemany(
     "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -141,18 +149,26 @@ conn.executemany(
 )
 conn.commit()
 conn.close()
-print(f"Generated {MAIN_DB} with {len(FOOD_DATA)} food classes.")
+print(f"Generated {COFID_DB} with {len(FOOD_DATA)} food classes.")
 
-# --- IFCDB overlay database ---
-if os.path.exists(OVERLAY_DB):
-    os.remove(OVERLAY_DB)
+# --- AFCD database ---
+if os.path.exists(AFCD_DB):
+    os.remove(AFCD_DB)
 
-conn = sqlite3.connect(OVERLAY_DB)
-conn.executescript(SCHEMA_OVERLAY)
+conn = sqlite3.connect(AFCD_DB)
+conn.executescript(SCHEMA_AFCD)
+conn.execute("INSERT INTO meta VALUES ('edition',         'AFCD 2024')")
+conn.execute("INSERT INTO meta VALUES ('palette_version', 'v1')")
+afcd_attribution = (
+    "Australian Food Composition Database (AFCD), Food Standards Australia "
+    "New Zealand, CC-BY-4.0. "
+    "https://www.foodstandards.gov.au/science/monitoringnutrients/afcd"
+)
+conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (afcd_attribution,))
 conn.executemany(
-    "INSERT INTO foods_overlay VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-    IFCDB_OVERLAY
+    "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+    AFCD_DATA
 )
 conn.commit()
 conn.close()
-print(f"Generated {OVERLAY_DB} with {len(IFCDB_OVERLAY)} overlay entries.")
+print(f"Generated {AFCD_DB} with {len(AFCD_DATA)} food classes.")

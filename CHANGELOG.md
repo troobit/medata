@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Research spec — v1 Adjustments phase, tasks 73–75)
+
+- `App/PhotoLibrarySaver.swift` — new `PhotoLibrarySaver` protocol and iOS `PhotoKitSaver` implementation. Wraps `PHPhotoLibrary.shared().performChanges` and `PHAuthorizationStatus(for: .addOnly)`. Returns the resulting `PHAsset.localIdentifier` or `""` when the user denies the prompt (Decision 37, Req §17.3).
+- `MedataCore/Sources/Foods/Resources/cofid_db.sqlite`, `afcd_db.sqlite` — both bundled and read-only per Decision 39. Replace the previous `food_db.sqlite` + `ifcdb_overlay.sqlite` pair.
+- `MedataCore/Tests/PersistenceTests/PersistenceTests.swift` — three new tests for `photoAssetID` round-trip via the JSON BLOB and the denormalised column, empty-string handling when add-only authorisation is denied, and `updatePhotoAssetID` stamping an existing meal.
+- `MedataCore/Tests/FoodsTests/FoodDatabaseTests.swift` — rewritten to exercise the CoFID-wins COALESCE join, AFCD-only fallthrough, missing-class behaviour, `databaseEdition` composite string, and `entry(for:edition:)` fallback for unknown edition strings.
+- `MedataCore/Tests/HarnessCLITests/PipelinePerformanceTests.swift` — single end-to-end soft latency check per Decision 40 / Req §16.1: asserts < 30 s for both `single` and `double` modes on the v1 hardware floor. Skips on macOS — runs only on a tethered iPhone 13 Pro Max under `-D HARNESS_ENABLED`.
+
+### Changed (Research spec — v1 Adjustments phase, tasks 73–75)
+
+- `MedataCore/Sources/PortableContracts/Schemas/MealRecord.proto` — added `string photo_asset_id = 14` carrying `PHAsset.localIdentifier` (Decision 37).
+- `MedataCore/Sources/PortableContracts/Schemas/RawFrameMetadata.proto` — `image_filename = 2` marked `reserved`; the original photo lives in the user's Photos library, not the app private container.
+- `MedataCore/Sources/PortableContracts/Generated/*.pb.swift` — regenerated from the updated `.proto` schemas via `Schemas/generate.sh`.
+- `MedataCore/Sources/Persistence/MealRecord.swift` — added `photoAssetID: String` field plus a `withPhotoAssetID(_:)` helper used by the capture flow to stamp the asset ID returned from PhotoKit on the persisted record.
+- `MedataCore/Sources/Persistence/PersistenceStore.swift` — new protocol method `updatePhotoAssetID(mealId:photoAssetID:) async throws`.
+- `MedataCore/Sources/Persistence/GRDBPersistenceStore.swift` — schema gains `photo_asset_id TEXT NOT NULL DEFAULT ''`; idempotent `migrate(_:)` adds the column to pre-existing DBs (schema_version bumped to `'2'`). `save(_:)` writes the column and the JSON BLOB; `updatePhotoAssetID` updates both. Existing test stubs (`NoOpPersistenceStore`, `StubPersistenceStore`, harness `NoOpStore`) updated to conform.
+- `MedataCore/Sources/Foods/GRDBFoodDatabase.swift` — rewritten to open `cofid_db.sqlite` and ATTACH `afcd_db.sqlite`, with a CoFID-wins `UNION ALL` lookup that falls through to AFCD only for AFCD-exclusive classes. `bundled()` no longer takes an overlay flag. `version` reports the composite `"CoFID 2024 + AFCD 2024"` string used as `MealRecord.databaseEdition`.
+- `MedataCore/Sources/Pipeline/EstimationFailure.swift` — `.noLidarDevice` message rewritten to point at the new hardware floor: "MeData requires an iPhone 13 Pro Max running iOS 26.5 or later." (Decision 40).
+- `Package.swift` — `Foods` resources updated to copy `cofid_db.sqlite` + `afcd_db.sqlite`.
+- `App/App.swift` — `CaptureFlowModel` now constructed with `store` and `PhotoKitSaver` injected; default `databaseEdition` bumped to `"CoFID 2024 + AFCD 2024"`.
+- `App/CaptureFlowModel.swift` — accepts `store` and `photoSaver`; after `pipeline.estimate` returns successfully, `saveNadirPhoto(record:frame:)` saves the nadir frame to Photos (denial degrades to `""`), stamps the asset ID on the persisted record via `store.updatePhotoAssetID`, and routes the stamped record into `lastMeal` / `showingResult` / `navigationPath`.
+- `App/SettingsKeys.swift` — removed `retentionDays` and `ifcdbOverlayEnabled`; only `captureMode` remains.
+- `App/SettingsView.swift` — rewritten: retention picker and IFCDB toggle gone, replaced by static "About macronutrient sources" and "Photos" sections that surface the CoFID + AFCD attributions and explain Photos lifecycle. Archive export retained.
+- `HarnessCLI/main.swift` — three call sites updated to use `GRDBFoodDatabase.bundled()` after the overlay flag was removed.
+- `MeData/MeData.xcodeproj/project.pbxproj` — added `PhotoLibrarySaver.swift` to the iOS app target's sources and `NSPhotoLibraryAddUsageDescription` to the app's Info.plist build settings.
+- `tools/food_db/generate.py` — rewritten to emit `cofid_db.sqlite` and `afcd_db.sqlite` (instead of the old CoFID + IFCDB overlay pair). Includes illustrative AFCD rows that exercise both the CoFID-wins case and the AFCD-only fallthrough.
+
+### Removed (Research spec — v1 Adjustments phase, tasks 73–75)
+
+- `MedataCore/Sources/Foods/Resources/food_db.sqlite`, `ifcdb_overlay.sqlite` — superseded by the bundled CoFID + AFCD pair.
+- The per-stage `XCTClockMetric` performance assertions (former tasks 65/66 single-view ≤ 1000 ms and two-view ≤ 1800 ms P95 caps) — replaced by a single end-to-end < 30 s soft check per Decision 40.
+- IFCDB overlay toggle and 30 / 90 / 365-day retention picker from the Settings screen.
+
 ### Added (Research spec — Harness and Calibration phase, tasks 55–65)
 
 - `HarnessCore/AccuracyHarness.swift`, `BetaCalibrator.swift`, `FixtureLoader.swift`, `FixtureRunner.swift`, `SegBench.swift` — restored as `HarnessCore` SPM library target with every file wrapped in `#if HARNESS_ENABLED ... #endif`. Implements the §6.9 β_c log-residual calibration, §7.3 fixture-driven pipeline runner, §7.3 accuracy harness (MAPE, MAE, per-class breakdown, per-stage latency), and §7.5 segmenter mIoU bench per Decision 41.

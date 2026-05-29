@@ -27,4 +27,8 @@ message MealRecord {
     ConfidenceResult confidence = 11;
     map<string, BetaCalibrationStatus> per_class_calibration = 12;
     UserCorrection user_correction = 13;        // optional
+    // PHAsset.localIdentifier for the original captured nadir frame saved to the
+    // user's Photos library (Decision 37, Req §17.3). Empty string when the user
+    // denied PHAuthorizationStatus(for: .addOnly) — estimation still completes.
+    string photo_asset_id = 14;
 }

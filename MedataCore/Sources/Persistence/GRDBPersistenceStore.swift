@@ -17,7 +17,10 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         self.dbURL = dbURL
         self.artefactsBaseURL = artefactsBaseURL
         queue = try DatabaseQueue(path: dbURL.path)
-        try queue.write { db in try GRDBPersistenceStore.createSchema(db) }
+        try queue.write { db in
+            try GRDBPersistenceStore.createSchema(db)
+            try GRDBPersistenceStore.migrate(db)
+        }
     }
 
     // MARK: - PersistenceStore
@@ -34,8 +37,8 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 sql: """
                     INSERT INTO meals
                         (id, created_at, capture_path, database_edition, palette_version,
-                         sigma_meal, total_carbs_g, record_json, artefacts_dir)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         sigma_meal, total_carbs_g, photo_asset_id, record_json, artefacts_dir)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     record.id.uuidString,
@@ -45,6 +48,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                     record.paletteVersion,
                     sigmaMeal,
                     totalCarbsG,
+                    record.photoAssetID,
                     json,
                     artefactsDir
                 ]
@@ -84,6 +88,31 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                     ]
                 )
             }
+        }
+    }
+
+    public func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {
+        try await queue.write { db in
+            // Update both the denormalised column AND the canonical JSON BLOB so a
+            // subsequent meal(id:) reload deserialises the new value (the JSON BLOB
+            // is the canonical source; the column is for indexing / filtering).
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT record_json FROM meals WHERE id = ?",
+                arguments: [mealId.uuidString]
+            )
+            guard let row else { throw PersistenceError.mealNotFound(mealId) }
+            let json: String = row["record_json"]
+            var pb = try PbMealRecord(jsonString: json)
+            pb.photoAssetID = photoAssetID
+            let updated = try pb.jsonString()
+            try db.execute(
+                sql: """
+                    UPDATE meals SET photo_asset_id = ?, record_json = ?
+                    WHERE id = ?
+                    """,
+                arguments: [photoAssetID, updated, mealId.uuidString]
+            )
         }
     }
 
@@ -214,6 +243,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 palette_version  TEXT NOT NULL,
                 sigma_meal       REAL NOT NULL,
                 total_carbs_g    REAL NOT NULL,
+                photo_asset_id   TEXT NOT NULL DEFAULT '',
                 record_json      BLOB NOT NULL,
                 artefacts_dir    TEXT NOT NULL
             );
@@ -244,7 +274,26 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '1')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '2')"
+        )
+    }
+
+    // Idempotent additive migrations for databases created before a column existed.
+    // The schema CREATE statements above are guarded by IF NOT EXISTS, so existing
+    // rows survive; this fills in the gaps without dropping anything.
+    private static func migrate(_ db: Database) throws {
+        let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(meals)")
+            .compactMap { $0["name"] as String? }
+        if !columns.contains("photo_asset_id") {
+            // Decision 37: original photo lives in the user's Photos library,
+            // referenced by PHAsset.localIdentifier. Existing rows get '' so
+            // history view renders a placeholder rather than failing to fetch.
+            try db.execute(
+                sql: "ALTER TABLE meals ADD COLUMN photo_asset_id TEXT NOT NULL DEFAULT ''"
+            )
+        }
+        try db.execute(
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '2')"
         )
     }
 }

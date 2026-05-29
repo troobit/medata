@@ -121,7 +121,7 @@ func runAccuracy(args: Args) throws {
     guard !args.fixturesDir.isEmpty, !args.checkpointSHA256.isEmpty else {
         fputs("accuracy requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
-    let db = try GRDBFoodDatabase.bundled(overlayEnabled: false)
+    let db = try GRDBFoodDatabase.bundled()
     let palette = ClassPalette.v1Standard
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
     let calInputs = buildCalInputs(fixtures: fixtures, palette: palette, db: db,
@@ -158,7 +158,7 @@ func runCalibrate(args: Args) throws {
     guard !args.fixturesDir.isEmpty, !args.checkpointSHA256.isEmpty else {
         fputs("calibrate requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
-    let db = try GRDBFoodDatabase.bundled(overlayEnabled: false)
+    let db = try GRDBFoodDatabase.bundled()
     let palette = ClassPalette.v1Standard
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
     let calInputs = buildCalInputs(fixtures: fixtures, palette: palette, db: db,
@@ -179,7 +179,7 @@ func runCalibrateAndEval(args: Args) throws {
     guard !args.fixturesDir.isEmpty, !args.checkpointSHA256.isEmpty else {
         fputs("calibrate-and-eval requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
-    let db = try GRDBFoodDatabase.bundled(overlayEnabled: false)
+    let db = try GRDBFoodDatabase.bundled()
     let palette = ClassPalette.v1Standard
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
     let calInputs = buildCalInputs(fixtures: fixtures, palette: palette, db: db,

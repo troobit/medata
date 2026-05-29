@@ -36,6 +36,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     private let session: CaptureSession
     private let pipeline: any PipelineEstimator
+    private let store: (any PersistenceStore)?
+    private let photoSaver: (any PhotoLibrarySaver)?
     private let databaseEdition: String
     private let paletteVersion: String
     private let cameraAuthorisation: @Sendable () -> AVAuthorizationStatus
@@ -59,6 +61,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         supportsLiDAR: Bool,
         databaseEdition: String,
         paletteVersion: String,
+        store: (any PersistenceStore)? = nil,
+        photoSaver: (any PhotoLibrarySaver)? = nil,
         cameraAuthorisation: @escaping @Sendable () -> AVAuthorizationStatus = {
             AVCaptureDevice.authorizationStatus(for: .video)
         },
@@ -69,6 +73,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     ) {
         self.session = session
         self.pipeline = pipeline
+        self.store = store
+        self.photoSaver = photoSaver
         self.indicators = indicators
         self.supportsLiDAR = supportsLiDAR
         self.databaseEdition = databaseEdition
@@ -344,11 +350,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             let record = try await pipeline.estimate(captureResult: captureResult, mode: mode)
             guard !Task.isCancelled else { return }
             guard case .estimating = state else { return }
+
+            // Decision 37 / Req §17.3: save the captured nadir frame to Photos
+            // and stamp the returned PHAsset.localIdentifier on the persisted
+            // meal. A denied Photos prompt is NOT an error — the meal still
+            // surfaces; the result view falls back to a placeholder.
+            let stamped = await saveNadirPhoto(record: record, frame: captureResult.nadirFrame)
             firstFrame = nil
             inFlightMode = nil
-            lastMeal = record
-            state = .showingResult(record)
-            navigationPath.append(record)
+            lastMeal = stamped
+            state = .showingResult(stamped)
+            navigationPath.append(stamped)
         } catch is CancellationError {
             return
         } catch let failure as EstimationFailure {
@@ -358,6 +370,26 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             guard case .estimating = state else { return }
             state = .refused(.noScaleAvailable, retryStage: retryStage)
         }
+    }
+
+    // Saves the captured nadir frame to the user's Photos library (if a saver
+    // is injected) and stamps the returned PHAsset.localIdentifier on the
+    // persisted meal. Returns the record updated with the asset ID. Throws
+    // nothing — Photos failures degrade to an empty identifier.
+    private func saveNadirPhoto(record: MealRecord, frame: RawFrame) async -> MealRecord {
+        guard let photoSaver else { return record }
+        let assetID: String
+        do {
+            assetID = try await photoSaver.saveNadirFrame(frame)
+        } catch {
+            // Encoding / performChanges failure — degrade to empty identifier.
+            assetID = ""
+        }
+        guard !assetID.isEmpty else { return record }
+        if let store {
+            try? await store.updatePhotoAssetID(mealId: record.id, photoAssetID: assetID)
+        }
+        return record.withPhotoAssetID(assetID)
     }
 
     private func cancelInFlight() {

@@ -36,8 +36,10 @@ struct MedataApp: App {
             indicators: LiveIndicatorModel(),
             interruptions: engine.interruptions,
             supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
-            databaseEdition: "CoFID 2024",
-            paletteVersion: "v1"
+            databaseEdition: "CoFID 2024 + AFCD 2024",
+            paletteVersion: "v1",
+            store: store,
+            photoSaver: PhotoKitSaver()
         ))
     }
 

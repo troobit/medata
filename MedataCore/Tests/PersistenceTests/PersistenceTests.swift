@@ -133,6 +133,53 @@ final class PersistenceTests: XCTestCase {
         }
     }
 
+    // MARK: - T73 PhotoKit asset identifier round-trips through JSON BLOB and column
+
+    func testPhotoAssetIDRoundTrips() async throws {
+        let record = makeMealRecord(photoAssetID: "0F1A2B3C-DEAD-BEEF-CAFE-00112233445/L0/001")
+        try await store.save(record, artefacts: [])
+
+        // Reload from JSON BLOB
+        let reloaded = try await store.meal(id: record.id)
+        XCTAssertEqual(reloaded.photoAssetID, record.photoAssetID)
+
+        // Denormalised column matches
+        let dbURL = tempDir.appendingPathComponent("meals.sqlite")
+        let q = try DatabaseQueue(path: dbURL.path)
+        try await q.read { db in
+            guard let row = try Row.fetchOne(
+                db, sql: "SELECT photo_asset_id FROM meals WHERE id = ?",
+                arguments: [record.id.uuidString]
+            ) else { return XCTFail("meal row not found") }
+            let assetID: String = row["photo_asset_id"]
+            XCTAssertEqual(assetID, record.photoAssetID)
+        }
+    }
+
+    // MARK: - T73 PhotoKit denied path stores empty string and reload succeeds
+
+    func testMealWithoutPhotoAssetIDStoresEmptyString() async throws {
+        let record = makeMealRecord(photoAssetID: "")
+        try await store.save(record, artefacts: [])
+        let reloaded = try await store.meal(id: record.id)
+        XCTAssertEqual(reloaded.photoAssetID, "")
+    }
+
+    // MARK: - T73 updatePhotoAssetID stamps an existing meal
+
+    func testUpdatePhotoAssetIDStampsExistingMeal() async throws {
+        let record = makeMealRecord(photoAssetID: "")
+        try await store.save(record, artefacts: [])
+
+        try await store.updatePhotoAssetID(
+            mealId: record.id,
+            photoAssetID: "PHASSET-LOCAL-ID-12345"
+        )
+
+        let reloaded = try await store.meal(id: record.id)
+        XCTAssertEqual(reloaded.photoAssetID, "PHASSET-LOCAL-ID-12345")
+    }
+
     // MARK: - T41.6 meal_artefacts rows written for each artefact
 
     func testArtefactsWrittenToTable() async throws {
@@ -162,7 +209,8 @@ private func makeMealRecord(
     classId: String = "white_rice",
     betaStatus: PbBetaCalibrationStatus = .calibrated,
     totalCarbsG: Float = 33.6,
-    sigmaMeal: Float = 0.82
+    sigmaMeal: Float = 0.82,
+    photoAssetID: String = ""
 ) -> MealRecord {
     var confidence = PbConfidenceResult()
     confidence.sigmaMeal = sigmaMeal
@@ -187,6 +235,7 @@ private func makeMealRecord(
         capturePath: .singleViewLidar,
         databaseEdition: "CoFID 2024",
         paletteVersion: "v1",
+        photoAssetID: photoAssetID,
         calibration: PbCameraIntrinsics(),
         supportPlane: PbSupportPlane(),
         scale: PbMetricScale(),

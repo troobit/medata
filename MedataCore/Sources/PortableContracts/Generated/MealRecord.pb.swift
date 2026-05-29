@@ -121,6 +121,14 @@ public struct PbMealRecord: @unchecked Sendable {
   /// Clears the value of `userCorrection`. Subsequent reads from it will return its default value.
   public mutating func clearUserCorrection() {_uniqueStorage()._userCorrection = nil}
 
+  /// PHAsset.localIdentifier for the original captured nadir frame saved to the
+  /// user's Photos library (Decision 37, Req §17.3). Empty string when the user
+  /// denied PHAuthorizationStatus(for: .addOnly) — estimation still completes.
+  public var photoAssetID: String {
+    get {_storage._photoAssetID}
+    set {_uniqueStorage()._photoAssetID = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -134,7 +142,7 @@ fileprivate let _protobuf_package = "medata.research.v1"
 
 extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MealRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}created_at_ms\0\u{3}capture_path\0\u{3}database_edition\0\u{1}frames\0\u{1}calibration\0\u{3}support_plane\0\u{1}scale\0\u{1}volumes\0\u{1}macros\0\u{1}confidence\0\u{3}per_class_calibration\0\u{3}user_correction\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}created_at_ms\0\u{3}capture_path\0\u{3}database_edition\0\u{1}frames\0\u{1}calibration\0\u{3}support_plane\0\u{1}scale\0\u{1}volumes\0\u{1}macros\0\u{1}confidence\0\u{3}per_class_calibration\0\u{3}user_correction\0\u{3}photo_asset_id\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -150,6 +158,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
     var _confidence: PbConfidenceResult? = nil
     var _perClassCalibration: Dictionary<String,PbBetaCalibrationStatus> = [:]
     var _userCorrection: PbUserCorrection? = nil
+    var _photoAssetID: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -173,6 +182,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       _confidence = source._confidence
       _perClassCalibration = source._perClassCalibration
       _userCorrection = source._userCorrection
+      _photoAssetID = source._photoAssetID
     }
   }
 
@@ -204,6 +214,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
         case 11: try { try decoder.decodeSingularMessageField(value: &_storage._confidence) }()
         case 12: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufEnumMap<SwiftProtobuf.ProtobufString,PbBetaCalibrationStatus>.self, value: &_storage._perClassCalibration) }()
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._userCorrection) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._photoAssetID) }()
         default: break
         }
       }
@@ -255,6 +266,9 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
       try { if let v = _storage._userCorrection {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
       } }()
+      if !_storage._photoAssetID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._photoAssetID, fieldNumber: 14)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -277,6 +291,7 @@ extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementat
         if _storage._confidence != rhs_storage._confidence {return false}
         if _storage._perClassCalibration != rhs_storage._perClassCalibration {return false}
         if _storage._userCorrection != rhs_storage._userCorrection {return false}
+        if _storage._photoAssetID != rhs_storage._photoAssetID {return false}
         return true
       }
       if !storagesAreEqual {return false}

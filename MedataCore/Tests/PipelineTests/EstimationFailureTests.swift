@@ -185,6 +185,7 @@ private struct NoOpPersistenceStore: PersistenceStore {
     func deleteArtefacts(olderThan date: Date) async throws {}
     func exportArchive() async throws -> String { "" }
     func sweepIfDue() async throws {}
+    func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {}
 }
 
 private struct ZeroLogitsEngine: SegmenterInferenceEngine {

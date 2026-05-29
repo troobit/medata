@@ -5,46 +5,49 @@ public enum FoodDatabaseError: Error {
     case bundleResourceMissing(String)
 }
 
-// GRDB-backed implementation of FoodDatabase per design §3.7 / §4.1 / §6.12.
+// GRDB-backed implementation of FoodDatabase per design §3.7 / §4.1 / Decision 39.
 //
-// Opens a read-only bundled `food_db.sqlite`. When overlayPath is set, attaches
-// `ifcdb_overlay.sqlite` via ATTACH DATABASE and uses the COALESCE merge query
-// from design §4.1 (P13) so IFCDB values take priority over CoFID values.
+// Opens read-only `cofid_db.sqlite` and ATTACHes `afcd_db.sqlite`. Lookups join
+// the two via a COALESCE that returns CoFID values when both databases supply a
+// class, falling back to AFCD for AFCD-only classes. Both sources are always
+// bundled in v1; the previous IFCDB overlay and `ifcdbOverlayEnabled` toggle
+// are removed.
 public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
 
     private let queue: DatabaseQueue
     private let _version: String
     private let _editions: [String]
 
-    // Production factory — opens the bundled CoFID database from the module bundle.
-    // Pass overlayEnabled = true to activate the IFCDB overlay per Decision 27.
-    public static func bundled(overlayEnabled: Bool = false) throws -> GRDBFoodDatabase {
+    // Production factory — opens the bundled CoFID + AFCD databases from the
+    // module bundle. Both are always present per Decision 39; no user toggle.
+    public static func bundled() throws -> GRDBFoodDatabase {
         let bundle = Bundle.module
-        guard let mainURL = bundle.url(forResource: "food_db", withExtension: "sqlite") else {
-            throw FoodDatabaseError.bundleResourceMissing("food_db.sqlite")
+        guard let cofidURL = bundle.url(forResource: "cofid_db", withExtension: "sqlite") else {
+            throw FoodDatabaseError.bundleResourceMissing("cofid_db.sqlite")
         }
-        var overlayPath: String?
-        if overlayEnabled {
-            overlayPath = bundle.url(forResource: "ifcdb_overlay", withExtension: "sqlite")?.path
+        guard let afcdURL = bundle.url(forResource: "afcd_db", withExtension: "sqlite") else {
+            throw FoodDatabaseError.bundleResourceMissing("afcd_db.sqlite")
         }
-        return try GRDBFoodDatabase(mainPath: mainURL.path, overlayPath: overlayPath)
+        return try GRDBFoodDatabase(cofidPath: cofidURL.path, afcdPath: afcdURL.path)
     }
 
     // Designated init. Tests pass file-based temp paths; production uses bundled paths.
-    public init(mainPath: String, overlayPath: String? = nil) throws {
+    public init(cofidPath: String, afcdPath: String) throws {
         var config = Configuration()
-        if let oPath = overlayPath {
-            config.prepareDatabase { db in
-                try db.execute(sql: "ATTACH DATABASE ? AS overlay", arguments: [oPath])
-            }
+        config.prepareDatabase { db in
+            try db.execute(sql: "ATTACH DATABASE ? AS afcd", arguments: [afcdPath])
         }
-        let q = try DatabaseQueue(path: mainPath, configuration: config)
-        _version = try q.read { db in
-            try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'edition'") ?? "unknown"
+        let q = try DatabaseQueue(path: cofidPath, configuration: config)
+        let cofidEdition = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'edition'") ?? "CoFID"
         }
-        _editions = try q.read { db in
-            try String.fetchAll(db, sql: "SELECT v FROM meta WHERE k = 'edition'")
+        let afcdEdition = try q.read { db in
+            try String.fetchOne(db, sql: "SELECT v FROM afcd.meta WHERE k = 'edition'") ?? "AFCD"
         }
+        // The composite edition string is what gets written to MealRecord.database_edition
+        // so a meal can be re-derived later against the same pair (Decision 39, Req §11.9).
+        _version = "\(cofidEdition) + \(afcdEdition)"
+        _editions = [cofidEdition, afcdEdition, _version]
         queue = q
     }
 
@@ -53,60 +56,62 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
     public func availableEditions() -> [String] { _editions }
 
     public func entry(for classId: String) -> FoodEntry? {
-        try? queue.read { db in try fetchEntry(db, classId: classId, hasOverlay: overlayAttached(db)) }
+        try? queue.read { db in try fetchEntry(db, classId: classId) }
     }
 
     public func entry(for classId: String, edition: String) -> FoodEntry? {
-        // §6.12: use current DB regardless of edition string when only one edition is bundled.
-        // A multi-edition implementation would dispatch here; v1 has one edition.
+        // §6.12: v1 bundles a single (CoFID + AFCD) pair so the edition string
+        // is informational. Multi-edition dispatch is reserved for a future
+        // migration scenario per Decision 24.
         entry(for: classId)
     }
 
     // MARK: - private
 
-    private func overlayAttached(_ db: Database) -> Bool {
-        (try? String.fetchOne(db, sql: "SELECT name FROM pragma_database_list WHERE name = 'overlay'")) != nil
-    }
-
-    private func fetchEntry(_ db: Database, classId: String, hasOverlay: Bool) throws -> FoodEntry? {
-        if hasOverlay {
-            return try fetchWithOverlay(db, classId: classId)
-        } else {
-            return try fetchBase(db, classId: classId)
-        }
-    }
-
-    // Canonical merge query per design §4.1 (P13).
-    private func fetchWithOverlay(_ db: Database, classId: String) throws -> FoodEntry? {
+    // Canonical CoFID-wins COALESCE join (design §4.1 / Decision 39). Any class
+    // present in CoFID returns CoFID values; classes that are AFCD-only fall
+    // through to AFCD via the FULL OUTER join shape (emulated here as a UNION
+    // of a LEFT JOIN both directions, since SQLite has no FULL OUTER).
+    private func fetchEntry(_ db: Database, classId: String) throws -> FoodEntry? {
         let sql = """
-            SELECT
-                f.class_id,
-                f.name,
-                COALESCE(o.density,          f.density)          AS density,
-                COALESCE(o.energy_kj_100,    f.energy_kj_100)    AS energy_kj_100,
-                COALESCE(o.carbs_mono_100,   f.carbs_mono_100)   AS carbs_mono_100,
-                COALESCE(o.protein_100,      f.protein_100)      AS protein_100,
-                COALESCE(o.fat_100,          f.fat_100)          AS fat_100,
-                COALESCE(o.fibre_100,        f.fibre_100)        AS fibre_100,
-                COALESCE(o.beta,             f.beta)             AS beta,
-                COALESCE(o.beta_status,      f.beta_status)      AS beta_status,
-                COALESCE(o.density_source,   f.density_source)   AS density_source,
-                COALESCE(o.composition_source, f.composition_source) AS composition_source
-            FROM foods f
-            LEFT JOIN overlay.foods_overlay o USING (class_id)
-            WHERE f.class_id = ?
+            WITH merged AS (
+                SELECT
+                    c.class_id           AS class_id,
+                    c.name               AS name,
+                    c.density            AS density,
+                    c.energy_kj_100      AS energy_kj_100,
+                    c.carbs_mono_100     AS carbs_mono_100,
+                    c.protein_100        AS protein_100,
+                    c.fat_100            AS fat_100,
+                    c.fibre_100          AS fibre_100,
+                    c.beta               AS beta,
+                    c.beta_status        AS beta_status,
+                    c.density_source     AS density_source,
+                    c.composition_source AS composition_source
+                FROM foods c
+                WHERE c.class_id = ?
+                UNION ALL
+                SELECT
+                    a.class_id           AS class_id,
+                    a.name               AS name,
+                    a.density            AS density,
+                    a.energy_kj_100      AS energy_kj_100,
+                    a.carbs_mono_100     AS carbs_mono_100,
+                    a.protein_100        AS protein_100,
+                    a.fat_100            AS fat_100,
+                    a.fibre_100          AS fibre_100,
+                    a.beta               AS beta,
+                    a.beta_status        AS beta_status,
+                    a.density_source     AS density_source,
+                    a.composition_source AS composition_source
+                FROM afcd.foods a
+                WHERE a.class_id = ?
+                AND NOT EXISTS (SELECT 1 FROM foods c WHERE c.class_id = a.class_id)
+            )
+            SELECT * FROM merged LIMIT 1
             """
-        return try Row.fetchOne(db, sql: sql, arguments: [classId]).map(rowToEntry)
-    }
-
-    private func fetchBase(_ db: Database, classId: String) throws -> FoodEntry? {
-        let sql = """
-            SELECT class_id, name, density, energy_kj_100, carbs_mono_100,
-                   protein_100, fat_100, fibre_100, beta, beta_status,
-                   density_source, composition_source
-            FROM foods WHERE class_id = ?
-            """
-        return try Row.fetchOne(db, sql: sql, arguments: [classId]).map(rowToEntry)
+        return try Row.fetchOne(db, sql: sql, arguments: [classId, classId])
+            .map(rowToEntry)
     }
 
     private func rowToEntry(_ row: Row) -> FoodEntry {
