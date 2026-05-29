@@ -216,7 +216,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // Permission-denied and refusal states are preserved across the switch so
     // the user finds the same surface when they come back.
     func tabSelectionChanged(to tab: AppTab) {
-        guard tab != .photo else { return }
+        if tab == .photo {
+            // Re-arm the AR session on return. The non-Photo branch below
+            // calls `session.stop()` and clears `startTask`; nothing in the
+            // SwiftUI lifecycle restarts it (TabView retains views, so
+            // ARPreviewView's `updateUIView` is not guaranteed to fire on
+            // re-select). Calling `evaluatePermissions()` is idempotent — it
+            // bails out on permission-denied and only spawns a fresh start
+            // task when one is not already in flight.
+            evaluatePermissions()
+            return
+        }
         switch state {
         case .estimating:
             // Let the pipeline finish; `flowTask` already routes the result

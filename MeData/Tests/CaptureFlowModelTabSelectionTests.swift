@@ -170,7 +170,7 @@ private func makeMealRecord() -> MealRecord {
 
 private final class ProgrammablePipeline: PipelineEstimator, @unchecked Sendable {
     var result: Result<MealRecord, Error> = .failure(EstimationFailure.noScaleAvailable)
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         switch result {
         case .success(let record): return record
         case .failure(let error): throw error
@@ -185,7 +185,7 @@ private final class SlowPipeline: PipelineEstimator, @unchecked Sendable {
         self.record = record
         self.delayNs = delayNs
     }
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord {
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         // Deliberately NOT cancellable: tab-switch must NOT abort the work.
         let deadline = ContinuousClock.now.advanced(by: .nanoseconds(Int64(delayNs)))
         while ContinuousClock.now < deadline {
