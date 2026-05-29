@@ -1,12 +1,12 @@
 # UI — Requirements
 
-**Version:** 1.0
-**Date:** 2026-05-20
-**Status:** Draft
+**Version:** 1.1
+**Date:** 2026-05-29
+**Status:** Draft (v1.1 — tab navigation, meal history, and settings tab added; tracks the Apple "Organize your features" tutorial pattern at <https://developer.apple.com/tutorials/develop-in-swift/organize-your-features>)
 
 ## Introduction
 
-The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_:)`) and placeholder SwiftUI views with no real capture flow. This spec defines the v1 user-facing capture experience: a live AR camera preview with state indicators, a manual shutter, an immediate result view, and the settings + export controls that the persistence layer already supports. The algorithm pipeline and data contracts are implemented per `specs/research/`; this spec consumes them.
+The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_:)`) and placeholder SwiftUI views with no real capture flow. This spec defines the v1 user-facing iPhone experience: a three-tab `TabView` root (Photo → Meals → Settings), a live AR camera preview inside the Photo tab with state indicators and a manual shutter, an immediate result view, a persistent meal-history list in the Meals tab, and the settings + export controls that the persistence layer already supports. The algorithm pipeline and data contracts are implemented per `specs/research/`; this spec consumes them. The tab shell, meal history list, and settings tab can be implemented in parallel with `specs/research/` Phase 1 (device MVP); both delivery slots share the same `meals.sqlite` (including the new `segmenter_source` column from research task 82).
 
 ## Out of Scope
 
@@ -16,8 +16,9 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 - Localisation beyond Irish/British English
 - iPad-optimised or Apple Watch layouts (iPhone first)
 - User-correction UI — research Req 14.2 persistence support is unchanged; surfacing deferred to a future spec
-- Persistent meal-history list / browsing — v1 ends at the post-capture result view; archive export is the only persistent egress
-- Liquid Glass / iOS 26-specific styling — UI targets iOS 17 baseline; iOS 26 refinements deferred
+- Data import (restoring from a previously exported archive) — export remains in scope (§11.4); import is deferred
+- Model / inference info panel (segmenter source, model version, palette version) — deferred; the placeholder banner from research Req 23.3 carries the dev-stub provenance for v1
+- Debug info panel (compile-flag state, last-error log, LiDAR availability) — deferred; ad-hoc Xcode inspection remains the developer's tool
 - Per-class carb breakdown on the result view — v1 displays meal total only (research Req 12.4)
 - Clinical macros (energy/protein/fat/fibre) on any user-facing view (research Req 12.6)
 - Accessibility / VoiceOver work (labels, announcements, focus order) — deferred to a future spec; research spec carries no accessibility requirement and adding it during MVP would inflate scope without a forcing reason. See `decision_log.md` Decision 10.
@@ -30,12 +31,13 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 **Acceptance Criteria:**
 
-1. <a name="1.1"></a>WHEN the app launches, THEN the system SHALL present a capture view containing a live AR camera feed, the indicators specified in §2–§4, and the shutter specified in §7.  
-2. <a name="1.2"></a>WHEN the user backgrounds the app or navigates away from the capture view, THEN the system SHALL release the AR session within 200 ms (consistent with research Req 2.5).  
-3. <a name="1.3"></a>WHEN camera permission has been denied, THEN the capture view SHALL display the localised refusal message and a control that opens the app's iOS Settings entry instead of the live preview.  
-4. <a name="1.4"></a>The capture view SHALL be the app's first screen on launch; no onboarding or tutorial screen precedes it.  
+1. <a name="1.1"></a>WHEN the app launches, THEN the Photo tab SHALL be the selected tab (per [18.2](#18.2)) and SHALL present a capture view containing a live AR camera feed, the indicators specified in §2–§4, and the shutter specified in §7.  
+2. <a name="1.2"></a>WHEN the user backgrounds the app or switches to a different tab, THEN the capture view SHALL release the AR session within 200 ms (consistent with research Req 2.5).  
+3. <a name="1.3"></a>WHEN camera permission has been denied, THEN the capture view SHALL display the localised refusal message and a control that opens the app's iOS Settings entry instead of the live preview. The tab bar SHALL remain visible so the user can navigate to other tabs.
+4. <a name="1.4"></a>No onboarding or tutorial screen SHALL precede the tab shell on launch.  
 5. <a name="1.5"></a>The app SHALL support portrait orientation only.  
-6. <a name="1.6"></a>WHEN the AR session has started but `ARSession` has not yet reported a "normal" tracking state, THEN the capture view SHALL display an "Initialising" indicator and SHALL disable the shutter until tracking becomes normal.  
+6. <a name="1.6"></a>WHEN the AR session has started but `ARSession` has not yet reported a "normal" tracking state, THEN the capture view SHALL display an "Initialising" indicator and SHALL disable the shutter until tracking becomes normal.
+7. <a name="1.7"></a>WHEN the user switches away from the Photo tab while the capture view is in any state other than `.estimating`, THEN the capture view SHALL release the AR session and SHALL reset to `.initialising` on re-entry. WHEN the user switches away during `.estimating`, THEN the estimation SHALL continue to completion in the background and the result view SHALL be shown on the next return to the Photo tab.  
 
 ### 2. Tilt indicator
 
@@ -58,15 +60,17 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 2. <a name="3.2"></a>WHERE LiDAR is unavailable, the capture view SHALL display a static 30–40 cm guidance hint and SHALL NOT gate the shutter on distance.  
 3. <a name="3.3"></a>The capture view SHALL surface which gating mode is active (measured vs guidance) so the user understands why the shutter is or isn't enabled.  
 
-### 4. Capture-path indicator
+### 4. Capture-mode toggle (persistent, user-selected)
 
-**User Story:** As a user, I want to see whether the app is using its faster LiDAR shortcut or its two-view path, so that I understand what's being asked of me.
+**User Story:** As a user, I want a persistent toggle on the capture view to choose between single-photo (LiDAR) and double-photo (with reference card) capture, so I'm not surprised by a floating modal mid-session and the chosen mode survives across launches.
 
 **Acceptance Criteria:**
 
-1. <a name="4.1"></a>The capture view SHALL display a capture-path hint with one of two values — `single_view_lidar` or `two_view_sfs` — computed before each capture from (a) the device's LiDAR-supported state and (b) the latest LiDAR coverage observed from the live AR frame stream. The path hint SHALL show `single_view_lidar` only when the device supports LiDAR and the latest observed coverage is ≥ 80% (research Req 3.5).  
-2. <a name="4.2"></a>WHEN the path hint is `single_view_lidar`, THEN the capture view SHALL display a control that forces the next capture onto the two-view path regardless of LiDAR coverage (research Req 3.5).  
-3. <a name="4.3"></a>WHEN `Pipeline.estimate(_:)` completes successfully, THEN the system SHALL treat `MealRecord.capturePath` as the authoritative path actually used and SHALL pass it to the result view (§9).  
+1. <a name="4.1"></a>The capture view SHALL display a persistent segmented control with exactly two options, `Single` and `Double`, bound to `SettingsKeys.captureMode` in `UserDefaults`. The default for a fresh install SHALL be `Double`. The chosen mode SHALL persist across app launches (research Decision 35).
+2. <a name="4.2"></a>WHEN the device does not support LiDAR, THEN the `Single` segment SHALL be disabled (greyed) and a single-line hint SHALL state that Single mode requires a LiDAR-equipped iPhone. Tapping the disabled segment SHALL NOT change the mode.
+3. <a name="4.3"></a>WHEN the user taps the shutter, THEN the active `CaptureMode` SHALL be passed to `Pipeline.estimate(_:mode:)` and `MealRecord.capturePath` SHALL be `single_view_lidar` for `Single`, `two_view_sfs` for `Double`.
+4. <a name="4.4"></a>WHILE `Pipeline.estimate(_:mode:)` is in flight (§8), the segmented control SHALL be visually disabled and SHALL ignore taps. Mode switches SHALL only take effect for the next capture, never mid-pipeline.
+5. <a name="4.5"></a>The previously-specified floating capture-path hint and the inline "force two-view" control SHALL NOT be displayed. The mode toggle is the single source of truth.
 
 ### 5. Two-view capture sequence
 
@@ -74,7 +78,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 **Acceptance Criteria:**
 
-1. <a name="5.1"></a>WHEN the active capture path is `two_view_sfs`, THEN the system SHALL prompt the user for the nadir view first, then the oblique view.  
+1. <a name="5.1"></a>WHEN the active `CaptureMode` is `Double` (resulting in `two_view_sfs`), THEN the system SHALL prompt the user for the nadir view first, then the oblique view.
 2. <a name="5.2"></a>Each view's prompt SHALL show a single-line instruction in Irish-English (e.g. "Top-down view", "Angled view").  
 3. <a name="5.3"></a>The capture stage SHALL advance to the next view (or to estimation) only after a successful capture completes; no auto-advance from a non-captured state.  
 4. <a name="5.4"></a>WHEN the user has captured the first view AND a refusal subsequently occurs at the second view, THEN the system SHALL allow the user to retry the second view without retaking the first.  
@@ -87,8 +91,8 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 **Acceptance Criteria:**
 
-1. <a name="6.1"></a>WHEN the capture-path hint from §4.1 is `two_view_sfs`, THEN the capture view SHALL display a single-line reminder to include an ID-1 reference card flat in the scene. This covers both non-LiDAR devices and LiDAR devices whose current LiDAR coverage falls below the §4.1 threshold (research Req 4.3, 5).  
-2. <a name="6.2"></a>WHEN the capture-path hint from §4.1 is `single_view_lidar`, THEN the card reminder SHALL NOT be shown.  
+1. <a name="6.1"></a>WHEN the active `CaptureMode` (§4.1) is `Double`, THEN the capture view SHALL display a single-line reminder to include an ID-1 reference card flat in the scene (research Req 4.3, 5).
+2. <a name="6.2"></a>WHEN the active `CaptureMode` (§4.1) is `Single`, THEN the card reminder SHALL NOT be shown.
 
 ### 7. Shutter button
 
@@ -135,14 +139,15 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 ### 11. Settings
 
-**User Story:** As a user, I want a settings screen to choose how long meals are kept and to export my data, so that I have control over local storage.
+**User Story:** As a user, I want a Settings tab to see which macro databases the app uses and to export my data, so that I have control over my dataset.
 
 **Acceptance Criteria:**
 
-1. <a name="11.1"></a>The app SHALL expose a Settings view reachable from the capture view via a single navigation control.  
-2. <a name="11.2"></a>The Settings view SHALL contain a retention-period picker with the values 30 / 90 / 365 days and Indefinite (research Req 17.4), bound to `SettingsKeys.retentionDays`.  
-3. <a name="11.3"></a>The Settings view SHALL contain an IFCDB-overlay toggle bound to `SettingsKeys.ifcdbOverlayEnabled`; a change SHALL take effect on the next app launch (research Req 11.3).  
-4. <a name="11.4"></a>The Settings view SHALL contain an "Export archive" control that invokes the persistence-layer archive export (research Req 15.8) and presents the produced file via the standard iOS share sheet.  
+1. <a name="11.1"></a>The app SHALL expose a Settings tab as the rightmost tab in the tab bar (per [18.1](#18.1)). The previous navigation-control entry point from the capture view SHALL be removed.
+2. <a name="11.2"></a>The Settings view SHALL contain a read-only "Macros" row stating which macronutrient databases are bundled (e.g. "CoFID 2024 + AFCD 2024", per research Req 11.1). No retention picker SHALL be shown (research Req 17.3, May 2026: retention removed).
+3. <a name="11.3"></a>The previous IFCDB-overlay toggle SHALL NOT be present. The Settings view SHALL NOT expose any food-database toggle (research Decision 39, May 2026).
+4. <a name="11.4"></a>The Settings view SHALL contain an "Export archive" control that invokes the persistence-layer archive export (research Req 15.8) and presents the produced file via the standard iOS share sheet. The archive SHALL reference photos by `PHAsset.localIdentifier`, not embed image bytes (research Req 17.3).
+5. <a name="11.5"></a>The Settings view SHALL NOT expose data import, model/inference info, or debug info controls in v1 (per Out of Scope above).
 
 ### 12. Localisation
 
@@ -203,4 +208,52 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 **Acceptance Criteria:**
 
 1. <a name="17.1"></a>The app SHALL NOT transmit any captured frame, depth map, segmentation mask, or `MealRecord` field to any network endpoint (research Req 17.2). This is enforced by the absence of any network-bound module rather than by a runtime guard.  
-2. <a name="17.2"></a>The archive export from §11.4 SHALL include only the user's persisted meals (the `meals.sqlite` file and per-meal artefact directories produced by the persistence layer) and SHALL NOT include device identifiers, IP addresses, user account information, or any telemetry-style fields not already present in `MealRecord`.  
+2. <a name="17.2"></a>The archive export from §11.4 SHALL include only the user's persisted meals (the `meals.sqlite` file and per-meal artefact directories produced by the persistence layer) and SHALL NOT include device identifiers, IP addresses, user account information, or any telemetry-style fields not already present in `MealRecord`.
+
+### 18. Tab navigation shell
+
+**User Story:** As a user, I want a tab bar at the bottom of the screen so that I can move between capturing a meal, reviewing past meals, and managing settings without losing context, following Apple's standard navigation pattern.
+
+**Acceptance Criteria:**
+
+1. <a name="18.1"></a>The root view of the application SHALL be a SwiftUI `TabView` containing exactly three tabs, in this order: Photo (§1), Meals (§19), Settings (§11). The tab order SHALL NOT be user-configurable in v1.
+2. <a name="18.2"></a>The Photo tab SHALL be the selected tab on cold launch. On warm launch (the app returning from the background), the previously selected tab SHALL be restored.
+3. <a name="18.3"></a>Each tab SHALL be labelled with a SF Symbol and an Irish-English label: Photo = `camera.fill` + "Photo"; Meals = `fork.knife` + "Meals"; Settings = `gearshape.fill` + "Settings".
+4. <a name="18.4"></a>The tab bar SHALL use the system-default Liquid Glass material on iOS 26.5. No custom tab-bar background SHALL be applied; the app SHALL NOT call `toolbarBackground()` or set a tab-bar appearance proxy.
+5. <a name="18.5"></a>WHEN the user taps a tab while it is already the selected tab, THEN the tab's navigation stack SHALL pop to root (the standard iOS behaviour) and the tab's state SHALL otherwise be preserved.
+6. <a name="18.6"></a>The selected-tab state SHALL persist across app cold/warm launches via `@AppStorage("selectedTab")` in `App/AppRoot.swift` (or the equivalent owner of the `TabView`). The default value SHALL be the Photo tab.
+7. <a name="18.7"></a>Tab switching SHALL NOT cancel an in-flight `Pipeline.estimate(_:mode:)` call (per [1.7](#1.7)); the estimation SHALL run to completion and the result SHALL be presented on the next return to the Photo tab.
+
+### 19. Meals tab
+
+**User Story:** As a user, I want to see a list of the meals I've captured and tap one to see the result view I saw at the time, so that I can review prior estimates without leaving the app.
+
+**Acceptance Criteria:**
+
+1. <a name="19.1"></a>The Meals tab SHALL display a list of all `MealRecord`s currently persisted in `meals.sqlite`, sorted by `capturedAt` descending (newest first). The list SHALL be wrapped in its own `NavigationStack` per the platform navigation rules (one stack per tab).
+2. <a name="19.2"></a>Each list row SHALL show: the captured-at timestamp formatted as `dd MMM yyyy, HH:mm` (Irish/British locale), the meal-level carbohydrate total to the nearest 1 g (per research Req 12.4), the meal's confidence pill in the same three-tier styling as the result view (§9.2), and a thumbnail of the captured photo where one is available (resolved via `PHImageManager.requestImage(for:)` using `MealRecord.photoAssetID`).
+3. <a name="19.3"></a>WHEN `MealRecord.segmenterSource == "dev_stub"`, THEN the list row SHALL display a small yellow "Placeholder" chip next to the carb value, matching the meaning of the result-view placeholder banner from research Req 23.3. The chip SHALL be present even when the current build is a Phase 3 build (the chip reads from the persisted field, not the build flag).
+4. <a name="19.4"></a>WHEN the user taps a row, THEN the system SHALL push a meal-detail view onto the Meals tab's navigation stack. The detail view SHALL reuse `ResultView` and SHALL display the same content the user saw immediately after the original capture (confidence pill, carbohydrate total, photo thumbnail, placeholder banner where applicable).
+5. <a name="19.5"></a>WHEN no meals have been captured yet, THEN the list SHALL display an Irish-English empty-state message ("No meals yet. Tap the Photo tab to capture your first meal.") and a `fork.knife` SF Symbol; no placeholder rows SHALL be shown.
+6. <a name="19.6"></a>WHEN a new meal is persisted by the Photo tab while the user is on the Meals tab, THEN the list SHALL update to show the new row within 500 ms without the user needing to refresh.
+7. <a name="19.7"></a>The list SHALL support `swipeActions(edge: .trailing)` providing a single "Delete" action per row. WHEN the user confirms a delete, THEN the corresponding `MealRecord` SHALL be removed from `meals.sqlite` and its on-disk mask / depth artefacts SHALL be removed from the per-meal artefact directory. The associated `PHAsset` in the user's Photos library SHALL NOT be deleted; the user manages their Photos library separately (research Req 17.3).
+8. <a name="19.8"></a>The Meals tab SHALL NOT expose: per-class carbohydrate breakdowns, per-meal note editing, user-correction entry, search, filtering, multi-select, or bulk export. These are deferred to a future spec.
+
+### 20. Visual design — clean capture aesthetic
+
+**User Story:** As a user, I want a clean, professional capture screen where only the photograph and the carbohydrate value compete for my attention, so that the chrome never gets in the way of seeing what I'm photographing.
+
+**Acceptance Criteria:**
+
+1. <a name="20.1"></a>The visual design SHALL be specified in `design-system/MASTER.md` plus page-specific overrides in `design-system/pages/<page>.md`. The implementation SHALL consume those tokens (colour, type, spacing, motion) verbatim and SHALL NOT introduce parallel values inline in views.
+2. <a name="20.2"></a>The Photo tab and ResultView SHALL use a pure-black (`#000000`) full-bleed background (`captureBackground` token); the AR preview is the content and chrome SHALL NOT compete with it.
+3. <a name="20.3"></a>All Photo-tab chrome (close button, flash toggle, indicator badge, capture-mode pill, shutter) SHALL be flat — no drop shadows, no gradients other than the result-view scrim, no glassmorphism over the AR feed.
+4. <a name="20.4"></a>The Photo tab's live indicators (tilt, distance, LiDAR coverage) SHALL be consolidated into a single chip per `design-system/pages/photo-tab.md` — NOT scattered across three corners. The chip SHALL auto-hide after 5 s of in-range `.ready` state and SHALL re-show on tap or any out-of-range value.
+5. <a name="20.5"></a>The capture-mode toggle (Req §4) SHALL be rendered as a capsule pill above the shutter (active label inside an inner accent pill that slides between positions), NOT as the v1.0 segmented control. The previous segmented-control spec is superseded.
+6. <a name="20.6"></a>The shutter button SHALL be 76pt diameter (white ring + inner white circle), centred horizontally, ≥24pt above the tab bar top edge. Press feedback SHALL be a 100ms inner-circle shrink + 150ms spring restoration; the visible shutter SHALL never shift the layout of surrounding chrome.
+7. <a name="20.7"></a>The refusal surface SHALL be a bottom sheet (`.presentationDetents([.fraction(0.35)])`) with a single primary CTA, NOT a top banner. The v1.0 `RefusalBanner` overlay is superseded.
+8. <a name="20.8"></a>The ResultView SHALL render the carbohydrate total at the `display` type-scale (72pt heavy monospaced) centred over a dimmed full-bleed photo background, with the confidence pill immediately below and (where applicable) the placeholder chip from research Req §23.3 as a small pill — NOT a full-width yellow banner.
+9. <a name="20.9"></a>The Meals tab SHALL render rows photo-led: full-width 4:3 photo (rounded 14pt) with carb total + confidence pill + optional placeholder chip + timestamp as a caption below the photo, with 24pt between rows. A 3-column thumbnail grid SHALL NOT be used (per `design-system/pages/meals-tab.md` rationale).
+10. <a name="20.10"></a>All interactive controls SHALL meet a ≥48pt touch target (use `hitSlop` when the visual size is smaller). Press feedback SHALL appear within 100ms of touch-down. These rules SHALL apply uniformly across the tab bar, the shutter, indicator chips, capture-mode pill, list rows, and toolbar buttons.
+11. <a name="20.11"></a>The implementation SHALL respect `accessibilityReduceMotion`: spring animations SHALL be replaced by a single crossfade; the carb-total `contentTransition(.numericText())` SHALL fall back to a snap-in.
+12. <a name="20.12"></a>The implementation SHALL respect Dynamic Type up to size `AX5`; the carb total's `display` style SHALL clamp at 88pt to prevent the value running off-screen.  
