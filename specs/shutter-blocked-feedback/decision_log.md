@@ -167,3 +167,32 @@ Do not add an explicit not-enabled trait. The existing `.accessibilityValue(stat
 - VoiceOver users get the disabled signal only via the spoken value ("Disabled"), not via the trait flag. Acceptable: the announcement is what users actually hear.
 
 ---
+
+## Verification Notes
+
+**Date**: 2026-05-31
+
+### Code-side audit (complete)
+
+- Device build (`xcodebuild -scheme MeData -destination 'generic/platform=iOS' -configuration Debug build`) succeeds for `Debug-iphoneos`.
+- All five prescribed log sites are wired through one `Logger(subsystem: "ie.medata.app", category: "Shutter")` in `App/CaptureFlowModel.swift`:
+  - `event=fired` — line 157 (in `shutter()`).
+  - `event=capture.start` — line 379 (in `performFlow`, before `try await capture(stage:)`).
+  - `event=capture.end success=true` — line 381; `success=false` branches — lines 408, 411, 414.
+  - `event=estimate.start` — line 432 (in `runEstimation`).
+  - `event=estimate.end success=true` — line 446; `success=false` branches — lines 452, 456.
+- `event=blocked` — `shutterBlockedTapped()` line 167.
+
+### On-device observation (pending)
+
+Not run in this session — requires holding the device at target tilt/distance and tapping. Runbook for the operator:
+
+1. Console.app predicate: `subsystem == "ie.medata.app" AND category == "Shutter"`.
+2. Single mode (LiDAR-equipped, 25–50 cm; non-LiDAR, ~30–40 cm) — expect trail: `fired` → `capture.start stage=nadir` → `capture.end success=true` → `estimate.start` → `estimate.end success=true mealId=…`.
+3. Double mode — expect two `fired`/`capture.*` pairs (nadir + oblique) before `estimate.start`.
+4. If `estimate.end success=false` appears, capture the `EstimationFailure` case name and file a follow-up bug (do not fix here).
+5. If `estimate.start` logs but `estimate.end` never does within ~30 s, capture the trail and file a follow-up (candidate root cause: [[pipeline-factory-parked]] YCbCr→RGB issue).
+
+Append observed trail + UI outcome here when run on device.
+
+---

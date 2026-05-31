@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Pending (Smolspec — shutter-blocked-feedback, task 5)
 
 - On-device verification of the success-path trail (`event=fired` → `capture.*` → `estimate.*` → `ResultView`) for both `CaptureMode.single` and `CaptureMode.double`. Test plan and expected log trail captured in `specs/shutter-blocked-feedback/tasks.md` task 5; results to be appended to the decision log under a one-off "Verification Notes" section after the device run.
+- `specs/shutter-blocked-feedback/decision_log.md` — "Verification Notes" section opened with the code-side audit (device build green; the five prescribed log sites confirmed in `App/CaptureFlowModel.swift` at the lines required by task 5) and an operator runbook for the Console.app predicate, expected single-/double-mode trails, and failure-mode follow-up rules. On-device observation block left empty pending the device run.
 
 ### Added (Research spec — Phase 1 dev-stub segmenter, tasks 76–83)
 
