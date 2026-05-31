@@ -82,7 +82,11 @@ struct CaptureFlowView: View {
         VStack(spacing: 16) {
             CaptureModeToggle(supportsLiDAR: model.supportsLiDAR, interactive: !model.isBusy)
                 .padding(.horizontal, 48)
-            ShutterButton(state: shutterState) { model.shutter() }
+            ShutterButton(
+                state: shutterState,
+                action: { model.shutter() },
+                onBlockedTap: { model.shutterBlockedTapped() }
+            )
             Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
         }
     }

@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Smolspec — shutter-blocked-feedback, tasks 1–4)
+
+- `App/LiveIndicatorModel.swift` — `visible: Bool` and `reveal()` / `scheduleHide()` methods. Visibility and the 5 s auto-hide `Task` lift off the badge view onto the model so other code paths (a blocked-shutter tap) can re-reveal the badge without `Binding` ceremony (Decision 3).
+- `App/ShutterButton.swift` — optional `onBlockedTap: (() -> Void)?` parameter and a `@State` `blockedTapCount` counter wired through `.sensoryFeedback(.warning, trigger:)`. Static `dispatchTap(state:action:onBlockedTap:)` routes `.ready` taps to `action()`, `.disabled` taps to `onBlockedTap?()`, and drops `.capturing` taps so an in-flight capture is not buzzed/spammed (Decisions 1, 2).
+- `App/CaptureFlowModel.swift` — `@MainActor func shutterBlockedTapped()` reveals the indicator and emits one `event=blocked` `Logger.info` line with the full gating snapshot (state name, tilt degrees, target tilt, tilt-in-range, distance cm, LiDAR coverage, supportsLiDAR, canShutter, flowTaskActive, startTaskActive). No state mutation.
+- `App/CaptureFlowModel.swift` — symmetric success-path logging on the same `Logger(subsystem: "ie.medata.app", category: "Shutter")`: `event=fired` (in `shutter()` with mode + stage), `event=capture.start` / `event=capture.end` (in `performFlow` with stage + frame dimensions or error type), and `event=estimate.start` / `event=estimate.end` (in `runEstimation` with capture path + meal id or `EstimationFailure` case name) — single Console.app predicate captures the full shutter→result trail (Decision 4).
+- `MeData/Tests/LiveIndicatorModelTests.swift` — two Swift Testing cases: `reveal()` after `scheduleHide()` keeps `visible == true` and re-arms the hide task; chained `reveal()` calls cancel the prior hide.
+- `MeData/Tests/ShutterButtonTests.swift` — three `dispatchTap` cases asserting `.ready` invokes `action` only, `.disabled` invokes `onBlockedTap` only, and `.capturing` invokes neither.
+- `MeData/Tests/CaptureFlowModelTests.swift` — three cases asserting `shutterBlockedTapped()` leaves `state` unchanged across `.initialising`, `.trackingLost`, and `.ready(out-of-range)` and flips `indicators.visible` to `true` when previously `false`.
+- `specs/shutter-blocked-feedback/decision_log.md` — Decision 5 documents dropping the `.isNotEnabled` accessibility trait (no such public SwiftUI API exists); `accessibilityValue("Disabled")` already carries the VoiceOver announcement.
+
+### Changed (Smolspec — shutter-blocked-feedback, tasks 1–4)
+
+- `App/LiveIndicatorBadge.swift` — renders `model.visible` directly and routes the existing `onChange` / `onTapGesture` / `onAppear` hooks through `model.reveal()` / `model.scheduleHide()`. The view's `@State visible` and `@State autoHideTask` are removed alongside the now-redundant `.onDisappear { autoHideTask?.cancel() }`.
+- `App/ShutterButton.swift` — `.disabled(!state.isInteractive)` removed so blocked taps reach the action closure. Press-gesture guard tightened from `guard state.isInteractive` to `guard state != .capturing`, so the press animation also plays on `.disabled` taps and only `.capturing` keeps the gesture inert (Decision 1, Decision 2).
+- `App/CaptureFlowView.swift` — shutter call site now passes `onBlockedTap: { model.shutterBlockedTapped() }`.
+
+### Pending (Smolspec — shutter-blocked-feedback, task 5)
+
+- On-device verification of the success-path trail (`event=fired` → `capture.*` → `estimate.*` → `ResultView`) for both `CaptureMode.single` and `CaptureMode.double`. Test plan and expected log trail captured in `specs/shutter-blocked-feedback/tasks.md` task 5; results to be appended to the decision log under a one-off "Verification Notes" section after the device run.
+
 ### Added (Research spec — Phase 1 dev-stub segmenter, tasks 76–83)
 
 - `MedataCore/Sources/Segmentation/StubInferenceEngine.swift` — `public struct StubInferenceEngine: SegmenterInferenceEngine` per Req §23.2 / Decision 42. Bypasses image pre-processing and writes per-pixel FP32 logits (`+10` on `dominantClass`, `-10` elsewhere) so the post-processor's softmax places ≥ 0.99 mass on the dominant class. Phase 1 device-MVP runs the full Pipeline against this stub without bundling a `.mlpackage`.

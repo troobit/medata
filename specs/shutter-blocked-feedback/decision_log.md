@@ -134,3 +134,36 @@ The blocked-path log alone answers "is the shutter gated?" but not "does the res
 - Logging happens unconditionally in production (no `#if DEBUG`). Acceptable because the entries are user-triggered (≤ a few per minute even with mashing) and `.info` level.
 
 ---
+
+## Decision 5: Drop the `.isNotEnabled` accessibility trait — `accessibilityValue` carries the disabled announcement
+
+**Date**: 2026-05-31
+**Status**: accepted
+
+### Context
+
+The smolspec's Requirements list called for the shutter to add the SwiftUI `.isNotEnabled` accessibility trait when `state != .ready`, to restore the VoiceOver "dimmed" announcement that `.disabled()` was supplying. During implementation it turned out `AccessibilityTraits.isNotEnabled` is not a public SwiftUI API (no such case exists in iOS 17–26 `AccessibilityTraits`). The pieces that do exist — `accessibilityRespondsToUserInteraction(_:)`, `accessibilityHidden(_:)` — change focus behaviour or remove the element entirely, neither of which is what the spec actually wants.
+
+### Decision
+
+Do not add an explicit not-enabled trait. The existing `.accessibilityValue(state.accessibilityValue)` modifier already announces "Disabled" (or "Capturing" / "Ready") to VoiceOver, which is the user-facing diagnostic the trait was meant to supply.
+
+### Rationale
+
+`AccessibilityTraits.isNotEnabled` does not exist as a public SwiftUI API; the spec's prescription cannot be implemented literally. The `accessibilityValue` already reads "Disabled" — a screen-reader user gets the same information they would have gotten from the trait. Re-adding `.disabled()` to recover the trait would re-swallow the tap and defeat the whole point of this change.
+
+### Alternatives Considered
+
+- **Use `accessibilityRespondsToUserInteraction(false)` to suppress Switch Control / Voice Control on the disabled shutter**: Rejected — that modifier changes interaction routing for assistive tech, which would also block the blocked-tap callback that is the whole point of the spec.
+- **Re-introduce `.disabled(state != .ready)` to recover the trait, then handle blocked taps via a separate `onTapGesture`**: Rejected — adds an extra gesture recogniser and routing layer just to recover a string announcement that `accessibilityValue` already provides.
+
+### Consequences
+
+**Positive:**
+- Shutter remains tappable in `.disabled`, so the blocked-tap diagnostic fires.
+- No new gesture plumbing.
+
+**Negative:**
+- VoiceOver users get the disabled signal only via the spoken value ("Disabled"), not via the trait flag. Acceptable: the announcement is what users actually hear.
+
+---

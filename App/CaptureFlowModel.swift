@@ -3,6 +3,7 @@ import CaptureKit
 import CoreMotion
 import Foundation
 import Observation
+import os
 import Pipeline
 import SwiftUI
 
@@ -48,6 +49,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private var interruptionTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
     private var firstFrame: RawFrame?
+
+    private let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
     // Mode frozen at the shutter-tap that began the in-flight capture. The
     // pipeline runs against this value; mid-session toggle changes are
     // ignored until the result view is shown.
@@ -150,11 +153,18 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         let mode = inFlightMode ?? captureModeReader()
         inFlightMode = mode
 
-        if firstFrame != nil {
-            beginCapture(stage: .oblique, frozen: snapshot, mode: mode)
-        } else {
-            beginCapture(stage: .nadir, frozen: snapshot, mode: mode)
-        }
+        let stage: CaptureStage = firstFrame != nil ? .oblique : .nadir
+        log.info("\(self.gatingLog(event: "fired", extra: "mode=\(mode.rawValue) stage=\(stage.name)"), privacy: .public)")
+        beginCapture(stage: stage, frozen: snapshot, mode: mode)
+    }
+
+    // Diagnostic for taps on the .disabled shutter. Does not mutate state.
+    // Surfaces the auto-hidden indicator badge and emits one .info log line
+    // with the full gating snapshot so a Console.app subscriber can see which
+    // gate is blocking.
+    func shutterBlockedTapped() {
+        indicators.reveal()
+        log.info("\(self.gatingLog(event: "blocked"), privacy: .public)")
     }
 
     // Alias for the bottom-sheet "Try again" CTA (Req §20.7 / Decision 16).
@@ -366,7 +376,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // throws .sessionNotStarted if captureNadir/Oblique races ahead of it.
         await startTask?.value
         do {
+            log.info("event=capture.start stage=\(stage.name, privacy: .public)")
             let frame = try await capture(stage: stage)
+            log.info("event=capture.end stage=\(stage.name, privacy: .public) success=true width=\(frame.imageWidth) height=\(frame.imageHeight)")
             guard !Task.isCancelled else { return }
             guard case .capturing = state else { return }
 
@@ -393,10 +405,13 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         } catch is CancellationError {
             return
         } catch CaptureError.worldTrackingDegraded {
+            log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=worldTrackingDegraded")
             state = .trackingLost
         } catch let failure as EstimationFailure {
+            log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=\(String(describing: failure), privacy: .public)")
             state = .refused(failure, retryStage: stage)
         } catch {
+            log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=\(String(describing: type(of: error)), privacy: .public)")
             state = .refused(.noScaleAvailable, retryStage: stage)
         }
     }
@@ -414,6 +429,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         retryStage: CaptureStage
     ) async {
         state = .estimating(captureResult: captureResult)
+        log.info("event=estimate.start capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
         do {
             let record = try await pipeline.estimate(captureResult: captureResult, mode: mode)
             guard !Task.isCancelled else { return }
@@ -427,14 +443,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             firstFrame = nil
             inFlightMode = nil
             lastMeal = stamped
+            log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
             state = .showingResult(stamped)
             navigationPath.append(stamped)
         } catch is CancellationError {
             return
         } catch let failure as EstimationFailure {
+            log.info("event=estimate.end success=false failure=\(String(describing: failure), privacy: .public)")
             guard case .estimating = state else { return }
             state = .refused(failure, retryStage: retryStage)
         } catch {
+            log.info("event=estimate.end success=false error=\(String(describing: type(of: error)), privacy: .public)")
             guard case .estimating = state else { return }
             state = .refused(.noScaleAvailable, retryStage: retryStage)
         }
@@ -494,6 +513,53 @@ final class CaptureFlowModel: CaptureFlowDelegate {
                 guard let self else { return }
                 self.handleInterruption(event)
             }
+        }
+    }
+
+    // Builds a single space-separated `key=value` line for the shutter logger.
+    // Fields match the smolspec Requirements list; an extra suffix is appended
+    // verbatim for the `fired` event (mode + stage).
+    fileprivate func gatingLog(event: String, extra: String? = nil) -> String {
+        let target: Float = firstFrame != nil ? 25 : 0
+        let tilt = indicators.liveTiltDegrees
+        let dist = indicators.liveDistanceCm.map { String(format: "%.1f", $0) } ?? "nil"
+        var line =
+            "event=\(event) " +
+            "state=\(state.logName) " +
+            "tiltDegrees=\(String(format: "%.1f", tilt)) " +
+            "targetTilt=\(Int(target)) " +
+            "tiltInRange=\(tiltInRange(degrees: tilt)) " +
+            "distanceCm=\(dist) " +
+            "lidarCoveragePercent=\(String(format: "%.1f", indicators.liveLiDARCoveragePercent)) " +
+            "supportsLiDAR=\(supportsLiDAR) " +
+            "canShutter=\(canShutter) " +
+            "flowTaskActive=\(flowTask != nil) " +
+            "startTaskActive=\(startTask != nil)"
+        if let extra { line += " " + extra }
+        return line
+    }
+}
+
+private extension CaptureState {
+    var logName: String {
+        switch self {
+        case .initialising: return "initialising"
+        case .permissionDenied: return "permissionDenied"
+        case .trackingLost: return "trackingLost"
+        case .ready: return "ready"
+        case .capturing: return "capturing"
+        case .estimating: return "estimating"
+        case .showingResult: return "showingResult"
+        case .refused: return "refused"
+        }
+    }
+}
+
+private extension CaptureStage {
+    var name: String {
+        switch self {
+        case .nadir: return "nadir"
+        case .oblique: return "oblique"
         }
     }
 }

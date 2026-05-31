@@ -37,12 +37,34 @@ enum ShutterButtonMetrics {
 struct ShutterButton: View {
     let state: ShutterButtonState
     let action: () -> Void
+    var onBlockedTap: (() -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isPressed: Bool = false
+    @State private var blockedTapCount: Int = 0
+
+    // Pure routing helper — kept static so tests can verify the .ready /
+    // .disabled / .capturing branches without instantiating a SwiftUI view.
+    static func dispatchTap(
+        state: ShutterButtonState,
+        action: () -> Void,
+        onBlockedTap: (() -> Void)?
+    ) {
+        switch state {
+        case .ready:
+            action()
+        case .disabled:
+            onBlockedTap?()
+        case .capturing:
+            break
+        }
+    }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            if state == .disabled { blockedTapCount &+= 1 }
+            Self.dispatchTap(state: state, action: action, onBlockedTap: onBlockedTap)
+        } label: {
             ZStack {
                 Circle()
                     .stroke(
@@ -75,8 +97,8 @@ struct ShutterButton: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(!state.isInteractive)
         .simultaneousGesture(pressGesture)
+        .sensoryFeedback(.warning, trigger: blockedTapCount)
         .accessibilityLabel("Capture meal")
         .accessibilityHint("Double-tap to take a photo")
         .accessibilityValue(state.accessibilityValue)
@@ -86,7 +108,7 @@ struct ShutterButton: View {
     private var pressGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { _ in
-                guard state.isInteractive else { return }
+                guard state != .capturing else { return }
                 withAnimation(pressAnimation) { isPressed = true }
             }
             .onEnded { _ in

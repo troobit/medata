@@ -318,6 +318,50 @@ struct CaptureFlowModelTests {
         #expect(fixture.model.state == .initialising)
     }
 
+    // MARK: - Blocked-tap diagnostic (smolspec: shutter-blocked-feedback)
+
+    @Test("shutterBlockedTapped leaves .initialising unchanged and reveals indicator")
+    func blockedTapInitialisingPreservesState() {
+        let fixture = makeFixture()
+        fixture.model.indicators.visible = false
+        let before = fixture.model.state
+        fixture.model.shutterBlockedTapped()
+        #expect(fixture.model.state == before)
+        #expect(fixture.model.indicators.visible == true)
+    }
+
+    @Test("shutterBlockedTapped leaves .trackingLost unchanged and reveals indicator")
+    func blockedTapTrackingLostPreservesState() {
+        let fixture = makeFixture()
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        fixture.model.trackingDegraded()
+        #expect(fixture.model.state == .trackingLost)
+        fixture.model.indicators.visible = false
+        fixture.model.shutterBlockedTapped()
+        #expect(fixture.model.state == .trackingLost)
+        #expect(fixture.model.indicators.visible == true)
+    }
+
+    @Test("shutterBlockedTapped leaves .ready(out-of-range) unchanged and reveals indicator")
+    func blockedTapReadyOutOfRangePreservesState() {
+        let fixture = makeFixture()
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 45, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        guard case .ready(let snapshot) = fixture.model.state else {
+            Issue.record("expected .ready, got \(fixture.model.state)")
+            return
+        }
+        #expect(snapshot.tiltInRange == false)
+        let before = fixture.model.state
+        fixture.model.indicators.visible = false
+        fixture.model.shutterBlockedTapped()
+        #expect(fixture.model.state == before)
+        #expect(fixture.model.indicators.visible == true)
+    }
+
     // MARK: - Backgrounding (§8.3, §1.2)
 
     @Test("backgrounding during .estimating resets state to .initialising")

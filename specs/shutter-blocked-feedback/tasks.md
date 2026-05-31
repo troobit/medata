@@ -5,14 +5,14 @@ references:
 ---
 # Shutter Blocked Feedback
 
-- [ ] 1. LiveIndicatorBadge visibility and auto-hide policy live on LiveIndicatorModel <!-- id:f4inr0n -->
+- [x] 1. LiveIndicatorBadge visibility and auto-hide policy live on LiveIndicatorModel <!-- id:f4inr0n -->
   - Lift `visible: Bool` and the auto-hide `Task` from `App/LiveIndicatorBadge.swift` onto `App/LiveIndicatorModel.swift`.
   - Expose `reveal()` (set visible = true, re-arm 5s hide timer) and `scheduleHide()` (cancel pending, sleep 5s, set visible = false).
   - Update `LiveIndicatorBadge` to render `model.visible` directly and route its existing onChange/onTap/onAppear hooks through the model methods.
   - Existing in-range auto-hide behaviour and the 48pt hit slop (Req §20.4 / §20.10) MUST be preserved.
   - Verify: build cleanly; add a Swift Testing case on `LiveIndicatorModel` that `reveal()` after `scheduleHide()` keeps `visible == true` and re-arms the hide task; confirm on attached device that the badge still auto-hides 5s after gates are met.
 
-- [ ] 2. ShutterButton routes disabled taps to a callback with haptic and accessibility trait <!-- id:f4inr0o -->
+- [x] 2. ShutterButton routes disabled taps to a callback with haptic and accessibility trait <!-- id:f4inr0o -->
   - In `App/ShutterButton.swift`, add `var onBlockedTap: (() -> Void)? = nil` and `@State private var blockedTapCount: Int = 0`.
   - Replace `.disabled(!state.isInteractive)` with branching inside the button action: invoke `action()` when `state == .ready`; increment `blockedTapCount` then invoke `onBlockedTap?()` when `state == .disabled`; do nothing when `state == .capturing`.
   - Add `.sensoryFeedback(.warning, trigger: blockedTapCount)` so iOS fires the haptic on counter bump.
@@ -20,7 +20,7 @@ references:
   - Drop the `guard state.isInteractive` in the press gesture so the press animation plays on `.disabled` taps; keep the gesture inert for `.capturing`.
   - Update `MeData/Tests/ShutterButtonTests.swift` so existing state→accessibilityValue assertions still pass; add coverage that the blocked-tap callback fires only for `.disabled` (not `.capturing`).
 
-- [ ] 3. CaptureFlowModel emits gating diagnostic on blocked + fired + pipeline-stage boundaries <!-- id:f4inr0p -->
+- [x] 3. CaptureFlowModel emits gating diagnostic on blocked + fired + pipeline-stage boundaries <!-- id:f4inr0p -->
   - Add a single private `Logger` constant on `App/CaptureFlowModel.swift` (subsystem `ie.medata.app`, category `Shutter`) and route all five new log sites through it.
   - Add `@MainActor func shutterBlockedTapped()` — (1) calls `indicators.reveal()`; (2) logs one `.info` line with `event=blocked` plus fields: `state` (name), `tiltDegrees`, `targetTilt` (0 or 25 depending on `firstFrame`), `tiltInRange`, `distanceCm` (or `"nil"`), `lidarCoveragePercent`, `supportsLiDAR`, `canShutter`, `flowTaskActive` (= `flowTask != nil`), `startTaskActive` (= `startTask != nil`). MUST NOT mutate state.
   - In the existing `shutter()` method, immediately after the `.ready` guard succeeds and before `beginCapture(...)`, log one `.info` line with `event=fired` plus the same gating snapshot fields PLUS the resolved `CaptureMode` and `CaptureStage`.
@@ -29,7 +29,7 @@ references:
   - Mirror the `os` import pattern in `MedataCore/Sources/Pipeline/Pipeline.swift:9` but without the `#if DEBUG` gate.
   - Add Swift Testing cases to `MeData/Tests/CaptureFlowModelTests.swift` verifying: (a) `shutterBlockedTapped()` leaves `state` unchanged across `.initialising`, `.trackingLost`, and `.ready(out-of-range)`; (b) it causes `indicators.visible` to flip true when previously false. (Log emission itself is not asserted in tests — verified on device in task 5.)
 
-- [ ] 4. Wire CaptureFlowView call site and verify blocked-tap feedback on device <!-- id:f4inr0q -->
+- [x] 4. Wire CaptureFlowView call site and verify blocked-tap feedback on device <!-- id:f4inr0q -->
   - In `App/CaptureFlowView.swift:85`, change `ShutterButton(state: shutterState) { model.shutter() }` to also pass `onBlockedTap: { model.shutterBlockedTapped() }`.
   - Build and run on the attached device.
   - Verify on a tap of the **disabled** shutter: (a) warning haptic is felt; (b) `LiveIndicatorBadge` re-reveals if previously auto-hidden; (c) exactly one `event=blocked` line appears in Console.app under `subsystem == "ie.medata.app"` and category `"Shutter"` containing all required fields.

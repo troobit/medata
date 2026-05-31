@@ -64,8 +64,6 @@ struct LiveIndicatorBadge: View {
     var targetTiltDegrees: Float = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var visible: Bool = true
-    @State private var autoHideTask: Task<Void, Never>?
 
     private var tiltInRange: Bool {
         LiveIndicatorBadgeState.isTiltInRange(
@@ -89,33 +87,29 @@ struct LiveIndicatorBadge: View {
 
     var body: some View {
         chip
-            .opacity(visible ? 1 : 0)
+            .opacity(model.visible ? 1 : 0)
             .animation(
                 reduceMotion ? .none : .easeInOut(duration: LiveIndicatorBadgeState.fadeDuration(reduceMotion: false)),
-                value: visible
+                value: model.visible
             )
             .frame(minWidth: LiveIndicatorBadgeState.hitSlopPoints, minHeight: LiveIndicatorBadgeState.hitSlopPoints)
             .contentShape(Rectangle())
-            .onTapGesture { showAndScheduleHide() }
+            .onTapGesture { model.reveal() }
             .onChange(of: allInRange) { _, ready in
                 if ready, isReady {
-                    scheduleHide()
+                    model.scheduleHide()
                 } else {
-                    showAndScheduleHide()
+                    model.reveal()
                 }
             }
             .onChange(of: isReady) { _, ready in
                 if ready, allInRange {
-                    scheduleHide()
+                    model.scheduleHide()
                 } else {
-                    showAndScheduleHide()
+                    model.reveal()
                 }
             }
-            .onAppear { showAndScheduleHide() }
-            .onDisappear {
-                autoHideTask?.cancel()
-                autoHideTask = nil
-            }
+            .onAppear { model.reveal() }
             .accessibilityIdentifier("liveIndicator.badge")
     }
 
@@ -183,20 +177,4 @@ struct LiveIndicatorBadge: View {
         }
     }
 
-    private func showAndScheduleHide() {
-        autoHideTask?.cancel()
-        visible = true
-        if isReady, allInRange { scheduleHide() }
-    }
-
-    private func scheduleHide() {
-        autoHideTask?.cancel()
-        autoHideTask = Task { @MainActor in
-            try? await Task.sleep(
-                nanoseconds: UInt64(LiveIndicatorBadgeState.autoHideDelaySeconds * 1_000_000_000)
-            )
-            guard !Task.isCancelled else { return }
-            visible = false
-        }
-    }
 }

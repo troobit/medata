@@ -53,4 +53,45 @@ struct ShutterButtonTests {
     func bottomClearance() {
         #expect(ShutterButtonMetrics.bottomClearanceFromTabBar >= 24)
     }
+
+    // MARK: - Blocked-tap routing (smolspec: shutter-blocked-feedback)
+
+    @Test("dispatchTap(.ready) invokes action only")
+    func dispatchReadyInvokesAction() {
+        var actionCalls = 0
+        var blockedCalls = 0
+        ShutterButton.dispatchTap(
+            state: .ready,
+            action: { actionCalls += 1 },
+            onBlockedTap: { blockedCalls += 1 }
+        )
+        #expect(actionCalls == 1)
+        #expect(blockedCalls == 0)
+    }
+
+    @Test("dispatchTap(.disabled) invokes onBlockedTap only")
+    func dispatchDisabledInvokesBlocked() {
+        var actionCalls = 0
+        var blockedCalls = 0
+        ShutterButton.dispatchTap(
+            state: .disabled,
+            action: { actionCalls += 1 },
+            onBlockedTap: { blockedCalls += 1 }
+        )
+        #expect(actionCalls == 0)
+        #expect(blockedCalls == 1)
+    }
+
+    @Test("dispatchTap(.capturing) invokes neither")
+    func dispatchCapturingInvokesNeither() {
+        var actionCalls = 0
+        var blockedCalls = 0
+        ShutterButton.dispatchTap(
+            state: .capturing,
+            action: { actionCalls += 1 },
+            onBlockedTap: { blockedCalls += 1 }
+        )
+        #expect(actionCalls == 0)
+        #expect(blockedCalls == 0)
+    }
 }
