@@ -25,7 +25,7 @@ public nonisolated struct PbGeomSubconfidences: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// 0.60..1.00 per Req 13.2 lookup
+  /// 0.30..1.00 per Req 13.2 lookup
   public var sigmaView: Float = 0
 
   /// exp(-r/5) · iter_penalty
@@ -33,6 +33,9 @@ public nonisolated struct PbGeomSubconfidences: Sendable {
 
   /// 1.00 unless single-view inter-class occlusion
   public var sigmaOccl: Float = 0
+
+  /// cos(Δθ_capture), floored at ε per Req 13.2 / Decision 44
+  public var sigmaTilt: Float = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -45,7 +48,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbGeomSubconfidences: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GeomSubconfidences"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sigma_view\0\u{3}sigma_plane\0\u{3}sigma_occl\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sigma_view\0\u{3}sigma_plane\0\u{3}sigma_occl\0\u{3}sigma_tilt\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -56,6 +59,7 @@ nonisolated extension PbGeomSubconfidences: SwiftProtobuf.Message, SwiftProtobuf
       case 1: try { try decoder.decodeSingularFloatField(value: &self.sigmaView) }()
       case 2: try { try decoder.decodeSingularFloatField(value: &self.sigmaPlane) }()
       case 3: try { try decoder.decodeSingularFloatField(value: &self.sigmaOccl) }()
+      case 4: try { try decoder.decodeSingularFloatField(value: &self.sigmaTilt) }()
       default: break
       }
     }
@@ -71,6 +75,9 @@ nonisolated extension PbGeomSubconfidences: SwiftProtobuf.Message, SwiftProtobuf
     if self.sigmaOccl.bitPattern != 0 {
       try visitor.visitSingularFloatField(value: self.sigmaOccl, fieldNumber: 3)
     }
+    if self.sigmaTilt.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.sigmaTilt, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -78,6 +85,7 @@ nonisolated extension PbGeomSubconfidences: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.sigmaView != rhs.sigmaView {return false}
     if lhs.sigmaPlane != rhs.sigmaPlane {return false}
     if lhs.sigmaOccl != rhs.sigmaOccl {return false}
+    if lhs.sigmaTilt != rhs.sigmaTilt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

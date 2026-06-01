@@ -14,7 +14,10 @@ public enum LiDARPlaneFitter {
     static let maxIterations: Int = 256
     static let inlierBandMm: Float = 5
     static let gravityAngleMaxRad: Float = 15 * .pi / 180
-    public static let residualMaxMm: Float = 8
+    // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5. Residuals in (8, 20]
+    // accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm,
+    // σ_plane ≈ 0.018, near the ε = 0.01 floor).
+    public static let residualMaxMm: Float = 20
     static let stabilityRatioMin: Float = 1e-6
     static let minPoints: Int = 3
 

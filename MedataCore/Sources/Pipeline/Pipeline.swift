@@ -58,6 +58,24 @@ public struct Pipeline: Sendable {
         let nadir = captureResult.nadirFrame
         let capturePath = mode.capturePath
 
+        // Per-stage angular error at shutter-tap time (Decision 43/44). Nadir
+        // targets 0° from vertical; oblique targets 25°. The values feed σ_tilt
+        // in `Confidence.combine` further down. The oblique stage also enforces
+        // the 30° hard cap (Decision 43): outside that envelope the visual hull
+        // is unreliable enough that we refuse rather than report a degraded
+        // estimate. The nadir gate is informational only — any angle is allowed.
+        let deltaThetaNadirDeg = captureResult.nadirAngleAtCaptureDeg
+        let deltaThetaObliqueDeg: Float?
+        if let obliqueAngle = captureResult.obliqueAngleAtCaptureDeg, capturePath == .twoViewSfS {
+            let delta = abs(obliqueAngle - 25)
+            if delta > 30 {
+                throw EstimationFailure.obliqueTiltOutOfRange
+            }
+            deltaThetaObliqueDeg = delta
+        } else {
+            deltaThetaObliqueDeg = nil
+        }
+
         // ── Stage C: Card detection ──────────────────────────────────────────────
         #if DEBUG
         let cardInterval = pipelineSignposter.beginInterval("CardDetection")
@@ -189,7 +207,17 @@ public struct Pipeline: Sendable {
                     delegate?.didDetectInterClassOcclusion()
                 }
                 let minCov = est.lidarCoverageFraction.values.min() ?? 1
-                viewCoverage = minCov >= 0.80 ? .singleViewFull : .singleViewPartial
+                // Three-tier σ_view lookup for single-view per Decision 47.
+                // ≥0.80 → singleViewFull (0.90), 0.50–0.80 → singleViewPartial (0.60),
+                // 0.30–0.50 → singleViewMinimal (0.30). Below 0.30 the height-field
+                // integrator refuses (see HeightFieldEstimator.coverageRefuseFraction).
+                if minCov >= 0.80 {
+                    viewCoverage = .singleViewFull
+                } else if minCov >= 0.50 {
+                    viewCoverage = .singleViewPartial
+                } else {
+                    viewCoverage = .singleViewMinimal
+                }
             } catch VolumeError.lidarCoverageTooLow(let classes) {
                 #if DEBUG
                 pipelineSignposter.endInterval("Volume", volumeInterval)
@@ -293,7 +321,9 @@ public struct Pipeline: Sendable {
             capturePath: captureResult.capturePath,
             interClassOcclusionDetected: interClassOcclusion,
             cardOnlyPath: nadir.depth == nil,
-            cardOnlyIterations: plane.convergedIterations ?? 0
+            cardOnlyIterations: plane.convergedIterations ?? 0,
+            deltaThetaNadirDeg: deltaThetaNadirDeg,
+            deltaThetaObliqueDeg: deltaThetaObliqueDeg
         )
         #if DEBUG
         pipelineSignposter.endInterval("Confidence", confidenceInterval)

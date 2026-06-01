@@ -6,8 +6,10 @@ import "GeomSubconfidences.proto";
 option swift_prefix = "Pb";
 
 message ConfidenceResult {
-    float sigma_meal = 1;                       // floored at ε = 0.05 per Req 13.1
+    float sigma_meal = 1;                       // floored at ε = 0.01 per Req 13.1 / Decision 45
     float sigma_scale = 2;
     float sigma_seg = 3;
     GeomSubconfidences sigma_geom = 4;
+    float delta_theta_nadir_deg = 5;            // per-stage angular error, Req 13.4
+    optional float delta_theta_oblique_deg = 6; // nil for single-view path
 }

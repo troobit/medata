@@ -78,7 +78,12 @@ enum PipelineBridges {
         geom.sigmaView = cr.sigmaGeom.sigmaView
         geom.sigmaPlane = cr.sigmaGeom.sigmaPlane
         geom.sigmaOccl = cr.sigmaGeom.sigmaOccl
+        geom.sigmaTilt = cr.sigmaGeom.sigmaTilt
         out.sigmaGeom = geom
+        out.deltaThetaNadirDeg = cr.deltaThetaNadirDeg
+        if let oblique = cr.deltaThetaObliqueDeg {
+            out.deltaThetaObliqueDeg = oblique
+        }
         return out
     }
 

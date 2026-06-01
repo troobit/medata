@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (Research spec — tilt-tolerant capture, tasks 84–90)
+
+- `MedataCore/Sources/PortableContracts/Schemas/GeomSubconfidences.proto` — `sigma_tilt` field (Decision 44) on the σ_geom record.
+- `MedataCore/Sources/PortableContracts/Schemas/ConfidenceResult.proto` — `delta_theta_nadir_deg` and optional `delta_theta_oblique_deg` per-stage angular-error fields (Req 13.4) and an updated ε floor comment.
+- `MedataCore/Sources/Confidence/Confidence.swift` — fourth σ_geom factor `σ_tilt = max(ε, cos(Δθ_capture))` per Decision 44. Two-view path takes the worse of nadir/oblique Δθ. New `ViewCoverage.singleViewMinimal` tier returning `σ_view = 0.30` for 30–50% LiDAR coverage (Decision 47). `Confidence.combine` takes `deltaThetaNadirDeg` and optional `deltaThetaObliqueDeg` parameters. Legacy `GeomSubconfidences` / `ConfidenceResult` records decode `sigmaTilt = 1.0` and absent Δθ fields per Req 13.4 via custom `init(from:)`.
+- `MedataCore/Sources/Pipeline/CaptureResult.swift` — `nadirAngleAtCaptureDeg: Float` and `obliqueAngleAtCaptureDeg: Float?` carry the tilt sampled at shutter-tap time through to Confidence (task 86).
+- `MedataCore/Sources/Pipeline/EstimationFailure.swift` — `.obliqueTiltOutOfRange` case with the Irish-English message "Tilt closer to 25°." per the Decision 43 hard cap.
+- `App/RefusalSheet.swift` — symbol and title mappings for the new `.obliqueTiltOutOfRange` case.
+- `MedataCore/Tests/ConfidenceTests/ConfidenceTests.swift` — `testSigmaTilt*` cases (cos curve at 0°/15°/90°, two-view worst-of-N pick), `testSigmaViewSingleViewMinimal` for the new 30% tier, `testSigmaMealFloorsAtEpsilonZeroOneWhenAllZero`, `testFourFactorReducesToThreeFactorWhenSigmaTiltOne`, `testEpsilonConstantIsZeroPointZeroOne`, `testLegacyGeomDecodeDefaultsSigmaTiltToOne`, `testLegacyConfidenceResultDecodeDefaultsDeltaThetaFields`, and `testRoundTripWithNewFields`.
+- `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` — `testProductionResidualMaxIsTwentyMm` covers the relaxed default.
+- `MedataCore/Tests/VolumeTests/HeightFieldEstimatorTests.swift` — `testLidarCoverageThirtyPercentAccepts` covers the new boundary tier.
+
+### Changed (Research spec — tilt-tolerant capture, tasks 84–90)
+
+- `MedataCore/Sources/Confidence/Confidence.swift` — ε floor lowered from `0.05` → `0.01` (Decision 45). `σ_geom` is now a four-factor product (`σ_view · σ_plane · σ_occl · σ_tilt`). Legacy records decode `σ_tilt = 1.0` so historical σ_meal values stay constant.
+- `MedataCore/Sources/Pipeline/Pipeline.swift` — computes per-stage Δθ from `CaptureResult.{nadir,oblique}AngleAtCaptureDeg`, enforces the oblique 30° hard cap (`throws .obliqueTiltOutOfRange` when `|θ−25°| > 30°`), threads Δθ into `Confidence.combine`, and selects the new `singleViewMinimal` tier when coverage is in `[0.30, 0.50)`.
+- `MedataCore/Sources/Pipeline/PipelineBridges.swift` — `pbConfidenceResult` propagates `sigmaTilt`, `deltaThetaNadirDeg`, and the optional `deltaThetaObliqueDeg` to the wire record.
+- `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` — production `residualMaxMm` raised from `8` → `20` per Decision 46. Residuals in `(8, 20]` accept; σ_plane = exp(−r/5) carries the degradation.
+- `MedataCore/Sources/Volume/HeightFieldEstimator.swift` — `coverageRefuseFraction` lowered from `0.5` → `0.3` per Decision 47.
+- `App/CaptureFlowModel.swift` — nadir hard gate removed (any tilt accepted); oblique gate relaxed from `±5°` to `±30°` per Req 3.3 / Decision 43. `firstFrameTiltDeg` snapshots tilt at the nadir shutter tap; both per-view angles stamp onto `CaptureResult`.
+- `MedataCore/Sources/PortableContracts/Generated/{GeomSubconfidences,ConfidenceResult}.pb.swift` — regenerated from the updated protos (sigma_tilt + Δθ fields, with public access preserved per the committed-stubs convention in §4.3).
+- `MedataCore/Tests/VolumeTests/HeightFieldEstimatorTests.swift` — `testLidarCoverageTooLowThrows` fixture lowered to 20% to hit the new refusal threshold.
+- `MedataCore/Tests/ConfidenceTests/ConfidenceTests.swift` — every ε expectation updated to `0.01`; geometric-mean expectations updated for the four-factor product.
+
 ### Added (Smolspec — shutter-blocked-feedback, tasks 1–4)
 
 - `App/LiveIndicatorModel.swift` — `visible: Bool` and `reveal()` / `scheduleHide()` methods. Visibility and the 5 s auto-hide `Task` lift off the badge view onto the model so other code paths (a blocked-shutter tap) can re-reveal the badge without `Binding` ceremony (Decision 3).

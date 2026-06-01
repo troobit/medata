@@ -3,56 +3,96 @@ import PortableContracts
 
 // σ_geom_view lookup per Req 13.2.
 public enum ViewCoverage: Equatable, Sendable {
-    case twoViewFull        // clean two-view, full silhouette agreement → σ_view = 1.00
-    case singleViewFull     // single-view LiDAR, ≥80% LiDAR coverage   → σ_view = 0.90
-    case twoViewPartial     // two-view, ≥1 class in one view only       → σ_view = 0.75
-    case singleViewPartial  // single-view LiDAR, 50–80% LiDAR coverage  → σ_view = 0.60
+    case twoViewFull          // clean two-view, full silhouette agreement → σ_view = 1.00
+    case singleViewFull       // single-view LiDAR, ≥80% LiDAR coverage    → σ_view = 0.90
+    case twoViewPartial       // two-view, ≥1 class in one view only        → σ_view = 0.75
+    case singleViewPartial    // single-view LiDAR, 50–80% LiDAR coverage   → σ_view = 0.60
+    case singleViewMinimal    // single-view LiDAR, 30–50% LiDAR coverage   → σ_view = 0.30 (Decision 47)
 
     public var sigmaView: Float {
         switch self {
-        case .twoViewFull:      return 1.00
-        case .singleViewFull:   return 0.90
-        case .twoViewPartial:   return 0.75
-        case .singleViewPartial: return 0.60
+        case .twoViewFull:        return 1.00
+        case .singleViewFull:     return 0.90
+        case .twoViewPartial:     return 0.75
+        case .singleViewPartial:  return 0.60
+        case .singleViewMinimal:  return 0.30
         }
     }
 }
 
 // Decomposed σ_geom sub-factors. Stored per Req 13.4 so the combination can be revisited.
 public struct GeomSubconfidences: Sendable, Codable, Equatable {
-    public let sigmaView: Float     // 0.60..1.00, lookup per ViewCoverage
+    public let sigmaView: Float     // 0.30..1.00, lookup per ViewCoverage
     public let sigmaPlane: Float    // exp(−r/5) · iter_penalty
     public let sigmaOccl: Float     // 1.00 unless single-view with inter-class occlusion
+    public let sigmaTilt: Float     // max(ε, cos(Δθ_capture)) per Decision 44
 
-    public init(sigmaView: Float, sigmaPlane: Float, sigmaOccl: Float) {
+    public init(sigmaView: Float, sigmaPlane: Float, sigmaOccl: Float, sigmaTilt: Float = 1.0) {
         self.sigmaView = sigmaView
         self.sigmaPlane = sigmaPlane
         self.sigmaOccl = sigmaOccl
+        self.sigmaTilt = sigmaTilt
     }
 
-    public var product: Float { sigmaView * sigmaPlane * sigmaOccl }
+    // Legacy records persisted before sigmaTilt was added decode it as 1.0
+    // (the identity multiplier) so historical σ_meal values are not retroactively
+    // penalised. Req 13.4.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sigmaView = try c.decode(Float.self, forKey: .sigmaView)
+        sigmaPlane = try c.decode(Float.self, forKey: .sigmaPlane)
+        sigmaOccl = try c.decode(Float.self, forKey: .sigmaOccl)
+        sigmaTilt = try c.decodeIfPresent(Float.self, forKey: .sigmaTilt) ?? 1.0
+    }
+
+    public var product: Float { sigmaView * sigmaPlane * sigmaOccl * sigmaTilt }
 }
 
 // Full confidence record persisted with the meal (Req 13.4).
 public struct ConfidenceResult: Sendable, Codable, Equatable {
-    public let sigmaMeal: Float     // geometric mean, floored at ε (Req 13.1)
-    public let sigmaScale: Float    // σ_s from MetricScale
-    public let sigmaSeg: Float      // mean class probability from Segmentation
+    public let sigmaMeal: Float                 // geometric mean, floored at ε (Req 13.1)
+    public let sigmaScale: Float                // σ_s from MetricScale
+    public let sigmaSeg: Float                  // mean class probability from Segmentation
     public let sigmaGeom: GeomSubconfidences
+    public let deltaThetaNadirDeg: Float        // per-stage angular error at capture, Req 13.4
+    public let deltaThetaObliqueDeg: Float?     // nil for single-view path, Req 13.4
 
-    public init(sigmaMeal: Float, sigmaScale: Float, sigmaSeg: Float, sigmaGeom: GeomSubconfidences) {
+    public init(
+        sigmaMeal: Float,
+        sigmaScale: Float,
+        sigmaSeg: Float,
+        sigmaGeom: GeomSubconfidences,
+        deltaThetaNadirDeg: Float = 0,
+        deltaThetaObliqueDeg: Float? = nil
+    ) {
         self.sigmaMeal = sigmaMeal
         self.sigmaScale = sigmaScale
         self.sigmaSeg = sigmaSeg
         self.sigmaGeom = sigmaGeom
+        self.deltaThetaNadirDeg = deltaThetaNadirDeg
+        self.deltaThetaObliqueDeg = deltaThetaObliqueDeg
+    }
+
+    // Legacy records decode Δθ fields as 0 / nil so they remain interpretable.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sigmaMeal = try c.decode(Float.self, forKey: .sigmaMeal)
+        sigmaScale = try c.decode(Float.self, forKey: .sigmaScale)
+        sigmaSeg = try c.decode(Float.self, forKey: .sigmaSeg)
+        sigmaGeom = try c.decode(GeomSubconfidences.self, forKey: .sigmaGeom)
+        deltaThetaNadirDeg = try c.decodeIfPresent(Float.self, forKey: .deltaThetaNadirDeg) ?? 0
+        deltaThetaObliqueDeg = try c.decodeIfPresent(Float.self, forKey: .deltaThetaObliqueDeg)
     }
 }
 
 // Pure computation per design §6.8 / Req 13. No mutable state.
 public enum Confidence {
 
-    // ε floor applied to each of the three top-level inputs before the geometric mean.
-    public static let epsilon: Float = 0.05
+    // ε floor applied to each of the three top-level inputs before the geometric mean,
+    // and to σ_tilt = cos(Δθ). Lowered from 0.05 to 0.01 per Decision 45 so soft
+    // acceptance of high-tilt captures still produces a meaningful (very low)
+    // confidence rather than collapsing to 0.05.
+    public static let epsilon: Float = 0.01
 
     // Uncertain-estimate UI threshold (Req 13.5).
     public static let uncertainThreshold: Float = 0.6
@@ -60,14 +100,16 @@ public enum Confidence {
     // Compute σ_meal and all sub-factors.
     //
     // Parameters:
-    //   sigmaScale         — σ_s from MetricScale.resolve (Req 7.1)
-    //   sigmaSeg           — mean top-class probability over food pixels (M8 pin)
-    //   planeFitResidualMm — r from SupportPlane fit (Req 4.6), used in σ_plane formula
-    //   viewCoverage       — lookup-table input per Req 13.2
-    //   capturePath        — determines whether σ_occl applies
+    //   sigmaScale                — σ_s from MetricScale.resolve (Req 7.1)
+    //   sigmaSeg                  — mean top-class probability over food pixels (M8 pin)
+    //   planeFitResidualMm        — r from SupportPlane fit (Req 4.6), used in σ_plane formula
+    //   viewCoverage              — lookup-table input per Req 13.2
+    //   capturePath               — determines whether σ_occl applies
     //   interClassOcclusionDetected — nadir-view flag from HeightFieldEstimator (§6.8)
-    //   cardOnlyPath       — true when support plane used card-only iterative fit (§4.3)
-    //   cardOnlyIterations — number of iterations taken; penalty applied when == 5 (§6.8)
+    //   cardOnlyPath              — true when support plane used card-only iterative fit (§4.3)
+    //   cardOnlyIterations        — number of iterations taken; penalty applied when == 5 (§6.8)
+    //   deltaThetaNadirDeg        — angular deviation of the nadir frame from 0° at shutter
+    //   deltaThetaObliqueDeg      — angular deviation of the oblique frame from 25°; nil = single-view
     public static func combine(
         sigmaScale: Float,
         sigmaSeg: Float,
@@ -76,7 +118,9 @@ public enum Confidence {
         capturePath: CapturePath,
         interClassOcclusionDetected: Bool,
         cardOnlyPath: Bool,
-        cardOnlyIterations: Int
+        cardOnlyIterations: Int,
+        deltaThetaNadirDeg: Float = 0,
+        deltaThetaObliqueDeg: Float? = nil
     ) -> ConfidenceResult {
         // σ_geom sub-factors (not individually floored — product is floored at meal level)
         let sigmaView  = viewCoverage.sigmaView
@@ -91,10 +135,23 @@ public enum Confidence {
             sigmaOccl = 1.00
         }
 
+        // σ_tilt per Decision 44: cos(Δθ_capture), floored at ε. For two-view the
+        // worse of the two views is taken, since the volume bound is set by the
+        // worse-conditioned view. For single-view only nadir applies.
+        let deltaThetaDeg: Float
+        if let oblique = deltaThetaObliqueDeg {
+            deltaThetaDeg = max(deltaThetaNadirDeg, oblique)
+        } else {
+            deltaThetaDeg = deltaThetaNadirDeg
+        }
+        let deltaThetaRad = deltaThetaDeg * .pi / 180
+        let sigmaTilt = max(epsilon, Foundation.cos(deltaThetaRad))
+
         let sigmaGeom = GeomSubconfidences(
             sigmaView:  sigmaView,
             sigmaPlane: sigmaPlane,
-            sigmaOccl:  sigmaOccl
+            sigmaOccl:  sigmaOccl,
+            sigmaTilt:  sigmaTilt
         )
 
         // Floor the three top-level inputs independently, then compute geometric mean.
@@ -108,7 +165,9 @@ public enum Confidence {
             sigmaMeal:  sigmaMeal,
             sigmaScale: sigmaScale,
             sigmaSeg:   sigmaSeg,
-            sigmaGeom:  sigmaGeom
+            sigmaGeom:  sigmaGeom,
+            deltaThetaNadirDeg: deltaThetaNadirDeg,
+            deltaThetaObliqueDeg: deltaThetaObliqueDeg
         )
     }
 }

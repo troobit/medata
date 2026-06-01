@@ -25,7 +25,7 @@ public nonisolated struct PbConfidenceResult: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// floored at ε = 0.05 per Req 13.1
+  /// floored at ε = 0.01 per Req 13.1 / Decision 45
   public var sigmaMeal: Float = 0
 
   public var sigmaScale: Float = 0
@@ -41,11 +41,25 @@ public nonisolated struct PbConfidenceResult: Sendable {
   /// Clears the value of `sigmaGeom`. Subsequent reads from it will return its default value.
   public mutating func clearSigmaGeom() {self._sigmaGeom = nil}
 
+  /// per-stage angular error, Req 13.4
+  public var deltaThetaNadirDeg: Float = 0
+
+  /// nil for single-view path
+  public var deltaThetaObliqueDeg: Float {
+    get {_deltaThetaObliqueDeg ?? 0}
+    set {_deltaThetaObliqueDeg = newValue}
+  }
+  /// Returns true if `deltaThetaObliqueDeg` has been explicitly set.
+  public var hasDeltaThetaObliqueDeg: Bool {self._deltaThetaObliqueDeg != nil}
+  /// Clears the value of `deltaThetaObliqueDeg`. Subsequent reads from it will return its default value.
+  public mutating func clearDeltaThetaObliqueDeg() {self._deltaThetaObliqueDeg = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _sigmaGeom: PbGeomSubconfidences? = nil
+  fileprivate var _deltaThetaObliqueDeg: Float? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -54,7 +68,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbConfidenceResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConfidenceResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sigma_meal\0\u{3}sigma_scale\0\u{3}sigma_seg\0\u{3}sigma_geom\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sigma_meal\0\u{3}sigma_scale\0\u{3}sigma_seg\0\u{3}sigma_geom\0\u{3}delta_theta_nadir_deg\0\u{3}delta_theta_oblique_deg\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -66,6 +80,8 @@ nonisolated extension PbConfidenceResult: SwiftProtobuf.Message, SwiftProtobuf._
       case 2: try { try decoder.decodeSingularFloatField(value: &self.sigmaScale) }()
       case 3: try { try decoder.decodeSingularFloatField(value: &self.sigmaSeg) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._sigmaGeom) }()
+      case 5: try { try decoder.decodeSingularFloatField(value: &self.deltaThetaNadirDeg) }()
+      case 6: try { try decoder.decodeSingularFloatField(value: &self._deltaThetaObliqueDeg) }()
       default: break
       }
     }
@@ -88,6 +104,12 @@ nonisolated extension PbConfidenceResult: SwiftProtobuf.Message, SwiftProtobuf._
     try { if let v = self._sigmaGeom {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
+    if self.deltaThetaNadirDeg.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.deltaThetaNadirDeg, fieldNumber: 5)
+    }
+    try { if let v = self._deltaThetaObliqueDeg {
+      try visitor.visitSingularFloatField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -96,6 +118,8 @@ nonisolated extension PbConfidenceResult: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.sigmaScale != rhs.sigmaScale {return false}
     if lhs.sigmaSeg != rhs.sigmaSeg {return false}
     if lhs._sigmaGeom != rhs._sigmaGeom {return false}
+    if lhs.deltaThetaNadirDeg != rhs.deltaThetaNadirDeg {return false}
+    if lhs._deltaThetaObliqueDeg != rhs._deltaThetaObliqueDeg {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -4,7 +4,8 @@ package medata.research.v1;
 option swift_prefix = "Pb";
 
 message GeomSubconfidences {
-    float sigma_view = 1;                       // 0.60..1.00 per Req 13.2 lookup
+    float sigma_view = 1;                       // 0.30..1.00 per Req 13.2 lookup
     float sigma_plane = 2;                      // exp(-r/5) · iter_penalty
     float sigma_occl = 3;                       // 1.00 unless single-view inter-class occlusion
+    float sigma_tilt = 4;                       // cos(Δθ_capture), floored at ε per Req 13.2 / Decision 44
 }

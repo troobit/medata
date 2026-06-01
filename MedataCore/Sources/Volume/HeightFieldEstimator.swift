@@ -28,7 +28,10 @@ public struct HeightFieldEstimate: Sendable {
 public enum HeightFieldEstimator {
     public static let tauSilhouette: Float = 0.5
     public static let tauConfidence: Float = 0.66
-    public static let coverageRefuseFraction: Float = 0.5
+    // Lowered from 0.5 to 0.3 per Decision 47 / Req §13.2. Coverages in
+    // [0.30, 0.50) accept and produce σ_view = 0.30 via the singleViewMinimal
+    // tier; below 0.30 the estimator refuses.
+    public static let coverageRefuseFraction: Float = 0.3
     public static let minVolumeCm3: Float = 1
 
     public struct Inputs: Sendable {

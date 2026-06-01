@@ -165,7 +165,7 @@ references:
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
@@ -194,7 +194,7 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
@@ -335,7 +335,7 @@ references:
 - [x] 44. ~~Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Photos now live in the user's Photos library (Task 72); the app no longer has a retention sweep. Source files to delete in follow-up. <!-- id:0f0700a -->
   - Register `BackgroundTasks` identifier; schedule daily refresh.
   - `Persistence.sweepIfDue()` runs on app foregrounding and at end of every `Pipeline.estimate(_:)` if `last_sweep_at_ms` > 24 hours old.
-  - Blocked-by: 0f07009 (~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44.), deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted
+  - Blocked-by: 0f07009 (~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44.), deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
 
 - [x] 45. Write tests for archive export (zip) <!-- id:0f0700b -->
@@ -347,7 +347,7 @@ references:
 - [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
   - Requirements: [15.8](requirements.md#15.8)
 
 - [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
@@ -389,7 +389,7 @@ references:
 - [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
@@ -461,7 +461,7 @@ references:
   - Emit JSON report for developer inspection: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - **No CI gate** in v1 (per Decision 41 and Req 21.7). The developer interprets the MAPE < 20% / MAE ≤ 25 g reference in Req 21.3 informationally.
   - `HarnessCore/AccuracyHarness.swift` and `FixtureRunner.swift` wrapped in `#if HARNESS_ENABLED`.
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8), [21.9](requirements.md#21.9)
 
 - [x] 62. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->
@@ -642,16 +642,16 @@ references:
 
 ## Tilt-tolerant capture (Decisions 43–47)
 
-- [ ] 84. Add `sigmaTilt` to `GeomSubconfidences` + `.proto` <!-- id:0f0701a -->
+- [x] 84. Add `sigmaTilt` to `GeomSubconfidences` + `.proto` <!-- id:0f0701a -->
   - Add `sigmaTilt: Float` field to `MedataCore/Sources/PortableContracts/ConfidenceResult.swift` (or wherever `GeomSubconfidences` is declared).
   - Add `delta_theta_nadir_deg` and optional `delta_theta_oblique_deg` to `ConfidenceResult.swift` per design §3.8.
   - Update `MedataCore/Sources/PortableContracts/Schemas/GeomSubconfidences.proto` to add `float sigma_tilt = 4;` and update `ConfidenceResult.proto` for the new Δθ fields.
   - Provide Codable default of 1.0 for `sigmaTilt` on legacy decode (per Req 13.4) via a custom `init(from:)` that falls back when the key is absent.
   - Tests: round-trip a record with the new fields; round-trip a JSON BLOB *without* `sigmaTilt` and assert it decodes with `sigmaTilt == 1.0` and original σ_meal unchanged.
   - Decision: 43, 44
-  - Requirements: [13.2](requirements.md#13-confidence-reporting), [13.4](requirements.md#13-confidence-reporting)
+  - Requirements: [13.2](requirements.md#13.2), [13.4](requirements.md#13.4)
 
-- [ ] 85. Implement σ_tilt computation in `Confidence` module <!-- id:0f0701b -->
+- [x] 85. Implement σ_tilt computation in `Confidence` module <!-- id:0f0701b -->
   - In `MedataCore/Sources/Confidence/ConfidenceCombiner.swift` (or equivalent), implement σ_tilt = max(ε, cos(Δθ_capture)) per design §6.8.
   - For two-view captures, take `max(Δθ_nadir, Δθ_oblique_relative_to_25deg)`. For single-view, take Δθ_nadir.
   - Δθ values come in from `CaptureFlowDelegate.didUpdateTilt(angleDegrees:)` snapshots captured at shutter time, not at the time of frame delivery.
@@ -659,18 +659,18 @@ references:
   - Tests: σ_tilt = 1.0 at Δθ=0; σ_tilt = cos(15°) ≈ 0.966 at 15°; σ_tilt = ε at Δθ ≥ 90°. σ_meal floors at 0.01 when all sub-confidences are zero. Two-view path picks the worse of two Δθs.
   - Decision: 43, 44, 45
   - Blocked-by: 0f0701a (Add `sigmaTilt` to `GeomSubconfidences` + `.proto`)
-  - Requirements: [13.1](requirements.md#13-confidence-reporting), [13.2](requirements.md#13-confidence-reporting)
+  - Requirements: [13.1](requirements.md#13.1), [13.2](requirements.md#13.2)
 
-- [ ] 86. Capture per-stage Δθ at shutter-tap time and thread into Pipeline <!-- id:0f0701c -->
+- [x] 86. Capture per-stage Δθ at shutter-tap time and thread into Pipeline <!-- id:0f0701c -->
   - Extend `CaptureResult` (or the per-view metadata bundle) with `tiltAngleAtCaptureDeg: Float` for each view.
   - `CaptureFlowModel` reads the last published Δθ from `CaptureFlowDelegate.didUpdateTilt` at the moment the shutter is tapped and stamps it onto the per-view metadata.
   - `Pipeline.estimate(...)` passes the values through to `Confidence` per task 85.
   - Tests: a stubbed flow with known Δθ values produces the expected σ_tilt and σ_meal end-to-end.
   - Decision: 43, 44
   - Blocked-by: 0f0701b (Implement σ_tilt computation in `Confidence` module)
-  - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [13.4](requirements.md#13-confidence-reporting)
+  - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [13.4](requirements.md#13.4)
 
-- [ ] 87. Remove nadir ±5° hard gate from CaptureKit; keep oblique ±30° hard cap <!-- id:0f0701d -->
+- [x] 87. Remove nadir ±5° hard gate from CaptureKit; keep oblique ±30° hard cap <!-- id:0f0701d -->
   - Find every site in `MedataCore/Sources/CaptureKit/` that enforces the ±5° angular envelope for the nadir stage and remove the gate. The angle is now informational only.
   - Add the oblique hard cap: refuse capture when `|measuredOblique − 25°| > 30°` with the message "tilt closer to 25°" mapped to a new `EstimationFailure.obliqueTiltOutOfRange` case.
   - Update `EstimationFailure` localised-message table in App layer.
@@ -679,24 +679,24 @@ references:
   - Blocked-by: 0f0701c (Capture per-stage Δθ at shutter-tap time and thread into Pipeline)
   - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
 
-- [ ] 88. Soften plane-fit refusal: 8mm → 20mm residual <!-- id:0f0701e -->
+- [x] 88. Soften plane-fit refusal: 8mm → 20mm residual <!-- id:0f0701e -->
   - In `MedataCore/Sources/SupportPlane/PlaneFitter.swift` (or equivalent), raise the `lidarFitResidualTooHigh` refusal threshold from 8 mm to 20 mm.
   - Leave the `lidarFitDegenerate` (singular covariance) and "zero depth points" refusals unchanged.
   - Tests: residuals at 5, 10, 15, 20 mm all accept; 21 mm refuses. σ_plane = exp(−r/5) is consumed downstream — verify no other code path enforces 8 mm.
   - Decision: 46
   - Requirements: [4.5](requirements.md#4.5)
 
-- [ ] 89. Extend σ_view lookup for 30–50% LiDAR coverage and lower refusal to 30% <!-- id:0f0701f -->
+- [x] 89. Extend σ_view lookup for 30–50% LiDAR coverage and lower refusal to 30% <!-- id:0f0701f -->
   - In `Confidence` (or wherever the σ_view lookup lives), add the 30–50% coverage → σ_view = 0.30 entry.
   - In `MedataCore/Sources/Volume/SingleViewHeightField.swift` (or equivalent), lower the `lidarCoverageTooLow` refusal threshold from 50% to 30%.
   - Tests: 30%, 40%, 50% coverages all accept; 29% refuses. σ_view = 0.30 at 35% coverage; σ_view = 0.60 at 60%; σ_view = 0.90 at 85%.
   - Decision: 47
-  - Requirements: [13.2](requirements.md#13-confidence-reporting)
+  - Requirements: [13.2](requirements.md#13.2)
 
-- [ ] 90. Update existing unit tests for ε = 0.01 floor and four-factor σ_geom <!-- id:0f0701g -->
+- [x] 90. Update existing unit tests for ε = 0.01 floor and four-factor σ_geom <!-- id:0f0701g -->
   - Sweep `MedataCore/Tests/Confidence*Tests.swift` and any other tests asserting ε = 0.05; update to 0.01.
   - Update fixtures or test inputs that previously assumed three-factor σ_geom to use four-factor product (σ_tilt = 1.0 for back-compatibility tests).
   - Add a new test asserting that the four-factor product reduces to the prior three-factor product when σ_tilt = 1.0 — guards against accidental σ_meal drift on legacy records.
   - Decision: 43, 44, 45
   - Blocked-by: 0f0701b (Implement σ_tilt computation in `Confidence` module)
-  - Requirements: [13.1](requirements.md#13-confidence-reporting), [13.4](requirements.md#13-confidence-reporting)
+  - Requirements: [13.1](requirements.md#13.1), [13.4](requirements.md#13.4)

@@ -7,7 +7,8 @@ import XCTest
 // Tests synthesise a depth map of a tilted plane plus controlled outliers and food
 // region, then assert RANSAC recovers normal/distance, that the seed-from-bytes is
 // deterministic, that singular inlier covariance is rejected, and that residual
-// breaches above 8 mm trigger lidarFitResidualTooHigh.
+// breaches above 20 mm trigger lidarFitResidualTooHigh (raised from 8 mm per
+// Decision 46 / T88).
 
 private let intrinsics = CameraIntrinsics(
     fx: 1500, fy: 1500, cx: 320, cy: 240,
@@ -171,11 +172,12 @@ final class LiDARPlaneFitterTests: XCTestCase {
         }
     }
 
-    // Task 13 bullet 4: lidarFitResidualTooHigh refusal path. The 8 mm production
-    // bound is unreachable from the RANSAC inlier band of 5 mm in normal operation
-    // (every inlier is within ±5 mm of its candidate plane by construction), so we
-    // verify the threshold logic with a fixture and a tightened residualMaxMm so
-    // a normally-acceptable σ ~3 mm trips the refusal.
+    // Task 13 bullet 4 / T88: lidarFitResidualTooHigh refusal path. The 20 mm
+    // production bound (raised from 8 mm per Decision 46) is unreachable from
+    // the RANSAC inlier band of 5 mm in normal operation (every inlier is within
+    // ±5 mm of its candidate plane by construction), so we verify the threshold
+    // logic with a fixture and a tightened residualMaxMm so a normally-acceptable
+    // σ ~3 mm trips the refusal.
     func testRefusesWhenResidualExceedsThreshold() {
         let trueNormal = Vec3(0, 1, 0)
         let trueDist: Float = 100
@@ -209,5 +211,10 @@ final class LiDARPlaneFitterTests: XCTestCase {
         ))) { err in
             XCTAssertEqual(err as? SupportPlaneError, .lidarFitResidualTooHigh)
         }
+    }
+
+    // T88: production residualMaxMm raised from 8 to 20. Verify the default value.
+    func testProductionResidualMaxIsTwentyMm() {
+        XCTAssertEqual(LiDARPlaneFitter.residualMaxMm, 20)
     }
 }

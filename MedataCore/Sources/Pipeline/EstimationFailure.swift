@@ -17,7 +17,7 @@ public enum EstimationFailure: Error, Equatable {
     case cardTooOblique
     // LiDAR RANSAC plane-fit covariance matrix is singular.
     case lidarFitDegenerate
-    // LiDAR RANSAC inlier σ exceeds 8 mm (Req 4.5).
+    // LiDAR RANSAC inlier σ exceeds 20 mm (Req 4.5, raised from 8 mm per Decision 46).
     case lidarFitResidualTooHigh
     // Card-only iterative fit best-of-5 residual exceeds 1.5 mm (Req 4.3).
     case iterationDiverged
@@ -27,8 +27,12 @@ public enum EstimationFailure: Error, Equatable {
     case noFoodPixels
     // All per-class volumes are below 1 cm³ post β-correction.
     case noFoodVolumeRecovered
-    // ≥1 food class has <50% LiDAR depth coverage in single-view path (Req 3.5, 13.2).
+    // ≥1 food class has <30% LiDAR depth coverage in single-view path
+    // (Req 3.5, 13.2; relaxed from 50% per Decision 47).
     case lidarCoverageTooLow([String])
+    // Oblique view captured with |θ − 25°| > 30° — outside the soft-acceptance
+    // envelope of Decision 43. Refused with "tilt closer to 25°" guidance.
+    case obliqueTiltOutOfRange
     // meals.sqlite is corrupt; record quarantined, history temporarily unavailable.
     case mealsDbCorrupt
 
@@ -63,6 +67,8 @@ public enum EstimationFailure: Error, Equatable {
         case .lidarCoverageTooLow(let classes):
             let list = classes.joined(separator: ", ")
             return "Insufficient depth data for: \(list). Please use two-view mode instead."
+        case .obliqueTiltOutOfRange:
+            return "Tilt closer to 25°."
         case .mealsDbCorrupt:
             return "Your meal history could not be loaded and has been reset. Capture continues normally."
         }

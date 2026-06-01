@@ -49,6 +49,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private var interruptionTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
     private var firstFrame: RawFrame?
+    // Tilt-at-shutter (degrees from straight-down) for the nadir frame, captured
+    // when the user taps the shutter on the first stage. Stamped onto the
+    // CaptureResult per Decision 44 / task 86 so σ_tilt reflects the camera pose
+    // at the moment the photo was taken, not at the moment the pipeline runs.
+    private var firstFrameTiltDeg: Float?
 
     private let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
     // Mode frozen at the shutter-tap that began the in-flight capture. The
@@ -176,7 +181,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // Retake from the same stage. If retryStage is .oblique we keep firstFrame
         // so the user does not have to retake the nadir view (req §5.4). If
         // retryStage is .nadir, drop any previously captured nadir.
-        if retryStage == .nadir { firstFrame = nil }
+        if retryStage == .nadir { firstFrame = nil; firstFrameTiltDeg = nil }
         let mode = inFlightMode ?? captureModeReader()
         inFlightMode = mode
         beginCapture(stage: retryStage, frozen: snapshot, mode: mode)
@@ -185,7 +190,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     func dismissResult() {
         guard case .showingResult = state else { return }
         navigationPath = NavigationPath()
-        firstFrame = nil
+        firstFrame = nil; firstFrameTiltDeg = nil
         inFlightMode = nil
         state = .ready(freshSnapshot())
     }
@@ -205,7 +210,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             switch state {
             case .capturing, .estimating:
                 state = .initialising
-                firstFrame = nil
+                firstFrame = nil; firstFrameTiltDeg = nil
                 inFlightMode = nil
             default:
                 break
@@ -252,12 +257,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // Capture in flight but estimation hasn't started: cancel and
             // reset to the same baseline as backgrounding.
             cancelInFlight()
-            firstFrame = nil
+            firstFrame = nil; firstFrameTiltDeg = nil
             state = .initialising
             Task { [session] in try? await session.stop() }
             startTask = nil
         case .initialising, .ready, .trackingLost, .showingResult:
-            firstFrame = nil
+            firstFrame = nil; firstFrameTiltDeg = nil
             if case .estimating = state {} else { state = .initialising }
             Task { [session] in try? await session.stop() }
             startTask = nil
@@ -309,7 +314,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         switch state {
         case .ready:
             state = .trackingLost
-            firstFrame = nil
+            firstFrame = nil; firstFrameTiltDeg = nil
         case .capturing(stage: .nadir, _):
             cancelInFlight()
             state = .trackingLost
@@ -331,7 +336,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         switch event {
         case .began:
             cancelInFlight()
-            firstFrame = nil
+            firstFrame = nil; firstFrameTiltDeg = nil
             inFlightMode = nil
             state = .trackingLost
             Task { [session] in try? await session.stop() }
@@ -375,6 +380,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // is kicked off fire-and-forget on .initialising entry and CaptureSession
         // throws .sessionNotStarted if captureNadir/Oblique races ahead of it.
         await startTask?.value
+        // Snapshot the live tilt before the await — `liveTiltDegrees` is the
+        // most recent value published by `LiveSampleObserver`, which matches the
+        // moment the user tapped the shutter (per Decision 44 / task 86). The
+        // post-capture tilt may have drifted (the user lowers the phone after
+        // tapping); we want the pre-capture value.
+        let tiltAtShutterDeg = indicators.liveTiltDegrees
         do {
             log.info("event=capture.start stage=\(stage.name, privacy: .public)")
             let frame = try await capture(stage: stage)
@@ -386,9 +397,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // and wait for the user to take the oblique tap.
             if stage == .nadir, mode == .double {
                 firstFrame = frame
+                firstFrameTiltDeg = tiltAtShutterDeg
                 state = .ready(frozen)
                 return
             }
+
+            // Per Decision 44 the σ_tilt computation runs over the angular
+            // deviation from each stage's target axis (0° for nadir, 25° for
+            // oblique). We persist the raw angle (degrees from straight-down)
+            // and let the pipeline convert to Δθ per stage.
+            let nadirAngle = stage == .oblique ? (firstFrameTiltDeg ?? 0) : tiltAtShutterDeg
+            let obliqueAngle: Float? = stage == .oblique ? tiltAtShutterDeg : nil
 
             let captureResult = CaptureResult(
                 capturePath: mode.capturePath,
@@ -399,7 +418,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
                 nadirFrame: stage == .oblique ? (firstFrame ?? frame) : frame,
                 obliqueFrame: stage == .oblique ? frame : nil,
                 databaseEdition: databaseEdition,
-                paletteVersion: paletteVersion
+                paletteVersion: paletteVersion,
+                nadirAngleAtCaptureDeg: nadirAngle,
+                obliqueAngleAtCaptureDeg: obliqueAngle
             )
             await runEstimation(captureResult: captureResult, mode: mode, retryStage: stage)
         } catch is CancellationError {
@@ -440,7 +461,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // meal. A denied Photos prompt is NOT an error — the meal still
             // surfaces; the result view falls back to a placeholder.
             let stamped = await saveNadirPhoto(record: record, frame: captureResult.nadirFrame)
-            firstFrame = nil
+            firstFrame = nil; firstFrameTiltDeg = nil
             inFlightMode = nil
             lastMeal = stamped
             log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
@@ -498,11 +519,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         return cm >= 25 && cm <= 50
     }
 
-    // Nadir targets 0° ±5° (§2.2); the oblique view targets 25° ±5° (§2.3).
-    // We're targeting the oblique view once the nadir frame is stashed.
+    // Per Decision 43 / Req §3.2 the nadir gate is informational only — capture
+    // is accepted at any tilt and σ_tilt = cos(Δθ) carries the angular error
+    // through to the meal confidence. The oblique view still has a 30° hard cap
+    // per Req §3.3 / Decision 43: outside |θ − 25°| ≤ 30° the visual hull is
+    // unreliable enough that we refuse rather than report a degraded estimate.
     private func tiltInRange(degrees: Float) -> Bool {
-        let target: Float = firstFrame != nil ? 25 : 0
-        return abs(degrees - target) <= 5
+        if firstFrame != nil {
+            return abs(degrees - 25) <= 30
+        }
+        return true
     }
 
     private func observeInterruptions(

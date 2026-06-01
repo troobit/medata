@@ -146,10 +146,11 @@ final class HeightFieldEstimatorTests: XCTestCase {
             "Coverage fraction should be ~0.80 (80 of 100 columns have good confidence)")
     }
 
-    // MARK: - T26.4 lidarCoverageTooLow throws when any class below 50%
+    // MARK: - T26.4 lidarCoverageTooLow throws when any class below 30% (T89)
 
     func testLidarCoverageTooLowThrows() throws {
-        // Only 30% of pixels have sufficient confidence.
+        // Only 20% of pixels have sufficient confidence — below the relaxed
+        // 30% refusal threshold (Decision 47 / T89).
         let bgId = palette.background
         let probs = makeProbTensor(width: 100, height: 100, palette: palette) { _, _, c in
             c == 0 ? 0.90 : (c == bgId ? 0.05 : 0.025)
@@ -158,7 +159,7 @@ final class HeightFieldEstimatorTests: XCTestCase {
         let depth = makeDepthMap(
             width: 100, height: 100, intrinsics: k500,
             depthMm: { _, _ in self.ztMm },
-            conf: { _, x in x < 30 ? 255 : 0 }   // only first 30 columns: good
+            conf: { _, x in x < 20 ? 255 : 0 }   // only first 20 columns: good
         )
         let inputs = HeightFieldEstimator.Inputs(
             probabilities: probs, argmax: argm, depth: depth,
@@ -172,6 +173,28 @@ final class HeightFieldEstimatorTests: XCTestCase {
                 XCTFail("Expected lidarCoverageTooLow, got \(error)")
             }
         }
+    }
+
+    // T89: 30%, 40%, 50% coverages all accept (boundary tier).
+    func testLidarCoverageThirtyPercentAccepts() throws {
+        let bgId = palette.background
+        let probs = makeProbTensor(width: 100, height: 100, palette: palette) { _, _, c in
+            c == 0 ? 0.90 : (c == bgId ? 0.05 : 0.025)
+        }
+        let argm = makeArgmax(width: 100, height: 100) { _, _ in 0 }
+        let depth = makeDepthMap(
+            width: 100, height: 100, intrinsics: k500,
+            depthMm: { _, _ in self.ztMm },
+            conf: { _, x in x < 30 ? 255 : 0 }   // 30% coverage — at the new floor
+        )
+        let inputs = HeightFieldEstimator.Inputs(
+            probabilities: probs, argmax: argm, depth: depth,
+            intrinsics: k500, supportPlane: plane,
+            beta: BetaCorrection(), palette: palette
+        )
+        let result = try HeightFieldEstimator.integrate(inputs)
+        let frac = result.lidarCoverageFraction["food_0"] ?? 0
+        XCTAssertEqual(frac, 0.30, accuracy: 0.02)
     }
 
     // MARK: - T26.5 mm³→cm³ unit conversion (M5)
