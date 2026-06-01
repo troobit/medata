@@ -30,6 +30,10 @@ extension Color {
     static let confidenceHigh = medataAccent
     static let confidenceModerate = Color(uiColor: .systemOrange)
     static let confidenceLow = Color(uiColor: .systemRed)
+    // Decision 17: desaturated greyscale — "use with skepticism" rather than
+    // alarm. The Low tier already owns systemRed, so Very Low needs a tone
+    // that draws the eye to the surrounding explanation copy instead.
+    static let confidenceVeryLow = Color(white: 0.35)
 
     // MARK: - Placeholder chip (research Req 23.3)
 

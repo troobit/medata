@@ -1,18 +1,23 @@
 import Testing
 @testable import MeData
 
-// Task 43 / Decision 16. Threshold + icon mapping for the shared
-// `ConfidencePill`. The threshold fixture mirrors the v1.0 ResultView table
-// (Decision 8 boundaries) so any drift between the two is caught here.
-@Suite("ConfidencePill three-tier icon + label mapping")
+// Task 43/57 — Decision 17 (supersedes Decision 8). Four-tier threshold + icon
+// mapping for the shared `ConfidencePill`. Boundaries:
+//   High      σ ≥ 0.75
+//   Moderate  0.50 ≤ σ < 0.75
+//   Low       0.20 ≤ σ < 0.50
+//   Very Low  σ < 0.20
+@Suite("ConfidencePill four-tier icon + label mapping")
 struct ConfidencePillTests {
 
     @Test(
-        "icon name per band",
+        "icon name per band (four tiers)",
         arguments: [
-            (sigma: Float(0.0), iconName: "xmark.octagon.fill"),
-            (sigma: Float(0.59), iconName: "xmark.octagon.fill"),
-            (sigma: Float(0.60), iconName: "exclamationmark.triangle.fill"),
+            (sigma: Float(0.0), iconName: "minus.circle.fill"),
+            (sigma: Float(0.19), iconName: "minus.circle.fill"),
+            (sigma: Float(0.20), iconName: "xmark.octagon.fill"),
+            (sigma: Float(0.49), iconName: "xmark.octagon.fill"),
+            (sigma: Float(0.50), iconName: "exclamationmark.triangle.fill"),
             (sigma: Float(0.74), iconName: "exclamationmark.triangle.fill"),
             (sigma: Float(0.75), iconName: "checkmark.seal.fill"),
             (sigma: Float(1.0), iconName: "checkmark.seal.fill"),
@@ -23,11 +28,13 @@ struct ConfidencePillTests {
     }
 
     @Test(
-        "label per band",
+        "label per band (four tiers)",
         arguments: [
-            (sigma: Float(0.0), label: "Low"),
-            (sigma: Float(0.59), label: "Low"),
-            (sigma: Float(0.60), label: "Moderate"),
+            (sigma: Float(0.0), label: "Very Low"),
+            (sigma: Float(0.19), label: "Very Low"),
+            (sigma: Float(0.20), label: "Low"),
+            (sigma: Float(0.49), label: "Low"),
+            (sigma: Float(0.50), label: "Moderate"),
             (sigma: Float(0.74), label: "Moderate"),
             (sigma: Float(0.75), label: "High"),
             (sigma: Float(1.0), label: "High"),
@@ -42,5 +49,6 @@ struct ConfidencePillTests {
         #expect(ConfidenceLevel.high.accessibilityToken == "high")
         #expect(ConfidenceLevel.moderate.accessibilityToken == "moderate")
         #expect(ConfidenceLevel.low.accessibilityToken == "low")
+        #expect(ConfidenceLevel.veryLow.accessibilityToken == "veryLow")
     }
 }

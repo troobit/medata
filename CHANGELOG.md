@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (UI spec — tilt-tolerant capture, tasks 54–60; Decisions 17–19, research Decision 43)
+
+- `MedataCore/Sources/Pipeline/EstimationFailure.swift` — new `obliqueTiltOutOfRange` case mapped to "Tilt the camera closer to 25° for the angled view." (research Req 3.3 / Decision 43). The case surfaces the only remaining tilt-driven shutter gate, used at the oblique stage when `|Δθ − 25°| > 30°`.
+- `App/CaptureFlowModel.swift` — `obliqueTiltMessage: String?` computed property surfaces the localised refusal copy above the shutter while the user is on the oblique stage but outside the hard cap. Returns `nil` everywhere else.
+- `App/Colors.swift` — `confidenceVeryLow = Color(white: 0.35)` token per UI Decision 17. Greyscale rather than alarming: the Low tier already owns `systemRed`, so Very Low pairs with the inline retake explanation copy rather than competing with it.
+- `App/ResultView.swift` — Very-Low surface gated on `record.confidence.sigmaMeal < 0.20` with two-line caption ("This estimate may be wrong by orders of magnitude." / "Capture was at \(Δθ)° from target.") and side-by-side `Retake` / `Keep as-is` buttons. "Keep as-is" hides the surface for the current view session only (no persistent flag); navigating away and back re-shows it. `ResultFormat.maxDeltaThetaDeg(for:)` returns 0 until the research-side `PbConfidenceResult.deltaThetaNadirDeg` / `deltaThetaObliqueDeg` fields land.
+- `App/CaptureFlowView.swift` — inline above-shutter capsule renders `model.obliqueTiltMessage` when the user is on the oblique stage with the live tilt outside the ±30° hard cap (Req §2.3). Visually consistent with the existing `initialisingHint` chrome.
+- `MeData/Tests/CaptureFlowModelTiltGateTests.swift` — new Swift Testing suite covering: nadir shutter armed at Δθ ∈ {0°, 15°, 30°, 60°} (no tilt gate at all), oblique shutter disabled at Δθ ∈ {-10°, 60°, 90°} (outside the ±30° cap), oblique shutter armed inside the cap, and the Irish-English failure copy.
+
+### Changed (UI spec — tilt-tolerant capture, tasks 54–60; Decisions 17–19, research Decision 43)
+
+- `App/LiveIndicatorBadge.swift` — tilt sub-element is now a continuous greyscale Δθ° + σ_tilt% two-line readout (Decision 19). The binary green/white in-range/out-of-range colour state is removed; every angle yields a valid capture and the user sees the σ_tilt cost they are about to record before the shutter fires. `LiveIndicatorBadgeState` exposes `sigmaTilt(deltaThetaDegrees:)`, `isSigmaTiltSufficient(deltaThetaDegrees:)`, and a `sigmaTiltAutoHideThreshold = 0.95` constant. The badge `allInRange` predicate (driving the 5 s auto-hide) is re-anchored from "tilt within ±5°" to "σ_tilt > 0.95 AND distance in-range AND LiDAR coverage > 0".
+- `App/CaptureFlowModel.swift` — `canShutter` and `shutter()` no longer require `snapshot.tiltInRange` (Decision 18 / research Decision 43). The nadir stage is always armed when distance and tracking permit; the oblique stage retains a `|Δθ − 25°| ≤ 30°` hard cap. The legacy `tiltInRange(degrees:)` helper still feeds the shutter-blocked-feedback log, but its semantics now mirror the σ_tilt > 0.95 auto-hide band (≈ Δθ < 18° from the per-stage target) rather than the prior ±5° gate, so existing Console.app predicates continue to parse.
+- `App/ResultView.swift` — `ConfidenceLevel` is now a four-tier enum (`high` ≥ 0.75, `moderate` 0.50–0.75, `low` 0.20–0.50, `veryLow` < 0.20) per UI Decision 17, superseding Decision 8's three tiers. `ResultFormat.showsUncertainPrompt(_:)` / the σ < 0.60 prompt are removed; replaced by `ResultFormat.showsVeryLowSurface(_:)` gated on σ < 0.20 (the new threshold also aligns with the revised research Req 13.5).
+- `App/ConfidencePill.swift` — icon and accessibility-token mappings extended to four tiers (`minus.circle.fill` / `veryLow`). The Very Low icon is intentionally quieter than the Low-tier `xmark.octagon.fill` so the desaturated pill draws the eye to the surrounding explanation copy rather than to the pill itself.
+- `design-system/MASTER.md` — confidence-pill colour-token table updated to the four-tier boundaries and adds the `confidenceVeryLow = Color(white: 0.35)` token.
+- `design-system/pages/photo-tab.md` — Indicator badge §"Tilt" rewritten to describe the greyscale Δθ + σ_tilt% two-line readout and the σ_tilt > 0.95 auto-hide gate.
+- `App/README.md` — `ResultView` row updated from "three-state confidence pill; uncertain-estimate retake below σ 0.60" to "four-tier confidence pill (Decision 17); Very-Low retake / Keep as-is surface below σ 0.20".
+- `MeData/Tests/LiveIndicatorBadgeTests.swift` — assertions migrated from the ±5° tilt-in-range predicate to the σ_tilt > 0.95 band. New tests cover the σ_tilt = cos(Δθ) curve (Δθ=0 → 1.0, Δθ=60 → 0.5) and the 10°/20° auto-hide cusp (≈0.985 vs ≈0.940).
+- `MeData/Tests/ConfidencePillTests.swift` — icon, label, and accessibility-token tables extended to four tiers including the new Very Low band boundaries at σ = 0.0, 0.19, 0.20, 0.49, 0.50, 0.74, 0.75, 1.0.
+- `MeData/Tests/ResultViewTests.swift` — pill-label table updated to the four-tier boundaries; `uncertainPromptVisibility` replaced with `veryLowSurfaceVisibility` asserting the σ < 0.20 gate (and explicitly that σ ≈ 0.55 no longer fires). Added a `deltaThetaFallback` test pinning the temporary 0 return until the research-side fields land.
+
+### Removed (UI spec — tilt-tolerant capture, tasks 54–60)
+
+- `App/ResultView.swift` — `ResultFormat.showsUncertainPrompt(_:)` and the inline "This estimate is uncertain. Consider retaking the photo for a better result." prompt removed. Superseded by the Very-Low retake surface at σ < 0.20.
+- `App/LiveIndicatorBadge.swift` — `tiltToleranceDegrees = 5` constant and the `isTiltInRange(degrees:target:)` helper removed in favour of the σ_tilt curve. The legacy green tint on the tilt sub-element is gone (greyscale only).
+
 ### Added (Smolspec — shutter-blocked-feedback, tasks 1–4)
 
 - `App/LiveIndicatorModel.swift` — `visible: Bool` and `reveal()` / `scheduleHide()` methods. Visibility and the 5 s auto-hide `Task` lift off the badge view onto the model so other code paths (a blocked-shutter tap) can re-reveal the badge without `Binding` ceremony (Decision 3).

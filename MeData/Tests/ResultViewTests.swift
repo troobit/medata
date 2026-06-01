@@ -7,11 +7,13 @@ import Testing
 struct ResultViewTests {
 
     @Test(
-        "σ_meal maps to the correct pill label (Decision 8 boundaries)",
+        "σ_meal maps to the correct pill label (Decision 17 four-tier boundaries)",
         arguments: [
-            (sigma: Float(0.0), expected: ConfidenceLevel.low),
-            (sigma: Float(0.59), expected: .low),
-            (sigma: Float(0.60), expected: .moderate),
+            (sigma: Float(0.0), expected: ConfidenceLevel.veryLow),
+            (sigma: Float(0.19), expected: .veryLow),
+            (sigma: Float(0.20), expected: .low),
+            (sigma: Float(0.49), expected: .low),
+            (sigma: Float(0.50), expected: .moderate),
             (sigma: Float(0.74), expected: .moderate),
             (sigma: Float(0.75), expected: .high),
             (sigma: Float(1.0), expected: .high),
@@ -21,12 +23,17 @@ struct ResultViewTests {
         #expect(ConfidenceLevel.forSigma(sigma) == expected)
     }
 
-    @Test("uncertain-estimate prompt visible only below σ=0.60 (§9.3)")
-    func uncertainPromptVisibility() {
-        #expect(ResultFormat.showsUncertainPrompt(0.0))
-        #expect(ResultFormat.showsUncertainPrompt(0.59))
-        #expect(!ResultFormat.showsUncertainPrompt(0.60))
-        #expect(!ResultFormat.showsUncertainPrompt(0.80))
+    // Decision 17 / Req §9.3: the retake surface fires only at σ < 0.20.
+    // The prior σ < 0.60 prompt is superseded (Decision 8 → Decision 17).
+    @Test("very-low retake surface visible only below σ=0.20 (Req §9.3)")
+    func veryLowSurfaceVisibility() {
+        #expect(ResultFormat.showsVeryLowSurface(0.0))
+        #expect(ResultFormat.showsVeryLowSurface(0.15))
+        #expect(ResultFormat.showsVeryLowSurface(0.19))
+        #expect(!ResultFormat.showsVeryLowSurface(0.20))
+        #expect(!ResultFormat.showsVeryLowSurface(0.25))
+        #expect(!ResultFormat.showsVeryLowSurface(0.55))
+        #expect(!ResultFormat.showsVeryLowSurface(0.80))
     }
 
     @Test("carbs rounded to nearest 1 g (§9.1)")
@@ -46,6 +53,16 @@ struct ResultViewTests {
         let record = makeMealRecord(carbs: 30, sigma: 0.8)
         #expect(ResultFormat.carbsGrams(record.macros.totalCarbsG) == 30)
         #expect(ConfidenceLevel.forSigma(record.confidence.sigmaMeal) == .high)
+    }
+
+    // The Δθ helper falls back to 0 until the research-side smolspec wires
+    // `PbConfidenceResult.deltaThetaNadirDeg` / `deltaThetaObliqueDeg`
+    // through PortableContracts. The Very-Low surface still renders the
+    // string — it just reads "0° from target" for now.
+    @Test("Δθ helper falls back to 0 pending research-side fields")
+    func deltaThetaFallback() {
+        let record = makeMealRecord(carbs: 0, sigma: 0.1)
+        #expect(ResultFormat.maxDeltaThetaDeg(for: record) == 0)
     }
 
     // Req §23.3 / Decision 42: the placeholder banner is gated on the persisted

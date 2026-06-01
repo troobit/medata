@@ -22,7 +22,7 @@ the architecture overview.
 | `LiveSampleObserver.swift` | `@MainActor` observer iterating `engine.frames`, computing per-frame metrics |
 | `ARPreviewView.swift` | `UIViewRepresentable` over `ARView`; engine adopts the view's `ARSession` (one session only) |
 | `RefusalBanner.swift` | Inline `EstimationFailure.localisedMessage` banner with "Try Again" |
-| `ResultView.swift` | Total carbs (rounded) + three-state confidence pill; uncertain-estimate retake below σ 0.60 |
+| `ResultView.swift` | Total carbs (rounded) + four-tier confidence pill (Decision 17); Very-Low retake / Keep as-is surface below σ 0.20 (Req §9.3) |
 | `SettingsView.swift` | Retention + IFCDB toggles via `@AppStorage`; Export archive → `ShareSheet` |
 | `ShareSheet.swift` | `UIViewControllerRepresentable` wrapping `UIActivityViewController` |
 | `Colors.swift` | Brand colour tokens (`medataAccent #63ff00`, confidence pill colours) |

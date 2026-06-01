@@ -31,6 +31,11 @@ public enum EstimationFailure: Error, Equatable {
     case lidarCoverageTooLow([String])
     // meals.sqlite is corrupt; record quarantined, history temporarily unavailable.
     case mealsDbCorrupt
+    // Oblique-stage hard cap: |Δθ − 25°| > 30° (research Req 3.3 / Decision 43).
+    // The SfS algorithm produces silently-wrong volumes far outside the Dehais
+    // 2017 envelope, so the oblique view is gated even after Decision 18 removed
+    // the nadir tilt gate.
+    case obliqueTiltOutOfRange
 
     // MARK: - Localised Irish-English messages (Req 17.1)
 
@@ -65,6 +70,8 @@ public enum EstimationFailure: Error, Equatable {
             return "Insufficient depth data for: \(list). Please use two-view mode instead."
         case .mealsDbCorrupt:
             return "Your meal history could not be loaded and has been reset. Capture continues normally."
+        case .obliqueTiltOutOfRange:
+            return "Tilt the camera closer to 25° for the angled view."
         }
     }
 }
