@@ -639,3 +639,64 @@ references:
   - Decision: 42
   - Blocked-by: 0f07018 (Persist `segmenterSource` on `MealRecord` and SQLite `meals`)
   - Requirements: [23.3](requirements.md#23.3)
+
+## Tilt-tolerant capture (Decisions 43–47)
+
+- [ ] 84. Add `sigmaTilt` to `GeomSubconfidences` + `.proto` <!-- id:0f0701a -->
+  - Add `sigmaTilt: Float` field to `MedataCore/Sources/PortableContracts/ConfidenceResult.swift` (or wherever `GeomSubconfidences` is declared).
+  - Add `delta_theta_nadir_deg` and optional `delta_theta_oblique_deg` to `ConfidenceResult.swift` per design §3.8.
+  - Update `MedataCore/Sources/PortableContracts/Schemas/GeomSubconfidences.proto` to add `float sigma_tilt = 4;` and update `ConfidenceResult.proto` for the new Δθ fields.
+  - Provide Codable default of 1.0 for `sigmaTilt` on legacy decode (per Req 13.4) via a custom `init(from:)` that falls back when the key is absent.
+  - Tests: round-trip a record with the new fields; round-trip a JSON BLOB *without* `sigmaTilt` and assert it decodes with `sigmaTilt == 1.0` and original σ_meal unchanged.
+  - Decision: 43, 44
+  - Requirements: [13.2](requirements.md#13-confidence-reporting), [13.4](requirements.md#13-confidence-reporting)
+
+- [ ] 85. Implement σ_tilt computation in `Confidence` module <!-- id:0f0701b -->
+  - In `MedataCore/Sources/Confidence/ConfidenceCombiner.swift` (or equivalent), implement σ_tilt = max(ε, cos(Δθ_capture)) per design §6.8.
+  - For two-view captures, take `max(Δθ_nadir, Δθ_oblique_relative_to_25deg)`. For single-view, take Δθ_nadir.
+  - Δθ values come in from `CaptureFlowDelegate.didUpdateTilt(angleDegrees:)` snapshots captured at shutter time, not at the time of frame delivery.
+  - Update the four-factor σ_geom product. Lower ε constant from 0.05 to 0.01.
+  - Tests: σ_tilt = 1.0 at Δθ=0; σ_tilt = cos(15°) ≈ 0.966 at 15°; σ_tilt = ε at Δθ ≥ 90°. σ_meal floors at 0.01 when all sub-confidences are zero. Two-view path picks the worse of two Δθs.
+  - Decision: 43, 44, 45
+  - Blocked-by: 0f0701a (Add `sigmaTilt` to `GeomSubconfidences` + `.proto`)
+  - Requirements: [13.1](requirements.md#13-confidence-reporting), [13.2](requirements.md#13-confidence-reporting)
+
+- [ ] 86. Capture per-stage Δθ at shutter-tap time and thread into Pipeline <!-- id:0f0701c -->
+  - Extend `CaptureResult` (or the per-view metadata bundle) with `tiltAngleAtCaptureDeg: Float` for each view.
+  - `CaptureFlowModel` reads the last published Δθ from `CaptureFlowDelegate.didUpdateTilt` at the moment the shutter is tapped and stamps it onto the per-view metadata.
+  - `Pipeline.estimate(...)` passes the values through to `Confidence` per task 85.
+  - Tests: a stubbed flow with known Δθ values produces the expected σ_tilt and σ_meal end-to-end.
+  - Decision: 43, 44
+  - Blocked-by: 0f0701b (Implement σ_tilt computation in `Confidence` module)
+  - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [13.4](requirements.md#13-confidence-reporting)
+
+- [ ] 87. Remove nadir ±5° hard gate from CaptureKit; keep oblique ±30° hard cap <!-- id:0f0701d -->
+  - Find every site in `MedataCore/Sources/CaptureKit/` that enforces the ±5° angular envelope for the nadir stage and remove the gate. The angle is now informational only.
+  - Add the oblique hard cap: refuse capture when `|measuredOblique − 25°| > 30°` with the message "tilt closer to 25°" mapped to a new `EstimationFailure.obliqueTiltOutOfRange` case.
+  - Update `EstimationFailure` localised-message table in App layer.
+  - Tests: nadir captures at 0°, 5°, 15°, 30° all succeed (gate removed); oblique captures at 0° and 55° (extremes) succeed; oblique capture at 60° fails with `obliqueTiltOutOfRange`.
+  - Decision: 43
+  - Blocked-by: 0f0701c (Capture per-stage Δθ at shutter-tap time and thread into Pipeline)
+  - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
+
+- [ ] 88. Soften plane-fit refusal: 8mm → 20mm residual <!-- id:0f0701e -->
+  - In `MedataCore/Sources/SupportPlane/PlaneFitter.swift` (or equivalent), raise the `lidarFitResidualTooHigh` refusal threshold from 8 mm to 20 mm.
+  - Leave the `lidarFitDegenerate` (singular covariance) and "zero depth points" refusals unchanged.
+  - Tests: residuals at 5, 10, 15, 20 mm all accept; 21 mm refuses. σ_plane = exp(−r/5) is consumed downstream — verify no other code path enforces 8 mm.
+  - Decision: 46
+  - Requirements: [4.5](requirements.md#4.5)
+
+- [ ] 89. Extend σ_view lookup for 30–50% LiDAR coverage and lower refusal to 30% <!-- id:0f0701f -->
+  - In `Confidence` (or wherever the σ_view lookup lives), add the 30–50% coverage → σ_view = 0.30 entry.
+  - In `MedataCore/Sources/Volume/SingleViewHeightField.swift` (or equivalent), lower the `lidarCoverageTooLow` refusal threshold from 50% to 30%.
+  - Tests: 30%, 40%, 50% coverages all accept; 29% refuses. σ_view = 0.30 at 35% coverage; σ_view = 0.60 at 60%; σ_view = 0.90 at 85%.
+  - Decision: 47
+  - Requirements: [13.2](requirements.md#13-confidence-reporting)
+
+- [ ] 90. Update existing unit tests for ε = 0.01 floor and four-factor σ_geom <!-- id:0f0701g -->
+  - Sweep `MedataCore/Tests/Confidence*Tests.swift` and any other tests asserting ε = 0.05; update to 0.01.
+  - Update fixtures or test inputs that previously assumed three-factor σ_geom to use four-factor product (σ_tilt = 1.0 for back-compatibility tests).
+  - Add a new test asserting that the four-factor product reduces to the prior three-factor product when σ_tilt = 1.0 — guards against accidental σ_meal drift on legacy records.
+  - Decision: 43, 44, 45
+  - Blocked-by: 0f0701b (Implement σ_tilt computation in `Confidence` module)
+  - Requirements: [13.1](requirements.md#13-confidence-reporting), [13.4](requirements.md#13-confidence-reporting)

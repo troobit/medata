@@ -235,7 +235,7 @@ A single brand master prevents drift between web and iOS surfaces. The SVG sourc
 ## Decision 8: Confidence-pill thresholds and UI responsiveness floors
 
 **Date**: 2026-05-20
-**Status**: accepted
+**Status**: superseded by Decision 17 (confidence-pill portion only — UI responsiveness floors remain accepted)
 
 ### Context
 
@@ -632,5 +632,142 @@ Keeping the tab bar visible during capture is the platform convention on iPhone.
 - `design-system/MASTER.md` (new) carries the global tokens. `design-system/pages/photo-tab.md` and `design-system/pages/meals-tab.md` (new) carry per-screen overrides and layout diagrams.
 - `specs/ui/tasks.md` gains a "v1.1 — Visual design" phase with the implementation tasks. The previous v1.1 phase ("Tab navigation + Meals tab") remains the structural work; the visual phase depends on it for some tasks (e.g. `MealRow` styling depends on the row existing).
 - No `MedataCore` changes. The supersession affects only the App target.
+
+---
+
+## Decision 17: Four-tier confidence pill; retake prompt at σ < 0.20
+
+**Date**: 2026-06-01
+**Status**: accepted (supersedes Decision 8 in this log)
+
+### Context
+
+Research Decision 43 (tilt-tolerant capture) reframes σ_meal so that low-confidence values are routine rather than exceptional — most off-axis captures now produce estimates in the 0.01–0.50 range. Under the prior three-tier pill (High ≥ 0.75, Moderate 0.60–0.75, Low < 0.60 from Decision 8), this would collapse the bulk of real captures into a single "Low" bucket and would fire the uncertain-estimate retake prompt (Req 13.5 old threshold 0.6) on most meals.
+
+The user's framing (`nextup.md`): low-confidence estimates are still useful and should be reported honestly, not buried behind an undifferentiated warning. Retake should be prompted only when the estimate is essentially worthless.
+
+### Decision
+
+Replace the three-tier confidence pill with a four-tier scheme:
+
+- **High**: σ ≥ 0.75
+- **Moderate**: 0.50 ≤ σ < 0.75
+- **Low**: 0.20 ≤ σ < 0.50
+- **Very Low**: σ < 0.20
+
+The retake prompt (UI Req 9.3) fires only at the Very Low tier (σ < 0.20). At Very Low the result view also surfaces an inline explanation including the per-stage angular error Δθ from the persisted record, and offers two side-by-side controls: "Retake" and "Keep as-is". The meal is persisted at capture time regardless of tier; "Keep as-is" simply dismisses the surface.
+
+Research Req 13.5's threshold is updated to match (0.6 → 0.2) so the UI and research specs agree.
+
+The pill colour token `confidenceVeryLow` is desaturated greyscale rather than a more alarming colour — red is already used by the Low tier, and the desaturated treatment draws the user's attention to the surrounding inline explanation rather than to the pill itself.
+
+### Rationale
+
+Four tiers give the user three meaningful gradient cuts where the prior three tiers gave two, and the Very Low tier carries the meaning that the prior Low bucket lost: "this is essentially a guess, not an estimate." The 0.50 boundary between Moderate and Low is chosen as the midpoint between the new Very Low threshold (0.20) and the High threshold (0.75); it gives Moderate enough breadth to land on most reasonable captures while still distinguishing the genuinely degraded ones.
+
+Firing the retake prompt only at the Very Low tier prevents prompt fatigue. Most off-axis captures will land in the Low tier under soft acceptance; if every one of them triggered a modal, users would learn to dismiss it reflexively (and stop noticing when it matters).
+
+### Alternatives Considered
+
+- **Keep three tiers, widen Low to cover 0.01–0.60**: Rejected — collapses a meal at σ = 0.03 and a meal at σ = 0.55 into the same visual treatment, hiding the gradient that justifies persisting σ in the first place.
+- **Five tiers including a separate Floor tier (σ < 0.05)**: Rejected as over-design — at two-decimal display precision the user cannot meaningfully distinguish a Floor tier from a Very Low tier. Decision 45 already lowered the ε floor to 0.01, so the bottom of the Very Low tier carries the "close to zero" meaning naturally.
+- **Keep the retake prompt at σ < 0.60**: Rejected — under tilt tolerance this fires on the majority of captures, producing prompt fatigue.
+
+### Consequences
+
+**Positive:**
+- The pill conveys the gradient that the soft-acceptance regime produces; users see "this was a careful capture" (High) versus "this was a rough capture" (Low) versus "this is essentially a guess" (Very Low).
+- The retake prompt has signal value again — when it fires, the user knows something is meaningfully wrong.
+- A meal at the Very Low tier still saves to history (no data loss); the user can come back and inspect why later via the persisted Δθ values.
+
+**Negative:**
+- `ConfidencePill` shared component and its tests need updating from three to four labels.
+- Decision 8's 0.60 / 0.75 boundaries are superseded; any documentation referencing those specific numbers needs updating.
+- The 0.50 Moderate/Low boundary is a UI-spec invention (the same status as Decision 8's old 0.75 boundary), not data-driven; Phase 2 user feedback may revise it.
+
+---
+
+## Decision 18: Shutter always armed when capture is otherwise possible
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+Prior UI Req 7.2 enabled the shutter only when the tilt indicator was in range (§2.4) AND the working-distance gate was satisfied AND no estimation was in flight. Research Decision 43 removes the nadir hard angular gate; tilt no longer has an "in-range" / "out-of-range" state to gate on.
+
+### Decision
+
+The shutter SHALL be enabled when:
+- no `Pipeline.estimate` is in flight (existing constraint), AND
+- ARSession tracking is `.normal` (existing constraint), AND
+- the working-distance gate is satisfied (existing constraint, unchanged per research Decision 43 group B), AND
+- the oblique-stage hard cap (research Req 3.3, |measured − 25°| ≤ 30°) is satisfied — but only when the active stage is the oblique view of a two-view capture.
+
+Tilt no longer affects shutter arming for the nadir stage at all. UI Req 2.4 (the prior "disable shutter while tilt out of range" requirement) is removed.
+
+### Rationale
+
+The two remaining tilt-driven constraints — the oblique-stage hard cap and the tracking-normal gate — are not really tilt constraints in the user-precision sense. The oblique hard cap exists because the SfS algorithm produces silently-wrong volumes far outside the Dehais 2017 envelope (research Decision 43); the tracking gate exists because relative pose between views is undefined when tracking drops (research Req 3.7).
+
+Always arming the nadir shutter removes the principal usability blocker from `nextup.md`. The user can now capture in moments of unsteadiness; the confidence pill carries the consequence.
+
+### Alternatives Considered
+
+- **Two-state armed (encouraged vs warning)**: Rejected as additional UX surface without changing the underlying behaviour. The continuous tilt readout from Decision 19 already communicates the impending confidence penalty before the user taps.
+- **Long-press required for low-σ_tilt captures**: Rejected for discoverability — users would not know they can long-press, and the friction would re-introduce the very gate that Decision 43 removes.
+
+### Consequences
+
+**Positive:**
+- Most usability blocker from `nextup.md` is addressed at the UI layer; a t1dm user with shaking hands can always capture.
+- Removes a UI state-machine branch (tilt-in-range / out-of-range), simplifying `CaptureFlowModel.GatingSnapshot` and the tests.
+
+**Negative:**
+- Some users may capture more low-confidence meals than intended; the four-tier pill from Decision 17 is the only feedback mechanism telling them so.
+- The legacy `LiveIndicatorBadge` tilt sub-element's green/white colour treatment (per `design-system/pages/photo-tab.md`) becomes inconsistent with the no-gate behaviour; Decision 19 supersedes it.
+
+---
+
+## Decision 19: Continuous tilt indicator — Δθ + live σ_tilt%, no binary state
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+The prior tilt indicator (UI Reqs 2.1–2.4, `design-system/pages/photo-tab.md` Indicator badge spec) used a binary colour state: green tint when the device tilt was within ±5° of the target axis, white otherwise. Under research Decision 43 this binary state has no meaning — there is no in-range / out-of-range distinction at the nadir stage, and at the oblique stage the only hard cap is at ±30° from 25°, well outside what a binary colour state would meaningfully encode.
+
+### Decision
+
+Replace the binary green/white tilt state with a continuous greyscale readout. The tilt sub-element of the indicator chip SHALL render two values per stage:
+
+- `Δθ` in degrees (e.g. `17°`), monospaced, white.
+- σ_tilt = cos(Δθ) as a percentage (e.g. `97%`), monospaced, white, slightly smaller weight.
+
+No green tint. No red tint. The chip auto-hide rule (UI Req 20.4) is re-anchored from "in-range tilt" to "σ_tilt > 0.95 (≈Δθ < 18°) for 5 seconds AND other indicators in-range" — captures within roughly the old ±5° gate continue to auto-hide as before, but the colour change is gone.
+
+### Rationale
+
+The continuous readout teaches the user the trade-off they are making at the moment of capture: they see directly that a 17° tilt costs them about 3% confidence, and they can decide in real time whether to steady the device further or accept the cost. The greyscale treatment communicates that there is no longer a "wrong" state — every angle produces a usable capture; the user is choosing where on the confidence curve to land.
+
+Showing both Δθ and σ_tilt is redundant by design: Δθ is the actionable lever (the user can adjust it), σ_tilt is the consequence (what they will see on the result view). The mapping between them — cos(Δθ) — is gentle enough that the user cannot intuit it from Δθ alone, especially in the 10°–30° range where σ_tilt remains surprisingly high.
+
+### Alternatives Considered
+
+- **Binary but never blocks shutter**: Rejected — keeps the colour-coded UI familiar but encodes a distinction (in/out of ±5°) that no longer has any consequence. Users would reasonably ask "what does the colour mean?" and the only honest answer would be "nothing actionable, just history."
+- **Three-band traffic light (green ≤5°, amber 5°–15°, red >15°)**: Rejected — re-introduces discrete states under a continuous regime and obscures the actual σ_tilt curve. The bands would also have to be re-justified at each release; the cos curve is justified once and forever.
+
+### Consequences
+
+**Positive:**
+- The user sees a direct, live preview of the σ_tilt sub-confidence that will appear on the result view — no surprise after capture.
+- The chip auto-hide rule keeps the indicator out of the way for clean captures while always re-showing it when the user is degrading the capture.
+- Greyscale treatment is consistent with the "clean capture aesthetic" theme established in Decision 16.
+
+**Negative:**
+- `LiveIndicatorBadge` and `design-system/pages/photo-tab.md` need updating; the green/white tilt treatment is superseded.
+- Cognitive load per capture rises slightly for users who could meet ±5° easily — they now read two numbers where they previously read a colour. The auto-hide rule mitigates this for steady users by dismissing the chip entirely after 5 s.
+- The display of σ_tilt as a percentage in the live preview may invite the user to confuse it with σ_meal — they look similar in the UI. The result-view pill remains the canonical σ_meal surface; only the live capture chip shows σ_tilt.
 
 ---

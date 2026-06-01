@@ -251,10 +251,10 @@ SwiftUI overlay (`.overlay(alignment: .top)`) on the capture view. Shows the `Es
 
 Pushed onto `NavigationStack` via `.navigationDestination(for: MealRecord.self)`. `MealRecord` is already `Hashable` (shipped). View body:
 
-- **Total carbs** (large numeric, accent colour): `"\(Int(record.macros.totalCarbsG.rounded())) g"`
-- **Confidence pill**: three labels keyed off `record.confidence.sigmaMeal` per requirements §9.2 thresholds. Pill background uses three discrete colour tokens (Decision 8: 0.75 / 0.60 thresholds; pill colours defined in `Colors.swift`).
-- **Uncertain-estimate prompt** (conditional on `sigmaMeal < 0.60`): a one-line text + a "Retake" button that pops the result view and resets `state` to `.ready`.
-- **"New capture" button**: pops the result view.
+- **Total carbs** (large numeric, accent colour): `"\(Int(record.macros.totalCarbsG.rounded())) g"`. When `sigmaMeal < 0.20`, append a "(rough estimate)" suffix in `caption` weight beneath the numeric.
+- **Confidence pill**: four labels keyed off `record.confidence.sigmaMeal` per requirements §9.2 thresholds (Decision 17 supersedes Decision 8). Pill background uses four discrete colour tokens defined in `Colors.swift`.
+- **Very-low-confidence surface** (conditional on `sigmaMeal < 0.20`, per requirements §9.3): a two-line `caption` block reading "This estimate may be wrong by orders of magnitude. Capture was at \(Δθ)° from target." (Δθ pulled from `record.confidence.deltaThetaNadirDeg` for single-view; `max(deltaThetaNadirDeg, deltaThetaObliqueDeg ?? 0)` for two-view), followed by a row of two side-by-side buttons: "Retake" (pops back, resets `state` to `.ready`) and "Keep as-is" (dismisses the surface but leaves the result view; the meal is already persisted).
+- **"New capture" button**: pops the result view. Hidden when presented from the Meals tab.
 
 No per-class breakdown, no clinical macros (requirements §9.5, Decision 3).
 
@@ -317,8 +317,11 @@ extension Color {
     static let confidenceHigh    = medataAccent
     static let confidenceModerate = Color.orange
     static let confidenceLow     = Color.red
+    static let confidenceVeryLow = Color(white: 0.35)        // greyscale: "essentially worthless"
 }
 ```
+
+The four-tier scheme replaces the three-tier scheme from Decision 8. `confidenceVeryLow` is intentionally desaturated rather than red — red was used at the "Low" tier already, and the Very Low tier needs to read as "use this with skepticism" rather than as "alarm." The pill renders monochrome at this tier so the user notices the surrounding inline explanation copy rather than the pill colour. See UI `decision_log.md` Decision 17.
 
 Applied to the SwiftUI scene via `.tint(.medataAccent)` on `WindowGroup`'s root view (requirements §15.1).
 

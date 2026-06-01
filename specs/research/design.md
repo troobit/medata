@@ -477,16 +477,21 @@ public struct MacroResult: Sendable, Codable {
 }
 
 public struct GeomSubconfidences: Sendable, Codable {
-    public let sigmaView: Float                  // 0.60..1.00 per Req 13.2 lookup
+    public let sigmaView: Float                  // 0.30..1.00 per Req 13.2 lookup
     public let sigmaPlane: Float                 // exp(-r_planefit_mm/5) · iter_penalty
     public let sigmaOccl: Float                  // 1.00 unless single-view inter-class occlusion
+    public let sigmaTilt: Float                  // cos(Δθ_capture), floored at ε per Req 13.2 / Decision 44
+    // Legacy meal records persisted before sigmaTilt was added decode it as 1.0 via a
+    // Codable default; see §4.4 and Req 13.4.
 }
 
 public struct ConfidenceResult: Sendable, Codable {
-    public let sigmaMeal: Float                  // floored at ε = 0.05 per [13.1]
+    public let sigmaMeal: Float                  // floored at ε = 0.01 per [13.1] / Decision 45
     public let sigmaScale: Float
     public let sigmaSeg: Float
-    public let sigmaGeom: GeomSubconfidences     // view, plane, occl factors per [13.2]
+    public let sigmaGeom: GeomSubconfidences     // view, plane, occl, tilt factors per [13.2]
+    public let deltaThetaNadirDeg: Float         // per-stage angular error, Req 13.4
+    public let deltaThetaObliqueDeg: Float?      // nil for single-view path
 }
 
 public struct UserCorrection: Sendable, Codable {
@@ -540,7 +545,7 @@ public protocol PersistenceStore {
 }
 ```
 
-Mass and carbohydrate formulas in `Macros` follow [12] verbatim and are unit-tested against fixed input vectors. `Confidence` is the geometric-mean implementation with the ε floor and the three-factor σ_geom decomposition. `Persistence` writes all tabular fields to SQLite and all binary artefacts (image, depth, mask) to a per-meal directory, never as SQLite blobs.
+Mass and carbohydrate formulas in `Macros` follow [12] verbatim and are unit-tested against fixed input vectors. `Confidence` is the geometric-mean implementation with the ε = 0.01 floor (Decision 45) and the four-factor σ_geom decomposition `σ_view · σ_plane · σ_occl · σ_tilt` (Decisions 43, 44). `Persistence` writes all tabular fields to SQLite and all binary artefacts (image, depth, mask) to a per-meal directory, never as SQLite blobs. Legacy meal records persisted before the `sigmaTilt` field was added decode it as `1.0` via a Codable default, so historical σ_meal values remain unchanged on read (Req 13.4).
 
 ### 3.9 Memory lifecycle (per-stage allocation / free)
 
@@ -707,8 +712,8 @@ Every type that crosses the pipeline boundary in §3 is `Codable` to JSON and ha
 | `ClinicalMacros` | `ClinicalMacros.proto` | `energy_kj`, `protein_g`, `fat_g`, `fibre_g` (computed but not displayed in v1) |
 | `PerClassMacros` | `PerClassMacros.proto` | `volume_cm3`, `mass_g`, `carbs_g`, `density_source`, `coefficient_source`, `beta_used` |
 | `MacroResult` | `MacroResult.proto` | `total_carbs_g`, `per_class: map<string, PerClassMacros>`, `clinical_totals: ClinicalMacros` |
-| `GeomSubconfidences` | `GeomSubconfidences.proto` | `sigma_view`, `sigma_plane`, `sigma_occl` |
-| `ConfidenceResult` | `ConfidenceResult.proto` | `sigma_meal`, `sigma_scale`, `sigma_seg`, `sigma_geom: GeomSubconfidences` |
+| `GeomSubconfidences` | `GeomSubconfidences.proto` | `sigma_view`, `sigma_plane`, `sigma_occl`, `sigma_tilt` |
+| `ConfidenceResult` | `ConfidenceResult.proto` | `sigma_meal`, `sigma_scale`, `sigma_seg`, `sigma_geom: GeomSubconfidences`, `delta_theta_nadir_deg`, `delta_theta_oblique_deg` (optional) |
 | `RawFrameMetadata` | `RawFrameMetadata.proto` | Per-view artefact filenames + image dims (no bytes; bytes live on disk) |
 | `UserCorrection` | `UserCorrection.proto` | `corrected_total_carbs_g`, `corrected_per_class: map<string,float>`, `note`, `created_at_ms` |
 | `MealArtefact` | `MealArtefact.proto` | `kind`, `view_id`, `filename`, `bytes_size`, `sha256` |
@@ -730,12 +735,12 @@ The Swift types in §3 are typealiases or thin wrappers over the generated proto
 | `degenerateCardPose` | §6.1 step 5 | Both-sign-of-λ-behind-camera or near-collinear quad. Surface "card not recognised" |
 | `cardTooOblique` | §6.1 step 7 (edge case 1) | Card seen >78° edge-on. Surface "place card flat in view" |
 | `lidarFitDegenerate` | §6.2 step 3 | Plane-fit covariance singular. Refuse, "place on flat surface" |
-| `lidarFitResidualTooHigh` | §6.2 step 5 / [4.5] | Residual >8 mm. Refuse, "place on flat surface" |
+| `lidarFitResidualTooHigh` | §6.2 step 5 / [4.5] | Residual >20 mm (raised from 8 mm per Decision 46). Refuse, "place on flat surface". Residuals in (8, 20] mm accept; σ_plane = exp(−r/5) carries the degradation. |
 | `iterationDiverged` | §6.3 / [4.3] | Card-only fit best-of-5 residual >1.5 mm. Refuse, "include card in nadir view" |
 | `noScaleAvailable` | §6.4 / [7.5] | Neither card nor LiDAR scale. Refuse with message |
 | `noFoodPixels` | §6.5 step 12 / [13.1] (edge case 3) | Zero food pixels after silhouette test. Aligned with `(1−q[bg]) ≥ τ_sil`, NOT argmax=bg |
 | `noFoodVolumeRecovered` | §6.6 / §6.7 (edge case 2) | All classes below 1 cm³ post-correction |
-| `lidarCoverageTooLow` | §6.7 / [3.5], [13.2] (edge case 6) | Single-view: any class with <50% LiDAR coverage. Surface "retake using two-view" |
+| `lidarCoverageTooLow` | §6.7 / [3.5], [13.2] (edge case 6) | Single-view: any class with <30% LiDAR coverage (relaxed from 50% per Decision 47). Surface "retake using two-view". 30–50% coverage accepts; σ_view = 0.30 carries the degradation. |
 | Class in only one view (two-view) | §6.6 single-class fallback / [10.2] (edge case 4) | Estimate with degraded one-silhouette extrusion + σ_view = 0.75 |
 | Class is `unsupported_liquid` only | [8.7] | Estimate other classes; show liquid disclaimer |
 | All food pixels are `unknown_food` | [8.6] | Compute volume; report 0-confidence "unknown carbs" |
@@ -1147,21 +1152,33 @@ The $1/\cos^3\theta_p$ correction is geometrically required and is **not** absor
 ### 6.8 Confidence combination (Req 13)
 
 ```
-ε := 0.05                                                // §6.0 floor
+ε := 0.01                                                // §6.0 floor (Decision 45)
 
 # Sub-factor computation.
-σ_geom_view  := lookup table per [13.2]                  // 0.60..1.00
+σ_geom_view  := lookup table per [13.2]                  // 0.30..1.00
 σ_geom_plane := exp(−r_planefit_mm / 5)                  // r_0 = 5 mm
 σ_geom_plane *= (cardOnlyPath AND iterations == 5) ? 0.9 : 1.0   // best-of-5 fallback or LiDAR
 σ_geom_occl  := (capturePath == single_view_lidar AND interClassOcclusionDetected) ? 0.80 : 1.00
 
-# σ_geom is the product of the three sub-factors (not floored individually; the FINAL
+# Per-stage angular error (Req 3.2 / 3.3). Target axes are vertical (nadir) and 25° from
+# vertical (oblique). Δθ in radians for cos(), degrees on the wire.
+Δθ_nadir   := angle_between(optical_axis_nadir,   −gravity)            // 0 if perfectly nadir
+if capturePath == two_view_sfs:
+    Δθ_oblique := |angle_between(optical_axis_oblique, −gravity) − 25°|
+    Δθ_capture := max(Δθ_nadir, Δθ_oblique)              // worse of the two views
+else:
+    Δθ_capture := Δθ_nadir
+
+σ_geom_tilt  := max(ε, cos(Δθ_capture))                  // Decision 44
+
+# σ_geom is the product of the four sub-factors (not floored individually; the FINAL
 # σ_meal computation floors the per-input value).
-σ_geom := σ_geom_view * σ_geom_plane * σ_geom_occl
+σ_geom := σ_geom_view * σ_geom_plane * σ_geom_occl * σ_geom_tilt
 
 # Floor and combine. Each of the three TOP-LEVEL inputs (σ_s, σ_seg, σ_geom) is floored
 # separately at ε. The sub-factors of σ_geom are not floored individually — they are
-# real-valued [0, 1] multipliers and floor only at the σ_geom aggregate level.
+# real-valued [0, 1] multipliers and floor only at the σ_geom aggregate level (with the
+# exception of σ_tilt which floors at the sub-factor level so cos(90°)=0 cannot zero σ_geom).
 function sigma_meal(σ_s, σ_seg, σ_geom):
     σ_s_tilde     := max(ε, σ_s)
     σ_seg_tilde   := max(ε, σ_seg)
@@ -1169,7 +1186,8 @@ function sigma_meal(σ_s, σ_seg, σ_geom):
     return (σ_s_tilde * σ_seg_tilde * σ_geom_tilde) ^ (1/3)
 
 # Bounds: σ_meal ∈ [ε, 1] always.
-# Threshold for "uncertain estimate" UI prompt (Req 13.5): σ_meal < 0.6.
+# Threshold for "Very Low" UI affordance (Req 13.5): σ_meal < 0.2  (lowered from 0.6 per Decision 43).
+# Legacy records without sigma_tilt decode it as 1.0 (identity); see Req 13.4.
 ```
 
 `interClassOcclusionDetected` is computed once per nadir frame as a single-pass 4-neighbour scan:

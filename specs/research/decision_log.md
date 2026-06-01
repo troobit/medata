@@ -1467,3 +1467,210 @@ Phasing the delivery (Phase 1 RUNNING DEVICE → Phase 2 UI/UX → Phase 3 data 
 
 ---
 
+## Decision 43: Tilt-tolerant capture — degrade confidence rather than refuse
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+The v1 nadir gate (Req 3.2) and oblique gate (Req 3.3) refused capture outside ±5° of the target axis. In real-world use by t1dm users, who may be unsteady or unable to make fine motor adjustments, this hard gate frequently makes the app unusable in the moments it is most needed — at mealtimes, on the move, one-handed.
+
+The user's framing (`nextup.md`, 2026-06-01): the application MUST NOT aim for perfect. Any programmatic carbohydrate estimate — even one wrong by orders of magnitude — is preferable to no estimate, because the alternative for a t1dm user is unaided guessing. The medata app provides the baseline and the ability to improve that baseline over time. Existing solutions are absent, paid, or do not use the available research; the goal is to fill that gap with a deterministic estimate annotated with honest confidence.
+
+This philosophy directly conflicts with several refusal paths in `requirements.md` and the design's refusal table.
+
+### Decision
+
+Replace the ±5° hard angular gate at nadir with a soft-acceptance regime that always accepts a capture and reports the angular degradation via a new sub-confidence $\sigma_{\text{tilt}}$ (Decision 44). Retain a wider gate at the oblique view (target 25°, accept ±30° from target) because the structure-from-silhouette algorithm degenerates badly far from the literature envelope. Soften pipeline refusals where the algorithm produces noisy-but-defined output (plane-fit residual, single-view LiDAR coverage); retain refusals where the algorithm is mathematically undefined (no scale, no food pixels, tracking dropout, plane-fit covariance singular, card-only iteration diverged).
+
+The result-view UI replaces the single "uncertain estimate" threshold (was σ < 0.6) with a four-tier confidence pill (High / Moderate / Low / Very Low) and only prompts retake at the Very Low tier (σ < 0.2). The Very Low surface includes an inline explanation that the estimate may be wrong by orders of magnitude.
+
+The ε floor on σ_meal is lowered from 0.05 to 0.01 so the displayed confidence can visibly approach zero when the deterministic process degrades severely (Decision 45).
+
+### Rationale
+
+The four-tier philosophy distinguishes degraded estimates (math runs, output is noisy) from undefined estimates (math doesn't run, no output exists). The user's framing only applies to the former: "close to 0 confidence if it cannot follow deterministic process" implicitly presumes the process *ran*. Where there is literally no metric scale, no food pixels, or no defined relative pose between two views, there are no numbers to degrade — the refusal is preserved.
+
+A cosine curve for $\sigma_{\text{tilt}} = \cos(\Delta\theta)$ is geometrically motivated: a tilted camera's nadir height-field footprint scales by $\cos(\Delta\theta)$, so the confidence penalty tracks the actual error mechanism. The curve is gentle near the target (at 15° off, σ_tilt ≈ 0.97; at 30° off, σ_tilt ≈ 0.87) and falls steeply at extreme tilt, matching the philosophy of "encourage capture, communicate degradation honestly."
+
+### Alternatives Considered
+
+- **Keep the ±5° hard gate, surface a softer in-UI warning**: Rejected — the hard gate is the principal usability blocker that motivates this change. A warning still permits zero capture for users who cannot achieve ±5°.
+- **Soft acceptance everywhere including oblique (no hard cap)**: Rejected for the oblique view — the structure-from-silhouette algorithm's correctness depends on the camera being within roughly the Dehais 2017 §III.B 20°–30° envelope. A capture at 80° (near horizontal) produces a visual hull with no top-down information; the algorithm would produce a number that is silently wrong rather than degraded.
+- **Always produce an estimate (fabricate scale, fabricate plane, fabricate food region)**: Rejected — beyond the framing of nextup.md. Producing numbers when the deterministic process has no input is not a degraded estimate; it is a hallucination, the same failure mode that motivated Decision 1 (rejecting the LLM approach).
+
+### Consequences
+
+**Positive:**
+- The application becomes usable for users who cannot reliably hold the device within ±5° of vertical — the population it is most intended to help.
+- Confidence reporting becomes the principal honesty signal rather than a hidden secondary number; users see directly when an estimate is rough.
+- The four-tier pill communicates a gradient that the prior three-tier scheme collapsed into a single "Low" bucket.
+
+**Negative:**
+- Most off-axis captures will land in the Low or Very Low tier under soft acceptance. Users seeing "Low confidence" on routine captures may either learn to ignore it (if it is always there) or learn to angle the camera better (the intended outcome). UX iteration in Phase 2 needs to monitor for tier-banner fatigue.
+- The simpler "in-range / out-of-range" UI signalling at ±5° is replaced by a continuous readout that requires reading degrees and a percentage; cognitive load per capture rises slightly for users who could achieve ±5° easily before.
+- Phase 1 records persisted before this change carry no σ_tilt sub-confidence. Re-derivation defaults σ_tilt = 1.0 (the identity multiplier) so historical confidences are not retroactively penalised; this is a deliberate choice to preserve the meaning of pre-existing records (Req 13.4).
+
+### Impact
+
+- `requirements.md`: Req 3.1 (tilt indicator now shows σ_tilt preview), Req 3.2 (gate removed), Req 3.3 (gate softened to ±30° from 25°), Req 4.5 (plane-fit threshold 8 → 20 mm), Req 13.1 (ε floor 0.05 → 0.01, no-food refusal explicitly retained), Req 13.2 (σ_geom gains σ_tilt as 4th factor; σ_view extended for 30–50% coverage; LiDAR coverage refusal 50 → 30%), Req 13.4 (persist σ_tilt + per-stage angular errors; legacy default = 1.0), Req 13.5 (threshold 0.6 → 0.2; inline explanation requirement added).
+- `design.md`: `GeomSubconfidences` adds `sigmaTilt`; `ConfidenceResult` adds per-stage Δθ fields; §6.8 pseudocode adds σ_tilt computation; refusal table updates `lidarFitResidualTooHigh` and `lidarCoverageTooLow` thresholds; §3.8 narrative updated.
+- Downstream UI spec: tier scheme change (Decision 17 in `specs/ui/decision_log.md`), shutter always armed (Decision 18), continuous tilt indicator (Decision 19).
+- Phase 1 device build immediately exercises the new code path (the dev-stub confidence pipeline runs end-to-end). Existing meal records persisted under Phase 1 may need re-derivation with σ_tilt = 1.0 default; the JSON-BLOB decoder absorbs this transparently per §4.4.
+
+---
+
+## Decision 44: σ_tilt placement and curve — fourth factor of σ_geom via cosine
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+Decision 43 introduces an angular-error confidence signal. The signal needs (a) a location in the existing σ_meal composition and (b) a mathematical form mapping the angular error Δθ to a [0, 1] multiplier.
+
+### Decision
+
+Add σ_tilt as a fourth, independent factor of σ_geom:
+$$\sigma_{\text{geom}} = \sigma_{\text{view}} \cdot \sigma_{\text{plane}} \cdot \sigma_{\text{occl}} \cdot \sigma_{\text{tilt}}$$
+
+Define σ_tilt by a floored cosine of the per-stage angular deviation:
+$$\sigma_{\text{tilt}} = \max(\varepsilon, \cos(\Delta\theta_{\text{capture}}))$$
+
+For the two-view path, Δθ_capture is the worse of the two views' deviations from their respective target axes (nadir and 25° from vertical); for the single-view path, only Δθ_nadir applies.
+
+### Rationale
+
+A new sub-factor of σ_geom keeps angular error separable from view-count (σ_view), plane-fit quality (σ_plane), and inter-class occlusion (σ_occl). When debugging a low σ_meal in a persisted record, the four sub-factors point at four distinct underlying causes; folding σ_tilt into σ_view would conflate "the camera was tilted" with "the LiDAR coverage was poor" and lose diagnostic value.
+
+The cosine curve is geometrically motivated: a tilted nadir camera's projected per-pixel footprint scales by $\cos(\Delta\theta)$ for first-order off-axis projection, so σ_tilt tracks the underlying physical error mechanism rather than being an arbitrary penalty function. The curve is gentle in the normal capture range (cos(5°) = 0.996, cos(15°) = 0.966) and naturally tends to zero at 90° (camera horizontal — no top-down information at all).
+
+The "worse of the two views" aggregation for two-view captures was chosen over averaging because a single severely-tilted view contaminates the structure-from-silhouette visual hull more than two moderately-tilted views; the max function communicates "this capture is only as good as its worst view."
+
+### Alternatives Considered
+
+- **Fold σ_tilt into σ_view**: Rejected — conflates angular-error and coverage failure modes. Debugging "why is σ_view low?" would require parsing capture context that σ_view itself does not carry.
+- **Cosine squared (cos²(Δθ))**: Rejected as overly aggressive — at 15° off, σ_tilt drops to 0.93; at 30° off, 0.75. The first-order projective geometry justifies cos, not cos². The cos² curve would discourage off-axis captures more than the underlying math warrants.
+- **Piecewise linear (1.0 in ±5°; ramp to ε over 5°–45°)**: Rejected — discontinuous at the original ±5° boundary, preserving the artefact of the old hard gate inside the new soft regime.
+- **Exponential exp(−Δθ/20°)**: Rejected — too steep; at 5° off σ_tilt = 0.78, which makes near-ideal captures already look poor.
+- **Per-view σ_tilt averaged rather than max**: Rejected — see Rationale above. The max aggregation is the more honest signal of capture quality.
+
+### Consequences
+
+**Positive:**
+- σ_geom decomposition remains diagnostic; each sub-factor isolates one error mechanism.
+- The cosine curve is documentable from first principles, not from heuristic tuning.
+- Phase 2 UI can show the live cos(Δθ) preview directly in the tilt indicator chip (per Decision 19 in the UI spec) without re-deriving the math.
+
+**Negative:**
+- σ_geom is now a product of four sub-factors rather than three; the spec, the proto, the SQLite re-derivation pseudocode, and the unit tests all gain a third dimension.
+- Persisting per-stage Δθ values (Req 13.4) adds two `Float` fields per meal record. Negligible storage cost (~8 bytes per record) but a real schema change.
+
+---
+
+## Decision 45: Lower ε floor on σ_meal from 0.05 to 0.01
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+The prior ε floor of 0.05 was chosen to keep σ_meal arithmetically away from zero and to avoid a "0% confidence" visual that might be misread as "the app didn't even try." Under the tilt-tolerance regime (Decision 43), σ_meal will routinely land in the 0.01–0.2 range for off-axis or low-coverage captures, and the user's framing explicitly endorses "confidence even close to 0 if it cannot follow deterministic process."
+
+### Decision
+
+Lower ε from 0.05 to 0.01. σ_meal now lies in [0.01, 1]. The floor is still strictly positive to keep the geometric mean numerically well-defined (a literal 0 multiplied through would zero σ_meal silently and lose all gradient information).
+
+### Rationale
+
+A floor of 0.01 preserves arithmetic sanity (no 0 × anything in the geometric mean), preserves the meaning of "σ_meal = floor" as a degenerate signal rather than an algorithm failure, and visibly communicates "this estimate is essentially worthless" to a user who reads "1% confidence" or sees the Very Low tier. The choice of 0.01 over 0.001 is for human readability: confidence numbers rendered to two decimal places (the UI convention) cap meaningfully at 0.01.
+
+### Alternatives Considered
+
+- **Keep ε = 0.05**: Rejected — directly contradicts the user's nextup.md framing that "close to 0 confidence" is acceptable. Leaves a 5% visual floor that misrepresents truly degraded captures.
+- **Drop ε to 0.001**: Rejected as marginal — visually identical to 0.01 at two-decimal display precision; offers no additional honesty.
+- **Remove the floor entirely (ε = 0)**: Rejected — a single zero-valued upstream sub-confidence would zero σ_meal, removing diagnostic value. The ε floor exists precisely to keep the multiplicative chain numerically informative when one input degenerates.
+
+### Consequences
+
+**Positive:**
+- The Very Low tier UI surface (σ < 0.2 per Req 13.5) can render values down to 1% without hitting an artificial floor.
+- σ_meal histograms across the meal corpus will spread further into the low end, making "this capture was bad" more visible to the user reviewing their history.
+
+**Negative:**
+- Existing tests that assert ε = 0.05 must be updated.
+- A meal record persisted with σ_meal = 0.05 under the old floor is indistinguishable from a meal that genuinely scored 0.05 under the new floor. This is acceptable because no users are in scope (pre-v1), but worth noting for any test fixtures captured during Phase 1.
+
+---
+
+## Decision 46: Soften LiDAR plane-fit refusal threshold from 8 mm to 20 mm
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+Req 4.5 / design refusal table previously refused capture when the LiDAR support-plane RANSAC fit residual standard deviation exceeded 8 mm. Under Decision 43's tilt-tolerance philosophy, this refusal needs to be re-examined: is an 8-mm-residual plane fit "math is undefined" or "math is noisy"?
+
+The σ_plane formula already exists: $\sigma_{\text{plane}} = \exp(-r / r_0)$ with $r_0 = 5$ mm. At r = 8 mm, σ_plane = 0.20 — perfectly usable as a degradation signal. At r = 20 mm, σ_plane = 0.018, approaching the new ε floor. At r > 20 mm, the support plane is so noisy that the height-field integration and visual-hull closure produce volumes dominated by noise rather than food geometry — qualitatively different from "noisy but valid."
+
+### Decision
+
+Raise the `lidarFitResidualTooHigh` refusal threshold from 8 mm to 20 mm. Residuals in (8, 20] mm accept; σ_plane carries the degradation. The other two algorithmic failures in the same code path (covariance singular → `lidarFitDegenerate`; zero depth points in food region) remain hard refusals because they represent undefined math, not noisy math.
+
+### Rationale
+
+The σ_plane formula was always continuous; the 8 mm threshold was an artefact of "this is too noisy to be useful" rather than "the algorithm has no defined output." Decision 43 reframes that judgement: a noisy plane fit with σ_plane = 0.02 produces a confidence-annotated estimate that the user can choose to accept or retake. Aligning the refusal threshold with where the math actually breaks down (where the residual exceeds the height field of the food itself, ~20 mm for typical meals) is more honest than the prior conservative cutoff.
+
+### Alternatives Considered
+
+- **Keep the 8 mm refusal**: Rejected — out of step with the broader tilt-tolerance reframing. The σ_plane formula already handles the degradation; the explicit refusal was redundant.
+- **Remove the refusal entirely and let σ_plane → ε**: Rejected — at r > 20 mm the plane fit is no longer a plane fit in any useful sense; the lower-bound voxel-carving constraint becomes arbitrary, producing visual hulls that intersect random volumes. A bounded cutoff preserves the algorithm's correctness envelope.
+
+### Consequences
+
+**Positive:**
+- Captures on slightly bowed or non-flat surfaces (a wooden cutting board, a placemat with texture) now produce estimates rather than refusals.
+- σ_plane already encodes the degradation; no new persisted field is required.
+
+**Negative:**
+- Captures with r in (8, 20] will routinely show low σ_plane and contribute a low σ_geom, lowering σ_meal into the Low or Very Low tier. Users may see more low-confidence estimates than they did under the old refusal threshold.
+
+---
+
+## Decision 47: Relax single-view LiDAR coverage refusal from 50% to 30%
+
+**Date**: 2026-06-01
+**Status**: accepted
+
+### Context
+
+Req 13.2 previously refused single-view LiDAR captures when valid depth covered less than 50% of the food region. Under Decision 43's philosophy, capturing with degraded coverage and degraded confidence is preferable to refusing capture.
+
+The σ_view lookup table provides graceful degradation: ≥80% → 0.90, 50–80% → 0.60. Extending it down to 30% requires defining the new sub-factor value.
+
+### Decision
+
+Lower the `lidarCoverageTooLow` refusal threshold from 50% to 30%. Extend the σ_view lookup table for the single-view path: 30–50% coverage → σ_view = 0.30. Below 30%, the system continues to refuse capture because at that level the height-field integration is interpolating across enormous gaps and the output is dominated by interpolation artefacts rather than food geometry.
+
+### Rationale
+
+At 30% coverage, the LiDAR provides a real anchor for the height-field integration over roughly a third of the food region; the remaining 70% is filled by linear interpolation across known supports, which gives an estimate that is wrong by a known mechanism (interpolation smoothing) rather than wrong by an unknown mechanism. σ_view = 0.30 makes that degradation visible. Below 30%, the LiDAR coverage is sparse enough that no continuous depth surface can be reconstructed even with interpolation; the estimate would be dominated by which 30% of the food happened to be in coverage, not by the food itself.
+
+### Alternatives Considered
+
+- **Remove the refusal entirely; σ_view = linear in coverage_fraction**: Rejected — at 5% coverage the algorithm is essentially extrapolating from a single point. The cleanest math (linear σ_view) doesn't reflect the real cliff in algorithmic correctness somewhere below 30%.
+- **Keep the 50% refusal threshold**: Rejected — out of step with the tilt-tolerance reframing. The σ_view degradation is already in the lookup table; the refusal was an additional and now-redundant cutoff.
+
+### Consequences
+
+**Positive:**
+- Single-view captures of meals where the LiDAR view is partially occluded (a fork blocking part of the plate, food at the edge of frame) now produce estimates rather than refusals.
+
+**Negative:**
+- Routine low-coverage captures will land in Low or Very Low tier; the same user-fatigue concern as Decision 43 applies here.
+- The 30–50% σ_view value (0.30) was chosen by extrapolation from the 50–80% (0.60) and ≥80% (0.90) anchors; it has no calibration data behind it. Phase 3 harness work may revisit it once real meals at intermediate coverage are available.
+
+---
+

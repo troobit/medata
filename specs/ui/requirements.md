@@ -41,14 +41,13 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 ### 2. Tilt indicator
 
-**User Story:** As a user, I want to know how level the camera is, so that I can hold it correctly before tapping the shutter.
+**User Story:** As a user, I want to see how much my camera tilt will reduce my estimate's accuracy, so that I can decide whether to steady the device or accept the trade-off and capture now.
 
 **Acceptance Criteria:**
 
-1. <a name="2.1"></a>The capture view SHALL display the current tilt angle in degrees, updated at the rate `CaptureFlowDelegate.didUpdateTilt(angleDegrees:)` publishes.  
-2. <a name="2.2"></a>WHEN the active capture stage targets nadir AND the device tilt is within ±5° of vertical (research Req 3.2), THEN the indicator SHALL render in an in-range state visually distinct from the out-of-range state.  
-3. <a name="2.3"></a>WHEN the active capture stage targets oblique AND the device tilt is within ±5° of 25° from vertical (research Req 3.3), THEN the indicator SHALL render in the in-range state.  
-4. <a name="2.4"></a>The shutter (§7) SHALL be disabled while the tilt indicator is out of range.  
+1. <a name="2.1"></a>The capture view SHALL display the current per-stage angular error Δθ in degrees AND the live σ_tilt = cos(Δθ) value as a percentage, updated at the rate `CaptureFlowDelegate.didUpdateTilt(angleDegrees:)` publishes. The values are informational only — the shutter (§7) is no longer gated on tilt (research Req 3.2 / Decision 43; UI `decision_log.md` Decision 19).
+2. <a name="2.2"></a>The tilt readout SHALL NOT use a binary in-range / out-of-range visual treatment. Per UI `decision_log.md` Decision 19 the indicator SHALL be a continuous greyscale readout; the prior ±5° colour-coded state is superseded.
+3. <a name="2.3"></a>WHEN the active capture stage targets oblique AND |measured − 25°| > 30° (research Req 3.3), the capture view SHALL surface a "tilt closer to 25°" inline message and SHALL block the shutter for that stage only. This is the only tilt-driven shutter gate that remains.
 
 ### 3. Working-distance gate
 
@@ -101,7 +100,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 **Acceptance Criteria:**
 
 1. <a name="7.1"></a>The capture view SHALL contain exactly one shutter control whose primary action triggers a frame capture for the current stage.  
-2. <a name="7.2"></a>The shutter SHALL be enabled only when the tilt indicator is in range (§2) AND the working-distance gate is satisfied (§3) AND no estimation is in flight (§8).  
+2. <a name="7.2"></a>The shutter SHALL be enabled when the working-distance gate is satisfied (§3) AND no estimation is in flight (§8) AND ARSession tracking is normal AND the oblique-stage hard cap from §2.3 is satisfied (when applicable). Tilt no longer affects shutter arming (research Req 3.2 / Decision 43; UI `decision_log.md` Decision 18).
 3. <a name="7.3"></a>WHEN the shutter is disabled, THEN its visual state SHALL communicate disablement without surfacing a separate error message.  
 4. <a name="7.4"></a>The shutter SHALL ignore any subsequent tap until the in-progress capture's outcome is observable (next-view prompt, busy state, or refusal banner). No frame SHALL be captured twice from a rapid double-tap.  
 
@@ -122,8 +121,8 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 **Acceptance Criteria:**
 
 1. <a name="9.1"></a>WHEN `Pipeline.estimate(_:)` completes successfully, THEN the system SHALL navigate to a result view showing the total meal carbohydrates in grams rounded to 1 g (research Req 12.4).  
-2. <a name="9.2"></a>The result view SHALL display the meal's `σ_meal` confidence as a labelled pill with three discrete states: "High" (σ ≥ 0.75), "Moderate" (0.60 ≤ σ < 0.75), "Low" (σ < 0.60). The 0.60 boundary aligns with research Req 13.5's uncertain-estimate threshold; the 0.75 boundary is documented in `decision_log.md` Decision 8.  
-3. <a name="9.3"></a>WHEN `σ_meal < 0.60`, THEN the result view SHALL display an uncertain-estimate prompt offering the user a control to retake the photograph (research Req 13.5; the "manually correct" branch of Req 13.5 is out of scope per the Non-Goals section).  
+2. <a name="9.2"></a>The result view SHALL display the meal's `σ_meal` confidence as a labelled pill with four discrete states: "High" (σ ≥ 0.75), "Moderate" (0.50 ≤ σ < 0.75), "Low" (0.20 ≤ σ < 0.50), "Very Low" (σ < 0.20). The 0.20 boundary aligns with the revised research Req 13.5 threshold (research Decision 43); the other boundaries are documented in UI `decision_log.md` Decision 17 (supersedes Decision 8).
+3. <a name="9.3"></a>WHEN `σ_meal < 0.20`, THEN the result view SHALL display an inline explanation that the estimate may be wrong by orders of magnitude AND SHALL surface the per-stage angular error Δθ that contributed to the low confidence, alongside a "Retake" control and a "Keep as-is" control (research Req 13.5; the "manually correct" branch is out of scope per the Non-Goals section).
 4. <a name="9.4"></a>The result view SHALL provide a control that returns the user to a fresh capture view, ready to capture a new meal.  
 5. <a name="9.5"></a>The result view SHALL NOT display per-class breakdown, clinical macros (energy, protein, fat, fibre), or any persistence-layer fields beyond the carb total and confidence pill.  
 
@@ -248,7 +247,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 1. <a name="20.1"></a>The visual design SHALL be specified in `design-system/MASTER.md` plus page-specific overrides in `design-system/pages/<page>.md`. The implementation SHALL consume those tokens (colour, type, spacing, motion) verbatim and SHALL NOT introduce parallel values inline in views.
 2. <a name="20.2"></a>The Photo tab and ResultView SHALL use a pure-black (`#000000`) full-bleed background (`captureBackground` token); the AR preview is the content and chrome SHALL NOT compete with it.
 3. <a name="20.3"></a>All Photo-tab chrome (close button, flash toggle, indicator badge, capture-mode pill, shutter) SHALL be flat — no drop shadows, no gradients other than the result-view scrim, no glassmorphism over the AR feed.
-4. <a name="20.4"></a>The Photo tab's live indicators (tilt, distance, LiDAR coverage) SHALL be consolidated into a single chip per `design-system/pages/photo-tab.md` — NOT scattered across three corners. The chip SHALL auto-hide after 5 s of in-range `.ready` state and SHALL re-show on tap or any out-of-range value.
+4. <a name="20.4"></a>The Photo tab's live indicators (tilt, distance, LiDAR coverage) SHALL be consolidated into a single chip per `design-system/pages/photo-tab.md` — NOT scattered across three corners. The chip SHALL auto-hide after 5 s of `.ready` state with σ_tilt > 0.95 (≈Δθ < 18°) AND all other indicators in-range, and SHALL re-show on tap or whenever any indicator leaves its preferred range. The tilt sub-element of the chip SHALL render the continuous Δθ + σ_tilt% readout from §2.1 in greyscale, NOT a binary green/red treatment (UI `decision_log.md` Decision 19).
 5. <a name="20.5"></a>The capture-mode toggle (Req §4) SHALL be rendered as a capsule pill above the shutter (active label inside an inner accent pill that slides between positions), NOT as the v1.0 segmented control. The previous segmented-control spec is superseded.
 6. <a name="20.6"></a>The shutter button SHALL be 76pt diameter (white ring + inner white circle), centred horizontally, ≥24pt above the tab bar top edge. Press feedback SHALL be a 100ms inner-circle shrink + 150ms spring restoration; the visible shutter SHALL never shift the layout of surrounding chrome.
 7. <a name="20.7"></a>The refusal surface SHALL be a bottom sheet (`.presentationDetents([.fraction(0.35)])`) with a single primary CTA, NOT a top banner. The v1.0 `RefusalBanner` overlay is superseded.
