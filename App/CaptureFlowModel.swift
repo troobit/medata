@@ -9,8 +9,13 @@ import SwiftUI
 
 // Resolves the persistent CaptureMode from UserDefaults; defaults to `.double`
 // on first install (Decision 35). Defined at file scope (not on the @MainActor
-// class) so it can be used as the default parameter for the @Sendable closure.
-@Sendable
+// class) so it can be used as the default parameter for the @Sendable closure
+// on `CaptureFlowModel.init`. `nonisolated` is required because the project
+// sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which would otherwise make
+// this free function implicitly MainActor-isolated and incompatible with the
+// `@Sendable () -> CaptureMode` parameter type. The UserDefaults read is
+// thread-safe (Apple documents internal locking), so no isolation is needed.
+nonisolated
 func defaultCaptureModeReader() -> CaptureMode {
     let raw = UserDefaults.standard.string(forKey: SettingsKeys.captureMode)
     return raw.flatMap(CaptureMode.init(rawValue:)) ?? .double

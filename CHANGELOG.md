@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed (Bugfix spec — clean-build-baseline)
+
+- `MeData/MeData.xcodeproj/project.pbxproj` — `TARGETED_DEVICE_FAMILY` lowered from `"1,2"` to `"1"` in both Debug and Release configs of the MeData app target (Decision 1). Eliminates the orientation validator warning and the two missing iPad App Icon validator warnings (76×76@2x, 83.5×83.5@2x). App now ships iPhone-only.
+- `App/CaptureFlowModel.swift` — `defaultCaptureModeReader()` is now `nonisolated` instead of `@Sendable` (Decision 2). Resolves the Swift 6 "MainActor-isolated function cannot be `@Sendable`" diagnostic and the MainActor-loss-on-closure-conversion diagnostic at the `CaptureFlowModel.init` default-arg site under `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. File-scope comment updated to explain why.
+- `App/SettingsKeys.swift` — `SettingsKeys` enum marked `nonisolated` so its static string constants remain reachable from the now-`nonisolated` `defaultCaptureModeReader`. Required because `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` would otherwise make the enum implicitly MainActor-isolated.
+- `App/MealRow.swift` — `loadThumbnail` reads row width from the connected `UIWindowScene` (with a 393 pt iPhone fallback for pre-scene early launch) instead of the iOS 26-deprecated `UIScreen.main` (Decision 3). Thumbnail target size is unchanged once a scene is active.
+
 ### Added (Research spec — tilt-tolerant capture, tasks 84–90)
 
 - `MedataCore/Sources/PortableContracts/Schemas/GeomSubconfidences.proto` — `sigma_tilt` field (Decision 44) on the σ_geom record.

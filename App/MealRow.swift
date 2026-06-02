@@ -120,7 +120,12 @@ struct MealRow: View {
         options.deliveryMode = .opportunistic
         options.isSynchronous = false
         options.isNetworkAccessAllowed = false
-        let rowWidth = await MainActor.run { UIScreen.main.bounds.width - 32 }
+        let rowWidth = await MainActor.run {
+            let scene = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first
+            return (scene?.screen.bounds.width ?? 393) - 32
+        }
         let target = MealRowLayout.thumbnailTargetSize(rowWidth: rowWidth)
         let image: UIImage? = await withCheckedContinuation { continuation in
             PHImageManager.default().requestImage(
