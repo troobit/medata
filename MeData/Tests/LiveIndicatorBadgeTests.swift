@@ -1,11 +1,12 @@
 import Testing
 @testable import MeData
 
-// Task 44 / Req §20.4 / Decision 16. Behavioural assertions for the
-// consolidated indicator chip — chip composition, in-range tint, auto-hide
-// timing, and re-show triggers. The pure `LiveIndicatorBadgeState` carries the
-// state-machine surface so we can test it without a SwiftUI host.
-@Suite("LiveIndicatorBadge state — composition, in-range, auto-hide")
+// Task 44/54/55 — Req §20.4 / Decisions 16, 18, 19. Behavioural assertions for
+// the consolidated indicator chip. Decision 19 replaces the binary
+// in-range/out-of-range tilt state with a continuous σ_tilt = cos(Δθ) readout;
+// the chip auto-hide gate is re-anchored to σ_tilt > 0.95 (≈ Δθ < 18°) plus the
+// other indicators in-range.
+@Suite("LiveIndicatorBadge state — composition, σ_tilt gate, auto-hide")
 @MainActor
 struct LiveIndicatorBadgeTests {
 
@@ -23,20 +24,20 @@ struct LiveIndicatorBadgeTests {
         #expect(elements == [.tilt])
     }
 
-    // MARK: - In-range tint
+    // MARK: - σ_tilt readout (Decision 19)
 
-    @Test("tilt within ±5° of target → green (in-range)")
-    func tiltInRange() {
-        #expect(LiveIndicatorBadgeState.isTiltInRange(degrees: 0, target: 0))
-        #expect(LiveIndicatorBadgeState.isTiltInRange(degrees: 4.9, target: 0))
-        #expect(LiveIndicatorBadgeState.isTiltInRange(degrees: 25, target: 25))
+    @Test("σ_tilt = cos(Δθ) per Decision 19 — Δθ=0 → 1.0; Δθ=60 → 0.5")
+    func sigmaTiltCurve() {
+        let s0 = LiveIndicatorBadgeState.sigmaTilt(deltaThetaDegrees: 0)
+        let s60 = LiveIndicatorBadgeState.sigmaTilt(deltaThetaDegrees: 60)
+        #expect(s0 > 0.999)
+        #expect(abs(s60 - 0.5) < 0.001)
     }
 
-    @Test("tilt outside ±5° of target → white (out-of-range)")
-    func tiltOutOfRange() {
-        #expect(!LiveIndicatorBadgeState.isTiltInRange(degrees: 5.5, target: 0))
-        #expect(!LiveIndicatorBadgeState.isTiltInRange(degrees: -10, target: 0))
-        #expect(!LiveIndicatorBadgeState.isTiltInRange(degrees: 0, target: 25))
+    @Test("σ_tilt > 0.95 satisfied at Δθ=10° (≈0.985) but not at Δθ=20° (≈0.940)")
+    func sigmaTiltAutoHideThreshold() {
+        #expect(LiveIndicatorBadgeState.isSigmaTiltSufficient(deltaThetaDegrees: 10))
+        #expect(!LiveIndicatorBadgeState.isSigmaTiltSufficient(deltaThetaDegrees: 20))
     }
 
     @Test("distance in 25–50 cm → in-range; outside → out-of-range; nil → out-of-range")
@@ -49,34 +50,34 @@ struct LiveIndicatorBadgeTests {
         #expect(!LiveIndicatorBadgeState.isDistanceInRange(cm: nil))
     }
 
-    // MARK: - All-in-range gate
+    // MARK: - All-in-range gate (drives the 5 s auto-hide)
 
-    @Test("allInRange = tilt-in-range AND (no-LiDAR OR distance-in-range)")
+    @Test("allInRange = σ_tilt > 0.95 AND (no-LiDAR OR (distance-in-range AND coverage>0))")
     func allInRangeWithLiDAR() {
         let yes = LiveIndicatorBadgeState.allInRange(
-            tiltDegrees: 0, target: 0, distanceCm: 35, supportsLiDAR: true
+            deltaThetaDegrees: 5, distanceCm: 35, lidarCoveragePercent: 80, supportsLiDAR: true
         )
         #expect(yes)
 
         let outTilt = LiveIndicatorBadgeState.allInRange(
-            tiltDegrees: 10, target: 0, distanceCm: 35, supportsLiDAR: true
+            deltaThetaDegrees: 20, distanceCm: 35, lidarCoveragePercent: 80, supportsLiDAR: true
         )
         #expect(!outTilt)
 
         let outDist = LiveIndicatorBadgeState.allInRange(
-            tiltDegrees: 0, target: 0, distanceCm: 100, supportsLiDAR: true
+            deltaThetaDegrees: 5, distanceCm: 100, lidarCoveragePercent: 80, supportsLiDAR: true
         )
         #expect(!outDist)
     }
 
-    @Test("no-LiDAR: distance does not gate (only tilt)")
+    @Test("no-LiDAR: distance does not gate (only σ_tilt)")
     func allInRangeNoLiDAR() {
         let yes = LiveIndicatorBadgeState.allInRange(
-            tiltDegrees: 0, target: 0, distanceCm: nil, supportsLiDAR: false
+            deltaThetaDegrees: 5, distanceCm: nil, lidarCoveragePercent: 0, supportsLiDAR: false
         )
         #expect(yes)
         let no = LiveIndicatorBadgeState.allInRange(
-            tiltDegrees: 10, target: 0, distanceCm: nil, supportsLiDAR: false
+            deltaThetaDegrees: 25, distanceCm: nil, lidarCoveragePercent: 0, supportsLiDAR: false
         )
         #expect(!no)
     }

@@ -80,6 +80,20 @@ struct CaptureFlowView: View {
 
     private var bottomChrome: some View {
         VStack(spacing: 16) {
+            // Decision 18 / research Decision 43: nadir captures always proceed
+            // regardless of tilt; the oblique stage retains a |Δθ − 25°| ≤ 30°
+            // hard cap. When the user is on the oblique stage but outside the
+            // cap, surface the Irish-English failure copy above the shutter so
+            // the disabled state has a written explanation (Req §2.3).
+            if let message = model.obliqueTiltMessage {
+                Text(message)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.captureChromeText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.captureChromeBG, in: Capsule())
+                    .accessibilityIdentifier("hint.obliqueTilt")
+            }
             CaptureModeToggle(supportsLiDAR: model.supportsLiDAR, interactive: !model.isBusy)
                 .padding(.horizontal, 48)
             ShutterButton(

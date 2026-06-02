@@ -58,11 +58,11 @@ No screen title. No back button. No labels.
 
 Replaces the v1.0 stacked indicators with one consolidated chip. Three sub-elements left-to-right, separated by 8pt vertical hairline (`Color.white.opacity(0.2)`):
 
-1. Tilt — SF Symbol `level` + `Δ°` text, monospaced, e.g. `0.5°`. Green tint when in ±5°, white otherwise.
+1. Tilt — SF Symbol `level` + two-line greyscale readout: top `Δθ°` (e.g. `17°`), bottom `σ_tilt%` (e.g. `97%`). Both monospaced, both `captureChromeText` (white). No green / amber / red tint — every angle yields a valid capture (Decision 18); the user sees the σ_tilt cost they are about to pay before the shutter fires (Decision 19).
 2. Distance — SF Symbol `ruler` + `cm`, monospaced. Green tint when 25–50 cm, white otherwise. Omitted if `!supportsLiDAR`.
 3. LiDAR coverage — 4pt horizontal bar gauge, 32pt wide, filled to `coverage/100`. Omitted if `!supportsLiDAR`.
 
-Whole chip uses `captureChromeBG` background, 14pt corner radius, `padding(.horizontal, 12)`, `padding(.vertical, 8)`. Auto-hide rule: after `.ready` has been the state for 5 s with all values in-range, the chip fades to 0.0 opacity (still tappable via 48pt `hitSlop`); tap or out-of-range value re-shows it.
+Whole chip uses `captureChromeBG` background, 14pt corner radius, `padding(.horizontal, 12)`, `padding(.vertical, 8)`. Auto-hide rule: after `.ready` has been the state for 5 s with `σ_tilt > 0.95` (≈ Δθ < 18°) AND distance and LiDAR coverage in range, the chip fades to 0.0 opacity (still tappable via 48pt `hitSlop`); tap or any predicate violation re-shows it (Decision 19; supersedes the prior ±5° tilt-in-range gate).
 
 ### Capture-mode pill — `CaptureModeToggle`
 

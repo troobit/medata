@@ -2,21 +2,28 @@ import Photos
 import Pipeline
 import SwiftUI
 
-// Three-state confidence band keyed off σ_meal per Req §9.2 / Decision 8.
-// Boundaries: High σ ≥ 0.75, Moderate 0.60 ≤ σ < 0.75, Low σ < 0.60.
+// Four-state confidence band keyed off σ_meal per Req §9.2 / Decision 17
+// (supersedes Decision 8's three-tier scheme). Boundaries:
+//   High        σ ≥ 0.75
+//   Moderate    0.50 ≤ σ < 0.75
+//   Low         0.20 ≤ σ < 0.50
+//   Very Low    σ < 0.20  (also triggers the result-view retake surface §9.3)
 enum ConfidenceLevel: Equatable {
+    case veryLow
     case low
     case moderate
     case high
 
     static func forSigma(_ sigma: Float) -> ConfidenceLevel {
         if sigma >= 0.75 { return .high }
-        if sigma >= 0.60 { return .moderate }
-        return .low
+        if sigma >= 0.50 { return .moderate }
+        if sigma >= 0.20 { return .low }
+        return .veryLow
     }
 
     var label: String {
         switch self {
+        case .veryLow: return "Very Low"
         case .low: return "Low"
         case .moderate: return "Moderate"
         case .high: return "High"
@@ -25,6 +32,7 @@ enum ConfidenceLevel: Equatable {
 
     var colour: Color {
         switch self {
+        case .veryLow: return .confidenceVeryLow
         case .low: return .confidenceLow
         case .moderate: return .confidenceModerate
         case .high: return .confidenceHigh
@@ -38,9 +46,14 @@ enum ResultFormat {
         Int(totalCarbsG.rounded())
     }
 
-    // §9.3: uncertain-estimate prompt shown when σ_meal < 0.60.
-    static func showsUncertainPrompt(_ sigma: Float) -> Bool {
-        sigma < 0.60
+    // §9.3 / Decision 17: Very-Low surface gate. Fires only when σ_meal
+    // collapses below 0.20 — the prior σ < 0.60 prompt is superseded
+    // (Decision 8 → Decision 17). Below this threshold the estimate may be
+    // wrong by orders of magnitude and the user is offered Retake / Keep
+    // as-is.
+    static let veryLowSigmaThreshold: Float = 0.20
+    static func showsVeryLowSurface(_ sigma: Float) -> Bool {
+        sigma < veryLowSigmaThreshold
     }
 
     // Decision 42 / Req §23.3: placeholder banner shown only for meals stamped
@@ -54,6 +67,19 @@ enum ResultFormat {
 
     static let placeholderBannerCopy =
         "Placeholder estimate. The food recogniser is a development stub — the carbohydrate value is not a real measurement."
+
+    // Decision 17 / research Decisions 43–47 (UI side): the Very-Low surface
+    // surfaces the per-stage angular error Δθ that contributed to the low
+    // confidence. The persisted `PbConfidenceResult` will gain
+    // `deltaThetaNadirDeg` / `deltaThetaObliqueDeg` fields under the research
+    // spec; until those land, we return 0 so the copy reads "0° from target"
+    // rather than crashing. Once the research-side smolspec wires the fields
+    // through PortableContracts, replace the 0 fallback with the real lookup.
+    static func maxDeltaThetaDeg(for record: MealRecord) -> Int {
+        // TODO: wire to record.confidence.deltaThetaNadirDeg /
+        //       deltaThetaObliqueDeg when the research-side fields land.
+        return 0
+    }
 }
 
 // Controls how `ResultView` is presented. The just-captured path (Photo tab)
@@ -109,9 +135,16 @@ struct ResultView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.sizeCategory) private var sizeCategory
     @State private var photo: UIImage?
+    // Decision 17: "Keep as-is" hides the Very-Low surface for the current
+    // view session only — navigating away and back re-shows it (no persistent
+    // dismissed flag). `@State` is per-instance, so this resets on each push.
+    @State private var keepAsIsDismissed = false
 
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
+    private var showsVeryLowSurface: Bool {
+        ResultFormat.showsVeryLowSurface(sigma) && !keepAsIsDismissed
+    }
     private var displayPoints: CGFloat { ResultViewLayout.displayPoints(sizeCategory) }
 
     var body: some View {
@@ -122,7 +155,7 @@ struct ResultView: View {
                 carbTotal
                 ConfidencePill(sigmaMeal: sigma)
                 if showsPlaceholderChip { placeholderChip }
-                if ResultFormat.showsUncertainPrompt(sigma) { uncertainPrompt }
+                if showsVeryLowSurface { veryLowSurface }
                 Spacer()
                 if mode.showsActionRow { actionRow }
             }
@@ -173,12 +206,39 @@ struct ResultView: View {
             .accessibilityIdentifier("result.placeholderChip")
     }
 
-    private var uncertainPrompt: some View {
-        Text("This estimate is uncertain. Consider retaking the photo for a better result.")
-            .font(.callout)
-            .foregroundStyle(Color.captureChromeText.opacity(0.85))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
+    // Decision 17 / Req §9.3: surfaces below σ_meal < 0.20 with two-line
+    // explanation + Retake / Keep as-is. The surface is in-session-only —
+    // navigating away and back re-shows it. The meal is already persisted by
+    // the capture pipeline, so "Keep as-is" only dismisses the surface; it
+    // does not write any "dismissed" flag.
+    private var veryLowSurface: some View {
+        VStack(spacing: 12) {
+            Text("This estimate may be wrong by orders of magnitude.")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Color.captureChromeText)
+                .multilineTextAlignment(.center)
+            Text("Capture was at \(ResultFormat.maxDeltaThetaDeg(for: record))° from target.")
+                .font(.caption)
+                .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                .multilineTextAlignment(.center)
+            HStack(spacing: 16) {
+                Button("Retake", action: onRetake)
+                    .font(.body.weight(.semibold))
+                    .frame(width: 120, height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
+                    .foregroundStyle(Color.captureChromeText)
+                    .accessibilityIdentifier("result.veryLow.retake")
+
+                Button("Keep as-is") { keepAsIsDismissed = true }
+                    .font(.body.weight(.semibold))
+                    .frame(width: 120, height: 44)
+                    .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(Color.captureBackground)
+                    .accessibilityIdentifier("result.veryLow.keepAsIs")
+            }
+        }
+        .padding(.horizontal, 24)
+        .accessibilityIdentifier("result.veryLowSurface")
     }
 
     private var actionRow: some View {

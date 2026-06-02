@@ -97,15 +97,31 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     // MARK: - Derived view state
 
-    // Shutter is armed only in .ready with tilt in range and the distance
-    // gate satisfied, and no capture / estimation in flight (§7.2).
+    // Shutter is armed in .ready with the distance gate satisfied and no
+    // capture / estimation in flight (§7.2). Tilt no longer gates the nadir
+    // stage (Decision 18 / research Decision 43); the oblique stage retains a
+    // hard cap of |Δθ − 25°| ≤ 30° (research Req 3.3).
     var canShutter: Bool {
         switch state {
         case .ready(let snapshot):
-            return snapshot.tiltInRange && distanceGateOK(snapshot)
+            guard distanceGateOK(snapshot) else { return false }
+            if firstFrame != nil {
+                return obliqueTiltOk(degrees: indicators.liveTiltDegrees)
+            }
+            return true
         default:
             return false
         }
+    }
+
+    // True iff the live tilt is within the oblique hard cap window
+    // (research Req 3.3: |Δθ − 25°| ≤ 30°). Used both by `canShutter` and by
+    // the inline above-shutter message that surfaces when the user is on the
+    // oblique stage but outside the cap.
+    var obliqueTiltMessage: String? {
+        guard firstFrame != nil, case .ready = state else { return nil }
+        if obliqueTiltOk(degrees: indicators.liveTiltDegrees) { return nil }
+        return EstimationFailure.obliqueTiltOutOfRange.localisedMessage
     }
 
     var currentSnapshot: GatingSnapshot? {
@@ -150,8 +166,13 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     func shutter() {
         guard case let .ready(snapshot) = state,
-              snapshot.tiltInRange, distanceGateOK(snapshot)
+              distanceGateOK(snapshot)
         else { return }
+        // Decision 18 / research Decision 43: only the oblique stage retains a
+        // tilt hard cap; nadir captures always proceed regardless of tilt.
+        if firstFrame != nil, !obliqueTiltOk(degrees: indicators.liveTiltDegrees) {
+            return
+        }
 
         // Pick up the persistent mode at the shutter tap and freeze it for the
         // rest of the flow (mid-session toggle changes are ignored).
@@ -519,16 +540,22 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         return cm >= 25 && cm <= 50
     }
 
-    // Per Decision 43 / Req §3.2 the nadir gate is informational only — capture
-    // is accepted at any tilt and σ_tilt = cos(Δθ) carries the angular error
-    // through to the meal confidence. The oblique view still has a 30° hard cap
-    // per Req §3.3 / Decision 43: outside |θ − 25°| ≤ 30° the visual hull is
-    // unreliable enough that we refuse rather than report a degraded estimate.
+    // Oblique-stage hard cap (research Req 3.3 / Decision 43): the SfS volume
+    // estimator runs off-envelope outside |Δθ − 25°| ≤ 30°, so the oblique
+    // shutter stays disabled there even after the nadir tilt gate was removed.
+    private func obliqueTiltOk(degrees: Float) -> Bool {
+        abs(degrees - 25) <= 30
+    }
+
+    // Retained for the gating log: indicates whether the *displayed* tilt is
+    // within the σ_tilt > 0.95 auto-hide band (≈ Δθ < 18° from the per-stage
+    // target). No longer used as a shutter gate; the field name is kept so
+    // existing log subscribers continue to parse the same key.
     private func tiltInRange(degrees: Float) -> Bool {
-        if firstFrame != nil {
-            return abs(degrees - 25) <= 30
-        }
-        return true
+        let target: Float = firstFrame != nil ? 25 : 0
+        return LiveIndicatorBadgeState.isSigmaTiltSufficient(
+            deltaThetaDegrees: abs(degrees - target)
+        )
     }
 
     private func observeInterruptions(

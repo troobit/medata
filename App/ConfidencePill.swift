@@ -33,12 +33,15 @@ struct ConfidencePill: View {
 
 extension ConfidenceLevel {
     // SF Symbol per design-system/pages/photo-tab.md §"ResultView" + the
-    // `color-not-only` rule referenced in MASTER.md.
+    // `color-not-only` rule referenced in MASTER.md. Decision 17: Very Low
+    // gets a desaturated `minus.circle.fill` so it reads as "essentially
+    // worthless" rather than the louder Low-tier alarm icon.
     var iconName: String {
         switch self {
         case .high: return "checkmark.seal.fill"
         case .moderate: return "exclamationmark.triangle.fill"
         case .low: return "xmark.octagon.fill"
+        case .veryLow: return "minus.circle.fill"
         }
     }
 
@@ -47,6 +50,7 @@ extension ConfidenceLevel {
         case .high: return "high"
         case .moderate: return "moderate"
         case .low: return "low"
+        case .veryLow: return "veryLow"
         }
     }
 }

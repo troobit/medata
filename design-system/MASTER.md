@@ -41,10 +41,11 @@ extension Color {
     static let textSecondary      = Color(uiColor: .secondaryLabel)
     static let separatorSubtle    = Color(uiColor: .separator)
 
-    // Confidence pill
-    static let confidenceHigh     = medataAccent              // σ ≥ 0.75
-    static let confidenceModerate = Color(uiColor: .systemOrange) // 0.60 ≤ σ < 0.75
-    static let confidenceLow      = Color(uiColor: .systemRed)    // σ < 0.60
+    // Confidence pill (Decision 17 — four tiers)
+    static let confidenceHigh     = medataAccent                  // σ ≥ 0.75
+    static let confidenceModerate = Color(uiColor: .systemOrange) // 0.50 ≤ σ < 0.75
+    static let confidenceLow      = Color(uiColor: .systemRed)    // 0.20 ≤ σ < 0.50
+    static let confidenceVeryLow  = Color(white: 0.35)            // σ < 0.20 (desaturated; pairs with the inline retake surface)
 
     // Placeholder banner / chip (research Req 23.3)
     static let placeholderBG      = Color(uiColor: .systemYellow)

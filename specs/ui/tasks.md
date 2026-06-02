@@ -297,7 +297,7 @@ references:
   - `mealsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
   - Artefact directory cleanup is best-effort: log and continue if a file is already gone.
   - Decision: 15
-  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods, methods
+  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
@@ -500,7 +500,7 @@ references:
 
 ## Tilt-tolerant capture (Decisions 17–19; research Decisions 43–47)
 
-- [ ] 54. Convert `LiveIndicatorBadge` tilt sub-element to continuous Δθ + σ_tilt% readout <!-- id:7pbwp5k -->
+- [x] 54. Convert `LiveIndicatorBadge` tilt sub-element to continuous Δθ + σ_tilt% readout <!-- id:7pbwp5k -->
   - In `App/LiveIndicatorBadge.swift`, replace the binary green/white tilt colour state with a greyscale two-line readout: `\(Int(deltaThetaDeg))°` and `\(Int(cos(deltaThetaRad) * 100))%`. Both monospaced, white.
   - `LiveSampleObserver` already publishes `tiltAngleDeg`; the σ_tilt percentage is computed in the view from `cos()`.
   - Update `design-system/pages/photo-tab.md` §"Indicator badge — `LiveIndicatorBadge`" to reflect the greyscale treatment.
@@ -508,7 +508,7 @@ references:
   - Decision: 19
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [20.4](requirements.md#20.4)
 
-- [ ] 55. Re-anchor chip auto-hide rule to `σ_tilt > 0.95 for 5 s` <!-- id:7pbwp5l -->
+- [x] 55. Re-anchor chip auto-hide rule to `σ_tilt > 0.95 for 5 s` <!-- id:7pbwp5l -->
   - In `CaptureFlowModel` (or wherever the chip-visibility timer lives), change the auto-hide predicate from "tilt in ±5°" to "σ_tilt > 0.95 AND distance in-range AND coverage in-range AND state == .ready, all stable for 5 s".
   - Re-show on any predicate violation or on tap (existing behaviour).
   - Tests: chip hides after 5 s at Δθ = 10° (σ_tilt = 0.985) but not at Δθ = 20° (σ_tilt = 0.940).
@@ -516,7 +516,7 @@ references:
   - Blocked-by: 7pbwp5k (Convert `LiveIndicatorBadge` tilt sub-element to continuous Δθ + σ_tilt% readout)
   - Requirements: [20.4](requirements.md#20.4)
 
-- [ ] 56. Remove tilt clause from shutter-enable gate; add oblique hard cap message <!-- id:7pbwp5m -->
+- [x] 56. Remove tilt clause from shutter-enable gate; add oblique hard cap message <!-- id:7pbwp5m -->
   - In `CaptureFlowModel.GatingSnapshot` and `ShutterButton`'s enable predicate, remove the tilt-in-range condition.
   - Add the oblique-stage hard cap predicate: when `activeStage == .oblique` and `|Δθ_oblique − 25°| > 30°`, disable the shutter and show an inline "tilt closer to 25°" message above the shutter (or in the existing refusal sheet path — UX choice for the implementer; the requirement only says it must be surfaced).
   - Map the new research `EstimationFailure.obliqueTiltOutOfRange` case to the Irish-English string "Tilt the camera closer to 25° for the angled view."
@@ -524,33 +524,33 @@ references:
   - Decision: 18; research Decision 43
   - Requirements: [2.3](requirements.md#2.3), [7.2](requirements.md#7.2)
 
-- [ ] 57. Rewrite `ConfidencePill` for four tiers <!-- id:7pbwp5n -->
+- [x] 57. Rewrite `ConfidencePill` for four tiers <!-- id:7pbwp5n -->
   - Update `App/ConfidencePill.swift` (the shared component used by `ResultView` and `MealRow`) to render four labels: "High", "Moderate", "Low", "Very Low" with thresholds per UI Req 9.2.
   - Map to `Color.confidenceHigh / .confidenceModerate / .confidenceLow / .confidenceVeryLow` per design §"Colour tokens".
   - Update all snapshot tests covering the pill to assert four tiers.
   - Decision: 17
   - Requirements: [9.2](requirements.md#9.2)
 
-- [ ] 58. Add `confidenceVeryLow` colour token <!-- id:7pbwp5o -->
+- [x] 58. Add `confidenceVeryLow` colour token <!-- id:7pbwp5o -->
   - In `App/Colors.swift`, add `static let confidenceVeryLow = Color(white: 0.35)` per design §"Colour tokens".
   - Update `design-system/MASTER.md` colour token table to include the new token.
   - Decision: 17
   - Requirements: [9.2](requirements.md#9.2)
 
-- [ ] 59. Implement Very-Low-confidence surface on `ResultView` (inline explanation + Retake / Keep as-is) <!-- id:7pbwp5p -->
-  - In `App/ResultView.swift`, gate a new section on `record.confidence.sigmaMeal < 0.20`. Section contains:
-    - One-line caption: "This estimate may be wrong by orders of magnitude."
-    - Second-line caption: "Capture was at \(Int(deltaTheta))° from target." (deltaTheta from `record.confidence.deltaThetaNadirDeg`; for two-view records use `max(deltaThetaNadirDeg, deltaThetaObliqueDeg ?? 0)`).
-    - Two side-by-side buttons: "Retake" (pops the view, resets state to `.ready`) and "Keep as-is" (dismisses the surface only; the meal is already persisted at capture time).
+- [x] 59. Implement Very-Low-confidence surface on `ResultView` (inline explanation + Retake / Keep as-is) <!-- id:7pbwp5p -->
+  - In `App/ResultView.swift`, gate a new section on `record.confidence.sigmaMeal < 0.20` containing the captions and buttons listed below.
+  - One-line caption: "This estimate may be wrong by orders of magnitude."
+  - Second-line caption: "Capture was at \(Int(deltaTheta))° from target." (deltaTheta from `record.confidence.deltaThetaNadirDeg`; for two-view records use `max(deltaThetaNadirDeg, deltaThetaObliqueDeg ?? 0)`).
+  - Two side-by-side buttons: "Retake" (pops the view, resets state to `.ready`) and "Keep as-is" (dismisses the surface only; the meal is already persisted at capture time).
   - The "Keep as-is" button hides the surface for the current view session; navigating away and back re-shows it (no persistent "dismissed" flag).
   - Tests: surface appears at σ = 0.15, hidden at σ = 0.25; Δθ string updates per record; both buttons wired.
   - Decision: 17
   - Blocked-by: 7pbwp5n (Rewrite `ConfidencePill` for four tiers)
   - Requirements: [9.3](requirements.md#9.3)
 
-- [ ] 60. Remove old uncertain-estimate prompt (σ < 0.60 path) from `ResultView` <!-- id:7pbwp5q -->
+- [x] 60. Remove old uncertain-estimate prompt (σ < 0.60 path) from `ResultView` <!-- id:7pbwp5q -->
   - Delete the prior one-line "uncertain estimate" prompt and its Retake button from `ResultView.swift` — superseded by task 59.
   - Update any XCUITest cases that asserted the prompt appeared at σ ≈ 0.55 to instead assert no prompt at that range and the new prompt at σ < 0.20.
   - Decision: 17
-  - Blocked-by: 7pbwp5p (Implement Very-Low-confidence surface on `ResultView` (inline explanation + Retake / Keep as-is))
+  - Blocked-by: 7pbwp5p (Implement Very-Low-confidence surface on `ResultView` (inline explanation + Retake / Keep as-is)), surface, surface, surface, surface, surface, surface, surface
   - Requirements: [9.3](requirements.md#9.3)

@@ -30,8 +30,10 @@ public enum EstimationFailure: Error, Equatable {
     // ≥1 food class has <30% LiDAR depth coverage in single-view path
     // (Req 3.5, 13.2; relaxed from 50% per Decision 47).
     case lidarCoverageTooLow([String])
-    // Oblique view captured with |θ − 25°| > 30° — outside the soft-acceptance
-    // envelope of Decision 43. Refused with "tilt closer to 25°" guidance.
+    // Oblique-stage hard cap: |θ − 25°| > 30° — outside the soft-acceptance
+    // envelope of research Req 3.3 / Decision 43. The SfS algorithm produces
+    // silently-wrong volumes far outside the Dehais 2017 envelope, so the
+    // oblique view is gated even after Decision 18 removed the nadir tilt gate.
     case obliqueTiltOutOfRange
     // meals.sqlite is corrupt; record quarantined, history temporarily unavailable.
     case mealsDbCorrupt
@@ -68,7 +70,7 @@ public enum EstimationFailure: Error, Equatable {
             let list = classes.joined(separator: ", ")
             return "Insufficient depth data for: \(list). Please use two-view mode instead."
         case .obliqueTiltOutOfRange:
-            return "Tilt closer to 25°."
+            return "Tilt the camera closer to 25° for the angled view."
         case .mealsDbCorrupt:
             return "Your meal history could not be loaded and has been reset. Capture continues normally."
         }
