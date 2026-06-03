@@ -254,6 +254,50 @@ struct CaptureFlowModelTests {
         #expect(stage == .nadir)
     }
 
+    // Regression for `bugfix/refusal-sheet-dismissal` — surface-not-detected
+    // bugfix report. The RefusalSheet was previously bound through a get-only
+    // binding (`refusalBinding.set = { _ in }`) combined with a no-op setter on
+    // `model.refusal`, so a swipe-down on the sheet had no effect and the sheet
+    // re-presented on the next render. Dismissing the refusal must transition
+    // the state out of `.refused` so the sheet does not pop back up.
+    @Test("dismissRefusal after .refused → .ready (sheet swipe-down dismissal)")
+    func dismissRefusalReturnsToReady() async {
+        let fixture = makeFixture(pipelineResult: .failure(EstimationFailure.lidarFitDegenerate))
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        fixture.model.shutter()
+        await fixture.model.flowTask?.value
+        guard case .refused = fixture.model.state else {
+            Issue.record("expected .refused before dismissal, got \(fixture.model.state)")
+            return
+        }
+        fixture.model.dismissRefusal()
+        if case .ready = fixture.model.state { return }
+        Issue.record("expected .ready after dismissRefusal, got \(fixture.model.state)")
+    }
+
+    // Companion regression: a second pipeline failure after a dismissal must
+    // present a fresh `.refused` state (covers the symmetry across all
+    // EstimationFailure cases, not just lidarFitDegenerate).
+    @Test("dismissRefusal clears firstFrame so a fresh nadir capture is required")
+    func dismissRefusalClearsCapturedFrame() async {
+        let fixture = makeFixture(pipelineResult: .failure(EstimationFailure.lidarFitDegenerate))
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        fixture.model.shutter()
+        await fixture.model.flowTask?.value
+        guard case .refused = fixture.model.state else {
+            Issue.record("expected .refused before dismissal, got \(fixture.model.state)")
+            return
+        }
+        fixture.model.dismissRefusal()
+        // After dismissal the user is back at the viewfinder; awaitingObliqueView
+        // is false because firstFrame was cleared.
+        #expect(fixture.model.awaitingObliqueView == false)
+    }
+
     // MARK: - Dismiss result → fresh capture (§9.4)
 
     @Test("dismissResult returns to .ready")
