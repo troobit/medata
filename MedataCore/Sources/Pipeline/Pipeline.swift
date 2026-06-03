@@ -20,6 +20,12 @@ private let pipelineSignposter = OSSignposter(
     subsystem: "ie.medata.pipeline",
     category: "Stages"
 )
+
+// Dev-build-only structured-log channel for the support-plane fit. Shares the
+// `ie.medata.app` / `Shutter` channel with the existing `estimate.start` /
+// `estimate.end` events emitted from `CaptureFlowModel`, so a single Console
+// predicate captures the full shutter→result trail.
+private let supportPlaneLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
 #endif
 
 // Orchestrator for pipeline stages C–L per design §2.2.
@@ -370,23 +376,75 @@ public struct Pipeline: Sendable {
     ) throws -> SupportPlane {
         // LiDAR plane fit takes precedence when depth is available.
         if let depth = nadir.depth {
-            let roughMask = BinaryMask(
-                pixels: [UInt8](repeating: 1, count: nadir.imageWidth * nadir.imageHeight),
+            // Phase 1 spatial prior: a centred rectangle approximates the
+            // plate under the documented capture envelope so the fitter's
+            // lower-edge scan band lands on visible table pixels rather than
+            // the bottom row of an all-ones mask. See
+            // `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/`.
+            let roughMask = makeCentreRectangleMask(
                 width: nadir.imageWidth,
-                height: nadir.imageHeight
+                height: nadir.imageHeight,
+                fillFraction: centreRectangleFillFraction
             )
+            #if DEBUG
+            supportPlaneLog.info(
+                """
+                event=supportplane.start width=\(nadir.imageWidth, privacy: .public) \
+                height=\(nadir.imageHeight, privacy: .public) \
+                fillFraction=\(centreRectangleFillFraction, privacy: .public)
+                """
+            )
+            #endif
             do {
-                return try LiDARPlaneFitter.fit(LiDARPlaneFitter.Inputs(
+                let plane = try LiDARPlaneFitter.fit(LiDARPlaneFitter.Inputs(
                     depth: depth,
                     colourIntrinsics: nadir.intrinsics,
                     foodRegionMask: roughMask,
                     gravityCamera: nadir.gravity
                 ))
+                #if DEBUG
+                supportPlaneLog.info(
+                    """
+                    event=supportplane.end success=true \
+                    residual_mm=\(plane.residualMm, privacy: .public) \
+                    inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public) \
+                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public)
+                    """
+                )
+                #endif
+                return plane
             } catch SupportPlaneError.lidarFitDegenerate {
+                #if DEBUG
+                supportPlaneLog.info(
+                    """
+                    event=supportplane.end success=false failure=lidarFitDegenerate \
+                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
+                    inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public)
+                    """
+                )
+                #endif
                 throw EstimationFailure.lidarFitDegenerate
             } catch SupportPlaneError.lidarFitResidualTooHigh {
+                #if DEBUG
+                supportPlaneLog.info(
+                    """
+                    event=supportplane.end success=false failure=lidarFitResidualTooHigh \
+                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
+                    inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public)
+                    """
+                )
+                #endif
                 throw EstimationFailure.lidarFitResidualTooHigh
-            } catch {
+            } catch let supportError as SupportPlaneError {
+                #if DEBUG
+                supportPlaneLog.info(
+                    """
+                    event=supportplane.end success=false \
+                    failure=\(String(describing: supportError), privacy: .public) \
+                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public)
+                    """
+                )
+                #endif
                 throw EstimationFailure.lidarFitDegenerate
             }
         }

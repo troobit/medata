@@ -207,7 +207,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PipelineTests",
-            dependencies: ["Pipeline", "Persistence", "PortableContracts"],
+            dependencies: ["Pipeline", "Persistence", "PortableContracts", "SupportPlane", "CaptureKit"],
             path: "MedataCore/Tests/PipelineTests"
         ),
         .testTarget(

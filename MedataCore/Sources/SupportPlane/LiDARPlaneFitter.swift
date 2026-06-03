@@ -8,6 +8,14 @@ import PortableContracts
 // gravity. RNG is seeded by hashing the depth bytes (per §6.0) so two runs on the
 // same fixture produce identical inliers.
 public enum LiDARPlaneFitter {
+    #if DEBUG
+    // Debug-only counters exposed for the Shutter-channel structured-log
+    // instrumentation at `Pipeline.fitSupportPlane`. Populated by `fit(_:)`
+    // before any throw or return. Not part of the production contract.
+    public nonisolated(unsafe) static var debugLastCandidatePointCount: Int = 0
+    public nonisolated(unsafe) static var debugLastInlierCount: Int = 0
+    #endif
+
     // Tunable parameters per design §6.2 ("Parameter justification").
     static let lowerEdgeBandMm: Float = 30
     static let confidenceThreshold: Float = 0.66
@@ -42,6 +50,10 @@ public enum LiDARPlaneFitter {
     public static func fit(_ inputs: Inputs) throws -> SupportPlane {
         // Step 1: collect candidate 3-D points in the colour-image lower-edge band.
         let points = try collectCandidatePoints(inputs)
+        #if DEBUG
+        debugLastCandidatePointCount = points.count
+        debugLastInlierCount = 0
+        #endif
         guard points.count >= minPoints else {
             throw SupportPlaneError.noLidarPoints
         }
@@ -54,6 +66,9 @@ public enum LiDARPlaneFitter {
             gravity: inputs.gravityCamera.normalised(),
             rng: &rng
         )
+        #if DEBUG
+        debugLastInlierCount = bestInliers.count
+        #endif
 
         guard bestInliers.count >= minPoints else {
             throw SupportPlaneError.noLidarPoints
