@@ -771,3 +771,60 @@ Showing both Δθ and σ_tilt is redundant by design: Δθ is the actionable lev
 - The display of σ_tilt as a percentage in the live preview may invite the user to confuse it with σ_meal — they look similar in the UI. The result-view pill remains the canonical σ_meal surface; only the live capture chip shows σ_tilt.
 
 ---
+
+## Decision 20: RefusalSheet is dismissible by swipe-down; leaving the Photo tab clears `.refused`
+
+**Date**: 2026-06-03
+**Status**: accepted
+
+### Context
+
+The v1.1 `RefusalSheet` (Req §20.7 / Decision 16) is presented via SwiftUI `.sheet(item: $model.refusal)` in `CaptureFlowView`. Two pieces of behaviour, both originally intentional, combined to produce a UX dead-end the user could not exit without re-launching capture:
+
+1. `model.refusal` was a derived read of `state == .refused`; its setter no-op'd on nil. A swipe-down on the sheet would write nil into the binding, the setter would ignore it, and on the next SwiftUI render the sheet would re-present because `state` was still `.refused`.
+2. `tabSelectionChanged(to:)` excluded `.refused` from the "reset to `.initialising`" branch, on the principle that the user should "find the same surface when they come back". Combined with (1) this meant the refusal sheet popped back up on every return to the Photo tab.
+
+The user reported the symptom on `lidarFitDegenerate` ("Surface not detected" in Irish-English) on flat camera mode, but the behaviour is uniform across all 14 `EstimationFailure` cases. Full investigation in `specs/bugfixes/surface-not-detected/report.md`.
+
+### Decision
+
+The RefusalSheet is dismissible by swipe-down. Two behavioural changes back this contract:
+
+1. `CaptureFlowModel` exposes `func dismissRefusal()` that transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. The `refusalBinding` in `CaptureFlowView` calls this on a nil write from `.sheet(item:)`.
+2. `tabSelectionChanged(to: nonPhoto)` while `.refused` is treated the same as `.ready` or `.trackingLost` — reset to `.initialising`, release the engine, clear captured frames. `.permissionDenied` remains preserved (no engine to release; the surface is the same on return).
+
+The explicit `tryAgain()` path is unchanged: it relaunches capture from the appropriate stage and preserves `firstFrame` when retrying the oblique view (Req §5.4).
+
+### Rationale
+
+A SwiftUI `.sheet(item:)` binding is a contract: when the framework writes nil into the binding (swipe-down, programmatic dismissal), the modal source of truth must clear. Wiring it to a get-only derivation breaks that contract silently — the sheet animates out and snaps back in with no diagnostic. There is no in-frame UI affordance that would tell the user "this sheet cannot be dismissed by swipe-down; tap Try again instead", so the silent re-presentation reads as a UI bug, not as intentional behaviour.
+
+The tab-switch change follows from the same principle: if the user can dismiss the sheet by swiping it down, they can also dismiss it by walking away from the Photo tab. Preserving `.refused` across tab switches forces the user to re-encounter a sheet they have already decided to leave behind. The `.estimating` carve-out (Decision 15 rule 2) remains untouched — that's about not throwing away in-flight work, which is a different concern.
+
+### Alternatives Considered
+
+- **Make the sheet non-dismissible with `.interactiveDismissDisabled()`**: Rejected — the explicit "Try again" button works, but there is no "dismiss without re-capturing" affordance. The user has no way to put the refusal aside and inspect the viewfinder before re-attempting; they're forced into immediate recapture even when they want to re-frame the meal first. Inferior UX for a marginal gain in "explicitness".
+- **Keep refusal across tab switches but make sheet dismissible**: Rejected — fixes Symptom 1 only. On return to Photo the user would see the sheet pop up again, having to dismiss it a second time. The carve-out's original rationale ("find the same surface when they come back") assumed the surface was useful to return to; with dismissal working, it isn't.
+- **Make `model.refusal` a stored property and set it nil from the binding directly**: Rejected — splits the source of truth (the `.refused` state and a separate `refusal` field would need to stay in lockstep), and the existing Equatable conformance on `CaptureState` would no longer suffice. Single source of truth via state, with `refusal` derived and an explicit `dismissRefusal()` command, is simpler.
+
+### Consequences
+
+**Positive:**
+- The `.sheet(item:)` dismissal contract is honoured; users have a working swipe-down to set the refusal aside.
+- Leaving the Photo tab is now a uniform "reset to baseline" regardless of which non-terminal state the user was in (`.ready` / `.trackingLost` / `.refused`). One fewer special case to remember.
+- The fix is symmetric across all `EstimationFailure` cases — no per-case branching, no risk of silently regressing on the cases the user didn't report.
+
+**Negative:**
+- Users who relied (consciously or not) on the refusal sheet being "sticky" across tab switches will no longer find it on return. The mitigation is that the underlying failure mode is usually transient — the user retakes the photo with the meal re-framed — so the refusal is rarely a thing the user wants to come back to.
+- Decision 15 rule 1 (engine released within 200 ms on tab leave) now applies to `.refused` too; the engine stop is fire-and-forget but adds a small amount of work on the leave path. Existing `tabSelectionChanged` tests on `.ready` already cover this.
+- Replaces one existing unit test (`CaptureFlowModelTabSelectionTests::refusedNoOp`) that encoded the now-superseded behaviour. The replacement (`refusedDismissedOnTabLeave` + `refusalDoesNotReappearOnPhotoReturn`) covers the new contract.
+
+### Impact
+
+- `App/CaptureFlowModel.swift` — `dismissRefusal()` added; `tabSelectionChanged` rewrites the `.refused` arm; `model.refusal` is now strictly derived (setter removed).
+- `App/CaptureFlowView.swift` — `refusalBinding.set` delegates nil writes to `model.dismissRefusal()`.
+- `MeData/Tests/CaptureFlowModelTests.swift` + `CaptureFlowModelTabSelectionTests.swift` — regression tests covering the new contract.
+- `docs/agent-notes/ui-capture-flow.md` — gotcha updated to reflect dismissibility.
+- `specs/bugfixes/surface-not-detected/report.md` — full investigation and verification trace.
+
+---

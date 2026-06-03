@@ -34,6 +34,9 @@ composition only; all behaviour is in the model and is unit-tested.
 
 ## Gotchas / non-obvious behaviour
 
+- **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
+
+
 - **One ARSession only — the engine adopts the ARView's session.** A regression
   (fixed, Decision 14) had `ARKitCaptureEngine` running its OWN `ARSession` while
   `ARView` ran a second one. Two AR sessions contend for the single camera capture
