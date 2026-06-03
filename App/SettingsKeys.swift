@@ -3,6 +3,12 @@
 // IFCDB and retention keys removed per Decisions 37 and 39: photo lifecycle is
 // delegated to PhotoKit (Req §17.3); macros source is fixed at CoFID + AFCD
 // with no user-facing override (Req §11.1).
-enum SettingsKeys {
+// `nonisolated` because the project sets
+// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which would otherwise make this
+// file-scope enum and its static constants implicitly MainActor-isolated.
+// `defaultCaptureModeReader` (App/CaptureFlowModel.swift) is `nonisolated` and
+// reads `captureMode`, so the keys must be reachable from any context. Plain
+// string constants are inherently thread-safe.
+nonisolated enum SettingsKeys {
     static let captureMode = "medata.captureMode"
 }
