@@ -65,6 +65,7 @@ private func allFailures() -> [EstimationFailure] {
         .noFoodPixels,
         .noFoodVolumeRecovered,
         .lidarCoverageTooLow(["rice"]),
-        .mealsDbCorrupt
+        .mealsDbCorrupt,
+        .obliqueTiltOutOfRange
     ]
 }

@@ -88,17 +88,9 @@ struct CaptureFlowModelTests {
         #expect(frozen.pathHint == .singleViewLidar)
     }
 
-    @Test("shutter blocked when tilt out of range")
-    func shutterTiltOutOfRange() {
-        let fixture = makeFixture()
-        fixture.model.liveSampleDidUpdate(
-            tiltDegrees: 90, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
-        )
-        fixture.model.shutter()
-        if case .capturing = fixture.model.state {
-            Issue.record("shutter should be gated by tilt")
-        }
-    }
+    // Decision 18 / task 56: the nadir-stage shutter is no longer gated by
+    // tilt. Coverage for the new behaviour (nadir always armed; oblique hard
+    // cap |Δθ − 25°| ≤ 30°) lives in CaptureFlowModelTiltGateTests.swift.
 
     @Test("shutter blocked when distance out of LiDAR range")
     func shutterDistanceOutOfRange() {

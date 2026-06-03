@@ -37,6 +37,7 @@ final class EstimationFailureTests: XCTestCase {
             .noFoodPixels,
             .noFoodVolumeRecovered,
             .lidarCoverageTooLow(["bread", "rice"]),
+            .obliqueTiltOutOfRange,
             .mealsDbCorrupt
         ]
         for failure in cases {
@@ -160,6 +161,78 @@ final class EstimationFailureTests: XCTestCase {
         let c = EstimationFailure.lidarCoverageTooLow(["rice"])
         XCTAssertEqual(a, b)
         XCTAssertNotEqual(a, c)
+    }
+
+    // MARK: - T87 oblique-tilt hard cap (Decision 43)
+    //
+    // |oblique − 25°| > 30° refuses; ≤ 30° accepts. Verified through the
+    // pipeline's pre-segmentation gate: a two-view CaptureResult with an
+    // oblique angle 60° (|60−25| = 35) must throw `obliqueTiltOutOfRange`
+    // before any other refusal path is hit.
+    func testObliqueTiltBeyondThirtyDegreesRefuses() async throws {
+        let pipeline = Pipeline(
+            cardDetector: NilCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        let nadirWithDepth = RawFrame.fixture(
+            timestampMonotonicNs: 3,
+            depth: makeMinimalDepthMap()
+        )
+        let oblique = RawFrame.fixture(timestampMonotonicNs: 4)
+        let captureResult = CaptureResult(
+            capturePath: .twoViewSfS,
+            lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 60),
+            nadirFrame: nadirWithDepth,
+            obliqueFrame: oblique,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v1",
+            nadirAngleAtCaptureDeg: 0,
+            obliqueAngleAtCaptureDeg: 60   // |60 − 25| = 35 > 30
+        )
+        do {
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
+            XCTFail("Expected EstimationFailure.obliqueTiltOutOfRange")
+        } catch EstimationFailure.obliqueTiltOutOfRange {
+            // expected
+        }
+    }
+
+    // |oblique − 25°| ≤ 30° must NOT throw the new refusal — at the boundary
+    // (oblique = 55° → |Δ| = 30) the pipeline proceeds past the tilt gate.
+    // Other downstream refusals are acceptable; only obliqueTiltOutOfRange
+    // would be a regression.
+    func testObliqueTiltAtBoundaryDoesNotRefuse() async throws {
+        let pipeline = Pipeline(
+            cardDetector: NilCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        let nadirWithDepth = RawFrame.fixture(
+            timestampMonotonicNs: 5,
+            depth: makeMinimalDepthMap()
+        )
+        let oblique = RawFrame.fixture(timestampMonotonicNs: 6)
+        let captureResult = CaptureResult(
+            capturePath: .twoViewSfS,
+            lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 60),
+            nadirFrame: nadirWithDepth,
+            obliqueFrame: oblique,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v1",
+            nadirAngleAtCaptureDeg: 0,
+            obliqueAngleAtCaptureDeg: 55   // |55 − 25| = 30 — at the cap, accepts
+        )
+        do {
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
+            // Downstream refusals on synthetic fixtures are fine.
+        } catch EstimationFailure.obliqueTiltOutOfRange {
+            XCTFail("Boundary case |Δ|=30 must not throw obliqueTiltOutOfRange")
+        } catch {
+            // Other refusals are acceptable on these synthetic fixtures.
+        }
     }
 }
 
