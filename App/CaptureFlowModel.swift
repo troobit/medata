@@ -3,8 +3,15 @@ import CaptureKit
 import CoreMotion
 import Foundation
 import Observation
+import os
 import Pipeline
 import SwiftUI
+
+// Per Decision 7 of `specs/rawframe-rgb-conversion/`: device-log correlation
+// for untyped pipeline failures. The on-screen `.internalError(typeName)`
+// refusal payload (Req 6.2) is meaningful only when the device log carries
+// the same `<Type>` token, so the catch-all logs it at this subsystem.
+private let captureFlowLog = Logger(subsystem: "ie.medata.captureflow", category: "Estimation")
 
 // Orchestrator for the capture flow per `specs/ui/design.md`. Owns the state
 // machine, drives the `CaptureSession` and `PipelineEstimator`, observes
@@ -313,7 +320,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         } catch let failure as EstimationFailure {
             state = .refused(failure, retryStage: stage)
         } catch {
-            state = .refused(.noScaleAvailable, retryStage: stage)
+            let typeName = String(describing: type(of: error))
+            captureFlowLog.info("event=estimate.end success=false error=\(typeName, privacy: .public)")
+            state = .refused(.internalError(typeName), retryStage: stage)
         }
     }
 
@@ -341,7 +350,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             state = .refused(failure, retryStage: retryStage)
         } catch {
             guard case .estimating = state else { return }
-            state = .refused(.noScaleAvailable, retryStage: retryStage)
+            let typeName = String(describing: type(of: error))
+            captureFlowLog.info("event=estimate.end success=false error=\(typeName, privacy: .public)")
+            state = .refused(.internalError(typeName), retryStage: retryStage)
         }
     }
 

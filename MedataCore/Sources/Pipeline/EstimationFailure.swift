@@ -31,6 +31,12 @@ public enum EstimationFailure: Error, Equatable {
     case lidarCoverageTooLow([String])
     // meals.sqlite is corrupt; record quarantined, history temporarily unavailable.
     case mealsDbCorrupt
+    // Catch-all for any non-typed error raised by `Pipeline.estimate` (Req 6 /
+    // Decision 7 of `specs/rawframe-rgb-conversion/`). The payload is the
+    // underlying error's Swift type name so the on-screen message can be
+    // correlated with the device log's `event=estimate.end success=false
+    // error=<Type>` line at debug time.
+    case internalError(String)
 
     // MARK: - Localised Irish-English messages (Req 17.1)
 
@@ -63,6 +69,13 @@ public enum EstimationFailure: Error, Equatable {
             return "Insufficient depth data for: \(list). Please use two-view mode instead."
         case .mealsDbCorrupt:
             return "Your meal history could not be loaded and has been reset. Capture continues normally."
+        case .internalError(let typeName):
+            #if DEBUG
+            return "Couldn't process the photo. Internal error: \(typeName)"
+            #else
+            _ = typeName
+            return "Couldn't process the photo. Please try again."
+            #endif
         }
     }
 }
