@@ -4,6 +4,10 @@
 
 `ARFrame.capturedImage` arrives from ARKit as a biplanar YCbCr `CVPixelBuffer`, but `ARKitCaptureEngine.copyPixelBufferBytes` reads it as if it were chunky RGB-family, producing either an empty buffer or the luma plane alone. `detectPixelFormat` compounds the bug by reporting `.bgra8` for every YCbCr frame. Every downstream consumer of `RawFrame.imageBytes` (the segmenter pre-processor today, a future `VisionCardDetector`, any other `CGImage` / `Vision` reader) is therefore reading miscoded bytes against a lying contract. This spec converts captured frames to BGRA8 at the capture boundary, makes `pixelFormat` truthful, and proves the conversion correct with a hand-computed reference patch.
 
+### 2026-06-04 device evidence (post-OOM-fix run)
+
+On-device verification on iPhone 13 Pro Max iOS 26.5 after the `lidar-plane-fit-oom-on-device-1920x1440` bugfix landed shows the pipeline now reaches the segmenter — and fails there with `event=estimate.end success=false error=SegmentationError` (`nextup.md` lines 90-96 and 150-156, both nadir-stage successes with `event=supportplane.end success=true residual_mm≈2.87 inliers≈37-46k`). The pre-OOM-fix `Fatal error: failed to allocate 32198713632 bytes` is gone; the YCbCr-mismatch defect this spec scopes is now the first reachable failure mode on a real device build. The OOM bugfix is therefore the prerequisite that exposed the latent YCbCr defect this spec resolves. (The same on-device run also surfaced a UI mislabelling problem covered by [Requirement 6](#6-honest-error-surfacing-for-pipeline-failures).)
+
 ## Non-Goals
 
 - Training, exporting, or bundling the Core ML segmenter `.mlpackage` (Blocker 1 in `docs/agent-notes/pipeline-wiring-status.md`).
@@ -68,3 +72,27 @@
 1. <a name="5.1"></a>`SegmenterPreProcessor.process(imageBytes:pixelFormat:width:height:)` SHALL accept the output of the conversion path without raising `SegmentationError.invalidInputDimensions` for any frame returned by `ARKitCaptureEngine.captureFrame`.  
 2. <a name="5.2"></a>The `Bridges` round-trip from `RawFrame` to `PbRawFrame` and back SHALL preserve the BGRA byte content and the `.bgra8` format tag bit-for-bit.  
 3. <a name="5.3"></a>`MockCaptureEngine` SHALL continue to emit `.bgra8` frames whose `imageBytes.count == imageWidth * imageHeight * 4`; the mock SHALL NOT be required to perform any YCbCr conversion.
+
+### 6. Honest Error Surfacing for Pipeline Failures
+
+**User Story:** As a user whose shutter tap fails for a non-scale reason (segmenter error, conversion error, persistence error, anything else the pipeline raises that is not already a typed `EstimationFailure`), I want the refusal modal to NOT lie about the cause being "Meal scale unknown", so that I do not waste time framing-and-retrying a problem that is unrelated to scale, and so that a developer reading the device log can correlate the on-screen message with the logged error type.
+
+**Background.** `App/CaptureFlowModel.swift:502-506` currently has:
+
+```swift
+} catch {
+    log.info("event=estimate.end success=false error=\(String(describing: type(of: error)), privacy: .public)")
+    guard case .estimating = state else { return }
+    state = .refused(.noScaleAvailable, retryStage: retryStage)
+}
+```
+
+That maps every non-`EstimationFailure` error (including every `SegmentationError` case except `noFoodPixels`, every `PixelBufferAdapter.ConversionError` once this spec lands, every `MetricScaleError` case other than `noScaleAvailable`, every persistence error, and every CoreML inference error) onto the single UI string "Meal scale unknown" (`App/RefusalSheet.swift:44`). That string is owned by `EstimationFailure.noScaleAvailable` and is correct only for that case. The 2026-06-04 device log shows the failure pattern: `event=estimate.end success=false error=SegmentationError` followed by a "Meal scale unknown" refusal modal that the user cannot dismiss into a productive next step.
+
+**Acceptance Criteria:**
+
+1. <a name="6.1"></a>WHEN the pipeline throws an error that is not an `EstimationFailure` case, THEN the UI SHALL surface a refusal whose label is distinct from "Meal scale unknown" and whose icon and message do not falsely imply a scale problem. The exact wording is left to design.md; the requirement is non-confusion.
+2. <a name="6.2"></a>WHEN such an error is surfaced, THEN the refusal payload SHALL retain enough information (at minimum, the error type's Swift name as `String(describing: type(of: error))`) for the device log's `event=estimate.end success=false error=<Type>` line to be correlated with the on-screen message at debug time.
+3. <a name="6.3"></a>The new refusal SHALL NOT regress any existing `EstimationFailure` case's UI label or symbol — the catch-all replacement only affects the previously-unmatched error path.
+4. <a name="6.4"></a>WHEN `pipeline.estimate(...)` throws `PixelBufferAdapter.ConversionError` (newly introduced by this spec), THEN the catch-all SHALL route it to the new refusal label rather than to `.noScaleAvailable` — i.e., the new label is the correct outcome for the entire untyped-error path including this spec's own new error type.
+5. <a name="6.5"></a>The mapping change SHALL be unit-tested via a synthetic injected pipeline error that exercises the catch-all branch of `CaptureFlowModel.runEstimation`, asserting that the resulting `CaptureState` is the new refusal case and NOT `.refused(.noScaleAvailable, …)`.

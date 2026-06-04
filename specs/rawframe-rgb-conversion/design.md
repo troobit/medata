@@ -79,6 +79,22 @@ public enum PixelBufferAdapter {
 
 The new error is `PixelBufferAdapter.ConversionError`, not a new case on `CaptureError`. Rationale: `CaptureError` is the vocabulary for the capture-session lifecycle (lidar unavailable, session not started, release timeout); pixel-format issues are a property of the buffer, not the session. `ARKitCaptureEngine.captureFrame` lets the `ConversionError` propagate up as-is — the throws clause is `throws` (untyped), so callers continue to receive `Error`. UI / pipeline layers that pattern-match on `CaptureError` are unaffected because `ConversionError` is a distinct type.
 
+### App-layer error surfacing for the untyped-error path (Req 6 / Decision 7)
+
+The catch-all at `App/CaptureFlowModel.swift:502-506` currently routes every non-`EstimationFailure` error onto `.refused(.noScaleAvailable, retryStage: retryStage)`, producing the misleading "Meal scale unknown" modal. This spec changes that in lock-step with the conversion landing — otherwise the new `PixelBufferAdapter.ConversionError` cases would themselves surface as "Meal scale unknown" on any future unsupported-format frame.
+
+Three files change together:
+
+| File | Change |
+|---|---|
+| `MedataCore/Sources/Pipeline/EstimationFailure.swift` | Add `case internalError(String)`; the payload is the underlying error type's Swift name (`String(describing: type(of: error))`) for the dev-log correlation requirement [Req 6.2](requirements.md#6.2). |
+| `App/CaptureFlowModel.swift` | Rewrite the catch-all block (currently lines 502-506) to compute the type name once, log it on the existing `event=estimate.end` info line, and route to `.refused(.internalError(typeName), retryStage: retryStage)`. |
+| `App/RefusalSheet.swift` | Add `internalError` cases to the symbol switch (`"exclamationmark.triangle"`), the title switch (`"Couldn't process the photo"`), and — gated on `#if DEBUG` — a subtitle reading `"Internal error: \(typeName)"`. The DEBUG gate matches the existing instrumentation pattern in `Pipeline.swift` so Release builds carry no developer-facing strings. |
+
+The case is enum-with-payload, matching the existing style of `EstimationFailure.lidarCoverageTooLow(Set<String>)`. No `String` interpolation runs in Release for the subtitle path because the entire branch sits inside `#if DEBUG`. The `String(describing: type(of: error))` call already runs in the existing `log.info` line, so the catch-all does not introduce a new run-time cost on the hot path.
+
+Because `EstimationFailure` is an `enum`, all switches over it in the App layer (currently the symbol and title computed properties in `RefusalSheet`) must add a branch for `.internalError`. The compiler enforces this — there is no `@unknown default` on those switches, so the design is self-policing at build time. A quick `grep "case \." App/RefusalSheet.swift` plus a `grep "EstimationFailure" App/` audit confirms the only switches are inside `RefusalSheet`; `CaptureFlowModel.swift` only constructs the case, it does not match on it.
+
 ## Pattern Extension Audit
 
 `copyPixelBufferBytes` and `detectPixelFormat` are private to `ARKitCaptureEngine`. Grep confirms no other call sites. There is no pattern to extend; the audit reduces to the consumer list of `RawFrame.imageBytes` / `pixelFormat`, already enumerated in the scope assessment:
@@ -130,6 +146,12 @@ PBT framework: deterministic seeded RNG matching `MedataCore/Tests/CardDetection
 
 Builds a synthetic YCbCr `CVPixelBuffer`, runs it through `PixelBufferAdapter.convert`, hands the resulting `(bytes, format, width, height)` directly to `SegmenterPreProcessor.process(...)` and asserts no `SegmentationError.invalidInputDimensions` is raised. Covers [5.1](#5.1). The test depends on both targets via the existing `dependencies: ["Segmentation", "CaptureKit", "PortableContracts"]` in `Package.swift:134`.
 
+### App-layer catch-all rewrite — `App/Tests/CaptureFlowModelInternalErrorTests.swift` (new or extend)
+
+Unit test for [Req 6.5](requirements.md#6.5): inject a `Pipeline` (or `EstimationPerformer`-style protocol seam) into `CaptureFlowModel` whose `estimate(captureResult:mode:)` throws a synthetic non-`EstimationFailure` error (e.g., a one-case test enum `case syntheticPipelineFailure`). Drive `runEstimation` to completion, then assert the resulting `CaptureFlowModel.state` is `.refused(.internalError(let typeName), retryStage: …)` where `typeName == "TestErrorType"`, and explicitly NOT `.refused(.noScaleAvailable, …)`. The same fixture also asserts the `event=estimate.end success=false error=TestErrorType` log line was emitted via an injectable `Logger`-style seam if one exists, or via a stub log adapter for the test if `CaptureFlowModel` uses the global `os.Logger` directly. If no seam exists, the log assertion is reduced to "the synthetic error type name appears on `state` payload" and the `os.Logger` line is verified by manual on-device run after the change lands.
+
+Covers [Req 6.1, 6.2, 6.4, 6.5](requirements.md#6-honest-error-surfacing-for-pipeline-failures). Req 6.3 (no regression on existing `EstimationFailure` UI labels) is covered by the existing `RefusalSheet` snapshot tests if any, plus the compile-time exhaustiveness guarantee — no separate test case needed.
+
 ### Existing tests — sanity checks
 
 - `RawFrameTests` continues to pass unmodified (no contract change to `RawFrame` itself).
@@ -146,3 +168,4 @@ Req 4.4 routes performance regressions to the existing Req 16.7 perf harness. No
 - **vImage matrix selection silently wrong.** If the matrix is set to `ITU_R_601_4` but the range struct is misconfigured (e.g. video-range offsets while the source is full-range), greys look right but saturated colours skew. Mitigated by the `testKnownColourPatchMatchesBT601` patch test, which uses saturated red/green/blue — any mis-set range fails the ±2 tolerance immediately.
 - **`vImage_YpCbCrToARGB` info struct lifetime.** Storing it as a `static let` requires Sendable safety. The struct is a C value type with no reference fields; wrapping the init in a `nonisolated(unsafe) static let` is the standard pattern. Alternative: lazy via a dispatch-once helper — same effect, more code.
 - **Source `CVPixelBuffer` may not be readable while locked elsewhere.** ARKit guarantees `ARFrame.capturedImage` is valid for the lifetime of the `ARFrame`; `buildRawFrame` is called synchronously on the same actor that received the frame, so contention is impossible in practice. The adapter still uses `lock/defer unlock` for safety.
+- **App-layer test seam may not exist.** `CaptureFlowModel.runEstimation` calls `pipeline.estimate(...)` against a stored property. If the property's type is the concrete `Pipeline` rather than a protocol, the synthetic-error test in `App/Tests/CaptureFlowModelInternalErrorTests.swift` cannot inject a throwing fake without a small refactor (extract an `EstimationPerformer` protocol, store as `any EstimationPerformer`). The test entry above flags this; the implementation task that lands [Req 6.5](requirements.md#6.5) decides whether to introduce that seam now or fall back to manual on-device verification of the catch-all branch. Either way, the source-level change at `CaptureFlowModel.swift:502-506` is small and self-evident, so the absence of a unit test does not block the spec — the worst case is one less automated regression sentinel.

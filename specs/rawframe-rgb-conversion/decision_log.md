@@ -217,3 +217,74 @@ Define `PixelBufferAdapter.ConversionError` with cases `unsupportedSourceFormat(
 - Two error types now reach `captureFrame` callers (`CaptureError` and `PixelBufferAdapter.ConversionError`); any future code that wants a unified `catch` must match on `Error` or both types explicitly.
 
 ---
+
+## Decision 7: Add `EstimationFailure.internalError(String)` for the untyped-error catch-all instead of mismapping to `.noScaleAvailable`
+
+**Date**: 2026-06-04
+**Status**: accepted
+
+### Context
+
+The 2026-06-04 device-log run on iPhone 13 Pro Max iOS 26.5 (post the OOM bugfix) surfaced `event=estimate.end success=false error=SegmentationError` and the user saw a "Meal scale unknown" modal — the UI string owned by `EstimationFailure.noScaleAvailable` (`App/RefusalSheet.swift:44`). The cause is the catch-all at `App/CaptureFlowModel.swift:502-506`, which routes every non-`EstimationFailure` error onto `.refused(.noScaleAvailable, retryStage: retryStage)`. The 2026-06-04 incident is the latest example; the same mismapping has shipped silently for every non-scale, non-typed pipeline failure since `CaptureFlowModel.runEstimation` was written.
+
+Without a fix, the new `PixelBufferAdapter.ConversionError` cases introduced by this spec would themselves surface as "Meal scale unknown" on any future unsupported-format frame, repeating the same misdirection. The catch-all has to change in lock-step with the conversion landing.
+
+### Decision
+
+Add a new case to `MedataCore/Sources/Pipeline/EstimationFailure.swift`:
+
+```swift
+case internalError(String)
+```
+
+The `String` payload is the underlying error's Swift type name (`String(describing: type(of: error))`), to satisfy [Req 6.2](requirements.md#6.2). Rewrite the catch-all in `App/CaptureFlowModel.swift:502-506` to:
+
+```swift
+} catch {
+    let typeName = String(describing: type(of: error))
+    log.info("event=estimate.end success=false error=\(typeName, privacy: .public)")
+    guard case .estimating = state else { return }
+    state = .refused(.internalError(typeName), retryStage: retryStage)
+}
+```
+
+Add `internalError` mappings to `App/RefusalSheet.swift`:
+
+- Symbol: `"exclamationmark.triangle"` (existing SF Symbol; no asset addition).
+- Title: `"Couldn't process the photo"`.
+- Subtitle (DEBUG only, gated on `#if DEBUG` per the existing instrumentation pattern in `Pipeline.swift`): `"Internal error: \(typeName)"` so the developer log line and the on-screen message read alike at debug time.
+
+`EstimationFailure` is an `Error` enum with associated values on other cases (`.lidarCoverageTooLow(Set<String>)`); the new `.internalError(String)` matches the existing payload style.
+
+### Rationale
+
+A new dedicated case is the smallest change that (a) stops the misdirection without touching unrelated cases, (b) preserves a usable retry path (`retryStage` still flows through), (c) keeps the catch-all single-line at the call site, and (d) keeps the error vocabulary truthful: untyped errors are not scale errors and should not borrow that label. The `String` payload carries the source-of-truth identifier for the underlying error type without committing the API to importing every downstream error namespace.
+
+`"Couldn't process the photo"` is deliberately user-facing (not "Internal error" or "Pipeline failure"): the user does not know what a pipeline is, but knows what their photo is. The DEBUG subtitle gives the developer the error type at a glance without polluting the Release-build UI.
+
+### Alternatives Considered
+
+- **Reuse `.noScaleAvailable`, change its label to "Couldn't process the photo"**: One fewer case, but conflates two genuinely different user-recoverable problems (no metric scale → place a reference card vs. internal failure → try again / file a bug). Rejected.
+- **Surface the raw error type name in the modal title**: e.g. "SegmentationError". Maximally honest, but exposes implementation vocabulary to end users for no benefit. Rejected; the type name goes into the DEBUG subtitle instead.
+- **Add multiple new cases (`.segmenterError`, `.persistenceError`, `.conversionError`, …)**: Granular and honest per-domain. Rejected for this bugfix's scope — most downstream domains do not yet have UI affordances different from a generic "try again" path. The single `.internalError(String)` is the smallest change that resolves Req 6 without committing to a longer per-domain UI design. Future specs can split off cases as user-facing affordances diverge.
+- **Crash on unknown errors (`fatalError`)**: Would force every error to be typed-through. Rejected because production users would see crashes for previously-soft failures (a regression in user experience), and because the typed-through model is exactly what the granular-cases alternative above proposes.
+
+### Consequences
+
+**Positive:**
+
+- "Meal scale unknown" stops firing for non-scale failures, including for the new `PixelBufferAdapter.ConversionError` this spec introduces.
+- The DEBUG subtitle correlates the on-screen message with the device log's `event=estimate.end success=false error=<Type>` line at a glance.
+- Single new case keeps the `EstimationFailure` API surface small; the case can be expanded into more specific cases later without breaking call sites (additive switch).
+- `retryStage` flows through, so the user still has a productive next action (re-shoot the same stage) for any internal failure that may be transient.
+
+**Negative:**
+
+- The catch-all is still a catch-all: a true internal bug is grouped with a transient device-side hiccup behind the same user-facing modal. Mitigation: the DEBUG subtitle distinguishes the cases for developers; a future spec can promote frequently-observed type names into their own `EstimationFailure` cases as the data justifies.
+- `RefusalSheet`'s switch on `EstimationFailure` is no longer exhaustive without the new case — any caller pattern-matching on it elsewhere must add a branch. The compiler enforces this for switches over an enum without `@unknown default`, so the impact is visible at build time.
+
+### Impact
+
+`MedataCore/Sources/Pipeline/EstimationFailure.swift`, `App/CaptureFlowModel.swift`, `App/RefusalSheet.swift`. New unit test in the App test target (or `App/Tests/CaptureFlowModelTests.swift` if it exists; otherwise a new file) covering [Req 6.5](requirements.md#6.5).
+
+---
