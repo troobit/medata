@@ -195,8 +195,16 @@ public enum LiDARPlaneFitter {
     }
 
     static func refine(inliers: [Vec3], seedNormal: Vec3) throws -> (Vec3, Float) {
-        // Centroid; then SVD of centred matrix to find smallest singular vector =
-        // plane normal. d = n̂ · centroid.
+        // Centroid; then SVD of the 3×3 scatter matrix M = Σ (pᵢ − c)(pᵢ − c)ᵀ
+        // to find the smallest singular vector = plane normal. d = n̂ · centroid.
+        //
+        // M's left singular vectors equal A's left singular vectors (where A is
+        // the 3×n centred matrix), and M's singular values are A's squared, so
+        // the stability gate becomes √(M.s[2])/√(M.s[0]) ≥ stabilityRatioMin.
+        // The 3×n SVD is avoided because `LinearAlgebra.svdFull` requests
+        // JOBVT='A' and allocates an n×n V^T (~32 GB at the 1920×1440 inlier
+        // counts observed on iPhone 13 Pro Max). See bugfix spec
+        // `specs/bugfixes/lidar-plane-fit-oom-on-device-1920x1440/`.
         let n = inliers.count
         guard n >= 3 else { throw SupportPlaneError.lidarFitDegenerate }
         let cx = inliers.map { $0.x }.reduce(0, +) / Float(n)
@@ -204,23 +212,34 @@ public enum LiDARPlaneFitter {
         let cz = inliers.map { $0.z }.reduce(0, +) / Float(n)
         let centroid = Vec3(cx, cy, cz)
 
-        // Build column-major 3×n matrix A (rows = X/Y/Z, cols = points).
-        var a = [Float](repeating: 0, count: 3 * n)
+        // Accumulate the symmetric 3×3 scatter matrix in one O(n) pass.
+        var m00: Float = 0, m01: Float = 0, m02: Float = 0
+        var m11: Float = 0, m12: Float = 0, m22: Float = 0
         for idx in 0..<n {
             let p = inliers[idx] - centroid
-            a[idx * 3 + 0] = p.x
-            a[idx * 3 + 1] = p.y
-            a[idx * 3 + 2] = p.z
+            m00 += p.x * p.x
+            m01 += p.x * p.y
+            m02 += p.x * p.z
+            m11 += p.y * p.y
+            m12 += p.y * p.z
+            m22 += p.z * p.z
         }
-        let svd = try LinearAlgebra.svdFull(a, rows: 3, cols: n)
-        let sMax = svd.s[0]
-        let sMin = svd.s[2]
-        guard sMax > 0, sMin / sMax >= stabilityRatioMin else {
+        // Column-major 3×3.
+        let mCol: [Float] = [
+            m00, m01, m02,
+            m01, m11, m12,
+            m02, m12, m22
+        ]
+        let svd = try LinearAlgebra.svdFull(mCol, rows: 3, cols: 3)
+        // svd.s holds the singular values of M, i.e., the squared singular
+        // values of A. Compare √-magnitudes to keep the existing 1e-6 gate.
+        let sMaxA = svd.s[0].squareRoot()
+        let sMinA = svd.s[2].squareRoot()
+        guard sMaxA > 0, sMinA / sMaxA >= stabilityRatioMin else {
             throw SupportPlaneError.lidarFitDegenerate
         }
-        // Smallest right singular vector = normal. With A 3×n, U is 3×3, columns are
-        // the left singular vectors. The plane normal corresponds to the column with
-        // the smallest singular value (s[2]).
+        // U columns are the eigenvectors of M, ordered by descending singular
+        // value. Column 2 is the smallest — the plane normal.
         let nHatCandidate = Vec3(svd.u[6], svd.u[7], svd.u[8])
         var nHat = nHatCandidate.normalised()
         if nHat.dot(seedNormal) < 0 { nHat = -nHat }
