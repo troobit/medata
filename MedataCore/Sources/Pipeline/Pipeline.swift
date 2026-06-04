@@ -26,6 +26,13 @@ private let pipelineSignposter = OSSignposter(
 // `estimate.end` events emitted from `CaptureFlowModel`, so a single Console
 // predicate captures the full shutter→result trail.
 private let supportPlaneLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
+
+// Per-stage start log. Same channel as above; emitted at every pipeline-stage
+// entry so a Console.app trail identifies the stage in progress when
+// estimate.end never fires (i.e., the pipeline hangs inside one stage). The
+// next stage's start line implies the previous stage finished — no separate
+// end line is emitted to keep the trail compact.
+private let pipelineStageLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
 #endif
 
 // Orchestrator for pipeline stages C–L per design §2.2.
@@ -84,6 +91,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage C: Card detection ──────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=CardDetection")
         let cardInterval = pipelineSignposter.beginInterval("CardDetection")
         #endif
         let corners = await cardDetector.detect(in: nadir)
@@ -116,6 +124,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage D: SupportPlane ────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=SupportPlane")
         let planeInterval = pipelineSignposter.beginInterval("SupportPlane")
         #endif
         let plane: SupportPlane
@@ -135,6 +144,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage E: MetricScale ─────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=MetricScale")
         let scaleInterval = pipelineSignposter.beginInterval("MetricScale")
         #endif
         let lidarMmPerPx: Float?
@@ -162,6 +172,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage F: Segmentation ────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=Segmentation width=\(nadir.imageWidth, privacy: .public) height=\(nadir.imageHeight, privacy: .public)")
         let segInterval = pipelineSignposter.beginInterval("Segmentation")
         #endif
         let nadirSeg: SegmentationResult
@@ -183,6 +194,7 @@ public struct Pipeline: Sendable {
 
         // ── Stages G/H/I: Volume ─────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=Volume capturePath=\(capturePath.rawValue, privacy: .public)")
         let volumeInterval = pipelineSignposter.beginInterval("Volume")
         #endif
         let pbVolumes: PbVolumeResult
@@ -304,6 +316,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage J: Macros ──────────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=Macros")
         let macrosInterval = pipelineSignposter.beginInterval("Macros")
         #endif
         let macros = Macros.compute(
@@ -317,6 +330,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage K: Confidence ──────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=Confidence")
         let confidenceInterval = pipelineSignposter.beginInterval("Confidence")
         #endif
         let confidence = Confidence.combine(
@@ -355,6 +369,7 @@ public struct Pipeline: Sendable {
 
         // ── Stage L: Persistence ─────────────────────────────────────────────────
         #if DEBUG
+        pipelineStageLog.info("event=pipeline.stage.start name=Persistence")
         let persistenceInterval = pipelineSignposter.beginInterval("Persistence")
         #endif
         try await store.save(record, artefacts: [])

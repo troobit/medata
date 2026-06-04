@@ -3,6 +3,16 @@ import CaptureKit
 #if canImport(CoreML)
 import CoreML
 #endif
+#if DEBUG
+import os
+
+// Dev-build-only sub-stage log on the `ie.medata.app` / `Shutter` channel.
+// Same channel as Pipeline's per-stage start log (`pipeline.stage.start`), so
+// a single Console.app predicate captures the full trail and the hanging
+// segmenter sub-stage is identifiable by which `segmenter.substage.start`
+// line is last in the log.
+private let segmenterLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
+#endif
 
 // Inference engine protocol: takes the FP16 LE HWC buffer produced by
 // SegmenterPreProcessor and returns logits of shape [targetSize × targetSize × C]
@@ -36,15 +46,24 @@ public final class CoreMLSegmenter: @unchecked Sendable {
     }
 
     public func segment(_ frame: RawFrame) async throws -> SegmentationResult {
+        #if DEBUG
+        segmenterLog.info("event=segmenter.substage.start name=preprocess width=\(frame.imageWidth, privacy: .public) height=\(frame.imageHeight, privacy: .public)")
+        #endif
         let pre = try SegmenterPreProcessor.process(
             imageBytes: frame.imageBytes,
             pixelFormat: frame.pixelFormat,
             width: frame.imageWidth, height: frame.imageHeight,
             targetSize: targetSize
         )
+        #if DEBUG
+        segmenterLog.info("event=segmenter.substage.start name=inference targetSize=\(pre.targetSize, privacy: .public)")
+        #endif
         let (logits, classes) = try await engine.runInference(
             inputFP16Bytes: pre.bytes, targetSize: pre.targetSize
         )
+        #if DEBUG
+        segmenterLog.info("event=segmenter.substage.start name=postprocess scaledWidth=\(pre.scaledWidth, privacy: .public) scaledHeight=\(pre.scaledHeight, privacy: .public) originalWidth=\(pre.originalWidth, privacy: .public) originalHeight=\(pre.originalHeight, privacy: .public) classes=\(classes, privacy: .public)")
+        #endif
         let post = try SegmenterPostProcessor.process(
             logitsFP32: logits,
             targetSize: pre.targetSize, classes: classes,
