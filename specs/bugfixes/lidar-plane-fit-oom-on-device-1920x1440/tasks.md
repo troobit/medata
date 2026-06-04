@@ -18,16 +18,9 @@ references:
   - **References:** smolspec.md (Implementation Approach > Affected files; Verification item 1), decision_log.md (Decision 1 — Consequences > Positive).
   - Blocked-by: oom-001
 
-- [x] 3. CHANGELOG records the fix under [Unreleased] in the existing Bugfix-spec format <!-- id:oom-003 -->
-  - **Outcome:** `CHANGELOG.md`'s `[Unreleased]` section gains a new `Fixed (Bugfix spec — lidar-plane-fit-oom-on-device-1920x1440)` subsection naming the user-visible symptom (`Fatal error: failed to allocate 32198713632 bytes ...` after `event=supportplane.start width=1920 height=1440`), the root cause one-liner (`LiDARPlaneFitter.refine`'s 3×n SVD requests an n×n V^T it never reads), and the resolution (3×3 scatter-matrix SVD). One bullet per affected production source file, matching the style of the existing `Fixed (Bugfix spec — lidar-plane-fit-degenerate-on-clean-capture)` block.
-  - **Approach:** insert the new subsection immediately under the prior bug's subsection — the two are conceptually sequential (the prior fix unblocked this defect).
-  - **Verification:** `git diff CHANGELOG.md` shows only an addition under `[Unreleased]`.
-  - **References:** smolspec.md (Overview), decision_log.md (Decision 1 — Impact).
-  - Blocked-by: oom-001, oom-002
-
-- [ ] 4. On-device verification on iPhone 13 Pro Max captures a clean run and `report.md` is finalised with the device log <!-- id:oom-004 -->
+- [ ] 3. On-device verification on iPhone 13 Pro Max captures a clean run and `report.md` is finalised with the device log <!-- id:oom-004 -->
   - **Outcome:** A fresh device-log capture on iPhone 13 Pro Max iOS 26.5 from a fruit-plate test (bananas, grapes, orange on a flat table at ~30-45 cm, the same framing that produced the original OOM) shows `event=supportplane.end success=true residual_mm=... inliers=... candidates=...` instead of the `Fatal error: failed to allocate ...` abort. The captured log block is appended to `specs/bugfixes/lidar-plane-fit-oom-on-device-1920x1440/report.md` under Verification.
   - **Approach:** rebuild the Debug variant from the new branch, install on device, capture via Xcode's Console window or `log stream --predicate 'subsystem == "ie.medata.app"'`.
   - **Verification:** `report.md` shows no `Fatal error: failed to allocate ...` lines in the appended log block; `event=supportplane.end success=true` is present.
   - **References:** smolspec.md (Implementation Approach > Verification, item 4), decision_log.md (Decision 1).
-  - Blocked-by: oom-001, oom-002, oom-003
+  - Blocked-by: oom-001, oom-002

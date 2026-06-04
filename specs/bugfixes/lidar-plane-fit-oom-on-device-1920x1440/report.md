@@ -98,7 +98,6 @@ For the device input:
   3. Plane normal = column 2 of `svd.u` (smallest singular value of M = smallest singular value of A, same column index as before).
   4. Stability gate updated to `√svd.s[2] / √svd.s[0] ≥ stabilityRatioMin` — preserves the existing 1e-6 threshold against A's singular-value ratio (since M's singular values are A's squared).
 - `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterRefineScaleTests.swift` (new) — two Swift Testing cases: small-scale equivalence (300 perturbed-planar points → recovers seed normal and d ≈ 100 mm) and moderate-scale allocation bound (10 000 tilted-plane points → recovers normal/d and asserts RSS delta < 64 MB via `mach_task_basic_info`).
-- `CHANGELOG.md` — new `Fixed (Bugfix spec — lidar-plane-fit-oom-on-device-1920x1440)` subsection under `[Unreleased]`, directly below the prior bug's subsection.
 
 **Approach rationale:** the smallest surgical change that closes the root cause. The 3×3 scatter-matrix path is mathematically equivalent in real arithmetic (M's eigenvectors are A's left singular vectors; M's singular values are A's squared), and reuses the existing `LinearAlgebra.svdFull` helper (which is correct and tested at the 3×3 size by `CardPoseSolver`'s call sites). No new dependencies; no `LinearAlgebra` API change so `CardDetection`/`CardPoseSolver` are unaffected; no `LiDARPlaneFitter` public-API change so `Pipeline.fitSupportPlane` is unchanged. Compute also drops from O(n²) to O(n) as a side-benefit.
 
@@ -134,7 +133,6 @@ xcodebuild test \
 |------|--------|
 | `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` | `refine(inliers:seedNormal:)` rewritten to use 3×3 scatter-matrix SVD instead of 3×n full SVD; comment block now references this spec |
 | `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterRefineScaleTests.swift` | New file — 2 Swift Testing cases: small-scale equivalence; moderate-scale RSS-bound OOM sentinel |
-| `CHANGELOG.md` | New `Fixed (Bugfix spec — lidar-plane-fit-oom-on-device-1920x1440)` subsection under `[Unreleased]` |
 
 ## Verification
 

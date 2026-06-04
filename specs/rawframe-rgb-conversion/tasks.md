@@ -53,9 +53,3 @@ references:
   - **References:** requirements.md ([6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5)), design.md (App-layer error surfacing), decision_log.md (Decision 7).
   - Blocked-by: internal-error-type, flow-catch-all-test
 
-- [x] 8. CHANGELOG entry under [Unreleased] <!-- id:changelog -->
-  - **Outcome:** `CHANGELOG.md`'s `[Unreleased]` section gains a `Fixed (Spec — rawframe-rgb-conversion)` subsection naming (a) the YCbCr→BGRA conversion at the capture boundary via `PixelBufferAdapter` (vImage biplanar full-range, BGRA target, ConversionError taxonomy per Decisions 1, 3, 5, 6), (b) the deletion of `ARKitCaptureEngine.copyPixelBufferBytes` / `detectPixelFormat` and delegation to the adapter, and (c) the App-layer catch-all rewrite plus the new `EstimationFailure.internalError(String)` case and `RefusalSheet` mappings per Decision 7. One bullet per affected production source file, matching the style of the existing `Fixed (Bugfix spec — lidar-plane-fit-oom-on-device-1920x1440)` block in `CHANGELOG.md`. The 2026-06-04 on-device evidence (`nextup.md` lines 90-96 and 150-156) and the OOM bugfix commit `de7fada` are named as the prerequisite that unblocked this defect.
-  - **Approach:** Insert the new subsection immediately under the existing `Fixed (Bugfix spec — lidar-plane-fit-oom-on-device-1920x1440)` block, since this spec is the next chronological step. No edits to unrelated entries.
-  - **Verification:** `git diff CHANGELOG.md` shows only an addition under `[Unreleased]`; no whitespace churn elsewhere.
-  - **References:** requirements.md (Introduction → 2026-06-04 device evidence), decision_log.md (Decisions 1, 5, 6, 7).
-  - Blocked-by: engine-wiring, flow-catch-all-impl

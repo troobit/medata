@@ -94,7 +94,6 @@ xcodebuild test \
 | `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` | `bindPreviewSession` sets `runRequested = true` before `applyRunStateIfNeeded` |
 | `MedataCore/Tests/CaptureKitTests/ARKitCaptureEngineStreamsTests.swift` | New regression test `testBindPreviewSessionRunsConfigImmediately` |
 | `docs/agent-notes/camera-input-fix.md` | Added regression-and-fix section documenting the `bindPreviewSession` race |
-| `CHANGELOG.md` | New `Fixed` entry under `[Unreleased]` |
 
 ## Verification
 

@@ -66,7 +66,7 @@ Read in this order if you're new to the project:
 | [`specs/research/`](specs/research/) | The core pipeline: requirements, design (algorithms, schemas), decisions, tasks. |
 | [`specs/ui/`](specs/ui/) | The capture-flow shell: state machine, components, AR-session ownership, decisions. |
 | [`tools/segmenter/README.md`](tools/segmenter/README.md) | PyTorch → Core ML / TFLite export pipeline for the bundled segmenter. |
-| [`CHANGELOG.md`](CHANGELOG.md) | What changed and when. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Notable changes since the first version. |
 
 ## Build and test
 

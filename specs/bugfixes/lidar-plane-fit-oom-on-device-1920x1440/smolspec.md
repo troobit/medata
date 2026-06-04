@@ -70,7 +70,6 @@ Computational cost drops from `O(n²)` memory and `O(n²)` SVD work to `O(n)` sc
 
 - **`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift`** (~25 LOC) — rewrite the body of `refine(inliers:seedNormal:)` to accumulate `m00..m22` in one pass and call `LinearAlgebra.svdFull(mCol, rows: 3, cols: 3)`. No API change.
 - **`MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterRefineScaleTests.swift`** (new, ~90 LOC) — Swift Testing suite with two cases: (a) small-scale equivalence — 300 points on a perturbed plane recover the seed normal at d ≈ 100; (b) moderate-scale allocation bound — 10 000 points on a 3°-tilted plane recover the plane and the test wraps the call in a `mach_task_basic_info` RSS-delta probe asserting `delta < 64 MB`. Pre-fix the V^T allocation is ~400 MB and the assertion fails; post-fix the call uses negligible memory.
-- **`CHANGELOG.md`** — new `Fixed (Bugfix spec — lidar-plane-fit-oom-on-device-1920x1440)` subsection under `[Unreleased]`.
 
 ### Patterns to follow
 

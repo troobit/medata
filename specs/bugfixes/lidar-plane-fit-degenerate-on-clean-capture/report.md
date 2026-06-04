@@ -134,7 +134,6 @@ xcodebuild test \
 | `MedataCore/Tests/PipelineTests/CentreRectangleMaskTests.swift` | New file — 5 Swift Testing cases pinning the helper's pixel layout |
 | `MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift` | New file — 2 Swift Testing cases: all-ones mask → `noLidarPoints`; centre-rectangle mask → finite gravity-aligned plane |
 | `Package.swift` | `PipelineTests` target gains `SupportPlane` and `CaptureKit` dependencies for the regression fixture |
-| `CHANGELOG.md` | New `Fixed (Bugfix spec — lidar-plane-fit-degenerate-on-clean-capture)` subsection under `[Unreleased]` |
 
 ## Verification
 
