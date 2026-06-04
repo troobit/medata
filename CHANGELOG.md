@@ -31,6 +31,79 @@ Fixes a `Fatal error: failed to allocate 32198713632 bytes of memory with alignm
 - `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` — `refine(inliers:seedNormal:)` rewritten to accumulate the 3×3 scatter matrix in one O(n) pass and call `LinearAlgebra.svdFull(mCol, rows: 3, cols: 3)`. The plane-normal column index (column 2 of `svd.u`) is unchanged; the stability gate now compares `√svd.s[2] / √svd.s[0]` against `stabilityRatioMin` to preserve the existing 1e-6 threshold against A's singular-value ratio (since M's singular values are A's squared). `LinearAlgebra.svdFull` is unchanged — its 8×9 and 3×3 callers in `CardPoseSolver` are unaffected.
 - `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterRefineScaleTests.swift` (new) — Swift Testing suite with two cases: `refineSmallEquivalence` (300 perturbed-planar points recover the seed normal and d ≈ 100 mm, anchoring the algebraic substitution) and `refineAllocationBoundedAtModerateN` (10 000 tilted-plane points recover the plane and a `mach_task_basic_info` RSS-delta probe asserts the call grows resident size by less than 64 MB; pre-fix the n² V^T allocation is ~400 MB, post-fix it's sub-MB).
 
+### Fixed (Spec — rawframe-rgb-conversion)
+
+Restores correct pixel decoding at the capture boundary and stops the App-layer
+catch-all from mis-labelling non-scale pipeline failures as "Meal scale unknown".
+On-device evidence preceding this spec: the 2026-06-04 iPhone 13 Pro Max iOS 26.5
+run after the LiDAR-plane-fit-OOM bugfix (`de7fada`) showed
+`event=estimate.end success=false error=SegmentationError` paired with a
+"Meal scale unknown" refusal modal (`nextup.md` lines 90-96 and 150-156). The
+OOM fix was the prerequisite that exposed both the YCbCr→RGB defect and the
+catch-all mismapping addressed here.
+
+- `MedataCore/Sources/CaptureKit/PixelBufferAdapter.swift` — **new** enum
+  exposing `PixelBufferAdapter.convert(_:) throws -> Output` per Decisions 1, 3,
+  5, 6 of `specs/rawframe-rgb-conversion/decision_log.md`. Uses vImage
+  (`vImageConvert_420Yp8_CbCr8ToARGB8888` with permute map `[3, 2, 1, 0]`) and a
+  cached `vImage_YpCbCrToARGB` info struct built once from
+  `kvImage_YpCbCrToARGBMatrix_ITU_R_601_4` + a full-range pixel range to match
+  `kCVPixelFormatType_420YpCbCr8BiPlanarFullRange`. BGRA / RGBA sources are
+  passed through into a contiguous owned buffer with the source-buffer stride
+  padding collapsed (Req 1.3). Unsupported four-CCs throw
+  `ConversionError.unsupportedSourceFormat(fourCC:)` rendering the OSType as four
+  ASCII characters; vImage failures throw
+  `ConversionError.conversionFailed(vImageErrorCode:)`. Not platform-guarded —
+  reachable from the iOS Simulator and the macOS HarnessCLI (Req 3.2 / Decision 5).
+- `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` — deleted
+  `copyPixelBufferBytes` and `detectPixelFormat`; `buildRawFrame` now delegates
+  to `PixelBufferAdapter.convert(pixelBuffer)` and uses its `bytes` and `format`
+  on the `RawFrame` constructor (Req 1.1–1.5, 2.1–2.4, 3.3, 4.1). The
+  `frames: AsyncStream<ARFrame>` path is untouched, honouring Decision 2 / Req 4.1
+  (conversion runs only at shutter time).
+- `MedataCore/Sources/Pipeline/EstimationFailure.swift` — added
+  `case internalError(String)` with a localised message that reads
+  `"Couldn't process the photo. Internal error: \(typeName)"` in DEBUG and
+  `"Couldn't process the photo. Please try again."` in Release (Decision 7,
+  Req 6.1–6.4). The payload is the underlying error's Swift type name so the
+  on-screen text correlates with the device log's
+  `event=estimate.end success=false error=<Type>` line.
+- `App/CaptureFlowModel.swift` — rewrote both estimation catch-all blocks (in
+  `performFlow` and `runEstimation`) to compute
+  `let typeName = String(describing: type(of: error))`, emit
+  `captureFlowLog.info("event=estimate.end success=false error=\(typeName, privacy: .public)")`
+  via a new `Logger(subsystem: "ie.medata.captureflow", category: "Estimation")`,
+  and set `state = .refused(.internalError(typeName), retryStage: …)` in place
+  of the previous `.refused(.noScaleAvailable, …)` (Req 6.1, 6.2, 6.4, 6.5). The
+  `MetricScaleError.noScaleAvailable → EstimationFailure.noScaleAvailable` route
+  at `MedataCore/Sources/Pipeline/Pipeline.swift:118-122` is unchanged — that is
+  still the correct mapping for a genuine "no scale" condition.
+- `MedataCore/Tests/CaptureKitTests/PixelBufferAdapterTests.swift` — **new**
+  9-case suite (`testFlatGrayYCbCrProducesGrayBGRA`,
+  `testKnownColourPatchMatchesBT601`, `testOutputIsContiguousNoStridePadding`,
+  `testBGRASourcePassesThrough`, `testRGBASourceReportsRGBA`,
+  `testYCbCrSourceReportsBGRAOnOutput`, `testUnsupportedFourCCThrows`,
+  `testNonSquareDimensions`, `testRandomisedRoundTripWithinTolerance`). Synthetic
+  YCbCr / BGRA / RGBA `CVPixelBuffer`s are built via public CoreVideo APIs
+  (`CVPixelBufferCreate` / `CVPixelBufferCreateWithBytes`) with no ARKit
+  dependency. BT.601 colour-patch and the PBT-style 200-sample round-trip both
+  assert each channel within ±2 of the reference. The RGBA passthrough test
+  `XCTSkip`s on hosts where CoreVideo refuses `kCVPixelFormatType_32RGBA` (the
+  macOS SwiftPM test runner returns -6680).
+- `MedataCore/Tests/SegmentationTests/PreProcessorAcceptsAdapterOutputTests.swift`
+  — **new** cross-target sentinel running a synthetic 1920×1440 YCbCr buffer
+  through `PixelBufferAdapter.convert` and the resulting `(bytes, format, width,
+  height)` straight into `SegmenterPreProcessor.process`. Asserts no
+  `SegmentationError.invalidInputDimensions` is raised and that the
+  `PreProcessedFrame` has `targetSize × targetSize × 3 × 2` FP16 bytes
+  (Req 3.3 / 5.1).
+- `MeData/Tests/CaptureFlowModelInternalErrorTests.swift` — **new** Swift
+  Testing suite covering Req 6.5: injects a synthetic
+  `TestErrorType.synthetic` (non-`EstimationFailure`) into the `PipelineEstimator`
+  seam, drives `runEstimation` to completion, and asserts the resulting
+  `CaptureFlowModel.state` is `.refused(.internalError("TestErrorType"), …)` and
+  explicitly NOT `.refused(.noScaleAvailable, …)`.
+
 ### Added (Research spec — tilt-tolerant capture, tasks 84–90)
 
 - `MedataCore/Sources/PortableContracts/Schemas/GeomSubconfidences.proto` — `sigma_tilt` field (Decision 44) on the σ_geom record.

@@ -249,9 +249,11 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             buildDepthMap(scene: sceneDepth, depthFromColour: matrix_identity_float4x4)
         }
 
+        let converted = try PixelBufferAdapter.convert(pixelBuffer)
+
         return RawFrame(
-            imageBytes: copyPixelBufferBytes(pixelBuffer),
-            pixelFormat: detectPixelFormat(pixelBuffer),
+            imageBytes: converted.bytes,
+            pixelFormat: converted.format,
             colourSpace: .sRGB,
             orientation: 1,
             imageWidth: imageWidth, imageHeight: imageHeight,
@@ -315,21 +317,6 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
         )
     }
 
-    private func detectPixelFormat(_ buffer: CVPixelBuffer) -> PixelFormat {
-        switch CVPixelBufferGetPixelFormatType(buffer) {
-        case kCVPixelFormatType_32BGRA: return .bgra8
-        case kCVPixelFormatType_32RGBA: return .rgba8
-        default: return .bgra8
-        }
-    }
-
-    private func copyPixelBufferBytes(_ buffer: CVPixelBuffer) -> Data {
-        CVPixelBufferLockBaseAddress(buffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(buffer) else { return Data() }
-        let length = CVPixelBufferGetBytesPerRow(buffer) * CVPixelBufferGetHeight(buffer)
-        return Data(bytes: base, count: length)
-    }
 }
 
 private extension ARCamera.TrackingState {

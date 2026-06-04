@@ -25,6 +25,7 @@ extension EstimationFailure {
         case .lidarCoverageTooLow: return "square.stack.3d.up.slash"
         case .obliqueTiltOutOfRange: return "rotate.3d"
         case .mealsDbCorrupt: return "exclamationmark.octagon"
+        case .internalError: return "exclamationmark.triangle"
         }
     }
 
@@ -47,6 +48,7 @@ extension EstimationFailure {
         case .lidarCoverageTooLow: return "Not enough depth data"
         case .obliqueTiltOutOfRange: return "Tilt closer to 25°"
         case .mealsDbCorrupt: return "Meal history reset"
+        case .internalError: return "Couldn't process the photo"
         }
     }
 }
