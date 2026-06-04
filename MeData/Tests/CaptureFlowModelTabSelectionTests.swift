@@ -80,8 +80,15 @@ struct CaptureFlowModelTabSelectionTests {
         #expect(fixture.model.state == .permissionDenied(.camera))
     }
 
-    @Test("switching away while .refused leaves the refusal alone")
-    func refusedNoOp() async {
+    // Regression for `bugfix/refusal-sheet-dismissal` — surface-not-detected
+    // bugfix report. Previously `.refused` was preserved across a tab switch
+    // (Decision 15 carve-out) which, combined with the get-only refusal sheet
+    // binding, meant the modal popped back up whenever the user returned to
+    // the Photo tab. The new behaviour treats leaving the Photo tab while
+    // `.refused` as an implicit dismissal — same baseline as `.ready` or
+    // `.trackingLost` (reset to `.initialising`, AR session stopped).
+    @Test("switching away while .refused dismisses the refusal to .initialising")
+    func refusedDismissedOnTabLeave() async {
         let fixture = makeFixture(pipelineResult: .failure(EstimationFailure.noScaleAvailable))
         fixture.model.liveSampleDidUpdate(
             tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
@@ -93,10 +100,23 @@ struct CaptureFlowModelTabSelectionTests {
             return
         }
         fixture.model.tabSelectionChanged(to: .meals)
-        guard case .refused = fixture.model.state else {
-            Issue.record("refused state must persist across tab switch, got \(fixture.model.state)")
-            return
-        }
+        #expect(fixture.model.state == .initialising)
+    }
+
+    // Companion regression: after the user returns to the Photo tab, the
+    // refusal sheet must not re-present (model.refusal is nil because the
+    // state is no longer `.refused`).
+    @Test("returning to Photo after dismissing a refusal does not re-present the sheet")
+    func refusalDoesNotReappearOnPhotoReturn() async {
+        let fixture = makeFixture(pipelineResult: .failure(EstimationFailure.noScaleAvailable))
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        fixture.model.shutter()
+        await fixture.model.flowTask?.value
+        fixture.model.tabSelectionChanged(to: .meals)
+        fixture.model.tabSelectionChanged(to: .photo)
+        #expect(fixture.model.refusal == nil)
     }
 }
 

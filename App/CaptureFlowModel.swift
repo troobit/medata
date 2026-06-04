@@ -150,21 +150,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // Wraps the current refusal in an Identifiable surface so the bottom-sheet
     // refusal can bind to it via `.sheet(item:)` (Req §20.7 / Decision 16).
     // The `id` derives from the underlying failure so consecutive presentations
-    // of the same failure don't trip SwiftUI's diffing. Setting `nil` clears
-    // the refusal back into `.ready` via the standard tryAgain path.
+    // of the same failure don't trip SwiftUI's diffing. The setter is a no-op:
+    // SwiftUI writes nil on swipe-down but the dismissal path is the explicit
+    // `dismissRefusal()` command, called from the view's `refusalBinding.set`.
+    // Keeping the setter unimplemented makes "where dismissal happens" a single
+    // call site instead of two.
     var refusal: ActiveRefusal? {
-        get {
-            if case let .refused(failure, stage) = state {
-                return ActiveRefusal(failure: failure, retryStage: stage)
-            }
-            return nil
+        if case let .refused(failure, stage) = state {
+            return ActiveRefusal(failure: failure, retryStage: stage)
         }
-        set {
-            if newValue == nil, case .refused = state {
-                // Swipe-down dismisses without state change (still .refused);
-                // explicit retry uses `retry()` instead.
-            }
-        }
+        return nil
     }
 
     // MARK: - Public commands
@@ -221,6 +216,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         state = .ready(freshSnapshot())
     }
 
+    // Sheet swipe-down on the RefusalSheet (Req §20.7 / Decision 16). Clears
+    // the captured nadir and any in-flight mode so the user lands back at the
+    // viewfinder in a fresh state. The explicit retry path (`tryAgain`) is
+    // unchanged — it preserves `firstFrame` when retrying from oblique stage.
+    func dismissRefusal() {
+        guard case .refused = state else { return }
+        firstFrame = nil; firstFrameTiltDeg = nil
+        inFlightMode = nil
+        state = .ready(freshSnapshot())
+    }
+
     func openSettings() {
         #if canImport(UIKit)
         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -250,12 +256,14 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
-    // Tab-switch lifecycle per UI Req §1.7 / §18.7 (Decision 15). Mirrors
-    // `scenePhaseChanged(.background)` for non-Photo tabs with one carve-out:
-    // when the model is already in `.estimating`, the pipeline runs to
-    // completion and the result is presented on the next return to Photo.
-    // Permission-denied and refusal states are preserved across the switch so
-    // the user finds the same surface when they come back.
+    // Tab-switch lifecycle per UI Req §1.7 / §18.7 (Decision 15; the `.refused`
+    // arm is superseded by Decision 20 — see specs/bugfixes/surface-not-detected/
+    // report.md). Mirrors `scenePhaseChanged(.background)` for non-Photo tabs
+    // with one carve-out: when the model is already in `.estimating`, the
+    // pipeline runs to completion and the result is presented on the next
+    // return to Photo. Permission-denied is preserved across the switch (no
+    // engine to release); `.refused` is treated as an implicit dismissal —
+    // same baseline as `.ready`.
     func tabSelectionChanged(to tab: AppTab) {
         if tab == .photo {
             // Re-arm the AR session on return. The non-Photo branch below
@@ -275,10 +283,18 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // background (no AR session needed while we wait for the result).
             Task { [session] in try? await session.stop() }
             startTask = nil
-        case .permissionDenied, .refused:
-            // No engine to release (permission), or a banner the user will
-            // return to (refused). Leave the state alone.
+        case .permissionDenied:
+            // No engine to release. Leave the state alone.
             return
+        case .refused:
+            // Leaving Photo while refused dismisses the refusal — the user
+            // does not return to a sheet they cannot interactively dismiss
+            // before leaving (see surface-not-detected bugfix).
+            firstFrame = nil; firstFrameTiltDeg = nil
+            inFlightMode = nil
+            state = .initialising
+            Task { [session] in try? await session.stop() }
+            startTask = nil
         case .capturing:
             // Capture in flight but estimation hasn't started: cancel and
             // reset to the same baseline as backgrounding.

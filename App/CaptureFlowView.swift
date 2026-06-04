@@ -142,15 +142,18 @@ struct CaptureFlowView: View {
         return model.canShutter ? .ready : .disabled
     }
 
-    // Bridges `model.refusal` (read-only on the model side; setting `nil`
-    // currently has no effect) into a `Binding` for `.sheet(item:)`. A
-    // swipe-down on the sheet writes `nil` here, which is a no-op against the
-    // `.refused` state — the sheet re-presents on the next render if the
-    // model is still `.refused`, so we collapse the binding to a get-only.
+    // Bridges `model.refusal` into a `Binding` for `.sheet(item:)`. A swipe-down
+    // on the sheet writes `nil` here; the setter delegates to the model's
+    // explicit dismissal command, which transitions `.refused → .ready` so the
+    // sheet does not re-present on the next render (surface-not-detected
+    // bugfix). `model.refusal` itself stays derived from state — there is no
+    // separate stored refusal to keep in sync.
     private var refusalBinding: Binding<ActiveRefusal?> {
         Binding(
             get: { model.refusal },
-            set: { _ in }
+            set: { newValue in
+                if newValue == nil { model.dismissRefusal() }
+            }
         )
     }
 }
