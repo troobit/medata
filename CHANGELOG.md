@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- `docs/agent-notes/figma-archive.md` — record that the June Figma MCP quota was exhausted on 2026-06-09 when attempting tasks 4–7 (Logo + icons); document the next-quota-window resume shape (single `use_figma` call that creates `Logo` + `Icons` pages, builds the Logo variant set with `default` bound to `brand/accent` and `colour` as a 6-stop linear gradient, and binds 7 macro + 4 nav icon strokes to `gray/400`).
 - `docs/agent-notes/figma-archive.md` — correct the Starter-plan Figma MCP cap from "rate-limited" to the actual figure (View/Collab seats are capped at 6 tool calls per month total, reads and writes both counted), with guidance to batch each phase into a single `use_figma` script so one cap-slot covers one whole page of work.
 
 ### Added
