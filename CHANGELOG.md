@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `specs/ui-restoration/` — Figma-archive spec for the pre-refocus MeData design system: `requirements.md`, `design-system.md` (canonical inventory of brand tokens, Logo paths/variants/animation, component catalogue, icon suite, raster export specs, animation catalogue), `decision_log.md`, and `tasks.md`. Phase 1 (inventory verification) complete; design-system.md values spot-checked against snapshot `3b5d54d` — no gaps.
+
 ### Changed
 - `src/routes/capture/+page.svelte` — full capture page wiring: fetch `/api/recognition/status` on mount with skeleton loading state, conditional ManualEntryCTA/MockModeBanner rendering, 10MB client-side image size check, `handleSave()` wired to `POST /api/meals` with Blob Storage image upload (Req 6.4, 11.1, 11.3)
 
