@@ -17,7 +17,7 @@ references:
 
 ## Foundations
 
-- [ ] 2. Author Figma colour variables (brand + Tailwind steps) <!-- id:uo74o2c -->
+- [x] 2. Author Figma colour variables (brand + Tailwind steps) <!-- id:uo74o2c -->
   - Use the /figma-generate-library skill to create colour variables for brand-accent (#63ff00) and brand-bg (#064e3b).
   - Create variables for every Tailwind step listed in design-system.md §1.1a that components reference: gray-950, gray-900, gray-800, gray-700, gray-500, gray-400, gray-200, gray-100, red-500, red-400. Use the exact hex values from §1.1a.
   - Variable names should be stable and reusable (e.g. brand/accent, brand/bg, gray/950, red/500) so component fills can bind to them.
@@ -25,7 +25,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1)
 
-- [ ] 3. Author Figma text styles for the typography scale <!-- id:uo74o2d -->
+- [x] 3. Author Figma text styles for the typography scale <!-- id:uo74o2d -->
   - Create text styles for text-sm (14px), text-base (16px), text-lg (18px), text-xl (20px), text-2xl (24px), all using Tailwind's default sans stack (system fonts) per design-system.md §1.2.
   - No custom web font is loaded; do not substitute a branded font.
   - Blocked-by: uo74o2b (Verify design-system.md inventory completeness)

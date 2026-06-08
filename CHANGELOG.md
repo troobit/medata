@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Figma file "MeData Design System (Archive)" (`DhfBU0E6qogplXCWlUc6Yb`) — Foundations phase of the ui-restoration spec authored via the `/figma` plugin: `Colors` collection (mode `Value`) with 12 primitive variables (`brand/accent`, `brand/bg`, `gray/{950,900,800,700,500,400,200,100}`, `red/{500,400}`) bound to WEB CSS-variable code syntax with scoped pickers; 5 text styles (`text/{sm,base,lg,xl,2xl}`) on SF Pro Regular with Tailwind-default line-heights (tasks 2 + 3, requirements 2.1 + 2.2).
+- `docs/agent-notes/figma-archive.md` — captures the Figma file key, variable inventory, font rationale, and resume protocol for subsequent authoring sessions.
 - `specs/ui-restoration/` — Figma-archive spec for the pre-refocus MeData design system: `requirements.md`, `design-system.md` (canonical inventory of brand tokens, Logo paths/variants/animation, component catalogue, icon suite, raster export specs, animation catalogue), `decision_log.md`, and `tasks.md`. Phase 1 (inventory verification) complete; design-system.md values spot-checked against snapshot `3b5d54d` — no gaps.
 
 ### Changed
