@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- `docs/agent-notes/figma-archive.md` — correct the Starter-plan Figma MCP cap from "rate-limited" to the actual figure (View/Collab seats are capped at 6 tool calls per month total, reads and writes both counted), with guidance to batch each phase into a single `use_figma` script so one cap-slot covers one whole page of work.
+
 ### Added
 - Figma file "MeData Design System (Archive)" (`DhfBU0E6qogplXCWlUc6Yb`) — Foundations phase of the ui-restoration spec authored via the `/figma` plugin: `Colors` collection (mode `Value`) with 12 primitive variables (`brand/accent`, `brand/bg`, `gray/{950,900,800,700,500,400,200,100}`, `red/{500,400}`) bound to WEB CSS-variable code syntax with scoped pickers; 5 text styles (`text/{sm,base,lg,xl,2xl}`) on SF Pro Regular with Tailwind-default line-heights (tasks 2 + 3, requirements 2.1 + 2.2).
 - `docs/agent-notes/figma-archive.md` — captures the Figma file key, variable inventory, font rationale, resume protocol, and Starter-plan constraints (3-page cap forces `Foundations`/`Logo`/`Icons` page allocation; MCP write calls are rate-capped and may block mid-phase, in which case `use_figma`'s atomicity leaves the file unchanged so work resumes cleanly).

@@ -44,7 +44,7 @@ The repository code at commit `3b5d54d` (read via `git show 3b5d54d:<path>`) is 
 ## Plan constraints (Starter)
 
 - **3-page cap.** `figma.createPage()` throws on the 4th. Phase 3 needs to fit `Foundations`, `Logo`, and `Icons` (single page for both macro + nav icons) — not separate `Icons / Macros` and `Icons / Navigation`.
-- **Tool-call rate limit.** Figma MCP write calls are rate-capped on Starter; long phases hit the cap mid-flight and return `You've reached the Figma MCP tool call limit on the Starter plan.` `use_figma` is atomic, so a blocked call leaves the file unchanged — pick the work back up where it stopped on the next session.
+- **Tool-call hard cap (per Figma docs `rate-limits-access.md`).** View/Collab seats — and R. O'B's seat on this team is View — are capped at **6 Figma MCP tool calls per month total** across all files and plans. Not per-minute, not per-day: monthly. Reads count, writes count, even a read-only inspection call counts. `use_figma` is atomic so a blocked call leaves the file unchanged, but there is no quick retry — the cap resets next calendar month. When picking the work back up, scope the next session tightly: one large `use_figma` script that creates a whole page's worth of work (e.g. all 11 icons in one call) is one tool call; eleven separate per-icon calls is eleven. Plan accordingly.
 
 ## Resume protocol
 
