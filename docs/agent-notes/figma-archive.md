@@ -41,9 +41,15 @@ SF Pro is the macOS system font that `-apple-system` resolves to — picked beca
 
 The repository code at commit `3b5d54d` (read via `git show 3b5d54d:<path>`) is the source of truth. Drift is reconciled by re-running the Figma authoring scripts from code — never by hand-editing Figma and back-porting (decision_log Decision 1).
 
+## Plan constraints (Starter)
+
+- **3-page cap.** `figma.createPage()` throws on the 4th. Phase 3 needs to fit `Foundations`, `Logo`, and `Icons` (single page for both macro + nav icons) — not separate `Icons / Macros` and `Icons / Navigation`.
+- **Tool-call rate limit.** Figma MCP write calls are rate-capped on Starter; long phases hit the cap mid-flight and return `You've reached the Figma MCP tool call limit on the Starter plan.` `use_figma` is atomic, so a blocked call leaves the file unchanged — pick the work back up where it stopped on the next session.
+
 ## Resume protocol
 
 `rune` tracks task progress. To continue authoring:
 1. `rune next --phase --format json` to see the next phase
 2. Pass `fileKey: "DhfBU0E6qogplXCWlUc6Yb"` to `use_figma` calls
 3. Re-discover existing variables/styles with a read-only `use_figma` call before creating anything new (idempotency)
+4. Plan page allocation against the 3-page Starter cap (see above)
