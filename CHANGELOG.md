@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `docs/agent-notes/ui-baseline/` — placeholder previews for the unauthored Logo + icons of the ui-restoration spec, so the work is browseable until the Figma MCP quota resets (2026-07-01 at earliest). Contains 3 Logo SVGs (`default`/`contrast`/`colour`, viewBox `0 0 128 128`, scales freely), 7 macro icon SVGs (`alcohol`/`bsl`/`carbs`/`fat`/`insulin`/`meal`/`protein`), 4 navigation icon SVGs (`home`/`plus-circle`/`list`/`settings`), and a `README.md` with three mermaid diagrams (Figma file structure, Logo variant matrix, Button state machine) plus a per-asset "Uplift to Figma" mapping that doubles as the next-quota-window authoring brief. Path data is read verbatim from `design-system.md` §2.1, §7.1, §7.2 (with `settings` re-read from `git show 3b5d54d:src/lib/components/layout/BottomNav.svelte` where §7.2 elides it).
+
 ### Changed
+- `docs/agent-notes/figma-archive.md` — record the second exhausted-quota attempt on 2026-06-09 (01:00 UTC), with the exact Figma MCP error message and a pointer to the new `ui-baseline/` placeholder artifacts. The prepared one-shot `use_figma` script is verified-correct against the Plugin API and should be re-submitted as-is when quota resets.
+- `specs/ui-restoration/decision_log.md` — add Decision 8 documenting the placeholder-baseline strategy (SVG + mermaid previews in `docs/agent-notes/ui-baseline/` are non-canonical browseable artifacts; the Figma file remains the source of truth once authored).
 - `docs/agent-notes/figma-archive.md` — record that the June Figma MCP quota was exhausted on 2026-06-09 when attempting tasks 4–7 (Logo + icons); document the next-quota-window resume shape (single `use_figma` call that creates `Logo` + `Icons` pages, builds the Logo variant set with `default` bound to `brand/accent` and `colour` as a 6-stop linear gradient, and binds 7 macro + 4 nav icon strokes to `gray/400`).
 - `docs/agent-notes/figma-archive.md` — correct the Starter-plan Figma MCP cap from "rate-limited" to the actual figure (View/Collab seats are capped at 6 tool calls per month total, reads and writes both counted), with guidance to batch each phase into a single `use_figma` script so one cap-slot covers one whole page of work.
 

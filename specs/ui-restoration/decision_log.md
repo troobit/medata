@@ -226,3 +226,45 @@ The exact, reproducible specification belongs in `design-system.md` (the source 
 - The Figma file is not a faithful motion prototype; consumers must read `design-system.md` for exact timings.
 
 ---
+
+## Decision 8: Ship non-canonical SVG + mermaid placeholders while Figma authoring is quota-blocked
+
+**Date**: 2026-06-09
+**Status**: accepted
+
+### Context
+
+The Figma Starter plan caps MCP tool calls at 6 per month (per Figma's `rate-limits-access.md`); the June 2026 window was exhausted by the Foundations work (tasks 2-3) and earlier inspection calls. Two attempts on 2026-06-09 to author tasks 4-6 (Logo + icons) hit the cap with the file unchanged. The next quota window is 2026-07-01 at the earliest, leaving the spec stalled for ~3 weeks with no browseable representation of the Logo or icon work the spec is meant to deliver.
+
+### Decision
+
+Commit static SVG renders (3 Logo variants, 7 macro icons, 4 nav icons) plus mermaid diagrams (Figma file structure, Logo variant matrix, Button state machine) under `docs/agent-notes/ui-baseline/`, alongside an "Uplift to Figma" mapping that doubles as the next-quota-window authoring brief. These artifacts are explicitly **non-canonical**: the Figma file remains the source of truth once authored, and the SVGs are deleted or kept as a regression check after uplift — they are not maintained in parallel.
+
+### Rationale
+
+The spec's deliverable is the Figma archive, but the authoring step is blocked on a calendar window outside our control. A repo-local placeholder lets reviewers see what the Logo and icons look like, confirms the path data from design-system.md renders sensibly, and prepares an exact, machine-followable authoring brief — so the next quota-window session is mechanical, not interpretive. The cost is small (16 files, all generated from existing spec data) and the cleanup is mechanical (`rm -rf docs/agent-notes/ui-baseline/` after uplift).
+
+### Alternatives Considered
+
+- **Wait until July with no placeholders**: - Rejected; leaves the spec partially-archived with no way to see the Logo + icon work for ~3 weeks, and forces the next session to re-derive path data and authoring shape from scratch.
+- **Render placeholders directly into Figma using a non-MCP path (e.g. manual upload)**: - Rejected; breaks Decision 1 (code is the source of truth, Figma is generated from it via the `/figma` plugin) and creates a hand-authored Figma layer that drifts.
+- **Maintain SVGs and Figma in parallel after uplift**: - Rejected; bidirectional sync is exactly what Decision 1 forbids. The SVGs are a stopgap, not a parallel artifact stream.
+
+### Consequences
+
+**Positive:**
+- The Logo + icon work is browseable today via `docs/agent-notes/ui-baseline/README.md`.
+- The "Uplift to Figma" section makes the July session mechanical: one `use_figma` call, exact bindings spelled out.
+- Path data is sanity-checked (we can see the SVGs render) before being pushed to Figma — bugs in the spec's path data would be caught locally.
+
+**Negative:**
+- A second non-canonical asset location exists temporarily; a reviewer could mistake it for source-of-truth. Mitigated by an explicit disclaimer at the top of the placeholder README and in `docs/agent-notes/figma-archive.md`.
+- The settings-icon path was elided in `design-system.md` §7.2 and had to be re-read from the snapshot — same lookup will be needed in the Figma session; `design-system.md` §7.2 should be filled in before the next session.
+
+### Impact
+
+- `docs/agent-notes/ui-baseline/` (new directory, 16 files).
+- `docs/agent-notes/figma-archive.md` (cross-references the placeholders).
+- Rune tasks 4, 5, 6, 7 remain `Pending` — placeholders do **not** satisfy the spec's acceptance criteria, which are written against the Figma file.
+
+---
