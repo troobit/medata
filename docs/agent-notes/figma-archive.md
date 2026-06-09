@@ -1,5 +1,15 @@
 # Figma Archive — UI Restoration
 
+> **▶ RESUME ON OR AFTER 2026-07-01 — Figma MCP quota window reopens.**
+>
+> The June 2026 quota was exhausted on 2026-06-09 (two attempts). Rune tasks 4-13 are all `Pending` and all need `use_figma` calls. When picking this back up:
+>
+> 1. `cd /Users/r/repos/medata.worktrees/ui-restoration`
+> 2. `git checkout ui-restoration`
+> 3. Read `docs/agent-notes/ui-baseline/README.md` — the "Uplift to Figma" section is the verbatim authoring brief for tasks 4-6 (one bundled `use_figma` call).
+> 4. Run `/make-it-so for the ui-restoration spec` — Phase 3 ("Logo & Icons") is the next phase.
+> 5. Budget: 6 MCP tool calls for the whole month of July. Bundle tasks aggressively — task 7 (screenshot verification) is a separate call; tasks 8-11 (UI primitives), 12 (animations), and 13 (verification) each want their own bundle.
+
 The Figma file authored by the `ui-restoration` spec.
 
 - **File name:** MeData Design System (Archive)
