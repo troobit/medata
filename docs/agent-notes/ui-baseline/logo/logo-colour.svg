@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="MeData logo">
+  <defs>
+    <linearGradient id="colour-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E40303"/>
+      <stop offset="20%" stop-color="#FF8C00"/>
+      <stop offset="40%" stop-color="#FFED00"/>
+      <stop offset="60%" stop-color="#008026"/>
+      <stop offset="80%" stop-color="#24408E"/>
+      <stop offset="100%" stop-color="#732982"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#colour-gradient)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 24,24 C 130,24 130,104 24,104 L 24,64"/>
+    <path d="M 104,64 L 104,104"/>
+    <path d="M 64,64 L 64,64"/>
+  </g>
+</svg>
