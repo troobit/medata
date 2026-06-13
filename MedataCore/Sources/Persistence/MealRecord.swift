@@ -177,6 +177,52 @@ public extension MealRecord {
             photoAssetID: photoAssetID
         )
     }
+
+    // MARK: - events.metadata shape (Decision 6)
+    //
+    // The events table stores the verbatim meal record (the protobuf-JSON
+    // that used to live in record_json) plus the SQL-only `palette_version`
+    // column in a single JSON object:
+    //
+    //   { "record": "<pb.jsonString()>", "palette_version": "<paletteVersion>" }
+    //
+    // The inner `record` is held as a JSON string value so it round-trips
+    // byte-identical through any conforming encoder (Decision 31).
+
+    func metadataJSON() throws -> String {
+        let recordJSON = try pb.jsonString()
+        let outer: [String: Any] = [
+            "record": recordJSON,
+            "palette_version": paletteVersion
+        ]
+        // No options: byte stability of the inner `record` string is the
+        // only contract; outer-key order is not.
+        let data = try JSONSerialization.data(withJSONObject: outer, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    static func from(metadata: String) throws -> MealRecord {
+        let data = Data(metadata.utf8)
+        let parsed: Any
+        do {
+            parsed = try JSONSerialization.jsonObject(with: data, options: [])
+        } catch {
+            throw PersistenceError.corruptRecord("metadata is not valid JSON: \(error)")
+        }
+        guard let outer = parsed as? [String: Any] else {
+            throw PersistenceError.corruptRecord("metadata is not a JSON object")
+        }
+        guard let recordJSON = outer["record"] as? String else {
+            throw PersistenceError.corruptRecord("metadata.record missing or not a string")
+        }
+        guard let paletteVersion = outer["palette_version"] as? String else {
+            throw PersistenceError.corruptRecord("metadata.palette_version missing or not a string")
+        }
+        return try MealRecord.from(
+            jsonString: recordJSON,
+            paletteVersion: paletteVersion
+        )
+    }
 }
 
 // MARK: - CapturePath bridge
