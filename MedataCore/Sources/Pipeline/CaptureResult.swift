@@ -1,6 +1,7 @@
 import CaptureKit
 import Foundation
 import PortableContracts
+import SupportPlane
 
 // Input bundle produced by the capture flow and consumed by Pipeline.estimate(_:).
 // Carries all per-session data needed by the pipeline stages C–L (design §2.2).
@@ -18,6 +19,15 @@ public struct CaptureResult: Sendable {
     // converts to per-stage Δθ.
     public let nadirAngleAtCaptureDeg: Float
     public let obliqueAngleAtCaptureDeg: Float?
+    // Pre-shutter food-region mask sampled at nadir-capture instant (Decision 11).
+    // Threaded into `SupportPlaneFitter.fit` and the `foodRegionCoveragePercent`
+    // recompute inside `Pipeline.estimate`. nil ⇒ pre-shutter pass produced no
+    // mask within the 750 ms staleness window (Req 1.2 / 3.2).
+    public let preShutterFoodMask: BinaryMask?
+    // Age of `preShutterFoodMask` at nadir-capture instant, in milliseconds.
+    // Logged at `event=estimate.start` for on-device freshness telemetry.
+    // nil when `preShutterFoodMask` is nil.
+    public let preShutterMaskAgeMs: Int?
 
     public init(
         capturePath: CapturePath,
@@ -27,7 +37,9 @@ public struct CaptureResult: Sendable {
         databaseEdition: String,
         paletteVersion: String,
         nadirAngleAtCaptureDeg: Float = 0,
-        obliqueAngleAtCaptureDeg: Float? = nil
+        obliqueAngleAtCaptureDeg: Float? = nil,
+        preShutterFoodMask: BinaryMask? = nil,
+        preShutterMaskAgeMs: Int? = nil
     ) {
         self.capturePath = capturePath
         self.lidar = lidar
@@ -37,5 +49,7 @@ public struct CaptureResult: Sendable {
         self.paletteVersion = paletteVersion
         self.nadirAngleAtCaptureDeg = nadirAngleAtCaptureDeg
         self.obliqueAngleAtCaptureDeg = obliqueAngleAtCaptureDeg
+        self.preShutterFoodMask = preShutterFoodMask
+        self.preShutterMaskAgeMs = preShutterMaskAgeMs
     }
 }

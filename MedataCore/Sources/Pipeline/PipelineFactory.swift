@@ -3,6 +3,7 @@ import CaptureKit
 import Foods
 import Foundation
 import Segmentation
+import SupportPlane
 
 // Pipeline construction for device-MVP builds per design §2.5 / Decision 42 / Req §23.
 //
@@ -14,8 +15,10 @@ import Segmentation
 //     `segmenterSource = "coreml_<modelVersion>"`. Throws on missing model.
 //
 // The bundled CoFID + AFCD food database (Decision 39) is loaded via
-// `GRDBFoodDatabase.bundled()`. A no-op `CardDetector` is wired in — the
-// Vision-backed implementation will land alongside Phase 3 capture work.
+// `GRDBFoodDatabase.bundled()`. Production callers pass a Vision-backed
+// `CardDetector` (the App target's `VisionCardDetector`); MedataCore tests
+// pass `NullCardDetector()` (internal to the Pipeline module) or a custom
+// mock conformance.
 
 public enum PipelineFactoryError: Error, Equatable {
     // Phase 3: the bundled `food_segmenter.mlpackage` is not present in the
@@ -26,7 +29,9 @@ public enum PipelineFactoryError: Error, Equatable {
 extension Pipeline {
     public static func makeForDevice(
         store: any PersistenceStore,
-        palette: ClassPalette = .v1Standard
+        cardDetector: any CardDetector,
+        palette: ClassPalette = .v1Standard,
+        supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter()
     ) throws -> Pipeline {
         let foods = try GRDBFoodDatabase.bundled()
         let targetSize = SegmenterPreProcessor.defaultTargetSize
@@ -52,17 +57,12 @@ extension Pipeline {
             modelPath: modelPath, palette: palette, engine: engine, targetSize: targetSize
         )
         return Pipeline(
-            cardDetector: NullCardDetector(),
+            cardDetector: cardDetector,
             segmenter: segmenter,
             database: foods,
             store: store,
+            supportPlaneFitter: supportPlaneFitter,
             segmenterSource: source
         )
     }
-}
-
-// No-op card detector. Single-view LiDAR meals do not require a card; the
-// canonical two-view path will get a Vision-backed detector in Phase 3.
-private struct NullCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
 }

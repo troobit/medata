@@ -5,16 +5,14 @@ import PortableContracts
 import Testing
 @testable import Pipeline
 
-// Regression coverage for the bugfix at
-// `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/`. Two test cases
-// share the same synthetic depth fixture (a gravity-aligned table at d = 200 mm
-// with a closer "plate" patch in the centre):
-//   (a) with an all-ones mask, `LiDARPlaneFitter.fit` throws `noLidarPoints` —
-//       the pre-fix behaviour, encoded as a sentinel so the regression cannot
-//       silently return.
-//   (b) with the centre-rectangle mask from `makeCentreRectangleMask`, the fit
-//       returns a finite plane within `gravityAngleMaxRad` of the synthesised
-//       gravity vector and below `LiDARPlaneFitter.residualMaxMm`.
+// Regression sentinel for the bugfix at
+// `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/`. With an
+// all-ones mask, `LiDARPlaneFitter.fit` throws `noLidarPoints` — the pre-fix
+// behaviour, kept as a regression sentinel per Req 8.6 against any future
+// placeholder mask. (The centre-rectangle test that previously paired with
+// this sentinel was removed alongside `CentreRectangleMask.swift` per Req 2.2;
+// the post-spec coverage comes from `SupportPlaneFitterTests` exercising the
+// `LiDARSupportPlaneFitter` protocol surface.)
 @Suite("Pipeline rough-mask regression (lidarFitDegenerate bugfix)")
 struct SupportPlaneRoughMaskTests {
 
@@ -38,29 +36,6 @@ struct SupportPlaneRoughMaskTests {
             #expect(error == .noLidarPoints,
                     "expected noLidarPoints; got \(error)")
         }
-    }
-
-    @Test("centre-rectangle mask yields a finite gravity-aligned plane")
-    func centreRectangleMaskFitsTablePlane() throws {
-        let fixture = Self.makeFixture()
-        let mask = makeCentreRectangleMask(
-            width: fixture.width,
-            height: fixture.height,
-            fillFraction: centreRectangleFillFraction
-        )
-        let plane = try LiDARPlaneFitter.fit(.init(
-            depth: fixture.depth,
-            colourIntrinsics: fixture.intrinsics,
-            foodRegionMask: mask,
-            gravityCamera: fixture.gravity
-        ))
-        let cosAngle = plane.normal.dot(fixture.gravity)
-        let angleRad = acos(max(-1, min(1, cosAngle)))
-        #expect(angleRad <= LiDARPlaneFitter.gravityAngleMaxRad,
-                "plane normal off-gravity by \(angleRad) rad")
-        #expect(plane.residualMm.isFinite, "residual should be finite")
-        #expect(plane.residualMm < LiDARPlaneFitter.residualMaxMm,
-                "residual \(plane.residualMm) mm exceeds \(LiDARPlaneFitter.residualMaxMm) mm cap")
     }
 
     // MARK: - Fixture

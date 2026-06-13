@@ -9,7 +9,7 @@ references:
 
 ## MedataCore
 
-- [ ] 1. Write tests for SupportPlaneFitter protocol contract <!-- id:81wvfiq -->
+- [x] 1. Write tests for SupportPlaneFitter protocol contract <!-- id:81wvfiq -->
   - New test file: MedataCore/Tests/SupportPlaneTests/SupportPlaneFitterTests.swift (or extend an existing SupportPlane test target file).
   - Cover the 2x2 decision table in design SupportPlaneFitter section: (depth nil | mask nil -> throws), (depth nil | mask empty -> throws), (depth nil | mask non-empty -> CardOnlyPlaneFitter branch returns finite plane on the existing card-only fixture), (depth present | mask nil -> throws), (depth present | mask empty -> throws), (depth present | mask non-empty -> LiDARPlaneFitter branch returns finite plane on synthetic fruit-plate fixture).
   - Empty-mask cases must throw EstimationFailure.noFoodPixels regardless of depth presence (Req 3.1 / Decision 2).
@@ -17,7 +17,7 @@ references:
   - Stream: 1
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
-- [ ] 2. Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field <!-- id:81wvfir -->
+- [x] 2. Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field <!-- id:81wvfir -->
   - New file: MedataCore/Sources/SupportPlane/SupportPlaneFitter.swift containing the public protocol SupportPlaneFitter and public struct LiDARSupportPlaneFitter per design SupportPlaneFitter section.
   - Empty-mask rejection happens at the protocol entry, BEFORE the LiDAR-vs-card dispatch (Decision 2 / 2x2 decision table).
   - LiDARSupportPlaneFitter wraps the existing LiDARPlaneFitter.fit(_:) and CardOnlyPlaneFitter.fit(_:) call sites currently inlined in Pipeline.fitSupportPlane; SupportPlaneError -> EstimationFailure mapping is preserved unchanged.
@@ -27,7 +27,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
-- [ ] 3. Move NullCardDetector to its own file; change PipelineFactory.makeForDevice signature <!-- id:81wvfis -->
+- [x] 3. Move NullCardDetector to its own file; change PipelineFactory.makeForDevice signature <!-- id:81wvfis -->
   - Move the private NullCardDetector struct out of MedataCore/Sources/Pipeline/PipelineFactory.swift into a new file MedataCore/Sources/Pipeline/NullCardDetector.swift with internal visibility.
   - Change PipelineFactory.makeForDevice signature to (store:cardDetector:palette:supportPlaneFitter:) per design PipelineFactory signature section. cardDetector is required (no default). supportPlaneFitter defaults to LiDARSupportPlaneFitter().
   - Remove the inline NullCardDetector() construction from makeForDevice; production builds wire VisionCardDetector from the App caller per task 14.
@@ -36,14 +36,14 @@ references:
   - Stream: 1
   - Requirements: [5.2](requirements.md#5.2)
 
-- [ ] 4. Write tests for StubInferenceEngine centred-ellipse output <!-- id:81wvfit -->
+- [x] 4. Write tests for StubInferenceEngine centred-ellipse output <!-- id:81wvfit -->
   - Update MedataCore/Tests/SegmentationTests/StubInferenceEngineTests.swift: rewrite testArgmaxOfEveryPixelEqualsDominantClass_defaultDominantZero, testArgmaxOfEveryPixelEqualsDominantClass_explicitDominantFive, and testDominantClassProbabilityAtLeastZeroPointNineNine per design StubInferenceEngine test impact table.
   - Add a new test asserting the food-pixel count is within 28-32% of `targetSize x targetSize` for targetSize = 256 (Decision 8: 30 +/- 2%).
   - Add a test asserting outside-ellipse pixels have mBackground >= 0.99 and inside-ellipse pixels have mDominant >= 0.99.
   - Stream: 1
   - Requirements: [1.5](requirements.md#1.5)
 
-- [ ] 5. Implement StubInferenceEngine centred-ellipse predicate <!-- id:81wvfiu -->
+- [x] 5. Implement StubInferenceEngine centred-ellipse predicate <!-- id:81wvfiu -->
   - Modify MedataCore/Sources/Segmentation/StubInferenceEngine.swift per design StubInferenceEngine section: replace the uniform-dominant write loop with the centred-ellipse predicate (alpha = 0.618; inside -> dominant logit; outside -> background-class logit).
   - Tests rewritten in task 4 must now pass.
   - Audit HarnessCore/FixtureRunner.swift:153,221 and refresh any fixtures that pin pre-change spatial distribution.
@@ -51,7 +51,7 @@ references:
   - Stream: 1
   - Requirements: [1.5](requirements.md#1.5)
 
-- [ ] 6. Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space) <!-- id:81wvfiv -->
+- [x] 6. Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space) <!-- id:81wvfiv -->
   - New test file: MedataCore/Tests/PipelineTests/FoodRegionCoverageTests.swift.
   - Test: mask 1920x1440 with food-area >= 10000 pixels + synthetic 256x192 confidence buffer where 50% of food-projected pixels pass threshold -> returns 50% +/- 1% (Req 8.4).
   - Test: mask empty -> returns 0 (Req 4.2).
@@ -60,14 +60,14 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [8.4](requirements.md#8.4)
 
-- [ ] 7. Implement computeFoodRegionCoverage; integrate Pipeline.estimate with SupportPlaneFitter, mask, and recomputed coverage; add logging <!-- id:81wvfiw -->
+- [x] 7. Implement computeFoodRegionCoverage; integrate Pipeline.estimate with SupportPlaneFitter, mask, and recomputed coverage; add logging <!-- id:81wvfiw -->
   - Add computeFoodRegionCoverage(confidenceMap:confidenceThreshold:mask:colourWidth:colourHeight:) to MedataCore/Sources/Pipeline/ (helper file or inline in Pipeline.swift) per design Pipeline.estimate coverage recompute section.
   - Modify Pipeline.fitSupportPlane to delegate to supportPlaneFitter.fit(nadir:cardPose:corners:preShutterFoodMask:) (keep the SupportPlaneError -> EstimationFailure mapping at the call site).
   - Modify Pipeline.estimate to read captureResult.preShutterFoodMask, pass it through, then call computeFoodRegionCoverage after fitSupportPlane returns.
   - Update Pipeline.init to take supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter() parameter.
   - Logging changes (DEBUG-only, ie.medata.app / Shutter channel): supportplane.start gains source=pre_shutter; estimate.start gains maskAgeMs=<int> (if mask age is not threaded through CaptureResult, add a preShutterMaskAgeMs: Int? companion field in this task and update CaptureResult initialiser); estimate.end gains foodRegionCoveragePercent=<float>.
   - All existing Pipeline / SupportPlane tests must continue to pass; the FoodRegionCoverageTests from task 6 must now pass.
-  - Blocked-by: 81wvfir (Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field), 81wvfiv (Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space)), 256x192, 256x192
+  - Blocked-by: 81wvfir (Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field), 81wvfiv (Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space)), 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.5](requirements.md#4.5), [7.2](requirements.md#7.2), [7.4](requirements.md#7.4)
 
@@ -113,7 +113,7 @@ references:
   - Convert ArgmaxMap -> BinaryMask via existing PipelineBridges.foodMask(from:palette:).
   - DEBUG-only logging: `event=preshutter.mask.update foodPixels=<int> ageMs=<int> source=pre_shutter_stub|pre_shutter_coreml latencyMs=<int>` and `event=preshutter.cadence.miss expectedHz=2 actualMs=<int>` per design Logging section (Reqs 7.1, 7.4).
   - Inflight-task latest-wins discipline per Decision 5: cancel-then-await in awaitPaused(); drop frames while in-flight in resume(frames:).
-  - Blocked-by: 81wvfiz (Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log)), cadence, cadence, 81wvfiu (Implement StubInferenceEngine centred-ellipse predicate)
+  - Blocked-by: 81wvfiz (Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log)), cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, 81wvfiu (Implement StubInferenceEngine centred-ellipse predicate)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [7.1](requirements.md#7.1), [7.4](requirements.md#7.4)
 
@@ -163,6 +163,6 @@ references:
   - Remove any remaining inline references; production Pipeline.fitSupportPlane by this point delegates entirely to LiDARSupportPlaneFitter.fit(...) (task 7), so the helper has no callers.
   - Verify MedataCore/Tests/PipelineTests/CentreRectangleMaskTests.swift is also deleted (it pinned the deleted helper's output).
   - Verify the existing MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift all-ones-mask sentinel still passes -- its assertion against LiDARPlaneFitter going degenerate on an all-ones mask is independent of the centred-rectangle helper (Req 8.6).
-  - Blocked-by: 81wvfj4 (Write integration test for mask routing (Req 8.7)), routing, routing
+  - Blocked-by: 81wvfj4 (Write integration test for mask routing (Req 8.7)), routing, routing, routing, routing, routing, routing, routing, routing, routing
   - Stream: 1
   - Requirements: [2.2](requirements.md#2.2), [8.6](requirements.md#8.6)

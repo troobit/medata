@@ -34,10 +34,31 @@ public struct StubInferenceEngine: SegmenterInferenceEngine, Sendable {
         let classes = palette.totalClasses
         let pixelCount = targetSize * targetSize
         var logits = [Float](repeating: Self.recessiveLogit, count: pixelCount * classes)
-        // Stride writes through the dominant-class slot only — touching ~targetSize²
-        // values rather than C·targetSize² — comfortably inside the 50 ms budget.
-        for p in 0..<pixelCount {
-            logits[p * classes + dominantClass] = Self.dominantLogit
+        // Centred-ellipse predicate per Decision 8 of
+        // `specs/pipeline-real-device-correctness/`. Semi-axes (α·targetSize/2,
+        // α·targetSize/2) with α = 0.618 cover π·α²/4 ≈ 30 % of frame area, so
+        // the pre-shutter pass produces a non-trivial, OOM-bounded mask under
+        // Phase 1 dev builds. Inside ellipse → dominant logit; outside →
+        // background-class logit.
+        let alpha: Float = 0.618
+        let cx = Float(targetSize) / 2
+        let cy = Float(targetSize) / 2
+        let rx = alpha * Float(targetSize) / 2
+        let ry = alpha * Float(targetSize) / 2
+        let background = palette.background
+        for y in 0..<targetSize {
+            let dy = (Float(y) + 0.5 - cy) / ry
+            let dyy = dy * dy
+            for x in 0..<targetSize {
+                let dx = (Float(x) + 0.5 - cx) / rx
+                let inside = (dx * dx + dyy) <= 1
+                let pixel = y * targetSize + x
+                if inside {
+                    logits[pixel * classes + dominantClass] = Self.dominantLogit
+                } else {
+                    logits[pixel * classes + background] = Self.dominantLogit
+                }
+            }
         }
         return (logits, classes)
     }

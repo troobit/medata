@@ -70,13 +70,20 @@ final class EstimationFailureTests: XCTestCase {
             database: EmptyFoodDatabase(),
             store: NoOpPersistenceStore()
         )
+        let nadir = RawFrame.fixture(timestampMonotonicNs: 0)   // no depth
+        // Non-empty pre-shutter mask so the new SupportPlaneFitter's empty-
+        // mask gate (Decision 2) does not pre-empt the noScaleAvailable path.
+        let mask = makeNonEmptyMask(
+            width: nadir.imageWidth, height: nadir.imageHeight
+        )
         let captureResult = CaptureResult(
             capturePath: .twoViewSfS,
             lidar: .unavailable,
-            nadirFrame: .fixture(timestampMonotonicNs: 0),   // no depth
+            nadirFrame: nadir,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1"
+            paletteVersion: "v1",
+            preShutterFoodMask: mask
         )
         do {
             _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
@@ -284,6 +291,17 @@ private func makeStubSegmenter() -> CoreMLSegmenter {
         palette: palette,
         engine: ZeroLogitsEngine(classes: palette.totalClasses)
     )
+}
+
+// Builds a tiny non-empty BinaryMask so empty-mask gating doesn't pre-empt
+// the test's intended refusal path.
+import SupportPlane
+private func makeNonEmptyMask(width: Int, height: Int) -> BinaryMask {
+    var pixels = [UInt8](repeating: 0, count: width * height)
+    let cx = width / 2
+    let cy = height / 2
+    pixels[cy * width + cx] = 1
+    return BinaryMask(pixels: pixels, width: width, height: height)
 }
 
 private func makeMinimalDepthMap() -> DepthMap {

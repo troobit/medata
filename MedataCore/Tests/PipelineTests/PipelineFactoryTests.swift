@@ -47,14 +47,14 @@ final class PipelineFactoryTests: XCTestCase {
     // GRDBFoodDatabase.bundled() loads, the stub engine is selected, and
     // CoreMLSegmenter wraps it without referencing a `.mlpackage` on disk.
     func testMakeForDeviceDoesNotThrowUnderDevStub() throws {
-        _ = try Pipeline.makeForDevice(store: store)
+        _ = try Pipeline.makeForDevice(store: store, cardDetector: NullCardDetector())
     }
 
     // Under DEV_STUB_SEGMENTER (the SPM-test default), the factory stamps
     // `segmenterSource = "dev_stub"` so every meal it produces carries the
     // banner-triggering value defined in Req §23.6.
     func testMakeForDeviceStampsDevStub() throws {
-        let pipeline = try Pipeline.makeForDevice(store: store)
+        let pipeline = try Pipeline.makeForDevice(store: store, cardDetector: NullCardDetector())
         XCTAssertEqual(pipeline.segmenterSource, "dev_stub",
                        "Phase 1 records must be stamped dev_stub per Req §23.6")
     }
