@@ -6,7 +6,7 @@
 | [Ui](#ui) | 2026-05-22 | Done | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. |
 | [Research](#research) | 2026-05-24 | Done | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. |
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
-| [Event Log Schema](#event-log-schema) | 2026-06-10 | No Tasks | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
+| [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 
 ---
 
@@ -52,4 +52,6 @@ Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-t
 Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata.
 
 - [decision_log.md](event-log-schema/decision_log.md)
+- [design.md](event-log-schema/design.md)
 - [requirements.md](event-log-schema/requirements.md)
+- [tasks.md](event-log-schema/tasks.md)
