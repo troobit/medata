@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `computeFoodRegionCoverage` helper that recomputes `LiDARStatus.foodRegionCoveragePercent` in 256×192 confidence-buffer space per Decision 14.
 - `SupportPlaneError.emptyFoodMask` case mapped to `EstimationFailure.noFoodPixels` so empty/missing masks refuse with the existing modal copy (Decision 2).
 - `MedataCore/Sources/Pipeline/NullCardDetector.swift` so MedataCore tests can reuse the no-op detector without redefining it.
+- `App/VisionCardDetector.swift`: Vision-backed `CardDetector` conformance reusing a single `VNDetectRectanglesRequest` configured for the ID-1 aspect / size envelope, BGRA→`CGImage` conversion, async `warmup()` over a 64×64 blank buffer (Req 5.7), and a DEBUG-gated `event=carddetect.end success=… cornerCount=… latencyMs=…` log on `ie.medata.app`/`Shutter` (Reqs 7.3, 7.4).
+- `MeData/Tests/VisionCardDetectorTests.swift`: Swift Testing suite that synthesises a 1920×1440 BGRA buffer with a single ID-1-aspect rectangle and asserts corner order TL→TR→BR→BL, nil return on an unrecognisable buffer (Req 5.4), and warm detection latency within the on-host CI ceiling (Req 5.6).
 
 ### Changed
 
