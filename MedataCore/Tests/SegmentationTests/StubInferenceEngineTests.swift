@@ -69,34 +69,72 @@ final class StubInferenceEngineTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 
-    // MARK: - Argmax and probability mass
+    // MARK: - Argmax distribution (centred-ellipse predicate, Decision 8)
 
-    func testArgmaxOfEveryPixelEqualsDominantClass_defaultDominantZero() async throws {
+    // Pre-spec all-ones argmax (`unique == [0]`) is replaced by a two-class
+    // distribution: dominantClass inside the centred ellipse, background
+    // outside. The exact pixel count is asserted by the area test below.
+    func testArgmaxIsDominantOrBackground_defaultDominantZero() async throws {
         let palette = makePalette()
         let stub = StubInferenceEngine(palette: palette)             // default dominantClass = 0
         let segmenter = CoreMLSegmenter(modelPath: "/dev/null", palette: palette, engine: stub)
         let frame = makeFrame()
         let result = try await segmenter.segment(frame)
         let unique = uniqueClassIds(in: result.argmax)
-        XCTAssertEqual(unique, [0], "every pixel should be labelled the dominant class (default 0)")
+        XCTAssertEqual(unique, Set([UInt8(0), UInt8(palette.background)]),
+                       "stub should produce dominantClass inside the ellipse and background outside")
     }
 
-    func testArgmaxOfEveryPixelEqualsDominantClass_explicitDominantFive() async throws {
+    func testArgmaxIsDominantOrBackground_explicitDominantFive() async throws {
         let palette = makePalette()
         let stub = StubInferenceEngine(palette: palette, dominantClass: 5)
         let segmenter = CoreMLSegmenter(modelPath: "/dev/null", palette: palette, engine: stub)
         let frame = makeFrame()
         let result = try await segmenter.segment(frame)
         let unique = uniqueClassIds(in: result.argmax)
-        XCTAssertEqual(unique, [5])
+        XCTAssertEqual(unique, Set([UInt8(5), UInt8(palette.background)]))
     }
 
-    // Per Req §23.2: mass at `dominantClass` ≥ 0.99 and remaining classes sum to ≤ 0.01.
-    // After softmax in post-processing the per-pixel distribution at the dominant
-    // class is ≥ 0.99; the remaining 1-mass is shared across the other classes.
-    func testDominantClassProbabilityAtLeastZeroPointNineNine() async throws {
+    // Decision 8: the dev-stub returns a centred-ellipse food region covering
+    // 30 ± 2 % of the input frame area. Asserted at the inference layer (raw
+    // logits) so the test is decoupled from CoreMLSegmenter's post-process
+    // downsampling. Iterates a 256×256 logits buffer at targetSize = 256.
+    func testFoodPixelCountIsThirtyPercentOfFrameAtTargetSize256() async throws {
         let palette = makePalette()
-        let stub = StubInferenceEngine(palette: palette, dominantClass: 0)
+        let dominantClass = 0
+        let stub = StubInferenceEngine(palette: palette, dominantClass: dominantClass)
+        let targetSize = 256
+        let bytes = Data(repeating: 0, count: targetSize * targetSize * 3 * 2)
+        let (logits, classes) = try await stub.runInference(
+            inputFP16Bytes: bytes, targetSize: targetSize
+        )
+        XCTAssertEqual(classes, palette.totalClasses)
+        var foodPixels = 0
+        for pixel in 0..<(targetSize * targetSize) {
+            let off = pixel * classes
+            var bestClass = 0
+            var bestLogit: Float = -.infinity
+            for c in 0..<classes where logits[off + c] > bestLogit {
+                bestLogit = logits[off + c]
+                bestClass = c
+            }
+            if bestClass == dominantClass { foodPixels += 1 }
+        }
+        let totalPixels = targetSize * targetSize
+        let coverage = Float(foodPixels) / Float(totalPixels)
+        XCTAssertGreaterThanOrEqual(coverage, 0.28,
+                                    "food coverage \(coverage) below Decision 8 floor 28 %")
+        XCTAssertLessThanOrEqual(coverage, 0.32,
+                                 "food coverage \(coverage) above Decision 8 ceiling 32 %")
+    }
+
+    // Inside-ellipse pixels carry ≥ 0.99 mass at dominantClass; outside-ellipse
+    // pixels carry ≥ 0.99 mass at the palette's background class. Verified at
+    // the CoreMLSegmenter output (post-softmax) to mirror downstream consumers.
+    func testInsideEllipseDominantAndOutsideEllipseBackgroundMassAreAtLeast099() async throws {
+        let palette = makePalette()
+        let dominantClass = 0
+        let stub = StubInferenceEngine(palette: palette, dominantClass: dominantClass)
         let segmenter = CoreMLSegmenter(modelPath: "/dev/null", palette: palette, engine: stub)
         let frame = makeFrame()
         let result = try await segmenter.segment(frame)
@@ -106,19 +144,28 @@ final class StubInferenceEngineTests: XCTestCase {
         XCTAssertEqual(probs.bytes.count, pixelCount * classes * 2,
                        "FP16 byte size must equal H*W*C*2 (portable HWC row-major contract)")
         let decoded = FP16Bytes.decode(probs.bytes, count: pixelCount * classes)
-        for pixel in 0..<pixelCount {
-            let off = pixel * classes
-            let mDominant = decoded[off + 0]
-            XCTAssertGreaterThanOrEqual(
-                mDominant, 0.99,
-                "pixel \(pixel) dominantClass mass \(mDominant) below 0.99 contract"
-            )
-            var remaining: Float = 0
-            for c in 1..<classes { remaining += decoded[off + c] }
-            XCTAssertLessThanOrEqual(
-                remaining, 0.01 + 1e-5,
-                "pixel \(pixel) remaining-class sum \(remaining) above 0.01 contract"
-            )
+        let argmaxBytes = result.argmax.pixels
+        argmaxBytes.withUnsafeBytes { rawArg in
+            let argBuf = rawArg.bindMemory(to: UInt8.self).baseAddress!
+            for pixel in 0..<pixelCount {
+                let off = pixel * classes
+                let label = Int(argBuf[pixel])
+                if label == dominantClass {
+                    let mDominant = decoded[off + dominantClass]
+                    XCTAssertGreaterThanOrEqual(
+                        mDominant, 0.99,
+                        "inside-ellipse pixel \(pixel) dominant mass \(mDominant) below 0.99"
+                    )
+                } else {
+                    XCTAssertEqual(label, palette.background,
+                                   "outside-ellipse pixel \(pixel) labelled \(label); expected background")
+                    let mBackground = decoded[off + palette.background]
+                    XCTAssertGreaterThanOrEqual(
+                        mBackground, 0.99,
+                        "outside-ellipse pixel \(pixel) background mass \(mBackground) below 0.99"
+                    )
+                }
+            }
         }
     }
 

@@ -34,6 +34,8 @@
 		112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D32FCE000000272C1E /* MealHistoryModel.swift */; };
 		112B11C42FCE000000272C1E /* MealRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D42FCE000000272C1E /* MealRow.swift */; };
 		112B11C52FCE000000272C1E /* MealsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D52FCE000000272C1E /* MealsTabView.swift */; };
+		114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B02FE2000000272C1E /* VisionCardDetector.swift */; };
+		114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +66,8 @@
 		112B11D32FCE000000272C1E /* MealHistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealHistoryModel.swift; path = ../App/MealHistoryModel.swift; sourceTree = SOURCE_ROOT; };
 		112B11D42FCE000000272C1E /* MealRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealRow.swift; path = ../App/MealRow.swift; sourceTree = SOURCE_ROOT; };
 		112B11D52FCE000000272C1E /* MealsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealsTabView.swift; path = ../App/MealsTabView.swift; sourceTree = SOURCE_ROOT; };
+		114CD0B02FE2000000272C1E /* VisionCardDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VisionCardDetector.swift; path = ../App/VisionCardDetector.swift; sourceTree = SOURCE_ROOT; };
+		114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PreShutterSegmenter.swift; path = ../App/PreShutterSegmenter.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -115,6 +119,8 @@
 				112B11D32FCE000000272C1E /* MealHistoryModel.swift */,
 				112B11D42FCE000000272C1E /* MealRow.swift */,
 				112B11D52FCE000000272C1E /* MealsTabView.swift */,
+				114CD0B02FE2000000272C1E /* VisionCardDetector.swift */,
+				114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */,
 				111EC90E2FBD327D00272C1E /* MeData */,
 				111EC90D2FBD327D00272C1E /* Products */,
 			);
@@ -232,6 +238,8 @@
 				112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */,
 				112B11C42FCE000000272C1E /* MealRow.swift in Sources */,
 				112B11C52FCE000000272C1E /* MealsTabView.swift in Sources */,
+				114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */,
+				114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

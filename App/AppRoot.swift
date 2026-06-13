@@ -13,11 +13,21 @@ struct AppRoot: View {
     @State private var historyModel: MealHistoryModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
+    let visionCardDetector: VisionCardDetector?
+    let preShutterSegmenter: PreShutterSegmenter?
 
-    init(captureModel: CaptureFlowModel, engine: ARKitCaptureEngine, store: any PersistenceStore) {
+    init(
+        captureModel: CaptureFlowModel,
+        engine: ARKitCaptureEngine,
+        store: any PersistenceStore,
+        visionCardDetector: VisionCardDetector? = nil,
+        preShutterSegmenter: PreShutterSegmenter? = nil
+    ) {
         self.captureModel = captureModel
         self.engine = engine
         self.store = store
+        self.visionCardDetector = visionCardDetector
+        self.preShutterSegmenter = preShutterSegmenter
         _historyModel = State(initialValue: MealHistoryModel(store: store))
     }
 
@@ -30,9 +40,15 @@ struct AppRoot: View {
 
     var body: some View {
         TabView(selection: selectedTab) {
-            CaptureFlowView(model: captureModel, engine: engine, store: store)
-                .tabItem { Label("Photo", systemImage: "camera.fill") }
-                .tag(AppTab.photo)
+            CaptureFlowView(
+                model: captureModel,
+                engine: engine,
+                store: store,
+                visionCardDetector: visionCardDetector,
+                preShutterSegmenter: preShutterSegmenter
+            )
+            .tabItem { Label("Photo", systemImage: "camera.fill") }
+            .tag(AppTab.photo)
             MealsTabView(model: historyModel)
                 .tabItem { Label("Meals", systemImage: "fork.knife") }
                 .tag(AppTab.meals)

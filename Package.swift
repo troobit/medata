@@ -164,7 +164,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SupportPlaneTests",
-            dependencies: ["SupportPlane", "CaptureKit", "PortableContracts"],
+            dependencies: ["SupportPlane", "CaptureKit", "CardDetection", "PortableContracts"],
             path: "MedataCore/Tests/SupportPlaneTests"
         ),
         .testTarget(

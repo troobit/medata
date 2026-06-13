@@ -8,6 +8,7 @@ These tasks must be completed by the user before or during implementation. The c
 - [ ] **ID-1 reference card** physically present on the test bench. Any expired credit / library / printed ID-1 calibration target works; needed to exercise the card-only fallback path under [Requirement 5.4](requirements.md#5.4).
 - [ ] **Console.app or `log stream --predicate 'subsystem == "ie.medata.app"'`** access on the dev Mac so the new `preshutter.mask.update`, `carddetect.end`, and amended `estimate.start` events can be captured during on-device runs.
 - [ ] **Xcode 26+** with the existing project scheme (`MeData` / `MedataCore-Package`). No new dependencies are anticipated; if Vision capability requires a deployment-target bump, raise it in the design phase before tasks start.
+- [ ] **Baseline measurements GATE TASKS 1.1 ONWARDS.** Run the existing pre-spec build (`research` branch tip, before this spec's tasks land) on iPhone 13 Pro Max iOS 26.5 with the fruit-plate fixture; capture (a) peak resident memory under Instruments → Allocations and (b) shutter-tap → `estimate.start` latency from the existing Console log. Write the two numbers into `design.md`'s "Baseline numbers to capture" table. Until those rows are filled, [Requirements 6.1](requirements.md#6.1) and [6.2](requirements.md#6.2) have undefined acceptance criteria and tasks-phase implementation cannot start.
 
 ## During Implementation
 
@@ -18,7 +19,7 @@ These tasks must be completed by the user before or during implementation. The c
 ## Before Testing
 
 - [ ] **Capture a "no food in frame" fixture** (camera framed at an empty table or wall) so the empty-mask refusal path can be exercised end-to-end on device per [Requirement 3.1](requirements.md#3.1) / [Decision 2](decision_log.md).
-- [ ] **Baseline measurements** of peak resident memory and shutter-tap → `estimate.start` latency on iPhone 13 Pro Max iOS 26.5 with the pre-spec build, so the regressions in [Requirements 6.1](requirements.md#6.1) and [6.2](requirements.md#6.2) can be measured against a defined baseline.
+- [ ] **Post-implementation on-device run** to record the new build's peak resident memory and shutter-tap → `estimate.start` latency, and confirm the deltas stay inside the budgets in [Requirements 6.1](requirements.md#6.1) and [6.2](requirements.md#6.2).
 
 ## Notes
 

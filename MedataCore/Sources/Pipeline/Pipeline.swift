@@ -10,8 +10,12 @@ import os
 #endif
 @_exported import Persistence
 @_exported import PortableContracts
-import Segmentation
-import SupportPlane
+// Re-export so App-target callers (PreShutterSegmenter, CaptureFlowModel) can
+// construct CoreMLSegmenter and refer to BinaryMask / ClassPalette without
+// adding extra package products. Keeps the App's package dependency surface a
+// single `MedataCore` import.
+@_exported import Segmentation
+@_exported import SupportPlane
 import Volume
 
 #if DEBUG
@@ -42,6 +46,7 @@ public struct Pipeline: Sendable {
     private let segmenter: CoreMLSegmenter
     private let database: any FoodDatabase
     private let store: any PersistenceStore
+    private let supportPlaneFitter: any SupportPlaneFitter
     // Stamped onto every MealRecord this pipeline produces (Decision 42, Req §23.6):
     // "dev_stub" for Phase 1 device-MVP builds, "coreml_<modelVersion>" for Phase 3.
     // Internal (not private) so tests can verify the factory stamps the correct
@@ -55,12 +60,14 @@ public struct Pipeline: Sendable {
         segmenter: CoreMLSegmenter,
         database: any FoodDatabase,
         store: any PersistenceStore,
+        supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
         segmenterSource: String = ""
     ) {
         self.cardDetector = cardDetector
         self.segmenter = segmenter
         self.database = database
         self.store = store
+        self.supportPlaneFitter = supportPlaneFitter
         self.segmenterSource = segmenterSource
     }
 
@@ -70,6 +77,13 @@ public struct Pipeline: Sendable {
     public func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
         let nadir = captureResult.nadirFrame
         let capturePath = mode.capturePath
+        #if DEBUG
+        // estimate.start augmented with maskAgeMs (Req 4.5 erratum / Decision 15).
+        let maskAgeMs = captureResult.preShutterMaskAgeMs ?? -1
+        supportPlaneLog.info(
+            "event=estimate.start maskAgeMs=\(maskAgeMs, privacy: .public)"
+        )
+        #endif
 
         // Per-stage angular error at shutter-tap time (Decision 43/44). Nadir
         // targets 0° from vertical; oblique targets 25°. The values feed σ_tilt
@@ -130,7 +144,10 @@ public struct Pipeline: Sendable {
         let plane: SupportPlane
         do {
             plane = try fitSupportPlane(
-                nadir: nadir, cardPose: cardPose, corners: corners
+                nadir: nadir,
+                cardPose: cardPose,
+                corners: corners,
+                preShutterFoodMask: captureResult.preShutterFoodMask
             )
         } catch {
             #if DEBUG
@@ -141,6 +158,18 @@ public struct Pipeline: Sendable {
         #if DEBUG
         pipelineSignposter.endInterval("SupportPlane", planeInterval)
         #endif
+
+        // Coverage recompute per Decision 14 / Req 4.1: compute the real
+        // `foodRegionCoveragePercent` against the pre-shutter mask + depth
+        // confidence buffer. The value is logged at estimate.end (Decision 15)
+        // but does NOT drive path selection in v1 (Decision 1).
+        let foodRegionCoveragePercent = computeFoodRegionCoverage(
+            depth: nadir.depth,
+            confidenceThreshold: 0.66,
+            mask: captureResult.preShutterFoodMask,
+            colourWidth: nadir.imageWidth,
+            colourHeight: nadir.imageHeight
+        )
 
         // ── Stage E: MetricScale ─────────────────────────────────────────────────
         #if DEBUG
@@ -379,116 +408,68 @@ public struct Pipeline: Sendable {
 
         delegate?.didProduceEstimate(record)
 
+        #if DEBUG
+        // estimate.end augmented with foodRegionCoveragePercent (Decision 15 /
+        // Req 4.5 erratum). Logged here at success-exit; the failure branches
+        // above throw before reaching this point.
+        supportPlaneLog.info(
+            "event=estimate.end success=true foodRegionCoveragePercent=\(foodRegionCoveragePercent, privacy: .public)"
+        )
+        #endif
         return record
     }
 
     // MARK: - Private helpers
 
+    // Thin wrapper that delegates to the injected `SupportPlaneFitter` and
+    // maps the protocol's `SupportPlaneError` cases to the pipeline-level
+    // `EstimationFailure` cases used by the rest of `estimate(_:)`. The empty-
+    // mask gate (Decision 2) lives inside the fitter so the card-only path
+    // also refuses with `noFoodPixels` when the pre-shutter mask is absent.
     private func fitSupportPlane(
         nadir: RawFrame,
         cardPose: CardPose?,
-        corners: [PixelCorner]?
+        corners: [PixelCorner]?,
+        preShutterFoodMask: BinaryMask?
     ) throws -> SupportPlane {
-        // LiDAR plane fit takes precedence when depth is available.
-        if let depth = nadir.depth {
-            // Phase 1 spatial prior: a centred rectangle approximates the
-            // plate under the documented capture envelope so the fitter's
-            // lower-edge scan band lands on visible table pixels rather than
-            // the bottom row of an all-ones mask. See
-            // `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/`.
-            let roughMask = makeCentreRectangleMask(
-                width: nadir.imageWidth,
-                height: nadir.imageHeight,
-                fillFraction: centreRectangleFillFraction
+        #if DEBUG
+        supportPlaneLog.info(
+            """
+            event=supportplane.start width=\(nadir.imageWidth, privacy: .public) \
+            height=\(nadir.imageHeight, privacy: .public) source=pre_shutter
+            """
+        )
+        #endif
+        do {
+            let plane = try supportPlaneFitter.fit(
+                nadir: nadir,
+                cardPose: cardPose,
+                corners: corners,
+                preShutterFoodMask: preShutterFoodMask
             )
             #if DEBUG
             supportPlaneLog.info(
                 """
-                event=supportplane.start width=\(nadir.imageWidth, privacy: .public) \
-                height=\(nadir.imageHeight, privacy: .public) \
-                fillFraction=\(centreRectangleFillFraction, privacy: .public)
+                event=supportplane.end success=true \
+                residual_mm=\(plane.residualMm, privacy: .public)
                 """
             )
             #endif
-            do {
-                let plane = try LiDARPlaneFitter.fit(LiDARPlaneFitter.Inputs(
-                    depth: depth,
-                    colourIntrinsics: nadir.intrinsics,
-                    foodRegionMask: roughMask,
-                    gravityCamera: nadir.gravity
-                ))
-                #if DEBUG
-                supportPlaneLog.info(
-                    """
-                    event=supportplane.end success=true \
-                    residual_mm=\(plane.residualMm, privacy: .public) \
-                    inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public) \
-                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public)
-                    """
-                )
-                #endif
-                return plane
-            } catch SupportPlaneError.lidarFitDegenerate {
-                #if DEBUG
-                supportPlaneLog.info(
-                    """
-                    event=supportplane.end success=false failure=lidarFitDegenerate \
-                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
-                    inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public)
-                    """
-                )
-                #endif
-                throw EstimationFailure.lidarFitDegenerate
-            } catch SupportPlaneError.lidarFitResidualTooHigh {
-                #if DEBUG
-                supportPlaneLog.info(
-                    """
-                    event=supportplane.end success=false failure=lidarFitResidualTooHigh \
-                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
-                    inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public)
-                    """
-                )
-                #endif
-                throw EstimationFailure.lidarFitResidualTooHigh
-            } catch let supportError as SupportPlaneError {
-                #if DEBUG
-                supportPlaneLog.info(
-                    """
-                    event=supportplane.end success=false \
-                    failure=\(String(describing: supportError), privacy: .public) \
-                    candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public)
-                    """
-                )
-                #endif
-                throw EstimationFailure.lidarFitDegenerate
-            }
-        }
-
-        // Card-only path: back-project lower card corners as lower-silhouette edge
-        // points (approximation; full Canny-edge extraction is a future enhancement).
-        guard let pose = cardPose, let c = corners, c.count >= 4 else {
-            throw EstimationFailure.noScaleAvailable
-        }
-        let k = nadir.intrinsics
-        let dCard = abs(pose.translationMm.z)
-        let s0 = pose.scaleAtCardPlaneMmPerPx
-        let lowerEdges: [Vec3] = c.suffix(2).map { corner in
-            Vec3((corner.u - k.cx) * s0, (corner.v - k.cy) * s0, -dCard)
-        }
-        let centroid = Vec3(pose.translationMm.x, pose.translationMm.y + 20, pose.translationMm.z)
-        do {
-            return try CardOnlyPlaneFitter.fit(CardOnlyPlaneFitter.Inputs(
-                cardCentreDepthMm: dCard,
-                scaleAtCardPlaneInitMmPerPx: s0,
-                gravityCamera: nadir.gravity,
-                edgePoints3DAtInitScale: lowerEdges,
-                foodCentroids3DAtInitScale: [centroid]
-            ))
-        } catch SupportPlaneError.iterationDiverged {
-            throw EstimationFailure.iterationDiverged
+            return plane
+        } catch SupportPlaneError.emptyFoodMask {
+            throw EstimationFailure.noFoodPixels
+        } catch SupportPlaneError.lidarFitDegenerate {
+            throw EstimationFailure.lidarFitDegenerate
+        } catch SupportPlaneError.lidarFitResidualTooHigh {
+            throw EstimationFailure.lidarFitResidualTooHigh
+        } catch SupportPlaneError.noLidarPoints {
+            // Pre-existing card-only fallback when LiDAR cannot produce a fit
+            // and a card pose is unavailable; otherwise the fitter raises
+            // `noLowerSilhouetteEdges` which we map to `noScaleAvailable`.
+            throw EstimationFailure.lidarFitDegenerate
         } catch SupportPlaneError.noLowerSilhouetteEdges {
-            throw EstimationFailure.iterationDiverged
-        } catch {
+            throw EstimationFailure.noScaleAvailable
+        } catch SupportPlaneError.iterationDiverged {
             throw EstimationFailure.iterationDiverged
         }
     }

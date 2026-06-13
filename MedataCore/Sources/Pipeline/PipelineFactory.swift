@@ -3,6 +3,7 @@ import CaptureKit
 import Foods
 import Foundation
 import Segmentation
+import SupportPlane
 
 // Pipeline construction for device-MVP builds per design §2.5 / Decision 42 / Req §23.
 //
@@ -14,8 +15,10 @@ import Segmentation
 //     `segmenterSource = "coreml_<modelVersion>"`. Throws on missing model.
 //
 // The bundled CoFID + AFCD food database (Decision 39) is loaded via
-// `GRDBFoodDatabase.bundled()`. A no-op `CardDetector` is wired in — the
-// Vision-backed implementation will land alongside Phase 3 capture work.
+// `GRDBFoodDatabase.bundled()`. Production callers pass a Vision-backed
+// `CardDetector` (the App target's `VisionCardDetector`); MedataCore tests
+// pass `NullCardDetector()` (internal to the Pipeline module) or a custom
+// mock conformance.
 
 public enum PipelineFactoryError: Error, Equatable {
     // Phase 3: the bundled `food_segmenter.mlpackage` is not present in the
@@ -26,15 +29,34 @@ public enum PipelineFactoryError: Error, Equatable {
 extension Pipeline {
     public static func makeForDevice(
         store: any PersistenceStore,
-        palette: ClassPalette = .v1Standard
+        cardDetector: any CardDetector,
+        palette: ClassPalette = .v1Standard,
+        supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter()
     ) throws -> Pipeline {
         let foods = try GRDBFoodDatabase.bundled()
-        let targetSize = SegmenterPreProcessor.defaultTargetSize
+        let segmenter = try makeSegmenter(palette: palette)
+        return Pipeline(
+            cardDetector: cardDetector,
+            segmenter: segmenter,
+            database: foods,
+            store: store,
+            supportPlaneFitter: supportPlaneFitter,
+            segmenterSource: segmenterSourceTag
+        )
+    }
 
+    /// Constructs a `CoreMLSegmenter` using the same compile-time engine
+    /// selection as `makeForDevice` (`StubInferenceEngine` under
+    /// `DEV_STUB_SEGMENTER`, `CoreMLInferenceEngine` otherwise). App-target
+    /// callers use this to build a SEPARATE pre-shutter segmenter from the
+    /// one wired into `Pipeline` (Decision 12 of
+    /// `specs/pipeline-real-device-correctness/`: pre-shutter and in-shutter
+    /// must not share an `MLModel` instance).
+    public static func makeSegmenter(palette: ClassPalette = .v1Standard) throws -> CoreMLSegmenter {
+        let targetSize = SegmenterPreProcessor.defaultTargetSize
         #if DEV_STUB_SEGMENTER
         let engine: any SegmenterInferenceEngine = StubInferenceEngine(palette: palette)
         let modelPath = "/dev/null"
-        let source = "dev_stub"
         #else
         guard let modelURL = Bundle.main.url(
             forResource: "food_segmenter", withExtension: "mlpackage"
@@ -45,24 +67,33 @@ extension Pipeline {
             modelPath: modelURL.path, targetSize: targetSize
         )
         let modelPath = modelURL.path
-        let source = "coreml_\(CoreMLInferenceEngine.modelVersion)"
         #endif
-
-        let segmenter = CoreMLSegmenter(
+        return CoreMLSegmenter(
             modelPath: modelPath, palette: palette, engine: engine, targetSize: targetSize
         )
-        return Pipeline(
-            cardDetector: NullCardDetector(),
-            segmenter: segmenter,
-            database: foods,
-            store: store,
-            segmenterSource: source
-        )
     }
-}
 
-// No-op card detector. Single-view LiDAR meals do not require a card; the
-// canonical two-view path will get a Vision-backed detector in Phase 3.
-private struct NullCardDetector: CardDetector {
-    func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+    /// `segmenterSource` tag stamped onto every `MealRecord` this pipeline
+    /// produces (Decision 42 / Req §23.6). `"dev_stub"` under Phase 1 builds,
+    /// `"coreml_<modelVersion>"` under Phase 3 / Release.
+    public static var segmenterSourceTag: String {
+        #if DEV_STUB_SEGMENTER
+        return "dev_stub"
+        #else
+        return "coreml_\(CoreMLInferenceEngine.modelVersion)"
+        #endif
+    }
+
+    /// Pre-shutter source tag matching the `PreShutterSegmenter.Source` enum
+    /// raw values. Driven by the same compile-time gate as
+    /// `segmenterSourceTag` so the App-target caller picks the right
+    /// `pre_shutter_stub` / `pre_shutter_coreml` label without duplicating
+    /// the `#if DEV_STUB_SEGMENTER` check.
+    public static var preShutterSourceTag: String {
+        #if DEV_STUB_SEGMENTER
+        return "pre_shutter_stub"
+        #else
+        return "pre_shutter_coreml"
+        #endif
+    }
 }
