@@ -10,8 +10,12 @@ import os
 #endif
 @_exported import Persistence
 @_exported import PortableContracts
-import Segmentation
-import SupportPlane
+// Re-export so App-target callers (PreShutterSegmenter, CaptureFlowModel) can
+// construct CoreMLSegmenter and refer to BinaryMask / ClassPalette without
+// adding extra package products. Keeps the App's package dependency surface a
+// single `MedataCore` import.
+@_exported import Segmentation
+@_exported import SupportPlane
 import Volume
 
 #if DEBUG

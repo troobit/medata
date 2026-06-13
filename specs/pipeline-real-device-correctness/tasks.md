@@ -67,7 +67,7 @@ references:
   - Update Pipeline.init to take supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter() parameter.
   - Logging changes (DEBUG-only, ie.medata.app / Shutter channel): supportplane.start gains source=pre_shutter; estimate.start gains maskAgeMs=<int> (if mask age is not threaded through CaptureResult, add a preShutterMaskAgeMs: Int? companion field in this task and update CaptureResult initialiser); estimate.end gains foodRegionCoveragePercent=<float>.
   - All existing Pipeline / SupportPlane tests must continue to pass; the FoodRegionCoverageTests from task 6 must now pass.
-  - Blocked-by: 81wvfir (Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field), 81wvfiv (Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space)), 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192
+  - Blocked-by: 81wvfir (Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field), 81wvfiv (Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space)), 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.5](requirements.md#4.5), [7.2](requirements.md#7.2), [7.4](requirements.md#7.4)
 
@@ -93,7 +93,7 @@ references:
 
 ## Pre-Shutter Producer + Wiring
 
-- [ ] 10. Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log) <!-- id:81wvfiz -->
+- [x] 10. Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log) <!-- id:81wvfiz -->
   - New test file: MeData/Tests/PreShutterSegmenterTests.swift.
   - Mock the AsyncStream<ARFrame> source by hand-crafting frames (ARFrame has no public init -- use a protocol seam wrapping the ARFrame consumer, OR test via a nonisolated ingest hook on PreShutterSegmenter that accepts a RawFrame directly bypassing ARFrame conversion).
   - Test: rapid frame ingest only publishes the most recent completed inference's mask (latest-wins; Decision 5).
@@ -104,7 +104,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.7](requirements.md#1.7)
 
-- [ ] 11. Implement PreShutterSegmenter with separate CoreMLSegmenter, off-actor conversion, pause/awaitPaused, and pre-shutter logging <!-- id:81wvfj0 -->
+- [x] 11. Implement PreShutterSegmenter with separate CoreMLSegmenter, off-actor conversion, pause/awaitPaused, and pre-shutter logging <!-- id:81wvfj0 -->
   - New file: App/PreShutterSegmenter.swift per design PreShutterSegmenter section.
   - Define MaskBox reference wrapper (avoid 2.7 MB value copies at 2 Hz).
   - Constructor takes a CoreMLSegmenter instance -- App-target callers construct a SEPARATE CoreMLSegmenter from the one passed into Pipeline.makeForDevice (Decision 12).
@@ -113,11 +113,11 @@ references:
   - Convert ArgmaxMap -> BinaryMask via existing PipelineBridges.foodMask(from:palette:).
   - DEBUG-only logging: `event=preshutter.mask.update foodPixels=<int> ageMs=<int> source=pre_shutter_stub|pre_shutter_coreml latencyMs=<int>` and `event=preshutter.cadence.miss expectedHz=2 actualMs=<int>` per design Logging section (Reqs 7.1, 7.4).
   - Inflight-task latest-wins discipline per Decision 5: cancel-then-await in awaitPaused(); drop frames while in-flight in resume(frames:).
-  - Blocked-by: 81wvfiz (Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log)), cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, 81wvfiu (Implement StubInferenceEngine centred-ellipse predicate)
+  - Blocked-by: 81wvfiz (Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log)), cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, 81wvfiu (Implement StubInferenceEngine centred-ellipse predicate)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [7.1](requirements.md#7.1), [7.4](requirements.md#7.4)
 
-- [ ] 12. Write tests for CaptureFlowModel staleness gate and firstFrameMaskBox lifecycle <!-- id:81wvfj1 -->
+- [x] 12. Write tests for CaptureFlowModel staleness gate and firstFrameMaskBox lifecycle <!-- id:81wvfj1 -->
   - Extend MeData/Tests/CaptureFlowModelTests.swift (or new CaptureFlowModelPreShutterTests.swift).
   - Test: at shutter-tap, preShutterSegmenter.latest with producedAt > 750 ms ago is treated as unavailable; resulting CaptureResult.preShutterFoodMask == nil and the model's downstream estimate path throws EstimationFailure.noFoodPixels per Req 8.3.
   - Test: each existing `firstFrame = nil` site clears `firstFrameMaskBox = nil` in lockstep (Decision 11 clear-on-X table): backgrounding, interruption.began, scenePhase to background, tab change, trackingDegraded mid-two-view, .initialising re-entry, .refused, .showingResult.
@@ -125,7 +125,7 @@ references:
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [8.3](requirements.md#8.3)
 
-- [ ] 13. Integrate PreShutterSegmenter into CaptureFlowModel; wire state-machine resume/pause and freeze-at-nadir snapshot <!-- id:81wvfj2 -->
+- [x] 13. Integrate PreShutterSegmenter into CaptureFlowModel; wire state-machine resume/pause and freeze-at-nadir snapshot <!-- id:81wvfj2 -->
   - Add `private let preShutterSegmenter: PreShutterSegmenter` to CaptureFlowModel; constructor takes it (or builds it from an injected CoreMLSegmenter).
   - State transitions per design state-machine gating: resume(frames:) on .initialising, .ready, .trackingLost, .armed; pause() on .capturing, .estimating, .showingResult, .refused.
   - Nadir-capture path: after `capture.end success=true` for nadir, `await preShutterSegmenter.awaitPaused()`, then read latest, apply 750 ms staleness check, assign to firstFrameMaskBox (two-view) or use directly in CaptureResult (single-view) per design freeze-at-nadir invariant.
@@ -136,7 +136,7 @@ references:
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [4.3](requirements.md#4.3)
 
-- [ ] 14. Wire App.swift and CaptureFlowView.swift: construct VisionCardDetector, PreShutterSegmenter, and start producer; warmup Vision request on .ready <!-- id:81wvfj3 -->
+- [x] 14. Wire App.swift and CaptureFlowView.swift: construct VisionCardDetector, PreShutterSegmenter, and start producer; warmup Vision request on .ready <!-- id:81wvfj3 -->
   - App/App.swift: construct VisionCardDetector() and a dedicated CoreMLSegmenter for the pre-shutter producer (separate instance per Decision 12); pass both into PipelineFactory.makeForDevice and CaptureFlowModel respectively.
   - App/CaptureFlowView.swift: alongside `observer.start(frames: engine.frames)` at line 76, call `preShutterSegmenter.resume(frames: engine.frames)` (each call to engine.frames returns an independent per-subscriber stream per ARKitCaptureEngine.swift:111).
   - On entry to .ready state in CaptureFlowModel, kick off `Task { await visionCardDetector.warmup() }` once per session per Req 5.7.
@@ -163,6 +163,6 @@ references:
   - Remove any remaining inline references; production Pipeline.fitSupportPlane by this point delegates entirely to LiDARSupportPlaneFitter.fit(...) (task 7), so the helper has no callers.
   - Verify MedataCore/Tests/PipelineTests/CentreRectangleMaskTests.swift is also deleted (it pinned the deleted helper's output).
   - Verify the existing MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift all-ones-mask sentinel still passes -- its assertion against LiDARPlaneFitter going degenerate on an all-ones mask is independent of the centred-rectangle helper (Req 8.6).
-  - Blocked-by: 81wvfj4 (Write integration test for mask routing (Req 8.7)), routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing
+  - Blocked-by: 81wvfj4 (Write integration test for mask routing (Req 8.7)), routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing
   - Stream: 1
   - Requirements: [2.2](requirements.md#2.2), [8.6](requirements.md#8.6)

@@ -15,8 +15,25 @@ struct CaptureFlowView: View {
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
+    let visionCardDetector: VisionCardDetector?
+    let preShutterSegmenter: PreShutterSegmenter?
+
+    init(
+        model: CaptureFlowModel,
+        engine: ARKitCaptureEngine,
+        store: any PersistenceStore,
+        visionCardDetector: VisionCardDetector? = nil,
+        preShutterSegmenter: PreShutterSegmenter? = nil
+    ) {
+        self.model = model
+        self.engine = engine
+        self.store = store
+        self.visionCardDetector = visionCardDetector
+        self.preShutterSegmenter = preShutterSegmenter
+    }
 
     @State private var observer: LiveSampleObserver?
+    @State private var hasWarmedCardDetector = false
 
     var body: some View {
         NavigationStack(path: $model.navigationPath) {
@@ -74,8 +91,43 @@ struct CaptureFlowView: View {
             let obs = observer ?? LiveSampleObserver(model: model)
             observer = obs
             obs.start(frames: engine.frames)
+            // Each `engine.frames` call returns an independent per-subscriber
+            // stream (ARKitCaptureEngine.swift:111), so the pre-shutter
+            // producer's subscription is disjoint from the live observer's.
+            preShutterSegmenter?.resume(frames: engine.frames)
         }
         .onDisappear { observer?.stop() }
+        .onChange(of: shouldProducePreShutter) { _, newValue in
+            // Req 1.4 / Decision 5: producer halts in capturing / estimating /
+            // result / refused, resumes on return to a producing state. Each
+            // resume gets a fresh per-subscriber stream from `engine.frames`.
+            if newValue {
+                preShutterSegmenter?.resume(frames: engine.frames)
+            } else {
+                preShutterSegmenter?.pause()
+            }
+        }
+        .onChange(of: isReady) { _, ready in
+            // Req 5.7: warm the Vision request once on first entry to
+            // `.ready` so the first shutter-tap of a session pays warm-path
+            // latency only. `Task { ... }` is fire-and-forget; warmup is
+            // cancellable internally and never blocks the live indicator
+            // stream.
+            guard ready, !hasWarmedCardDetector, let detector = visionCardDetector else { return }
+            hasWarmedCardDetector = true
+            Task { await detector.warmup() }
+        }
+    }
+
+    // Mirror of the state-machine gating in the design's "State-machine
+    // gating" section. Producer runs when the flow is in a state where the
+    // user can still adjust framing (initialising / ready / trackingLost);
+    // pauses in transient states where the result would be discarded.
+    private var shouldProducePreShutter: Bool {
+        switch model.state {
+        case .initialising, .ready, .trackingLost: return true
+        default: return false
+        }
     }
 
     private var bottomChrome: some View {

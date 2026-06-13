@@ -7,6 +7,8 @@ import SwiftUI
 struct MedataApp: App {
     @State private var model: CaptureFlowModel
     @State private var engine: ARKitCaptureEngine
+    @State private var visionCardDetector: VisionCardDetector?
+    @State private var preShutterSegmenter: PreShutterSegmenter?
     private let store: any PersistenceStore
     @Environment(\.scenePhase) private var scenePhase
 
@@ -26,10 +28,32 @@ struct MedataApp: App {
             let harness = UITestHarness()
             _model = State(initialValue: harness.model)
             _uiTestHarness = State(initialValue: harness)
+            _visionCardDetector = State(initialValue: nil)
+            _preShutterSegmenter = State(initialValue: nil)
             return
         }
         _uiTestHarness = State(initialValue: nil)
         #endif
+
+        // Vision-backed card detector (Req 5.1-5.7). Construct once at app
+        // launch so the same instance is wired into Pipeline AND pre-warmed
+        // by `CaptureFlowView` on entry to `.ready` (warmup reuses the same
+        // `VNDetectRectanglesRequest` so the first shutter-tap pays warm-path
+        // latency only).
+        let cardDetector = VisionCardDetector()
+        _visionCardDetector = State(initialValue: cardDetector)
+
+        // Pre-shutter segmenter uses its OWN CoreMLSegmenter instance —
+        // separate from the one PipelineFactory wires into Pipeline.estimate —
+        // per Decision 12. Two `MLModel` loads at launch (< 50 ms) eliminate
+        // the in-shutter / pre-shutter race entirely.
+        let preShutter = PreShutterSegmenter(
+            segmenter: try! Pipeline.makeSegmenter(),
+            palette: .v1Standard,
+            source: Pipeline.preShutterSourceTag == "pre_shutter_stub"
+                ? .preShutterStub : .preShutterCoreML
+        )
+        _preShutterSegmenter = State(initialValue: preShutter)
 
         // Decision 42 / Req §23: real Pipeline backed by the dev-stub segmenter
         // under DEV_STUB_SEGMENTER (Phase 1, Debug). Release builds will throw
@@ -38,21 +62,28 @@ struct MedataApp: App {
         // recoverable runtime condition.
         _model = State(initialValue: CaptureFlowModel(
             session: CaptureSession(engine: engine),
-            pipeline: try! Pipeline.makeForDevice(store: store),
+            pipeline: try! Pipeline.makeForDevice(store: store, cardDetector: cardDetector),
             indicators: LiveIndicatorModel(),
             interruptions: engine.interruptions,
             supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
             databaseEdition: "CoFID 2024 + AFCD 2024",
             paletteVersion: "v1",
             store: store,
-            photoSaver: PhotoKitSaver()
+            photoSaver: PhotoKitSaver(),
+            preShutterSegmenter: preShutter
         ))
     }
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                AppRoot(captureModel: model, engine: engine, store: store)
+                AppRoot(
+                    captureModel: model,
+                    engine: engine,
+                    store: store,
+                    visionCardDetector: visionCardDetector,
+                    preShutterSegmenter: preShutterSegmenter
+                )
                 #if DEBUG
                 if let uiTestHarness {
                     UITestControlPanel(harness: uiTestHarness)

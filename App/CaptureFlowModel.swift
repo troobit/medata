@@ -55,6 +55,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private let cameraAuthorisation: @Sendable () -> AVAuthorizationStatus
     private let motionAvailable: @Sendable () -> Bool
     private let captureModeReader: @Sendable () -> CaptureMode
+    // Pre-shutter food-region mask source per spec
+    // `pipeline-real-device-correctness/`. Optional so existing tests
+    // constructed before task 13 continue to compile; production callers
+    // (App.swift) pass a non-nil instance so the freeze-at-nadir flow runs.
+    private let preShutterSegmenter: (any PreShutterMaskSource)?
 
     private(set) var flowTask: Task<Void, Never>?
     private var interruptionTask: Task<Void, Never>?
@@ -65,6 +70,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // CaptureResult per Decision 44 / task 86 so σ_tilt reflects the camera pose
     // at the moment the photo was taken, not at the moment the pipeline runs.
     private var firstFrameTiltDeg: Float?
+    // Pre-shutter mask frozen at the nadir-capture instant (Decision 11). For
+    // single-view captures this is read directly into CaptureResult at the
+    // same callsite. For two-view captures it travels with `firstFrame` /
+    // `firstFrameTiltDeg` through the oblique tap; cleared in lockstep with
+    // `firstFrame = nil` at every existing lifecycle site (Decision 11 table).
+    var firstFrameMaskBox: PreShutterSegmenter.MaskBox?
 
     private let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
     // Mode frozen at the shutter-tap that began the in-flight capture. The
@@ -82,6 +93,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         paletteVersion: String,
         store: (any PersistenceStore)? = nil,
         photoSaver: (any PhotoLibrarySaver)? = nil,
+        preShutterSegmenter: (any PreShutterMaskSource)? = nil,
         cameraAuthorisation: @escaping @Sendable () -> AVAuthorizationStatus = {
             AVCaptureDevice.authorizationStatus(for: .video)
         },
@@ -98,6 +110,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         self.supportsLiDAR = supportsLiDAR
         self.databaseEdition = databaseEdition
         self.paletteVersion = paletteVersion
+        self.preShutterSegmenter = preShutterSegmenter
         self.cameraAuthorisation = cameraAuthorisation
         self.motionAvailable = motionAvailable
         self.captureModeReader = captureModeReader
@@ -208,7 +221,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // Retake from the same stage. If retryStage is .oblique we keep firstFrame
         // so the user does not have to retake the nadir view (req §5.4). If
         // retryStage is .nadir, drop any previously captured nadir.
-        if retryStage == .nadir { firstFrame = nil; firstFrameTiltDeg = nil }
+        if retryStage == .nadir { firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil }
         let mode = inFlightMode ?? captureModeReader()
         inFlightMode = mode
         beginCapture(stage: retryStage, frozen: snapshot, mode: mode)
@@ -217,7 +230,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     func dismissResult() {
         guard case .showingResult = state else { return }
         navigationPath = NavigationPath()
-        firstFrame = nil; firstFrameTiltDeg = nil
+        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
         inFlightMode = nil
         state = .ready(freshSnapshot())
     }
@@ -228,7 +241,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // unchanged — it preserves `firstFrame` when retrying from oblique stage.
     func dismissRefusal() {
         guard case .refused = state else { return }
-        firstFrame = nil; firstFrameTiltDeg = nil
+        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
         inFlightMode = nil
         state = .ready(freshSnapshot())
     }
@@ -248,7 +261,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             switch state {
             case .capturing, .estimating:
                 state = .initialising
-                firstFrame = nil; firstFrameTiltDeg = nil
+                firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
                 inFlightMode = nil
             default:
                 break
@@ -296,7 +309,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // Leaving Photo while refused dismisses the refusal — the user
             // does not return to a sheet they cannot interactively dismiss
             // before leaving (see surface-not-detected bugfix).
-            firstFrame = nil; firstFrameTiltDeg = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
             inFlightMode = nil
             state = .initialising
             Task { [session] in try? await session.stop() }
@@ -305,12 +318,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // Capture in flight but estimation hasn't started: cancel and
             // reset to the same baseline as backgrounding.
             cancelInFlight()
-            firstFrame = nil; firstFrameTiltDeg = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
             state = .initialising
             Task { [session] in try? await session.stop() }
             startTask = nil
         case .initialising, .ready, .trackingLost, .showingResult:
-            firstFrame = nil; firstFrameTiltDeg = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
             if case .estimating = state {} else { state = .initialising }
             Task { [session] in try? await session.stop() }
             startTask = nil
@@ -362,7 +375,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         switch state {
         case .ready:
             state = .trackingLost
-            firstFrame = nil; firstFrameTiltDeg = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
         case .capturing(stage: .nadir, _):
             cancelInFlight()
             state = .trackingLost
@@ -384,7 +397,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         switch event {
         case .began:
             cancelInFlight()
-            firstFrame = nil; firstFrameTiltDeg = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
             inFlightMode = nil
             state = .trackingLost
             Task { [session] in try? await session.stop() }
@@ -441,11 +454,41 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             guard !Task.isCancelled else { return }
             guard case .capturing = state else { return }
 
+            // Snapshot the pre-shutter mask at the nadir-capture instant per
+            // Decision 11 and Decision 13. `awaitPaused()` drains any
+            // in-flight inference so the subsequent `latest` read is atomic
+            // with respect to the producer (no TOCTOU). The 750 ms staleness
+            // ceiling is applied here, at the nadir tap, not at
+            // `CaptureResult` construction time — the oblique-tap delay must
+            // not invalidate a fresh nadir-instant pairing.
+            let nadirMaskBox: PreShutterSegmenter.MaskBox?
+            let nadirMaskAgeMs: Int?
+            if stage == .nadir, let producer = preShutterSegmenter {
+                await producer.awaitPaused()
+                if let ts = producer.latest {
+                    let ageMs = millisecondsBetween(ts.producedAt, ContinuousClock.now)
+                    if ageMs <= 750 {
+                        nadirMaskBox = ts.box
+                        nadirMaskAgeMs = ageMs
+                    } else {
+                        nadirMaskBox = nil
+                        nadirMaskAgeMs = nil
+                    }
+                } else {
+                    nadirMaskBox = nil
+                    nadirMaskAgeMs = nil
+                }
+            } else {
+                nadirMaskBox = stage == .oblique ? firstFrameMaskBox : nil
+                nadirMaskAgeMs = nil
+            }
+
             // Two-view (Double) mode: after the nadir tap, stash the frame
             // and wait for the user to take the oblique tap.
             if stage == .nadir, mode == .double {
                 firstFrame = frame
                 firstFrameTiltDeg = tiltAtShutterDeg
+                firstFrameMaskBox = nadirMaskBox
                 state = .ready(frozen)
                 return
             }
@@ -457,18 +500,31 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             let nadirAngle = stage == .oblique ? (firstFrameTiltDeg ?? 0) : tiltAtShutterDeg
             let obliqueAngle: Float? = stage == .oblique ? tiltAtShutterDeg : nil
 
+            // For the oblique tap, the relevant mask is the one frozen at the
+            // earlier nadir tap (Decision 11). For single-view, it's the
+            // mask we just snapshotted above.
+            let preShutterMaskBox: PreShutterSegmenter.MaskBox? =
+                stage == .oblique ? firstFrameMaskBox : nadirMaskBox
+
+            // `foodRegionCoveragePercent: 0` — Pipeline.estimate recomputes
+            // the real value against the pre-shutter mask + depth confidence
+            // buffer per Decision 14 and Req 4.1. The old wiring of
+            // `frozen.lidarCoveragePercent` is removed because that value
+            // measured whole-frame coverage, not food-region coverage.
             let captureResult = CaptureResult(
                 capturePath: mode.capturePath,
                 lidar: LiDARStatus(
                     available: supportsLiDAR,
-                    foodRegionCoveragePercent: frozen.lidarCoveragePercent
+                    foodRegionCoveragePercent: 0
                 ),
                 nadirFrame: stage == .oblique ? (firstFrame ?? frame) : frame,
                 obliqueFrame: stage == .oblique ? frame : nil,
                 databaseEdition: databaseEdition,
                 paletteVersion: paletteVersion,
                 nadirAngleAtCaptureDeg: nadirAngle,
-                obliqueAngleAtCaptureDeg: obliqueAngle
+                obliqueAngleAtCaptureDeg: obliqueAngle,
+                preShutterFoodMask: preShutterMaskBox?.mask,
+                preShutterMaskAgeMs: nadirMaskAgeMs
             )
             await runEstimation(captureResult: captureResult, mode: mode, retryStage: stage)
         } catch is CancellationError {
@@ -510,7 +566,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // meal. A denied Photos prompt is NOT an error — the meal still
             // surfaces; the result view falls back to a placeholder.
             let stamped = await saveNadirPhoto(record: record, frame: captureResult.nadirFrame)
-            firstFrame = nil; firstFrameTiltDeg = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
             inFlightMode = nil
             lastMeal = stamped
             log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
@@ -620,6 +676,18 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         if let extra { line += " " + extra }
         return line
     }
+}
+
+// Pre-shutter mask staleness computation (Req 1.2 / Decision 11). Mirrors the
+// helper in PreShutterSegmenter so freshness is measured with the same clock
+// the producer uses for `producedAt`.
+private func millisecondsBetween(
+    _ start: ContinuousClock.Instant,
+    _ end: ContinuousClock.Instant
+) -> Int {
+    let d = end - start
+    let comps = d.components
+    return Int(comps.seconds * 1_000 + comps.attoseconds / 1_000_000_000_000_000)
 }
 
 private extension CaptureState {
