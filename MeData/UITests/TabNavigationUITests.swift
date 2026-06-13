@@ -7,7 +7,7 @@ import XCTest
 // - empty-state copy + icon on a fresh container (Req §19.5)
 // - new-meal-within-500-ms refresh is not exercised here because the AR-gated
 //   pipeline doesn't deliver a real MealRecord through the simulator harness;
-//   the unit-level `mealsDidChange` and `MealHistoryModel` tests cover that
+//   the unit-level `eventsDidChange` and `MealHistoryModel` tests cover that
 //   contract directly.
 //
 // Each test resets the persisted tab selection via the `-uitestResetSelectedTab`

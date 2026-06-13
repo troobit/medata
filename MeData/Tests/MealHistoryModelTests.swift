@@ -6,7 +6,7 @@ import Testing
 
 // Tests for `MealHistoryModel` per UI Req §19.1 / §19.6 / §19.7 (task 31).
 // The model is the @MainActor data source for the Meals tab: loads on start,
-// reloads on `mealsDidChange`, and routes deletes through the store.
+// reloads on `eventsDidChange`, and routes deletes through the store.
 @Suite("MealHistoryModel reload + delete + subscription lifecycle")
 @MainActor
 struct MealHistoryModelTests {
@@ -21,7 +21,7 @@ struct MealHistoryModelTests {
         #expect(model.meals.count == 2)
     }
 
-    @Test("mealsDidChange tick triggers a reload")
+    @Test("eventsDidChange tick triggers a reload")
     func changeTickReloads() async throws {
         let initial = makeMealRecord()
         let store = FakeStore(meals: [initial])
@@ -101,7 +101,14 @@ private final class FakeStore: PersistenceStore, @unchecked Sendable {
         broadcaster.tick()
     }
 
-    var mealsDidChange: AsyncStream<Void> { broadcaster.subscribe() }
+    func events(in range: ClosedRange<Date>, type: String?) async throws -> [Event] {
+        fatalError("unused")
+    }
+    func corrections(for mealId: UUID) async throws -> [PbUserCorrection] {
+        fatalError("unused")
+    }
+
+    var eventsDidChange: AsyncStream<Void> { broadcaster.subscribe() }
 }
 
 private final class TickBroadcaster: @unchecked Sendable {

@@ -3,8 +3,10 @@ import GRDB
 import PortableContracts
 import ZIPFoundation
 
-// GRDB-backed PersistenceStore. Uses meals.sqlite per design §4.1.
-// record_json column is protobuf-JSON of PbMealRecord (Decision 31).
+// GRDB-backed PersistenceStore. Backs the long-form event log per
+// specs/event-log-schema/design.md. Each meal is one row in `events` with
+// event_type=EventType.meal; the verbatim protobuf-JSON record sits inside
+// the `metadata` JSON blob (Decision 6 / Decision 31).
 public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
 
     private let queue: DatabaseQueue
@@ -27,53 +29,25 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     // MARK: - PersistenceStore
 
     public func save(_ record: MealRecord, artefacts: [MealArtefact]) async throws {
-        let json = try record.jsonString()
-        let artefactsDir = "meals/\(record.id.uuidString)"
-        let sigmaMeal = Double(record.confidence.sigmaMeal)
+        let metadata = try record.metadataJSON()
         let totalCarbsG = Double(record.macros.totalCarbsG)
         let createdAtMs = Int64(record.createdAt.timeIntervalSince1970 * 1000)
 
         try await queue.write { db in
             try db.execute(
                 sql: """
-                    INSERT INTO meals
-                        (id, created_at, capture_path, database_edition, palette_version,
-                         sigma_meal, total_carbs_g, photo_asset_id, segmenter_source,
-                         record_json, artefacts_dir)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO events
+                        (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     record.id.uuidString,
                     createdAtMs,
-                    record.capturePath.rawValue,
-                    record.databaseEdition,
-                    record.paletteVersion,
-                    sigmaMeal,
+                    EventType.meal,
                     totalCarbsG,
-                    record.photoAssetID,
-                    record.segmenterSource,
-                    json,
-                    artefactsDir
+                    metadata
                 ]
             )
-
-            for (classId, pbStatus) in record.perClassCalibration {
-                let classEntry = record.macros.perClass[classId]
-                try db.execute(
-                    sql: """
-                        INSERT INTO meal_classes
-                            (meal_id, class_id, beta_status, mass_g, carbs_g)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                    arguments: [
-                        record.id.uuidString,
-                        classId,
-                        pbStatus.betaStatusString,
-                        Double(classEntry?.massG ?? 0),
-                        Double(classEntry?.carbsG ?? 0)
-                    ]
-                )
-            }
 
             for artefact in artefacts {
                 try db.execute(
@@ -97,27 +71,51 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
 
     public func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {
         try await queue.write { db in
-            // Update both the denormalised column AND the canonical JSON BLOB so a
-            // subsequent meal(id:) reload deserialises the new value (the JSON BLOB
-            // is the canonical source; the column is for indexing / filtering).
+            // Read the outer metadata, parse it, decode the inner protobuf-JSON
+            // record string, mutate only the photoAssetID, then re-emit both
+            // layers. The round-trip is through PbMealRecord — the canonical
+            // encoder — so unchanged sibling fields stay byte-identical to a
+            // fresh save (Decision 31).
             let row = try Row.fetchOne(
                 db,
-                sql: "SELECT record_json FROM meals WHERE id = ?",
-                arguments: [mealId.uuidString]
+                sql: "SELECT metadata FROM events WHERE id = ? AND event_type = ?",
+                arguments: [mealId.uuidString, EventType.meal]
             )
             guard let row else { throw PersistenceError.mealNotFound(mealId) }
-            let json: String = row["record_json"]
-            var pb = try PbMealRecord(jsonString: json)
+            let metadata: String = row["metadata"]
+
+            let parsed: Any
+            do {
+                parsed = try JSONSerialization.jsonObject(with: Data(metadata.utf8))
+            } catch {
+                throw PersistenceError.corruptRecord("metadata is not valid JSON: \(error)")
+            }
+            guard let outer = parsed as? [String: Any],
+                  let recordJSON = outer["record"] as? String,
+                  let paletteVersion = outer["palette_version"] as? String else {
+                throw PersistenceError.corruptRecord("metadata envelope is malformed")
+            }
+
+            var pb = try PbMealRecord(jsonString: recordJSON)
             pb.photoAssetID = photoAssetID
-            let updated = try pb.jsonString()
+            let updatedRecordJSON = try pb.jsonString()
+
+            let newOuter: [String: Any] = [
+                "record": updatedRecordJSON,
+                "palette_version": paletteVersion
+            ]
+            let newMetadataData = try JSONSerialization.data(withJSONObject: newOuter, options: [])
+            let newMetadata = String(decoding: newMetadataData, as: UTF8.self)
+
             try db.execute(
-                sql: """
-                    UPDATE meals SET photo_asset_id = ?, record_json = ?
-                    WHERE id = ?
-                    """,
-                arguments: [photoAssetID, updated, mealId.uuidString]
+                sql: "UPDATE events SET metadata = ? WHERE id = ? AND event_type = ?",
+                arguments: [newMetadata, mealId.uuidString, EventType.meal]
             )
         }
+        // Decision 7: notify so the Meals tab refreshes after the photo
+        // binding is stamped. This is a deliberate behaviour change vs the
+        // pre-event-log code, which updated silently.
+        changeBroadcaster.notify()
     }
 
     public func appendCorrection(mealId: UUID, correction: PbUserCorrection) async throws {
@@ -131,86 +129,143 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 arguments: [mealId.uuidString, correction.createdAtMs, json]
             )
         }
+        // Deliberately no broadcast: corrections live in their own side table,
+        // and the Meals tab does not redraw on a correction (design §Change
+        // broadcaster).
     }
 
     public func meal(id: UUID) async throws -> MealRecord {
         let row = try await queue.read { db in
             try Row.fetchOne(db,
                 sql: """
-                    SELECT record_json, palette_version, segmenter_source, photo_asset_id
-                    FROM meals WHERE id = ?
+                    SELECT metadata FROM events
+                    WHERE id = ? AND event_type = ?
                     """,
-                arguments: [id.uuidString])
+                arguments: [id.uuidString, EventType.meal])
         }
         guard let row else { throw PersistenceError.mealNotFound(id) }
-        let json: String = row["record_json"]
-        let paletteVersion: String = row["palette_version"]
-        let segmenterSource: String? = row["segmenter_source"]
-        let photoAssetID: String? = row["photo_asset_id"]
-        return try MealRecord.from(
-            jsonString: json,
-            paletteVersion: paletteVersion,
-            segmenterSource: segmenterSource,
-            photoAssetID: photoAssetID
-        )
+        let metadata: String = row["metadata"]
+        return try MealRecord.from(metadata: metadata)
     }
 
     public func allMeals() async throws -> [MealRecord] {
         let rows = try await queue.read { db in
             try Row.fetchAll(db,
                 sql: """
-                    SELECT record_json, palette_version, segmenter_source, photo_asset_id
-                    FROM meals ORDER BY created_at DESC
-                    """)
+                    SELECT metadata FROM events
+                    WHERE event_type = ?
+                    ORDER BY timestamp DESC, id ASC
+                    """,
+                arguments: [EventType.meal])
         }
         return try rows.map { row in
-            let json: String = row["record_json"]
-            let paletteVersion: String = row["palette_version"]
-            let segmenterSource: String? = row["segmenter_source"]
-            let photoAssetID: String? = row["photo_asset_id"]
-            return try MealRecord.from(
-                jsonString: json,
-                paletteVersion: paletteVersion,
-                segmenterSource: segmenterSource,
-                photoAssetID: photoAssetID
-            )
+            let metadata: String = row["metadata"]
+            return try MealRecord.from(metadata: metadata)
         }
     }
 
     public func deleteMeal(id: UUID) async throws {
-        let artefactsDir = try await queue.write { db -> String? in
-            let dir = try String.fetchOne(db,
-                sql: "SELECT artefacts_dir FROM meals WHERE id = ?",
-                arguments: [id.uuidString])
-            try db.execute(sql: "DELETE FROM meal_classes WHERE meal_id = ?",
-                           arguments: [id.uuidString])
+        try await queue.write { db in
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.meal]
+            )
             try db.execute(sql: "DELETE FROM meal_artefacts WHERE meal_id = ?",
                            arguments: [id.uuidString])
             try db.execute(sql: "DELETE FROM corrections WHERE meal_id = ?",
                            arguments: [id.uuidString])
-            try db.execute(sql: "DELETE FROM meals WHERE id = ?",
-                           arguments: [id.uuidString])
-            return dir
         }
-        if let artefactsDir {
-            // Best-effort cleanup — log via stderr but swallow per design.md.
-            let url = artefactsBaseURL.appendingPathComponent(artefactsDir)
-            try? FileManager.default.removeItem(at: url)
-        }
+        // Best-effort filesystem cleanup. The path is derived from the id —
+        // no `artefacts_dir` column to read (design §Pattern extension audit).
+        let url = artefactsBaseURL
+            .appendingPathComponent("meals", isDirectory: true)
+            .appendingPathComponent(id.uuidString, isDirectory: true)
+        try? FileManager.default.removeItem(at: url)
         changeBroadcaster.notify()
     }
 
-    public var mealsDidChange: AsyncStream<Void> { changeBroadcaster.subscribe() }
+    public var eventsDidChange: AsyncStream<Void> { changeBroadcaster.subscribe() }
+
+    public func events(in range: ClosedRange<Date>, type: String?) async throws -> [Event] {
+        let startMs = Int64(range.lowerBound.timeIntervalSince1970 * 1000)
+        let endMs = Int64(range.upperBound.timeIntervalSince1970 * 1000)
+        let rows = try await queue.read { db -> [Row] in
+            if let type {
+                return try Row.fetchAll(db,
+                    sql: """
+                        SELECT id, timestamp, event_type, value, metadata FROM events
+                        WHERE timestamp BETWEEN ? AND ? AND event_type = ?
+                        ORDER BY timestamp ASC, id ASC
+                        """,
+                    arguments: [startMs, endMs, type])
+            }
+            return try Row.fetchAll(db,
+                sql: """
+                    SELECT id, timestamp, event_type, value, metadata FROM events
+                    WHERE timestamp BETWEEN ? AND ?
+                    ORDER BY timestamp ASC, id ASC
+                    """,
+                arguments: [startMs, endMs])
+        }
+        return try rows.map { row in
+            let idString: String = row["id"]
+            guard let uuid = UUID(uuidString: idString) else {
+                throw PersistenceError.corruptRecord("invalid UUID: \(idString)")
+            }
+            let timestampMs: Int64 = row["timestamp"]
+            let eventType: String = row["event_type"]
+            let value: Double? = row["value"]
+            let metadata: String = row["metadata"]
+            // Fail-fast on malformed metadata JSON. Required by Req 1.5 contract
+            // tested in PersistenceTests.testEventsInRangeFailsFastOnCorruptMetadata.
+            do {
+                _ = try JSONSerialization.jsonObject(with: Data(metadata.utf8))
+            } catch {
+                throw PersistenceError.corruptRecord("malformed metadata JSON: \(error)")
+            }
+            return Event(
+                id: uuid,
+                timestamp: Date(timeIntervalSince1970: Double(timestampMs) / 1000),
+                eventType: eventType,
+                value: value,
+                metadata: metadata
+            )
+        }
+    }
+
+    public func corrections(for mealId: UUID) async throws -> [PbUserCorrection] {
+        let rows = try await queue.read { db in
+            try Row.fetchAll(db,
+                sql: """
+                    SELECT correction_json FROM corrections
+                    WHERE meal_id = ?
+                    ORDER BY created_at ASC
+                    """,
+                arguments: [mealId.uuidString])
+        }
+        return try rows.map { row in
+            let json: String = row["correction_json"]
+            do {
+                return try PbUserCorrection(jsonString: json)
+            } catch {
+                throw PersistenceError.corruptRecord("corrupt correction JSON: \(error)")
+            }
+        }
+    }
 
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
-        let dirs: [String] = try await queue.read { db in
+        let ids: [String] = try await queue.read { db in
             try String.fetchAll(db,
-                sql: "SELECT artefacts_dir FROM meals WHERE created_at < ?",
-                arguments: [cutoffMs])
+                sql: """
+                    SELECT id FROM events
+                    WHERE event_type = ? AND timestamp < ?
+                    """,
+                arguments: [EventType.meal, cutoffMs])
         }
-        for dir in dirs {
-            let url = artefactsBaseURL.appendingPathComponent(dir)
+        let mealsRoot = artefactsBaseURL.appendingPathComponent("meals", isDirectory: true)
+        for id in ids {
+            let url = mealsRoot.appendingPathComponent(id, isDirectory: true)
             try? FileManager.default.removeItem(at: url)
         }
     }
@@ -293,31 +348,22 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     }
 
     // MARK: - Schema
+    //
+    // Decision 2 / Decision 5 / Decision 10: only the event-log tables are
+    // created. Pre-existing dev DBs may still carry the legacy `meals` and
+    // `meal_classes` tables — they are left untouched (no destructive DDL on
+    // the production path; developers wipe simulator/device storage).
 
     private static func createSchema(_ db: Database) throws {
         try db.execute(sql: """
-            CREATE TABLE IF NOT EXISTS meals (
-                id               TEXT PRIMARY KEY,
-                created_at       INTEGER NOT NULL,
-                capture_path     TEXT NOT NULL,
-                database_edition TEXT NOT NULL,
-                palette_version  TEXT NOT NULL,
-                sigma_meal       REAL NOT NULL,
-                total_carbs_g    REAL NOT NULL,
-                photo_asset_id   TEXT NOT NULL DEFAULT '',
-                segmenter_source TEXT NOT NULL DEFAULT '',
-                record_json      BLOB NOT NULL,
-                artefacts_dir    TEXT NOT NULL
+            CREATE TABLE IF NOT EXISTS events (
+                id          TEXT    PRIMARY KEY,
+                timestamp   INTEGER NOT NULL,
+                event_type  TEXT    NOT NULL,
+                value       REAL,
+                metadata    TEXT    NOT NULL
             );
-            CREATE TABLE IF NOT EXISTS meal_classes (
-                meal_id     TEXT NOT NULL,
-                class_id    TEXT NOT NULL,
-                beta_status TEXT NOT NULL,
-                mass_g      REAL NOT NULL,
-                carbs_g     REAL NOT NULL,
-                PRIMARY KEY (meal_id, class_id)
-            );
-            CREATE INDEX IF NOT EXISTS meal_classes_class ON meal_classes(class_id);
+            CREATE INDEX IF NOT EXISTS events_timestamp ON events(timestamp);
             CREATE TABLE IF NOT EXISTS meal_artefacts (
                 meal_id    TEXT NOT NULL,
                 kind       TEXT NOT NULL,
@@ -332,39 +378,19 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 correction_json BLOB NOT NULL,
                 PRIMARY KEY (meal_id, created_at)
             );
-            CREATE INDEX IF NOT EXISTS meals_created_at ON meals(created_at);
             CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '2')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '3')"
         )
     }
 
-    // Idempotent additive migrations for databases created before a column existed.
-    // The schema CREATE statements above are guarded by IF NOT EXISTS, so existing
-    // rows survive; this fills in the gaps without dropping anything.
+    // Idempotent: re-stamps schema_version to '3' so a dev DB carried over
+    // from an earlier code path is correctly labelled. No DDL on legacy
+    // tables (Decision 10).
     private static func migrate(_ db: Database) throws {
-        let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(meals)")
-            .compactMap { $0["name"] as String? }
-        if !columns.contains("photo_asset_id") {
-            // Decision 37: original photo lives in the user's Photos library,
-            // referenced by PHAsset.localIdentifier. Existing rows get '' so
-            // history view renders a placeholder rather than failing to fetch.
-            try db.execute(
-                sql: "ALTER TABLE meals ADD COLUMN photo_asset_id TEXT NOT NULL DEFAULT ''"
-            )
-        }
-        if !columns.contains("segmenter_source") {
-            // Decision 42 / Req §23.6: Phase 1 records carry "dev_stub", Phase 3
-            // records carry "coreml_<modelVersion>". Existing rows default to
-            // '' (provenance unknown) so they are not retroactively attributed
-            // to either segmenter.
-            try db.execute(
-                sql: "ALTER TABLE meals ADD COLUMN segmenter_source TEXT NOT NULL DEFAULT ''"
-            )
-        }
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '2')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '3')"
         )
     }
 }
@@ -399,17 +425,5 @@ private final class ChangeBroadcaster: @unchecked Sendable {
         let snapshot = Array(continuations.values)
         lock.unlock()
         for continuation in snapshot { continuation.yield() }
-    }
-}
-
-// MARK: - Helpers
-
-private extension PbBetaCalibrationStatus {
-    var betaStatusString: String {
-        switch self {
-        case .calibrated: return "calibrated"
-        case .uncalibratedPooled: return "uncalibrated_pooled"
-        case .uncalibratedUnity, .unspecified, .UNRECOGNIZED: return "uncalibrated_unity"
-        }
     }
 }

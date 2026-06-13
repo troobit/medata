@@ -96,10 +96,10 @@ final class MealHistoryStoreTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
-    // MARK: - mealsDidChange (Req §19.6)
+    // MARK: - eventsDidChange (Req §19.6)
 
     func testMealsDidChangeYieldsAfterSave() async throws {
-        let stream = store.mealsDidChange
+        let stream = store.eventsDidChange
         let received = Task<Bool, Never> {
             for await _ in stream { return true }
             return false
@@ -108,14 +108,14 @@ final class MealHistoryStoreTests: XCTestCase {
         await Task.yield()
         try await store.save(makeMealRecord(), artefacts: [])
         let got = try await awaitWithTimeout(seconds: 2, received)
-        XCTAssertTrue(got, "mealsDidChange did not yield after save")
+        XCTAssertTrue(got, "eventsDidChange did not yield after save")
     }
 
     func testMealsDidChangeYieldsAfterDelete() async throws {
         let record = makeMealRecord()
         try await store.save(record, artefacts: [])
 
-        let stream = store.mealsDidChange
+        let stream = store.eventsDidChange
         let received = Task<Bool, Never> {
             for await _ in stream { return true }
             return false
@@ -123,12 +123,12 @@ final class MealHistoryStoreTests: XCTestCase {
         await Task.yield()
         try await store.deleteMeal(id: record.id)
         let got = try await awaitWithTimeout(seconds: 2, received)
-        XCTAssertTrue(got, "mealsDidChange did not yield after delete")
+        XCTAssertTrue(got, "eventsDidChange did not yield after delete")
     }
 
     func testMealsDidChangeIsPerSubscriber() async throws {
-        let streamA = store.mealsDidChange
-        let streamB = store.mealsDidChange
+        let streamA = store.eventsDidChange
+        let streamB = store.eventsDidChange
         let a = Task<Bool, Never> {
             for await _ in streamA { return true }
             return false

@@ -137,7 +137,13 @@ private struct NoOpStore: PersistenceStore {
     func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {}
     func allMeals() async throws -> [MealRecord] { [] }
     func deleteMeal(id: UUID) async throws {}
-    var mealsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
+    func events(in range: ClosedRange<Date>, type: String?) async throws -> [Event] {
+        fatalError("unused")
+    }
+    func corrections(for mealId: UUID) async throws -> [PbUserCorrection] {
+        fatalError("unused")
+    }
+    var eventsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
 }
 
 // Returns FP32 logits that make foodClasses[0] ("bread") dominate every pixel,

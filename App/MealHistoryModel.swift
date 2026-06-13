@@ -4,7 +4,7 @@ import Persistence
 
 // @Observable @MainActor data source for the Meals tab (UI Req §19.1, §19.6,
 // §19.7). Loads `meals` from the store on `start()`, refreshes on every
-// `mealsDidChange` tick, and routes deletes through the store. The tab view
+// `eventsDidChange` tick, and routes deletes through the store. The tab view
 // owns one instance and keeps it alive across tab switches; `cancel()` ends
 // the subscription so the model can be torn down deterministically in tests.
 @Observable
@@ -26,7 +26,7 @@ final class MealHistoryModel {
     func start() async {
         await reload()
         subscription?.cancel()
-        let stream = store.mealsDidChange
+        let stream = store.eventsDidChange
         subscription = Task { [weak self] in
             for await _ in stream {
                 guard let self else { return }
@@ -45,7 +45,7 @@ final class MealHistoryModel {
             try await store.deleteMeal(id: record.id)
         } catch {
             // Best-effort: a delete failure leaves the row in the store and the
-            // next mealsDidChange tick (if any) restores the displayed state.
+            // next eventsDidChange tick (if any) restores the displayed state.
         }
     }
 

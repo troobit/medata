@@ -187,3 +187,133 @@ A hand-maintained field list was already factually wrong and would drift from th
 - `metadata` carries the full record even for fields a query rarely needs; negligible at this scale.
 
 ---
+
+## Decision 7: Rename `mealsDidChange` to `eventsDidChange`; notify on `updatePhotoAssetID`
+
+**Date**: 2026-06-13
+**Status**: accepted
+
+### Context
+
+The change-notification stream fires after every event-row write. With the schema moving from a meals table to a generic events table, the existing `mealsDidChange` name no longer describes what the broadcaster does. Separately, `updatePhotoAssetID` silently rewrites the row today; with the event log it is the only path that stamps the photo binding onto an already-persisted meal, and the Meals tab does not refresh otherwise.
+
+### Decision
+
+Rename `mealsDidChange` to `eventsDidChange`. Make `updatePhotoAssetID` call the broadcaster.
+
+### Rationale
+
+The rename is a single-call surface and one consumer (`MealHistoryModel`). Renaming now avoids name-rot when other event types arrive. Adding the notification on `updatePhotoAssetID` aligns the broadcaster's contract — fires on every event-row write — and gives the UI a deterministic refresh point.
+
+### Alternatives Considered
+
+- **Keep `mealsDidChange`**: Rejected — name-rot once non-meal events ship; cost of the rename is one consumer line.
+- **Leave `updatePhotoAssetID` silent**: Rejected — Meals tab does not redraw on photo stamp; the row appears un-photographed until the next unrelated change.
+
+### Consequences
+
+**Positive:**
+- Stream name matches its semantics; UI redraws on the photo stamp.
+
+**Negative:**
+- Test stub conformers across the codebase update — small mechanical churn.
+
+---
+
+## Decision 8: Public `events(in:type:)` and `corrections(for:)` on `PersistenceStore`
+
+**Date**: 2026-06-13
+**Status**: accepted
+
+### Context
+
+Requirements 1.4 / 1.5 (chronological order + range query) and 4.4 (corrections overlay) could be satisfied internally without changing the protocol surface. The alternative is to expose them as protocol methods so the requirements have a concrete read API.
+
+### Decision
+
+Add two methods to `PersistenceStore`: `events(in:type:)` and `corrections(for:)`.
+
+### Rationale
+
+The requirements describe behaviours of the store that consumers should be able to invoke. Exposing them at the protocol gives a directly testable surface and a small, future-friendly affordance for a regression/overlay consumer that does not exist yet in this phase. The cost is two method signatures and matching stubs in test conformers — small. The `type` parameter on `events(in:type:)` is retained even though only `"meal"` is implementable in this phase, because it is the Req 1.3 affordance and is exercised in tests with a hand-inserted non-meal row.
+
+### Alternatives Considered
+
+- **Keep internal**: Rejected — the requirements are read-side; not exposing them leaves the contract untestable at the API boundary.
+- **Add only `events(in:type:)`, leave corrections internal**: Rejected — Req 4.4 explicitly mentions overlay reads; symmetry beats asymmetry for the cost.
+
+### Consequences
+
+**Positive:**
+- Requirements 1.4 / 1.5 / 4.4 are testable at the public surface.
+
+**Negative:**
+- Two extra methods on stub conformers (`fatalError("unused")` is acceptable where the test does not exercise them).
+
+---
+
+## Decision 9: `EventType.meal` constant; no SQL `CHECK` on `event_type`
+
+**Date**: 2026-06-13
+**Status**: accepted
+
+### Context
+
+`event_type` is a free-text `TEXT` column. With only one value (`"meal"`) today, an unconstrained column lets a typo or copy-paste error silently insert a row that no read path returns (every meal-shaped read filters on `event_type='meal'`).
+
+### Decision
+
+Centralize the vocabulary at the API boundary with a Swift constant: `EventType.meal = "meal"`. No SQL `CHECK` constraint and no full enum (yet).
+
+### Rationale
+
+A constant catches the typo at the call site, which is where every event is constructed. A `CHECK` constraint would block future event types from being added without a schema change, contradicting Req 1.3. A full Swift enum is overkill while only one variant exists — it is trivially upgradable later. Decision 1 already deferred SQL-level validation machinery.
+
+### Alternatives Considered
+
+- **SQL `CHECK (event_type IN ('meal'))`**: Rejected — would have to be dropped or rewritten for every new event type; contradicts Req 1.3's "no schema change" promise.
+- **No central registry, callers use the literal**: Rejected — vulnerable to silent-typo bugs; no compile-time hint.
+- **Full Swift `enum EventType: String`**: Rejected — single-variant enum has no advantage over a constant and adds rawValue/init churn.
+
+### Consequences
+
+**Positive:**
+- Typo-resistant at the API boundary; future types extend the same namespace.
+
+**Negative:**
+- An external SQL writer could still insert an unknown `event_type`; acceptable since the only external writer is the test that exercises the `type` filter.
+
+---
+
+## Decision 10: Wrong-`event_type` id → `mealNotFound`; pre-existing dev DBs left untouched
+
+**Date**: 2026-06-13
+**Status**: accepted
+
+### Context
+
+`meal(id:)` and `deleteMeal(id:)` are meal-specific operations on an events table that will, eventually, hold other event types. Separately, dev devices may carry a pre-existing `meals.sqlite` from before this change; the legacy `meals` / `meal_classes` tables would still be present on disk.
+
+### Decision
+
+Both `meal(id:)` and `deleteMeal(id:)` filter on `event_type=EventType.meal`. An id that exists with a different `event_type` is reported as `PersistenceError.mealNotFound`. `createSchema` only creates the `events` table; pre-existing legacy tables are not dropped. The design states the developer workaround (wipe simulator/device storage) for those who care about the orphan storage.
+
+### Rationale
+
+Filtering keeps the meal-named API honest about its scope — `deleteMeal` does not delete arbitrary events. `mealNotFound` for a wrong-type id is the closest existing error and avoids inventing a new error case for a path that can only arise from external tampering. For dev DBs, destructive DDL on the production code path guards a risk that does not exist (Decision 5: no production data) and adds a code path with no production value; the wipe instruction is the simplest correct outcome.
+
+### Alternatives Considered
+
+- **`meal(id:)` / `deleteMeal(id:)` operate on any event row by id**: Rejected — the names lie about what they do once other event types exist.
+- **New `PersistenceError.wrongEventType(_:got:)`**: Rejected — only meal API code paths would observe it; an indistinguishable `mealNotFound` is sufficient.
+- **`createSchema` drops legacy tables when `schema_version < 3`**: Rejected — destructive DDL on every dev install for no production benefit.
+
+### Consequences
+
+**Positive:**
+- Meal API is honest; no destructive DDL ships.
+
+**Negative:**
+- Dev DBs accumulate stale legacy tables that `exportArchive` includes verbatim; acceptable in pre-release.
+
+---
