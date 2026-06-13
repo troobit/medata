@@ -7,7 +7,7 @@
 | [Research](#research) | 2026-05-24 | Done | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. |
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Event Log Schema](#event-log-schema) | 2026-06-10 | No Tasks | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
-| [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | In Progress | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
+| [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
 
 ---
 
