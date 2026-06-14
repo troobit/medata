@@ -183,16 +183,33 @@ Do not add an explicit not-enabled trait. The existing `.accessibilityValue(stat
   - `event=estimate.end success=true` — line 446; `success=false` branches — lines 452, 456.
 - `event=blocked` — `shutterBlockedTapped()` line 167.
 
-### On-device observation (pending)
+### On-device observation (complete)
 
-Not run in this session — requires holding the device at target tilt/distance and tapping. Runbook for the operator:
+**Date**: 2026-06-14
+**Device**: iPhone 13 Pro Max iOS 26.5, Debug-iphoneos build off `research` @ fdeab9d
+**Mode tested**: double
+**Outcome**: refusal
 
-1. Console.app predicate: `subsystem == "ie.medata.app" AND category == "Shutter"`.
-2. Single mode (LiDAR-equipped, 25–50 cm; non-LiDAR, ~30–40 cm) — expect trail: `fired` → `capture.start stage=nadir` → `capture.end success=true` → `estimate.start` → `estimate.end success=true mealId=…`.
-3. Double mode — expect two `fired`/`capture.*` pairs (nadir + oblique) before `estimate.start`.
-4. If `estimate.end success=false` appears, capture the `EstimationFailure` case name and file a follow-up bug (do not fix here).
-5. If `estimate.start` logs but `estimate.end` never does within ~30 s, capture the trail and file a follow-up (candidate root cause: [[pipeline-factory-parked]] YCbCr→RGB issue).
+Observed log trail:
 
-Append observed trail + UI outcome here when run on device.
+```
+event=fired state=ready tiltDegrees=4.6 targetTilt=0 tiltInRange=true distanceCm=39.5 lidarCoveragePercent=90.3 supportsLiDAR=true canShutter=true flowTaskActive=false startTaskActive=true mode=double stage=nadir
+event=capture.start stage=nadir
+event=capture.end stage=nadir success=true width=1920 height=1440
+event=fired state=ready tiltDegrees=3.5 targetTilt=25 tiltInRange=false distanceCm=39.9 lidarCoveragePercent=88.7 supportsLiDAR=true canShutter=true flowTaskActive=true startTaskActive=true mode=double stage=oblique
+event=capture.start stage=oblique
+event=capture.end stage=oblique success=true width=1920 height=1440
+event=estimate.start capturePath=two_view_sfs
+event=estimate.start maskAgeMs=-1
+event=pipeline.stage.start name=CardDetection
+event=carddetect.end success=false cornerCount=0 latencyMs=29
+event=pipeline.stage.start name=SupportPlane
+event=supportplane.start width=1920 height=1440 source=pre_shutter
+event=estimate.end success=false failure=noFoodPixels
+```
+
+UI outcome: Refusal modal title not captured in this session; ResultView did not appear.
+
+Notes: `maskAgeMs=-1` on `estimate.start` despite pre-shutter `segmenter.substage.*` events firing — captured for triage in `specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/`.
 
 ---
