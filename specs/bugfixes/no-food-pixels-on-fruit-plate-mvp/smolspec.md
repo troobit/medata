@@ -169,3 +169,29 @@ Confirming evidence the lost-age fix code is on-device: the build at `a349118` +
 (All cadence followups previously listed here have been pulled in-scope; the cadence work is now bug 2 of this spec, covered by tasks 4–7 of `tasks.md`. The single-mode-also verification requirement is folded into task 8.)
 
 - **Decision-log entry for the cadence-fix mechanism** — once the on-device trail (task 5) identifies which of H1/H2/H3 fired, append a short ADR-format note to the appropriate decision log (this spec's directory has no `decision_log.md` today; if the fix touches `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift`, link it from `specs/pipeline-real-device-correctness/decision_log.md` as a Status: superseded clarification on the existing `bufferingNewest(1)` decision).
+
+## Verification attempt 2026-06-16 — mask contract met, blocked on `lidarFitDegenerate`
+
+**Build**: HEAD `288c5a7` (lost-age fix + cadence fix, diagnostics stripped). Device: PhoneMax (iPhone 13 Pro Max iOS 26.5, UDID `76A45E6D-C57E-5BA6-ABAD-205C3C668572`). Mode: Double. Single-mode trail still owed.
+
+Filtered Console trail (OS framework chatter removed; only the app's `event=` and `segmenter.substage` lines kept):
+
+```
+01:13:26.689  event=fired state=ready tiltDegrees=5.6 targetTilt=25 tiltInRange=false distanceCm=45.2 lidarCoveragePercent=87.9 supportsLiDAR=true canShutter=true mode=double stage=oblique
+01:13:26.705  event=capture.start stage=oblique
+01:13:26.771  event=capture.end   stage=oblique success=true width=1920 height=1440
+01:13:26.771  event=estimate.start capturePath=two_view_sfs
+01:13:26.772  event=estimate.start maskAgeMs=170
+01:13:26.772  event=pipeline.stage.start name=CardDetection
+01:13:26.804  event=pipeline.stage.start name=SupportPlane
+01:13:26.804  event=supportplane.start width=1920 height=1440 source=pre_shutter
+01:13:27.505  event=estimate.end success=false failure=lidarFitDegenerate
+```
+
+**This spec's contract is met**:
+- `maskAgeMs=170` — fresh, well inside the 750 ms staleness gate (cadence fix [bug 2] holding).
+- `noFoodPixels` refusal **resolved**: the pre-shutter mask now reaches `Pipeline.estimate` via `source=pre_shutter` (lost-age fix [bug 1] holding).
+
+**Different-refusal blocker** per task 8's rule ("do not iterate blind"): `failure=lidarFitDegenerate`. This is out of scope for this smolspec — the spec's contract ends at "mask reaching `Pipeline.estimate`". The new refusal sits downstream in `Pipeline.fitSupportPlane` → `LiDARPlaneFitter.refine` (`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift:209,238`): the real `source=pre_shutter` mask's geometry yields a degenerate scatter matrix (near-collinear candidate points in the lower-edge band when the food bbox extends close to the image's bottom edge), where the centre-rectangle `roughMask` previously used by `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/` (sealed 2026-06-14, commit `ecf0211`) had been hiding the geometry by giving the lower-edge band a guaranteed below-bbox strip on the table.
+
+**Handed to** `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/` (re-opened). Tasks 8–10 of this spec stay `[ ]` with a `BLOCKED 2026-06-16` annotation on task 8; their success criterion (`estimate.end success=true` in both modes) is gated on the lidar fix landing.

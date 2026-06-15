@@ -69,7 +69,7 @@ references:
 
 ## Verify
 
-- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky -->
+- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky --> <!-- BLOCKED 2026-06-16 — Blocked-by: lidar-plane-fit-degenerate-on-clean-capture (real-mask degenerate fit). Mask contract met (cadence + lost-age fixes verified; `event=estimate.start maskAgeMs=170` on PhoneMax Double; `noFoodPixels` resolved). End-to-end `estimate.end success=true` gated on the lidar fix; see `## Verification attempt 2026-06-16` in smolspec.md. -->
   - Agent: rebuild for device, print install/launch commands and Console filter.
   - User: install, launch, capture in **Single** mode first (one nadir tap at a fruit plate), then in **Double** mode (nadir + oblique at a fruit plate). Paste both trails back.
   - Success criteria (BOTH modes) — `event=estimate.start maskAgeMs=N` with `N >= 0` AND `N <= 750`.
