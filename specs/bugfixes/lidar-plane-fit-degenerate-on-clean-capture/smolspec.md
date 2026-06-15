@@ -102,3 +102,48 @@ With this mask:
 - **Assumption**: `Pipeline.fitSupportPlane` is the only call site that constructs an all‑ones mask for `LiDARPlaneFitter`. **Validation**: grep `LiDARPlaneFitter` call sites in production code (not tests) before editing. The fitter's tests use synthetic masks designed for their assertions and are out of scope.
 - **Assumption**: The capture frame's `nadir.imageWidth` and `nadir.imageHeight` are the same colour grid the `BinaryMask` is expressed against. **Validation**: confirmed by the existing all‑ones construction at `Pipeline.swift:373-377` already passing these dimensions to `BinaryMask`.
 - **Prerequisite**: A reproducible synthetic depth + mask fixture for the regression test. The existing `MedataCore/Tests/SupportPlaneTests/` (or `PipelineTests/`) should already have similar fixtures to start from; the new test reuses or extends them.
+
+## Re-open 2026-06-16 — real-mask path regresses the fit
+
+**Status**: re-opened. The 2026-06-03 fix above is preserved as the all-ones-mask regression sentinel (`SupportPlaneRoughMaskTests` at `MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift`). The `CentreRectangleMask.swift` helper itself has been retired — the `specs/pipeline-real-device-correctness/` follow-on wired a real pre-shutter `BinaryMask` through `CaptureResult.preShutterFoodMask`, so `Pipeline.fitSupportPlane` no longer constructs any rough mask of its own. That migration is what re-exposes this bug.
+
+### Evidence
+
+PhoneMax (iPhone 13 Pro Max iOS 26.5), build HEAD `288c5a7` (no-food-pixels-on-fruit-plate-mvp cadence + lost-age fixes), mode=double, 2026-06-16 (see `nextup.md` `# LOGS`):
+
+```
+01:13:26.771  event=capture.end   stage=oblique success=true width=1920 height=1440
+01:13:26.771  event=estimate.start capturePath=two_view_sfs
+01:13:26.772  event=estimate.start maskAgeMs=170
+01:13:26.804  event=pipeline.stage.start name=SupportPlane
+01:13:26.804  event=supportplane.start width=1920 height=1440 source=pre_shutter
+01:13:27.505  event=estimate.end success=false failure=lidarFitDegenerate
+```
+
+`source=pre_shutter` is the new — and correct — path: a real pre-shutter mask from `PreShutterSegmenter.latest` reaches `LiDARPlaneFitter.fit` instead of the centre-rectangle stand-in.
+
+### Root cause (real-mask path)
+
+`LiDARPlaneFitter.collectCandidatePoints` (`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift:100-144` pre-fix) only scans the band **below** the food bbox (`y ∈ [bbox.maxY, bbox.maxY + bbox.heightPx]`, `x ∈ [bbox.minX, bbox.maxX]`). On a centred capture envelope the plate fills the middle of the frame; on the Phase 1 dev-stub the bbox is the cropped ellipse cap at α=0.618 (`MedataCore/Sources/Segmentation/StubInferenceEngine.swift:43-62`) which post-letterbox-crop-and-resize occupies y ∈ [≈367, ≈1437] in a 1440-tall device frame. The below-bbox scan window collapses to 2-3 image rows. Either:
+
+- `points.count < minPoints` (3) → `noLidarPoints` (mapped to `EstimationFailure.lidarFitDegenerate` at `Pipeline.swift:465-469`), OR
+- the candidate set forms a near-collinear 3-D line (all points sharing image-y → constant camera-Y after back-projection) → singular covariance at `refine` (`LiDARPlaneFitter.swift:238`) → `SupportPlaneError.lidarFitDegenerate`.
+
+The earlier centre-rectangle `roughMask` had been hiding the geometry by guaranteeing a wide scan window below its inner rectangle. With the real mask now in play, that buffer is gone.
+
+### Fix (real-mask path)
+
+`collectCandidatePoints` now scans **four** edge bands around the food bbox — top, bottom, left, right — each as thick as the bbox dimension perpendicular to it, clipped to image bounds. Preserves the fitter's design intent (collect table pixels around the plate); only widens which sides are considered, so that any side flush against an image edge no longer starves the candidate set. `LiDARPlaneFitter.Inputs` is unchanged; `Pipeline.fitSupportPlane` is unchanged; the `LiDARSupportPlaneFitter` protocol contract is unchanged. See `decision_log.md` Decision 2.
+
+### Affected files
+
+| File | Change |
+|------|--------|
+| `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` | `collectCandidatePoints` scans four edge bands instead of one; `BBox` gains a `widthPx` accessor mirroring `heightPx`. |
+| `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` | New regression `testFitsCentredMaskWithBboxAtImageBottomEdge` — bbox extending to the image's last row; pre-fix throws `noLidarPoints`, post-fix recovers a 5°-tilted plane within 2° and 5 mm. |
+
+### Out of scope (real-mask re-open)
+
+- Wiring `foodRegionCoveragePercent` into `LiDARStatus` so `selectCapturePath` picks `.singleViewLidar`. Tracked under `specs/pipeline-real-device-correctness/`.
+- Replacing `NullCardDetector` with a Vision-backed implementation. Same.
+- Single-mode on-device trail (the 2026-06-16 device run was Double-only). Folded into closeout verification.

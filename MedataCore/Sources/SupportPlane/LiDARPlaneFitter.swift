@@ -99,45 +99,69 @@ public enum LiDARPlaneFitter {
 
     static func collectCandidatePoints(_ inputs: Inputs) throws -> [Vec3] {
         // Resample depth + confidence onto the colour-image grid (bilinear depth, NN
-        // confidence). For each colour-image pixel in the lower-edge band of the food
+        // confidence). For each colour-image pixel in an edge band around the food
         // bbox where the pixel is OUTSIDE the food mask AND confidence/255 ≥ τ_conf,
         // back-project to 3-D camera-1 space using K_colour^{-1} · [u,v,1] · z.
+        //
+        // Bands: bottom, top, left, right of the food bbox, each as thick as the
+        // bbox dimension perpendicular to it, clipped to image bounds. The original
+        // §6.2 design scanned only the lower-edge band on the assumption that the
+        // camera framed the plate from above with the table visible below it. On a
+        // centred capture envelope (`App/CaptureFlowModel.swift` gating) the plate
+        // fills the middle of the frame and the table is visible on every side; a
+        // bbox that extends close to an image edge starves the single-band scan and
+        // surfaces as `noLidarPoints` or `lidarFitDegenerate` (near-collinear 3-D
+        // points → singular covariance at `refine`). The four-edge scan keeps the
+        // fitter's intent (collect table pixels around the plate) while tolerating
+        // any side of the bbox sitting against the image edge.
+        // Bug `lidar-plane-fit-degenerate-on-clean-capture` 2026-06-16.
         let mask = inputs.foodRegionMask
-        let bbox = foodBBox(mask: mask)
-        guard let bbox else { return [] }
+        guard let bbox = foodBBox(mask: mask) else { return [] }
 
-        // Lower-edge band: from y = bbox.maxY down to y = bbox.maxY + bandPx, where
-        // bandPx = lowerEdgeBandMm / mm_per_px_at_food_plane. We don't have a precise
-        // depth-aware px-mm conversion before fitting; use a depth-projection: for
-        // each candidate pixel, accept it if its distance to the bbox lower edge in
-        // camera-3D mm is ≤ lowerEdgeBandMm. That keeps the band depth-aware.
         var points: [Vec3] = []
         let kc = inputs.colourIntrinsics
-        let xMin = bbox.minX
-        let xMax = bbox.maxX
-        let yLowerEdge = bbox.maxY
-        let yScanMax = min(mask.height - 1, yLowerEdge + bbox.heightPx)  // generous scan window
+        let xMin = bbox.minX, xMax = bbox.maxX
+        let yMin = bbox.minY, yMax = bbox.maxY
+        // Below-bbox band starts AT bbox.maxY (food row, filtered by `isFood`) per
+        // the original §6.2 design; the top/left/right bands mirror that convention
+        // by starting one pixel outside the bbox in their respective directions.
+        let scanRegions: [(xRange: ClosedRange<Int>, yRange: ClosedRange<Int>)] = [
+            // Below
+            (xMin...xMax,
+             yMax...min(mask.height - 1, yMax + bbox.heightPx)),
+            // Above
+            (xMin...xMax,
+             max(0, yMin - bbox.heightPx)...yMin),
+            // Left
+            (max(0, xMin - bbox.widthPx)...xMin,
+             yMin...yMax),
+            // Right
+            (xMax...min(mask.width - 1, xMax + bbox.widthPx),
+             yMin...yMax),
+        ]
 
-        for y in yLowerEdge..<yScanMax + 1 {
-            for x in xMin...xMax {
-                if mask.isFood(x: x, y: y) { continue }
-                let conf = sampleConfidenceNearest(depth: inputs.depth, colourX: x, colourY: y,
-                                                   colourWidth: mask.width, colourHeight: mask.height)
-                if Float(conf) / 255 < confidenceThreshold { continue }
-                guard let zMm = sampleDepthBilinear(depth: inputs.depth, colourX: Float(x), colourY: Float(y),
-                                                    colourWidth: mask.width, colourHeight: mask.height) else {
-                    continue
+        for (xRange, yRange) in scanRegions {
+            for y in yRange {
+                for x in xRange {
+                    if mask.isFood(x: x, y: y) { continue }
+                    let conf = sampleConfidenceNearest(depth: inputs.depth, colourX: x, colourY: y,
+                                                       colourWidth: mask.width, colourHeight: mask.height)
+                    if Float(conf) / 255 < confidenceThreshold { continue }
+                    guard let zMm = sampleDepthBilinear(depth: inputs.depth, colourX: Float(x), colourY: Float(y),
+                                                        colourWidth: mask.width, colourHeight: mask.height) else {
+                        continue
+                    }
+                    if zMm <= 0 { continue }
+                    // Back-project: p = (X, Y, Z) with Z<0 in §6.0 (-Z forward). The
+                    // depth value is positive distance along the optical axis, so:
+                    //   p = ((u-cx)/fx, (v-cy)/fy, -1) · zMm
+                    let p = Vec3(
+                        (Float(x) - kc.cx) / kc.fx * zMm,
+                        (Float(y) - kc.cy) / kc.fy * zMm,
+                        -zMm
+                    )
+                    points.append(p)
                 }
-                if zMm <= 0 { continue }
-                // Back-project: p = (X, Y, Z) with Z<0 in §6.0 (-Z forward). The
-                // depth value is positive distance along the optical axis, so:
-                //   p = ((u-cx)/fx, (v-cy)/fy, -1) · zMm
-                let p = Vec3(
-                    (Float(x) - kc.cx) / kc.fx * zMm,
-                    (Float(y) - kc.cy) / kc.fy * zMm,
-                    -zMm
-                )
-                points.append(p)
             }
         }
         return points
@@ -262,6 +286,7 @@ public enum LiDARPlaneFitter {
         let minX, maxX: Int
         let minY, maxY: Int
         var heightPx: Int { max(1, maxY - minY) }
+        var widthPx: Int { max(1, maxX - minX) }
     }
 
     static func foodBBox(mask: BinaryMask) -> BBox? {

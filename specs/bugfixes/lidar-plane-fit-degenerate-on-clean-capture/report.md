@@ -1,7 +1,9 @@
 # Bugfix Report: LiDAR Plane Fit Degenerate on Clean Capture
 
-**Date:** 2026-06-03
-**Status:** Fixed (automated); on-device verification pending
+**Date:** 2026-06-03 (original fix), re-opened 2026-06-16
+**Status:** Fixed (automated, both passes); on-device verification pending for the 2026-06-16 re-open
+
+> **Re-opened 2026-06-16**: The original fix below (centre-rectangle `roughMask` at `Pipeline.fitSupportPlane`) was retired by `specs/pipeline-real-device-correctness/` once the real `PreShutterSegmenter` mask was wired through `CaptureResult.preShutterFoodMask`. The real-mask path then re-tripped `lidarFitDegenerate` because `LiDARPlaneFitter.collectCandidatePoints` only scanned the band BELOW the food bbox; centred capture envelopes whose bbox extends to (or near) the image's bottom edge starved that single band. Fix: scan four edge bands (top, bottom, left, right) around the bbox. See `smolspec.md` (`## Re-open 2026-06-16`), `decision_log.md` Decision 2, and `tasks.md` (tasks 6-9). The all-ones-mask `SupportPlaneRoughMaskTests` sentinel from the original fix is preserved.
 
 ## Description of the Issue
 

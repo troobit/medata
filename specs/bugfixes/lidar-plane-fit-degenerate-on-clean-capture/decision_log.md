@@ -49,3 +49,50 @@ This is surgical (one call site, ~25 LOC), preserves the LiDAR-fit-takes-precede
 `MedataCore/Sources/Pipeline/Pipeline.swift` (replace `roughMask` construction with the helper call; add the helper). `MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift` (new). DEBUG-only logging addition near `Pipeline.fitSupportPlane` call sites — same `os.Logger` subsystem `ie.medata.app`, category `Shutter` as the existing `estimate.start` / `estimate.end` events. No call-site changes anywhere else; no public-API changes.
 
 ---
+
+## Decision 2: Scan four edge bands around the food bbox in `collectCandidatePoints`
+
+**Date**: 2026-06-16
+**Status**: accepted
+
+### Context
+
+The 2026-06-03 fix (Decision 1) shipped a centre-rectangle `roughMask` at the `Pipeline.fitSupportPlane` call site. The `specs/pipeline-real-device-correctness/` follow-on then retired that helper and wired a real pre-shutter `BinaryMask` through `CaptureResult.preShutterFoodMask` from `PreShutterSegmenter.latest`. On-device verification 2026-06-16 (PhoneMax, Double mode, build `288c5a7`) showed the real mask reaching `Pipeline.estimate` via `source=pre_shutter` (cadence + lost-age fixes holding from `specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/`) but `estimate.end success=false failure=lidarFitDegenerate`. Decision 1's regression sentinel did not cover this geometry: the real mask is a centred shape (Phase 1 dev-stub ellipse at α=0.618 in 513×513 letterbox → cropped to top-left 513×385 → bilinearly resized to 1920×1440 → bbox y ∈ [≈367, ≈1437] in a 1440-tall frame) whose bbox extends to within ~3 rows of the image's bottom edge. `LiDARPlaneFitter.collectCandidatePoints` only scanned the band BELOW the bbox; that window collapses to 2-3 rows, producing either zero candidates (`noLidarPoints`) or a near-collinear 3-D set (singular covariance at `refine` → `lidarFitDegenerate`). The centre-rectangle had been hiding this by guaranteeing a wide below-band; the production segmenter does not.
+
+### Decision
+
+Modify `LiDARPlaneFitter.collectCandidatePoints` to scan FOUR edge bands around the food bbox — bottom, top, left, and right — each as thick as the bbox dimension perpendicular to it (bottom/top use `bbox.heightPx`; left/right use a new `bbox.widthPx` accessor), clipped to image bounds. Each band is filtered by the existing `mask.isFood` check (food pixels skipped), depth-confidence threshold, and `zMm > 0` validity, before back-projection. `LiDARPlaneFitter.Inputs`, the `LiDARSupportPlaneFitter` protocol, and `Pipeline.fitSupportPlane` are all unchanged.
+
+### Rationale
+
+The fitter's design intent — find table pixels around the plate by scanning bands of non-food image area — is preserved. The original single-band-below assumption fitted a camera-strictly-above-plate framing in which the table is reliably visible below the food bbox. The MVP capture envelope (`App/CaptureFlowModel.swift` gating: centred, near-0° tilt, ~30-40 cm distance) puts the plate in the middle of the frame with the table visible on every side; the four-edge scan applies the same intent to every side the camera can see. Pixels overlapping the bbox boundary (the four corners shared between adjacent bands) are food and the existing `mask.isFood` filter drops them, so no double-counting in the candidate set.
+
+The fix is contained to `LiDARPlaneFitter.swift` (~20 LOC delta in `collectCandidatePoints` plus a one-line `widthPx` accessor on `BBox`). No public surface changes. Determinism is preserved because the RNG seed is hashed from `inputs.depth.depthBytesMm`, not the candidate set; the candidate ordering across the four bands is fixed (below, above, left, right).
+
+### Alternatives Considered
+
+- **Fall back to the centre-rectangle roughMask when the real mask admits < 3 inliers**: Retry the fit with the Decision-1-style synthesised mask when the first attempt fails. — Rejected because (a) it re-runs the entire RANSAC + refine on a different candidate set, doubling worst-case latency; (b) it perpetuates the "all-ones-style placeholder mask" pattern Decision 1's `Prevention` section explicitly warned against; (c) it does not improve robustness for valid masks with bbox-edges-near-image-edge geometries, only "recovers" from them after the first attempt has already burned cycles.
+- **Erode the real mask before passing it to `collectCandidatePoints`**: Shrink the food bbox by N pixels (or N % of its dimensions) so the below-band always has guaranteed thickness. — Rejected because (a) the erosion factor is a tuning knob with no principled value (must trade off plate-rim retention against scan-band thickness); (b) it does not help when the bbox legitimately reaches the image edge (a plate flush against the bottom of the frame); (c) it changes the meaning of the mask before it reaches the fitter, complicating downstream debug/log analysis.
+- **Detect-and-throw earlier with a more specific error case**: Add a new `SupportPlaneError.lowerBandTooThin` and have `Pipeline.fitSupportPlane` retry with a synthetic mask on that error. — Rejected because it pushes recovery logic up to the Pipeline layer and conflates "mask too aggressive" with "fitter cannot find a plane", which are different concerns. The four-edge scan addresses the geometric issue at its source.
+- **Scan the entire image for non-food pixels (no band constraint)**: Drop the band concept and collect every non-food pixel with valid depth. — Rejected because it can pick up background/wall/ceiling pixels far from the table surface, biasing the RANSAC seed and degrading recovered plane accuracy. The band constraint (proximity to the food bbox) is what keeps candidates likely-to-be-table.
+
+### Consequences
+
+**Positive:**
+
+- Real `source=pre_shutter` masks no longer trip `lidarFitDegenerate` purely due to bbox-at-image-edge geometry. Centred framings work on every side.
+- The fix is localised: one function, one helper accessor, one new test case. The `LiDARSupportPlaneFitter` protocol and `Pipeline.fitSupportPlane` are untouched.
+- All existing SupportPlane + Pipeline tests continue to pass (313/313 with 3 skipped; the all-ones-mask sentinel from Decision 1 still throws `noLidarPoints` as before — the four-band scan over an all-ones mask still finds zero non-food candidates).
+- Deterministic seed contract preserved (`testDeterministicSeedProducesIdenticalResults`).
+
+**Negative:**
+
+- The candidate count is now up to ~4× higher per fit (one band → four bands). Worst-case CPU cost grows accordingly; not yet measured on-device but the RANSAC + refine loops are already O(n) in candidate count, so absolute latency at 1920×1440 with ~50K candidates remains well under one frame budget.
+- The "below-bbox" intuition documented in §6.2 ("scan the lower-edge band") is now broader; future readers must consult `collectCandidatePoints` itself, not the design doc, for the actual scan shape. The function comment cross-references this bugfix spec.
+- The fix exposes a wider candidate set, which can in principle let RANSAC fit a NEAR-table plane biased by far-background depth samples (e.g., wall behind the table). Mitigated by the existing `gravityAngleMaxRad = 15°` filter and the per-side band-thickness clamp at `bbox.{height,width}Px`, which keeps the scan reasonably close to the food bbox in image space.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`collectCandidatePoints` reworked to four-band; `BBox.widthPx` accessor added). `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` (one new test `testFitsCentredMaskWithBboxAtImageBottomEdge`). No call-site changes anywhere else; no public-API changes; `LiDARSupportPlaneFitter` protocol unchanged.
+
+---

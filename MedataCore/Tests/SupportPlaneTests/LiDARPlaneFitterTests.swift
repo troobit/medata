@@ -217,4 +217,41 @@ final class LiDARPlaneFitterTests: XCTestCase {
     func testProductionResidualMaxIsTwentyMm() {
         XCTAssertEqual(LiDARPlaneFitter.residualMaxMm, 20)
     }
+
+    // Regression for `lidar-plane-fit-degenerate-on-clean-capture` real-mask
+    // path (2026-06-16 device verification on PhoneMax). The pre-shutter
+    // segmenter produces a centred food mask whose bbox extends to the
+    // image's bottom edge (~y=1437 of 1440 on device). Pre-fix
+    // `collectCandidatePoints` only scans BELOW the bbox — the window
+    // collapses to zero rows and the fit throws `noLidarPoints`. Post-fix
+    // the scan extends to all four edge bands (top, bottom, left, right)
+    // around the bbox so centred framings still find table pixels on the
+    // sides when the bottom band is starved.
+    func testFitsCentredMaskWithBboxAtImageBottomEdge() throws {
+        let tiltRad: Float = 5 * .pi / 180
+        let trueNormal = Vec3(sin(tiltRad), cos(tiltRad), 0)
+        let trueDist: Float = 200
+        let depth = syntheticPlaneDepthMap(normal: trueNormal, distanceMm: trueDist)
+        // bbox.maxY = 479 (the image's last row): the below-bbox scan
+        // window collapses to a single row that is itself inside the food
+        // mask, leaving zero candidate pixels. Mimics the on-device
+        // dev-stub ellipse bbox extending to y ≈ mask.height − 3 in a
+        // 1440-tall frame.
+        let foodMask = centredFoodMask(
+            foodRectX: 100..<540,
+            foodRectY: 100..<480
+        )
+        let plane = try LiDARPlaneFitter.fit(.init(
+            depth: depth,
+            colourIntrinsics: intrinsics,
+            foodRegionMask: foodMask,
+            gravityCamera: trueNormal
+        ))
+        let angleRad = acos(max(-1, min(1, plane.normal.dot(trueNormal))))
+        let angleDeg = angleRad * 180 / .pi
+        XCTAssertLessThan(angleDeg, 2.0,
+                          "recovered normal off by \(angleDeg)°; expected within 2°")
+        XCTAssertEqual(plane.distanceMm, trueDist, accuracy: 5.0,
+                       "recovered distance \(plane.distanceMm) mm; expected \(trueDist) ± 5 mm")
+    }
 }
