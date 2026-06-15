@@ -97,6 +97,69 @@ struct CaptureFlowModelPreShutterTests {
         #expect(spy.latestReadsAfterAwaitPaused >= 1)
     }
 
+    // MARK: - preShutterMaskAgeMs threaded onto CaptureResult (bugfix smolspec)
+
+    // Test A — single-view nadir tap with a fresh published mask must reach
+    // CaptureResult with both preShutterFoodMask non-nil AND preShutterMaskAgeMs
+    // >= 0. Mirrors `freshMaskFlowsThroughCaptureResult` but asserts the age
+    // field that drives `event=estimate.start maskAgeMs=…` (Req: estimate.start
+    // log line must reflect a real measurement when a mask is attached).
+    @Test("single-view nadir stamps preShutterMaskAgeMs >= 0 on CaptureResult")
+    func singleViewNadirStampsMaskAge() async {
+        let mask = makeOnesMask(width: 8, height: 8)
+        let spy = SpyPreShutterMaskSource()
+        spy.latest = makeTimestamped(mask: mask, ageMs: 0)
+
+        let fixture = makeFixture(spy: spy)
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        fixture.model.shutter()
+        await fixture.model.flowTask?.value
+
+        let received = fixture.pipeline.lastCaptureResult
+        #expect(received != nil)
+        #expect(received?.preShutterFoodMask != nil)
+        #expect((received?.preShutterMaskAgeMs ?? -1) >= 0)
+    }
+
+    // Test B — the smoking gun for the noFoodPixels / maskAgeMs=-1 refusal
+    // observed on iPhone 13 Pro Max 2026-06-14. After a nadir tap stashes the
+    // pre-shutter mask, the oblique tap currently sets nadirMaskAgeMs = nil in
+    // the else branch at CaptureFlowModel.swift:481-484, so the oblique-stage
+    // CaptureResult arrives at the pipeline with preShutterMaskAgeMs == nil
+    // even though the mask itself is present. Must fail today.
+    @Test("double-mode oblique preserves nadir-instant preShutterMaskAgeMs")
+    func doubleModeObliquePreservesNadirMaskAge() async {
+        let mask = makeOnesMask(width: 8, height: 8)
+        let spy = SpyPreShutterMaskSource()
+        spy.latest = makeTimestamped(mask: mask, ageMs: 0)
+
+        let fixture = makeFixture(spy: spy, supportsLiDAR: false)
+
+        // Nadir tap — model returns to .ready awaiting the oblique view.
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 0, trackingIsNormal: true
+        )
+        fixture.model.shutter()
+        await fixture.model.flowTask?.value
+        #expect(fixture.model.awaitingObliqueView == true)
+        #expect(fixture.model.firstFrameMaskBox != nil)
+
+        // Oblique tap — pipeline receives the CaptureResult for the full
+        // two-view sequence.
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 25, distanceCm: 35, lidarCoveragePercent: 0, trackingIsNormal: true
+        )
+        fixture.model.shutter()
+        await fixture.model.flowTask?.value
+
+        let received = fixture.pipeline.lastCaptureResult
+        #expect(received != nil)
+        #expect(received?.preShutterFoodMask?.pixels == mask.pixels)
+        #expect((received?.preShutterMaskAgeMs ?? -1) >= 0)
+    }
+
     // MARK: - firstFrameMaskBox lifecycle (Decision 11)
 
     @Test("two-view nadir capture stashes firstFrameMaskBox alongside firstFrame")

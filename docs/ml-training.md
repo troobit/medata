@@ -46,7 +46,7 @@ detail not duplicated there.
 | --- | --- |
 | Segmenter training | Linux/Windows box with a CUDA GPU (RTX 3060 12 GB or better is comfortable; smaller works with a smaller batch size). M-series Mac with MPS is acceptable for short fine-tunes but ~5–10× slower than a mid-range CUDA card. |
 | Export to Core ML + TFLite | macOS 14+. `coremltools` requires Apple OS; cross-OS export is not supported. |
-| On-device validation | iPhone 12 Pro or later Pro / Pro Max (Req 1.2). Needed for the Apple Neural Engine residency check (Req 16.5) and per-stage latency bar (Req 16.2). |
+| On-device validation | iPhone 13 Pro Max (Req 1.2 spec floor; iOS 26.5+). Needed for the Apple Neural Engine residency check (Req 16.5) and per-stage latency bar (Req 16.2). |
 | β_c gravimetric capture | Calibrated kitchen scale, 1 g resolution or finer; ID-1 reference card (any expired credit / library card); the same iPhone used for on-device validation. |
 
 ### Python environment
@@ -109,7 +109,7 @@ fixture directory.
 | --- | --- | --- |
 | Segmenter mean food-class mIoU ≥ 0.60 | Req 8.9 | `HarnessCLI seg-bench` |
 | Segmenter weights ≤ 10 MB (FP16) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
-| Segmenter inference ≤ 250 ms / view on iPhone 12 Pro | Req 8.3 | XCTest with `XCTClockMetric` |
+| Segmenter inference ≤ 250 ms / view on iPhone 13 Pro Max (v1 hardware floor) | Req 8.3 | XCTest with `XCTClockMetric` |
 | Segmenter resident on the Apple Neural Engine | Req 16.5 | Xcode → Core ML performance report (manual, post-bundle) |
 | End-to-end MAPE < 20% AND MAE ≤ 10 g | Req 21.3 | `HarnessCLI accuracy` |
 | ≥ 30 calibration meals per class for `calibrated` β_c status | Req 11.7 | `HarnessCLI calibrate` |

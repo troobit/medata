@@ -80,7 +80,7 @@ It touches one source file but is load-bearing for every downstream consumer of 
 
 ## What is *not* blocked
 
-- LiDAR-path scale resolution. The pipeline's `fitSupportPlane` uses LiDAR when available and only falls back to the card-plane path when LiDAR coverage is insufficient. v1 hardware floor (research §51) is iPhone 12 Pro+ with rear LiDAR, so on-target devices have a usable scale source without a card detector. A real `Pipeline` could be wired today with `NilCardDetector` (already exists at `MedataCore/Tests/PipelineTests/EstimationFailureTests.swift:168`, would need lifting to production code) — provided segmenter weights exist (which they don't, hence Blocker 1).
+- LiDAR-path scale resolution. The pipeline's `fitSupportPlane` uses LiDAR when available and only falls back to the card-plane path when LiDAR coverage is insufficient. v1 hardware floor (research Req 1.2) is iPhone 13 Pro Max with rear LiDAR, so on-target devices have a usable scale source without a card detector. A real `Pipeline` could be wired today with `NilCardDetector` (already exists at `MedataCore/Tests/PipelineTests/EstimationFailureTests.swift:168`, would need lifting to production code) — provided segmenter weights exist (which they don't, hence Blocker 1).
 
 ## Next steps — order of operations
 
@@ -104,7 +104,7 @@ These are sequenced. Do not skip ahead.
 
 **Why second:** needs Step 1's RGB pipeline to be correct, otherwise the model trained on properly-converted inputs will see miscoded bytes at runtime.
 
-**Output:** `MedataCore/Resources/segmenter.mlpackage` produced by `tools/segmenter/export.py`, size ≤10 MB (research Req 8.2), per-view inference ≤250 ms on iPhone 12 Pro (research Req 8.3), mIoU bar per research Req 8.9.
+**Output:** `MedataCore/Resources/segmenter.mlpackage` produced by `tools/segmenter/export.py`, size ≤10 MB (research Req 8.2), per-view inference ≤250 ms on iPhone 13 Pro Max (research Req 8.3 — v1 hardware floor per Req 1.2), mIoU bar per research Req 8.9.
 
 **Acceptance:** `SegmenterWeightsBudget.validate(at:)` passes; `CoreMLInferenceEngine` loads and runs the model on-device with Neural Engine residency confirmed via Xcode's Core ML performance report.
 
@@ -124,7 +124,7 @@ These are sequenced. Do not skip ahead.
 
 `PendingPipeline` can be removed in the same change, or kept behind a bundle-presence check for development builds without weights.
 
-**Acceptance:** end-to-end on iPhone 12 Pro+ — tap shutter → real estimation → `MealRecord` reaches the result view with a non-placeholder carb total.
+**Acceptance:** end-to-end on iPhone 13 Pro Max — tap shutter → real estimation → `MealRecord` reaches the result view with a non-placeholder carb total.
 
 **Estimate:** smolspec-sized, <50 LOC across 1–2 files.
 

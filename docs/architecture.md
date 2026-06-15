@@ -31,6 +31,41 @@ See `specs/research/requirements.md` for the full mathematical pipeline, modelli
 assumptions, and academic provenance.
 
 **Hardware floor:** iPhone 13 Pro Max and later (rear LiDAR). **OS floor:** iOS 26.5.
+(`specs/research/requirements.md` Req 1.2. The capture engine relaxes this at runtime
+for non-LiDAR devices — see [`docs/ios-device-setup.md`](ios-device-setup.md) device
+matrix — but calibration and performance bars are measured on iPhone 13 Pro Max.)
+
+### 1.1 Delivery phases — what works today
+
+V1 ships in three ordered phases (`specs/research/requirements.md` §0). Phases 1 and 2
+ship with a development stub in the segmenter slot; numeric accuracy targets gate
+**Phase 3 only**.
+
+- **Phase 1 — running on device (current).** Full capture → segmentation (dev-stub) →
+  volume → macros → result on iPhone 13 Pro Max. Capture flow, gating, persistence,
+  refusal paths and confidence combination are real; the segmenter emits a centred
+  ellipse food mask (`specs/research/requirements.md` §23.2) so carb numbers are
+  placeholders. `DEV_STUB_SEGMENTER` is the swift-build flag that selects this engine.
+- **Phase 2 — UI/UX iteration.** Capture-flow polish against real-device usage; no new
+  pipeline algorithms.
+- **Phase 3 — data veracity & modelling.** Bundled trained Core ML segmenter, β_c
+  calibration via `HarnessCLI calibrate`, accuracy harness exercised against the §21.3
+  reference; placeholder banner from §23.3 removed.
+
+### 1.2 Why the test scene is a fruit plate
+
+A plate of fruit is the canonical Phase 1 test scene because it gives clean geometric
+inputs: mostly-convex items sitting flat on a single support plane, which the LiDAR
+plane fit and voxel carve / height-field integration handle cleanly. The pipeline
+itself is food-agnostic at the geometry layer — volume → mass → carbs is just numbers
+— so the choice is about reducing noise during Phase 1 bring-up, not about a limit of
+the design.
+
+Generalisation beyond fruit lands in Phase 3 and is gated on two trained components:
+the segmenter's `ClassPalette` (which pixel classes count as which food) and the
+`Foods` density / carbs-per-gram look-up. Until both cover a broader food set,
+non-fruit dishes may segment poorly and density estimates fall back to defaults; the
+geometry, gating and persistence paths are unaffected.
 
 ---
 
@@ -324,17 +359,25 @@ because `MedataCore` has no iOS-only dependencies (§2). See `specs/research/des
 
 Design lives in the specs; this document links to it rather than duplicating it. Each
 feature is a subfolder of `specs/` with requirements, design, decision log, tasks, and
-prerequisites.
+prerequisites. **[`specs/OVERVIEW.md`](../specs/OVERVIEW.md) is the canonical index** —
+status, summary and per-spec file listing for every feature and bugfix spec; consult it
+first when looking for prior work on a topic.
+
+The two foundational specs this architecture sits on top of:
 
 | Spec | What it covers |
 |---|---|
-| [`specs/research/requirements.md`](../specs/research/requirements.md) | Numbered requirements, mathematical pipeline, modelling assumptions, academic sources |
+| [`specs/research/requirements.md`](../specs/research/requirements.md) | Numbered requirements, §0 phase plan, §1.2 hardware floor (iPhone 13 Pro Max + iOS 26.5), §23 dev-stub phasing, mathematical pipeline, modelling assumptions, academic sources |
 | [`specs/research/design.md`](../specs/research/design.md) | Module map, interfaces (§3), data models (§4), portable algorithm pseudocode (§6), testing strategy (§7) |
 | [`specs/research/decision_log.md`](../specs/research/decision_log.md) | Architectural decisions D1–D31 (LLM→CV, platform-neutral core, protobuf contracts, …) |
 | [`specs/research/tasks.md`](../specs/research/tasks.md) | Implementation task breakdown |
 | [`specs/ui/requirements.md`](../specs/ui/requirements.md) | Capture-flow UI requirements |
 | [`specs/ui/design.md`](../specs/ui/design.md) | `CaptureFlowModel` state machine, components, AR-session ownership, test seams |
 | [`specs/ui/decision_log.md`](../specs/ui/decision_log.md) | UI decisions (live-signal source, best-effort backgrounding, single-session fix, …) |
+
+For everything else — `rawframe-rgb-conversion`, `event-log-schema`,
+`pipeline-real-device-correctness`, `shutter-blocked-feedback`, and active bugfix specs
+under `specs/bugfixes/` — go through `specs/OVERVIEW.md`.
 
 ---
 

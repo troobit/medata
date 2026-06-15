@@ -8,8 +8,10 @@ coexist while Foundation is being built; the Swift sources live in `MedataCore/`
 ## Topology
 
 - `Package.swift` (root) — single SwiftPM manifest declaring `MedataCore` library
-  + `HarnessCLI` macOS executable + per-target test bundles. Platforms: `iOS 17`,
-  `macOS 14`. Swift tools 5.9.
+  + `HarnessCLI` macOS executable + per-target test bundles. SPM-level platform floor:
+  `iOS 17`, `macOS 14` (loose — the library doesn't use post-iOS-17 features). The App
+  target in `MeData/MeData.xcodeproj` deploys at iOS 26.5 per spec Req 1.2 — that is
+  the runtime floor, not this one. Swift tools 5.9.
 - `MedataCore/Sources/{module}/` — twelve modules per design §2.1: CaptureKit,
   CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Foods, Macros,
   Confidence, Persistence, PortableContracts, Pipeline.
@@ -327,7 +329,8 @@ Tasks 65–70 are done. Test count: 239 (was 207 after Harness and Calibration).
 - `HarnessCLITests/PipelinePerformanceTests.swift` — XCTest performance tests using
   `XCTClockMetric` + `measure` over 10 iterations. Single-view P95 ≤ 1000 ms and
   two-view P95 ≤ 1800 ms assertions. Both tests skip on macOS via `XCTSkip` (2 skipped
-  tests in the test suite) — they only assert on a tethered iPhone 12 Pro per Req 16.7.
+  tests in the test suite) — they only assert on a tethered iPhone 13 Pro Max per
+  Req 16.7 (spec floor was raised from iPhone 12 Pro to 13 Pro Max).
 - P95 with 10 samples equals the maximum value (sorted[9]); so the assertion effectively
   requires all 10 runs to complete within budget.
 - Transitive imports via `HarnessCore` dependency are sufficient — no `Package.swift`

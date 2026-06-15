@@ -76,6 +76,13 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // `firstFrameTiltDeg` through the oblique tap; cleared in lockstep with
     // `firstFrame = nil` at every existing lifecycle site (Decision 11 table).
     var firstFrameMaskBox: PreShutterSegmenter.MaskBox?
+    // Age of `firstFrameMaskBox` at the original nadir-tap instant, in
+    // milliseconds. Stashed at the nadir tap so the oblique-stage CaptureResult
+    // carries the same non-negative age recorded then (smolspec
+    // no-food-pixels-on-fruit-plate-mvp / 2026-06-14 bugfix). Without this,
+    // every double-mode oblique CaptureResult had preShutterMaskAgeMs == nil →
+    // `event=estimate.start maskAgeMs=-1` → `failure=noFoodPixels`.
+    var firstFrameMaskAgeMs: Int?
 
     private let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
     // Mode frozen at the shutter-tap that began the in-flight capture. The
@@ -221,7 +228,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // Retake from the same stage. If retryStage is .oblique we keep firstFrame
         // so the user does not have to retake the nadir view (req §5.4). If
         // retryStage is .nadir, drop any previously captured nadir.
-        if retryStage == .nadir { firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil }
+        if retryStage == .nadir { firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil }
         let mode = inFlightMode ?? captureModeReader()
         inFlightMode = mode
         beginCapture(stage: retryStage, frozen: snapshot, mode: mode)
@@ -230,7 +237,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     func dismissResult() {
         guard case .showingResult = state else { return }
         navigationPath = NavigationPath()
-        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
         inFlightMode = nil
         state = .ready(freshSnapshot())
     }
@@ -241,7 +248,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // unchanged — it preserves `firstFrame` when retrying from oblique stage.
     func dismissRefusal() {
         guard case .refused = state else { return }
-        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
         inFlightMode = nil
         state = .ready(freshSnapshot())
     }
@@ -261,7 +268,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             switch state {
             case .capturing, .estimating:
                 state = .initialising
-                firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+                firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
                 inFlightMode = nil
             default:
                 break
@@ -309,7 +316,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // Leaving Photo while refused dismisses the refusal — the user
             // does not return to a sheet they cannot interactively dismiss
             // before leaving (see surface-not-detected bugfix).
-            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
             inFlightMode = nil
             state = .initialising
             Task { [session] in try? await session.stop() }
@@ -318,12 +325,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // Capture in flight but estimation hasn't started: cancel and
             // reset to the same baseline as backgrounding.
             cancelInFlight()
-            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
             state = .initialising
             Task { [session] in try? await session.stop() }
             startTask = nil
         case .initialising, .ready, .trackingLost, .showingResult:
-            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
             if case .estimating = state {} else { state = .initialising }
             Task { [session] in try? await session.stop() }
             startTask = nil
@@ -375,7 +382,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         switch state {
         case .ready:
             state = .trackingLost
-            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
         case .capturing(stage: .nadir, _):
             cancelInFlight()
             state = .trackingLost
@@ -397,7 +404,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         switch event {
         case .began:
             cancelInFlight()
-            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
             inFlightMode = nil
             state = .trackingLost
             Task { [session] in try? await session.stop() }
@@ -478,17 +485,29 @@ final class CaptureFlowModel: CaptureFlowDelegate {
                     nadirMaskBox = nil
                     nadirMaskAgeMs = nil
                 }
+            } else if stage == .oblique {
+                // Oblique tap: read back the mask + age stashed at the
+                // original nadir tap. The 750 ms staleness check already
+                // fired at the nadir instant (Decision 11) so the oblique-
+                // tap delay must NOT invalidate the pairing.
+                nadirMaskBox = firstFrameMaskBox
+                nadirMaskAgeMs = firstFrameMaskAgeMs
             } else {
-                nadirMaskBox = stage == .oblique ? firstFrameMaskBox : nil
+                nadirMaskBox = nil
                 nadirMaskAgeMs = nil
             }
 
             // Two-view (Double) mode: after the nadir tap, stash the frame
-            // and wait for the user to take the oblique tap.
+            // and wait for the user to take the oblique tap. The nadir-instant
+            // mask age is stashed alongside `firstFrameMaskBox` so the
+            // oblique-stage CaptureResult carries it through to
+            // `event=estimate.start maskAgeMs=N` (smolspec bugfix
+            // no-food-pixels-on-fruit-plate-mvp / 2026-06-14).
             if stage == .nadir, mode == .double {
                 firstFrame = frame
                 firstFrameTiltDeg = tiltAtShutterDeg
                 firstFrameMaskBox = nadirMaskBox
+                firstFrameMaskAgeMs = nadirMaskAgeMs
                 state = .ready(frozen)
                 return
             }
@@ -566,7 +585,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             // meal. A denied Photos prompt is NOT an error — the meal still
             // surfaces; the result view falls back to a placeholder.
             let stamped = await saveNadirPhoto(record: record, frame: captureResult.nadirFrame)
-            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil
+            firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
             inFlightMode = nil
             lastMeal = stamped
             log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
