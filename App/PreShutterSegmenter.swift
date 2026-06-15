@@ -80,6 +80,7 @@ final class PreShutterSegmenter: PreShutterMaskSource {
 
     #if DEBUG
     private let log = Logger(subsystem: "ie.medata.app", category: "Shutter")
+    nonisolated static let cadenceDiagLog = Logger(subsystem: "ie.medata.app", category: "Shutter") // CADENCE-DIAG:
     #endif
 
     init(segmenter: CoreMLSegmenter, palette: ClassPalette, source: Source) {
@@ -98,14 +99,29 @@ final class PreShutterSegmenter: PreShutterMaskSource {
         let segmenter = self.segmenter
         inflight = Task { [weak self] in
             for await frame in frames {
+                #if DEBUG
+                Self.cadenceDiagLog.info("event=preshutter.loop.iter") // CADENCE-DIAG:
+                #endif
                 guard !Task.isCancelled else { return }
                 guard let raw = await Self.makeRawFrame(from: frame) else { continue }
                 guard !Task.isCancelled else { return }
                 let startedAt = ContinuousClock.now
-                guard let result = try? await segmenter.segment(raw) else { continue }
+                let segmentResult = try? await segmenter.segment(raw)
                 guard !Task.isCancelled else { return }
                 let latencyMs = millisecondsBetween(startedAt, ContinuousClock.now)
+                guard let result = segmentResult else {
+                    #if DEBUG
+                    Self.cadenceDiagLog.info("event=preshutter.loop.segmentNil latencyMs=\(latencyMs, privacy: .public)") // CADENCE-DIAG:
+                    #endif
+                    continue
+                }
+                #if DEBUG
+                Self.cadenceDiagLog.info("event=preshutter.loop.segmentOK latencyMs=\(latencyMs, privacy: .public)") // CADENCE-DIAG:
+                #endif
                 await self?.publish(argmax: result.argmax, latencyMs: latencyMs)
+                #if DEBUG
+                Self.cadenceDiagLog.info("event=preshutter.loop.published latencyMs=\(latencyMs, privacy: .public)") // CADENCE-DIAG:
+                #endif
             }
         }
     }
@@ -115,9 +131,18 @@ final class PreShutterSegmenter: PreShutterMaskSource {
     // MainActor (design PreShutterSegmenter section: "PixelBufferAdapter
     // conversion is CPU-heavy and would jank the UI at 2 Hz").
     private nonisolated static func makeRawFrame(from frame: ARFrame) async -> RawFrame? {
+        #if DEBUG
+        cadenceDiagLog.info("event=preshutter.makeRawFrame.enter") // CADENCE-DIAG:
+        #endif
         guard let converted = try? PixelBufferAdapter.convert(frame.capturedImage) else {
+            #if DEBUG
+            cadenceDiagLog.info("event=preshutter.makeRawFrame.convertNil") // CADENCE-DIAG:
+            #endif
             return nil
         }
+        #if DEBUG
+        cadenceDiagLog.info("event=preshutter.makeRawFrame.convertOK width=\(converted.width, privacy: .public) height=\(converted.height, privacy: .public)") // CADENCE-DIAG:
+        #endif
         let intrinsics = CameraIntrinsics(
             fx: frame.camera.intrinsics[0, 0],
             fy: frame.camera.intrinsics[1, 1],

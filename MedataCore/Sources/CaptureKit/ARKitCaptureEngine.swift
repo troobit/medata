@@ -2,8 +2,11 @@
 import ARKit
 import CoreMotion
 import Foundation
+import os // CADENCE-DIAG:
 import PortableContracts
 import simd
+
+private let cadenceDiagLog = Logger(subsystem: "ie.medata.app", category: "Shutter") // CADENCE-DIAG:
 
 // Real ARKit + Core Motion engine per Req 1, 2, 3, 6 and design §3.1. Lives behind
 // `#if canImport(ARKit) && os(iOS)`; the macOS HarnessCLI uses MockCaptureEngine.
@@ -115,6 +118,9 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
         )
         stateQueue.async { [weak self] in
             self?.frameContinuations[id] = cont
+            let shortId = String(id.uuidString.prefix(8)) // CADENCE-DIAG:
+            let count = self?.frameContinuations.count ?? 0 // CADENCE-DIAG:
+            cadenceDiagLog.info("event=preshutter.engine.frames.registered id=\(shortId, privacy: .public) count=\(count, privacy: .public)") // CADENCE-DIAG:
         }
         cont.onTermination = { [weak self] _ in
             self?.stateQueue.async { [weak self] in
@@ -185,6 +191,7 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             for cont in self.frameContinuations.values {
                 cont.yield(frame)
             }
+            cadenceDiagLog.info("event=preshutter.engine.session.yielded count=\(self.frameContinuations.count, privacy: .public)") // CADENCE-DIAG:
             if let cont = self.latestFrameContinuation {
                 self.latestFrameContinuation = nil
                 cont.resume(returning: frame)
