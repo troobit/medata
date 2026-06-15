@@ -102,6 +102,36 @@ Suspect mechanism 2 of the bug-1 Implementation Approach — "Lost age across th
 
 Added a paired `firstFrameMaskAgeMs: Int?` field on `CaptureFlowModel` next to the existing `firstFrameMaskBox`. At the nadir-stash branch of `performFlow` (`stage == .nadir, mode == .double`), the age computed against the 750 ms staleness ceiling is stashed alongside the box. On the oblique tap, the snapshot block's third arm now reads the paired `firstFrameMaskAgeMs` back into `nadirMaskAgeMs` instead of resetting to `nil`. The field is cleared in lockstep with `firstFrameMaskBox` at every existing lifecycle site (`tryAgain` nadir-retry, `dismissResult`, `dismissRefusal`, `scenePhaseChanged(.background)`, `tabSelectionChanged(to: nonPhoto)` × 3 arms, `trackingDegraded`, `handleInterruption(.began)`, post-estimation cleanup) so the lifecycle table in Decision 11 stays internally consistent. No changes to `CaptureResult`, `RawFrame`, `Pipeline`, the staleness ceiling, or the `PreShutterSegmenter` contract.
 
+## Verification attempt 2026-06-16 — H4 identified
+
+Build: `aba6427` (cadence-diagnostic instrumentation on top of lost-age fix). Installed via `xcrun devicectl device install app` on iPhone 13 Pro Max iOS 26.5 (devicectl UDID `76A45E6D-C57E-5BA6-ABAD-205C3C668572`). Mode tested: `double`, 6 nadir-oblique cycles over ~22 seconds (Console.app `Process: MeData` + `Category: Shutter`, Include Info + Debug enabled).
+
+Observed evidence rules in H1, H2, H3 out and surfaces H4:
+
+- `event=preshutter.engine.frames.registered count=N` and `event=preshutter.engine.session.yielded count=N` agreed on `N` after every registration — rules out **H1** (registration race).
+- After every `frames.registered`, the producer logged ONE `event=preshutter.loop.iter` + `event=preshutter.makeRawFrame.convertOK` + the segmenter substage triplet (preprocess → inference → postprocess) — rules out **H2** (yields silently dropped: the producer iterated and consumed one frame fine) and **H3** (`makeRawFrame` nil after first frame: convertOK fired with `width=1920 height=1440`).
+- No subsequent `event=preshutter.loop.segmentOK` nor `event=preshutter.loop.segmentNil` ever fired in any cycle. The loop body silently returned between `segmenter.segment(raw)` and the success/fail logs. The only path out is the `guard !Task.isCancelled` after segmenter return.
+- `frames.registered count=N` grew monotonically across the session: 3 → 4 → 5 → 6 → 7 → 8, ending with ARKit emitting `delegate is retaining 11 ARFrames` at `00:40:44.384`.
+
+## Root cause (cadence)
+
+Two interacting App-layer bugs in `App/PreShutterSegmenter.swift`, taken together call them **H4**:
+
+1. **Subscription leak**: `ARKitCaptureEngine.frames` returns a fresh per-subscriber `AsyncStream` on every access. `PreShutterSegmenter.resume(frames:)` is called from `CaptureFlowView.onChange(of: shouldProducePreShutter)` on every state-transition into a producing state, and `engine.frames` is invoked inline at each call — a brand-new AsyncStream + continuation each time. The continuations are registered in `engine.frameContinuations` keyed by UUID; the stream's `onTermination` (line 119 of `ARKitCaptureEngine.swift`) is the only path that removes them, and is not reliably triggered by `Task.cancel()` on the iterating Task. Result: continuations accumulate over the session. Each holds one buffered ARFrame via `bufferingNewest(1)`, eventually hitting ARKit's ~10-frame retention ceiling.
+2. **Mid-segment cancel**: `pause()` (called on state-transition out of `.ready`) executes `inflight?.cancel()`. The inflight Task may be suspended inside `try? await segmenter.segment(raw)` (a ~1-second CoreML / dev-stub cycle on this device). Cancellation propagates to the segmenter which throws `CancellationError`; `try?` swallows to nil; the very next line is `guard !Task.isCancelled else { return }` — the Task returns silently. `publish()` never runs. `latest` stays nil for that whole resume cycle. Since every state-transition fires the cancel before the segmenter completes, the producer publishes **zero** masks per session, regardless of cycle count.
+
+Together: every double-mode oblique tap reads `producer.latest == nil`, `nadirMaskAgeMs` collapses to nil, `Pipeline.estimate` sees `maskAgeMs=-1`, `SupportPlaneFitter` short-circuits to `noFoodPixels`. The lost-age fix from bug 1 is correct but had no published mask to forward.
+
+## Fix (cadence)
+
+Three structural changes in `App/PreShutterSegmenter.swift` only — public `PreShutterMaskSource` contract (`latest`, `pause`, `awaitPaused`, `resume`) byte-identical.
+
+1. **Cache the ARFrame stream** on the first `resume(frames:)` call (`cachedStream: AsyncStream<ARFrame>?`); subsequent `resume()` calls reuse the cached stream rather than calling `engine.frames` for a fresh subscription. Net: at most one producer subscription per app lifetime, so `frameContinuations` count is bounded by `(UI overlays) + 1`. The leak is gone.
+2. **Replace `inflight?.cancel()` with a fire-and-forget `isPaused = true` flag**. The for-await body checks `isPaused` AT THE TOP of each iteration on MainActor; if paused, the iteration drops the frame (no makeRawFrame, no segment, no publish) and goes back to await the next frame. The AsyncStream keeps draining at full cadence — no stale buffered frames — but no work is done while paused. The Task lives forever once started; pause/resume only toggles the gate.
+3. **Drain-aware `awaitPaused()`**: an `inflightSegmentCycles` counter is incremented on MainActor before `segmenter.segment(raw)` and decremented on MainActor inside a new `finishSegmentCycle(result:latencyMs:)` method that ALSO performs the publish. If `awaitPaused()` is called while a cycle is in flight, it suspends on a `CheckedContinuation` that `finishSegmentCycle` resumes after the publish completes. Decision 13's "no writes after `awaitPaused()` returns" invariant is preserved exactly — and now the cycle's publish actually completes (no cancel cuts it off).
+
+Result: each `.ready` window produces 1-2 published masks (one segmenter cycle ≈ 1.5 s on iPhone 13 Pro Max with the dev-stub). `producer.latest` is fresh before every shutter tap. Double-mode oblique stash sees `nadirMaskAgeMs` non-nil. `Pipeline.estimate` sees `maskAgeMs` in `[0, 750]`. `SupportPlaneFitter` sees a populated mask and proceeds past `noFoodPixels`.
+
 ## Verification attempt 2026-06-15 — BLOCKED on deeper bug
 
 Build: `research` @ `a349118` + uncommitted lost-age fix on branch `no-food-pixels-on-fruit-plate-mvp`. Installed on iPhone 13 Pro Max iOS 26.5 (devicectl UDID `76A45E6D-C57E-5BA6-ABAD-205C3C668572`, bundle `rtob.MeData`). Mode tested: `double` twice. Outcome: same refusal trail as the 2026-06-14 baseline — `event=estimate.start maskAgeMs=-1` followed by `event=estimate.end success=false failure=noFoodPixels`. Per nextup.md step 4 classification rule ("Same refusal ⇒ stop and report, do not iterate blind"), verification halted.

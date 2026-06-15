@@ -23,7 +23,7 @@ references:
 - [x] 3. swift build clean and swift test green (baseline + new regression tests) <!-- id:op0jbkx -->
   - Run swift build (clean) and swift test on the MedataCore SwiftPM target.
   - Confirm swift test reports the existing baseline (312 + 16) plus the two new regression tests, all passing.
-  - Blocked-by: op0jbkw (Diagnose suspect mechanism(s); apply minimal App-layer fix; record Root cause + Fix in smolspec.md), suspect, minimal
+  - Blocked-by: op0jbkw (Diagnose suspect mechanism(s); apply minimal App-layer fix; record Root cause + Fix in smolspec.md), suspect, minimal, suspect, minimal, suspect, minimal, suspect, minimal
 
 ## Fix bug 2 — PreShutterSegmenter cadence stall
 
@@ -39,7 +39,7 @@ references:
   - swift build MUST stay clean; xcodebuild iphoneos build MUST succeed.
   - Blocked-by: op0jbkx (swift build clean and swift test green (baseline + new regression tests))
 
-- [ ] 5. STOP — human runs device capture; agent reads trail and diagnoses <!-- id:qx7n2tb -->
+- [x] 5. STOP — human runs device capture; agent reads trail and diagnoses <!-- id:qx7n2tb -->
   - Agent: build for device (`xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination 'id=76A45E6D-C57E-5BA6-ABAD-205C3C668572' -configuration Debug build`).
   - Agent: print the install/launch commands and Console.app filter for the user.
   - User: install, launch, set Console filter, capture 2 shutter taps in Double mode at a fruit plate, ~30 seconds total session.
@@ -51,7 +51,7 @@ references:
   - Agent: report the diagnosis verbatim to the user before writing any fix code.
   - Blocked-by: qx7n2ta (Add cadence-diagnostic `.info` instrumentation on a throwaway branch)
 
-- [ ] 6. Apply minimal cadence fix; remove instrumentation; append Root cause (cadence) + Fix (cadence) to smolspec.md <!-- id:qx7n2tc -->
+- [x] 6. Apply minimal cadence fix; remove instrumentation; append Root cause (cadence) + Fix (cadence) to smolspec.md <!-- id:qx7n2tc -->
   - Apply the minimal fix matching the diagnosed hypothesis from task 5.
   - H1 → register `frameContinuations[id] = cont` synchronously before returning the stream from `ARKitCaptureEngine.frames`.
   - H2 → replace `bufferingNewest(1)` with a hand-rolled latest-frame channel (Mutex<ARFrame?> + Continuation resume on every set), keeping the `frames` public type byte-identical (`AsyncStream<ARFrame>`).
@@ -61,7 +61,7 @@ references:
   - Append one-paragraph `## Root cause (cadence)` and one-paragraph `## Fix (cadence)` sections to specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/smolspec.md (after the existing ## Fix (lost-age) section, before ## Verification attempt 2026-06-15).
   - Blocked-by: qx7n2tb (STOP — human runs device capture; agent reads trail and diagnoses)
 
-- [ ] 7. swift build clean and swift test green (no regressions) <!-- id:qx7n2td -->
+- [x] 7. swift build clean and swift test green (no regressions) <!-- id:qx7n2td -->
   - Run swift build (clean) and swift test on MedataCore SwiftPM target.
   - Confirm 312 + 16 baseline + 2 lost-age regression tests still pass; no new failures introduced by the cadence fix.
   - If H2 was the diagnosed fix path, add one unit test exercising the hand-rolled latest-frame channel synchronously (multi-set overwrite, single resume on consume).
@@ -86,4 +86,4 @@ references:
   - Append a `### On-device observation (complete, rerun)` block to specs/shutter-blocked-feedback/decision_log.md immediately after the existing (complete) block, mirroring its template (Date, Device, Mode tested, Outcome=success, observed trail, UI outcome, Notes).
   - Tick task 5 in specs/shutter-blocked-feedback/tasks.md (the line marked id:f4inr0r) from [ ] to [x].
   - These two doc edits land alongside the smolspec `## Verification` section in the same closeout commit (per nextup.md step 8).
-  - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes)), section, success
+  - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes)), section, success, section, success, section, success, section, success
