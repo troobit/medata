@@ -22,7 +22,7 @@ references:
 
 ## Phase 2 — Pipeline stage instrumentation
 
-- [ ] 3. Add pipeline.stage.end name=<X> latencyMs=N lines <!-- id:v6kipz0 -->
+- [x] 3. Add pipeline.stage.end name=<X> latencyMs=N lines <!-- id:v6kipz0 -->
   - MedataCore/Sources/Pipeline/Pipeline.swift — for every stage already emitting pipelineStageLog.info event=pipeline.stage.start name=<X>, also emit pipelineStageLog.info event=pipeline.stage.end name=<X> latencyMs=N on exit (both success and refusal paths).
   - Stages: CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Macros.
   - Compute ms as (ContinuousClock.now - stageStartedAt) / .milliseconds(1) or equivalent integer ms.

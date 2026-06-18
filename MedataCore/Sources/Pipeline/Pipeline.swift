@@ -106,6 +106,7 @@ public struct Pipeline: Sendable {
         // ── Stage C: Card detection ──────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=CardDetection")
+        let cardStartedAt = ContinuousClock.now
         let cardInterval = pipelineSignposter.beginInterval("CardDetection")
         #endif
         let corners = await cardDetector.detect(in: nadir)
@@ -115,16 +116,19 @@ public struct Pipeline: Sendable {
                 cardPose = try CardPoseSolver.solve(corners: c, intrinsics: nadir.intrinsics)
             } catch CardPoseError.degenerateCardPose {
                 #if DEBUG
+                logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
                 pipelineSignposter.endInterval("CardDetection", cardInterval)
                 #endif
                 throw EstimationFailure.degenerateCardPose
             } catch CardPoseError.cardTooOblique {
                 #if DEBUG
+                logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
                 pipelineSignposter.endInterval("CardDetection", cardInterval)
                 #endif
                 throw EstimationFailure.cardTooOblique
             } catch {
                 #if DEBUG
+                logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
                 pipelineSignposter.endInterval("CardDetection", cardInterval)
                 #endif
                 throw EstimationFailure.degenerateCardPose
@@ -133,12 +137,14 @@ public struct Pipeline: Sendable {
             cardPose = nil
         }
         #if DEBUG
+        logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
         pipelineSignposter.endInterval("CardDetection", cardInterval)
         #endif
 
         // ── Stage D: SupportPlane ────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=SupportPlane")
+        let planeStartedAt = ContinuousClock.now
         let planeInterval = pipelineSignposter.beginInterval("SupportPlane")
         #endif
         let plane: SupportPlane
@@ -151,11 +157,13 @@ public struct Pipeline: Sendable {
             )
         } catch {
             #if DEBUG
+            logStageEnd(name: "SupportPlane", startedAt: planeStartedAt)
             pipelineSignposter.endInterval("SupportPlane", planeInterval)
             #endif
             throw error
         }
         #if DEBUG
+        logStageEnd(name: "SupportPlane", startedAt: planeStartedAt)
         pipelineSignposter.endInterval("SupportPlane", planeInterval)
         #endif
 
@@ -174,6 +182,7 @@ public struct Pipeline: Sendable {
         // ── Stage E: MetricScale ─────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=MetricScale")
+        let scaleStartedAt = ContinuousClock.now
         let scaleInterval = pipelineSignposter.beginInterval("MetricScale")
         #endif
         let lidarMmPerPx: Float?
@@ -191,17 +200,20 @@ public struct Pipeline: Sendable {
             )
         } catch MetricScaleError.noScaleAvailable {
             #if DEBUG
+            logStageEnd(name: "MetricScale", startedAt: scaleStartedAt)
             pipelineSignposter.endInterval("MetricScale", scaleInterval)
             #endif
             throw EstimationFailure.noScaleAvailable
         }
         #if DEBUG
+        logStageEnd(name: "MetricScale", startedAt: scaleStartedAt)
         pipelineSignposter.endInterval("MetricScale", scaleInterval)
         #endif
 
         // ── Stage F: Segmentation ────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=Segmentation width=\(nadir.imageWidth, privacy: .public) height=\(nadir.imageHeight, privacy: .public)")
+        let segStartedAt = ContinuousClock.now
         let segInterval = pipelineSignposter.beginInterval("Segmentation")
         #endif
         let nadirSeg: SegmentationResult
@@ -209,11 +221,13 @@ public struct Pipeline: Sendable {
             nadirSeg = try await segmenter.segment(nadir)
         } catch SegmentationError.noFoodPixels {
             #if DEBUG
+            logStageEnd(name: "Segmentation", startedAt: segStartedAt)
             pipelineSignposter.endInterval("Segmentation", segInterval)
             #endif
             throw EstimationFailure.noFoodPixels
         }
         #if DEBUG
+        logStageEnd(name: "Segmentation", startedAt: segStartedAt)
         pipelineSignposter.endInterval("Segmentation", segInterval)
         #endif
         let palette = nadirSeg.probabilities.palette
@@ -224,6 +238,7 @@ public struct Pipeline: Sendable {
         // ── Stages G/H/I: Volume ─────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=Volume capturePath=\(capturePath.rawValue, privacy: .public)")
+        let volumeStartedAt = ContinuousClock.now
         let volumeInterval = pipelineSignposter.beginInterval("Volume")
         #endif
         let pbVolumes: PbVolumeResult
@@ -234,6 +249,7 @@ public struct Pipeline: Sendable {
         case .singleViewLidar:
             guard let depth = nadir.depth else {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.lidarUnavailableMidCapture
@@ -267,11 +283,13 @@ public struct Pipeline: Sendable {
                 }
             } catch VolumeError.lidarCoverageTooLow(let classes) {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.lidarCoverageTooLow(classes)
             } catch VolumeError.noFoodVolumeRecovered {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.noFoodVolumeRecovered
@@ -280,6 +298,7 @@ public struct Pipeline: Sendable {
         case .twoViewSfS:
             guard let oblique = captureResult.obliqueFrame else {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.arWorldTrackingLost
@@ -289,6 +308,7 @@ public struct Pipeline: Sendable {
                 obliqueSeg = try await segmenter.segment(oblique)
             } catch SegmentationError.noFoodPixels {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.noFoodPixels
@@ -310,6 +330,7 @@ public struct Pipeline: Sendable {
                 ))
             } catch {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.noFoodVolumeRecovered
@@ -334,18 +355,21 @@ public struct Pipeline: Sendable {
                 viewCoverage = matching.singleViewOnlyClasses.isEmpty ? .twoViewFull : .twoViewPartial
             } catch VolumeError.noFoodVolumeRecovered {
                 #if DEBUG
+                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
                 throw EstimationFailure.noFoodVolumeRecovered
             }
         }
         #if DEBUG
+        logStageEnd(name: "Volume", startedAt: volumeStartedAt)
         pipelineSignposter.endInterval("Volume", volumeInterval)
         #endif
 
         // ── Stage J: Macros ──────────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=Macros")
+        let macrosStartedAt = ContinuousClock.now
         let macrosInterval = pipelineSignposter.beginInterval("Macros")
         #endif
         let macros = Macros.compute(
@@ -354,12 +378,14 @@ public struct Pipeline: Sendable {
             edition: captureResult.databaseEdition
         )
         #if DEBUG
+        logStageEnd(name: "Macros", startedAt: macrosStartedAt)
         pipelineSignposter.endInterval("Macros", macrosInterval)
         #endif
 
         // ── Stage K: Confidence ──────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=Confidence")
+        let confidenceStartedAt = ContinuousClock.now
         let confidenceInterval = pipelineSignposter.beginInterval("Confidence")
         #endif
         let confidence = Confidence.combine(
@@ -375,6 +401,7 @@ public struct Pipeline: Sendable {
             deltaThetaObliqueDeg: deltaThetaObliqueDeg
         )
         #if DEBUG
+        logStageEnd(name: "Confidence", startedAt: confidenceStartedAt)
         pipelineSignposter.endInterval("Confidence", confidenceInterval)
         #endif
 
@@ -399,10 +426,20 @@ public struct Pipeline: Sendable {
         // ── Stage L: Persistence ─────────────────────────────────────────────────
         #if DEBUG
         pipelineStageLog.info("event=pipeline.stage.start name=Persistence")
+        let persistenceStartedAt = ContinuousClock.now
         let persistenceInterval = pipelineSignposter.beginInterval("Persistence")
         #endif
-        try await store.save(record, artefacts: [])
+        do {
+            try await store.save(record, artefacts: [])
+        } catch {
+            #if DEBUG
+            logStageEnd(name: "Persistence", startedAt: persistenceStartedAt)
+            pipelineSignposter.endInterval("Persistence", persistenceInterval)
+            #endif
+            throw error
+        }
         #if DEBUG
+        logStageEnd(name: "Persistence", startedAt: persistenceStartedAt)
         pipelineSignposter.endInterval("Persistence", persistenceInterval)
         #endif
 
@@ -420,6 +457,21 @@ public struct Pipeline: Sendable {
     }
 
     // MARK: - Private helpers
+
+    #if DEBUG
+    // Emits the paired `pipeline.stage.end` line for a stage whose `stage.start`
+    // already fired. `latencyMs` is integer milliseconds accrued from the
+    // `ContinuousClock` instant captured at the stage's entry — on both the
+    // success path and every refusal/early-return path, so each `stage.start`
+    // has exactly one matching `stage.end`. Same `pipelineStageLog` channel and
+    // `#if DEBUG` gating as the start lines.
+    private func logStageEnd(name: String, startedAt: ContinuousClock.Instant) {
+        let latencyMs = Int((ContinuousClock.now - startedAt) / .milliseconds(1))
+        pipelineStageLog.info(
+            "event=pipeline.stage.end name=\(name, privacy: .public) latencyMs=\(latencyMs, privacy: .public)"
+        )
+    }
+    #endif
 
     // Thin wrapper that delegates to the injected `SupportPlaneFitter` and
     // maps the protocol's `SupportPlaneError` cases to the pipeline-level
