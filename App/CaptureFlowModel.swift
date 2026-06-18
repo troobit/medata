@@ -173,6 +173,10 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
     var awaitingObliqueView: Bool { firstFrame != nil }
 
+    // The captured nadir frame, surfaced so the viewfinder can show a
+    // confirmation thumbnail while the user aims the oblique view.
+    var capturedNadirFrame: RawFrame? { firstFrame }
+
     // Wraps the current refusal in an Identifiable surface so the bottom-sheet
     // refusal can bind to it via `.sheet(item:)` (Req §20.7 / Decision 16).
     // The `id` derives from the underlying failure so consecutive presentations

@@ -78,6 +78,18 @@ struct CaptureFlowView: View {
             VStack(spacing: 0) {
                 CaptureTopBar()
                     .padding(.top, 8)
+                // While aiming the oblique view, show the banked nadir as a
+                // top-trailing inset so the user can confirm their top-down
+                // shot landed. Hidden during `.estimating`, when
+                // `CapturedFramesView` already shows both frames full-screen.
+                if model.awaitingObliqueView, !isEstimating, let nadir = model.capturedNadirFrame {
+                    HStack {
+                        Spacer()
+                        NadirThumbnailView(frame: nadir)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                }
                 Spacer().frame(height: 24)
                 if isEstimating {
                     // Viewfinder is frozen during estimation; swap the live
@@ -273,7 +285,7 @@ private struct CapturedFramesView: View {
 
     @ViewBuilder
     private func frameImage(_ frame: RawFrame) -> some View {
-        if let cgImage = Self.cgImage(from: frame) {
+        if let cgImage = decodeCGImage(from: frame) {
             Image(decorative: cgImage, scale: 1)
                 .resizable()
                 .scaledToFill()
@@ -284,46 +296,82 @@ private struct CapturedFramesView: View {
 
     private var obliqueImage: CGImage? {
         guard let oblique = result.obliqueFrame else { return nil }
-        return Self.cgImage(from: oblique)
+        return decodeCGImage(from: oblique)
     }
+}
 
-    // Inline `CGImage` decode from `RawFrame.imageBytes` + `.pixelFormat`. The
-    // bytes are BGRA8 after the rawframe-rgb-conversion fix; the switch keeps the
-    // other portable formats decodable too. No shared utility module per spec —
-    // this stays at the call site.
-    private static func cgImage(from frame: RawFrame) -> CGImage? {
-        let bytesPerPixel: Int
-        let bitmapInfo: CGBitmapInfo
-        switch frame.pixelFormat {
-        case .rgb8:
-            bytesPerPixel = 3
-            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
-        case .rgba8:
-            bytesPerPixel = 4
-            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        case .bgra8:
-            bytesPerPixel = 4
-            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-                .union(.byteOrder32Little)
+// Inline `CGImage` decode from `RawFrame.imageBytes` + `.pixelFormat`. The
+// bytes are BGRA8 after the rawframe-rgb-conversion fix; the switch keeps the
+// other portable formats decodable too. No shared utility module per spec —
+// this stays file-local so both the frozen `CapturedFramesView` and the
+// oblique-aiming nadir thumbnail share one decode path.
+fileprivate func decodeCGImage(from frame: RawFrame) -> CGImage? {
+    let bytesPerPixel: Int
+    let bitmapInfo: CGBitmapInfo
+    switch frame.pixelFormat {
+    case .rgb8:
+        bytesPerPixel = 3
+        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
+    case .rgba8:
+        bytesPerPixel = 4
+        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+    case .bgra8:
+        bytesPerPixel = 4
+        bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+            .union(.byteOrder32Little)
+    }
+    let width = frame.imageWidth
+    let height = frame.imageHeight
+    let bytesPerRow = width * bytesPerPixel
+    guard frame.imageBytes.count == bytesPerRow * height else { return nil }
+    guard let provider = CGDataProvider(data: frame.imageBytes as CFData) else { return nil }
+    return CGImage(
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bitsPerPixel: bytesPerPixel * 8,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: bitmapInfo,
+        provider: provider,
+        decode: nil,
+        shouldInterpolate: false,
+        intent: .defaultIntent
+    )
+}
+
+// Small labelled thumbnail of the banked nadir frame, shown over the live
+// viewfinder while the user aims the oblique view so they can confirm their
+// top-down shot landed (smolspec no-food-pixels-on-fruit-plate-mvp). Renders
+// nothing if the frame fails to decode. Full review / select / retake of the
+// captured frames is deferred to a future spec.
+private struct NadirThumbnailView: View {
+    let frame: RawFrame
+
+    private let width: CGFloat = 96
+    // Captured buffers are landscape ~4:3 (e.g. 1920×1440).
+    private var height: CGFloat { width * 3 / 4 }
+
+    var body: some View {
+        if let cgImage = decodeCGImage(from: frame) {
+            VStack(alignment: .leading, spacing: 4) {
+                Image(decorative: cgImage, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(Color.captureChromeText, lineWidth: 1)
+                    )
+                Label("Nadir", systemImage: "checkmark.circle.fill")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Color.captureChromeText)
+            }
+            .accessibilityIdentifier("capturedNadirThumbnail")
+        } else {
+            EmptyView()
         }
-        let width = frame.imageWidth
-        let height = frame.imageHeight
-        let bytesPerRow = width * bytesPerPixel
-        guard frame.imageBytes.count == bytesPerRow * height else { return nil }
-        guard let provider = CGDataProvider(data: frame.imageBytes as CFData) else { return nil }
-        return CGImage(
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bitsPerPixel: bytesPerPixel * 8,
-            bytesPerRow: bytesPerRow,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: bitmapInfo,
-            provider: provider,
-            decode: nil,
-            shouldInterpolate: false,
-            intent: .defaultIntent
-        )
     }
 }
 
