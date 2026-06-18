@@ -79,7 +79,13 @@ struct CaptureFlowView: View {
                 CaptureTopBar()
                     .padding(.top, 8)
                 Spacer().frame(height: 24)
-                if model.currentSnapshot != nil, !isInitialising {
+                if isEstimating {
+                    // Viewfinder is frozen during estimation; swap the live
+                    // tilt/distance/coverage badge for the "Estimating…" hint so
+                    // the chrome stops reading as a live camera (Req §"Freeze
+                    // viewfinder").
+                    initialisingHint
+                } else if model.currentSnapshot != nil, !isInitialising {
                     LiveIndicatorBadge(
                         model: model.indicators,
                         supportsLiDAR: model.supportsLiDAR,
@@ -139,30 +145,40 @@ struct CaptureFlowView: View {
         }
     }
 
+    @ViewBuilder
     private var bottomChrome: some View {
         VStack(spacing: 16) {
-            // Decision 18 / research Decision 43: nadir captures always proceed
-            // regardless of tilt; the oblique stage retains a |Δθ − 25°| ≤ 30°
-            // hard cap. When the user is on the oblique stage but outside the
-            // cap, surface the Irish-English failure copy above the shutter so
-            // the disabled state has a written explanation (Req §2.3).
-            if let message = model.obliqueTiltMessage {
-                Text(message)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.captureChromeText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.captureChromeBG, in: Capsule())
-                    .accessibilityIdentifier("hint.obliqueTilt")
+            if isEstimating {
+                // Viewfinder is frozen during estimation; suppress the live
+                // tilt message, mode toggle and shutter so the chrome stops
+                // reading as a live camera, but keep the clearance spacer so the
+                // layout footprint is preserved (Req §"Freeze viewfinder").
+                Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
+            } else {
+                // Decision 18 / research Decision 43: nadir captures always
+                // proceed regardless of tilt; the oblique stage retains a
+                // |Δθ − 25°| ≤ 30° hard cap. When the user is on the oblique
+                // stage but outside the cap, surface the Irish-English failure
+                // copy above the shutter so the disabled state has a written
+                // explanation (Req §2.3).
+                if let message = model.obliqueTiltMessage {
+                    Text(message)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.captureChromeText)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.captureChromeBG, in: Capsule())
+                        .accessibilityIdentifier("hint.obliqueTilt")
+                }
+                CaptureModeToggle(supportsLiDAR: model.supportsLiDAR, interactive: !model.isBusy)
+                    .padding(.horizontal, 48)
+                ShutterButton(
+                    state: shutterState,
+                    action: { model.shutter() },
+                    onBlockedTap: { model.shutterBlockedTapped() }
+                )
+                Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
             }
-            CaptureModeToggle(supportsLiDAR: model.supportsLiDAR, interactive: !model.isBusy)
-                .padding(.horizontal, 48)
-            ShutterButton(
-                state: shutterState,
-                action: { model.shutter() },
-                onBlockedTap: { model.shutterBlockedTapped() }
-            )
-            Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
         }
     }
 
@@ -195,6 +211,11 @@ struct CaptureFlowView: View {
 
     private var isReady: Bool {
         if case .ready = model.state { return true }
+        return false
+    }
+
+    private var isEstimating: Bool {
+        if case .estimating = model.state { return true }
         return false
     }
 
