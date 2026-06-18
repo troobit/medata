@@ -131,7 +131,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // Shutter is armed in .ready with the distance gate satisfied and no
     // capture / estimation in flight (§7.2). Tilt no longer gates the nadir
     // stage (Decision 18 / research Decision 43); the oblique stage retains a
-    // hard cap of |Δθ − 25°| ≤ 30° (research Req 3.3).
+    // hard cap of |Δθ − 25°| ≤ 15° (closeout-trail Decision 1, tightening the
+    // ±30° aspect of research Decision 18/43 after three device trails overshot).
     var canShutter: Bool {
         switch state {
         case .ready(let snapshot):
@@ -146,9 +147,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     }
 
     // True iff the live tilt is within the oblique hard cap window
-    // (research Req 3.3: |Δθ − 25°| ≤ 30°). Used both by `canShutter` and by
-    // the inline above-shutter message that surfaces when the user is on the
-    // oblique stage but outside the cap.
+    // (|Δθ − 25°| ≤ 15° — closeout-trail Decision 1). Used both by `canShutter`
+    // and by the inline above-shutter message that surfaces when the user is on
+    // the oblique stage but outside the cap.
     var obliqueTiltMessage: String? {
         guard firstFrame != nil, case .ready = state else { return nil }
         if obliqueTiltOk(degrees: indicators.liveTiltDegrees) { return nil }
@@ -648,11 +649,14 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         return cm >= 25 && cm <= 50
     }
 
-    // Oblique-stage hard cap (research Req 3.3 / Decision 43): the SfS volume
-    // estimator runs off-envelope outside |Δθ − 25°| ≤ 30°, so the oblique
-    // shutter stays disabled there even after the nadir tilt gate was removed.
+    // Oblique-stage hard cap (closeout-trail Decision 1, tightening research
+    // Req 3.3 / Decision 43): the SfS volume estimator runs off-envelope outside
+    // |Δθ − 25°| ≤ 15°, so the oblique shutter stays disabled there even after
+    // the nadir tilt gate was removed. The window was narrowed from ±30° to ±15°
+    // after three device trails fired the oblique at ~50° and refused with
+    // noFoodVolumeRecovered.
     private func obliqueTiltOk(degrees: Float) -> Bool {
-        abs(degrees - 25) <= 30
+        abs(degrees - 25) <= 15
     }
 
     // Retained for the gating log: indicates whether the *displayed* tilt is

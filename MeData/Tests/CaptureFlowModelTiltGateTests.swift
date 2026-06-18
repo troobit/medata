@@ -7,10 +7,11 @@ import PortableContracts
 import Testing
 @testable import MeData
 
-// Task 56 / Decision 18 / research Decision 43. The nadir-stage shutter is no
-// longer gated by tilt — any Δθ from straight-down produces a valid capture.
-// The oblique stage retains a hard cap (|Δθ − 25°| ≤ 30°) because the SfS
-// volume estimator falls off-envelope outside that window.
+// Task 56 / Decision 18 / research Decision 43 / closeout-trail Decision 1. The
+// nadir-stage shutter is no longer gated by tilt — any Δθ from straight-down
+// produces a valid capture. The oblique stage retains a hard cap
+// (|Δθ − 25°| ≤ 15°, tightened from ±30°) because the SfS volume estimator falls
+// off-envelope outside that window and device trails overshot the ±30° band.
 @Suite("CaptureFlowModel — tilt gate (nadir always armed; oblique hard cap)")
 @MainActor
 struct CaptureFlowModelTiltGateTests {
@@ -36,8 +37,8 @@ struct CaptureFlowModelTiltGateTests {
     // MARK: - Oblique-stage hard cap (research Req 3.3 / Decision 43)
 
     @Test(
-        "oblique-stage shutter is disabled when |Δθ − 25°| > 30°",
-        arguments: [Float(-10), 60, 90]
+        "oblique-stage shutter is disabled when |Δθ − 25°| > 15°",
+        arguments: [Float(0), 45, 60, 90]
     )
     func obliqueShutterDisabledOutsideCap(tilt: Float) async {
         // Push the model to the awaiting-oblique state by completing a nadir
@@ -58,8 +59,8 @@ struct CaptureFlowModelTiltGateTests {
     }
 
     @Test(
-        "oblique-stage shutter is enabled inside the ±30° cap",
-        arguments: [Float(0), 25, 55]
+        "oblique-stage shutter is enabled inside the ±15° cap",
+        arguments: [Float(10), 25, 40]
     )
     func obliqueShutterArmedInsideCap(tilt: Float) async {
         let fixture = makeFixture(supportsLiDAR: false)
