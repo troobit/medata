@@ -91,7 +91,7 @@ struct RefusalSheet: View {
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)
-        .presentationDetents([.fraction(0.35)])
+        .presentationDetents([.fraction(0.35), .large])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("refusalSheet")
     }

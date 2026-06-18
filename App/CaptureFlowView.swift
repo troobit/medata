@@ -64,7 +64,16 @@ struct CaptureFlowView: View {
     private var capture: some View {
         ZStack {
             Color.captureBackground.ignoresSafeArea()
-            ARPreviewView(engine: engine).ignoresSafeArea()
+            // Freeze the viewfinder during estimation: swap the live AR feed for
+            // the captured frame(s) the estimator is working from, so the user
+            // sees the photo is taken and can put the phone down (Req §"Freeze
+            // viewfinder"). Every other state shows the live preview; the chrome
+            // VStack below renders unchanged over whichever layer is shown.
+            if case .estimating(let result) = model.state {
+                CapturedFramesView(result: result).ignoresSafeArea()
+            } else {
+                ARPreviewView(engine: engine).ignoresSafeArea()
+            }
 
             VStack(spacing: 0) {
                 CaptureTopBar()
@@ -206,6 +215,93 @@ struct CaptureFlowView: View {
             set: { newValue in
                 if newValue == nil { model.dismissRefusal() }
             }
+        )
+    }
+}
+
+// Static rendering of the captured frame(s) shown in place of the live
+// `ARPreviewView` during `.estimating` (Req §"Freeze viewfinder"). Single mode
+// shows the nadir frame filling the safe area; two-view mode stacks nadir over
+// oblique so the user sees BOTH photos were taken. Vertical stacking reads
+// better than side-by-side here: each captured buffer is itself landscape
+// (1920×1440), so two of them sit naturally one above the other in the portrait
+// safe area without per-frame letterboxing.
+private struct CapturedFramesView: View {
+    let result: CaptureResult
+
+    var body: some View {
+        GeometryReader { proxy in
+            // Nadir fills the whole safe area in single mode; in two-view mode it
+            // takes the top half and the oblique the bottom half.
+            let nadirHeight = obliqueImage == nil ? proxy.size.height : proxy.size.height / 2
+            VStack(spacing: 0) {
+                frameImage(result.nadirFrame)
+                    .frame(width: proxy.size.width, height: nadirHeight)
+                    .clipped()
+                if let oblique = obliqueImage {
+                    Image(decorative: oblique, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height / 2)
+                        .clipped()
+                }
+            }
+        }
+        .accessibilityIdentifier("capturedFrames")
+    }
+
+    @ViewBuilder
+    private func frameImage(_ frame: RawFrame) -> some View {
+        if let cgImage = Self.cgImage(from: frame) {
+            Image(decorative: cgImage, scale: 1)
+                .resizable()
+                .scaledToFill()
+        } else {
+            Color.captureBackground
+        }
+    }
+
+    private var obliqueImage: CGImage? {
+        guard let oblique = result.obliqueFrame else { return nil }
+        return Self.cgImage(from: oblique)
+    }
+
+    // Inline `CGImage` decode from `RawFrame.imageBytes` + `.pixelFormat`. The
+    // bytes are BGRA8 after the rawframe-rgb-conversion fix; the switch keeps the
+    // other portable formats decodable too. No shared utility module per spec —
+    // this stays at the call site.
+    private static func cgImage(from frame: RawFrame) -> CGImage? {
+        let bytesPerPixel: Int
+        let bitmapInfo: CGBitmapInfo
+        switch frame.pixelFormat {
+        case .rgb8:
+            bytesPerPixel = 3
+            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
+        case .rgba8:
+            bytesPerPixel = 4
+            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        case .bgra8:
+            bytesPerPixel = 4
+            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+                .union(.byteOrder32Little)
+        }
+        let width = frame.imageWidth
+        let height = frame.imageHeight
+        let bytesPerRow = width * bytesPerPixel
+        guard frame.imageBytes.count == bytesPerRow * height else { return nil }
+        guard let provider = CGDataProvider(data: frame.imageBytes as CFData) else { return nil }
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: bytesPerPixel * 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: bitmapInfo,
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
         )
     }
 }

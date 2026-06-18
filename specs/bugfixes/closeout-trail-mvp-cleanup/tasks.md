@@ -6,12 +6,12 @@ references:
 
 ## Phase 1 — UI fixes (no device)
 
-- [ ] 1. Expand RefusalSheet to two detents <!-- id:v6kipyy -->
+- [x] 1. Expand RefusalSheet to two detents <!-- id:v6kipyy -->
   - App/RefusalSheet.swift:94 — change .presentationDetents([.fraction(0.35)]) to .presentationDetents([.fraction(0.35), .large]).
   - First-appearance detent stays at 35%; user can drag up to .large to read long messages.
   - swift build clean; existing RefusalSheetTests MUST stay green.
 
-- [ ] 2. Freeze viewfinder during .estimating <!-- id:v6kipyz -->
+- [x] 2. Freeze viewfinder during .estimating <!-- id:v6kipyz -->
   - App/CaptureFlowView.swift:67 — swap ARPreviewView(engine: engine) for a state-driven choice: live preview in every state EXCEPT .estimating(captureResult: let result), where it renders a new CapturedFramesView(result: result).
   - CapturedFramesView is a small View (same file or alongside CaptureFlowView). Decodes CGImages inline from RawFrame.imageBytes + .pixelFormat (BGRA8 post-rawframe-rgb-conversion).
   - Single mode: nadir frame fills the safe area.
