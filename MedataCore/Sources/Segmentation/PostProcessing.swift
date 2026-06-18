@@ -93,19 +93,28 @@ public enum SegmenterPostProcessor {
         )
 
         // Step 11: argmax over class axis → ArgmaxMap (UInt8, top-left origin per §6.0).
+        // Each pixel is independent, so the scan is fanned out across CPU cores
+        // (the per-pixel result is order-independent — bit-identical to the serial
+        // scan). This and the resize above are the two dominant passes over the
+        // original-resolution × classes tensor.
         let pixelCount = originalHeight * originalWidth
         var argmaxData = Data(count: pixelCount)
         argmaxData.withUnsafeMutableBytes { rawBuf in
             let buf = rawBuf.bindMemory(to: UInt8.self).baseAddress!
-            for pixel in 0..<pixelCount {
-                let off = pixel * classes
-                var bestC = 0
-                var bestV = -Float.infinity
-                for c in 0..<classes where resized[off + c] > bestV {
-                    bestV = resized[off + c]
-                    bestC = c
+            resized.withUnsafeBufferPointer { srcBuf in
+                let src = srcBuf.baseAddress!
+                parallelForRows(rowCount: originalHeight, columns: originalWidth) { pStart, pEnd in
+                    for pixel in pStart..<pEnd {
+                        let off = pixel * classes
+                        var bestC = 0
+                        var bestV = -Float.infinity
+                        for c in 0..<classes where src[off + c] > bestV {
+                            bestV = src[off + c]
+                            bestC = c
+                        }
+                        buf[pixel] = UInt8(bestC)
+                    }
                 }
-                buf[pixel] = UInt8(bestC)
             }
         }
 
@@ -170,33 +179,73 @@ func bilinearResizeProbabilities(
 ) {
     let scaleX = Float(srcW) / Float(dstW)
     let scaleY = Float(srcH) / Float(dstH)
-    for yd in 0..<dstH {
-        let ys = (Float(yd) + 0.5) * scaleY - 0.5
-        let ys0i = Int(ys.rounded(.down))
-        let dy = ys - Float(ys0i)
-        let y0 = max(0, min(srcH - 1, ys0i))
-        let y1 = max(0, min(srcH - 1, ys0i + 1))
-        for xd in 0..<dstW {
-            let xs = (Float(xd) + 0.5) * scaleX - 0.5
-            let xs0i = Int(xs.rounded(.down))
-            let dx = xs - Float(xs0i)
-            let x0 = max(0, min(srcW - 1, xs0i))
-            let x1 = max(0, min(srcW - 1, xs0i + 1))
+    // Output rows are independent; fan them out across CPU cores. Each output
+    // element is computed from the same source samples and weights regardless of
+    // which worker runs the row, so the result is bit-identical to a serial pass.
+    src.withUnsafeBufferPointer { srcBuf in
+        dst.withUnsafeMutableBufferPointer { dstBuf in
+            let s = srcBuf.baseAddress!
+            let d = dstBuf.baseAddress!
+            parallelForRows(rowCount: dstH, columns: dstW) { pStart, pEnd in
+                let ydStart = pStart / dstW
+                let ydEnd = (pEnd + dstW - 1) / dstW
+                for yd in ydStart..<ydEnd {
+                    let ys = (Float(yd) + 0.5) * scaleY - 0.5
+                    let ys0i = Int(ys.rounded(.down))
+                    let dy = ys - Float(ys0i)
+                    let y0 = max(0, min(srcH - 1, ys0i))
+                    let y1 = max(0, min(srcH - 1, ys0i + 1))
+                    for xd in 0..<dstW {
+                        let xs = (Float(xd) + 0.5) * scaleX - 0.5
+                        let xs0i = Int(xs.rounded(.down))
+                        let dx = xs - Float(xs0i)
+                        let x0 = max(0, min(srcW - 1, xs0i))
+                        let x1 = max(0, min(srcW - 1, xs0i + 1))
 
-            let off00 = (y0 * srcW + x0) * classes
-            let off01 = (y0 * srcW + x1) * classes
-            let off10 = (y1 * srcW + x0) * classes
-            let off11 = (y1 * srcW + x1) * classes
-            let dstOff = (yd * dstW + xd) * classes
-            for c in 0..<classes {
-                let v00 = src[off00 + c]
-                let v01 = src[off01 + c]
-                let v10 = src[off10 + c]
-                let v11 = src[off11 + c]
-                let v0 = v00 * (1 - dx) + v01 * dx
-                let v1 = v10 * (1 - dx) + v11 * dx
-                dst[dstOff + c] = v0 * (1 - dy) + v1 * dy
+                        let off00 = (y0 * srcW + x0) * classes
+                        let off01 = (y0 * srcW + x1) * classes
+                        let off10 = (y1 * srcW + x0) * classes
+                        let off11 = (y1 * srcW + x1) * classes
+                        let dstOff = (yd * dstW + xd) * classes
+                        for c in 0..<classes {
+                            let v00 = s[off00 + c]
+                            let v01 = s[off01 + c]
+                            let v10 = s[off10 + c]
+                            let v11 = s[off11 + c]
+                            let v0 = v00 * (1 - dx) + v01 * dx
+                            let v1 = v10 * (1 - dx) + v11 * dx
+                            d[dstOff + c] = v0 * (1 - dy) + v1 * dy
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+// Splits a `rowCount × columns` pixel grid into contiguous row stripes and runs
+// `body(pixelStart, pixelEnd)` for each stripe concurrently across CPU cores via
+// `DispatchQueue.concurrentPerform`. The stripe boundaries fall on whole rows so
+// callers that key off `pixel / columns` see clean row ranges. Falls back to a
+// single serial invocation for small grids where dispatch overhead would dominate.
+func parallelForRows(
+    rowCount: Int,
+    columns: Int,
+    body: (_ pixelStart: Int, _ pixelEnd: Int) -> Void
+) {
+    let pixelCount = rowCount * columns
+    let cores = max(1, ProcessInfo.processInfo.activeProcessorCount)
+    // Target a few stripes per core for load balance; cap to the row count.
+    let stripes = min(rowCount, max(1, cores * 2))
+    guard stripes > 1, pixelCount >= 1 << 16 else {
+        body(0, pixelCount)
+        return
+    }
+    let rowsPerStripe = (rowCount + stripes - 1) / stripes
+    DispatchQueue.concurrentPerform(iterations: stripes) { stripe in
+        let rowStart = stripe * rowsPerStripe
+        guard rowStart < rowCount else { return }
+        let rowEnd = min(rowCount, rowStart + rowsPerStripe)
+        body(rowStart * columns, rowEnd * columns)
     }
 }

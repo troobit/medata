@@ -32,7 +32,7 @@ references:
 
 ## Phase 3 — Re-test
 
-- [ ] 4. STOP — human runs device capture; agent reads trail <!-- id:v6kipz1 -->
+- [x] 4. STOP — human runs device capture; agent reads trail <!-- id:v6kipz1 -->
   - Agent: build for device from this worktree: cd /Users/r/repos/medata.worktrees/no-food-pixels-on-fruit-plate-mvp && xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination id=76A45E6D-C57E-5BA6-ABAD-205C3C668572 -configuration Debug build
   - Agent: re-derive DerivedData path with xcodebuild ... -showBuildSettings | grep BUILT_PRODUCTS_DIR; print the install + launch commands for the user.
   - Console filter: subsystem:ie.medata.app category:Shutter, Include Info Messages.
@@ -43,7 +43,7 @@ references:
 
 ## Phase 4 — Diagnose and apply targeted fixes
 
-- [ ] 5. Apply one targeted latency cut to the dominant slow stage; close volume refusal if reproduced <!-- id:v6kipz2 -->
+- [x] 5. Apply one targeted latency cut to the dominant slow stage; close volume refusal if reproduced <!-- id:v6kipz2 -->
   - Read the Phase 3 trail pipeline.stage.end latencyMs=N lines. The stage with the largest latencyMs is the cut target.
   - If Segmentation dominates: target SegmenterPostProcessor.process — vectorise the per-pixel sigma_seg / perClassMeanProb loops, or eliminate intermediate copies. Aim for ≥50% cut.
   - If Volume dominates: target VoxelCarveEstimator.carve — reduce grid resolution for MVP, or short-circuit empty class slabs. Aim for ≥50% cut.

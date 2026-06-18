@@ -71,3 +71,76 @@ cap). Affects `App/CaptureFlowModel.swift` (`obliqueTiltOk`, `canShutter`,
 `obliqueTiltOutOfRange` refusal and its tests are unchanged.
 
 ---
+
+## Decision 2: Parallelise the segmentation postprocess hot passes across CPU cores
+
+**Date**: 2026-06-19
+**Status**: accepted
+
+### Context
+
+`SegmenterPostProcessor.process` was the dominant pipeline cost in the device
+trail. It runs softmax → crop → bilinear resize → argmax → silhouette/σ_seg →
+FP16 encode over an original-resolution (1920×1440) × 27-class probability tensor
+(~74.6M floats per full-tensor pass). A phase-by-phase microbench (Apple Silicon,
+release) attributed the ~115 ms steady-state cost as: bilinear resize ~64 ms
+(≈49%), argmax ~30 ms, softmax ~18 ms, FP16 encode ~10 ms, crop ~5 ms,
+silhouette/σ_seg ~3 ms. The cost is memory-bandwidth-bound and intrinsic to the
+fixed output contract (resolution, class count, FP16 tensor) — vectorising the
+inner class run (vDSP at length-27, manual SIMD8) gave under 15% because the
+bilinear gather is not contiguously vectorisable, and the contract forbids
+reducing resolution or class count.
+
+### Decision
+
+Fan the two largest passes — the bilinear resize and the argmax scan — out across
+CPU cores with `DispatchQueue.concurrentPerform` over whole-row stripes (helper
+`parallelForRows`, with a serial fallback below a 64k-pixel threshold). Both
+passes are per-output-element independent, so the result is bit-identical to the
+serial computation regardless of stripe boundaries or worker scheduling. The
+softmax, crop, silhouette/σ_seg reduction, and FP16 encode stay serial — the
+reduction is kept serial specifically to preserve identical floating-point
+accumulation order for σ_seg / perClassMeanProb.
+
+### Rationale
+
+Parallelism is the only lever that beats a memory-bandwidth-bound scalar pass
+without touching the output contract or the numerics. Measured end-to-end on
+Apple Silicon (release), the full `process` dropped from ~115 ms to ~31.5 ms
+steady-state — a **73% cut** — with deterministic, bit-identical output (σ_seg
+unchanged, argmax and FP16 bytes stable across runs). The full `swift test` suite
+(313/313, 3 skipped) stays green, which is the correctness proof that the
+contract and numerics are unchanged. On a ~6-core device the speedup is smaller
+than on the 18-core dev Mac but still clears the ≥50% target comfortably for the
+two parallelised passes.
+
+### Alternatives Considered
+
+- **Vectorise the class run (vDSP / SIMD8)**: Rejected — at 27 classes the vDSP
+  call overhead erased the gain (62.9 ms vs 60.5 ms scalar), and manual SIMD8
+  gave only ~14% because building the gather vectors is itself scalar.
+- **Reduce resolution / class count, or fuse resize into FP16 encode**: Rejected —
+  forbidden by the output contract; `resized` (FP32) is needed by argmax,
+  silhouette and σ_seg, so it cannot be skipped.
+- **Document the floor and defer (escape hatch)**: Not needed — a single
+  targeted, contract-preserving change cleared ≥50%.
+
+### Consequences
+
+**Positive:**
+- ~73% postprocess cut (dev Mac), bit-identical output, no contract change.
+- Helper `parallelForRows` is reusable for any future per-pixel pass.
+
+**Negative:**
+- The dev-stub postprocess remains a CPU-bound floor; Phase 3's CoreML segmenter
+  on the Neural Engine supersedes this dev-stub path entirely and is where the
+  research §16 sub-second budget is met. This cut is a stepping-stone, not
+  load-bearing.
+
+### Impact
+
+Affects `MedataCore/Sources/Segmentation/PostProcessing.swift`
+(`bilinearResizeProbabilities`, the argmax pass, new `parallelForRows` helper).
+No public-surface, contract, or numeric change.
+
+---
