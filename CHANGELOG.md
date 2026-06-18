@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `MeData/Tests/CaptureFlowModelPreShutterTests.swift`: Swift Testing suite covering the 750 ms staleness gate (fresh mask flows through `CaptureResult.preShutterFoodMask`; stale mask reaches the pipeline as nil), `awaitPaused()` is called before reading `latest` at the nadir-capture instant (Decision 13 / no TOCTOU), and the `firstFrameMaskBox` lifecycle clears in lockstep with `firstFrame` at backgrounding, interruption, tab change, tracking degradation, dismissResult, and dismissRefusal sites (Decision 11).
 - `PipelineFactory.makeSegmenter`, `Pipeline.segmenterSourceTag`, and `Pipeline.preShutterSourceTag` helpers so App-target callers can construct a separate pre-shutter `CoreMLSegmenter` (Decision 12) without duplicating the `#if DEV_STUB_SEGMENTER` engine-selection gate.
 - `MedataCore/Tests/PipelineTests/PreShutterMaskRoutingIntegrationTests.swift`: Swift Testing integration suite asserting that a `BinaryMask` placed into `CaptureResult.preShutterFoodMask` reaches `SupportPlaneFitter.fit`'s `preShutterFoodMask` argument byte-identical, using a local `ProbeFitter` injected via `PipelineFactory.makeForDevice(supportPlaneFitter:)` (Req 8.7).
+- `CapturedFramesView` in `App/CaptureFlowView.swift`: a static rendering of the captured frame(s) shown in place of the live `ARPreviewView` during `.estimating` so the user sees the photo is taken and can put the phone down. Decodes `CGImage`s inline from `RawFrame.imageBytes` + `.pixelFormat` (BGRA8), nadir filling the safe area in single mode and nadir-over-oblique stacked in two-view mode. Overlay chrome renders unchanged over the frozen image; the live preview restores on exit from `.estimating` (closeout-trail-mvp-cleanup Phase 1).
 
 ### Changed
 
@@ -33,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `App.swift` constructs a single `VisionCardDetector` (passed to both `Pipeline.makeForDevice` and the warmup path) and a SEPARATE `CoreMLSegmenter` for the pre-shutter producer (Decision 12).
 - `CaptureFlowView` starts the pre-shutter producer on `.onAppear` alongside `LiveSampleObserver`, re-subscribes each `engine.frames` on state transitions back into producing states (Req 1.4), `pause()`s the producer when leaving those states, and triggers a one-shot `Task { await visionCardDetector.warmup() }` on first entry to `.ready` (Req 5.7).
 - `Pipeline` re-exports `Segmentation` and `SupportPlane` so the App target can construct `CoreMLSegmenter` / refer to `BinaryMask` and `ClassPalette` via a single `import Pipeline`.
+- `App/RefusalSheet.swift` expands `presentationDetents` from `[.fraction(0.35)]` to `[.fraction(0.35), .large]` so long refusal messages (e.g. `noFoodVolumeRecovered`) can be dragged up and read in full; first-appearance detent stays at 35% so `RefusalSheetTests` need no test-side change (closeout-trail-mvp-cleanup Phase 1).
 - Cleaned up changelog to match first version (ignoring history of pre-release UI exploration).
 
 ### Removed
