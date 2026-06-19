@@ -14,6 +14,15 @@ public enum LiDARPlaneFitter {
     // before any throw or return. Not part of the production contract.
     public nonisolated(unsafe) static var debugLastCandidatePointCount: Int = 0
     public nonisolated(unsafe) static var debugLastInlierCount: Int = 0
+    // Food-region bbox in colour/mask pixel coords (min corner + size). Populated
+    // by `collectCandidatePoints`; -1 sentinel means no bbox was resolved (empty
+    // mask). Lets the Pipeline-side `supportplane.end success=false` log report
+    // whether a degenerate bbox starved the four-edge scan vs. a genuinely
+    // collinear inlier set. Bug `lidar-plane-fit-degenerate-on-clean-capture`.
+    public nonisolated(unsafe) static var debugLastFoodBBoxX: Int = -1
+    public nonisolated(unsafe) static var debugLastFoodBBoxY: Int = -1
+    public nonisolated(unsafe) static var debugLastFoodBBoxW: Int = -1
+    public nonisolated(unsafe) static var debugLastFoodBBoxH: Int = -1
     #endif
 
     // Tunable parameters per design §6.2 ("Parameter justification").
@@ -49,6 +58,10 @@ public enum LiDARPlaneFitter {
 
     public static func fit(_ inputs: Inputs) throws -> SupportPlane {
         // Step 1: collect candidate 3-D points in the colour-image lower-edge band.
+        #if DEBUG
+        debugLastFoodBBoxX = -1; debugLastFoodBBoxY = -1
+        debugLastFoodBBoxW = -1; debugLastFoodBBoxH = -1
+        #endif
         let points = try collectCandidatePoints(inputs)
         #if DEBUG
         debugLastCandidatePointCount = points.count
@@ -117,6 +130,12 @@ public enum LiDARPlaneFitter {
         // Bug `lidar-plane-fit-degenerate-on-clean-capture` 2026-06-16.
         let mask = inputs.foodRegionMask
         guard let bbox = foodBBox(mask: mask) else { return [] }
+        #if DEBUG
+        debugLastFoodBBoxX = bbox.minX
+        debugLastFoodBBoxY = bbox.minY
+        debugLastFoodBBoxW = bbox.widthPx
+        debugLastFoodBBoxH = bbox.heightPx
+        #endif
 
         var points: [Vec3] = []
         let kc = inputs.colourIntrinsics

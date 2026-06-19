@@ -43,3 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Removed
 
 - `CentreRectangleMask.swift`, the `centreRectangleFillFraction` constant, and `CentreRectangleMaskTests.swift` — the centred-rectangle placeholder is superseded by the real pre-shutter mask (Req 2.2). The all-ones-mask regression sentinel in `SupportPlaneRoughMaskTests` is preserved per Req 8.6.
+
+### Fixed
+
+- **Single-mode toggle had no effect** — `CaptureModeStorage.key` ("captureMode") diverged from the key `defaultCaptureModeReader()` reads (`SettingsKeys.captureMode` = "medata.captureMode"), so the `@AppStorage` toggle wrote a key nothing consumed and every capture ran as `.double` regardless of the user's selection. Unified the toggle onto the canonical `SettingsKeys.captureMode`. On-device confirmed `mode=single` now drives the single-view path. See [specs/bugfixes/single-mode-toggle-key-mismatch](specs/bugfixes/single-mode-toggle-key-mismatch/report.md).
+- **Support-plane failure trace was missing** — `Pipeline.fitSupportPlane` logged `event=supportplane.end` only on success, so a failing LiDAR fit produced no candidate/inlier diagnostics (the trace promised by the `lidar-plane-fit-degenerate-on-clean-capture` report had been dropped in the real-mask rewrite). Restored the DEBUG `event=supportplane.end success=false failure=<case> candidates=N inliers=M bbox…` line (with the exact `SupportPlaneError` case and `LiDARPlaneFitter.debugLastFoodBBox{X,Y,W,H}`), so a `noLidarPoints` remap is distinguishable from a genuine collinear `lidarFitDegenerate`. On-device single-view re-capture confirmed the LiDAR plane fit succeeds (2.9 mm residual); the failure mode did not reproduce on that path.

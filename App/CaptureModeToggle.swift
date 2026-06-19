@@ -16,7 +16,14 @@ extension CaptureMode {
 }
 
 enum CaptureModeStorage {
-    static let key = "captureMode"
+    // MUST equal the key `defaultCaptureModeReader()` reads (SettingsKeys
+    // .captureMode = "medata.captureMode"). This was previously the bare
+    // "captureMode", which silently diverged from the reader's namespaced key:
+    // the @AppStorage toggle wrote one key, the capture flow read another, so a
+    // Single selection never took effect and every capture ran as .double.
+    // Bug single-mode-toggle-key-mismatch. CaptureMode.swift documents
+    // SettingsKeys.captureMode as the canonical persistence location.
+    static let key = SettingsKeys.captureMode
     static let defaultValue: CaptureMode = .double
     // Irish-English refusal copy emitted when the user taps the disabled
     // `Single` segment on a device without LiDAR (Req §4.2).

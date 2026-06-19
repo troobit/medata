@@ -167,6 +167,35 @@ xcodebuild test \
 - [ ] The `event=estimate.end success=false failure=lidarFitDegenerate` line must NOT appear. (A different downstream failure such as `noFoodVolumeRecovered` is acceptable for Phase 1, since the dev-stub segmenter does not produce real food classes.)
 - [ ] Append the captured on-device log block to this report's Verification section once the run is observed.
 
+### On-device observation (2026-06-19, single-view path)
+
+The DEBUG `event=supportplane.end success=false …` trace promised at report lines 92/161
+was **absent from the shipped code** — the `pipeline-real-device-correctness` real-mask
+rewrite left `Pipeline.fitSupportPlane` logging `supportplane.end` only on the *success*
+path, so a failing fit jumped straight from `supportplane.start` to
+`estimate.end success=false` with no candidate/inlier trace. Restored it (see below), then
+re-captured on iPhone 13 Pro Max iOS 26.5 (Debug, single-view path):
+
+```
+event=estimate.start capturePath=single_view_lidar
+event=pipeline.stage.end name=CardDetection latencyMs=27
+event=supportplane.start width=1920 height=1440 source=pre_shutter
+event=supportplane.end   success=true residual_mm=2.865439
+event=pipeline.stage.end name=SupportPlane latencyMs=1440
+event=estimate.end success=true mealId=… capturePath=single_view_lidar
+```
+
+**Result:** on the single-view LiDAR path the plane fit **succeeds cleanly** (2.9 mm
+residual) — `lidarFitDegenerate` does **not** reproduce. The earlier `lidarFitDegenerate`
+failures were all on the **two-view SfS / oblique** path. The two-view path remains
+unverified on device and is tracked as follow-up (no-LiDAR / two-view work); the restored
+trace is now in place to disambiguate the two roots (`noLidarPoints` remap vs. genuine
+collinear inliers) the moment it next fires.
+
+**Instrumentation restored (this commit):**
+- `Pipeline.fitSupportPlane` — DEBUG `event=supportplane.end success=false failure=<case> candidates=N inliers=M bboxX=.. bboxY=.. bboxW=.. bboxH=..` on the failure path, preserving the exact `SupportPlaneError → EstimationFailure` mapping.
+- `LiDARPlaneFitter` — DEBUG `debugLastFoodBBox{X,Y,W,H}` statics populated in `collectCandidatePoints`, so the failure trace reports whether a degenerate/full-frame bbox starved the four-edge scan.
+
 ## Prevention
 
 **Recommendations to avoid similar bugs:**

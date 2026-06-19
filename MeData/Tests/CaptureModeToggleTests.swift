@@ -29,6 +29,25 @@ struct CaptureModeToggleTests {
         #expect(restored == .single)
     }
 
+    // Regression: single-mode-toggle-key-mismatch. The toggle persists via
+    // @AppStorage(CaptureModeStorage.key); the capture flow resolves the mode
+    // through defaultCaptureModeReader(), which reads SettingsKeys.captureMode.
+    // Before the fix these were "captureMode" vs "medata.captureMode", so a
+    // Single selection never reached the reader and every capture ran as
+    // .double regardless of the toggle. The pre-existing roundTripUserDefaults
+    // test missed this because it both wrote AND read CaptureModeStorage.key.
+    @Test("a Single selection written via the toggle key is observed by the reader")
+    func toggleSelectionReachesReader() {
+        UserDefaults.standard.set(CaptureMode.single.rawValue, forKey: CaptureModeStorage.key)
+        defer { UserDefaults.standard.removeObject(forKey: CaptureModeStorage.key) }
+        #expect(defaultCaptureModeReader() == .single)
+    }
+
+    @Test("toggle storage key is identical to the reader's key (regression guard)")
+    func toggleAndReaderKeysAreUnified() {
+        #expect(CaptureModeStorage.key == SettingsKeys.captureMode)
+    }
+
     @Test("no-LiDAR refusal copy is Irish-English (Req §4.2 / §12.1)")
     func noLiDARRefusalCopy() {
         // British/Irish spelling: "sensor" is the same in both; key word here

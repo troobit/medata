@@ -508,23 +508,62 @@ public struct Pipeline: Sendable {
             )
             #endif
             return plane
-        } catch SupportPlaneError.emptyFoodMask {
-            throw EstimationFailure.noFoodPixels
-        } catch SupportPlaneError.lidarFitDegenerate {
-            throw EstimationFailure.lidarFitDegenerate
-        } catch SupportPlaneError.lidarFitResidualTooHigh {
-            throw EstimationFailure.lidarFitResidualTooHigh
-        } catch SupportPlaneError.noLidarPoints {
-            // Pre-existing card-only fallback when LiDAR cannot produce a fit
-            // and a card pose is unavailable; otherwise the fitter raises
-            // `noLowerSilhouetteEdges` which we map to `noScaleAvailable`.
-            throw EstimationFailure.lidarFitDegenerate
-        } catch SupportPlaneError.noLowerSilhouetteEdges {
-            throw EstimationFailure.noScaleAvailable
-        } catch SupportPlaneError.iterationDiverged {
-            throw EstimationFailure.iterationDiverged
+        } catch let error as SupportPlaneError {
+            #if DEBUG
+            // Failure-path trace promised by the bugfix report but lost in the
+            // `pipeline-real-device-correctness` real-mask rewrite. `failure=`
+            // carries the EXACT SupportPlaneError case so `noLidarPoints` (scan
+            // starved → remapped below to lidarFitDegenerate) is distinguishable
+            // from a genuine collinear-inlier `lidarFitDegenerate`. The candidate/
+            // inlier counts and food bbox come from the LiDAR fitter's DEBUG
+            // statics. Bug `lidar-plane-fit-degenerate-on-clean-capture`.
+            supportPlaneLog.info(
+                """
+                event=supportplane.end success=false \
+                failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
+                candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
+                inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public) \
+                bboxX=\(LiDARPlaneFitter.debugLastFoodBBoxX, privacy: .public) \
+                bboxY=\(LiDARPlaneFitter.debugLastFoodBBoxY, privacy: .public) \
+                bboxW=\(LiDARPlaneFitter.debugLastFoodBBoxW, privacy: .public) \
+                bboxH=\(LiDARPlaneFitter.debugLastFoodBBoxH, privacy: .public)
+                """
+            )
+            #endif
+            switch error {
+            case .emptyFoodMask:
+                throw EstimationFailure.noFoodPixels
+            case .lidarFitDegenerate:
+                throw EstimationFailure.lidarFitDegenerate
+            case .lidarFitResidualTooHigh:
+                throw EstimationFailure.lidarFitResidualTooHigh
+            case .noLidarPoints:
+                // Pre-existing card-only fallback when LiDAR cannot produce a fit
+                // and a card pose is unavailable; otherwise the fitter raises
+                // `noLowerSilhouetteEdges` which we map to `noScaleAvailable`.
+                throw EstimationFailure.lidarFitDegenerate
+            case .noLowerSilhouetteEdges:
+                throw EstimationFailure.noScaleAvailable
+            case .iterationDiverged:
+                throw EstimationFailure.iterationDiverged
+            }
         }
     }
+
+    #if DEBUG
+    // Stable kebab-ish label for the SupportPlaneError case, used only by the
+    // DEBUG `supportplane.end success=false` trace above.
+    private static func supportPlaneFailureLabel(_ error: SupportPlaneError) -> String {
+        switch error {
+        case .lidarFitResidualTooHigh: return "lidarFitResidualTooHigh"
+        case .lidarFitDegenerate: return "lidarFitDegenerate"
+        case .noLowerSilhouetteEdges: return "noLowerSilhouetteEdges"
+        case .iterationDiverged: return "iterationDiverged"
+        case .noLidarPoints: return "noLidarPoints"
+        case .emptyFoodMask: return "emptyFoodMask"
+        }
+    }
+    #endif
 
     private func buildBeta(palette: ClassPalette, edition: String) -> BetaCorrection {
         var entries: [String: Float] = [:]
