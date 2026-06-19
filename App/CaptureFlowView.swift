@@ -11,7 +11,19 @@ import SwiftUI
 // Behaviour lives in `CaptureFlowModel`; this is composition only.
 // CaptureMode (Decision 35) is read via `@AppStorage` so any UI toggle change
 // flows here without coupling.
+// Two persistent tilt-guide designs are available to compare on device; flip
+// `tiltGuideStyle` to switch. Both share the same `TiltAimGuideState` logic.
+//   • .gauge — vertical bar, a puck tracking tilt against a centred band (attempt 1)
+//   • .dial  — quarter-circle protractor, a needle rotating into a wedge (attempt 2)
+enum TiltGuideStyle {
+    case gauge
+    case dial
+}
+
 struct CaptureFlowView: View {
+    // Active tilt-guide design. Change this one line to compare the two.
+    static let tiltGuideStyle: TiltGuideStyle = .gauge
+
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
@@ -119,11 +131,8 @@ struct CaptureFlowView: View {
             // condition as the badge; never takes hits so it can't block chrome.
             if model.currentSnapshot != nil, !isEstimating, !isInitialising {
                 HStack {
-                    TiltAimGuide(
-                        tiltDegrees: model.indicators.liveTiltDegrees,
-                        awaitingOblique: model.awaitingObliqueView
-                    )
-                    .padding(.leading, 16)
+                    tiltGuide
+                        .padding(.leading, 16)
                     Spacer()
                 }
                 .allowsHitTesting(false)
@@ -209,6 +218,24 @@ struct CaptureFlowView: View {
                 )
                 Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
             }
+        }
+    }
+
+    // Selected persistent tilt guide (see `tiltGuideStyle`). Both designs read
+    // the same live tilt and stage and share `TiltAimGuideState`.
+    @ViewBuilder
+    private var tiltGuide: some View {
+        switch Self.tiltGuideStyle {
+        case .gauge:
+            TiltAimGuide(
+                tiltDegrees: model.indicators.liveTiltDegrees,
+                awaitingOblique: model.awaitingObliqueView
+            )
+        case .dial:
+            TiltDialGuide(
+                tiltDegrees: model.indicators.liveTiltDegrees,
+                awaitingOblique: model.awaitingObliqueView
+            )
         }
     }
 
