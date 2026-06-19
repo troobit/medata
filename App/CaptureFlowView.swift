@@ -110,6 +110,24 @@ struct CaptureFlowView: View {
                 Spacer()
                 bottomChrome
             }
+
+            // Persistent graphical tilt guide, leading-aligned and vertically
+            // centred over the viewfinder. Unlike the badge — which auto-hides 5s
+            // after framing is in range (LiveIndicatorModel.scheduleHide) — this
+            // stays on screen the whole time the user is aiming, so the angle
+            // target never disappears mid-adjustment. Shown under the same
+            // condition as the badge; never takes hits so it can't block chrome.
+            if model.currentSnapshot != nil, !isEstimating, !isInitialising {
+                HStack {
+                    TiltAimGuide(
+                        tiltDegrees: model.indicators.liveTiltDegrees,
+                        awaitingOblique: model.awaitingObliqueView
+                    )
+                    .padding(.leading, 16)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
+            }
         }
         .sheet(item: refusalBinding) { refusal in
             RefusalSheet(failure: refusal.failure) { model.retry() }
