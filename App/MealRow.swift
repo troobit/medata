@@ -117,7 +117,12 @@ struct MealRow: View {
         let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil)
         guard let asset = assets.firstObject else { return }
         let options = PHImageRequestOptions()
-        options.deliveryMode = .opportunistic
+        // Single-shot delivery: a checked continuation can only be resumed once,
+        // but `.opportunistic` invokes the result handler multiple times (a fast
+        // degraded image, then the full-quality one), which crashes with
+        // "continuation resumed more than once". `.highQualityFormat` delivers a
+        // single callback — same pattern as `ResultView.loadPhoto()`.
+        options.deliveryMode = .highQualityFormat
         options.isSynchronous = false
         options.isNetworkAccessAllowed = false
         let rowWidth = await MainActor.run {
