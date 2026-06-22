@@ -163,7 +163,12 @@ struct ResultView: View {
             .padding(.bottom, 24)
         }
         .background(Color.captureBackground)
-        .ignoresSafeArea()
+        // Only the background layers (photo + gradient, below) ignore the safe
+        // area for the full-bleed look. The ZStack itself must NOT — otherwise
+        // its content and hit region extend under the system tab bar and
+        // swallow tab taps, leaving the result screen unable to switch tabs.
+        // The tab bar is not a takeover; it stays visible and reachable in both
+        // .justCaptured and .historyDetail (bugfix/result-view-covers-tab-bar).
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPhoto() }
     }
@@ -178,6 +183,7 @@ struct ResultView: View {
                 .accessibilityHidden(true)
         } else {
             Color.captureBackground
+                .ignoresSafeArea()
         }
         LinearGradient(
             colors: [Color.captureScrim, Color.clear, Color.captureScrim],
