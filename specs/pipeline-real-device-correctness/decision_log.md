@@ -518,3 +518,55 @@ The corrected coverage value is for telemetry/diagnostics, not for path selectio
 - Req 4.5 wording becomes an erratum (intent honoured at a different line); update the spec text in a follow-up edit so future readers don't re-litigate.
 
 ---
+
+## Decision 16: Dev-Stub Segmenter Latency Starves the AR Session — Measure in Release Before Treating as a Defect
+
+**Date**: 2026-06-23
+**Status**: accepted (Release measurement confirms Debug artifact — no code fix scheduled; see Update)
+
+### Update (2026-06-23, Release measurement)
+
+A Release-optimised dev-stub build (temporary unconditional `DEV_STUB_SEGMENTER`, reverted after build) was installed on the iPhone 13 Pro Max and re-captured in single mode (same segmentation code path as two-view):
+
+- **Segmentation substages: preprocess 739 ms (Debug ~1668 ms), inference 52 ms (Debug ~92 ms).** Postprocess end line not yet captured (paste truncated at `postprocess start`) — but the estimate completed and persisted a record.
+- **Zero `ARSession … retaining` warnings and zero `cadence.miss` lines across the entire run** (Debug had them continuously). The live gating loop streamed smoothly.
+
+A second clean Release single-mode capture removed all doubt: the **full estimate (CardDetection→SupportPlane→Segmentation→Volume→Macros→Confidence→Persistence) ran start-to-finish in 827 ms** (`estimate.start` 01:11:18.243 → `estimate.end success=true` 01:11:19.070, persisted), and the `capture.end`→`estimate.start` gap collapsed from ~28 s (Debug) to **143 ms**. Segmentation is therefore sub-827 ms in Release vs **24,960 ms** in Debug — a ~30× swing, entirely the optimiser.
+
+Conclusion: the AR-frame starvation and the 27–50 s latencies were a **Debug `-Onone` artifact**, not a code defect. The mitigations in the Decision below are **not scheduled**; the Track-3 real model is the permanent resolution. Re-open only if a Release build ever shows `retaining`/`cadence.miss` again.
+
+### Context
+
+A two-view device drive on 2026-06-23 (Debug `-Onone` build) surfaced a cluster of AR-session symptoms tied to the pre-shutter loop this spec designed (Decisions 10–13):
+
+- `ARSession … is retaining 11–13 ARFrames … the camera will stop delivering camera images` — repeated.
+- `event=preshutter.cadence.miss expectedHz=2 actualMs=36000–51000` — the 2 Hz pre-shutter cadence (Decision 10) collapsed to ~0.02 Hz.
+- `event=preshutter.mask.update … source=pre_shutter_stub latencyMs≈35000–50000` — each dev-stub `segment()` cycle takes 35–50 s.
+- Consequential media noise: `FigCaptureSourceRemote … err=-17281` and `(Fig) signalled err=-12710` clustered at SupportPlane (the camera stalling under frame-retention back-pressure), plus benign `Could not resolve material name 'engine:…/AR/*.rematerial'` RealityKit fallbacks.
+
+Root cause: the dev-stub `CoreMLSegmenter` runs the full 27-class preprocess→inference→postprocess (513×385 upscaled to 1920×1440) on every pre-shutter cycle. In `PreShutterSegmenter.resume(frames:)` the bound `ARFrame` stays retained for the entire ~30–50 s `segment()` call, so frames pile up faster than the loop drains them and ARKit throttles the camera. The work is off-MainActor, so it does **not** block tab switching (the separately-reported stuck tab bar is a different issue).
+
+### Decision
+
+Do **not** treat the ARFrame retention as a code defect yet. First re-measure the same two-view trail on a **Release** build (the postprocess hot passes were already parallelised in `e425543`; the missing factor is the optimiser, expected ~10×). If the starvation persists in Release, the fix is, in order: (a) release/copy out of the `ARFrame` before calling `segment()` so it is not retained across the inference; (b) skip or throttle the full pre-shutter segmentation while `segmenterSource == "dev_stub"` (the stub mask is constant — `foodPixels=1052134` every cycle — so the expensive path buys nothing). The ultimate resolution is the Track-3 real model (tens of ms/inference), which dissolves the back-pressure entirely.
+
+### Rationale
+
+The headline latencies (27–50 s) are almost certainly a Debug `-Onone` artifact; optimising against them would be measuring a number that does not exist in a shippable build. Gating the fix on a Release measurement right-sizes the work before any code changes. The dev-stub gate keeps the mitigation out of App Store builds automatically.
+
+### Alternatives Considered
+
+- **Fix the retention immediately (restructure the loop now)**: Rejected for now — risks reworking the Decision 12/13 concurrency contract against a latency that Release may erase.
+- **Cancel the inflight segment on back-pressure**: Rejected — Decision 13's snapshot-then-pause atomicity depends on the inflight cycle draining, not being cancelled (this was the smolspec H4 regression).
+
+### Consequences
+
+**Positive:** Avoids premature rework of a delicate concurrency contract; cheap to validate; self-retires with Track 3.
+
+**Negative:** Live preview remains sluggish on dev-stub Debug builds until either the Release retest or Track 3; demos must use Release or accept the lag.
+
+### Impact
+
+`App/PreShutterSegmenter.swift` (the `resume(frames:)` inference loop and ARFrame lifetime), the dev-stub `CoreMLSegmenter`, and the pre-shutter cadence contract (Decisions 10–13). No change to the in-shutter pipeline path.
+
+---
