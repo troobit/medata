@@ -350,7 +350,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         tiltDegrees: Float,
         distanceCm: Float?,
         lidarCoveragePercent: Float,
-        trackingIsNormal: Bool
+        trackingIsNormal: Bool,
+        tiltVector: SIMD2<Float> = .zero
     ) {
         let snapshot = GatingSnapshot(
             tiltInRange: tiltInRange(degrees: tiltDegrees),
@@ -362,21 +363,24 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // is acting on them; capture / estimation freeze them (no flicker).
         switch state {
         case .initialising where trackingIsNormal:
-            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent, tiltVector)
             state = .ready(snapshot)
         case .ready:
-            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent, tiltVector)
             state = .ready(snapshot)
         case .trackingLost where trackingIsNormal:
-            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent)
+            writeIndicators(tiltDegrees, distanceCm, lidarCoveragePercent, tiltVector)
             state = .ready(snapshot)
         default:
             break
         }
     }
 
-    private func writeIndicators(_ tilt: Float, _ distanceCm: Float?, _ coverage: Float) {
+    private func writeIndicators(
+        _ tilt: Float, _ distanceCm: Float?, _ coverage: Float, _ tiltVector: SIMD2<Float>
+    ) {
         indicators.liveTiltDegrees = tilt
+        indicators.liveTiltVector = tiltVector
         indicators.liveDistanceCm = distanceCm
         indicators.liveLiDARCoveragePercent = coverage
     }
@@ -692,6 +696,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             "event=\(event) " +
             "state=\(state.logName) " +
             "tiltDegrees=\(String(format: "%.1f", tilt)) " +
+            "tiltVec=[\(String(format: "%.1f", indicators.liveTiltVector.x)),\(String(format: "%.1f", indicators.liveTiltVector.y))] " +
             "targetTilt=\(Int(target)) " +
             "tiltInRange=\(tiltInRange(degrees: tilt)) " +
             "distanceCm=\(dist) " +

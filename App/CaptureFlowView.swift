@@ -11,18 +11,20 @@ import SwiftUI
 // Behaviour lives in `CaptureFlowModel`; this is composition only.
 // CaptureMode (Decision 35) is read via `@AppStorage` so any UI toggle change
 // flows here without coupling.
-// Two persistent tilt-guide designs are available to compare on device; flip
-// `tiltGuideStyle` to switch. Both share the same `TiltAimGuideState` logic.
-//   • .gauge — vertical bar, a puck tracking tilt against a centred band (attempt 1)
-//   • .dial  — quarter-circle protractor, a needle rotating into a wedge (attempt 2)
+// Three persistent tilt-guide designs are available to compare on device; flip
+// `tiltGuideStyle` to switch. All share the same `TiltAimGuideState` logic.
+//   • .gauge  — vertical bar, a puck tracking tilt against a centred band (attempt 1)
+//   • .dial   — quarter-circle protractor, a needle rotating into a wedge (attempt 2)
+//   • .bubble — 2-D attitude level; dot distance = tilt, direction = azimuth (attempt 3)
 enum TiltGuideStyle {
     case gauge
     case dial
+    case bubble
 }
 
 struct CaptureFlowView: View {
-    // Active tilt-guide design. Change this one line to compare the two.
-    static let tiltGuideStyle: TiltGuideStyle = .gauge
+    // Active tilt-guide design. Change this one line to compare the three.
+    static let tiltGuideStyle: TiltGuideStyle = .bubble
 
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
@@ -82,7 +84,13 @@ struct CaptureFlowView: View {
             // viewfinder"). Every other state shows the live preview; the chrome
             // VStack below renders unchanged over whichever layer is shown.
             if case .estimating(let result) = model.state {
-                CapturedFramesView(result: result).ignoresSafeArea()
+                // Blur + dim the frozen capture so the viewfinder reads as
+                // "processing" — the same pause the tilt guide shows, applied to
+                // the camera. The live AR feed is not rendered here at all.
+                CapturedFramesView(result: result)
+                    .blur(radius: 18)
+                    .overlay(Color.captureBackground.opacity(0.25))
+                    .ignoresSafeArea()
             } else {
                 ARPreviewView(engine: engine).ignoresSafeArea()
             }
@@ -234,6 +242,11 @@ struct CaptureFlowView: View {
         case .dial:
             TiltDialGuide(
                 tiltDegrees: model.indicators.liveTiltDegrees,
+                awaitingOblique: model.awaitingObliqueView
+            )
+        case .bubble:
+            TiltBubbleGuide(
+                tiltVector: model.indicators.liveTiltVector,
                 awaitingOblique: model.awaitingObliqueView
             )
         }
