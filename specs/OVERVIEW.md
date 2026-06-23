@@ -8,6 +8,7 @@
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
+| [Bubble-only Cleanup](#bubble-only-cleanup) | 2026-06-24 | Done | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 
 ---
 
@@ -66,3 +67,11 @@ Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCo
 - [prerequisites.md](pipeline-real-device-correctness/prerequisites.md)
 - [requirements.md](pipeline-real-device-correctness/requirements.md)
 - [tasks.md](pipeline-real-device-correctness/tasks.md)
+
+## Bubble-only Cleanup
+
+Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design.
+
+- [decision_log.md](ui/bubble-only-cleanup/decision_log.md)
+- [smolspec.md](ui/bubble-only-cleanup/smolspec.md)
+- [tasks.md](ui/bubble-only-cleanup/tasks.md)
