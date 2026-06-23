@@ -103,16 +103,26 @@ enum LiveSampleMath {
     // Two-axis tilt for the bubble guide. Decomposes "straight-down" into the
     // camera's screen plane (right / up axes from the world transform). The
     // returned vector's LENGTH equals `tiltDegrees` (so the azimuth-free in-range
-    // test is unchanged) and its DIRECTION is the screen azimuth of the tilt:
-    //   x = down · cameraRight  (right/left), y = down · cameraUp (up/down).
-    // Screen-y orientation (which way "tilt away" moves the dot) is handled in
-    // the view and is trivial to flip after an on-device look.
+    // test is unchanged) and its DIRECTION is the PORTRAIT screen azimuth.
+    //
+    // ARKit's camera intrinsic frame is fixed to the device in LANDSCAPE: column 0
+    // (right) runs along the device's long edge, column 1 (up) along the short
+    // edge — regardless of how the UI is oriented. Our UI is PORTRAIT, so the
+    // sensor frame is rotated 90° from what the user sees. The meaningful capture
+    // axis is forward/back pitch (nadir 0° ↔ oblique 25°), which for a
+    // portrait-held phone is a rotation about the device's SHORT edge — i.e. it
+    // moves the camera's intrinsic RIGHT axis relative to gravity. So:
+    //   screen-y (vertical, forward/back) = down · cameraRight
+    //   screen-x (horizontal, left/right) = down · cameraUp
+    // (90° landscape→portrait rotation: x←up, y←right). Screen-y polarity (which
+    // way "tilt away" drives the dot) is trivial to flip after an on-device look;
+    // the magnitude / in-range gate is azimuth-free so the swap leaves it intact.
     static func tiltVector(worldFromCamera m: simd_float4x4) -> SIMD2<Float> {
         let right = simd_normalize(simd_float3(m.columns.0.x, m.columns.0.y, m.columns.0.z))
         let up = simd_normalize(simd_float3(m.columns.1.x, m.columns.1.y, m.columns.1.z))
         let down = simd_float3(0, -1, 0)
-        let sx = simd_dot(down, right)
-        let sy = simd_dot(down, up)
+        let sx = simd_dot(down, up)      // portrait horizontal (left/right roll)
+        let sy = simd_dot(down, right)   // portrait vertical (forward/back pitch)
         let mag = (sx * sx + sy * sy).squareRoot()   // = sin(theta)
         if mag < 1e-6 { return .zero }
         let thetaDeg = asin(min(mag, 1)) * 180 / .pi
