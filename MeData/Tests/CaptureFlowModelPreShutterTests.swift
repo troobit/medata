@@ -160,6 +160,71 @@ struct CaptureFlowModelPreShutterTests {
         #expect((received?.preShutterMaskAgeMs ?? -1) >= 0)
     }
 
+    // MARK: - First-shot race: nadir shutter gated on a usable mask
+    //
+    // Regression for fix/first-shot-nofoodpixels. On the FIRST shutter tap of a
+    // session the mask could still be nil (`maskAgeMs=-1`), the empty-mask gate
+    // refused, and the tap mapped to `EstimationFailure.noFoodPixels`. The
+    // nadir shutter must stay disarmed until a usable (fresh) pre-shutter mask
+    // exists.
+
+    @Test("nadir shutter is NOT armed while no pre-shutter mask exists")
+    func nadirShutterDisarmedWithoutMask() async {
+        let spy = SpyPreShutterMaskSource()
+        spy.latest = nil  // first frame of a session: producer hasn't published
+
+        let fixture = makeFixture(spy: spy)
+        // Drive into .ready with the distance gate satisfied — the only other
+        // nadir gate. Pre-fix this returned canShutter == true (the bug).
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        guard case .ready = fixture.model.state else {
+            Issue.record("expected .ready, got \(fixture.model.state)")
+            return
+        }
+        #expect(fixture.model.canShutter == false)
+
+        // The command-side guard must also refuse: a maskless nadir tap must
+        // not begin a capture (no flow task spawned).
+        fixture.model.shutter()
+        #expect(fixture.model.flowTask == nil)
+        guard case .ready = fixture.model.state else {
+            Issue.record("expected to remain .ready, got \(fixture.model.state)")
+            return
+        }
+    }
+
+    @Test("nadir shutter arms once a fresh pre-shutter mask is present")
+    func nadirShutterArmsWithFreshMask() async {
+        let spy = SpyPreShutterMaskSource()
+        spy.latest = nil
+
+        let fixture = makeFixture(spy: spy)
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        #expect(fixture.model.canShutter == false)
+
+        // A fresh mask becomes available — the shutter must arm.
+        spy.latest = makeTimestamped(mask: makeOnesMask(width: 8, height: 8), ageMs: 0)
+        #expect(fixture.model.canShutter == true)
+    }
+
+    @Test("nadir shutter stays disarmed when the only mask is stale (> 750 ms)")
+    func nadirShutterDisarmedWithStaleMask() async {
+        // A mask older than the 750 ms nadir-instant ceiling would be discarded
+        // by performFlow, so the shutter must not arm on it (no arm-then-refuse).
+        let spy = SpyPreShutterMaskSource()
+        spy.latest = makeTimestamped(mask: makeOnesMask(width: 8, height: 8), ageMs: 1_500)
+
+        let fixture = makeFixture(spy: spy)
+        fixture.model.liveSampleDidUpdate(
+            tiltDegrees: 0, distanceCm: 35, lidarCoveragePercent: 90, trackingIsNormal: true
+        )
+        #expect(fixture.model.canShutter == false)
+    }
+
     // MARK: - firstFrameMaskBox lifecycle (Decision 11)
 
     @Test("two-view nadir capture stashes firstFrameMaskBox alongside firstFrame")
