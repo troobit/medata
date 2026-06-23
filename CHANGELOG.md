@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- The two unused tilt-guide designs and their selection scaffolding — `App/TiltAimGuide.swift` (`.gauge` vertical bar) and `App/TiltDialGuide.swift` (`.dial` protractor), the `TiltGuideStyle` enum, and the `CaptureFlowView.tiltGuideStyle` selector. The device-confirmed `.bubble` (2-D attitude level) is now the sole tilt guide, composed directly in `CaptureFlowView`. The shared per-stage logic relocated from `TiltAimGuide.swift` into `TiltBubbleGuide.swift` and the enum renamed `TiltAimGuideState` → `TiltGuideState` (dropping the gauge/dial-only `halfSpanDegrees`/`offsetFraction`/`correction` as dead code); targets/tolerances unchanged (0/25° targets, 12/15° tolerances). Tests renamed `TiltAimGuideTests.swift` → `TiltGuideStateTests.swift`. See [specs/ui/bubble-only-cleanup](specs/ui/bubble-only-cleanup/).
 - `CentreRectangleMask.swift`, the `centreRectangleFillFraction` constant, and `CentreRectangleMaskTests.swift` — the centred-rectangle placeholder is superseded by the real pre-shutter mask (Req 2.2). The all-ones-mask regression sentinel in `SupportPlaneRoughMaskTests` is preserved per Req 8.6.
 
 ### Fixed
