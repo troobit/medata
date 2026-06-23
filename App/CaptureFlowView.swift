@@ -11,21 +11,9 @@ import SwiftUI
 // Behaviour lives in `CaptureFlowModel`; this is composition only.
 // CaptureMode (Decision 35) is read via `@AppStorage` so any UI toggle change
 // flows here without coupling.
-// Three persistent tilt-guide designs are available to compare on device; flip
-// `tiltGuideStyle` to switch. All share the same `TiltAimGuideState` logic.
-//   • .gauge  — vertical bar, a puck tracking tilt against a centred band (attempt 1)
-//   • .dial   — quarter-circle protractor, a needle rotating into a wedge (attempt 2)
-//   • .bubble — 2-D attitude level; dot distance = tilt, direction = azimuth (attempt 3)
-enum TiltGuideStyle {
-    case gauge
-    case dial
-    case bubble
-}
-
+// The persistent tilt guide is `TiltBubbleGuide` — a 2-D attitude level whose
+// dot distance encodes tilt and direction encodes azimuth.
 struct CaptureFlowView: View {
-    // Active tilt-guide design. Change this one line to compare the three.
-    static let tiltGuideStyle: TiltGuideStyle = .bubble
-
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
@@ -229,27 +217,12 @@ struct CaptureFlowView: View {
         }
     }
 
-    // Selected persistent tilt guide (see `tiltGuideStyle`). Both designs read
-    // the same live tilt and stage and share `TiltAimGuideState`.
-    @ViewBuilder
+    // Persistent tilt guide: the 2-D attitude level reading live tilt and stage.
     private var tiltGuide: some View {
-        switch Self.tiltGuideStyle {
-        case .gauge:
-            TiltAimGuide(
-                tiltDegrees: model.indicators.liveTiltDegrees,
-                awaitingOblique: model.awaitingObliqueView
-            )
-        case .dial:
-            TiltDialGuide(
-                tiltDegrees: model.indicators.liveTiltDegrees,
-                awaitingOblique: model.awaitingObliqueView
-            )
-        case .bubble:
-            TiltBubbleGuide(
-                tiltVector: model.indicators.liveTiltVector,
-                awaitingOblique: model.awaitingObliqueView
-            )
-        }
+        TiltBubbleGuide(
+            tiltVector: model.indicators.liveTiltVector,
+            awaitingOblique: model.awaitingObliqueView
+        )
     }
 
     @ViewBuilder

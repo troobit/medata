@@ -9,6 +9,7 @@
 | [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
 | [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | 2026-06-23 | Done | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
+| [Bubble-only Cleanup](#bubble-only-cleanup) | 2026-06-24 | Done | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 
 ---
 
@@ -75,3 +76,11 @@ Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipe
 - [decision_log.md](lidar-first-scale-fallback/decision_log.md)
 - [smolspec.md](lidar-first-scale-fallback/smolspec.md)
 - [tasks.md](lidar-first-scale-fallback/tasks.md)
+
+## Bubble-only Cleanup
+
+Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design.
+
+- [decision_log.md](ui/bubble-only-cleanup/decision_log.md)
+- [smolspec.md](ui/bubble-only-cleanup/smolspec.md)
+- [tasks.md](ui/bubble-only-cleanup/tasks.md)

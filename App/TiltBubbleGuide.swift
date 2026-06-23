@@ -1,18 +1,44 @@
 import SwiftUI
 
-// Two-axis ("bubble" / attitude-level) tilt guide — a third design to compare
-// against the 1-D `.gauge` and `.dial` on device (CaptureFlowView.tiltGuideStyle).
+// The persistent tilt guide for the nadir (0°) and oblique (25°) capture
+// stages — a two-axis ("bubble" / attitude-level) readout. The numeric
+// `LiveIndicatorBadge` auto-hides 5s after framing is in range
+// (LiveIndicatorModel.scheduleHide), so its angle target disappears mid-
+// adjustment; this guide stays on screen the whole time the user is aiming.
 //
-// The gauge collapses tilt to a single magnitude, so near the target it can't
-// show WHICH way to rotate. This guide plots the live tilt as a dot in a 2-D
-// field: distance from centre = tilt angle, direction = on-screen azimuth (fed
-// by LiveIndicatorModel.liveTiltVector / LiveSampleMath.tiltVector).
+// It plots the live tilt as a dot in a 2-D field: distance from centre = tilt
+// angle, direction = on-screen azimuth (fed by LiveIndicatorModel.liveTiltVector
+// / LiveSampleMath.tiltVector). This shows WHICH way to rotate near the target.
 //   • Nadir (0°)  — bring the dot to the centre bullseye (in-range disc = 12°).
 //   • Oblique (25°) — bring the dot onto the target ring (in-range band 10–40°),
 //     in ANY direction (free ring — matches the azimuth-free shutter gate).
 //
-// In-range logic and per-stage target/tolerance are reused verbatim from
-// `TiltAimGuideState`; only the rendering differs from the gauge.
+// Per-stage target/tolerance and the in-range test live in `TiltGuideState`
+// below, kept pure so they stay testable without a SwiftUI host.
+
+// MARK: - Pure state surface (testable without a SwiftUI host)
+
+enum TiltGuideState {
+    // Target axis per stage: 0° straight-down for nadir, 25° for the oblique
+    // (CaptureFlowModel tiltInRange / obliqueTiltOk).
+    static func target(awaitingOblique: Bool) -> Float {
+        awaitingOblique ? 25 : 0
+    }
+
+    // In-range tolerance. Oblique mirrors the live shutter gate exactly
+    // (|Δθ − 25°| ≤ 15°, closeout-trail Decision 1). Nadir has no shutter gate,
+    // so its band is advisory — the comfort window where σ_tilt stays high.
+    static func toleranceDegrees(awaitingOblique: Bool) -> Float {
+        awaitingOblique ? 15 : 12
+    }
+
+    static func isAligned(tilt: Float, target: Float, tolerance: Float) -> Bool {
+        abs(tilt - target) <= tolerance
+    }
+}
+
+// MARK: - View
+
 struct TiltBubbleGuide: View {
     let tiltVector: SIMD2<Float>
     let awaitingOblique: Bool
@@ -28,11 +54,11 @@ struct TiltBubbleGuide: View {
     private var maxRadius: CGFloat { (fieldSize - puckSize) / 2 }
     private var pointsPerDegree: CGFloat { maxRadius / CGFloat(maxAngleDegrees) }
 
-    private var target: Float { TiltAimGuideState.target(awaitingOblique: awaitingOblique) }
-    private var tolerance: Float { TiltAimGuideState.toleranceDegrees(awaitingOblique: awaitingOblique) }
+    private var target: Float { TiltGuideState.target(awaitingOblique: awaitingOblique) }
+    private var tolerance: Float { TiltGuideState.toleranceDegrees(awaitingOblique: awaitingOblique) }
     private var tiltMagnitude: Float { (tiltVector.x * tiltVector.x + tiltVector.y * tiltVector.y).squareRoot() }
     private var aligned: Bool {
-        TiltAimGuideState.isAligned(tilt: tiltMagnitude, target: target, tolerance: tolerance)
+        TiltGuideState.isAligned(tilt: tiltMagnitude, target: target, tolerance: tolerance)
     }
 
     private func radius(forDegrees deg: Float) -> CGFloat {
