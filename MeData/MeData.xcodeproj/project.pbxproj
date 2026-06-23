@@ -24,6 +24,9 @@
 		111ECA0C2FBD47A100272C1E /* PhotoLibrarySaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA0B2FBD47A100272C1E /* PhotoLibrarySaver.swift */; };
 		112B11C02FCE000000272C1E /* AppRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D02FCE000000272C1E /* AppRoot.swift */; };
 		113B22A02FD0000000272C1E /* LiveIndicatorBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B02FD0000000272C1E /* LiveIndicatorBadge.swift */; };
+		113B22F02FD0000000272C1E /* TiltAimGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22F12FD0000000272C1E /* TiltAimGuide.swift */; };
+		113B22F22FD0000000272C1E /* TiltDialGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22F32FD0000000272C1E /* TiltDialGuide.swift */; };
+		113B22F42FD0000000272C1E /* TiltBubbleGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22F52FD0000000272C1E /* TiltBubbleGuide.swift */; };
 		113B22A12FD0000000272C1E /* CaptureTopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B12FD0000000272C1E /* CaptureTopBar.swift */; };
 		113B22A22FD0000000272C1E /* CaptureModeToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B22FD0000000272C1E /* CaptureModeToggle.swift */; };
 		113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B32FD0000000272C1E /* ShutterButton.swift */; };
@@ -56,6 +59,9 @@
 		111ECA0B2FBD47A100272C1E /* PhotoLibrarySaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PhotoLibrarySaver.swift; path = ../App/PhotoLibrarySaver.swift; sourceTree = SOURCE_ROOT; };
 		112B11D02FCE000000272C1E /* AppRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppRoot.swift; path = ../App/AppRoot.swift; sourceTree = SOURCE_ROOT; };
 		113B22B02FD0000000272C1E /* LiveIndicatorBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveIndicatorBadge.swift; path = ../App/LiveIndicatorBadge.swift; sourceTree = SOURCE_ROOT; };
+		113B22F12FD0000000272C1E /* TiltAimGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TiltAimGuide.swift; path = ../App/TiltAimGuide.swift; sourceTree = SOURCE_ROOT; };
+		113B22F32FD0000000272C1E /* TiltDialGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TiltDialGuide.swift; path = ../App/TiltDialGuide.swift; sourceTree = SOURCE_ROOT; };
+		113B22F52FD0000000272C1E /* TiltBubbleGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TiltBubbleGuide.swift; path = ../App/TiltBubbleGuide.swift; sourceTree = SOURCE_ROOT; };
 		113B22B12FD0000000272C1E /* CaptureTopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureTopBar.swift; path = ../App/CaptureTopBar.swift; sourceTree = SOURCE_ROOT; };
 		113B22B22FD0000000272C1E /* CaptureModeToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureModeToggle.swift; path = ../App/CaptureModeToggle.swift; sourceTree = SOURCE_ROOT; };
 		113B22B32FD0000000272C1E /* ShutterButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShutterButton.swift; path = ../App/ShutterButton.swift; sourceTree = SOURCE_ROOT; };
@@ -109,6 +115,9 @@
 				111ECA0B2FBD47A100272C1E /* PhotoLibrarySaver.swift */,
 				112B11D02FCE000000272C1E /* AppRoot.swift */,
 				113B22B02FD0000000272C1E /* LiveIndicatorBadge.swift */,
+				113B22F12FD0000000272C1E /* TiltAimGuide.swift */,
+				113B22F32FD0000000272C1E /* TiltDialGuide.swift */,
+				113B22F52FD0000000272C1E /* TiltBubbleGuide.swift */,
 				113B22B12FD0000000272C1E /* CaptureTopBar.swift */,
 				113B22B22FD0000000272C1E /* CaptureModeToggle.swift */,
 				113B22B32FD0000000272C1E /* ShutterButton.swift */,
@@ -228,6 +237,9 @@
 				111ECA0C2FBD47A100272C1E /* PhotoLibrarySaver.swift in Sources */,
 				112B11C02FCE000000272C1E /* AppRoot.swift in Sources */,
 				113B22A02FD0000000272C1E /* LiveIndicatorBadge.swift in Sources */,
+				113B22F02FD0000000272C1E /* TiltAimGuide.swift in Sources */,
+				113B22F22FD0000000272C1E /* TiltDialGuide.swift in Sources */,
+				113B22F42FD0000000272C1E /* TiltBubbleGuide.swift in Sources */,
 				113B22A12FD0000000272C1E /* CaptureTopBar.swift in Sources */,
 				113B22A22FD0000000272C1E /* CaptureModeToggle.swift in Sources */,
 				113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */,

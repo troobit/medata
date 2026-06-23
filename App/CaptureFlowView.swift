@@ -11,7 +11,21 @@ import SwiftUI
 // Behaviour lives in `CaptureFlowModel`; this is composition only.
 // CaptureMode (Decision 35) is read via `@AppStorage` so any UI toggle change
 // flows here without coupling.
+// Three persistent tilt-guide designs are available to compare on device; flip
+// `tiltGuideStyle` to switch. All share the same `TiltAimGuideState` logic.
+//   • .gauge  — vertical bar, a puck tracking tilt against a centred band (attempt 1)
+//   • .dial   — quarter-circle protractor, a needle rotating into a wedge (attempt 2)
+//   • .bubble — 2-D attitude level; dot distance = tilt, direction = azimuth (attempt 3)
+enum TiltGuideStyle {
+    case gauge
+    case dial
+    case bubble
+}
+
 struct CaptureFlowView: View {
+    // Active tilt-guide design. Change this one line to compare the three.
+    static let tiltGuideStyle: TiltGuideStyle = .bubble
+
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
@@ -70,7 +84,13 @@ struct CaptureFlowView: View {
             // viewfinder"). Every other state shows the live preview; the chrome
             // VStack below renders unchanged over whichever layer is shown.
             if case .estimating(let result) = model.state {
-                CapturedFramesView(result: result).ignoresSafeArea()
+                // Blur + dim the frozen capture so the viewfinder reads as
+                // "processing" — the same pause the tilt guide shows, applied to
+                // the camera. The live AR feed is not rendered here at all.
+                CapturedFramesView(result: result)
+                    .blur(radius: 18)
+                    .overlay(Color.captureBackground.opacity(0.25))
+                    .ignoresSafeArea()
             } else {
                 ARPreviewView(engine: engine).ignoresSafeArea()
             }
@@ -109,6 +129,21 @@ struct CaptureFlowView: View {
                 }
                 Spacer()
                 bottomChrome
+            }
+
+            // Persistent graphical tilt guide, leading-aligned and vertically
+            // centred over the viewfinder. Unlike the badge — which auto-hides 5s
+            // after framing is in range (LiveIndicatorModel.scheduleHide) — this
+            // stays on screen the whole time the user is aiming, so the angle
+            // target never disappears mid-adjustment. Shown under the same
+            // condition as the badge; never takes hits so it can't block chrome.
+            if model.currentSnapshot != nil, !isEstimating, !isInitialising {
+                HStack {
+                    tiltGuide
+                        .padding(.leading, 16)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
             }
         }
         .sheet(item: refusalBinding) { refusal in
@@ -191,6 +226,29 @@ struct CaptureFlowView: View {
                 )
                 Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
             }
+        }
+    }
+
+    // Selected persistent tilt guide (see `tiltGuideStyle`). Both designs read
+    // the same live tilt and stage and share `TiltAimGuideState`.
+    @ViewBuilder
+    private var tiltGuide: some View {
+        switch Self.tiltGuideStyle {
+        case .gauge:
+            TiltAimGuide(
+                tiltDegrees: model.indicators.liveTiltDegrees,
+                awaitingOblique: model.awaitingObliqueView
+            )
+        case .dial:
+            TiltDialGuide(
+                tiltDegrees: model.indicators.liveTiltDegrees,
+                awaitingOblique: model.awaitingObliqueView
+            )
+        case .bubble:
+            TiltBubbleGuide(
+                tiltVector: model.indicators.liveTiltVector,
+                awaitingOblique: model.awaitingObliqueView
+            )
         }
     }
 

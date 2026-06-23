@@ -5,6 +5,9 @@ import Observation
 @MainActor
 final class LiveIndicatorModel {
     var liveTiltDegrees: Float = 0
+    // Two-axis tilt (degrees) for the bubble guide: length == liveTiltDegrees,
+    // direction == on-screen azimuth of the tilt. See LiveSampleMath.tiltVector.
+    var liveTiltVector: SIMD2<Float> = .zero
     var liveDistanceCm: Float?
     var liveLiDARCoveragePercent: Float = 0
     var visible: Bool = true

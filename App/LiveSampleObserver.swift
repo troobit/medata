@@ -17,6 +17,10 @@ final class LiveSampleObserver {
         var distanceCm: Float?
         var lidarCoveragePercent: Float
         var trackingIsNormal: Bool
+        // Screen-plane tilt: length == tiltDegrees, direction == the on-screen
+        // azimuth of the deviation from straight-down. Drives the 2-D bubble
+        // guide; defaulted so existing call sites are unaffected.
+        var tiltVector: SIMD2<Float> = .zero
     }
 
     private let model: CaptureFlowModel
@@ -51,7 +55,8 @@ final class LiveSampleObserver {
                 tiltDegrees: sample.tiltDegrees,
                 distanceCm: sample.distanceCm,
                 lidarCoveragePercent: sample.lidarCoveragePercent,
-                trackingIsNormal: sample.trackingIsNormal
+                trackingIsNormal: sample.trackingIsNormal,
+                tiltVector: sample.tiltVector
             )
         default:
             break
@@ -76,7 +81,8 @@ enum LiveSampleMath {
             tiltDegrees: tilt,
             distanceCm: distance,
             lidarCoveragePercent: coverage,
-            trackingIsNormal: frame.camera.trackingState == .normal
+            trackingIsNormal: frame.camera.trackingState == .normal,
+            tiltVector: tiltVector(worldFromCamera: frame.camera.transform)
         )
     }
 
@@ -92,6 +98,35 @@ enum LiveSampleMath {
         let down = simd_float3(0, -1, 0)
         let cosA = simd_clamp(simd_dot(forward, down), -1, 1)
         return acos(cosA) * 180 / .pi
+    }
+
+    // Two-axis tilt for the bubble guide. Decomposes "straight-down" into the
+    // camera's screen plane (right / up axes from the world transform). The
+    // returned vector's LENGTH equals `tiltDegrees` (so the azimuth-free in-range
+    // test is unchanged) and its DIRECTION is the PORTRAIT screen azimuth.
+    //
+    // ARKit's camera intrinsic frame is fixed to the device in LANDSCAPE: column 0
+    // (right) runs along the device's long edge, column 1 (up) along the short
+    // edge — regardless of how the UI is oriented. Our UI is PORTRAIT, so the
+    // sensor frame is rotated 90° from what the user sees. The meaningful capture
+    // axis is forward/back pitch (nadir 0° ↔ oblique 25°), which for a
+    // portrait-held phone is a rotation about the device's SHORT edge — i.e. it
+    // moves the camera's intrinsic RIGHT axis relative to gravity. So:
+    //   screen-y (vertical, forward/back) = down · cameraRight
+    //   screen-x (horizontal, left/right) = down · cameraUp
+    // (90° landscape→portrait rotation: x←up, y←right). Screen-y polarity (which
+    // way "tilt away" drives the dot) is trivial to flip after an on-device look;
+    // the magnitude / in-range gate is azimuth-free so the swap leaves it intact.
+    static func tiltVector(worldFromCamera m: simd_float4x4) -> SIMD2<Float> {
+        let right = simd_normalize(simd_float3(m.columns.0.x, m.columns.0.y, m.columns.0.z))
+        let up = simd_normalize(simd_float3(m.columns.1.x, m.columns.1.y, m.columns.1.z))
+        let down = simd_float3(0, -1, 0)
+        let sx = simd_dot(down, up)      // portrait horizontal (left/right roll)
+        let sy = simd_dot(down, right)   // portrait vertical (forward/back pitch)
+        let mag = (sx * sx + sy * sy).squareRoot()   // = sin(theta)
+        if mag < 1e-6 { return .zero }
+        let thetaDeg = asin(min(mag, 1)) * 180 / .pi
+        return SIMD2<Float>(sx / mag, sy / mag) * thetaDeg
     }
 
     // Median of a centre-crop of the depth map, returned in centimetres.
