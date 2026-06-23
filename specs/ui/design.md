@@ -2,7 +2,7 @@
 
 **Version:** 1.1
 **Date:** 2026-05-29
-**Status:** Draft (v1.1 — tab navigation, Meals tab, Settings tab; follows the Apple "Organize your features" tutorial pattern for the TabView root)
+**Status:** Done (v1.1 — all 60 tasks landed). The 2026-06-20 consistency pass (GAPS Group C) reconciled this document with the as-built code and the later UI decisions (15, 17, 18) / `research` §0: four-tier confidence pill, iOS 26.5 floor, `CapturePathDecider` behind the deferred `AUTO_CAPTURE_MODE` flag, retention/IFCDB removed, `eventsDidChange` / `events`-table persistence shape, and `SettingsKeys.captureMode` (not a bare literal). Superseded v1.0 task content is retained in `tasks.md` with inline markers for history.
 
 ## Overview
 
@@ -106,7 +106,10 @@ enum CaptureState: Equatable {
 
 // CaptureMode lives in MedataCore; bound to SettingsKeys.captureMode in UserDefaults.
 // Default = .double on first install. See research design §0.
-@AppStorage("captureMode") var captureMode: CaptureMode = .double
+// NOTE: use the named SettingsKeys.captureMode constant ("medata.captureMode"), NOT a
+// bare "captureMode" literal — the literal silently diverged from the reader's namespaced
+// key and caused the single-mode-toggle-key-mismatch bug (now fixed).
+@AppStorage(SettingsKeys.captureMode) var captureMode: CaptureMode = .double
 
 enum CaptureStage: Equatable { case nadir, oblique }
 enum PermissionSubject: Equatable { case camera, motion }
@@ -171,22 +174,22 @@ Transitions (exhaustive — every other input is a programmer error and triggers
 | `App/CaptureTopBar.swift` | **New (v1.1)** — minimal top-chrome view per `design-system/pages/photo-tab.md` §"Top chrome". Hosts the close (`xmark`) button and the flash/torch toggle. White SF Symbols in 40pt `captureChromeBG` capsules. |
 | `App/LiveIndicatorBadge.swift` | **New (v1.1)** — single consolidated indicator chip replacing the v1.0 three-corner `LiveIndicatorView`. Inline tilt / distance / LiDAR-coverage sub-elements. Auto-hide after 5 s in-range `.ready`, re-show on tap or out-of-range. Spec: `design-system/pages/photo-tab.md` §"Indicator badge". |
 | `App/LiveIndicatorView.swift` | **Superseded in v1.1** by `LiveIndicatorBadge.swift` per Req §20.4. The v1.0 three-corner layout is removed; the `LiveIndicatorModel` change-tracking surface is preserved and consumed by the new badge view. |
-| `App/CaptureModeToggle.swift` | **Modified (v1.1)** — capsule pill with an animated inner accent pill, replacing the v1.0 segmented control. Same `@AppStorage("captureMode")` binding. Spec: `design-system/pages/photo-tab.md` §"Capture-mode pill". |
+| `App/CaptureModeToggle.swift` | **Modified (v1.1)** — capsule pill with an animated inner accent pill, replacing the v1.0 segmented control. Same `@AppStorage(SettingsKeys.captureMode)` binding (the namespaced key — not a bare `"captureMode"` literal). Spec: `design-system/pages/photo-tab.md` §"Capture-mode pill". |
 | `App/ShutterButton.swift` | **New (v1.1)** — 76pt circular shutter extracted out of `CaptureFlowView`. Press feedback per Req §20.6. Spec: `design-system/pages/photo-tab.md` §"Shutter". |
-| `App/ConfidencePill.swift` | **New (v1.1)** — shared view rendering the three-tier confidence pill (icon + label + value) reused by `ResultView` and `MealRow`. SF Symbols added per the `color-not-only` rule. |
+| `App/ConfidencePill.swift` | **New (v1.1)** — shared view rendering the four-tier confidence pill (High / Moderate / Low / Very Low; icon + label + value) reused by `ResultView` and `MealRow`. Four-tier per Decision 17 (supersedes the three-tier Decision 8). SF Symbols added per the `color-not-only` rule. |
 | `App/ResultView.swift` | Rewrite from placeholder; consumes `MealRecord`. |
 | `App/SettingsView.swift` | Extend placeholder with "Export archive" button → `ShareSheet`. |
 | `App/ShareSheet.swift` | **New** — `UIViewControllerRepresentable` wrapping `UIActivityViewController`. |
 | `App/Colors.swift` | **New** — brand colour tokens. |
-| `App/CaptureModeToggle.swift` | **New** — `View` rendering the persistent `Single` / `Double` segmented control bound to `@AppStorage("captureMode")`. Disables `Single` when `!supportsLiDAR`. Disabled visually while `model.state` is anything other than `.ready` / `.refused` / `.permissionDenied` / `.trackingLost`. |
+| `App/CaptureModeToggle.swift` | **New** — `View` rendering the persistent `Single` / `Double` segmented control bound to `@AppStorage(SettingsKeys.captureMode)` (the namespaced key). Disables `Single` when `!supportsLiDAR`. Disabled visually while `model.state` is anything other than `.ready` / `.refused` / `.permissionDenied` / `.trackingLost`. |
 | `App/CaptureFlowModel.swift` | **New** — `@Observable @MainActor` state model + `CaptureFlowDelegate` conformance (no-op for `didUpdateTilt`/`didUpdateLiDARCoverage`; routes `didProduceEstimate` and `didDetectInterClassOcclusion`). Adds `tabSelectionChanged(to:)` method per Architecture §"Tab shell". |
 | `App/LiveIndicatorModel.swift` | **New** — child `@Observable` holding `liveTiltDegrees`, `liveDistanceCm`, `liveLiDARCoveragePercent`. Owned by `CaptureFlowModel`, passed to `LiveIndicatorView` only. |
 | `App/AppRoot.swift` | **New** (v1.1) — `TabView` owner per Architecture §"Tab shell". Owns `CaptureFlowModel` and `MealHistoryModel`. Replaces the v1.0 entry point where `App.swift` directly presented `CaptureFlowView`. |
 | `App/MealsTabView.swift` | **New** (v1.1) — Meals tab root: `NavigationStack` wrapping `MealListView` and a `.navigationDestination(for: MealRecord.self) { ResultView(record: $0, mode: .historyDetail) }`. |
 | `App/MealListView.swift` | **New** (v1.1) — `List` of `MealRow` over `model.meals` with `swipeActions(edge: .trailing)` providing Delete (Req §19.7), and an empty-state placeholder (Req §19.5). |
 | `App/MealRow.swift` | **New** (v1.1) — list-row view: thumbnail (resolved via `PHImageManager.requestImage(for:targetSize:contentMode:options:resultHandler:)` keyed on `record.photoAssetID`), timestamp, carbohydrate total, confidence pill (shared component reused from `ResultView`), and the yellow "Placeholder" chip when `record.segmenterSource == "dev_stub"` (Req §19.3). |
-| `App/MealHistoryModel.swift` | **New** (v1.1) — `@Observable @MainActor` model owning `meals: [MealRecord]`. Subscribes to `PersistenceStore.mealsDidChange: AsyncStream<Void>` (new — see below) to refresh within 500 ms of a new meal landing (Req §19.6). Loads initial state via `store.allMeals()` on first appearance. |
-| `MedataCore/Sources/Persistence/PersistenceStore.swift` | **Additive (v1.1)** — new methods `func allMeals() async throws -> [MealRecord]` (sorted by `capturedAt` desc), `func deleteMeal(id: UUID) async throws` (removes row + artefact directory; does NOT touch the `PHAsset`), and a `var mealsDidChange: AsyncStream<Void>` change-notification stream emitted on every `appendMeal` and `deleteMeal`. ~50 lines. The GRDB-backed conformer implements all three. |
+| `App/MealHistoryModel.swift` | **New** (v1.1) — `@Observable @MainActor` model owning `meals: [MealRecord]`. Subscribes to `PersistenceStore.eventsDidChange: AsyncStream<Void>` (new — see below) to refresh within 500 ms of a new meal landing (Req §19.6). Loads initial state via `store.allMeals()` on first appearance. |
+| `MedataCore/Sources/Persistence/PersistenceStore.swift` | **Additive (v1.1)** — new methods `func allMeals() async throws -> [MealRecord]` (reads `event_type = meal` rows from the `events` table, sorted by `createdAt` desc — see event-log-schema spec), `func deleteMeal(id: UUID) async throws` (removes the event row + artefact directory; does NOT touch the `PHAsset`), and a `var eventsDidChange: AsyncStream<Void>` change-notification stream emitted on every `save`, `deleteMeal`, and `updatePhotoAssetID`. The GRDB-backed conformer implements all three. |
 | `App/SettingsView.swift` | Extend placeholder with "Export archive" button → `ShareSheet`. v1.1: the previous in-capture-view navigation entry is removed; the view is reached only via the Settings tab (Req §11.1). |
 | `MeData/MeData.xcodeproj/project.pbxproj` | New files added to the `MeData` target. `Info.plist` keys: `NSCameraUsageDescription`, `NSMotionUsageDescription`, `NSPhotoLibraryUsageDescription` (for `PHImageManager` thumbnail fetches per Req §19.2), `UIRequiredDeviceCapabilities = [arkit]`, `UISupportedInterfaceOrientations = [UIInterfaceOrientationPortrait]`. |
 
@@ -203,14 +206,14 @@ Behavioural contracts not visible in signatures:
 - **Estimation is wrapped in a `Task` stored on the model** so the model's `cancelInFlight()` can be called from scene-phase hooks. The model writes `lastMeal` only on `Pipeline.estimate` *returning*. ⚠️ §8.3 caveat per Decision 12: MedataCore's `Pipeline.estimate` has no cooperative cancellation points; `Task.cancel()` from the UI does NOT actually interrupt the in-flight pipeline. The UI's contribution to §8.3 is limited to (a) ignoring the result if a cancellation was requested before the pipeline returns, and (b) showing the `.initialising` state on foreground. A `MealRecord` may still appear in the persisted store; correcting that requires the sibling Pipeline-cancellation spec.
 - **`databaseEdition` and `paletteVersion`** are read once at app launch and cached on the model. Sources: `FoodDatabase.currentEdition` and the bundled segmenter palette. Read via a small `AppEnvironment` helper instantiated in the model's initialiser.
 - **Live observation runs only while `state` is `.ready`.** When state enters `.capturing`, `.estimating`, `.showingResult`, `.refused`, `.permissionDenied`, or `.trackingLost`, the model cancels its `frames` iteration task. On return to `.ready`, a fresh iteration task is launched.
-- **`captureMode` is read at shutter-tap time, not derived.** The persistent segmented control is the single source of truth; there is no `CapturePathDecider` and no auto-derivation from LiDAR coverage. The previous floating capture-path hint and `.forcingTwoView` transient state are removed per research design §0.
+- **`captureMode` is read at shutter-tap time, not derived.** The persistent segmented control is the single source of truth; in v1 there is no active auto-derivation from LiDAR coverage. `App/CapturePathDecider.swift` still exists but is compiled out behind the deferred `#if AUTO_CAPTURE_MODE` flag (research Req 3.9 / Decision 35) and plays no part in the v1 flow. The previous floating capture-path hint and `.forcingTwoView` transient state are removed per research design §0 / Decision 35.
 - **`didDetectInterClassOcclusion` and the live-signal protocol methods (`didUpdateTilt`, `didUpdateLiDARCoverage`) are no-ops** in the v1 model (Decisions 9 and 11). The protocol conformance exists for forward compatibility.
 
 ### `CaptureModeToggle` — persistent segmented control
 
 ```swift
 struct CaptureModeToggle: View {
-    @AppStorage("captureMode") private var mode: CaptureMode = .double
+    @AppStorage(SettingsKeys.captureMode) private var mode: CaptureMode = .double   // namespaced key, not bare "captureMode"
     let supportsLiDAR: Bool
     let interactive: Bool   // false while .capturing/.estimating
 
@@ -258,9 +261,9 @@ Pushed onto `NavigationStack` via `.navigationDestination(for: MealRecord.self)`
 
 No per-class breakdown, no clinical macros (requirements §9.5, Decision 3).
 
-### `SettingsView` — extends placeholder
+### `SettingsView`
 
-The existing placeholder already binds retention + IFCDB toggles. New additions:
+The retention picker and IFCDB toggle were **removed** (research §0 / Decision 39, research task 74; photo lifecycle is delegated to the Photos library, CoFID + AFCD are always bundled). The live settings are the persistent `captureMode` toggle (Decision 35) plus:
 
 - **"Export archive" button** — calls into `PersistenceStore.exportArchive() async throws -> URL`, then presents `ShareSheet(items: [url])` via `.sheet(item:)`. `ShareSheet` is `UIViewControllerRepresentable` wrapping `UIActivityViewController(activityItems:applicationActivities:)`.
 
@@ -279,7 +282,7 @@ The existing placeholder already binds retention + IFCDB toggles. New additions:
     func start() async {
         meals = (try? await store.allMeals()) ?? []
         changeSubscription = Task { [weak self] in
-            guard let stream = self?.store.mealsDidChange else { return }
+            guard let stream = self?.store.eventsDidChange else { return }
             for await _ in stream {
                 self?.meals = (try? await self?.store.allMeals()) ?? []
             }
@@ -288,7 +291,7 @@ The existing placeholder already binds retention + IFCDB toggles. New additions:
 
     func delete(_ record: MealRecord) async {
         try? await store.deleteMeal(id: record.id)
-        // mealsDidChange will re-fire and refresh meals
+        // eventsDidChange will re-fire and refresh meals
     }
 }
 ```
@@ -354,26 +357,26 @@ AR-session interruption is consumed via the `interruptions: AsyncStream<Interrup
 
 ## Testing Strategy
 
-- **`CapturePathDecider`** — XCTest table: `[(supportsLiDAR, coverage, expectedPath)]` × five boundary rows.
+- **`CapturePathDecider`** (deferred — `#if AUTO_CAPTURE_MODE` only) — XCTest table: `[(supportsLiDAR, coverage, expectedPath)]` × five boundary rows. This covers the dormant auto-derivation logic preserved behind the compile flag (research Req 3.9 / Decision 35); it is **not** the v1 active path (the `captureMode` toggle is authoritative).
 - **`CaptureFlowModel` state transitions** — XCTest with a `MockCaptureSession` (returns canned `RawFrame` fixtures) and a `MockPipeline: PipelineEstimator` (programmable `Result<MealRecord, Error>`). Drive each transition row from the state-machine table; assert resulting state and rejection of illegal transitions (in debug builds via `assertionFailure` capture).
-- **Path-hint freeze rule** — XCTest: enter `.ready` with snapshot A, change `liveLiDARCoveragePercent` to flip the path, immediately fire shutter tap on the same MainActor tick; assert the `.capturing(.nadir, frozen:)` carries snapshot A, not the post-change one.
+- **Gating-snapshot freeze rule** — XCTest: enter `.ready` with snapshot A, change a live gating value, immediately fire shutter tap on the same MainActor tick; assert the `.capturing(.nadir, frozen:)` carries snapshot A, not the post-change one. (The frozen value is the gating snapshot — `captureMode` is read directly from the toggle at tap time, not derived from coverage.)
 - **`LiveSampleObserver` distance + coverage maths** — unit tests with synthesised `CVPixelBuffer` depth/confidence pairs (existing fixtures in `CaptureKitTests`); assert centre-crop median and `≥ τ_conf` count.
 - **`ARKitCaptureEngine.frames` and `.interruptions` streams** — `CaptureKitTests` additions: assert subscriber receives latest-only frame on slow consumption (`BufferingPolicy.bufferingNewest(1)`); assert interruption stream yields `.began` and `.ended` in order from mocked `ARSession` delegate calls; assert cancelling iteration unsubscribes without leaking continuations.
 - **Delegate-reassignment guard in `ARPreviewView`** — XCTest: after `ARView` is created with `engine.arSession`, assert `engine.session.delegate === engine` immediately and after a forced `updateUIView` invocation. Both `makeUIView` and `updateUIView` re-assert the delegate (RealityKit may install itself at either lifecycle point).
 - **Rapid shutter taps (§7.4 debounce)** — XCTest: model in `.ready`, fire shutter tap, then fire a second tap before the first transition completes; assert the second tap is no-op (state observation count ≤ 1).
-- **Confidence pill thresholds** — XCTest table: σ_meal ∈ {0.0, 0.59, 0.60, 0.74, 0.75, 1.0} → expected pill label (Low / Low / Moderate / Moderate / High / High).
+- **Confidence pill thresholds** (four-tier per Decision 17) — XCTest table: σ_meal ∈ {0.0, 0.19, 0.20, 0.59, 0.60, 0.74, 0.75, 1.0} → expected pill label (Very Low / Very Low / Low / Low / Moderate / Moderate / High / High); retake prompt fires only for σ < 0.20.
 - **AR interruption recovery (§16.1)** — XCTest with mocked engine: emit `.began` on the interruption stream → assert `state = .trackingLost`; emit `.ended` → assert `engine.start()` re-called and `state = .initialising`.
 - **Permission-denied state (§13.3)** — XCTest with stubbed `AVCaptureDevice.authorizationStatus(for:)` returning `.denied`; assert model initialises to `.permissionDenied(.camera)`.
 - **Refusal banner** — XCUITest: trip `EstimationFailure.noScaleAvailable` via a fixture, assert banner appears with Irish-English message, "Try again" returns to `.capturing` at the right stage.
 - **Backgrounding** (requirements §8.3, best-effort per Decision 12) — XCUITest: tap shutter, background app via `XCUIDevice.shared.press(.home)`, foreground; assert the UI is in `.initialising`. (Note: with no pipeline cancellation, a `MealRecord` may exist in the in-memory store; this test asserts UI state only.)
-- **End-to-end on-device** — manual; not automated in this spec. Performance assertions (requirements §14) are covered by research-spec tasks 65 / 66's `XCTClockMetric` harness on the iPhone 13 Pro test device.
+- **End-to-end on-device** — manual; not automated in this spec. Performance is covered by the research spec's single end-to-end **30 s soft check** (research task 75 / Req 16.1) on the iPhone 13 Pro Max test device; the per-stage `XCTClockMetric` P95 assertions were removed (research §0 / Decision 40).
 - **Property-based tests** — not appropriate here: the state machine has a finite, small transition graph (better covered by exhaustive example tests); no parsers, serialisers, or invariants that benefit from PBT.
 
 **v1.1 additions:**
 
 - **`AppRoot` tab persistence (Req §18.6)** — XCUITest: launch app, switch to Meals tab, kill app, relaunch; assert Meals tab is selected. Reset `@AppStorage("selectedTab")` between tests via launch argument.
 - **Tab-switch capture lifecycle (Req §1.7, §18.7)** — XCTest: model in `.ready`, switch tab away → assert `.initialising` on Photo re-entry and `engine.release()` was called within 200 ms; model in `.estimating`, switch away → assert `Pipeline.estimate` is NOT cancelled and the resulting `MealRecord` lands; on Photo re-entry the state SHALL be `.showingResult(record)`.
-- **`MealHistoryModel` change-stream refresh (Req §19.6)** — XCTest with a fake `PersistenceStore` exposing a controllable `mealsDidChange` continuation; emit a tick, assert `model.meals` reloads within 500 ms.
+- **`MealHistoryModel` change-stream refresh (Req §19.6)** — XCTest with a fake `PersistenceStore` exposing a controllable `eventsDidChange` continuation; emit a tick, assert `model.meals` reloads within 500 ms.
 - **`MealRow` placeholder chip (Req §19.3)** — XCTest: render `MealRow` with `segmenterSource = "dev_stub"` and `segmenterSource = "coreml_v0.1"`; assert chip presence/absence via accessibility-identifier visibility.
 - **Meal delete (Req §19.7)** — XCTest: seed two meals, call `MealHistoryModel.delete(meals[0])`; assert `store.allMeals()` returns one row, the corresponding artefact directory is removed, and `PHPhotoLibrary` is NOT touched (mock `PHPhotoLibrary` to assert no `performChanges` call).
 - **Meals empty state (Req §19.5)** — XCUITest: launch on a fresh container, switch to Meals tab, assert the empty-state copy and fork-knife icon are visible; no list rows present.

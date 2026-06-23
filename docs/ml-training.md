@@ -7,10 +7,10 @@
 This document is the end-to-end recipe for producing the two model artefacts that
 the iOS app depends on at runtime:
 
-1. **The segmenter** — a 27-class semantic segmentation network (`segmenter.mlpackage`)
-   bundled into the iOS binary, run on the Apple Neural Engine.
+1. **The segmenter** — a 27-class semantic segmentation network (`food_segmenter.mlpackage`,
+   the filename the `PipelineFactory` loader expects) bundled into the iOS binary, run on the Apple Neural Engine.
 2. **The β_c table** — a per-class bulk-correction factor baked into
-   `food_db.sqlite`, applied to volume estimates before macro calculation.
+   `cofid_db.sqlite`, applied to volume estimates before macro calculation.
 
 Both are produced offline; neither trains, fine-tunes, or recalibrates on-device.
 
@@ -111,7 +111,7 @@ fixture directory.
 | Segmenter weights ≤ 10 MB (FP16) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
 | Segmenter inference ≤ 250 ms / view on iPhone 13 Pro Max (v1 hardware floor) | Req 8.3 | XCTest with `XCTClockMetric` |
 | Segmenter resident on the Apple Neural Engine | Req 16.5 | Xcode → Core ML performance report (manual, post-bundle) |
-| End-to-end MAPE < 20% AND MAE ≤ 10 g | Req 21.3 | `HarnessCLI accuracy` |
+| End-to-end MAPE < 20% AND MAE ≤ 25 g | Req 21.3 | `HarnessCLI accuracy` |
 | ≥ 30 calibration meals per class for `calibrated` β_c status | Req 11.7 | `HarnessCLI calibrate` |
 
 A class that misses the 30-meal bar falls back to a pooled β_c
@@ -141,7 +141,7 @@ Two sources of truth, kept in sync by hand because they're tiny:
 
 | File | Role |
 | --- | --- |
-| [tools/food_db/generate.py:78-104](../tools/food_db/generate.py#L78-L104) | The 24 food class IDs + names + density / macro / β rows that get baked into `food_db.sqlite`. |
+| [tools/food_db/generate.py:78-104](../tools/food_db/generate.py#L78-L104) | The 24 food class IDs + names + density / macro / β rows that get baked into `cofid_db.sqlite`. |
 | [MedataCore/Sources/Segmentation/ClassPalette.swift:41-53](../MedataCore/Sources/Segmentation/ClassPalette.swift#L41-L53) | Swift `ClassPalette.v1Standard` — the runtime palette consumed by `CoreMLSegmenter`. Index order must match `FOOD_DATA`. |
 
 When training, use the Python list — that's the one that maps onto the SQLite
@@ -149,7 +149,7 @@ DB and the per-class β_c calibration target.
 
 ### Palette ↔ DB edition lock
 
-The palette and `food_db.sqlite` are released as a **versioned pair**
+The palette and `cofid_db.sqlite` are released as a **versioned pair**
 (Req 11.4). The DB's `meta.palette_version` (`v1`) must match the Swift
 `ClassPalette.version` (`v1`). Re-derivation across palette versions requires
 an explicit class-mapping file ([design §6.12](../specs/research/design.md#L1244));

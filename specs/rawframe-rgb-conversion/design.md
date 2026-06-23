@@ -161,7 +161,7 @@ Covers [Req 6.1, 6.2, 6.4, 6.5](requirements.md#6-honest-error-surfacing-for-pip
 
 ### Performance harness coverage
 
-Req 4.4 routes performance regressions to the existing Req 16.7 perf harness. No per-call wall-clock assertion is added to the unit suite (per D4). The harness already runs the capture stage end-to-end; once the real Pipeline lands (Blocker 1), conversion cost shows up under shutter-to-result latency.
+Req 4.4 routes performance regressions to the research spec's end-to-end check (Req 16.1's soft 30 s target, research task 75 — there is no Req 16.7; the per-stage perf harness was removed in research §0 / Decision 40). No per-call wall-clock assertion is added to the unit suite (per D4). The end-to-end path already runs the capture stage; once the real Pipeline lands (Blocker 1), conversion cost shows up under shutter-to-result latency.
 
 ## Risks
 

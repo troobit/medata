@@ -152,7 +152,7 @@ flowchart TD
 | `MetricScale` | Resolve mm-per-pixel, scale uncertainty σ_s | Pure resolver function |
 | `Segmentation` | Core ML wrapper, pre/post-process, σ_seg | `SegmenterInferenceEngine` protocol |
 | `Volume` | Metal voxel-carve (two-view) / height-field (single-view) | `VoxelCarveEstimator`, `HeightFieldEstimator` |
-| `Foods` | Food-composition DB (CoFID + IFCDB overlay) | `FoodDatabase` protocol |
+| `Foods` | Food-composition DB (CoFID + AFCD) | `FoodDatabase` protocol |
 | `Macros` | mass & carbs per class | Pure `Macros.compute(...)` |
 | `Confidence` | σ_meal combination | Pure `Confidence.combine(...)` |
 | `Persistence` | SQLite meal records, artefacts, retention, export | `PersistenceStore` |
@@ -338,9 +338,9 @@ run via `BackgroundTasks` with a foreground fallback that fires if the last swee
 than 24 h. Export zips the DB + artefacts via ZIPFoundation
 (`PersistenceStore.exportArchive()`).
 
-The food database ships bundled: CoFID 2024 base (`food_db.sqlite`) with an IFCDB overlay
-(`ifcdb_overlay.sqlite`) ATTACHed and merged via `COALESCE`. See
-`docs/agent-notes/persistence.md` for GRDB specifics.
+The food database ships bundled: CoFID 2024 base (`cofid_db.sqlite`) with the AFCD database
+(`afcd_db.sqlite`) ATTACHed and merged via `COALESCE` (CoFID wins for shared classes; IFCDB
+overlay removed per Decision 39). See `docs/agent-notes/persistence.md` for GRDB specifics.
 
 ---
 
@@ -390,7 +390,7 @@ under `specs/bugfixes/` — go through `specs/OVERVIEW.md`.
 | Change the single-vs-two-view rule | `Pipeline/CapturePathDispatch.swift` **and** `App/CapturePathDecider.swift` |
 | Add/modify a persisted field | edit the `.proto` in `PortableContracts/Schemas/`, regenerate, update `Persistence` |
 | Change a volume algorithm | `Volume/` (Metal kernels in `Volume/Kernels/`) + `specs/research/design.md` §6.6/§6.7 |
-| Retrain/replace the segmenter | `tools/segmenter/export.py` → `segmenter.mlpackage` |
+| Retrain/replace the segmenter | `tools/segmenter/export.py` → `food_segmenter.mlpackage` (filename the `PipelineFactory` loader expects) |
 | Regenerate the food DB | `tools/food_db/generate.py` |
 | Change confidence thresholds | `Confidence/` + `App/ResultView.swift` (pill labels) |
 | Add an app-facing core type | re-export it from `Pipeline.swift` (`@_exported import`) |

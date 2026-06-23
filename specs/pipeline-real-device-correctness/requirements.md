@@ -2,8 +2,8 @@
 
 **Version:** 0.3
 **Date:** 2026-06-13
-**Status:** Draft (review-1 + design-phase erratum applied; Req 4.5 corrected)
-**Branch:** (to be created)
+**Status:** Implemented (tasks 1–16 landed; see `design.md` status note). Caveat: the Req 6.1/6.2 baseline-delta numbers were never formally recorded — budgets were sanity-checked on device, not measured against a pre-spec baseline. Two-view-path end-to-end on-device verification remains open (GAPS Group D).
+**Branch:** mvp-refine
 
 ## Introduction
 

@@ -6,6 +6,19 @@ references:
 ---
 # UI — Implementation Tasks
 
+> **Reading note — v1.0 tasks superseded by v1.1.** This list is layered: the **v1.1 sections**
+> ("Tab navigation + Meals tab", "Visual design", "Tilt-tolerant capture") supersede earlier v1.0 task
+> content where they conflict. The authoritative current behaviour is the **latest** decision (UI
+> decision log Decisions 15–20) + `research/requirements.md`. Specifically, against the as-built code:
+> - **Confidence pill is four-tier** (High / Moderate / Low / Very Low, retake at σ < 0.20) per Decision 17
+>   / tasks 52–60 — the **three-tier** thresholds (σ < 0.60 prompt, Low/Moderate/High at 0.60/0.75) in the
+>   v1.0 tasks (5, 20, 43) are superseded.
+> - **No active auto path-selection.** `CapturePathDecider` (tasks 8–9) exists only behind the deferred
+>   `#if AUTO_CAPTURE_MODE` flag (research Req 3.9 / Decision 35); the `captureMode` toggle is authoritative.
+> - **`.forcingTwoView` was removed** from `CaptureState` (Decision 35) — `CaptureState` has 8 cases.
+> - **OS floor is iOS 26.5** (research Req 1.2 / §0; UI Decision 4's iOS-17 baseline is superseded).
+> - **Retention picker + IFCDB toggle removed** (research §0 / Decision 39).
+
 ## SPM prerequisites
 
 - [x] 1. Write tests for ARKitCaptureEngine streams and interruption observer methods <!-- id:7pbwp43 -->
@@ -66,7 +79,7 @@ references:
   - Requirements: [4.1](requirements.md#4.1), [7.2](requirements.md#7.2)
 
 - [x] 7. Add App/CaptureState.swift enum and PermissionSubject + CaptureStage sub-enums <!-- id:7pbwp49 -->
-  - Define all 9 cases of CaptureState per design.md (initialising, permissionDenied(.camera|.motion), trackingLost, ready, forcingTwoView, capturing(stage, frozen), estimating(captureResult), showingResult(MealRecord), refused(EstimationFailure, retryStage))
+  - Define the 8 cases of CaptureState per design.md (initialising, permissionDenied(.camera|.motion), trackingLost, ready, capturing(stage, frozen), estimating(captureResult), showingResult(MealRecord), refused(EstimationFailure, retryStage)). **Note:** the original `.forcingTwoView` case was removed per Decision 35 (the `captureMode` toggle is authoritative; no auto-derivation), leaving 8 cases.
   - Conform to Equatable
   - Define PermissionSubject and CaptureStage sub-enums
   - Exempt from TDD — type definitions
@@ -74,13 +87,15 @@ references:
   - Stream: 1
   - Requirements: [1.6](requirements.md#1.6), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [13.3](requirements.md#13.3), [16.1](requirements.md#16.1)
 
-- [x] 8. Write tests for CapturePathDecider boundary table <!-- id:7pbwp4a -->
+- [x] 8. Write tests for CapturePathDecider boundary table (deferred `AUTO_CAPTURE_MODE` path) <!-- id:7pbwp4a -->
+  - **Note:** `CapturePathDecider` is compiled out behind `#if AUTO_CAPTURE_MODE` (research Req 3.9 / Decision 35) and is not the v1 active path — the `captureMode` toggle is authoritative. These tests cover the dormant deferred logic.
   - MeData/Tests/CapturePathDeciderTests.swift
   - Table rows: (supportsLiDAR: false, coverage: 100, expected: .twoViewSfs), (true, 0, .twoViewSfs), (true, 79.99, .twoViewSfs), (true, 80, .singleViewLidar), (true, 100, .singleViewLidar)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1)
 
-- [x] 9. Implement App/CapturePathDecider.swift <!-- id:7pbwp4b -->
+- [x] 9. Implement App/CapturePathDecider.swift (behind `#if AUTO_CAPTURE_MODE`) <!-- id:7pbwp4b -->
+  - The whole file is wrapped in `#if AUTO_CAPTURE_MODE` — dormant in v1 (research Req 3.9 / Decision 35).
   - enum CapturePathDecider { static func decide(supportsLiDAR: Bool, latestCoveragePercent: Float) -> CapturePath { supportsLiDAR && latestCoveragePercent >= 80 ? .singleViewLidar : .twoViewSfs } }
   - Make the tests from task 8 pass
   - Blocked-by: 7pbwp4a (Write tests for CapturePathDecider boundary table)
@@ -135,7 +150,7 @@ references:
   - Assert tilt from frame.camera.transform gravity-aligned column
   - Assert distance = median of centre-crop depth in cm; nil when sceneDepth absent
   - Assert LiDAR coverage = fraction of pixels with confidence >= τ_conf=0.66, ×100
-  - Assert write-gating: while CaptureFlowModel.state is not .ready or .forcingTwoView, frame writes are dropped (no flicker)
+  - Assert write-gating: while CaptureFlowModel.state is not .ready, frame writes are dropped (no flicker) (`.forcingTwoView` removed per Decision 35)
   - Blocked-by: 7pbwp44 (Implement ARKitCaptureEngine accessors arSession, frames, interruptions plus ARSessionObserver interruption methods), 7pbwp4c (Add App/LiveIndicatorModel.swift child @Observable)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [4.1](requirements.md#4.1)
@@ -143,7 +158,7 @@ references:
 - [x] 15. Implement App/LiveSampleObserver.swift <!-- id:7pbwp4h -->
   - @MainActor final class LiveSampleObserver
   - Iterates engine.frames AsyncStream
-  - Writes to LiveIndicatorModel only when CaptureFlowModel.state is .ready or .forcingTwoView
+  - Writes to LiveIndicatorModel only when CaptureFlowModel.state is .ready (`.forcingTwoView` removed per Decision 35)
   - Started/cancelled by CaptureFlowModel based on state observation
   - Make the tests from task 14 pass
   - Blocked-by: 7pbwp4g (Write tests for LiveSampleObserver per-frame computation and write-gating)
@@ -188,6 +203,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [4.1](requirements.md#4.1)
 
 - [x] 20. Write tests for ResultView confidence pill thresholds <!-- id:7pbwp4m -->
+  - **Superseded by tasks 58 & 60** (Decision 17): the pill is now four-tier and the retake prompt fires at σ < 0.20, not σ < 0.60. The three-tier thresholds below are the original v1.0 content.
   - MeData/Tests/ResultViewTests.swift
   - Table over σ_meal ∈ {0.0, 0.59, 0.60, 0.74, 0.75, 1.0} → expected pill label (Low / Low / Moderate / Moderate / High / High)
   - Assert uncertain-prompt visibility when σ < 0.60
@@ -197,9 +213,10 @@ references:
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.5](requirements.md#9.5)
 
 - [x] 21. Rewrite App/ResultView.swift <!-- id:7pbwp4n -->
+  - **Superseded by tasks 58 & 60** (Decision 17): four-tier pill; retake prompt at σ < 0.20.
   - Display total carbs in grams rounded to nearest 1g (Int(record.macros.totalCarbsG.rounded()))
-  - Three-state confidence pill keyed off record.confidence.sigmaMeal
-  - Uncertain-estimate prompt with Retake control when σ < 0.60
+  - Three-state confidence pill keyed off record.confidence.sigmaMeal *(now four-tier — task 58)*
+  - Uncertain-estimate prompt with Retake control when σ < 0.60 *(now σ < 0.20 — task 60)*
   - New-capture control that pops the result view
   - No per-class breakdown, no clinical macros
   - Make the tests from task 20 pass
@@ -208,7 +225,7 @@ references:
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [12.1](requirements.md#12.1)
 
 - [x] 22. Extend App/SettingsView.swift with Export archive control <!-- id:7pbwp4o -->
-  - Existing placeholder keeps the retention-period picker and IFCDB toggle (already wired)
+  - **Note:** the retention-period picker and IFCDB toggle were since **removed** (research §0 / Decision 39, research task 74). The live settings are the `captureMode` toggle (Decision 35) plus the Export archive control below.
   - Add Export archive button that calls PersistenceStore.exportArchive() async throws -> URL
   - Present the produced file via .sheet(item:) hosting ShareSheet
   - Exempt from TDD — UI plumbing; archive functionality covered by Persistence tests in research spec
@@ -284,26 +301,26 @@ references:
 
 ## v1.1 — Tab navigation + Meals tab
 
-- [x] 29. Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange) <!-- id:7pbwp4v -->
-  - `allMeals()` returns rows sorted by `capturedAt` desc, including the new `segmenter_source` column from research task 82.
-  - `deleteMeal(id:)` removes the SQLite row, removes the per-meal artefact directory, and DOES NOT call any `PHPhotoLibrary` API.
-  - `mealsDidChange` yields a tick after `appendMeal` and after `deleteMeal`. Two subscribers both receive the tick (per-subscriber stream).
+- [x] 29. Write tests for additive PersistenceStore methods (allMeals, deleteMeal, eventsDidChange) <!-- id:7pbwp4v -->
+  - `allMeals()` returns `event_type = meal` rows from the `events` table sorted by `createdAt` desc; `segmenterSource` (research task 82) is read from the `MealRecord` inside the event `metadata` JSON, not a SQL column (see event-log-schema spec).
+  - `deleteMeal(id:)` removes the event row, removes the per-meal artefact directory, and DOES NOT call any `PHPhotoLibrary` API.
+  - `eventsDidChange` yields a tick after `save` and after `deleteMeal`. Two subscribers both receive the tick (per-subscriber stream).
   - Mock the artefact-directory FileManager calls; use an in-memory GRDB queue.
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
-- [x] 30. Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore <!-- id:7pbwp4w -->
+- [x] 30. Implement PersistenceStore.allMeals / deleteMeal / eventsDidChange in GRDBPersistenceStore <!-- id:7pbwp4w -->
   - Add three methods to the `PersistenceStore` protocol and implement them on `GRDBPersistenceStore`.
-  - `mealsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
+  - `eventsDidChange` uses per-subscriber `AsyncStream<Void>` with `BufferingPolicy.bufferingNewest(1)`; emit on every successful write.
   - Artefact directory cleanup is best-effort: log and continue if a file is already gone.
   - Decision: 15
-  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, mealsDidChange)), methods, methods, methods, methods, methods, methods, methods
+  - Blocked-by: 7pbwp4v (Write tests for additive PersistenceStore methods (allMeals, deleteMeal, eventsDidChange))
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
 - [x] 31. Write tests for MealHistoryModel <!-- id:7pbwp4x -->
-  - Initial `start()` loads `meals` from a fake store; subsequent `mealsDidChange` tick triggers a reload.
-  - `delete(_:)` calls `store.deleteMeal(id:)`; the resulting `mealsDidChange` tick refreshes `meals`.
+  - Initial `start()` loads `meals` from a fake store; subsequent `eventsDidChange` tick triggers a reload.
+  - `delete(_:)` calls `store.deleteMeal(id:)`; the resulting `eventsDidChange` tick refreshes `meals`.
   - Cancelling the model's subscription task removes the subscription without leaking the continuation.
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
@@ -311,13 +328,13 @@ references:
 - [x] 32. Implement MealHistoryModel <!-- id:7pbwp4y -->
   - `@Observable @MainActor final class MealHistoryModel` in `App/MealHistoryModel.swift`. See `specs/ui/design.md` §"Meals tab" for the sketch.
   - Subscription `Task` cancelled in `deinit` (use a `cancellable` reference).
-  - Blocked-by: 7pbwp4w (Implement PersistenceStore.allMeals / deleteMeal / mealsDidChange in GRDBPersistenceStore), 7pbwp4x (Write tests for MealHistoryModel)
+  - Blocked-by: 7pbwp4w (Implement PersistenceStore.allMeals / deleteMeal / eventsDidChange in GRDBPersistenceStore), 7pbwp4x (Write tests for MealHistoryModel)
   - Stream: 2
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6)
 
 - [x] 33. Write tests for MealRow rendering <!-- id:7pbwp4z -->
   - Placeholder chip is present when `record.segmenterSource == "dev_stub"` and absent otherwise (assert via accessibility identifier visibility).
-  - Confidence pill matches `ResultView`'s three-tier thresholds (reuse the `ConfidencePill` component extracted in task 36).
+  - Confidence pill matches `ResultView`'s confidence thresholds (four-tier per Decision 17 / task 58; reuse the `ConfidencePill` component extracted in task 36).
   - Photo-denied fallback renders the `photo.fill` SF Symbol when `PHImageManager.requestImage` returns nil.
   - Timestamp formatter matches `dd MMM yyyy, HH:mm` in `en_IE` locale.
   - Stream: 2
@@ -381,7 +398,7 @@ references:
   - Tab persistence: launch, switch to Meals, terminate, relaunch — Meals is selected.
   - Re-tap pop-to-root: Meals → tap row → detail visible → re-tap Meals tab item → list visible.
   - Empty state: launch on a fresh container → switch to Meals → empty-state copy and icon visible.
-  - New-meal-within-500-ms: with the UITestHarness, drive a successful capture from the Photo tab; while on Meals, assert the new row appears within 500 ms of `mealsDidChange` emitting.
+  - New-meal-within-500-ms: with the UITestHarness, drive a successful capture from the Photo tab; while on Meals, assert the new row appears within 500 ms of `eventsDidChange` emitting.
   - Each XCUITest resets `@AppStorage("selectedTab")` via a launch argument.
   - Blocked-by: 7pbwp56 (Implement AppRoot TabView + wire from App.swift; add NSPhotoLibraryUsageDescription)
   - Stream: 2
@@ -398,6 +415,7 @@ references:
   - Requirements: [20.1](requirements.md#20.1), [20.2](requirements.md#20.2)
 
 - [x] 43. Implement ConfidencePill shared view (icon + label + value) <!-- id:7pbwp59 -->
+  - **Extended to four tiers by task 58** (Decision 17): a `.veryLow` tier (σ < 0.20) was added below "Low". The three-tier rendering below is the original v1.0 content.
   - Extract `App/ConfidencePill.swift` consumed by `ResultView` and `MealRow`.
   - Three-tier rendering: `checkmark.seal.fill` + "High" for σ ≥ 0.75; `exclamationmark.triangle.fill` + "Moderate" for 0.60 ≤ σ < 0.75; `xmark.octagon.fill` + "Low" for σ < 0.60. Icon satisfies the `color-not-only` accessibility rule.
   - Body: pill (capsule shape), 28pt tall, `padding(.horizontal, 12)`, semibold body text.
@@ -436,7 +454,7 @@ references:
 - [x] 47. Rewrite CaptureModeToggle as capsule pill <!-- id:7pbwp5d -->
   - Replace the v1.0 segmented control rendering with the pill design per `design-system/pages/photo-tab.md` §"Capture-mode pill".
   - Animated inner accent pill slides between Single and Double positions with spring `.bouncy(duration: 0.2)`.
-  - Same `@AppStorage("captureMode")` binding; no model changes.
+  - Same `@AppStorage(SettingsKeys.captureMode)` binding (the namespaced key, not a bare `"captureMode"` literal — see single-mode-toggle-key-mismatch bugfix); no model changes.
   - Disabled state for "Single" when `!supportsLiDAR`: label opacity 0.4, tap emits the existing Irish-English no-LiDAR refusal.
   - Tests: tap toggles UserDefaults; disabled-Single tap emits refusal; reduced-motion replaces the slide with a crossfade.
   - Stream: 2

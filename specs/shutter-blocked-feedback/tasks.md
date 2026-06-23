@@ -33,7 +33,7 @@ references:
   - In `App/CaptureFlowView.swift:85`, change `ShutterButton(state: shutterState) { model.shutter() }` to also pass `onBlockedTap: { model.shutterBlockedTapped() }`.
   - Build and run on the attached device.
   - Verify on a tap of the **disabled** shutter: (a) warning haptic is felt; (b) `LiveIndicatorBadge` re-reveals if previously auto-hidden; (c) exactly one `event=blocked` line appears in Console.app under `subsystem == "ie.medata.app"` and category `"Shutter"` containing all required fields.
-  - Confirm the diagnostic identifies which gate is failing (e.g. `tiltInRange=false`, or `distanceCm=…` outside 25–50 cm).
+  - Confirm the diagnostic identifies which gate is failing (e.g. `distanceCm=…` outside 25–50 cm, or — on the oblique stage — tilt outside the ±15°-around-25° cap). Note: `tiltInRange` is logged but the **nadir** tilt does not gate the shutter (research Decision 43 / UI Decision 18), so a nadir `tiltInRange=false` with `canShutter=true` is expected, not a bug.
   - Confirm taps during `.capturing` produce no haptic and no log entry.
   - Update `MeData/Tests/CaptureFlowModelTabSelectionTests.swift` only if an existing test broke from the new wiring; otherwise leave unchanged.
   - Blocked-by: f4inr0n (LiveIndicatorBadge visibility and auto-hide policy live on LiveIndicatorModel), f4inr0o (ShutterButton routes disabled taps to a callback with haptic and accessibility trait), f4inr0p (CaptureFlowModel emits gating diagnostic on blocked + fired + pipeline-stage boundaries)
@@ -42,7 +42,7 @@ references:
   - Goal: confirm that when gates ARE satisfied, the dev-stub baseline estimation (`Pipeline.makeForDevice` under `DEV_STUB_SEGMENTER`, per `App/App.swift:41`) completes end-to-end and the `ResultView` renders for both `CaptureMode.single` (if LiDAR available) and `CaptureMode.double`.
   - Pre-conditions: tasks 1–3 landed; app built and running on the attached device.
   - In Console.app, subscribe with predicate `subsystem == "ie.medata.app" && category == "Shutter"`.
-  - Drive the happy path: hold the device level (tilt within ±5°) and at a working distance (LiDAR-equipped: 25–50 cm; non-LiDAR: ~30–40 cm), wait for the indicator badge to go green and the shutter to enable, then tap.
+  - Drive the happy path: at a working distance (LiDAR-equipped: 25–50 cm; non-LiDAR: ~30–40 cm), wait for the indicator badge to go green and the shutter to enable, then tap. The **nadir** shutter enables on distance + tracking (tilt is not a gate — research Decision 43); hold the device reasonably level only to keep σ_tilt high for a good estimate. For the **oblique** capture (Double mode), aim ~25° from vertical so the shutter is inside the ±15° oblique cap.
   - Expected log trail in order: `event=fired` → `event=capture.start stage=nadir` → `event=capture.end success=true` → (Double mode only: a second `event=fired`/`capture.*` pair for `stage=oblique` after the second tap) → `event=estimate.start` → `event=estimate.end success=true mealId=… capturePath=…`.
   - Expected UI: navigation pushes to `ResultView` showing total carbs and a confidence pill.
   - If `event=estimate.end success=false` appears with an `EstimationFailure` case, capture the case name (e.g. `noScaleAvailable`, `coverageInsufficient`) — that is the **actionable diagnostic** the user wanted. Open a follow-up Transit bug with the captured log trail; do NOT attempt to fix the failure in this smolspec.

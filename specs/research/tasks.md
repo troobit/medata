@@ -6,6 +6,19 @@ references:
 ---
 # Research — Implementation Tasks
 
+> **What `[x]` means here.** A checked box means the **code / scaffolding for that task landed and its
+> unit tests pass** — it does **not** mean the Phase-3 data deliverables exist. Phase 1 (RUNNING DEVICE)
+> is the current status: the full pipeline runs on device with the **dev-stub segmenter**. The following
+> checked tasks have a Phase-3 deliverable that is **not yet produced** because it depends on prerequisites
+> the agent cannot satisfy (trained model, gravimetric dataset):
+> - **Tasks 22–23** — the `CoreMLSegmenter` wrapper and the `export.py` pipeline are written, but **no
+>   trained `food_segmenter.mlpackage` exists**; Release builds throw `segmenterModelMissing` until Phase 3
+>   bundles it (see task 80). Inference is exercised only via `StubInferenceEngine`.
+> - **Tasks 58–65** — the β-calibration and accuracy/mIoU harness are restored under `#if HARNESS_ENABLED`,
+>   but their outputs (calibrated β_c, measured MAPE/MAE/mIoU) **have not been produced**; they require the
+>   gravimetric meal set + held-out segmenter test set (see `prerequisites.md`, the single largest project risk).
+> The numeric-accuracy (Req 21.3) and mIoU (Req 8.9) bars apply to **Phase 3 only**.
+
 ## Foundation
 
 - [x] 1. Create Swift Package + Xcode project skeleton <!-- id:0f06zz7 -->
@@ -98,7 +111,7 @@ references:
   - Synthesise plane + outliers; assert recovered normal within 1° of gravity, distance within 2 mm.
   - Test deterministic seed from `xxh64(depth.bytes)` — two runs on same fixture produce identical inlier set.
   - Test `lidarFitDegenerate` refusal when inlier covariance is singular.
-  - Test `lidarFitResidualTooHigh` refusal at residual > 8 mm.
+  - Test `lidarFitResidualTooHigh` refusal at residual > 20 mm (Decision 46); residuals in (8, 20] mm accept.
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6)
 
@@ -162,16 +175,18 @@ references:
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
 
 - [x] 22. Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor <!-- id:0f06zzo -->
+  - **Code-complete; Phase-3 model pending.** The wrapper is written and unit-tested, but no trained `food_segmenter.mlpackage` exists — runtime inference is exercised only via `StubInferenceEngine` (Phase 1). See the top-of-file note.
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
-  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference)), wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading, wrapper, loading
+  - Blocked-by: 0f06zzn (Write tests for `CoreMLSegmenter` wrapper (model loading + inference))
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
+  - **Script written; no checkpoint exists.** `export.py` runs, but the trained PyTorch checkpoint it converts has not been produced (Phase 3 / dataset prerequisites), so `food_segmenter.mlpackage` is not yet bundled. See the top-of-file note.
   - Python script in `tools/segmenter/export.py`: torchvision DeepLabV3+MobileNetV3-Large checkpoint → `coremltools.convert(...)` → Core ML; same checkpoint → `ai-edge-torch` → TFLite (validation only in v1).
   - Verify both exports produce numerically equivalent output on a reference image.
-  - Save Core ML weights into `MedataCore/Resources/segmenter.mlpackage` (bundled per Decision 27).
+  - Save Core ML weights into `MedataCore/Resources/food_segmenter.mlpackage` (bundled per Decision 27; filename must match the `PipelineFactory` loader).
   - ONNX hop is bypassed (Decision 28).
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
   - Requirements: [8.5](requirements.md#8.5), [18.3](requirements.md#18.3)
@@ -194,14 +209,14 @@ references:
   - Per-class atomic counts in `MTLBuffer<atomic_uint>[C]` with `.storageModeShared`.
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
-  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6)), carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving, carving
+  - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6))
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
   - Synthetic dome with known LiDAR depth: assert volume within 3% of analytical, cm³.
   - Test 1/cos³θ off-axis correction (M1) — corner pixels get ~54% larger area at 73° HFoV.
   - Test per-class `lidarCoverageFraction` tracking.
-  - Test `lidarCoverageTooLow` refusal at any class < 50% LiDAR coverage (edge case 6).
+  - Test `lidarCoverageTooLow` refusal at any class < 30% LiDAR coverage (Decision 47; relaxed from 50%) (edge case 6).
   - Test mm³ → cm³ conversion (M5).
   - Blocked-by: 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries), 0f06zzm (Implement segmenter pre/post-processing pipeline)
   - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8), [13.2](requirements.md#13.2)
@@ -261,19 +276,21 @@ references:
 
 ## Database Macros and Confidence
 
-- [x] 35. Write tests for `FoodDatabase` queries with IFCDB overlay merge <!-- id:0f07001 -->
+- [x] 35. Write tests for `FoodDatabase` queries with CoFID + AFCD merge <!-- id:0f07001 -->
+  - **Superseded by task 74** (Decision 39): IFCDB overlay removed; CoFID + AFCD are both bundled with CoFID-wins priority.
   - Test CoFID-only lookup returns base values.
-  - Test ATTACH + COALESCE merge query from design §4.1 returns overlay-where-present, base-otherwise.
+  - Test ATTACH + COALESCE merge query from design §4.1 returns CoFID-where-present, AFCD-otherwise.
   - Test `entry(for:edition:)` honours per-meal database edition (Decision 24).
   - Test density and macro coefficients are returned in canonical units (g/cm³, g per 100 g).
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
   - Requirements: [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9), [11.10](requirements.md#11.10)
 
-- [x] 36. Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay) <!-- id:0f07002 -->
-  - GRDB connection to bundled `food_db.sqlite`; ATTACH `ifcdb_overlay.sqlite` when overlay enabled in settings.
-  - Build CoFID + IFCDB SQLite assets from authoritative source data; bundle in app binary (Decision 27).
+- [x] 36. Implement `FoodDatabase` via GRDB.swift (CoFID + AFCD) <!-- id:0f07002 -->
+  - **Superseded by task 74** (Decision 39): IFCDB overlay + `ifcdbOverlayEnabled` setting removed.
+  - GRDB connection to bundled `cofid_db.sqlite`; ATTACH `afcd_db.sqlite` (always present, no user toggle).
+  - Build CoFID + AFCD SQLite assets from authoritative source data; bundle in app binary (Decision 27, Decision 39).
   - Persist `BetaCorrectionTable` integration: read β_c and `betaCalibrationStatus` per class per edition.
-  - Blocked-by: 0f07001 (Write tests for `FoodDatabase` queries with IFCDB overlay merge)
+  - Blocked-by: 0f07001 (Write tests for `FoodDatabase` queries with CoFID + AFCD merge)
   - Requirements: [10.1](requirements.md#10.1), [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9)
 
 - [x] 37. Write tests for `Macros` calculation (Req 12) <!-- id:0f07003 -->
@@ -281,7 +298,7 @@ references:
   - Test `C_c = m_c · κ_c / 100`.
   - Test meal-total `C_meal = Σ C_c` displayed rounded to 1 g (Req 12.4) but persisted at full precision (Req 12.5).
   - Test clinical macros (energy, protein, fat, fibre) computed but not surfaced to display per Req 12.6.
-  - Blocked-by: 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
+  - Blocked-by: 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + AFCD))
   - Requirements: [12.1](requirements.md#12.1), [12.2](requirements.md#12.2), [12.3](requirements.md#12.3), [12.4](requirements.md#12.4), [12.5](requirements.md#12.5), [12.6](requirements.md#12.6), [12.7](requirements.md#12.7), [12.8](requirements.md#12.8)
 
 - [x] 38. Implement `Macros` module (per-class formulas + meal totals) <!-- id:0f07004 -->
@@ -292,7 +309,7 @@ references:
 
 - [x] 39. Write tests for `Confidence` combination (§6.8) <!-- id:0f07005 -->
   - Test geometric mean `(σ_s_tilde · σ_seg_tilde · σ_geom_tilde)^(1/3)`.
-  - Test ε = 0.05 floor per top-level input; σ_geom is product of three sub-factors NOT individually floored.
+  - Test ε = 0.01 floor per top-level input (Decision 45); σ_geom is product of four sub-factors (view · plane · occl · tilt) NOT individually floored (except σ_tilt, per §6.8).
   - Test σ_geom_view lookup table for both capture paths per Req 13.2.
   - Test σ_geom_plane = exp(-r/5) with 0.9 penalty when card-only iteration fell back to best-of-5.
   - Test σ_geom_occl = 0.80 only on single-view path with inter-class occlusion detected.
@@ -335,7 +352,7 @@ references:
 - [x] 44. ~~Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Photos now live in the user's Photos library (Task 72); the app no longer has a retention sweep. Source files to delete in follow-up. <!-- id:0f0700a -->
   - Register `BackgroundTasks` identifier; schedule daily refresh.
   - `Persistence.sweepIfDue()` runs on app foregrounding and at end of every `Pipeline.estimate(_:)` if `last_sweep_at_ms` > 24 hours old.
-  - Blocked-by: 0f07009 (~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44.), deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted, deleted
+  - Blocked-by: 0f07009 (~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44.)
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
 
 - [x] 45. Write tests for archive export (zip) <!-- id:0f0700b -->
@@ -347,14 +364,14 @@ references:
 - [x] 46. Implement archive export via `ZIPFoundation` <!-- id:0f0700c -->
   - Return file path (String, not URL per P8); UI layer wraps in URL for `UIActivityViewController`.
   - Excludes the bundled CoFID database (only meal data + artefacts go in the export).
-  - Blocked-by: 0f0700b (Write tests for archive export (zip)), archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive, archive
+  - Blocked-by: 0f0700b (Write tests for archive export (zip))
   - Requirements: [15.8](requirements.md#15.8)
 
 - [x] 47. Write tests for `PaletteMigrator` (Req 11.10) <!-- id:0f0700d -->
   - Test v1→v2 mapping with one mappable + one unmappable class: original retained, shadow record created, mapping path persisted.
   - Test refusal when `class_mapping_v1_v2.json` is missing or malformed.
   - Test `m_c' = V_c · ρ_new · β_new / (ρ_old · β_old)` correctly cancels old β baked into persisted V_c.
-  - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON)), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
+  - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON)), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + AFCD))
   - Requirements: [11.10](requirements.md#11.10)
 
 - [x] 48. Implement `PaletteMigrator` with `ClassMappingFile` schema <!-- id:0f0700e -->
@@ -367,8 +384,8 @@ references:
 ## Pipeline and App Shell
 
 - [x] 49. Write tests for capture-path dispatch (§2.3) <!-- id:0f0700f -->
-  - Test LiDAR available + plane detected + ≥80% LiDAR coverage → `single_view_lidar`.
-  - Test otherwise → `two_view_sfs`.
+  - **Note:** the original ≥80%-LiDAR-coverage auto-dispatch was superseded by the persistent `CaptureMode` toggle (Decision 35, task 72). Auto-coverage dispatch is preserved only behind the deferred `AUTO_CAPTURE_MODE` flag (Req 3.9).
+  - Test capture mode `single` → `capturePath = single_view_lidar`; `double` → `capturePath = two_view_sfs` (mode copied at capture time per §2.3).
   - Test `capturePath` field is persisted on every meal record (Req 3.8).
   - Blocked-by: 0f06zzb (Implement `CaptureKit` (AVFoundation + ARKit + Core Motion bridge)), 0f06zzg (Implement LiDAR support-plane RANSAC fitter)
   - Requirements: [3.5](requirements.md#3.5), [3.8](requirements.md#3.8), [6.5](requirements.md#6.5)
@@ -377,7 +394,7 @@ references:
   - Async pipeline running stages C–L from design §2.2 sequentially; short-circuit on refusal.
   - Dispatch volume estimator by `capturePath`.
   - Wire MetalContext.shared, FoodDatabase, Persistence, Macros, Confidence into orchestrator.
-  - Blocked-by: 0f0700f (Write tests for capture-path dispatch (§2.3)), 0f06zzd (Implement P4P card-pose recovery (custom SVD-based, no OpenCV)), 0f06zzi (Implement card-only iterative support-plane fitter), 0f06zzk (Implement metric scale resolver (pure function)), 0f06zzo (Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor), 0f06zzr (Implement two-view voxel carving Metal kernel + Swift dispatcher), 0f06zzt (Implement single-view height-field Metal kernel + Swift dispatcher), 0f06zzy (Implement voxel-grid sizing function), 0f07000 (Implement mask matching (class-equivalence)), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay)), 0f07004 (Implement `Macros` module (per-class formulas + meal totals)), 0f07006 (Implement `Confidence` combination function), 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
+  - Blocked-by: 0f0700f (Write tests for capture-path dispatch (§2.3)), 0f06zzd (Implement P4P card-pose recovery (custom SVD-based, no OpenCV)), 0f06zzi (Implement card-only iterative support-plane fitter), 0f06zzk (Implement metric scale resolver (pure function)), 0f06zzo (Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor), 0f06zzr (Implement two-view voxel carving Metal kernel + Swift dispatcher), 0f06zzt (Implement single-view height-field Metal kernel + Swift dispatcher), 0f06zzy (Implement voxel-grid sizing function), 0f07000 (Implement mask matching (class-equivalence)), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + AFCD)), 0f07004 (Implement `Macros` module (per-class formulas + meal totals)), 0f07006 (Implement `Confidence` combination function), 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
   - Requirements: [1.5](requirements.md#1.5), [3.5](requirements.md#3.5), [3.8](requirements.md#3.8), [6.5](requirements.md#6.5), [16.1](requirements.md#16.1), [16.4](requirements.md#16.4)
 
 - [x] 51. Write tests for `EstimationFailure` error mapping (§5) <!-- id:0f0700h -->
@@ -389,13 +406,13 @@ references:
 - [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
   - Localised Irish-English messages keyed by enum case for UI dispatch.
-  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5)), mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping, mapping
+  - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5))
   - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
 
 - [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
   - `App.swift`, `CaptureFlowView`, `ResultView`, `SettingsView` as placeholders (UI design deferred to specs/ui per design §10).
   - Expose `CaptureFlowDelegate` protocol (didUpdateTilt, didUpdateLiDARCoverage, didDetectInterClassOcclusion, didProduceEstimate).
-  - Confirm app builds and launches on iPhone 12 Pro+ device.
+  - Confirm app builds and launches on the v1 hardware floor (iPhone 13 Pro Max, iOS 26.5; narrowed in task 75).
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [1.1](requirements.md#1.1), [3.1](requirements.md#3.1), [3.5](requirements.md#3.5), [13.5](requirements.md#13.5)
 
@@ -403,6 +420,11 @@ references:
   - Blocked-by: 0f0700j (Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate`)
 
 ## Harness and Calibration — Feature-flagged off (`HARNESS_ENABLED`)
+
+> **`[x]` = harness code restored under `#if HARNESS_ENABLED` and its unit tests pass.** It does **not**
+> mean the harness has been *run against real data*: calibrated β_c, measured MAPE/MAE, and segmenter
+> mIoU (tasks 58–65) require the gravimetric meal set + held-out segmenter test set, which are Phase-3
+> prerequisites not yet acquired (`prerequisites.md`). v1 ships every class with β = 1.0 / `uncalibrated_unity`.
 
 - [x] 55. Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree <!-- id:0f07011 -->
   - Add the `HarnessCLI` executable target back to `Package.swift` with `swiftSettings: [.define("HARNESS_ENABLED")]`.
@@ -445,7 +467,7 @@ references:
   - Emit new `food_db.sqlite` with calibrated β_c values + new edition string.
   - Output is for developer inspection only — promoting it into the shipping app's bundled assets is a deliberate later step, not automatic (per Decision 41).
   - `HarnessCore/BetaCalibrator.swift` wrapped in `#if HARNESS_ENABLED`.
-  - Blocked-by: 0f0700n (Write tests for β_c calibration log-residual closed form (§6.9)), 0f0700m (Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED`), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + IFCDB overlay))
+  - Blocked-by: 0f0700n (Write tests for β_c calibration log-residual closed form (§6.9)), 0f0700m (Restore `HarnessCLI` fixture loader under `#if HARNESS_ENABLED`), 0f07002 (Implement `FoodDatabase` via GRDB.swift (CoFID + AFCD))
   - Requirements: [11.4](requirements.md#11.4), [11.7](requirements.md#11.7), [21.4](requirements.md#21.4), [21.9](requirements.md#21.9)
 
 - [x] 60. Write tests for accuracy harness (MAPE, MAE, per-class breakdown) <!-- id:0f0700p -->
@@ -461,7 +483,7 @@ references:
   - Emit JSON report for developer inspection: MAPE, MAE, per-class, latency-per-stage, mIoU.
   - **No CI gate** in v1 (per Decision 41 and Req 21.7). The developer interprets the MAPE < 20% / MAE ≤ 25 g reference in Req 21.3 informationally.
   - `HarnessCore/AccuracyHarness.swift` and `FixtureRunner.swift` wrapped in `#if HARNESS_ENABLED`.
-  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, harness, 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`)
+  - Blocked-by: 0f0700p (Write tests for accuracy harness (MAPE, MAE, per-class breakdown)), 0f0700g (Implement `Pipeline.estimate(_:)` orchestration), 0f0700o (Restore β_c calibration in `HarnessCLI` under `#if HARNESS_ENABLED`)
   - Requirements: [21.2](requirements.md#21.2), [21.3](requirements.md#21.3), [21.4](requirements.md#21.4), [21.5](requirements.md#21.5), [21.6](requirements.md#21.6), [21.7](requirements.md#21.7), [21.8](requirements.md#21.8), [21.9](requirements.md#21.9)
 
 - [x] 62. Write tests for calibration round-trip (§6.13) <!-- id:0f0700r -->

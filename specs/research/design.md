@@ -1,11 +1,11 @@
 # Research — Design
 
-**Version:** 0.5
-**Date:** 2026-05-29
-**Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter; see §0 row "Phase 1 segmenter")
+**Version:** 0.5.1
+**Date:** 2026-06-20
+**Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter; see §0 row "Phase 1 segmenter". 2026-06-20 consistency pass: the §0 deltas — device floor, ε floor, plane-residual cap, LiDAR-coverage floor, capture-mode dispatch, class-count range, retention/IFCDB removal — are now propagated into the §3–§8 body and tasks, removing the stale duplicate values.)
 **Branch:** research
 
-This document describes the implementation design for the requirements in `requirements.md` v0.4 and the decisions in `decision_log.md` (D1–D42). It does not restate requirements; it cites them by ID.
+This document describes the implementation design for the requirements in `requirements.md` v0.4.1 and the decisions in `decision_log.md` (D1–D47). It does not restate requirements; it cites them by ID.
 
 ---
 
@@ -81,15 +81,15 @@ The split keeps every algorithm module in `MedataCore` free of iOS-only types, s
 
 ```mermaid
 flowchart TD
-    A[CaptureKit.startSession] --> B{Path?}
-    B -->|single_view_lidar| C1[Capture nadir frame + LiDAR]
-    B -->|two_view_sfs| C2[Capture nadir + oblique]
+    A[CaptureKit.startSession] --> B{CaptureMode?}
+    B -->|single → single_view_lidar| C1[Capture nadir frame + LiDAR]
+    B -->|double → two_view_sfs| C2[Capture nadir + oblique]
     C1 --> D[CardDetection.detect]
     C2 --> D
     D --> E[SupportPlane.fit]
     E --> F[MetricScale.resolve]
     F --> G[Segmentation.segment]
-    G --> H{Path?}
+    G --> H{capturePath?}
     H -->|single_view_lidar| I1[Volume.heightFieldIntegrate]
     H -->|two_view_sfs| I2[Volume.voxelCarve]
     I1 --> J[Macros.compute]
@@ -99,7 +99,7 @@ flowchart TD
     L --> M[ResultView]
 ```
 
-Stages C through L run as a single `async` pipeline driven by `Pipeline.estimate(_:)`. Each stage produces a record consumed by the next; nothing is global mutable state. A stage that refuses (no card + no LiDAR; <50% LiDAR coverage; support-plane fit failure) returns an `EstimationFailure` and the pipeline short-circuits.
+Stages C through L run as a single `async` pipeline driven by `Pipeline.estimate(_:)`. Each stage produces a record consumed by the next; nothing is global mutable state. A stage that refuses (no card + no LiDAR; <30% LiDAR coverage; support-plane fit failure) returns an `EstimationFailure` and the pipeline short-circuits.
 
 ### 2.3 Capture-path dispatch
 
@@ -220,7 +220,7 @@ public struct Mat4: Sendable, Codable {
 public struct DepthMap: Sendable {
     public let depthBytesMm: Data                // Float32 row-major, mm (NOT m, per §6.0 unit convention)
     public let confidenceBytes: Data             // UInt8, 0..255 per §6.0; iOS adapts {0,127,255} from ARConfidenceLevel
-    public let width, height: Int                // platform-dependent (256×192 on iPhone 12 Pro LiDAR; variable on Android)
+    public let width, height: Int                // platform-dependent (256×192 on iPhone 13 Pro Max LiDAR; variable on Android)
     public let rowStrideBytes: Int               // for non-tightly-packed row layouts
     public let depthIntrinsics: CameraIntrinsics
     public let depthFromColour: Mat4             // rigid transform: depth-frame ← colour-frame
@@ -284,7 +284,7 @@ public struct SupportPlane: Sendable {
 }
 
 public enum SupportPlaneError: Error {
-    case lidarFitResidualTooHigh    // > 8 mm σ → refuse per [4.5]
+    case lidarFitResidualTooHigh    // > 20 mm σ → refuse per [4.5] / Decision 46
     case noLowerSilhouetteEdges     // card-only path, no edges visible
     case iterationDiverged          // card-only path, > 5 iterations w/o convergence
 }
@@ -317,7 +317,7 @@ The resolver is a pure function; per Req 7 it produces a single scale and σ_s. 
 
 ```swift
 public struct ClassPalette: Sendable {
-    public let foodClasses: [String]            // 24 entries per [8.4]
+    public let foodClasses: [String]            // 24–40 entries per [8.4] (v1 ships 24)
     public let background: Int                  // class index for `background`
     public let unknownFood: Int
     public let unsupportedLiquid: Int
@@ -353,17 +353,18 @@ public final class CoreMLSegmenter {
     public func segment(_ frame: RawFrame) async throws -> SegmentationResult
 }
 
-// Phase 1 (Req §23.2). Conforms to the same `SegmenterInferenceEngine`
-// protocol as `CoreMLInferenceEngine`, emits a deterministic FP16 tensor
-// with ≥0.99 probability on `dominantClass` (default: palette class 0)
-// and ≤0.01/(N-1) spread elsewhere. No model file required.
+// Phase 1 (Req §23.2). Satisfies the §8.10 requirement that the Phase-1
+// segmenter conform to the same `SegmenterInferenceEngine` protocol as
+// `CoreMLInferenceEngine`, emitting a deterministic FP16 tensor with ≥0.99
+// probability on `dominantClass` (default: palette class 0) and ≤0.01/(N-1)
+// spread elsewhere, so downstream stages run unchanged. No model file required.
 public struct StubInferenceEngine: SegmenterInferenceEngine, Sendable {
     public init(palette: ClassPalette, dominantClass: Int = 0)
     public func infer(image: RawFrame) async throws -> ProbabilityTensor
 }
 ```
 
-The full per-pixel probability tensor is retained in memory, not just the argmax label map, because the two-view voxel ownership rule in Req 9.5 needs the per-class probabilities at each voxel's two projected pixels. At 360×360 input × 27 classes × 2 bytes (FP16) ≈ 7 MB per view — comfortably inside the 300 MB peak budget [16.6]. P1 fix: `MTLBuffer` is no longer in the public type; the `bytes` field is the portable contract and the iOS GPU buffer is a private adaptor inside `Segmentation/`.
+The full per-pixel probability tensor is retained in memory, not just the argmax label map, because the two-view voxel ownership rule in Req 9.5 needs the per-class probabilities at each voxel's two projected pixels. At 360×360 input × C classes × 2 bytes (FP16), where C = palette.classes (27 for the v1 24-food palette; up to 43 at the 40-food ceiling per [8.4]), the tensor is ≈ 7 MB per view (≈ 11 MB at the 40-food ceiling) — comfortably inside the 300 MB peak budget [16.6]. P1 fix: `MTLBuffer` is no longer in the public type; the `bytes` field is the portable contract and the iOS GPU buffer is a private adaptor inside `Segmentation/`.
 
 **Phase 1 dev stub.** `StubInferenceEngine` (Req §23.2) substitutes for `CoreMLInferenceEngine` at the seam already defined by the `SegmenterInferenceEngine` protocol. It is selected at compile time, not at runtime, by the `DEV_STUB_SEGMENTER` Swift flag — the alternative (a runtime factory choice) was rejected because Phase 3 should remove the stub code entirely from Release builds, and a compile flag is the smallest mechanism that achieves that (same rationale as Decision 41 for the harness). The stub does NOT use the real Core ML pre-processing pipeline; it bypasses image resize/letterbox entirely and writes the tensor directly. Pre-processing is exercised in Phase 3 when the real engine is wired.
 
@@ -635,6 +636,7 @@ CREATE TABLE meal_classes (                  -- denormalised for in-app filterin
     meal_id     TEXT NOT NULL,
     class_id    TEXT NOT NULL,
     beta_status TEXT NOT NULL,               -- 'calibrated' | 'uncalibrated_pooled' | 'uncalibrated_unity'
+                                             -- (v1 writes only 'uncalibrated_unity'; the other two are Phase-3 β-calibrator outputs, deferred per §0)
     mass_g      REAL NOT NULL,
     carbs_g     REAL NOT NULL,
     PRIMARY KEY (meal_id, class_id)
@@ -676,14 +678,14 @@ Byte layouts below are the portable on-disk contract; both iOS and Android write
     ├── nadir.depth_mm          # Float32 little-endian, mm, [height, width] row-major; companion .depth.json with {height, width, row_stride_bytes}
     ├── nadir.confidence        # UInt8, [height, width] row-major; same dims as depth
     ├── nadir.mask              # UInt8 argmax label map (top-left origin, row-major)
-    ├── nadir.probs             # FP16 IEEE-754 LE probability tensor, [H, W, C] row-major; retained 30 days
+    ├── nadir.probs             # FP16 IEEE-754 LE probability tensor, [H, W, C] row-major
     ├── oblique.image           # two-view path only; PNG RGB8 sRGB
     ├── oblique.mask
     ├── oblique.probs
     └── manifest.json           # SHA-256 checksums + (H,W,C) dims per file, for portability validation
 ```
 
-Files are immutable. Retention sweep ([17.3]) deletes the directory; the `meals` row is preserved.
+Files are immutable and live for the meal's lifetime; they are deleted only when the meal itself is deleted (the retention scheduler is removed in v1 per §0 / Req 17.3, and deferred behind the `RETENTION_SCHEDULER_ENABLED` compile flag per Req 17.6).
 
 ### 4.3 Portable contracts (`PortableContracts` module)
 
@@ -877,10 +879,10 @@ Output: π_sup = (n̂, d), residual_mm
 
 4. residual_mm := sqrt(mean(squared inlier distances)) in mm
 
-5. If residual_mm > 8 mm: throw lidarFitResidualTooHigh
+5. If residual_mm > 20 mm: throw lidarFitResidualTooHigh        // raised from 8 mm per Decision 46
 ```
 
-**Parameter justification (asserted; sensitivity study in design phase).** Inlier band 5 mm chosen as the standard ARKit LiDAR per-pixel σ. Residual cap 8 mm allows ~1.5σ slack across the inlier set. 15° gravity-angle bias is wide enough to admit a tray on a slight slope but rejects candidates whose normals don't even vaguely align with up. 256 iterations is standard for a 3-point sample; success probability > 0.999 for 50% inliers.
+**Parameter justification (asserted; sensitivity study in design phase).** Inlier band 5 mm chosen as the standard ARKit LiDAR per-pixel σ. Residual cap 20 mm (Decision 46, raised from 8 mm) admits real-surface roughness and textured tablecloths; residuals in (8, 20] mm accept with σ_plane = exp(−r/5) carrying the degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε floor). 15° gravity-angle bias is wide enough to admit a tray on a slight slope but rejects candidates whose normals don't even vaguely align with up. 256 iterations is standard for a 3-point sample; success probability > 0.999 for 50% inliers.
 
 ### 6.3 Card-only iterative support-plane fit (Req 4.3)
 
@@ -942,7 +944,8 @@ The symmetric form replaces v0.2's $|s_{\text{lidar}} - s_{\text{card}}| / s_{\t
 Input: image of size W×H, pixel_format ∈ {RGB8, BGRA8, RGBA8}, color_space = sRGB
        target_size = 513
        mean = (0.485, 0.456, 0.406), std = (0.229, 0.224, 0.225)
-       palette: ClassPalette (27 classes total: 24 food + background + unknown_food + unsupported_liquid)
+       palette: ClassPalette; C := palette.classes (24–40 food + background + unknown_food
+                + unsupported_liquid = 27–43 total; v1 ships 24 food → C = 27)
 
 # Step 0: pixel-format normalisation. Output is RGB8 sRGB.
 1. If pixel_format == BGRA8: drop alpha, swap channels 0↔2 → RGB8
@@ -962,12 +965,12 @@ Input: image of size W×H, pixel_format ∈ {RGB8, BGRA8, RGBA8}, color_space = 
 7. Cast to FP16 (segmenter is FP16 per Decision 25).
 
 # Inference and post-processing.
-8. Run inference → per-pixel logits [target_size, target_size, 27].
+8. Run inference → per-pixel logits [target_size, target_size, C].
 9. Softmax over class axis → probabilities P_padded (FP16).
 10. Crop P_padded to remove letterbox padding, then resize bilinearly back to (W, H).
     Resize uses pixel-centre alignment (PyTorch / coremltools / ai-edge-torch all default to
     pixel-centre alignment when align_corners=False; that is the contract).
-    Output: probability tensor P of shape [H, W, 27], FP16, HWC row-major (§6.0).
+    Output: probability tensor P of shape [H, W, C], FP16, HWC row-major (§6.0).
 11. argmax over class axis → label map L (UInt8, [H, W], top-left origin per §6.0).
 
 # σ_seg input definition (M8 pin).
@@ -1132,7 +1135,7 @@ for each pixel p ∈ nadir image:
 # Per-class LiDAR coverage (edge case 6).
 for c in classes_present:
     lidarCoverageFraction[c] := covered_pixels[c] / total_pixels[c]
-    if lidarCoverageFraction[c] < 0.50:
+    if lidarCoverageFraction[c] < 0.30:                          // refusal floor lowered from 0.50 per Decision 47
         flag class c as lidar_coverage_too_low → refuse meal (per §3.5 / Req 13.2)
     elif lidarCoverageFraction[c] < 0.80:
         flag class c with reduced σ_view per Req 13.2 (handled in §6.8)
@@ -1147,7 +1150,7 @@ if food_classes_present is empty: throw noFoodVolumeRecovered
 
 **Off-axis pixel area (M1 fix).** The pixel-area function is
 $$a(p) = \frac{z_t^2}{f_x f_y \cos^3\theta_p}, \qquad \cos\theta_p = \frac{f}{\sqrt{f^2 + (u-c_x)^2 + (v-c_y)^2}}, \quad f = (f_x + f_y)/2.$$
-The $1/\cos^3\theta_p$ correction is geometrically required and is **not** absorbable by β_c (which is a per-class scalar; the bias is spatial). At iPhone 12 Pro main-camera 73° horizontal FoV, the corner-pixel correction is ~54% (cos(36.5°)⁻³ ≈ 1.94) — well outside what β_c can absorb. v0.2's "6% corner correction absorbed by β_c" claim was numerically wrong and is removed. Computing $a(p)$ at $z_t$ rather than at $\pi_{\text{sup}}$ captures the dominant foreshortening on a non-flat top surface.
+The $1/\cos^3\theta_p$ correction is geometrically required and is **not** absorbable by β_c (which is a per-class scalar; the bias is spatial). At the iPhone 13 Pro Max main-camera ~73° horizontal FoV, the corner-pixel correction is ~54% (cos(36.5°)⁻³ ≈ 1.94) — well outside what β_c can absorb. v0.2's "6% corner correction absorbed by β_c" claim was numerically wrong and is removed. Computing $a(p)$ at $z_t$ rather than at $\pi_{\text{sup}}$ captures the dominant foreshortening on a non-flat top surface.
 
 ### 6.8 Confidence combination (Req 13)
 
@@ -1207,7 +1210,7 @@ O(W·H) total. Runs as a Metal kernel inside the height-field integrator so that
 
 ### 6.9 β_c calibration (offline, run on macOS via HarnessCLI)
 
-> **Feature-flagged in v1 per §0 and Decision 41.** This algorithm lives in `HarnessCore/BetaCalibrator.swift` behind `#if HARNESS_ENABLED`. The shipping app continues to bundle all classes with `β_c = 1.0` and `beta_status = uncalibrated_unity`. A developer running `swift build --target HarnessCLI` (which defines `HARNESS_ENABLED`) can produce a candidate `food_db.sqlite` for inspection; promoting it into the bundled assets is a deliberate developer step, not automatic.
+> **Feature-flagged in v1 per §0 and Decision 41.** This algorithm lives in `HarnessCore/BetaCalibrator.swift` behind `#if HARNESS_ENABLED`. The shipping app continues to bundle all classes with `β_c = 1.0` and `beta_status = uncalibrated_unity`. A developer running `swift build --target HarnessCLI` (which defines `HARNESS_ENABLED`) can produce a candidate `cofid_db.sqlite` (the DB holding the β column) for inspection; promoting it into the bundled assets is a deliberate developer step, not automatic.
 
 
 ```
@@ -1279,7 +1282,7 @@ Output: β_c per class, calibrationStatus per class
 4. Evaluate on eval_subset: compute MAPE and MAE per [21.3], with per-class breakdown
    distinguishing calibrated / uncalibrated_pooled / uncalibrated_unity per Req 21.4.
 
-5. Emit a new bundled food_db.sqlite with the calibrated β_c values and the new edition string.
+5. Emit a new bundled cofid_db.sqlite with the calibrated β_c values and the new edition string.
 ```
 
 **Pooled fallback decision.** v1 ships with `uncalibrated_pooled` enabled (per Decision 20 alternative). This commits the design rather than deferring the choice to release-time as the original Decision 20 contemplated.
@@ -1407,7 +1410,6 @@ The HarnessCLI accuracy mode performs an explicit round-trip assertion: starting
 | Macros | Per-class formulas: m_c = V_c·ρ_c, C_c = m_c·κ_c/100; round-to-1g display |
 | Persistence | Save → reload → assert deep-equal MealRecord; correction append never mutates original |
 | PaletteMigrator | v1 → v2 mapping with one mappable + one unmappable class; assert original retained, shadow record created, mapping path persisted |
-| RetentionScheduler | sweep with `now`-stamped meals at 29/30/31 days; idempotent across two consecutive sweeps |
 | β_c calibration round-trip | Synthetic dataset where ground truth is known; assert recovered β_c within 5% of analytical value |
 
 ### 7.2 Property-based tests (`SwiftCheck`)
@@ -1419,7 +1421,6 @@ Properties suited to PBT:
 - **Voxel ownership disjointness**: For arbitrary segmenter probability tensor pairs, the union of per-class voxel sets has no overlap.
 - **Confidence floor**: For arbitrary sub-confidence inputs in [0, 1], the output `σ_meal` lies in [ε, 1].
 - **Macro additivity**: For arbitrary V_c, ρ_c, κ_c, the sum of per-class C_c equals C_meal (with floating-point tolerance).
-- **Retention sweep idempotence**: Running the sweep twice with the same `now` produces identical state.
 
 Generators are written for `CameraIntrinsics`, `SupportPlane`, and `SegmentationResult` in the `Tests/Generators/` target.
 
@@ -1508,7 +1509,7 @@ Run on an iPhone 13 Pro Max device (the v1 hardware floor per §0). No CI thresh
 
 `HarnessCLI seg-bench` mode loads the held-out segmenter test set, runs Core ML inference, and reports:
 
-- Mean IoU averaged over the 24 food classes (excluding `background`, `unknown_food`, `unsupported_liquid` per Decision 14).
+- Mean IoU averaged over the food classes (24–40 per the shipped palette per [8.4]; excluding `background`, `unknown_food`, `unsupported_liquid` per Decision 14).
 - Per-class IoU.
 - Confusion matrix.
 
@@ -1531,8 +1532,8 @@ The mean food-class mIoU < 0.60 reference is the developer's quality bar for int
 | Segmenter inference | Core ML + ANE | TFLite + NNAPI/GPU delegate (model exported via `ai-edge-torch`) |
 | Voxel carving / height-field | Metal compute shader | Vulkan compute shader or OpenGL ES 3.1+ compute shaders |
 | SQLite | GRDB.swift | `androidx.sqlite` (raw) or Room (same on-disk format) |
-| Background retention | `BackgroundTasks` framework | `WorkManager` |
-| Foreground retention sweep | `Persistence.sweepIfDue()` on app foregrounding + estimate completion | Same — both platforms call the portable `sweepIfDue()` regardless of the OS-level scheduler |
+| Background retention *(deferred — `RETENTION_SCHEDULER_ENABLED`, off in v1 per Req 17.6)* | `BackgroundTasks` framework | `WorkManager` |
+| Foreground retention sweep *(deferred — off in v1 per Req 17.6)* | `Persistence.sweepIfDue()` on app foregrounding + estimate completion | Same — both platforms call the portable `sweepIfDue()` regardless of the OS-level scheduler |
 | Archive export | `Foundation` + `ZIPFoundation` | `java.util.zip` |
 
 **Type-level mapping.** Portable contract types and their per-platform bindings.
@@ -1546,7 +1547,7 @@ The mean food-class mIoU < 0.60 reference is the developer's quality bar for int
 | Timestamp | `Int64` ns (monotonic, no wall-clock); iOS: `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)` | `Image.getTimestamp()` (CLOCK_MONOTONIC) |
 | Depth bytes | `Data` Float32 LE mm | `ByteBuffer` Float32 LE mm |
 | LiDAR confidence | `Data` UInt8 0..255 (iOS adapts ARKit `ARConfidenceLevel` `{0,1,2}` → `{0,127,255}`) | `ByteArray` UInt8 0..255 (ARCore uint16 confidence rescaled to UInt8) |
-| Depth resolution | Variable (`width`, `height` fields); iPhone 12 Pro LiDAR = 256×192 | Variable (typically 160×120 for ARCore Depth software-stereo, device-dependent for ToF) |
+| Depth resolution | Variable (`width`, `height` fields); iPhone 13 Pro Max LiDAR = 256×192 | Variable (typically 160×120 for ARCore Depth software-stereo, device-dependent for ToF) |
 | File path | `String`, wrapped in `URL` only at iOS UI layer (P8 fix) | `String`, wrapped in `File` only at Android UI layer |
 | `MTLBuffer` (segmenter probability tensor backing) | iOS-private adaptor inside `Segmentation/`; portable `bytes` field is the canonical storage | Vulkan `VkBuffer` or compute-shader SSBO; same portable `bytes` field |
 | Compute-shader random seed | `xxh64(input.bytes)` per §6.0 | Same |

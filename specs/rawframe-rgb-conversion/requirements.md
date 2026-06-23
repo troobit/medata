@@ -54,14 +54,14 @@ On-device verification on iPhone 13 Pro Max iOS 26.5 after the `lidar-plane-fit-
 
 ### 4. Per-Frame Conversion Cost Discipline
 
-**User Story:** As a user tapping the shutter, I want the food estimate to appear within Req 16.1's 1000 ms P95 budget without the conversion stage tanking the capture path, so that the pipeline stays inside its end-to-end budget on the actual fleet of supported devices (current floor is several generations newer than the research-spec iPhone 12 Pro reference).
+**User Story:** As a user tapping the shutter, I want the food estimate to appear within research Req 16.1's soft 30 s end-to-end target without the conversion stage tanking the capture path, so that the pipeline stays inside its end-to-end budget on the v1 hardware floor (iPhone 13 Pro Max). *(Historical note: this spec was written against the earlier Req 16.1 "1000 ms P95" budget; research §0 / Decision 40 replaced that with a soft 30 s target and removed the per-stage P95 budgets. The discipline below — shutter-only, bounded memory, accelerated path — is unchanged.)*
 
 **Acceptance Criteria:**
 
 1. <a name="4.1"></a>The conversion SHALL run only at `captureFrame(target:)` shutter time. The per-frame `frames: AsyncStream<ARFrame>` SHALL NOT trigger the conversion.  
 2. <a name="4.2"></a>The conversion SHALL NOT allocate more than 2× the output buffer's worth of transient memory per call (input is the immutable source `CVPixelBuffer`, output is the returned `Data`; intermediates SHALL fit in one additional buffer at most).  
 3. <a name="4.3"></a>The conversion SHALL use a hardware-accelerated path (vImage, CoreImage, or Metal) on every call — no per-pixel Swift loop. The implementation SHALL NOT instantiate per-call helpers that are documented as expensive to construct (notably `CIContext`); any such helper SHALL be cached across calls.  
-4. <a name="4.4"></a>The conversion path SHALL be exercised by the Req 16.7 performance harness so that any end-to-end-budget regression introduced by the conversion stage is detected at the harness level rather than via a per-call wall-clock assertion.
+4. <a name="4.4"></a>The conversion path SHALL be exercised at the end-to-end level (research Req 16.1's soft 30 s check, research task 75) so that any end-to-end-budget regression introduced by the conversion stage is observed there rather than via a per-call wall-clock assertion. *(There is no Req 16.7 — the per-stage performance harness this criterion originally named was removed in research §0 / Decision 40.)*
 
 ### 5. Contract Preservation for Existing Consumers
 

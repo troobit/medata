@@ -112,7 +112,7 @@ The conversion is a pure function from `CVPixelBuffer` to bytes-plus-format. Pul
 ## Decision 4: No Hard Per-Frame Conversion Wall-Clock Target
 
 **Date**: 2026-05-24
-**Status**: accepted
+**Status**: accepted (decision stands; cited figures stale). The rationale below references the earlier research Req 16.1 "1000 ms / 1800 ms P95" budgets, the Req 16.2 per-stage budgets, the Req 16.7 perf harness, and the iPhone 12 Pro floor — all superseded by research §0 / Decision 40 (single soft 30 s end-to-end target, per-stage P95 removed, no Req 16.7) and the iPhone 13 Pro Max floor (Req 1.2). The decision itself — no per-call wall-clock gate; discipline the implementation; observe regressions at the end-to-end level — is unchanged.
 
 ### Context
 
@@ -120,7 +120,7 @@ Research Req 16.1 caps end-to-end single-view-LiDAR latency at 1000 ms P95 on th
 
 ### Decision
 
-The spec does NOT impose a per-call wall-clock threshold on the conversion. Instead it requires (a) shutter-only execution, (b) bounded transient memory, (c) a hardware-accelerated path with cached helpers, and (d) coverage by the existing Req 16.7 end-to-end performance harness. Regressions are detected at the end-to-end-budget level, not as a per-call assertion.
+The spec does NOT impose a per-call wall-clock threshold on the conversion. Instead it requires (a) shutter-only execution, (b) bounded transient memory, (c) a hardware-accelerated path with cached helpers, and (d) coverage at the end-to-end level (originally the Req 16.7 perf harness; now research Req 16.1's soft 30 s end-to-end check after §0 / Decision 40 removed the per-stage harness). Regressions are detected at the end-to-end-budget level, not as a per-call assertion.
 
 ### Rationale
 

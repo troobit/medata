@@ -1,8 +1,8 @@
 # Research — Requirements
 
-**Version:** 0.4
-**Date:** 2026-05-29
-**Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter added)
+**Version:** 0.4.1
+**Date:** 2026-06-20
+**Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter; 2026-06-20 consistency pass propagated the §0 deltas through design.md, tasks.md, and prerequisites.md)
 **Branch:** research
 
 ## Introduction
@@ -247,7 +247,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 1. <a name="12.1"></a>FOR each segmenter class $c$ present in the meal with corrected volume $V_c$ from [9.6](#9.6), the system SHALL compute mass $m_c = V_c \cdot \rho_c$ where $\rho_c$ is the served-portion bulk density from the bundled database.
 2. <a name="12.2"></a>FOR each class $c$, the system SHALL compute carbohydrates $C_c = m_c \cdot \kappa_c / 100$ where $\kappa_c$ is the monosaccharide-equivalent carbohydrate per 100 g for that class.
 3. <a name="12.3"></a>The meal-level carbohydrate total SHALL be $C_{\text{meal}} = \sum_c C_c$.
-4. <a name="12.4"></a>$C_{\text{meal}}$ SHALL be displayed to the nearest **1 gram** (consistent with the 10 g MAE target in [21.3](#21.3) and with diabetes-bolus-calculator conventions).
+4. <a name="12.4"></a>$C_{\text{meal}}$ SHALL be displayed to the nearest **1 gram** (consistent with the 25 g MAE reference in [21.3](#21.3) and with diabetes-bolus-calculator conventions).
 5. <a name="12.5"></a>$C_{\text{meal}}$ and all per-class values SHALL be persisted at full machine precision regardless of display rounding.
 6. <a name="12.6"></a>The system SHALL also compute and persist meal-level totals for energy, protein, fat and fibre using the same per-class formula. These totals are computed for clinical-track consumption and are NOT displayed to the user in v1.
 7. <a name="12.7"></a>The meal record SHALL include the per-class breakdown ($V_c$, $m_c$, $C_c$, density source, coefficient source, $\beta_c$ used) so that any later audit can reconstruct how the meal-level total was derived.

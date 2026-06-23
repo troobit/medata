@@ -2,7 +2,7 @@
 
 **Version:** 0.2
 **Date:** 2026-06-13
-**Status:** Draft — **Blocked on baseline capture** (Reqs 6.1, 6.2). Implementation tasks cannot start until the pre-spec peak resident memory and shutter→`estimate.start` latency are measured on iPhone 13 Pro Max iOS 26.5 and written into the "Baseline numbers to capture" table below.
+**Status:** Implemented — tasks 1–16 landed (see `tasks.md` and CHANGELOG: pre-shutter mask producer, `VisionCardDetector`, real `foodRegionCoveragePercent`, `SupportPlaneFitter`). The pre-implementation baseline-capture gate was **not formally recorded**: the "Baseline numbers to capture" table below was never filled, so the Req 6.1/6.2 memory/latency *deltas* were not quantified — the budgets were sanity-checked qualitatively during on-device single-view-LiDAR runs rather than measured against a recorded pre-spec baseline. End-to-end on-device verification of the **two-view SfS path** for this spec's mask routing is still open (tracked in `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 5 and `GAPS.md` Group D).
 **Requirements:** `requirements.md` v0.2
 **Decision log:** `decision_log.md` D1–D11
 
@@ -483,4 +483,4 @@ No new PBT candidates. The mask is a `[UInt8]` buffer with no algebraic invarian
 | Peak resident memory under fruit-plate flow | ___ MB | ___ MB | + 50 MB |
 | Shutter-tap → `estimate.start` latency | ___ ms | ___ ms | + 100 ms |
 
-These rows are blanked until the user runs the baseline capture per `prerequisites.md`. The design phase does NOT commit code until the pre-spec numbers are filled in.
+**These rows were never formally captured.** Implementation (tasks 1–16) landed without the pre-spec baseline being recorded, so the Req 6.1/6.2 deltas are unquantified. The memory/latency budgets were not observed to regress during on-device runs, but the recorded-delta acceptance was not performed. If the formal baseline is needed (e.g. before a Phase 3 release), run the capture per `prerequisites.md` and fill these rows retroactively against the current build.

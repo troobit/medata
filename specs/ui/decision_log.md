@@ -104,7 +104,7 @@ The spec's framing is diabetes-bolus-calculator: the user needs one number to de
 ## Decision 4: Neutral SwiftUI / iOS 17 baseline (no Liquid Glass)
 
 **Date**: 2026-05-20
-**Status**: accepted
+**Status**: superseded — research Req 1.2 / design §0 raised the OS floor to **iOS 26.5**, and Decision 15 (+ Req 18.4) adopt the system-default Liquid Glass `TabView` material. The "iOS 17 API surface only, no Liquid Glass" position no longer holds; the app targets iOS 26.5 and uses system Liquid Glass where the framework supplies it by default. The underlying principle (minimum custom chrome, no bespoke per-OS branches) is retained.
 
 ### Context
 
@@ -552,11 +552,11 @@ Settings tab content is intentionally minimal. The user explicitly excluded data
 - The developer can confirm meals are persisting and clean up placeholder runs from inside the app, removing a friction point during Phase 1 device-MVP work.
 - Standard iOS navigation conventions (tab-tap pop-to-root, per-tab state preservation, Liquid Glass tab-bar material) are inherited from the framework with no custom code.
 - The placeholder chip in the meal history carries the dev-stub provenance forward into Phase 3, matching the architecture established by research Decision 42.
-- v1.1 work can proceed in parallel with research Phase 1: Phase 1 tasks touch `MedataCore` (Pipeline, Segmentation, Persistence); v1.1 tasks touch `App/`. The shared surface is the new `segmenter_source` SQLite column from research task 82 and the additive `PersistenceStore` methods (`allMeals`, `deleteMeal`, `mealsDidChange`), both of which Phase 1 and v1.1 can land without colliding.
+- v1.1 work can proceed in parallel with research Phase 1: Phase 1 tasks touch `MedataCore` (Pipeline, Segmentation, Persistence); v1.1 tasks touch `App/`. The shared surface is the `segmenterSource` value from research task 82 (later reshaped by the event-log-schema spec to a field inside the event `metadata` JSON, not a SQL column) and the additive `PersistenceStore` methods (`allMeals`, `deleteMeal`, `eventsDidChange` — renamed from `mealsDidChange` by event-log-schema Decision 7), both of which Phase 1 and v1.1 can land without colliding.
 
 **Negative:**
 - The previously frozen v1.0 capture-only framing is no longer accurate; readers must read v1.1 to see what currently applies. The diff against v1.0 is preserved by git rather than by a separate spec.
-- `PersistenceStore` gains three additive methods (`allMeals`, `deleteMeal`, `mealsDidChange`). The `mealsDidChange` stream requires the GRDB conformer to emit on every write, which is a small but new coordination point.
+- `PersistenceStore` gains three additive methods (`allMeals`, `deleteMeal`, `eventsDidChange` — the stream was named `mealsDidChange` here originally and renamed by event-log-schema Decision 7). The stream requires the GRDB conformer to emit on every write, which is a small but new coordination point.
 - The `MealHistoryModel` uses `PHImageManager` to fetch thumbnails; a user who denies Photos access sees fork-knife placeholders in the list. This is the same fallback the result view uses (research task 73) but it is now visible in two places.
 
 ### Impact

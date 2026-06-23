@@ -182,7 +182,8 @@ Tasks 19–23 are done. Modules added in this phase:
 - `Segmentation/CoreMLSegmenter.swift` also hosts `SegmenterWeightsBudget` which
   walks `.mlpackage` directories recursively to enforce Req 8.2 (≤ 10 MB).
 - `tools/segmenter/export.py` — PyTorch DeepLabV3 + MobileNetV3-Large → Core ML
-  (`coremltools.convert`) → `MedataCore/Resources/segmenter.mlpackage`; the same
+  (`coremltools.convert`) → `MedataCore/Resources/food_segmenter.mlpackage` (the name
+  the `PipelineFactory` loader expects); the same
   checkpoint also exports to TFLite via `ai-edge-torch`. ONNX hop is bypassed
   (decision 28). A reference image is run through both artefacts and per-pixel
   argmax agreement asserted >99% with max-abs logit error <0.05 — disagreement
@@ -223,15 +224,16 @@ Tasks 35–40 are done. Test count: 167 (was 86 after Segmentation + Volume phas
 - `Foods/FoodDatabase.swift` — protocol: `version`, `entry(for:)`, `entry(for:edition:)`,
   `availableEditions()`.
 - `Foods/GRDBFoodDatabase.swift` — GRDB.swift v6.29.3. Two init paths:
-  - `bundled(overlayEnabled:)` resolves resources via `Bundle.module`
-  - `init(mainPath:overlayPath:)` takes file paths directly (used by FoodsTests)
-  The IFCDB overlay is ATTACHed via `Configuration.prepareDatabase` so every GRDB
-  connection automatically runs `ATTACH DATABASE ? AS overlay` at open time. The
-  canonical COALESCE query (`COALESCE(o.col, m.col)`) merges overlay onto CoFID base.
-  `entry(for:edition:)` delegates to `entry(for:)` in v1 (single bundled edition).
-- `tools/food_db/generate.py` — creates `food_db.sqlite` (24 food classes, CoFID 2024)
-  and `ifcdb_overlay.sqlite` (3 IFCDB override entries). Apostrophes in SQL strings
-  must go through parameterised `?` placeholders, not inline SQL literals.
+  - `bundled()` resolves `cofid_db.sqlite` + `afcd_db.sqlite` via `Bundle.module`
+  - `init(cofidPath:afcdPath:)` takes file paths directly (used by FoodsTests)
+  AFCD is ATTACHed (`ATTACH DATABASE ? AS afcd`) so every GRDB connection sees both.
+  The canonical CoFID-wins COALESCE join (design §4.1 / Decision 39) returns CoFID
+  values for any shared class and falls through to AFCD for AFCD-only classes; the
+  IFCDB overlay and `ifcdbOverlayEnabled` toggle were removed. `entry(for:edition:)`
+  delegates to `entry(for:)` in v1 (single bundled CoFID+AFCD pair).
+- `tools/food_db/generate.py` — creates `cofid_db.sqlite` (24 food classes, CoFID 2024)
+  and `afcd_db.sqlite` (AFCD entries). Apostrophes in SQL strings must go through
+  parameterised `?` placeholders, not inline SQL literals.
 - Resources are in `MedataCore/Sources/Foods/Resources/` and declared with
   `.copy(...)` in Package.swift (not `.process` — SQLite is a binary blob).
 
@@ -300,8 +302,9 @@ Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
 - `App/CaptureFlowView.swift` — placeholder with `CaptureFlowViewModel: CaptureFlowDelegate`
   using `@MainActor` + `nonisolated` callbacks.
 - `App/ResultView.swift` — displays `totalCarbsG` and `sigmaMeal` from `MealRecord`.
-- `App/SettingsView.swift` — `@AppStorage` retention picker (30/90/365/indefinite)
-  and IFCDB overlay `Toggle`. Keys in `SettingsKeys` namespace.
+- `App/SettingsView.swift` — rewritten per Decisions 37/39: the retention picker and
+  IFCDB toggle are gone (photo lifecycle delegated to Photos; CoFID + AFCD always bundled).
+  The persistent `captureMode` toggle (Decision 35) is the live setting; keys in `SettingsKeys`.
 
 > The placeholder `CaptureFlowView` / `CaptureFlowViewModel` and the result/settings
 > placeholders were subsequently rewritten by the UI spec (`specs/ui/`). For current

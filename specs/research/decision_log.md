@@ -152,7 +152,7 @@ The carb-estimation pipeline is the technical risk concentration. Bundling clini
 ## Decision 5: Accuracy target — <20% MAPE, ≤10 g MAE for v1
 
 **Date**: 2026-05-05
-**Status**: accepted
+**Status**: amended — the MAE reference was relaxed from ≤10 g to ≤25 g per the v0.4 requirements diff (Req 21.3 / design §0), and is now an informational reference rather than a CI gate (Decision 41). MAPE < 20% is unchanged.
 
 ### Context
 
@@ -218,7 +218,7 @@ LiDAR alone produces metric volume on iPhone 12 Pro+; the card adds an independe
 ## Decision 7: iPhone 12 Pro and later (LiDAR floor)
 
 **Date**: 2026-05-05
-**Status**: accepted
+**Status**: superseded — the v1 hardware floor was narrowed to iPhone 13 Pro Max only, iOS 26.5 minimum (Req 1.2 / design §0; device-narrowing landed with Decision 40 / task 75). The non-LiDAR relaxation noted here still applies at runtime (`noLidarConfidence`), but the calibration/performance targets are measured only on iPhone 13 Pro Max.
 
 ### Context
 
@@ -734,7 +734,7 @@ Affects Req 11.7 (calibration sample size), Req 21.4 (test-set partitioning), th
 ## Decision 21: Confidence sub-confidences floored at ε = 0.05 before geometric mean
 
 **Date**: 2026-05-06
-**Status**: accepted
+**Status**: superseded by Decision 45 (ε floor lowered from 0.05 to 0.01). The ≥50% single-view LiDAR-coverage refusal referenced in this entry is further superseded by Decision 47 (relaxed to 30%).
 
 ### Context
 
@@ -947,7 +947,7 @@ The 300 ms two-view budget at 576k voxels × 2 projections × per-class probabil
 ## Decision 27: Segmenter weights and CoFID/IFCDB SQLite ship in the app binary
 
 **Date**: 2026-05-07
-**Status**: accepted
+**Status**: amended by Decision 39 — the bundled databases are now CoFID + AFCD (both always present, CoFID-wins COALESCE); the IFCDB overlay and its user toggle are removed. The core decision (bundle weights + food DB in the app binary, no CDN) is unchanged.
 
 ### Context
 
