@@ -8,6 +8,7 @@
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
+| [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | 2026-06-23 | Done | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
 
 ---
 
@@ -66,3 +67,11 @@ Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCo
 - [prerequisites.md](pipeline-real-device-correctness/prerequisites.md)
 - [requirements.md](pipeline-real-device-correctness/requirements.md)
 - [tasks.md](pipeline-real-device-correctness/tasks.md)
+
+## LiDAR First Scale Fallback
+
+Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting.
+
+- [decision_log.md](lidar-first-scale-fallback/decision_log.md)
+- [smolspec.md](lidar-first-scale-fallback/smolspec.md)
+- [tasks.md](lidar-first-scale-fallback/tasks.md)
