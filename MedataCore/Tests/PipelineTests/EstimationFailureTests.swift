@@ -206,6 +206,83 @@ final class EstimationFailureTests: XCTestCase {
         }
     }
 
+    // MARK: - LiDAR-first scale fallback (Decision 1)
+    //
+    // A degenerate card read (four collinear corners → CardPoseSolver.solve
+    // throws degenerateCardPose, proven by CardPoseSolverTests) must NOT abort
+    // the estimate when the nadir frame carries LiDAR depth: cardPose is treated
+    // as absent and the pipeline proceeds on the LiDAR-only scale + plane path.
+    // Other downstream refusals on synthetic fixtures are acceptable; throwing a
+    // card EstimationFailure would be the regression.
+    func testCardSolveFailureWithLidarDepthDoesNotThrowCardFailure() async throws {
+        let pipeline = Pipeline(
+            cardDetector: CollinearCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        let nadirWithDepth = RawFrame.fixture(
+            timestampMonotonicNs: 7,
+            depth: makeMinimalDepthMap()
+        )
+        // Non-empty pre-shutter mask so the SupportPlaneFitter empty-mask gate
+        // (Decision 2) does not pre-empt Stage C's card-solve outcome.
+        let mask = makeNonEmptyMask(
+            width: nadirWithDepth.imageWidth, height: nadirWithDepth.imageHeight
+        )
+        let captureResult = CaptureResult(
+            capturePath: .singleViewLidar,
+            lidar: LiDARStatus(available: true, foodRegionCoveragePercent: 90),
+            nadirFrame: nadirWithDepth,
+            obliqueFrame: nil,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v1",
+            preShutterFoodMask: mask
+        )
+        do {
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .single)
+            // Reaching success is fine — the fallback did not refuse.
+        } catch EstimationFailure.degenerateCardPose {
+            XCTFail("LiDAR depth present: card-solve failure must fall back, not throw degenerateCardPose")
+        } catch EstimationFailure.cardTooOblique {
+            XCTFail("LiDAR depth present: card-solve failure must fall back, not throw cardTooOblique")
+        } catch {
+            // Other refusals on these synthetic fixtures are acceptable.
+        }
+    }
+
+    // The mirror case: with NO LiDAR depth, the same degenerate card read has no
+    // alternative scale source, so the pipeline must still refuse with
+    // degenerateCardPose (proving the fallback does not fire unconditionally).
+    func testCardSolveFailureWithoutLidarDepthRefuses() async throws {
+        let pipeline = Pipeline(
+            cardDetector: CollinearCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore()
+        )
+        let nadirNoDepth = RawFrame.fixture(timestampMonotonicNs: 8)   // no depth
+        // Non-empty pre-shutter mask so the empty-mask gate does not fire first.
+        let mask = makeNonEmptyMask(
+            width: nadirNoDepth.imageWidth, height: nadirNoDepth.imageHeight
+        )
+        let captureResult = CaptureResult(
+            capturePath: .twoViewSfS,
+            lidar: .unavailable,
+            nadirFrame: nadirNoDepth,
+            obliqueFrame: nil,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v1",
+            preShutterFoodMask: mask
+        )
+        do {
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
+            XCTFail("Expected EstimationFailure.degenerateCardPose")
+        } catch EstimationFailure.degenerateCardPose {
+            // expected — no LiDAR depth, so the card is the only scale source.
+        }
+    }
+
     // |oblique − 25°| ≤ 30° must NOT throw the new refusal — at the boundary
     // (oblique = 55° → |Δ| = 30) the pipeline proceeds past the tilt gate.
     // Other downstream refusals are acceptable; only obliqueTiltOutOfRange
@@ -247,6 +324,21 @@ final class EstimationFailureTests: XCTestCase {
 
 private struct NilCardDetector: CardDetector {
     func detect(in frame: RawFrame) async -> [PixelCorner]? { nil }
+}
+
+// Returns four collinear corners. CardPoseSolver.solve throws degenerateCardPose
+// on these (rank-deficient homography), per CardPoseSolverTests
+// .testDegenerateCardPoseWhenAllCornersCollinear. Used to drive Stage C's
+// card-solve failure path deterministically.
+private struct CollinearCardDetector: CardDetector {
+    func detect(in frame: RawFrame) async -> [PixelCorner]? {
+        [
+            PixelCorner(100, 100),
+            PixelCorner(200, 100),
+            PixelCorner(300, 100),
+            PixelCorner(400, 100)
+        ]
+    }
 }
 
 private struct EmptyFoodDatabase: FoodDatabase {

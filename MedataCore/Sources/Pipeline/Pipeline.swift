@@ -114,6 +114,22 @@ public struct Pipeline: Sendable {
         if let c = corners {
             do {
                 cardPose = try CardPoseSolver.solve(corners: c, intrinsics: nadir.intrinsics)
+            } catch CardPoseError.degenerateCardPose where nadir.depth != nil {
+                // LiDAR-first fallback (Decision 1): a degenerate card read does
+                // not abort the estimate when LiDAR depth is present — LiDAR
+                // supplies both scale and support plane. Continue with cardPose
+                // absent; the post-block logStageEnd fires the single stage-end.
+                #if DEBUG
+                supportPlaneLog.info("event=scale.card_fallback reason=degenerateCardPose")
+                #endif
+                cardPose = nil
+            } catch CardPoseError.cardTooOblique where nadir.depth != nil {
+                // LiDAR-first fallback (Decision 1): same as above for an oblique
+                // card. Continue on the LiDAR-only path.
+                #if DEBUG
+                supportPlaneLog.info("event=scale.card_fallback reason=cardTooOblique")
+                #endif
+                cardPose = nil
             } catch CardPoseError.degenerateCardPose {
                 #if DEBUG
                 logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
@@ -127,6 +143,9 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.cardTooOblique
             } catch {
+                // Generic (unexpected) card-solve errors stay fail-closed
+                // (Decision 2): refuse regardless of LiDAR depth so unknown
+                // failures stay surfaced rather than masked behind a LiDAR fit.
                 #if DEBUG
                 logStageEnd(name: "CardDetection", startedAt: cardStartedAt)
                 pipelineSignposter.endInterval("CardDetection", cardInterval)
