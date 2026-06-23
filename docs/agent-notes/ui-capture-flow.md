@@ -55,6 +55,16 @@ composition only; all behaviour is in the model and is unit-tested.
 - **Tilt target depends on stage.** `liveSampleDidUpdate` takes raw
   `tiltDegrees` (angle from straight-down); the model computes in-range against
   0° for nadir and 25° once `firstFrame != nil` (awaiting oblique, §2.2/§2.3).
+- **Nadir shutter is gated on a usable pre-shutter mask (`hasUsablePreShutterMask`).**
+  `canShutter` (and the `shutter()` command) refuse the nadir stage until
+  `preShutterSegmenter.latest` exists and is within the same 750 ms freshness
+  bound `performFlow` applies at the nadir-capture instant. Without this, the
+  first tap of a session could fire while `latest` was still nil →
+  `maskAgeMs=-1` → `emptyFoodMask` → `noFoodPixels` refusal; the second tap then
+  succeeded. The gate is bypassed when no segmenter is injected (tests / legacy;
+  `App.swift` always passes one) so the shutter is never permanently disabled.
+  Disabled-nadir state reuses the existing `ShutterButtonState.disabled` "waiting"
+  UX. Regression: `specs/bugfixes/first-shot-nofoodpixels-race/report.md`.
 - **Path hint is frozen at shutter tap** and locked to `.twoViewSfS` while
   awaiting the oblique view (so a coverage flip can't switch paths mid-sequence).
 - **§8.3 is best-effort (Decision 12).** Backgrounding cancels the in-flight

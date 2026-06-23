@@ -140,10 +140,32 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             if firstFrame != nil {
                 return obliqueTiltOk(degrees: indicators.liveTiltDegrees)
             }
-            return true
+            // First-shot race (fix/first-shot-nofoodpixels): the nadir shutter
+            // must not arm until a usable pre-shutter food mask exists. Without
+            // this, the very first tap of a session could fire while
+            // `preShutterSegmenter.latest` is still nil — `performFlow` then
+            // built a CaptureResult with `maskAgeMs=-1`, the support-plane
+            // fitter's empty-mask gate refused, and the tap mapped to
+            // `EstimationFailure.noFoodPixels`. The second tap (mask now ready)
+            // succeeded. Gating here turns that failed first shot into the
+            // existing disabled-shutter "waiting" UX instead of a refusal.
+            return hasUsablePreShutterMask
         default:
             return false
         }
+    }
+
+    // True iff the pre-shutter producer currently holds a mask fresh enough to
+    // survive the nadir-instant staleness gate. The 750 ms bound mirrors the
+    // ceiling applied in `performFlow` at the nadir-capture instant so the
+    // shutter never arms on a mask that the capture path would then discard
+    // (no arm-then-refuse). When no producer is injected (legacy / unit-test
+    // callers, App.swift always passes one) the gate is bypassed so the shutter
+    // is never permanently disabled.
+    private var hasUsablePreShutterMask: Bool {
+        guard let producer = preShutterSegmenter else { return true }
+        guard let ts = producer.latest else { return false }
+        return millisecondsBetween(ts.producedAt, ContinuousClock.now) <= 750
     }
 
     // True iff the live tilt is within the oblique hard cap window
@@ -202,6 +224,14 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         // Decision 18 / research Decision 43: only the oblique stage retains a
         // tilt hard cap; nadir captures always proceed regardless of tilt.
         if firstFrame != nil, !obliqueTiltOk(degrees: indicators.liveTiltDegrees) {
+            return
+        }
+        // First-shot race (fix/first-shot-nofoodpixels): mirror the `canShutter`
+        // nadir gate so a programmatic / racing fire can't begin a nadir capture
+        // before a usable pre-shutter mask exists. The UI already disables the
+        // button when `canShutter` is false; this is the matching command-side
+        // guard, consistent with the distance / oblique-tilt re-checks above.
+        if firstFrame == nil, !hasUsablePreShutterMask {
             return
         }
 
