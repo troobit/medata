@@ -70,9 +70,13 @@ composition only; all behaviour is in the model and is unit-tested.
 - **§8.3 is best-effort (Decision 12).** Backgrounding cancels the in-flight
   `flowTask` and resets UI to `.initialising`; the pipeline has no cooperative
   cancellation so a `MealRecord` may still be persisted.
-- **`PendingPipeline` stand-in** in `App.swift` throws `.noScaleAvailable` until
-  the segmenter-weights smolspec lands a real `Pipeline` (Decision 13). Capture,
-  gating, and the refusal flow work; estimation surfaces a refusal for now.
+- **Real pipeline, dev-stub segmenter.** `App.swift` now wires
+  `Pipeline.makeForDevice(store:cardDetector:)` (the `PendingPipeline` stand-in
+  was deleted — research task 81). Under `DEV_STUB_SEGMENTER` (Phase 1) the
+  pipeline runs end-to-end with `StubInferenceEngine`, producing a placeholder
+  carb value rather than a refusal. Capture, gating, refusal, and persistence all
+  work; real estimates await the Phase 3 trained model (Blocker 1 in
+  [`pipeline-wiring-status.md`](pipeline-wiring-status.md)).
 
 ## Tests
 

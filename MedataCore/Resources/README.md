@@ -2,7 +2,7 @@
 
 Bundled resources loaded at runtime by `MedataCore`:
 
-- `food_segmenter.mlpackage/` — Core ML segmenter (decision 27, task 23 output).
+- `segmenter.mlpackage/` — Core ML segmenter (decision 27, task 23 output).
   Produced by `tools/segmenter/export.py` from a PyTorch checkpoint.
   Filename must match the `PipelineFactory` loader.
   Not committed; built locally or by CI and bundled at build time.

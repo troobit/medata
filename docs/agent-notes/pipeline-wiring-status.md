@@ -1,14 +1,54 @@
 # Pipeline factory wiring — status and next steps
 
-**Status:** Parked. Investigated 2026-05-23; no code changes shipped from this investigation.
+**Status:** Largely landed. The 2026-05-23 investigation below is **superseded** —
+the real factory, the RGB conversion, and `VisionCardDetector` have all since
+shipped. The only remaining blocker is **Blocker 1 (no trained segmenter
+checkpoint)**. The rest of this note is kept as historical context; see the
+"Update (current state)" section directly below for what's actually true now.
 
-## Summary
+## Update (current state)
 
-The iOS app currently wires `pipeline: PendingPipeline()` in `App/App.swift:35`. `PendingPipeline.estimate(_:)` (`App/App.swift:79-83`) unconditionally throws `EstimationFailure.noScaleAvailable`. The user-visible effect is that every tap of the shutter results in an `Estimating…` flash followed by the refusal banner — the pipeline is *engaged* (the protocol call goes through) but cannot *produce* a `MealRecord` because the real `Pipeline` factory is not constructed.
+What changed since the original 2026-05-23 investigation:
 
-This is by design, documented in:
+- **`PendingPipeline` is gone.** `App/App.swift` now wires a real pipeline via
+  `Pipeline.makeForDevice(store:cardDetector:)`
+  (`MedataCore/Sources/Pipeline/PipelineFactory.swift`). Engine selection is a
+  compile-time gate: `DEV_STUB_SEGMENTER` (Phase 1/Debug) uses
+  `StubInferenceEngine` and stamps `segmenterSource = "dev_stub"`; without it
+  (Phase 3/Release) it loads the bundled Core ML model. So **Step 3 below is
+  done** and **Step 1 (Blocker 2) is done** (see next bullet).
+- **Blocker 2 (YCbCr→RGB) is resolved.** `copyPixelBufferBytes` /
+  `detectPixelFormat` are deleted; `PixelBufferAdapter.convert`
+  (`MedataCore/Sources/CaptureKit/PixelBufferAdapter.swift`) converts captured
+  frames to BGRA8 at the capture boundary and `pixelFormat` is now truthful.
+  Shipped via `specs/rawframe-rgb-conversion/` (all tasks complete).
+- **`VisionCardDetector` exists** (`App/VisionCardDetector.swift`) — so **Step 4
+  below is done**, not deferred. Tests use `NullCardDetector`
+  (`MedataCore/Sources/Pipeline/NullCardDetector.swift`, a production source file
+  now, not lifted from a test target).
+- **Artefact name is settled: `segmenter.mlpackage`.** `export.py`, `.gitignore`,
+  and `PipelineFactory.makeSegmenter` all use that one name — no renaming step.
+  The only remaining loader nuance is that it reads from `Bundle.main` rather
+  than via `Bundle.module`, and the resource isn't declared in `Package.swift`;
+  align that when the trained model lands (see `docs/architecture.md` §9).
+
+**Bottom line:** only **Blocker 1** (train + export the checkpoint) remains, plus
+the minor `Bundle.module`/`Package.swift` loader tidy-up. Everything else in the
+original note is history.
+
+---
+
+## Original investigation (2026-05-23, superseded)
+
+> The remainder of this note records the state at the time of the 2026-05-23
+> investigation. It is retained for context; see the update above for what is
+> true now.
+
+The iOS app at the time wired `pipeline: PendingPipeline()` in `App/App.swift`. `PendingPipeline.estimate(_:)` unconditionally threw `EstimationFailure.noScaleAvailable`. The user-visible effect was that every tap of the shutter resulted in an `Estimating…` flash followed by the refusal banner — the pipeline was *engaged* (the protocol call went through) but could not *produce* a `MealRecord` because the real `Pipeline` factory was not constructed.
+
+This was by design, documented at the time in:
 - `specs/ui/requirements.md:14` Out of Scope: *"Bundling the Core ML segmenter weights (separate smolspec)"*
-- `App/App.swift:74-78` PendingPipeline doc-comment: *"used until the segmenter-weights smolspec bundles the Core ML model and a real `Pipeline` factory lands"*
+- `App/App.swift` PendingPipeline doc-comment: *"used until the segmenter-weights smolspec bundles the Core ML model and a real `Pipeline` factory lands"*
 
 Wiring the real factory was attempted as a smolspec on 2026-05-23 and parked when two upstream blockers were discovered. This note records them and what's needed to unblock.
 
@@ -33,6 +73,10 @@ Producing the checkpoint requires:
 This is days of ML work, not a code task. It is **the** prerequisite for the food-estimation pipeline going live.
 
 ## Blocker 2 — `RawFrame.imageBytes` is unusable for RGB consumers
+
+> **RESOLVED** (see "Update (current state)" above). Shipped via
+> `specs/rawframe-rgb-conversion/` — `PixelBufferAdapter` now converts to BGRA8.
+> The diagnosis below is retained as the historical record of the bug.
 
 Any code that needs to read the captured image as RGB — the segmenter pre-processor, a future `VisionCardDetector`, or anything else hitting `CGImage` / `Vision` — needs `RawFrame.imageBytes` to be a known-format contiguous RGB buffer. It isn't.
 
@@ -84,7 +128,12 @@ It touches one source file but is load-bearing for every downstream consumer of 
 
 ## Next steps — order of operations
 
-These are sequenced. Do not skip ahead.
+> **Mostly superseded.** Steps 1, 3, and 4 below have shipped (see "Update
+> (current state)" above). Only **Step 2 (train + export the segmenter
+> checkpoint)** plus the minor `Bundle.module`/`Package.swift` loader tidy-up
+> remain. The sequenced list is kept for the rationale.
+
+These were sequenced. Do not skip ahead.
 
 ### 1. Resolve Blocker 2 (RawFrame YCbCr → RGB)
 

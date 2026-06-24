@@ -182,7 +182,7 @@ Tasks 19–23 are done. Modules added in this phase:
 - `Segmentation/CoreMLSegmenter.swift` also hosts `SegmenterWeightsBudget` which
   walks `.mlpackage` directories recursively to enforce Req 8.2 (≤ 10 MB).
 - `tools/segmenter/export.py` — PyTorch DeepLabV3 + MobileNetV3-Large → Core ML
-  (`coremltools.convert`) → `MedataCore/Resources/food_segmenter.mlpackage` (the name
+  (`coremltools.convert`) → `MedataCore/Resources/segmenter.mlpackage` (the name
   the `PipelineFactory` loader expects); the same
   checkpoint also exports to TFLite via `ai-edge-torch`. ONNX hop is bypassed
   (decision 28). A reference image is run through both artefacts and per-pixel

@@ -11,7 +11,7 @@ import SupportPlane
 //   - DEV_STUB_SEGMENTER defined (Phase 1, Debug): `StubInferenceEngine` — no model
 //     file required; stamps `segmenterSource = "dev_stub"`.
 //   - DEV_STUB_SEGMENTER undefined (Phase 3, Release): `CoreMLInferenceEngine`
-//     loading the bundled `food_segmenter.mlpackage`; stamps
+//     loading the bundled `segmenter.mlpackage`; stamps
 //     `segmenterSource = "coreml_<modelVersion>"`. Throws on missing model.
 //
 // The bundled CoFID + AFCD food database (Decision 39) is loaded via
@@ -21,7 +21,7 @@ import SupportPlane
 // mock conformance.
 
 public enum PipelineFactoryError: Error, Equatable {
-    // Phase 3: the bundled `food_segmenter.mlpackage` is not present in the
+    // Phase 3: the bundled `segmenter.mlpackage` is not present in the
     // app's main bundle. Phase 1 should never reach this branch.
     case segmenterModelMissing
 }
@@ -59,7 +59,7 @@ extension Pipeline {
         let modelPath = "/dev/null"
         #else
         guard let modelURL = Bundle.main.url(
-            forResource: "food_segmenter", withExtension: "mlpackage"
+            forResource: "segmenter", withExtension: "mlpackage"
         ) else {
             throw PipelineFactoryError.segmenterModelMissing
         }

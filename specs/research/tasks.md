@@ -12,7 +12,7 @@ references:
 > checked tasks have a Phase-3 deliverable that is **not yet produced** because it depends on prerequisites
 > the agent cannot satisfy (trained model, gravimetric dataset):
 > - **Tasks 22–23** — the `CoreMLSegmenter` wrapper and the `export.py` pipeline are written, but **no
->   trained `food_segmenter.mlpackage` exists**; Release builds throw `segmenterModelMissing` until Phase 3
+>   trained `segmenter.mlpackage` exists**; Release builds throw `segmenterModelMissing` until Phase 3
 >   bundles it (see task 80). Inference is exercised only via `StubInferenceEngine`.
 > - **Tasks 58–65** — the β-calibration and accuracy/mIoU harness are restored under `#if HARNESS_ENABLED`,
 >   but their outputs (calibrated β_c, measured MAPE/MAE/mIoU) **have not been produced**; they require the
@@ -175,7 +175,7 @@ references:
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
 
 - [x] 22. Implement `CoreMLSegmenter` with ANE inference + Metal-backed probability tensor <!-- id:0f06zzo -->
-  - **Code-complete; Phase-3 model pending.** The wrapper is written and unit-tested, but no trained `food_segmenter.mlpackage` exists — runtime inference is exercised only via `StubInferenceEngine` (Phase 1). See the top-of-file note.
+  - **Code-complete; Phase-3 model pending.** The wrapper is written and unit-tested, but no trained `segmenter.mlpackage` exists — runtime inference is exercised only via `StubInferenceEngine` (Phase 1). See the top-of-file note.
   - Load Core ML model via `MLModel.compileModel` if needed; force ANE compute units where available, CPU fallback for dev builds.
   - Construct `ProbabilityTensor` whose canonical `bytes` field is the portable contract; `MTLBuffer` is private adaptor (P1).
   - Apply pre/post-processing from task 20.
@@ -183,10 +183,10 @@ references:
   - Requirements: [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5), [16.5](requirements.md#16.5)
 
 - [x] 23. Implement Python segmenter export pipeline (PyTorch → Core ML + TFLite) <!-- id:0f06zzp -->
-  - **Script written; no checkpoint exists.** `export.py` runs, but the trained PyTorch checkpoint it converts has not been produced (Phase 3 / dataset prerequisites), so `food_segmenter.mlpackage` is not yet bundled. See the top-of-file note.
+  - **Script written; no checkpoint exists.** `export.py` runs, but the trained PyTorch checkpoint it converts has not been produced (Phase 3 / dataset prerequisites), so `segmenter.mlpackage` is not yet bundled. See the top-of-file note.
   - Python script in `tools/segmenter/export.py`: torchvision DeepLabV3+MobileNetV3-Large checkpoint → `coremltools.convert(...)` → Core ML; same checkpoint → `ai-edge-torch` → TFLite (validation only in v1).
   - Verify both exports produce numerically equivalent output on a reference image.
-  - Save Core ML weights into `MedataCore/Resources/food_segmenter.mlpackage` (bundled per Decision 27; filename must match the `PipelineFactory` loader).
+  - Save Core ML weights into `MedataCore/Resources/segmenter.mlpackage` (bundled per Decision 27; filename must match the `PipelineFactory` loader).
   - ONNX hop is bypassed (Decision 28).
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
   - Requirements: [8.5](requirements.md#8.5), [18.3](requirements.md#18.3)
@@ -632,7 +632,7 @@ references:
   - Add `static func makeForDevice(store: any PersistenceStore, palette: ClassPalette = .v1Standard) throws -> Pipeline` in `MedataCore/Sources/Pipeline/Pipeline.swift`.
   - Selects engine via `#if DEV_STUB_SEGMENTER` -> `StubInferenceEngine`, else `CoreMLInferenceEngine`.
   - Stamps `segmenterSource` as `"dev_stub"` or `"coreml_<modelVersion>"`. Constructs `GRDBFoodDatabase.bundled()`.
-  - Tests: under DEV_STUB_SEGMENTER, factory returns a Pipeline whose end-to-end estimate succeeds against a fixture `CaptureResult` and produces a `MealRecord` with `segmenterSource == "dev_stub"`; without the flag, factory throws on missing `food_segmenter.mlpackage` (Phase 3 will bundle the model).
+  - Tests: under DEV_STUB_SEGMENTER, factory returns a Pipeline whose end-to-end estimate succeeds against a fixture `CaptureResult` and produces a `MealRecord` with `segmenterSource == "dev_stub"`; without the flag, factory throws on missing `segmenter.mlpackage` (Phase 3 will bundle the model).
   - Decision: 42
   - Blocked-by: 0f07014 (Fix `PipelineEstimator` protocol signature to include `mode:`), 0f07013 (Implement StubInferenceEngine), 0f07015 (Define `DEV_STUB_SEGMENTER` Swift compile flag in `Package.swift`)
   - Requirements: [23.1](requirements.md#23.1), [23.5](requirements.md#23.5), [23.6](requirements.md#23.6)

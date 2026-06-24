@@ -149,7 +149,7 @@ extension Pipeline {
         let source = "dev_stub"
         #else
         let engine: SegmenterInferenceEngine = try CoreMLInferenceEngine(
-            modelURL: Bundle.main.url(forResource: "food_segmenter", withExtension: "mlpackage")!,
+            modelURL: Bundle.main.url(forResource: "segmenter", withExtension: "mlpackage")!,
             palette: palette
         )
         let source = "coreml_\(CoreMLInferenceEngine.modelVersion)"

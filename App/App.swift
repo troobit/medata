@@ -57,7 +57,7 @@ struct MedataApp: App {
 
         // Decision 42 / Req §23: real Pipeline backed by the dev-stub segmenter
         // under DEV_STUB_SEGMENTER (Phase 1, Debug). Release builds will throw
-        // until Phase 3 bundles `food_segmenter.mlpackage`; `try!` is correct
+        // until Phase 3 bundles `segmenter.mlpackage`; `try!` is correct
         // because a missing model at launch is a development error, not a
         // recoverable runtime condition.
         _model = State(initialValue: CaptureFlowModel(

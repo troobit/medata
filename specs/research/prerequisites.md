@@ -29,7 +29,7 @@ These tasks must be completed by the user before or during implementation. The c
 
 - [ ] **Calibrate test devices' camera intrinsics** if `AVCameraCalibrationData` is unavailable on the chosen capture format (rare; blocks task 9 device verification)
 - [ ] **Record fixture batches** of representative meals on the v1 hardware floor: at least 10 meals each for `single_view_lidar` and `two_view_sfs` paths, with cached probability tensors and gravimetric ground-truth (blocks tasks 60–62 accuracy harness end-to-end runs)
-- [ ] **Confirm bundle artefacts produced**: `cofid_db.sqlite`, `afcd_db.sqlite`, `food_segmenter.mlpackage` (≤ 10 MB after FP16 quantisation per Req 8.2) (blocks any device build that reads bundled resources)
+- [ ] **Confirm bundle artefacts produced**: `cofid_db.sqlite`, `afcd_db.sqlite`, `segmenter.mlpackage` (≤ 10 MB after FP16 quantisation per Req 8.2) (blocks any device build that reads bundled resources)
 
 ## Notes
 
