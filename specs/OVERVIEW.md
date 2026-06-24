@@ -1,5 +1,7 @@
 # Specs Overview
 
+> Cross-cutting architectural decisions are distilled in the meta decision log: [DECISIONS.md](DECISIONS.md). Per-spec decision logs below remain authoritative for detail.
+
 | Name | Creation Date | Status | Summary |
 |------|---------------|--------|---------|
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | 2026-05-06 | Done | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
