@@ -369,7 +369,7 @@ The two foundational specs this architecture sits on top of:
 |---|---|
 | [`specs/research/requirements.md`](../specs/research/requirements.md) | Numbered requirements, §0 phase plan, §1.2 hardware floor (iPhone 13 Pro Max + iOS 26.5), §23 dev-stub phasing, mathematical pipeline, modelling assumptions, academic sources |
 | [`specs/research/design.md`](../specs/research/design.md) | Module map, interfaces (§3), data models (§4), portable algorithm pseudocode (§6), testing strategy (§7) |
-| [`specs/research/decision_log.md`](../specs/research/decision_log.md) | Architectural decisions D1–D31 (LLM→CV, platform-neutral core, protobuf contracts, …) |
+| [`specs/research/decision_log.md`](../specs/research/decision_log.md) | Architectural decisions D1–D47 (LLM→CV, platform-neutral core, protobuf contracts, …) |
 | [`specs/research/tasks.md`](../specs/research/tasks.md) | Implementation task breakdown |
 | [`specs/ui/requirements.md`](../specs/ui/requirements.md) | Capture-flow UI requirements |
 | [`specs/ui/design.md`](../specs/ui/design.md) | `CaptureFlowModel` state machine, components, AR-session ownership, test seams |
@@ -390,7 +390,7 @@ under `specs/bugfixes/` — go through `specs/OVERVIEW.md`.
 | Change the single-vs-two-view rule | `Pipeline/CapturePathDispatch.swift` **and** `App/CapturePathDecider.swift` |
 | Add/modify a persisted field | edit the `.proto` in `PortableContracts/Schemas/`, regenerate, update `Persistence` |
 | Change a volume algorithm | `Volume/` (Metal kernels in `Volume/Kernels/`) + `specs/research/design.md` §6.6/§6.7 |
-| Retrain/replace the segmenter | `tools/segmenter/export.py` → `food_segmenter.mlpackage` (filename the `PipelineFactory` loader expects) |
+| Retrain/replace the segmenter | `tools/segmenter/export.py` → `segmenter.mlpackage`, bundled into the `Segmentation` module and loaded via `Bundle.module` — the same resource pattern as the `Foods` food DB (`GRDBFoodDatabase.bundled()`). **Known gap (Phase 3):** the `PipelineFactory` loader still looks up `food_segmenter` in `Bundle.main` and the resource is not yet declared in `Package.swift`; align both to this pattern when the trained model lands. |
 | Regenerate the food DB | `tools/food_db/generate.py` |
 | Change confidence thresholds | `Confidence/` + `App/ResultView.swift` (pill labels) |
 | Add an app-facing core type | re-export it from `Pipeline.swift` (`@_exported import`) |

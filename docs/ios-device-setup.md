@@ -76,9 +76,9 @@ Reference: [Adding capabilities to your app](https://developer.apple.com/documen
 
 The pipeline lives in the SPM at the repo root (`Package.swift`). The iOS app lives in `MeData/MeData.xcodeproj`, which depends on the SPM as a local package. This split is deliberate: the algorithm code is testable on macOS without an iPhone, and reusable from a future Android harness.
 
-The SPM exposes one library product, `MedataCore`, which is the `Pipeline` target. `Pipeline` re-exports `Persistence` and `PortableContracts` via `@_exported import` so the app only needs `import Pipeline` to get `MealRecord`, `EstimationFailure`, and the `Pb*` proto types. Anything *not* re-exported (e.g. `CaptureKit`, `Foods`) requires the app to add the matching local package product first.
+The SPM exposes one library product, `MedataCore`, which is the `Pipeline` target. `Pipeline` re-exports `Persistence`, `PortableContracts`, `Segmentation`, and `SupportPlane` via `@_exported import` so the app only needs `import Pipeline` to get `MealRecord`, `EstimationFailure`, the `Pb*` proto types, and those modules' public surfaces. Anything *not* re-exported (e.g. `CaptureKit`, `Foods`) requires the app to add the matching local package product first.
 
-The SPM also exposes a macOS-only executable, `HarnessCLI`, plus a `HarnessCore` library used by tests. **`HarnessCore` is not needed by the iOS app** but does no harm if linked accidentally — only macOS-specific code paths in it would fail to link, and there are none.
+The SPM also defines a macOS-only `HarnessCLI` executable and a `HarnessCore` target (used only by `HarnessCLI` and the offline tests). Neither is exposed as a library *product*, so neither appears when adding the package to the app, and the shipping app links zero harness code (the `HARNESS_ENABLED` flag is defined only on the harness targets — see `Package.swift`).
 
 ## 3. Code signing on a fresh clone
 
@@ -185,7 +185,7 @@ Reference: [Running your app in Simulator or on a device](https://developer.appl
 | Build error: `Sandbox: bash deny(1) file-write-create` for SPM build cache | Fresh checkout permissions | Clean Build Folder (⇧⌘K), retry |
 | `App installation failed: Unable to install MeData` | Provisioning profile mismatch | Toggle **Automatically manage signing** off and on, or delete `~/Library/MobileDevice/Provisioning\ Profiles/` and rebuild |
 | Capture works but every meal carries `noLidarConfidence` | Expected on non-LiDAR devices (Req 7.4) | Use a LiDAR device for spec-compliant captures |
-| `BGTaskScheduler` errors in console on launch | `BGTaskSchedulerPermittedIdentifiers` missing or doesn't match the identifier registered in `RetentionScheduler` | [§4](#4-infoplist-privacy-strings-deferred) — add when wiring up retention |
+| `BGTaskScheduler` errors in console on launch | `BGTaskSchedulerPermittedIdentifiers` missing or doesn't match the identifier registered in `RetentionScheduler` | [§4](#4-infoplist-privacy-strings) — add when wiring up retention |
 
 ## Appendix A — Recreate the Xcode project from scratch
 
@@ -199,8 +199,8 @@ Only needed if the committed `MeData/MeData.xcodeproj` is somehow broken beyond 
 | A.4 | Save inside the repo root. Xcode wraps the project in a folder named after the product → `<repo-root>/MeData/MeData.xcodeproj` plus a sibling `<repo-root>/MeData/MeData/` sources folder. Untick *Create Git repository* (the repo already exists). |
 | A.5 | Project editor → target → **Signing & Capabilities** → tick **Automatically manage signing**, pick your **Team**, set **Bundle Identifier**. |
 | A.6 | Project editor → target → **General** → **Minimum Deployments → iPhone**: set to **26.5** (Req 1.2 OS floor). |
-| A.7 | **File → Add Package Dependencies… → Add Local…** and pick the repo root (the folder containing `Package.swift`). The dialog lists `MedataCore` and `HarnessCore` products. Tick **MedataCore** (you can also tick `HarnessCore` — it's harmless on iOS, just dead weight). Ensure the **Add to Target** column shows **MeData**. Click **Add Package**. |
-| A.8 | **File → Add Files to "MeData"…** → navigate to the repo's `App/` folder → select `App.swift`, `CaptureFlowView.swift`, `ResultView.swift`, `SettingsView.swift`. **Uncheck "Copy items if needed"** so they stay in `App/` and aren't duplicated. Tick **Add to targets: MeData**. Click **Add**. Note: Xcode 16+ may show the added files flat in the Project navigator rather than under a virtual `App/` group — they're still in the target. |
+| A.7 | **File → Add Package Dependencies… → Add Local…** and pick the repo root (the folder containing `Package.swift`). The dialog lists only the `MedataCore` library product (`HarnessCore` is an internal target, not a product, so it does not appear). Tick **MedataCore**. Ensure the **Add to Target** column shows **MeData**. Click **Add Package**. |
+| A.8 | **File → Add Files to "MeData"…** → navigate to the repo's `App/` folder → select **all `*.swift` files** in it (the committed project references each `App/*.swift` individually via `../App/…`, so every Swift source must be added — do not add `README.md`). **Uncheck "Copy items if needed"** so they stay in `App/` and aren't duplicated. Tick **Add to targets: MeData**. Click **Add**. Note: Xcode 16+ may show the added files flat in the Project navigator rather than under a virtual `App/` group — they're still in the target. |
 | A.9 | In the Project navigator, under `MeData/MeData/`, right-click and delete the auto-generated `MeDataApp.swift` and `ContentView.swift`. They conflict with `App/App.swift`'s `@main` declaration. Keep `Assets.xcassets`. |
 | A.10 | ⌘B. Build should succeed. |
 | A.11 | Connect iPhone, ⌘R to run. |

@@ -7,8 +7,10 @@
 This document is the end-to-end recipe for producing the two model artefacts that
 the iOS app depends on at runtime:
 
-1. **The segmenter** — a 27-class semantic segmentation network (`food_segmenter.mlpackage`,
-   the filename the `PipelineFactory` loader expects) bundled into the iOS binary, run on the Apple Neural Engine.
+1. **The segmenter** — a 27-class semantic segmentation network (`segmenter.mlpackage`)
+   bundled into the iOS binary, run on the Apple Neural Engine. (Runtime bundling/loader
+   alignment is a Phase 3 task — see the "Known gap" note in
+   [`architecture.md`](architecture.md) §9.)
 2. **The β_c table** — a per-class bulk-correction factor baked into
    `cofid_db.sqlite`, applied to volume estimates before macro calculation.
 
@@ -141,7 +143,7 @@ Two sources of truth, kept in sync by hand because they're tiny:
 
 | File | Role |
 | --- | --- |
-| [tools/food_db/generate.py:78-104](../tools/food_db/generate.py#L78-L104) | The 24 food class IDs + names + density / macro / β rows that get baked into `cofid_db.sqlite`. |
+| [tools/food_db/generate.py:72-95](../tools/food_db/generate.py#L72-L95) | The 24 food class IDs + names + density / macro / β rows that get baked into `cofid_db.sqlite`. |
 | [MedataCore/Sources/Segmentation/ClassPalette.swift:41-53](../MedataCore/Sources/Segmentation/ClassPalette.swift#L41-L53) | Swift `ClassPalette.v1Standard` — the runtime palette consumed by `CoreMLSegmenter`. Index order must match `FOOD_DATA`. |
 
 When training, use the Python list — that's the one that maps onto the SQLite
