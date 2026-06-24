@@ -144,7 +144,7 @@ final class PreShutterSegmenter: PreShutterMaskSource {
                 let startedAt = ContinuousClock.now
                 let segmentResult = try? await segmenter.segment(raw)
                 let latencyMs = millisecondsBetween(startedAt, ContinuousClock.now)
-                await self?.finishSegmentCycle(result: segmentResult, latencyMs: latencyMs)
+                self?.finishSegmentCycle(result: segmentResult, latencyMs: latencyMs)
             }
         }
     }
@@ -200,7 +200,7 @@ final class PreShutterSegmenter: PreShutterMaskSource {
                 let startedAt = ContinuousClock.now
                 let segmentResult = try? await segmenter.segment(raw)
                 let latencyMs = millisecondsBetween(startedAt, ContinuousClock.now)
-                await self?.finishSegmentCycle(result: segmentResult, latencyMs: latencyMs)
+                self?.finishSegmentCycle(result: segmentResult, latencyMs: latencyMs)
             }
         }
     }
