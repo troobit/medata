@@ -27,7 +27,9 @@ those specs; it does not duplicate the requirements or the maths.
 
 **[`specs/OVERVIEW.md`](../specs/OVERVIEW.md) is the spec index** — every feature and
 bugfix spec, its status, summary and per-file links. Consult it first when looking for
-prior design work on any topic.
+prior design work on any topic. **[`specs/PROCESS.md`](../specs/PROCESS.md)** governs *how*
+a spec is written, sized, tracked (`rune`), and reviewed — read it before starting a new
+feature.
 
 The two foundational specs the architecture sits on top of:
 

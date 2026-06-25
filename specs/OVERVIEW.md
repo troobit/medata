@@ -1,5 +1,6 @@
 # Specs Overview
 
+> How specs are written, tracked, and turned into code: [PROCESS.md](PROCESS.md).
 > Cross-cutting architectural decisions are distilled in the meta decision log: [DECISIONS.md](DECISIONS.md). Per-spec decision logs below remain authoritative for detail.
 
 | Name | Creation Date | Status | Summary |
