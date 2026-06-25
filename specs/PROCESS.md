@@ -51,25 +51,79 @@ when a clinical or cryptographic expert joins, they own `requirements.md` or `de
 respectively, and the boundary already exists. Build for that seam now; do not collapse
 the documents into one just because one person currently writes all of them.
 
-## 3. Standard directory structure
+## 3. Directory structure, spec boundaries, and naming
 
-One folder per feature under `specs/`, named for the feature (kebab-case). The folder name
-*is* the feature name.
+A spec is a **folder under `specs/<domain>/<capability>/`**. The path encodes two things: a
+*domain* (the layer of concern, from a fixed list) and a *capability* (the one coherent
+thing this spec delivers). Both are kebab-case.
 
 ```
 specs/
-├── PROCESS.md            # this file — how specs are developed
-├── OVERVIEW.md           # the index of every spec + status (keep in sync)
-├── DECISIONS.md          # meta decision log — cross-cutting decisions distilled
-├── <feature-name>/
-│   ├── requirements.md   # the WHAT (EARS-format acceptance criteria)
-│   ├── design.md         # the HOW (architecture, data models, algorithms)
-│   ├── tasks.md          # the EXECUTION ledger (rune-managed)
-│   ├── decision_log.md   # the WHY (Enhanced Nygard ADR entries)
-│   └── prerequisites.md  # optional — preconditions for large specs
+├── PROCESS.md             # this file — how specs are developed
+├── OVERVIEW.md            # generated index — regenerate, don't hand-merge (see §9)
+├── DECISIONS.md           # meta decision log — cross-cutting decisions distilled
+├── <domain>/              # one of the fixed domains below
+│   └── <capability>/      # one coherent capability = one spec
+│       ├── requirements.md   # the WHAT (EARS acceptance criteria)
+│       ├── design.md         # the HOW (architecture, data models, algorithms)
+│       ├── tasks.md          # the EXECUTION ledger (rune-managed; optional, §5)
+│       ├── decision_log.md   # the WHY (Enhanced Nygard ADR entries)
+│       └── prerequisites.md  # optional — preconditions for large specs
 └── bugfixes/
-    └── <bug-name>/        # fix-bug reports keep their own decision_log.md
+    └── <bug-name>/           # fix-bug reports keep their own decision_log.md
 ```
+
+### Domains (fixed vocabulary)
+
+Every spec belongs to exactly one domain. The set is **closed** — adding a domain is itself
+a logged decision, not an ad-hoc choice. For Medata:
+
+| Domain | Owns | Example specs |
+|---|---|---|
+| `platform` | app shell, build, OS/runtime bindings (iOS today, Android later) | app foundation, packaging |
+| `capture` | sensor/AR/photo acquisition and the raw inputs | `rawframe-rgb-conversion` |
+| `estimation` | the on-device CV/geometry/maths → carb pipeline | the core (today `research/`), `mv-volume-estimator`, `lidar-first-scale-fallback` |
+| `data` | persistence, schemas, food/nutrition databases, **data-input streams** (biometrics, glucose) | `event-log-schema` |
+| `ui` | user-facing surfaces, navigation, interaction, visual design | `ui`, `shutter-blocked-feedback` |
+
+### Boundary: is it a new spec, or an extension?
+
+- **Extension** — it refines or grows an *existing* capability and shares its acceptance
+  bar. Add a requirement section to that spec; do not spawn a folder.
+- **New spec** — it delivers a *new* user- or system-visible capability with its own
+  acceptance bar. One capability per folder; a capability that needs two unrelated
+  acceptance bars is two specs.
+- **Cross-domain capability** — give it ONE home: the domain whose acceptance criteria
+  dominate. It *references* the other domains' specs rather than duplicating them.
+
+### Naming a spec
+
+1. **Pick the domain** — the one layer that owns the primary outcome (where most of the
+   acceptance criteria live).
+2. **Name the capability** as a concrete noun phrase for *what it delivers*.
+
+Do **not** name a spec after:
+- the **layer** (`screen`, `tab`, `ui`, `view`) — the domain already says that;
+- the **effort or phase** (`cleanup`, `v2`, `real-device-correctness`, `refinement`) — name
+  the durable capability, not the project that produced it;
+- the generic word **`feature`** — everything is a feature; it carries no information.
+
+**Worked example.** *"A new tab that auto-adds meals/drinks I consume frequently."* Apply
+the procedure: it is a **new** capability (its own acceptance bar — a frequent-items list,
+one-tap add, recency/frequency ranking). Its acceptance criteria are about an interactive
+surface, so the domain is **`ui`** (even though it writes to `data`, which it references).
+The capability is *quick-add of frequent consumables* → **`specs/ui/quick-add-frequent-items/`**.
+Not `feature` (vacuous), not `screen`/`tab`/`ui` (those are the layer, i.e. the domain),
+not `data-input` (it consumes the `data` domain but does not own it).
+
+### Legacy names
+
+Several existing specs predate this convention and sit flat under `specs/` with
+effort-flavoured names (`research` → really `estimation`; `pipeline-real-device-correctness`;
+`bubble-only-cleanup`). They are kept as-is for link and citation stability (e.g.
+`DECISIONS.md` keys like `research D9`). When one is next substantially revised, migrate it
+to `specs/<domain>/<capability>/` and update its references in the same pass (see §9 — a
+rename is an additive move plus a reference rewrite, done capability-by-capability).
 
 **Small changes use one file, not five.** A change under ~80 LOC touching 1–3 files with
 clear requirements is a **smolspec**: a single `smolspec.md` (Overview / Requirements /
@@ -256,6 +310,41 @@ platform-agnostic core spec (algorithms, data models, maths, contracts — reuse
 and a per-platform binding spec (capture, depth, compute, UI). Do not duplicate the maths
 into a second monolith.
 
+### The authoritative spec set and iterative merge
+
+Intent must not be branch-local. **Every branch carries the `specs/` tree** (the
+`requirements.md` files at minimum), so a line of work never holds the only copy of *why* it
+exists. A feature branch may add its own `specs/<domain>/<capability>/` long before its code
+is portable or merged — **intent lands first, code follows**.
+
+One branch is the **authoritative spec set** that aggregates all of them — for Medata today
+that is `research`, which is intended to merge to `main` and supersede it (excluding the
+existing Svelte work in the main tree). Specs converge onto it **iteratively, one capability
+at a time**, not in a single big-bang:
+
+```mermaid
+flowchart LR
+    b1[branch: ui work] -->|specs/ui/*| auth[(authoritative<br/>spec set)]
+    b2[branch: android] -->|specs/platform/*| auth
+    b3[branch: data stream] -->|specs/data/*| auth
+    auth -->|regenerate OVERVIEW · reconcile DECISIONS| main[(main)]
+```
+
+The per-capability folder layout (§3) is what makes this safe: independent efforts touch
+**disjoint folders**, so spec merges are additive and conflict-free. Only three files are
+shared, and each has a rule that avoids hand-merging:
+
+- **`OVERVIEW.md`** is a generated index — regenerate it from the folders after a merge
+  (the `/specs-overview` skill), never resolve it by hand.
+- **`DECISIONS.md`** is a synthesis; on conflict the per-spec `decision_log.md` wins (it
+  already says so). Reconcile the meta log after the capability has landed.
+- **`PROCESS.md`** changes rarely and is reviewed on its own.
+
+So bringing another branch's intent in (e.g. the `ui-restoration` / `mvp-refinement` specs)
+is the *expected* path, not an exception: copy the `specs/<domain>/<capability>/` folders
+onto the authoritative branch, regenerate `OVERVIEW.md`, reconcile `DECISIONS.md`. The code
+can follow on its own schedule.
+
 ## 10. Decomposing a monolithic spec
 
 A large spec earns a split when separate concerns within it acquire **separate owners,
@@ -285,7 +374,9 @@ stays cohesive by design, not by neglect.
 
 Before opening a change for review:
 
-- [ ] Right mode chosen (full / smol / iterative, §5); folder follows §3.
+- [ ] Boundary checked (new spec vs extension, §3); lives at `specs/<domain>/<capability>/`
+  named for the capability — not the layer, effort, or "feature".
+- [ ] Right mode chosen (full / smol / iterative, §5).
 - [ ] `requirements.md` in EARS, criteria anchored; no implementation leaked in — or, in
   iterative mode, the target and acceptance band are stated and measurable where possible.
 - [ ] `design.md` cites sources / records maths where relevant; no requirements restated.
