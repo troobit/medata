@@ -3,16 +3,18 @@
 > How specs are written, tracked, and turned into code: [PROCESS.md](PROCESS.md).
 > Cross-cutting architectural decisions are distilled in the meta decision log: [DECISIONS.md](DECISIONS.md). Per-spec decision logs below remain authoritative for detail.
 
-| Name | Creation Date | Status | Summary |
-|------|---------------|--------|---------|
-| [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | 2026-05-06 | Done | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
-| [Ui](#ui) | 2026-05-22 | Done | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. |
-| [Research](#research) | 2026-05-24 | Done | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. |
-| [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
-| [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
-| [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
-| [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | 2026-06-23 | Done | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
-| [Bubble-only Cleanup](#bubble-only-cleanup) | 2026-06-24 | Done | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
+> **Mode** ([PROCESS.md §5](PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative)) — `full` (req/design/tasks), `smol` (single `smolspec.md`), or `iterative` (taste/target-driven; converges on a written target — e.g. `design-system/` or an accuracy target — rather than a tasks ledger). A `·iterative` suffix marks a `full`/`smol` spec that carries a target-driven *concern* (e.g. visual design) inside an otherwise deterministic spec.
+
+| Name | Creation Date | Status | Mode | Summary |
+|------|---------------|--------|------|---------|
+| [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
+| [Ui](#ui) | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
+| [Research](#research) | 2026-05-24 | Done | full ·iterative | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. Per-class β_c / threshold calibration is iterative against the v1 test-set accuracy target. |
+| [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
+| [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
+| [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | full | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
+| [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
+| [Bubble-only Cleanup](#bubble-only-cleanup) | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 
 ---
 

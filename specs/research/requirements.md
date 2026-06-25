@@ -4,6 +4,7 @@
 **Date:** 2026-06-20
 **Status:** Draft (device-MVP phasing pass — Phase 1 dev-stub segmenter; 2026-06-20 consistency pass propagated the §0 deltas through design.md, tasks.md, and prerequisites.md)
 **Branch:** research
+**Mode:** full · per-class β_c bulk-correction and confidence thresholds are **iterative/target-driven** — tuned toward the v1 test-set accuracy target, not enumerated as discrete tasks (see [PROCESS.md §5](../PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative)).
 
 ## Introduction
 
