@@ -1,11 +1,30 @@
-# Segmenter export pipeline
+# Segmenter training & export pipeline
 
-Implements task 23 of `specs/research/tasks.md`: PyTorch → Core ML + TFLite
-from a single source-of-truth checkpoint (decision 28).
+Builds the 27-class semantic segmenter the iOS app runs on-device. Full
+end-to-end recipe (env, dataset, bars, iteration loop) lives in
+[`docs/ml-training.md`](../../docs/ml-training.md) — that is the source of truth;
+this README is the per-script index.
 
 Architecture: DeepLabV3 + MobileNetV3-Large at 513×513 input, FP16 weights
 (decision 25). Output: 27-class semantic segmenter (24 food + background +
-unknown_food + unsupported_liquid).
+unknown_food + unsupported_liquid); channel order is fixed by
+`tools/food_db/generate.py` FOOD_DATA / `ClassPalette.v1Standard` and must never
+be reordered.
+
+## Scripts (run in order)
+
+| Script | Step | Does |
+| --- | --- | --- |
+| `build_class_mapping.py` | §3b | FoodSeg103 (103 classes) → 27-channel palette JSON (`class_mapping_foodseg103_v1.json`). Foundational — every later script consumes it. |
+| `prepare_dataset.py` | §3c | Remap FoodSeg103 PNG masks via the mapping + cut train/val/held-out splits (fixed seed). |
+| `train.py` | §4 | Transfer-learn DeepLabV3+MobileNetV3-Large → `build/checkpoint.pt`. Needs a GPU + dataset. |
+| `make_fixtures.py` | §5a | Run a checkpoint over the held-out split → `HarnessCLI seg-bench` fixtures + the export `reference.png`. |
+| `export.py` | §6 | `checkpoint.pt` → Core ML `.mlpackage` (+ TFLite), with a numerical-equivalence gate. Runs on macOS. |
+
+The four non-export scripts are authored and smoke-tested on tiny synthetic
+data; their real runs need the FoodSeg103 dataset (§3a) and a GPU (§1). Each
+follows the same conventions: lazy heavy-imports (importable without torch),
+`--help`, and a `main(argv) -> int` entry point.
 
 ## Setup
 
