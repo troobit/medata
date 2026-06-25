@@ -15,13 +15,13 @@ For the spec index see [OVERVIEW.md](OVERVIEW.md). For the
 per-decision format see `rules/references/decision-log-format.md`.
 
 **Source citation key:** `research D9` = Decision 9 in `specs/research/decision_log.md`;
-`ui D15` = Decision 15 in `specs/ui/decision_log.md`; `event-log D3` =
-`specs/event-log-schema/decision_log.md`; `pipeline-rdc D4` =
-`specs/pipeline-real-device-correctness/decision_log.md`; `lidar-fallback D1` =
-`specs/lidar-first-scale-fallback/decision_log.md`; `rawframe D5` =
-`specs/rawframe-rgb-conversion/decision_log.md`; `shutter D4` =
-`specs/shutter-blocked-feedback/decision_log.md`; `mv-volume D5` =
-`specs/mv-volume-estimator/decision_log.md`; `bubble D1` =
+`ui D15` = Decision 15 in `specs/ui/iphone-experience/decision_log.md`; `event-log D3` =
+`specs/data/event-log-schema/decision_log.md`; `pipeline-rdc D4` =
+`specs/estimation/pipeline-real-device-correctness/decision_log.md`; `lidar-fallback D1` =
+`specs/estimation/lidar-first-scale-fallback/decision_log.md`; `rawframe D5` =
+`specs/capture/rawframe-rgb-conversion/decision_log.md`; `shutter D4` =
+`specs/ui/shutter-blocked-feedback/decision_log.md`; `mv-volume D5` =
+`specs/estimation/mv-volume-estimator/decision_log.md`; `bubble D1` =
 `specs/ui/bubble-only-cleanup/decision_log.md`; `bugfix/<name> D1` =
 `specs/bugfixes/<name>/decision_log.md`.
 

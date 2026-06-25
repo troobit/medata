@@ -7,7 +7,7 @@ import XCTest
 
 // Task 3 / pba-integration: cross-target regression sentinel that locks the
 // `PixelBufferAdapter` → `SegmenterPreProcessor` contract from
-// `specs/rawframe-rgb-conversion/requirements.md#5.1`. Asserts the typical
+// `specs/capture/rawframe-rgb-conversion/requirements.md#5.1`. Asserts the typical
 // 1920×1440 capture handoff flows through both APIs without raising
 // `SegmentationError.invalidInputDimensions`, and that the pre-processor's
 // FP16 output has the expected `targetSize × targetSize × 3` byte count.

@@ -35,7 +35,7 @@ public struct StubInferenceEngine: SegmenterInferenceEngine, Sendable {
         let pixelCount = targetSize * targetSize
         var logits = [Float](repeating: Self.recessiveLogit, count: pixelCount * classes)
         // Centred-ellipse predicate per Decision 8 of
-        // `specs/pipeline-real-device-correctness/`. Semi-axes (α·targetSize/2,
+        // `specs/estimation/pipeline-real-device-correctness/`. Semi-axes (α·targetSize/2,
         // α·targetSize/2) with α = 0.618 cover π·α²/4 ≈ 30 % of frame area, so
         // the pre-shutter pass produces a non-trivial, OOM-bounded mask under
         // Phase 1 dev builds. Inside ellipse → dominant logit; outside →

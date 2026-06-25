@@ -1,8 +1,8 @@
 ---
 references:
-    - specs/event-log-schema/requirements.md
-    - specs/event-log-schema/design.md
-    - specs/event-log-schema/decision_log.md
+    - specs/data/event-log-schema/requirements.md
+    - specs/data/event-log-schema/design.md
+    - specs/data/event-log-schema/decision_log.md
 ---
 # Tasks: Event Log Schema
 

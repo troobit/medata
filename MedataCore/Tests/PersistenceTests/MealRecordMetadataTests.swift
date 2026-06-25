@@ -4,7 +4,7 @@ import XCTest
 @testable import Persistence
 
 // Tests for MealRecord.metadataJSON() / from(metadata:) per spec
-// `specs/event-log-schema/design.md` "MealRecord ↔ event metadata".
+// `specs/data/event-log-schema/design.md` "MealRecord ↔ event metadata".
 //
 // The metadata blob is an outer JSON object with exactly two keys:
 //   - "record"          → a JSON string holding the protobuf-JSON of PbMealRecord

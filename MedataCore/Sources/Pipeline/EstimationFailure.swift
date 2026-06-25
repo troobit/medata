@@ -38,7 +38,7 @@ public enum EstimationFailure: Error, Equatable {
     // meals.sqlite is corrupt; record quarantined, history temporarily unavailable.
     case mealsDbCorrupt
     // Catch-all for any non-typed error raised by `Pipeline.estimate` (Req 6 /
-    // Decision 7 of `specs/rawframe-rgb-conversion/`). The payload is the
+    // Decision 7 of `specs/capture/rawframe-rgb-conversion/`). The payload is the
     // underlying error's Swift type name so the on-screen message can be
     // correlated with the device log's `event=estimate.end success=false
     // error=<Type>` line at debug time.

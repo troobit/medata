@@ -5,7 +5,7 @@ import XCTest
 @testable import Persistence
 
 // Tests for GRDBPersistenceStore against the event-log schema
-// (specs/event-log-schema/design.md). Each meal is one row in `events` with
+// (specs/data/event-log-schema/design.md). Each meal is one row in `events` with
 // event_type='meal'. `meals` and `meal_classes` are gone.
 
 final class PersistenceTests: XCTestCase {

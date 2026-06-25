@@ -210,7 +210,7 @@ The decision rule lives in two places that must agree: `Pipeline/CapturePathDisp
 The iOS shell is a thin SwiftUI layer over a single `@Observable @MainActor`
 `CaptureFlowModel` that owns a `CaptureState` state machine. **All behaviour is in the
 model; the views are composition only.** This is what makes the flow unit-testable without
-a camera. Full spec: `specs/ui/design.md`.
+a camera. Full spec: `specs/ui/iphone-experience/design.md`.
 
 ```mermaid
 stateDiagram-v2
@@ -281,7 +281,7 @@ Kotlin consumer (`specs/research/decision_log.md` Decision 31). Regenerate with
   documented `MTLDevice`/`MTLCommandQueue` thread-safety.
 - Long-running stage work checks cancellation; note the caveat that the *core* pipeline
   currently has no cooperative cancellation points, so UI backgrounding is best-effort
-  (`specs/ui/decision_log.md` Decision 12).
+  (`specs/ui/iphone-experience/decision_log.md` Decision 12).
 
 See `rules/language-rules/swift.md` (global) for the full Swift 6 / SwiftUI ruleset this
 project follows.
@@ -371,9 +371,9 @@ The two foundational specs this architecture sits on top of:
 | [`specs/research/design.md`](../specs/research/design.md) | Module map, interfaces (§3), data models (§4), portable algorithm pseudocode (§6), testing strategy (§7) |
 | [`specs/research/decision_log.md`](../specs/research/decision_log.md) | Architectural decisions D1–D47 (LLM→CV, platform-neutral core, protobuf contracts, …) |
 | [`specs/research/tasks.md`](../specs/research/tasks.md) | Implementation task breakdown |
-| [`specs/ui/requirements.md`](../specs/ui/requirements.md) | Capture-flow UI requirements |
-| [`specs/ui/design.md`](../specs/ui/design.md) | `CaptureFlowModel` state machine, components, AR-session ownership, test seams |
-| [`specs/ui/decision_log.md`](../specs/ui/decision_log.md) | UI decisions (live-signal source, best-effort backgrounding, single-session fix, …) |
+| [`specs/ui/iphone-experience/requirements.md`](../specs/ui/iphone-experience/requirements.md) | Capture-flow UI requirements |
+| [`specs/ui/iphone-experience/design.md`](../specs/ui/iphone-experience/design.md) | `CaptureFlowModel` state machine, components, AR-session ownership, test seams |
+| [`specs/ui/iphone-experience/decision_log.md`](../specs/ui/iphone-experience/decision_log.md) | UI decisions (live-signal source, best-effort backgrounding, single-session fix, …) |
 
 For everything else — `rawframe-rgb-conversion`, `event-log-schema`,
 `pipeline-real-device-correctness`, `shutter-blocked-feedback`, and active bugfix specs
@@ -385,7 +385,7 @@ under `specs/bugfixes/` — go through `specs/OVERVIEW.md`.
 
 | Task | Location |
 |---|---|
-| Change a capture-flow transition | `App/CaptureFlowModel.swift` + `specs/ui/design.md` state table |
+| Change a capture-flow transition | `App/CaptureFlowModel.swift` + `specs/ui/iphone-experience/design.md` state table |
 | Adjust live tilt/distance/coverage maths | `App/LiveSampleObserver.swift` (`LiveSampleMath`) |
 | Change the single-vs-two-view rule | `Pipeline/CapturePathDispatch.swift` **and** `App/CapturePathDecider.swift` |
 | Add/modify a persisted field | edit the `.proto` in `PortableContracts/Schemas/`, regenerate, update `Persistence` |

@@ -83,7 +83,7 @@ references:
   - Blocked-by: op0jbky (STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure)
 
 - [ ] 10. Append `### On-device observation (complete, rerun)` block to shutter-blocked-feedback/decision_log.md; tick task 5 (id:f4inr0r) in shutter-blocked-feedback/tasks.md <!-- id:op0jbl0 -->
-  - Append a `### On-device observation (complete, rerun)` block to specs/shutter-blocked-feedback/decision_log.md immediately after the existing (complete) block, mirroring its template (Date, Device, Mode tested, Outcome=success, observed trail, UI outcome, Notes).
-  - Tick task 5 in specs/shutter-blocked-feedback/tasks.md (the line marked id:f4inr0r) from [ ] to [x].
+  - Append a `### On-device observation (complete, rerun)` block to specs/ui/shutter-blocked-feedback/decision_log.md immediately after the existing (complete) block, mirroring its template (Date, Device, Mode tested, Outcome=success, observed trail, UI outcome, Notes).
+  - Tick task 5 in specs/ui/shutter-blocked-feedback/tasks.md (the line marked id:f4inr0r) from [ ] to [x].
   - These two doc edits land alongside the smolspec `## Verification` section in the same closeout commit (per nextup.md step 8).
   - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes)), section, success, section, success, section, success, section, success

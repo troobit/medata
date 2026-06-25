@@ -84,7 +84,7 @@ a logged decision, not an ad-hoc choice. For Medata:
 | `capture` | sensor/AR/photo acquisition and the raw inputs | `rawframe-rgb-conversion` |
 | `estimation` | the on-device CV/geometry/maths → carb pipeline | the core (today `research/`), `mv-volume-estimator`, `lidar-first-scale-fallback` |
 | `data` | persistence, schemas, food/nutrition databases, **data-input streams** (biometrics, glucose) | `event-log-schema` |
-| `ui` | user-facing surfaces, navigation, interaction, visual design | `ui`, `shutter-blocked-feedback` |
+| `ui` | user-facing surfaces, navigation, interaction, visual design | `iphone-experience`, `shutter-blocked-feedback` |
 
 ### Boundary: is it a new spec, or an extension?
 
@@ -118,17 +118,19 @@ not `data-input` (it consumes the `data` domain but does not own it).
 
 ### Legacy names
 
-Several existing specs predate this convention and sit flat under `specs/` with
-effort-flavoured names (`research` → really `estimation`; `pipeline-real-device-correctness`;
-`bubble-only-cleanup`). They are kept as-is for link and citation stability (e.g.
-`DECISIONS.md` keys like `research D9`). When one is next substantially revised, migrate it
-to `specs/<domain>/<capability>/` and update its references in the same pass (see §9 — a
-rename is an additive move plus a reference rewrite, done capability-by-capability).
+One spec is still flat: **`research/`** (the estimation core). Its move into
+`specs/estimation/` is deferred to a dedicated pass because it touches the largest decision
+log and the `DECISIONS.md` citation keys (`research D9`). Separately, some migrated specs
+kept **effort-flavoured capability names** (`pipeline-real-device-correctness`,
+`bubble-only-cleanup`, and the imported `ui-restoration` / `mvp-refinement`); they now live
+under the right domain but their *name* still predates the convention. The convention binds
+new specs; a legacy name is corrected when its spec is next substantially revised — a rename
+is an additive move plus a reference rewrite (see §9), done one capability at a time.
 
 **Small changes use one file, not five.** A change under ~80 LOC touching 1–3 files with
 clear requirements is a **smolspec**: a single `smolspec.md` (Overview / Requirements /
 Implementation Approach / Risks) plus a `tasks.md` and `decision_log.md`. See
-`specs/lidar-first-scale-fallback/` for the shape. Do not manufacture a full five-document
+`specs/estimation/lidar-first-scale-fallback/` for the shape. Do not manufacture a full five-document
 spec for a one-function change — that is process for its own sake.
 
 ## 4. The development loop
@@ -297,7 +299,7 @@ each has a defined shape so it does not force an ad-hoc reorganisation later.
 **New data input streams (biometrics, blood glucose, …).** Each new stream is a **new
 sibling spec** under `specs/`, not an edit to `research/`. The persistence layer already
 anticipates this: the event-log schema stores any metric as a new `event_type` with no
-schema change (`specs/event-log-schema/`). A new stream's spec owns its ingestion,
+schema change (`specs/data/event-log-schema/`). A new stream's spec owns its ingestion,
 validation, units, and how it relates to existing events. The carb-estimation core
 (`research/`) stays focused; correlation features (e.g. glucose-vs-meal) are their own
 specs that depend on both.

@@ -1,7 +1,7 @@
 ---
 references:
-    - specs/shutter-blocked-feedback/smolspec.md
-    - specs/shutter-blocked-feedback/decision_log.md
+    - specs/ui/shutter-blocked-feedback/smolspec.md
+    - specs/ui/shutter-blocked-feedback/decision_log.md
 ---
 # Shutter Blocked Feedback
 
@@ -47,5 +47,5 @@ references:
   - Expected UI: navigation pushes to `ResultView` showing total carbs and a confidence pill.
   - If `event=estimate.end success=false` appears with an `EstimationFailure` case, capture the case name (e.g. `noScaleAvailable`, `coverageInsufficient`) — that is the **actionable diagnostic** the user wanted. Open a follow-up Transit bug with the captured log trail; do NOT attempt to fix the failure in this smolspec.
   - If `event=estimate.start` is logged but no `event=estimate.end` appears within ~30s, the pipeline is hanging downstream of capture (candidate root cause: the `RawFrame.imageBytes` YCbCr → RGB issue described in the prior `pipeline-factory-parked` memory). Capture the trail and open a follow-up; do NOT attempt to fix in this smolspec.
-  - Document the observed log trail and UI outcome in a short note appended to `specs/shutter-blocked-feedback/decision_log.md` under a new `## Verification Notes` section. This is a one-off field report, not a permanent decision — keep it under 20 lines.
+  - Document the observed log trail and UI outcome in a short note appended to `specs/ui/shutter-blocked-feedback/decision_log.md` under a new `## Verification Notes` section. This is a one-off field report, not a permanent decision — keep it under 20 lines.
   - Blocked-by: f4inr0q (Wire CaptureFlowView call site and verify blocked-tap feedback on device)

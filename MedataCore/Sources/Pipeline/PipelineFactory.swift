@@ -50,7 +50,7 @@ extension Pipeline {
     /// `DEV_STUB_SEGMENTER`, `CoreMLInferenceEngine` otherwise). App-target
     /// callers use this to build a SEPARATE pre-shutter segmenter from the
     /// one wired into `Pipeline` (Decision 12 of
-    /// `specs/pipeline-real-device-correctness/`: pre-shutter and in-shutter
+    /// `specs/estimation/pipeline-real-device-correctness/`: pre-shutter and in-shutter
     /// must not share an `MLModel` instance).
     public static func makeSegmenter(palette: ClassPalette = .v1Standard) throws -> CoreMLSegmenter {
         let targetSize = SegmenterPreProcessor.defaultTargetSize

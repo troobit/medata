@@ -8,7 +8,7 @@
 On the two-view (`twoViewSfS`) capture path, the pipeline refuses with
 `event=estimate.end success=false failure=noFoodVolumeRecovered` at the **Volume**
 stage, even though CardDetection, SupportPlane, MetricScale, and Segmentation all
-succeed first (device trail, `specs/mv-volume-estimator/decision_log.md` Decision 4).
+succeed first (device trail, `specs/estimation/mv-volume-estimator/decision_log.md` Decision 4).
 Single mode (LiDAR height-field path) is unaffected and persists records normally.
 
 **Reproduction steps:**
@@ -22,7 +22,7 @@ the only working spine for the first `main` commit.
 
 ## Investigation Summary
 
-This started as a smolspec (`specs/mv-volume-estimator/`) premised on the dev-stub
+This started as a smolspec (`specs/estimation/mv-volume-estimator/`) premised on the dev-stub
 producing "unusable per-class masks". That premise was wrong (see Decision 5 there),
 which reframed it as a suspected geometry bug in the carve. The geometry was then
 characterised with a synthetic two-view reproduction.
@@ -139,7 +139,7 @@ cause of the device symptom.
 
 ## Related
 
-- `specs/mv-volume-estimator/decision_log.md` (Decisions 4–5) — the superseded smolspec
+- `specs/estimation/mv-volume-estimator/decision_log.md` (Decisions 4–5) — the superseded smolspec
   and the misdiagnosis chain that led here.
-- `specs/pipeline-real-device-correctness/` — device-correctness pipeline spec, Decision 16.
+- `specs/estimation/pipeline-real-device-correctness/` — device-correctness pipeline spec, Decision 16.
 - `nextup.md` — oblique-aim blocker (Track 2 tilt aim guide), two-view collection.

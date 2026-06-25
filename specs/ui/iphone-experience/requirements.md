@@ -3,7 +3,7 @@
 **Version:** 1.1
 **Date:** 2026-05-29
 **Status:** Done (v1.1 — all 60 tasks landed; tab navigation, meal history, settings tab; tracks the Apple "Organize your features" tutorial pattern at <https://developer.apple.com/tutorials/develop-in-swift/organize-your-features>). The 2026-06-20 consistency pass (GAPS Group C) reconciled `design.md`/`tasks.md` with the as-built code: four-tier confidence pill (Decision 17), iOS 26.5 floor (Decision 4 superseded), `CapturePathDecider` behind the deferred `AUTO_CAPTURE_MODE` flag, retention/IFCDB removed, and the `eventsDidChange` / `events`-table persistence shape. Superseded v1.0 task content is retained with inline markers for history.
-**Mode:** full · the visual-design concern (§20) is **iterative/target-driven** against [`design-system/`](../../design-system/MASTER.md) — see [PROCESS.md §5](../PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative). Future visual iteration tunes toward those tokens and is not re-ledgered as discrete tasks.
+**Mode:** full · the visual-design concern (§20) is **iterative/target-driven** against [`design-system/`](../../../design-system/MASTER.md) — see [PROCESS.md §5](../../PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative). Future visual iteration tunes toward those tokens and is not re-ledgered as discrete tasks.
 
 ## Introduction
 

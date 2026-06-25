@@ -1516,7 +1516,7 @@ A cosine curve for $\sigma_{\text{tilt}} = \cos(\Delta\theta)$ is geometrically 
 
 - `requirements.md`: Req 3.1 (tilt indicator now shows σ_tilt preview), Req 3.2 (gate removed), Req 3.3 (gate softened to ±30° from 25°), Req 4.5 (plane-fit threshold 8 → 20 mm), Req 13.1 (ε floor 0.05 → 0.01, no-food refusal explicitly retained), Req 13.2 (σ_geom gains σ_tilt as 4th factor; σ_view extended for 30–50% coverage; LiDAR coverage refusal 50 → 30%), Req 13.4 (persist σ_tilt + per-stage angular errors; legacy default = 1.0), Req 13.5 (threshold 0.6 → 0.2; inline explanation requirement added).
 - `design.md`: `GeomSubconfidences` adds `sigmaTilt`; `ConfidenceResult` adds per-stage Δθ fields; §6.8 pseudocode adds σ_tilt computation; refusal table updates `lidarFitResidualTooHigh` and `lidarCoverageTooLow` thresholds; §3.8 narrative updated.
-- Downstream UI spec: tier scheme change (Decision 17 in `specs/ui/decision_log.md`), shutter always armed (Decision 18), continuous tilt indicator (Decision 19).
+- Downstream UI spec: tier scheme change (Decision 17 in `specs/ui/iphone-experience/decision_log.md`), shutter always armed (Decision 18), continuous tilt indicator (Decision 19).
 - Phase 1 device build immediately exercises the new code path (the dev-stub confidence pipeline runs end-to-end). Existing meal records persisted under Phase 1 may need re-derivation with σ_tilt = 1.0 default; the JSON-BLOB decoder absorbs this transparently per §4.4.
 
 ---

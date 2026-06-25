@@ -1,9 +1,9 @@
 ---
 references:
-    - specs/pipeline-real-device-correctness/requirements.md
-    - specs/pipeline-real-device-correctness/design.md
-    - specs/pipeline-real-device-correctness/decision_log.md
-    - specs/pipeline-real-device-correctness/prerequisites.md
+    - specs/estimation/pipeline-real-device-correctness/requirements.md
+    - specs/estimation/pipeline-real-device-correctness/design.md
+    - specs/estimation/pipeline-real-device-correctness/decision_log.md
+    - specs/estimation/pipeline-real-device-correctness/prerequisites.md
 ---
 # Pipeline Real-Device Correctness — Tasks
 

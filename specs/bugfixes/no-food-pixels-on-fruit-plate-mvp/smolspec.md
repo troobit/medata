@@ -168,7 +168,7 @@ Confirming evidence the lost-age fix code is on-device: the build at `a349118` +
 
 (All cadence followups previously listed here have been pulled in-scope; the cadence work is now bug 2 of this spec, covered by tasks 4–7 of `tasks.md`. The single-mode-also verification requirement is folded into task 8.)
 
-- **Decision-log entry for the cadence-fix mechanism** — once the on-device trail (task 5) identifies which of H1/H2/H3 fired, append a short ADR-format note to the appropriate decision log (this spec's directory has no `decision_log.md` today; if the fix touches `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift`, link it from `specs/pipeline-real-device-correctness/decision_log.md` as a Status: superseded clarification on the existing `bufferingNewest(1)` decision).
+- **Decision-log entry for the cadence-fix mechanism** — once the on-device trail (task 5) identifies which of H1/H2/H3 fired, append a short ADR-format note to the appropriate decision log (this spec's directory has no `decision_log.md` today; if the fix touches `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift`, link it from `specs/estimation/pipeline-real-device-correctness/decision_log.md` as a Status: superseded clarification on the existing `bufferingNewest(1)` decision).
 
 ## Verification attempt 2026-06-16 — mask contract met, blocked on `lidarFitDegenerate`
 

@@ -97,12 +97,12 @@ Per `docs/agent-notes/ui-capture-flow.md` "Tests" section, neither the unit test
 
 - `App/CaptureFlowModel.swift` — Removed the no-op `model.refusal` setter; the property is now strictly derived from `state`. Added `func dismissRefusal()` that guards on `.refused` and transitions to `.ready(freshSnapshot())` with `firstFrame`/`firstFrameTiltDeg`/`inFlightMode` cleared — exactly the same shape as `dismissResult()` minus the `navigationPath` reset. Rewrote the `.refused` arm of `tabSelectionChanged` so leaving the Photo tab from a refusal resets to `.initialising`, fires the engine `session.stop()` task, and clears `startTask` — same baseline as the `.ready`/`.trackingLost` arms. `.permissionDenied` remains preserved.
 - `App/CaptureFlowView.swift` — `refusalBinding` setter now delegates `nil` writes (which `.sheet(item:)` produces on swipe-down) to `model.dismissRefusal()`. The binding still derives reads from `model.refusal`.
-- `specs/ui/decision_log.md` — Added Decision 20 documenting the new sheet-dismissal contract and the `.refused`-on-tab-leave behaviour. Decision 15 stands; only the implicit refusal-preservation clause is superseded.
+- `specs/ui/iphone-experience/decision_log.md` — Added Decision 20 documenting the new sheet-dismissal contract and the `.refused`-on-tab-leave behaviour. Decision 15 stands; only the implicit refusal-preservation clause is superseded.
 - `docs/agent-notes/ui-capture-flow.md` — Added gotcha entry pointing future agents at Decision 20 and this report.
 
 **Approach rationale:** Single source of truth (`state`), explicit dismissal command, view-side binding wires SwiftUI's nil-write contract to the command. Avoids the alternative of a stored `refusal` property that has to be kept in lockstep with `state`, and avoids `.interactiveDismissDisabled()` which removes a useful UX affordance.
 
-**Alternatives considered:** Documented in Decision 20 (`specs/ui/decision_log.md`) — non-dismissible sheet, sheet-dismissible-but-tab-switch-preserves, and stored-refusal-property were all rejected for reasons stated there.
+**Alternatives considered:** Documented in Decision 20 (`specs/ui/iphone-experience/decision_log.md`) — non-dismissible sheet, sheet-dismissible-but-tab-switch-preserves, and stored-refusal-property were all rejected for reasons stated there.
 
 ## Regression Tests
 
@@ -139,7 +139,7 @@ Per the project convention noted in `ui-capture-flow.md`, the unit-test target w
 | `App/CaptureFlowView.swift` | `refusalBinding.set` calls `model.dismissRefusal()` |
 | `MeData/Tests/CaptureFlowModelTests.swift` | Two new regression tests (`dismissRefusalReturnsToReady`, `dismissRefusalClearsCapturedFrame`) |
 | `MeData/Tests/CaptureFlowModelTabSelectionTests.swift` | Replace `refusedNoOp` with `refusedDismissedOnTabLeave` + `refusalDoesNotReappearOnPhotoReturn` |
-| `specs/ui/decision_log.md` | New entry superseding the clause of Decision 15 that preserved `.refused` across tab switches |
+| `specs/ui/iphone-experience/decision_log.md` | New entry superseding the clause of Decision 15 that preserved `.refused` across tab switches |
 | `docs/agent-notes/ui-capture-flow.md` | Update gotcha for the new dismissal contract |
 
 ## Verification

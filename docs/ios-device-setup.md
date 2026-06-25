@@ -104,7 +104,7 @@ privacy strings live in the target build settings as `INFOPLIST_KEY_*` entries i
 |---|---|---|
 | `INFOPLIST_KEY_NSCameraUsageDescription` | "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate." | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nscamerausagedescription) |
 | `INFOPLIST_KEY_NSMotionUsageDescription` | "MeData uses motion data to show how level the camera is while you capture your meal." | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/nsmotionusagedescription) |
-| `INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone` | `UIInterfaceOrientationPortrait` (portrait-only per `specs/ui/`) | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportedinterfaceorientations) |
+| `INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone` | `UIInterfaceOrientationPortrait` (portrait-only per `specs/ui/iphone-experience/`) | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/uisupportedinterfaceorientations) |
 | `INFOPLIST_KEY_LSApplicationCategoryType` | `public.app-category.medical` | [docs](https://developer.apple.com/documentation/bundleresources/information-property-list/lsapplicationcategorytype) |
 
 To change a value, edit the target's **Build Settings** → search "INFOPLIST_KEY_" — Xcode

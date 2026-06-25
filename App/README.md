@@ -1,6 +1,6 @@
 # App target — iOS SwiftUI shell
 
-The SwiftUI capture-flow shell for the iOS app (per `specs/ui/design.md`). The Xcode
+The SwiftUI capture-flow shell for the iOS app (per `specs/ui/iphone-experience/design.md`). The Xcode
 project at `MeData/MeData.xcodeproj` (repo root) references these files in place via
 `../App/*.swift`; they live here, not duplicated into the project's source folder.
 

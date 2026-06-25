@@ -1,8 +1,8 @@
 ---
 references:
-    - specs/rawframe-rgb-conversion/requirements.md
-    - specs/rawframe-rgb-conversion/design.md
-    - specs/rawframe-rgb-conversion/decision_log.md
+    - specs/capture/rawframe-rgb-conversion/requirements.md
+    - specs/capture/rawframe-rgb-conversion/design.md
+    - specs/capture/rawframe-rgb-conversion/decision_log.md
 ---
 # RawFrame YCbCr→RGB Conversion — Tasks
 

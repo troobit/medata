@@ -1,8 +1,8 @@
 ---
 references:
-    - specs/ui/requirements.md
-    - specs/ui/design.md
-    - specs/ui/decision_log.md
+    - specs/ui/iphone-experience/requirements.md
+    - specs/ui/iphone-experience/design.md
+    - specs/ui/iphone-experience/decision_log.md
 ---
 # UI — Implementation Tasks
 
@@ -326,7 +326,7 @@ references:
   - Requirements: [19.1](requirements.md#19.1), [19.6](requirements.md#19.6), [19.7](requirements.md#19.7)
 
 - [x] 32. Implement MealHistoryModel <!-- id:7pbwp4y -->
-  - `@Observable @MainActor final class MealHistoryModel` in `App/MealHistoryModel.swift`. See `specs/ui/design.md` §"Meals tab" for the sketch.
+  - `@Observable @MainActor final class MealHistoryModel` in `App/MealHistoryModel.swift`. See `specs/ui/iphone-experience/design.md` §"Meals tab" for the sketch.
   - Subscription `Task` cancelled in `deinit` (use a `cancellable` reference).
   - Blocked-by: 7pbwp4w (Implement PersistenceStore.allMeals / deleteMeal / eventsDidChange in GRDBPersistenceStore), 7pbwp4x (Write tests for MealHistoryModel)
   - Stream: 2

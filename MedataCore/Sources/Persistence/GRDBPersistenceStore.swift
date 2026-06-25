@@ -4,7 +4,7 @@ import PortableContracts
 import ZIPFoundation
 
 // GRDB-backed PersistenceStore. Backs the long-form event log per
-// specs/event-log-schema/design.md. Each meal is one row in `events` with
+// specs/data/event-log-schema/design.md. Each meal is one row in `events` with
 // event_type=EventType.meal; the verbatim protobuf-JSON record sits inside
 // the `metadata` JSON blob (Decision 6 / Decision 31).
 public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {

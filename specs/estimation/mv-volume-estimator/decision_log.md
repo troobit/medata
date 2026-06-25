@@ -164,6 +164,6 @@ A static read of the carve shows the dev-stub masks are clean and carveable, so 
 
 ### Impact
 
-`specs/mv-volume-estimator/` is closed (superseded). Follow-on work lives in the `/fix-bug` report under `specs/bugfixes/`.
+`specs/estimation/mv-volume-estimator/` is closed (superseded). Follow-on work lives in the `/fix-bug` report under `specs/bugfixes/`.
 
 ---

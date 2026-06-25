@@ -21,7 +21,7 @@ What changed since the original 2026-05-23 investigation:
   `detectPixelFormat` are deleted; `PixelBufferAdapter.convert`
   (`MedataCore/Sources/CaptureKit/PixelBufferAdapter.swift`) converts captured
   frames to BGRA8 at the capture boundary and `pixelFormat` is now truthful.
-  Shipped via `specs/rawframe-rgb-conversion/` (all tasks complete).
+  Shipped via `specs/capture/rawframe-rgb-conversion/` (all tasks complete).
 - **`VisionCardDetector` exists** (`App/VisionCardDetector.swift`) — so **Step 4
   below is done**, not deferred. Tests use `NullCardDetector`
   (`MedataCore/Sources/Pipeline/NullCardDetector.swift`, a production source file
@@ -47,7 +47,7 @@ original note is history.
 The iOS app at the time wired `pipeline: PendingPipeline()` in `App/App.swift`. `PendingPipeline.estimate(_:)` unconditionally threw `EstimationFailure.noScaleAvailable`. The user-visible effect was that every tap of the shutter resulted in an `Estimating…` flash followed by the refusal banner — the pipeline was *engaged* (the protocol call went through) but could not *produce* a `MealRecord` because the real `Pipeline` factory was not constructed.
 
 This was by design, documented at the time in:
-- `specs/ui/requirements.md:14` Out of Scope: *"Bundling the Core ML segmenter weights (separate smolspec)"*
+- `specs/ui/iphone-experience/requirements.md:14` Out of Scope: *"Bundling the Core ML segmenter weights (separate smolspec)"*
 - `App/App.swift` PendingPipeline doc-comment: *"used until the segmenter-weights smolspec bundles the Core ML model and a real `Pipeline` factory lands"*
 
 Wiring the real factory was attempted as a smolspec on 2026-05-23 and parked when two upstream blockers were discovered. This note records them and what's needed to unblock.
@@ -75,7 +75,7 @@ This is days of ML work, not a code task. It is **the** prerequisite for the foo
 ## Blocker 2 — `RawFrame.imageBytes` is unusable for RGB consumers
 
 > **RESOLVED** (see "Update (current state)" above). Shipped via
-> `specs/rawframe-rgb-conversion/` — `PixelBufferAdapter` now converts to BGRA8.
+> `specs/capture/rawframe-rgb-conversion/` — `PixelBufferAdapter` now converts to BGRA8.
 > The diagnosis below is retained as the historical record of the bug.
 
 Any code that needs to read the captured image as RGB — the segmenter pre-processor, a future `VisionCardDetector`, or anything else hitting `CGImage` / `Vision` — needs `RawFrame.imageBytes` to be a known-format contiguous RGB buffer. It isn't.
@@ -145,7 +145,7 @@ These were sequenced. Do not skip ahead.
 
 **Acceptance:** new tests in `MedataCore/Tests/CaptureKitTests/` pass on iOS Simulator; existing tests still pass; tasks 12–17 of the UI spec (the capture-flow tests) still pass.
 
-**Estimate:** 1–2 days. Probably its own spec (`specs/rawframe-rgb-conversion/` or similar).
+**Estimate:** 1–2 days. Probably its own spec (`specs/capture/rawframe-rgb-conversion/` or similar).
 
 ### 2. Resolve Blocker 1 (train + export segmenter)
 

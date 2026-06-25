@@ -307,7 +307,7 @@ Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
   The persistent `captureMode` toggle (Decision 35) is the live setting; keys in `SettingsKeys`.
 
 > The placeholder `CaptureFlowView` / `CaptureFlowViewModel` and the result/settings
-> placeholders were subsequently rewritten by the UI spec (`specs/ui/`). For current
+> placeholders were subsequently rewritten by the UI spec (`specs/ui/iphone-experience/`). For current
 > capture-flow architecture see [`ui-capture-flow.md`](ui-capture-flow.md) and
 > [`../architecture.md`](../architecture.md) §4.
 

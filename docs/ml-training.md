@@ -302,7 +302,7 @@ held-out split to produce those fixtures, then bench them.
 > the on-device pre-processor feeds the model a different colour space than you
 > trained on, mIoU here stays green while real-device inference degrades. The
 > capture path now emits BGRA8 (`PixelBufferAdapter`, shipped via
-> `specs/rawframe-rgb-conversion/`); train on BGRA-consistent inputs and keep the
+> `specs/capture/rawframe-rgb-conversion/`); train on BGRA-consistent inputs and keep the
 > training transform matched to `SegmenterPreProcessor`. See §11.
 
 ### Runbook
@@ -519,7 +519,7 @@ shipped app is wrong.
   — what's built vs what the trained checkpoint unblocks (only Blocker 1 remains).
 - [`architecture.md`](architecture.md) §9 — the `Bundle.main` → `Bundle.module`
   loader gap (§7).
-- [`specs/rawframe-rgb-conversion/`](../specs/rawframe-rgb-conversion/) +
+- [`specs/capture/rawframe-rgb-conversion/`](../specs/capture/rawframe-rgb-conversion/) +
   [`agent-notes/camera-input-fix.md`](agent-notes/camera-input-fix.md) — the
   shipped BGRA8 capture conversion behind the train/serve-skew caveat (§5, §11).
 - [`agent-notes/swift-package.md`](agent-notes/swift-package.md) — how bundled

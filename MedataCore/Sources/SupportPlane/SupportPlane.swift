@@ -26,7 +26,7 @@ public enum SupportPlaneError: Error, Equatable {
     case noLidarPoints              // <3 valid samples after confidence filter
     // SupportPlaneFitter protocol gate: pre-shutter food mask is nil or has zero
     // 1-bits. Mapped to `EstimationFailure.noFoodPixels` by the Pipeline call
-    // site per Decision 2 / Req 3.1/3.2 of `specs/pipeline-real-device-correctness/`.
+    // site per Decision 2 / Req 3.1/3.2 of `specs/estimation/pipeline-real-device-correctness/`.
     case emptyFoodMask
 }
 

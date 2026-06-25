@@ -89,7 +89,7 @@ Computational cost drops from `O(n²)` memory and `O(n²)` SVD work to `O(n)` sc
 - Replacing `LinearAlgebra.svdFull` with a thin-SVD variant (`JOBVT='S'` or `'N'`). The shared API is also used by `CardPoseSolver` on 8×9 and 3×3 inputs where it works fine. Tracked as a future optimisation if more callers hit the V^T tax.
 - The shutter-button-flash + `FigCaptureSourceRemote -12784` / `(Fig) -12710` bursts at launch in the same device log. Covered by `specs/bugfixes/arview-session-config-race/`.
 - The `VideoLightSpillGenerator … Failed to create input texture with MTLPixelFormat MTLPixelFormatYCBCR8_420_2P` RealityKit-prewarm line. Cosmetic, no pipeline impact.
-- Replacing the centre-rectangle approximation with a real food-region mask from a pre-shutter segmentation pass. Same follow-on spec referenced by the prior bug (`specs/pipeline-real-device-correctness/`, not yet created).
+- Replacing the centre-rectangle approximation with a real food-region mask from a pre-shutter segmentation pass. Same follow-on spec referenced by the prior bug (`specs/estimation/pipeline-real-device-correctness/`, not yet created).
 - A general audit of every `svdFull` call site for similar quadratic-V^T waste. The only at-risk caller is `LiDARPlaneFitter`; the two `CardPoseSolver` call sites are at fixed 8×9 and 3×3 dimensions.
 
 ## Risks and Assumptions

@@ -3,39 +3,27 @@
 > How specs are written, tracked, and turned into code: [PROCESS.md](PROCESS.md).
 > Cross-cutting architectural decisions are distilled in the meta decision log: [DECISIONS.md](DECISIONS.md). Per-spec decision logs below remain authoritative for detail.
 
-> **Mode** ([PROCESS.md §5](PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative)) — `full` (req/design/tasks), `smol` (single `smolspec.md`), or `iterative` (taste/target-driven; converges on a written target — e.g. `design-system/` or an accuracy target — rather than a tasks ledger). A `·iterative` suffix marks a `full`/`smol` spec that carries a target-driven *concern* (e.g. visual design) inside an otherwise deterministic spec.
+> **Domain** ([PROCESS.md §3](PROCESS.md#3-directory-structure-spec-boundaries-and-naming)) — every spec lives at `specs/<domain>/<capability>/`; the domain is one of `platform · capture · estimation · data · ui`. `research/` is still flat pending its rename into `estimation/`.
+> **Mode** ([PROCESS.md §5](PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative)) — `full` / `smol` / `iterative`; a `·iterative` suffix marks a target-driven concern inside an otherwise deterministic spec.
+> **Imported** — specs marked *imported* carry intent from the SvelteKit line (the `ui-restoration` branch); the code is out of scope here, the requirements travel so the intent is not lost (PROCESS.md §9).
 
-| Name | Creation Date | Status | Mode | Summary |
-|------|---------------|--------|------|---------|
-| [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
-| [Ui](#ui) | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
-| [Research](#research) | 2026-05-24 | Done | full ·iterative | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. Per-class β_c / threshold calibration is iterative against the v1 test-set accuracy target. |
-| [Shutter Blocked Feedback](#shutter-blocked-feedback) | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
-| [Event Log Schema](#event-log-schema) | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
-| [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | 2026-06-13 | Done | full | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
-| [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
-| [Bubble-only Cleanup](#bubble-only-cleanup) | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
+| Name | Domain | Created | Status | Mode | Summary |
+|------|--------|---------|--------|------|---------|
+| [Research](#research) | estimation* | 2026-05-24 | Done | full ·iterative | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. |
+| [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | estimation | 2026-06-13 | Done | full | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
+| [Minimum Viable Volume Estimator](#minimum-viable-volume-estimator) | estimation | 2026-06-22 | Done | smol | Decouple the dev-stub volume path from the per-class segmenter so two-view capture completes with a rough, low-confidence carb number instead of refusing `noFoodVolumeRecovered`. |
+| [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | estimation | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
+| [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
+| [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
+| [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
+| [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
+| [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
+| [UI Restoration](#ui-restoration) | ui | 2026-06-08 | Draft · imported | full | Archive the removed MeData design system (logo, motion, icon suite, UI primitives) into a Figma file as the browsable record; code restoration not in scope. |
+| [MVP Refinement](#mvp-refinement) | platform | 2026-03-12 | Draft · imported | full | Make the SvelteKit MVP function end-to-end — mobile camera capture, AI food recognition with a real API key, and the full capture → recognise → edit → save → view flow. |
+
+\* `research/` is estimation-domain but remains flat until its rename into `specs/estimation/` (PROCESS.md §3, “Legacy names”).
 
 ---
-
-## Rawframe Rgb Conversion
-
-Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes.
-
-- [decision_log.md](rawframe-rgb-conversion/decision_log.md)
-- [design.md](rawframe-rgb-conversion/design.md)
-- [requirements.md](rawframe-rgb-conversion/requirements.md)
-- [tasks.md](rawframe-rgb-conversion/tasks.md)
-
-## Ui
-
-v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings.
-
-- [decision_log.md](ui/decision_log.md)
-- [design.md](ui/design.md)
-- [prerequisites.md](ui/prerequisites.md)
-- [requirements.md](ui/requirements.md)
-- [tasks.md](ui/tasks.md)
 
 ## Research
 
@@ -47,40 +35,66 @@ Low-compute on-device system estimating carbohydrate content from one or two iPh
 - [requirements.md](research/requirements.md)
 - [tasks.md](research/tasks.md)
 
-## Shutter Blocked Feedback
-
-Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped.
-
-- [decision_log.md](shutter-blocked-feedback/decision_log.md)
-- [smolspec.md](shutter-blocked-feedback/smolspec.md)
-- [tasks.md](shutter-blocked-feedback/tasks.md)
-
-## Event Log Schema
-
-Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata.
-
-- [decision_log.md](event-log-schema/decision_log.md)
-- [design.md](event-log-schema/design.md)
-- [requirements.md](event-log-schema/requirements.md)
-- [tasks.md](event-log-schema/tasks.md)
-
 ## Pipeline Real Device Correctness
 
 Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture.
 
-- [decision_log.md](pipeline-real-device-correctness/decision_log.md)
-- [design.md](pipeline-real-device-correctness/design.md)
-- [prerequisites.md](pipeline-real-device-correctness/prerequisites.md)
-- [requirements.md](pipeline-real-device-correctness/requirements.md)
-- [tasks.md](pipeline-real-device-correctness/tasks.md)
+- [decision_log.md](estimation/pipeline-real-device-correctness/decision_log.md)
+- [design.md](estimation/pipeline-real-device-correctness/design.md)
+- [prerequisites.md](estimation/pipeline-real-device-correctness/prerequisites.md)
+- [requirements.md](estimation/pipeline-real-device-correctness/requirements.md)
+- [tasks.md](estimation/pipeline-real-device-correctness/tasks.md)
+
+## Minimum Viable Volume Estimator
+
+Decouple the dev-stub volume path from the per-class segmenter so two-view capture completes with a rough, low-confidence carb number instead of refusing `noFoodVolumeRecovered`.
+
+- [decision_log.md](estimation/mv-volume-estimator/decision_log.md)
+- [smolspec.md](estimation/mv-volume-estimator/smolspec.md)
 
 ## LiDAR First Scale Fallback
 
 Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting.
 
-- [decision_log.md](lidar-first-scale-fallback/decision_log.md)
-- [smolspec.md](lidar-first-scale-fallback/smolspec.md)
-- [tasks.md](lidar-first-scale-fallback/tasks.md)
+- [decision_log.md](estimation/lidar-first-scale-fallback/decision_log.md)
+- [smolspec.md](estimation/lidar-first-scale-fallback/smolspec.md)
+- [tasks.md](estimation/lidar-first-scale-fallback/tasks.md)
+
+## Rawframe Rgb Conversion
+
+Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes.
+
+- [decision_log.md](capture/rawframe-rgb-conversion/decision_log.md)
+- [design.md](capture/rawframe-rgb-conversion/design.md)
+- [requirements.md](capture/rawframe-rgb-conversion/requirements.md)
+- [tasks.md](capture/rawframe-rgb-conversion/tasks.md)
+
+## Event Log Schema
+
+Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata.
+
+- [decision_log.md](data/event-log-schema/decision_log.md)
+- [design.md](data/event-log-schema/design.md)
+- [requirements.md](data/event-log-schema/requirements.md)
+- [tasks.md](data/event-log-schema/tasks.md)
+
+## iPhone Experience
+
+v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. (Folder: `ui/iphone-experience/`; formerly the flat `ui/` spec.)
+
+- [decision_log.md](ui/iphone-experience/decision_log.md)
+- [design.md](ui/iphone-experience/design.md)
+- [prerequisites.md](ui/iphone-experience/prerequisites.md)
+- [requirements.md](ui/iphone-experience/requirements.md)
+- [tasks.md](ui/iphone-experience/tasks.md)
+
+## Shutter Blocked Feedback
+
+Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped.
+
+- [decision_log.md](ui/shutter-blocked-feedback/decision_log.md)
+- [smolspec.md](ui/shutter-blocked-feedback/smolspec.md)
+- [tasks.md](ui/shutter-blocked-feedback/tasks.md)
 
 ## Bubble-only Cleanup
 
@@ -89,3 +103,22 @@ Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the devi
 - [decision_log.md](ui/bubble-only-cleanup/decision_log.md)
 - [smolspec.md](ui/bubble-only-cleanup/smolspec.md)
 - [tasks.md](ui/bubble-only-cleanup/tasks.md)
+
+## UI Restoration
+
+Archive the removed MeData design system (logo, motion, icon suite, UI primitives) into a Figma file as the browsable record; code restoration not in scope. **Imported** from the `ui-restoration` branch (SvelteKit line) for intent preservation.
+
+- [decision_log.md](ui/ui-restoration/decision_log.md)
+- [design-system.md](ui/ui-restoration/design-system.md)
+- [requirements.md](ui/ui-restoration/requirements.md)
+- [tasks.md](ui/ui-restoration/tasks.md)
+
+## MVP Refinement
+
+Make the SvelteKit MVP function end-to-end — mobile camera capture, AI food recognition with a real API key, and the full capture → recognise → edit → save → view flow. **Imported** from the `ui-restoration` branch (SvelteKit line) for intent preservation.
+
+- [decision_log.md](platform/mvp-refinement/decision_log.md)
+- [design.md](platform/mvp-refinement/design.md)
+- [prerequisites.md](platform/mvp-refinement/prerequisites.md)
+- [requirements.md](platform/mvp-refinement/requirements.md)
+- [tasks.md](platform/mvp-refinement/tasks.md)

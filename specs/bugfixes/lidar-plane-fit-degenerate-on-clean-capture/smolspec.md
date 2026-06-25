@@ -87,7 +87,7 @@ With this mask:
 
 ### Out of scope
 
-- Replacing the centre‑rectangle approximation with a real food‑region mask derived from a pre‑shutter segmentation pass — tracked separately under the follow‑on full spec `specs/pipeline-real-device-correctness/` (not yet created).
+- Replacing the centre‑rectangle approximation with a real food‑region mask derived from a pre‑shutter segmentation pass — tracked separately under the follow‑on full spec `specs/estimation/pipeline-real-device-correctness/` (not yet created).
 - Wiring `foodRegionCoveragePercent` into `LiDARStatus` so `selectCapturePath` can pick `.singleViewLidar`. Same follow‑on spec.
 - Replacing `NullCardDetector` with a Vision‑backed implementation. Same follow‑on spec.
 - The "refusal modal persists across bottom‑nav tab change" UI bug. Separate concern; flag this as a follow‑up but do not address here.
@@ -105,7 +105,7 @@ With this mask:
 
 ## Re-open 2026-06-16 — real-mask path regresses the fit
 
-**Status**: re-opened. The 2026-06-03 fix above is preserved as the all-ones-mask regression sentinel (`SupportPlaneRoughMaskTests` at `MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift`). The `CentreRectangleMask.swift` helper itself has been retired — the `specs/pipeline-real-device-correctness/` follow-on wired a real pre-shutter `BinaryMask` through `CaptureResult.preShutterFoodMask`, so `Pipeline.fitSupportPlane` no longer constructs any rough mask of its own. That migration is what re-exposes this bug.
+**Status**: re-opened. The 2026-06-03 fix above is preserved as the all-ones-mask regression sentinel (`SupportPlaneRoughMaskTests` at `MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift`). The `CentreRectangleMask.swift` helper itself has been retired — the `specs/estimation/pipeline-real-device-correctness/` follow-on wired a real pre-shutter `BinaryMask` through `CaptureResult.preShutterFoodMask`, so `Pipeline.fitSupportPlane` no longer constructs any rough mask of its own. That migration is what re-exposes this bug.
 
 ### Evidence
 
@@ -144,6 +144,6 @@ The earlier centre-rectangle `roughMask` had been hiding the geometry by guarant
 
 ### Out of scope (real-mask re-open)
 
-- Wiring `foodRegionCoveragePercent` into `LiDARStatus` so `selectCapturePath` picks `.singleViewLidar`. Tracked under `specs/pipeline-real-device-correctness/`.
+- Wiring `foodRegionCoveragePercent` into `LiDARStatus` so `selectCapturePath` picks `.singleViewLidar`. Tracked under `specs/estimation/pipeline-real-device-correctness/`.
 - Replacing `NullCardDetector` with a Vision-backed implementation. Same.
 - Single-mode on-device trail (the 2026-06-16 device run was Double-only). Folded into closeout verification.

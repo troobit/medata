@@ -35,7 +35,7 @@ The two foundational specs the architecture sits on top of:
 
 - `specs/research/` — the on-device estimation pipeline (the core). §0 has the phase
   plan; §1.2 has the hardware floor; §23 covers the Phase 1 dev-stub.
-- `specs/ui/` — the SwiftUI capture-flow shell.
+- `specs/ui/iphone-experience/` — the SwiftUI capture-flow shell.
 
 ## Architecture vs agent-notes
 

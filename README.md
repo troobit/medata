@@ -98,7 +98,7 @@ Read in this order if you're new to the project:
 | [`docs/agent-notes/`](docs/agent-notes/) | Module-level implementation notes and gotchas — read the relevant one before working in a module. |
 | [`specs/OVERVIEW.md`](specs/OVERVIEW.md) | **The spec index** — every feature/bugfix spec with status, summary, and links into its requirements / design / decision log / tasks. |
 | [`specs/research/`](specs/research/) | The core pipeline: requirements (incl. §0 phase plan and §1.2 hardware floor), design (algorithms, schemas), decisions, tasks. |
-| [`specs/ui/`](specs/ui/) | The capture-flow shell: state machine, components, AR-session ownership, decisions. |
+| [`specs/ui/iphone-experience/`](specs/ui/iphone-experience/) | The capture-flow shell: state machine, components, AR-session ownership, decisions. |
 | [`tools/segmenter/README.md`](tools/segmenter/README.md) | PyTorch → Core ML / TFLite export pipeline for the Phase 3 trained segmenter. |
 | [`docs/ml-training.md`](docs/ml-training.md) | End-to-end training recipe for the Phase 3 segmenter + β_c calibration. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Notable changes since the first version. |

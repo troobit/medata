@@ -1,6 +1,6 @@
 # UI capture flow (App/)
 
-The iOS SwiftUI capture flow per `specs/ui/`. New code lives in `App/`; the
+The iOS SwiftUI capture flow per `specs/ui/iphone-experience/`. New code lives in `App/`; the
 Xcode project (`MeData/MeData.xcodeproj`) references the files in place via
 `../App/*.swift`. All spec tasks (1–28) are implemented.
 
@@ -11,7 +11,7 @@ It owns the `CaptureState` state machine, a `CaptureSession`, an
 `any PipelineEstimator`, and the child `LiveIndicatorModel`. The view layer is
 composition only; all behaviour is in the model and is unit-tested.
 
-- **CaptureFlowModel** — drives the state machine from `specs/ui/design.md`.
+- **CaptureFlowModel** — drives the state machine from `specs/ui/iphone-experience/design.md`.
   Public commands: `shutter()`, `forceTwoView()`, `tryAgain()`,
   `dismissResult()`, `scenePhaseChanged(_:)`, `liveSampleDidUpdate(...)`,
   `trackingDegraded()`, `handleInterruption(_:)`. Derived view state:

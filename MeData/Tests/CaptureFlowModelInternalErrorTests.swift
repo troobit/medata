@@ -7,7 +7,7 @@ import Testing
 @testable import MeData
 
 // Task 6 / flow-catch-all-test (red baseline) → Task 7 / flow-catch-all-impl
-// (green). Locks Req 6.5 of `specs/rawframe-rgb-conversion/`: a non-typed error
+// (green). Locks Req 6.5 of `specs/capture/rawframe-rgb-conversion/`: a non-typed error
 // thrown by the injected pipeline must surface as `.refused(.internalError(typeName))`
 // — never as `.refused(.noScaleAvailable)`, which would borrow the scale-error
 // label for an unrelated failure (the 2026-06-04 device-log incident).
