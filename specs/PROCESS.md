@@ -41,7 +41,7 @@ own different parts of the same feature without colliding.
 |---|---|---|---|
 | `requirements.md` | **What** must be true, and for whom | Product / clinical / domain | `/starwave:requirements` |
 | `design.md` | **How** it is built — architecture, data models, algorithms, maths | Engineering / protocol | `/starwave:design` |
-| `tasks.md` | **Execution** — the ordered, trackable checklist | Implementer (dev or agent) | `/starwave:tasks`, `rune` |
+| `tasks.md` | **Execution** — the ordered, trackable checklist (optional in iterative mode, §5) | Implementer (dev or agent) | `/starwave:tasks`, `rune` |
 | `decision_log.md` | **Why** each load-bearing choice was made | Whoever made the call | maintained as decisions land |
 | `prerequisites.md` | Preconditions/inputs a large spec assumes | Engineering | created for large specs |
 
@@ -104,22 +104,72 @@ flowchart TD
 5. **Implementation** — execute tasks in order; update the ledger per commit.
 6. **Review** — the SSOT gate (§8).
 
+This linear path is the **full-spec** loop. Smolspecs collapse phases 2–4 into one document;
+**iterative** work (§5) replaces the task ledger with a target-and-converge loop. The
+*gates* still apply in every mode.
+
 **The gates are the process.** Do not start design before requirements are agreed, or code
-before tasks exist. For a solo developer the "approval" is a deliberate self-review (the
+before its plan exists — a `tasks.md` ledger in full/smol mode, or an agreed target and
+acceptance band in iterative mode (§5). For a solo developer the "approval" is a deliberate
+self-review (the
 `/explain-like` skill is useful here — explaining the design at three levels surfaces gaps);
 the gate is real even when the approver and author are the same person.
 
-## 5. Sizing: full spec vs smolspec
+## 5. Choosing the mode: full spec, smolspec, or iterative
 
-Use a **smolspec** only when *all* hold: <80 LOC, 1–3 files, single component, clear
-requirements, no breaking changes, no cross-cutting concerns (security, performance,
-privacy, clinical safety). If *any* fails, use the full spec. Anything touching the
-estimation maths, the data model, refusal/safety paths, or a public contract is a full
-spec regardless of line count.
+Three modes. Pick by the *nature* of the work, not size alone.
+
+**Full spec** — a feature with a definable correct answer. The default; required for
+anything touching the estimation maths, the data model, refusal/safety paths, or a public
+contract, regardless of line count.
+
+**Smolspec** — small, isolated change. Use only when *all* hold: <80 LOC, 1–3 files, single
+component, clear requirements, no breaking changes, no cross-cutting concerns (security,
+performance, privacy, clinical safety). If *any* fails, use the full spec.
+
+**Iterative (taste/target-driven)** — work that converges on a *target* by judgement rather
+than against a fixed pass/fail list: UI look-and-feel, motion, copy tone; and
+research/calibration tuning (per-class β_c, confidence thresholds) where you tune toward an
+accuracy target on the test set. Here "complete" is replaced by *"near enough is good enough
+against the target"*. A `tasks.md` ledger often adds nothing — there is no fixed, orderable
+checklist, only a loop you stop when the result meets the bar.
+
+### The iterative loop
+
+`requirements.md` still defines the **targets and acceptance bands** — what "good enough"
+means, measurably where it can be (e.g. "carb MAE ≤ target on the v1 set", "matches the
+design-system spacing scale", "shutter reachable one-handed"). `design.md` records the
+approach and points at the reference. Then iterate:
+
+```mermaid
+flowchart LR
+    build[build / tune] --> observe[observe real output]
+    observe --> compare{within<br/>acceptance band?}
+    compare -->|no| adjust[adjust toward target]
+    adjust --> build
+    compare -->|yes| stop([stop — log the bar hit])
+```
+
+- **The target is an artifact, not a memory.** For UI it is `design-system/MASTER.md` and
+  the per-page docs in `design-system/pages/`; for tuning it is the accuracy target and the
+  test set. Iterating against a *written* target is what keeps "taste" reviewable.
+- **Observe with real output** — screenshots / on-device runs (the `verify` and `run`
+  skills, the loop in `docs/agent-notes/device-build-and-test.md`), never assumptions.
+- **Get an independent read** — the `ui-ux-reviewer` skill, or a second-opinion critique
+  from an `mcp-devtools` agent (`gemini-agent` / `codex-agent`) against the design-system
+  reference, catches taste drift a single author misses. `swiftui-forms` covers form layout.
+- **Stop at the bar.** When the output is inside the band, stop — do not gold-plate. Record
+  the bar reached and any conscious "near enough" trade-offs in `decision_log.md`.
+
+**`tasks.md` is optional in this mode.** When the work is a convergence loop rather than an
+orderable checklist, omit it — the targets in `requirements.md` plus the decision log carry
+the state. (Sibling precedent: rune's `batch-positional-file-arg` and
+`general/TECH-IMPROVEMENTS.md` ship without a tasks ledger.) Add a `tasks.md` only when
+discrete, separable steps actually emerge.
 
 ## 6. Requirements in EARS
 
-Acceptance criteria use EARS (Easy Approach to Requirements Syntax) with `SHALL`, each
+Acceptance criteria use EARS (Easy Approach to Requirements Syntax) with `SHALL`, **each**
 criterion individually anchored so design and tasks can reference it:
 
 ```markdown
@@ -154,7 +204,8 @@ rune list   specs/<feature>/tasks.md --filter pending
 
 Update the ledger as work happens — set a task in-progress when you start it and complete
 it in the same commit that lands its code, so the ledger and the tree never drift. A task
-should name the requirement(s) it satisfies and the file(s) it touches.
+should name the requirement(s) it satisfies and the file(s) it touches. Iterative work (§5)
+omits the ledger; its state lives in the targets and the decision log instead.
 
 **Orchestration (`orbit`).** The repo carries an `.orbit.yaml` for driving a coding agent
 over the ledger. `rune`'s streams/owner model and `orbit` exist to run **parallel** agents
@@ -234,10 +285,12 @@ stays cohesive by design, not by neglect.
 
 Before opening a change for review:
 
-- [ ] Right size chosen (smolspec vs full spec); folder follows §3.
-- [ ] `requirements.md` in EARS, criteria anchored; no implementation leaked in.
+- [ ] Right mode chosen (full / smol / iterative, §5); folder follows §3.
+- [ ] `requirements.md` in EARS, criteria anchored; no implementation leaked in — or, in
+  iterative mode, the target and acceptance band are stated and measurable where possible.
 - [ ] `design.md` cites sources / records maths where relevant; no requirements restated.
-- [ ] `tasks.md` exists in `rune`, tasks map to requirements, state is current.
+- [ ] `tasks.md` exists in `rune`, tasks map to requirements, state is current — *unless*
+  iterative mode, where the converge-on-target loop and decision log carry the state.
 - [ ] Code matches requirements + design; refusal/units/safety paths honoured.
 - [ ] `decision_log.md` has any load-bearing decisions (Enhanced Nygard ADR format).
 - [ ] `OVERVIEW.md` updated (status + links); `DECISIONS.md` updated if cross-cutting.
