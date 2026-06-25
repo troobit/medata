@@ -1,7 +1,6 @@
 # Spec-Driven Development Process
 
-**Audience:** anyone adding or changing a feature in Medata — today a single developer
-working with AI coding agents; later a small team with domain experts.
+**Audience:** anyone adding or changing a feature in Medata.
 
 **Status:** the governing description of how specs are written, tracked, and turned into
 code in this repository. It documents the process *as practised* (the "starwave" spec
@@ -83,26 +82,16 @@ spec for a one-function change — that is process for its own sake.
 The loop is sequential with an **explicit approval gate** between phases. Each phase has a
 skill that drives it; the orchestrator is `/starwave:creating-spec`.
 
-```
-  idea / ticket
-       │
-       ▼
-  ① Scope assessment ───► smolspec?  ──yes──►  smolspec.md ──┐
-       │ (full spec)                                          │
-       ▼                                                      │
-  ② requirements.md   (EARS)        ◄── gate: approve ──►     │
-       │                                                      │
-       ▼                                                      │
-  ③ design.md         (research-grounded)  ◄── gate ──►       │
-       │                                                      │
-       ▼                                                      │
-  ④ tasks.md          (rune ledger)        ◄── gate ──►       │
-       │                                                      ▼
-       └──────────────►  ⑤ implementation  ◄──────────  tasks tracked per-commit
-                                │
-                                ▼
-                         ⑥ review gate: code matches requirements + design,
-                           all tasks [x], decision_log + OVERVIEW updated
+```mermaid
+flowchart TD
+    idea([idea / ticket]) --> scope{① Scope assessment}
+    scope -->|small change| smol["smolspec.md"]
+    scope -->|full spec| req["② requirements.md (EARS)"]
+    req -->|gate: approve| design["③ design.md (research-grounded)"]
+    design -->|gate: approve| tasks["④ tasks.md (rune ledger)"]
+    tasks -->|gate: approve| impl["⑤ implementation"]
+    smol -->|gate: approve| impl
+    impl -->|tasks tracked per-commit| review{{"⑥ review gate: code matches requirements + design · all tasks complete · decision_log + OVERVIEW updated"}}
 ```
 
 1. **Scope assessment** — research the affected code, estimate size, choose smolspec vs
@@ -252,4 +241,3 @@ Before opening a change for review:
 - [ ] Code matches requirements + design; refusal/units/safety paths honoured.
 - [ ] `decision_log.md` has any load-bearing decisions (Enhanced Nygard ADR format).
 - [ ] `OVERVIEW.md` updated (status + links); `DECISIONS.md` updated if cross-cutting.
-```
