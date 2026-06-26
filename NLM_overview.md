@@ -26,7 +26,7 @@ estimation path** — so the usual cloud/SRE deployment model does not apply her
 |---|---|
 | **The recipe** (env → data → train → validate → export → bundle) — the source of truth | [`docs/ml-training.md`](docs/ml-training.md), start at §1 |
 | System shape, layers, conventions | [`docs/architecture.md`](docs/architecture.md) |
-| Requirements / design / decisions | [`specs/research/`](specs/research/) |
+| Requirements / design / decisions | [`specs/estimation/pipeline/`](specs/estimation/pipeline/) |
 | What's built vs what the model unblocks | [`docs/agent-notes/pipeline-wiring-status.md`](docs/agent-notes/pipeline-wiring-status.md) |
 | Project intro, build, phase plan | [`README.md`](README.md) |
 

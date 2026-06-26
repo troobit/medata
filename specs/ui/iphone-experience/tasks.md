@@ -9,7 +9,7 @@ references:
 > **Reading note — v1.0 tasks superseded by v1.1.** This list is layered: the **v1.1 sections**
 > ("Tab navigation + Meals tab", "Visual design", "Tilt-tolerant capture") supersede earlier v1.0 task
 > content where they conflict. The authoritative current behaviour is the **latest** decision (UI
-> decision log Decisions 15–20) + `research/requirements.md`. Specifically, against the as-built code:
+> decision log Decisions 15–20) + `estimation/pipeline/requirements.md`. Specifically, against the as-built code:
 > - **Confidence pill is four-tier** (High / Moderate / Low / Very Low, retake at σ < 0.20) per Decision 17
 >   / tasks 52–60 — the **three-tier** thresholds (σ < 0.60 prompt, Low/Moderate/High at 0.60/0.75) in the
 >   v1.0 tasks (5, 20, 43) are superseded.

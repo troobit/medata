@@ -82,7 +82,7 @@ a logged decision, not an ad-hoc choice. For Medata:
 |---|---|---|
 | `platform` | app shell, build, OS/runtime bindings (iOS today, Android later) | app foundation, packaging |
 | `capture` | sensor/AR/photo acquisition and the raw inputs | `rawframe-rgb-conversion` |
-| `estimation` | the on-device CV/geometry/maths → carb pipeline | the core (today `research/`), `mv-volume-estimator`, `lidar-first-scale-fallback` |
+| `estimation` | the on-device CV/geometry/maths → carb pipeline | the core (`pipeline/`), `mv-volume-estimator`, `lidar-first-scale-fallback` |
 | `data` | persistence, schemas, food/nutrition databases, **data-input streams** (biometrics, glucose) | `event-log-schema` |
 | `ui` | user-facing surfaces, navigation, interaction, visual design | `iphone-experience`, `shutter-blocked-feedback` |
 
@@ -118,9 +118,9 @@ not `data-input` (it consumes the `data` domain but does not own it).
 
 ### Legacy names
 
-One spec is still flat: **`research/`** (the estimation core). Its move into
-`specs/estimation/` is deferred to a dedicated pass because it touches the largest decision
-log and the `DECISIONS.md` citation keys (`research D9`). Separately, some migrated specs
+The estimation core was renamed from the flat `research/` into `estimation/pipeline/`. For
+continuity its `DECISIONS.md` citation-key label stays `research` (e.g. `research D9`), now
+resolving to `specs/estimation/pipeline/decision_log.md`. Separately, some migrated specs
 kept **effort-flavoured capability names** (`pipeline-real-device-correctness`,
 `bubble-only-cleanup`, and the imported `ui-restoration` / `mvp-refinement`); they now live
 under the right domain but their *name* still predates the convention. The convention binds
@@ -135,12 +135,19 @@ spec for a one-function change — that is process for its own sake.
 
 ## 4. The development loop
 
-The loop is sequential with an **explicit approval gate** between phases. Each phase has a
-skill that drives it; the orchestrator is `/starwave:creating-spec`.
+The loop is sequential with an **explicit approval gate** between phases. The front door is
+**`/nextup`**: it reads `nextup.md` at the repo root and routes the stated intent — resume an
+existing spec at its current phase, hand a small job to a focused skill, or start a *new* spec.
+`/nextup` is a router, not an executor; it classifies and hands off, never doing the work
+itself. New-spec work is routed into the chain below, orchestrated by `/starwave:creating-spec`,
+and each phase has a skill that drives it. Routing a new capability through that chain is what
+fixes its domain and capability name up front (§3) — a spec never gets a file before it has a
+convention-correct home.
 
 ```mermaid
 flowchart TD
-    idea([idea / ticket]) --> scope{① Scope assessment}
+    idea([idea / nextup.md]) --> nextup{{"/nextup — route intent"}}
+    nextup -->|new or resumed spec| scope{① Scope assessment}
     scope -->|small change| smol["smolspec.md"]
     scope -->|full spec| req["② requirements.md (EARS)"]
     req -->|gate: approve| design["③ design.md (research-grounded)"]
@@ -157,7 +164,9 @@ flowchart TD
    record the maths. No code yet.
 4. **Tasks** — decompose design into an ordered checklist mapped back to requirements,
    created with `rune` (§7).
-5. **Implementation** — execute tasks in order; update the ledger per commit.
+5. **Implementation** — execute the `rune` ledger in order with `make-it-so` (works a whole
+   phase, delegating tasks to subagents) or `next-task` (one task group at a time); update the
+   ledger per commit (§7).
 6. **Review** — the SSOT gate (§8).
 
 This linear path is the **full-spec** loop. Smolspecs collapse phases 2–4 into one document;
@@ -168,8 +177,9 @@ This linear path is the **full-spec** loop. Smolspecs collapse phases 2–4 into
 before its plan exists — a `tasks.md` ledger in full/smol mode, or an agreed target and
 acceptance band in iterative mode (§5). For a solo developer the "approval" is a deliberate
 self-review (the
-`/explain-like` skill is useful here — explaining the design at three levels surfaces gaps);
-the gate is real even when the approver and author are the same person.
+`/explain-like` skill is useful here — explaining the design at three levels surfaces gaps),
+with `sendit` shipping the spec documents to the external review folder when a human sign-off
+is wanted; the gate is real even when the approver and author are the same person.
 
 ## 5. Choosing the mode: full spec, smolspec, or iterative
 
@@ -263,13 +273,19 @@ it in the same commit that lands its code, so the ledger and the tree never drif
 should name the requirement(s) it satisfies and the file(s) it touches. Iterative work (§5)
 omits the ledger; its state lives in the targets and the decision log instead.
 
+Day-to-day, a single developer executes the ledger through `make-it-so` / `next-task` (§4) —
+no orchestrator required.
+
 **Orchestration (`orbit`).** The repo carries an `.orbit.yaml` for driving a coding agent
 over the ledger. `rune`'s streams/owner model and `orbit` exist to run **parallel** agents
-across independent tasks. For a single developer this is optional — the ledger is valuable
-on its own. Reach for orchestration when a spec has genuinely parallel, independent task
-streams (e.g. a platform port where Android bindings and a shared-core refactor proceed at
-once), not by default. We do **not** require moving every change through an orchestrator;
-the requirement is that task *state* is tracked in `rune`, not how the tasks are executed.
+across independent tasks. We still use it, but reach for it only when a spec has genuinely
+parallel, independent task streams (e.g. a platform port where Android bindings and a
+shared-core refactor proceed at once), not by default. We do **not** require moving every
+change through an orchestrator; the requirement is that task *state* is tracked in `rune`, not
+how the tasks are executed. **Treat any persisted `.orbit/` run state as disposable:** it can
+reference task formats, IDs, and names from before the domain migration (§3). The `rune`
+ledger is authoritative — regenerate orbit state against it rather than trusting stale
+`.orbit/` contents.
 
 ## 8. Keeping spec and code aligned (SSOT enforcement)
 
@@ -297,15 +313,15 @@ The roadmap is the reason the process must be mature now. Two expansions are ant
 each has a defined shape so it does not force an ad-hoc reorganisation later.
 
 **New data input streams (biometrics, blood glucose, …).** Each new stream is a **new
-sibling spec** under `specs/`, not an edit to `research/`. The persistence layer already
+sibling spec** under `specs/`, not an edit to `estimation/pipeline/`. The persistence layer already
 anticipates this: the event-log schema stores any metric as a new `event_type` with no
 schema change (`specs/data/event-log-schema/`). A new stream's spec owns its ingestion,
 validation, units, and how it relates to existing events. The carb-estimation core
-(`research/`) stays focused; correlation features (e.g. glucose-vs-meal) are their own
+(`estimation/pipeline/`) stays focused; correlation features (e.g. glucose-vs-meal) are their own
 specs that depend on both.
 
 **Android port.** The estimation pipeline is already specified to be **platform-agnostic at
-the algorithm layer** — `research/` design §8 (Portability Notes) and Req 18 (Portable
+the algorithm layer** — `estimation/pipeline/` design §8 (Portability Notes) and Req 18 (Portable
 Pipeline Contracts) define the seam between portable algorithms and platform bindings
 (ARKit, Metal, SwiftUI). When Android work begins, the split is along that existing seam: a
 platform-agnostic core spec (algorithms, data models, maths, contracts — reused verbatim)
@@ -360,7 +376,7 @@ modelling assumptions, the cross-cutting decision log) and extract self-containe
 into child specs that link back up; rewrite cross-references in the same pass; carry each
 extracted decision's history with it.
 
-**`research/` — verdict (2026-06-25).** `research/` is monolithic (23 requirement areas, a
+**`estimation/pipeline/` — verdict (2026-06-25).** `estimation/pipeline/` is monolithic (23 requirement areas, a
 large design, a large decision log) and is a candidate for decomposition. Applying the
 criterion above, it is **not split yet**, because no forcing function is active: there is
 one developer, one platform, and the internal portability seam (§8 / Req 18) already
@@ -369,7 +385,7 @@ follow the pattern above — when **either** the Android port starts (extract th
 platform-agnostic core from the iOS bindings) **or** a concern inside it gains an
 independent owner. The most self-contained extraction candidate, when triggered, is the
 density + macronutrient concern (Req 11–12): pure data and arithmetic, platform-independent,
-and the natural attachment point for blood-glucose correlation work. Until then `research/`
+and the natural attachment point for blood-glucose correlation work. Until then `estimation/pipeline/`
 stays cohesive by design, not by neglect.
 
 ## 11. Quick checklist

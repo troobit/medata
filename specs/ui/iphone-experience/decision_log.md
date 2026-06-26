@@ -7,7 +7,7 @@
 
 ### Context
 
-The research spec's capture flow (§3 of `specs/research/requirements.md`) describes conditions under which a capture is valid (tilt within ±5° of the target axis, distance 25–50 cm with LiDAR, working-distance guidance 30–40 cm without). It does not specify whether the system auto-fires when conditions are met or whether the user explicitly triggers each capture.
+The research spec's capture flow (§3 of `specs/estimation/pipeline/requirements.md`) describes conditions under which a capture is valid (tilt within ±5° of the target axis, distance 25–50 cm with LiDAR, working-distance guidance 30–40 cm without). It does not specify whether the system auto-fires when conditions are met or whether the user explicitly triggers each capture.
 
 ### Decision
 
@@ -239,7 +239,7 @@ A single brand master prevents drift between web and iOS surfaces. The SVG sourc
 
 ### Context
 
-`requirements.md` §9.2 introduces a three-state confidence pill ("High" σ ≥ 0.75, "Moderate" 0.60 ≤ σ < 0.75, "Low" σ < 0.60). §15.1–§15.2 mandate a 30 fps camera-preview floor; §15.3 mandates a 100 ms shutter-tap-to-busy-state latency. None of these specific numbers come from `specs/research/`. The research spec gives one threshold (Req 13.5, σ < 0.60 triggers the uncertain-estimate affordance) and one performance figure (Req 16.1/16.7, P95 end-to-end pipeline budget ≤ 1000/1800 ms — a wall-clock figure, not a UI responsiveness floor).
+`requirements.md` §9.2 introduces a three-state confidence pill ("High" σ ≥ 0.75, "Moderate" 0.60 ≤ σ < 0.75, "Low" σ < 0.60). §15.1–§15.2 mandate a 30 fps camera-preview floor; §15.3 mandates a 100 ms shutter-tap-to-busy-state latency. None of these specific numbers come from `specs/estimation/pipeline/`. The research spec gives one threshold (Req 13.5, σ < 0.60 triggers the uncertain-estimate affordance) and one performance figure (Req 16.1/16.7, P95 end-to-end pipeline budget ≤ 1000/1800 ms — a wall-clock figure, not a UI responsiveness floor).
 
 ### Decision
 

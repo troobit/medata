@@ -40,7 +40,7 @@ The full pipeline relies on [ARKit `sceneDepth`](https://developer.apple.com/doc
 | iPhone 13 / 14 / 14 Plus / 15 / 15 Plus / 16 / 16 Plus / 17 / Air | No | Yes | Yes | ID-1 reference card required in every shot; two views mandatory (no single-view shortcut). `noLidarConfidence` set on every meal. |
 | Pre-iPhone 12 / iOS < 26.5 | n/a | No | No | Unsupported (Req 1.2 — OS floor is iOS 26.5) |
 
-LiDAR availability is the canonical Apple matrix at [Tech Specs — iPhone](https://support.apple.com/en-gb/iphone/compare/). For the algorithmic background, see `specs/research/decision_log.md` Decision 9.
+LiDAR availability is the canonical Apple matrix at [Tech Specs — iPhone](https://support.apple.com/en-gb/iphone/compare/). For the algorithmic background, see `specs/estimation/pipeline/decision_log.md` Decision 9.
 
 ## Prerequisites
 
@@ -234,8 +234,8 @@ Reference: [Creating an Xcode project for an app](https://developer.apple.com/do
 
 | Topic | Location |
 |---|---|
-| LiDAR hardware floor (spec-level) | `specs/research/requirements.md` §1.2, §1.3 |
-| Card-only support-plane recovery | `specs/research/requirements.md` §4.3 |
-| Metric scale resolver (`noLidarConfidence`) | `specs/research/requirements.md` §7.4, §7.5 |
-| Two-view-without-LiDAR algorithmic background | `specs/research/decision_log.md` Decision 9 |
+| LiDAR hardware floor (spec-level) | `specs/estimation/pipeline/requirements.md` §1.2, §1.3 |
+| Card-only support-plane recovery | `specs/estimation/pipeline/requirements.md` §4.3 |
+| Metric scale resolver (`noLidarConfidence`) | `specs/estimation/pipeline/requirements.md` §7.4, §7.5 |
+| Two-view-without-LiDAR algorithmic background | `specs/estimation/pipeline/decision_log.md` Decision 9 |
 | iOS-shell capture engine (LiDAR opt-in, not gated) | `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` |

@@ -24,7 +24,7 @@ the iOS app depends on at runtime:
 Both are produced offline; neither trains, fine-tunes, or recalibrates on-device.
 
 For project-level prerequisites (Apple Dev account, Xcode, device, fixtures repo)
-see [`specs/research/prerequisites.md`](../specs/research/prerequisites.md). This
+see [`specs/estimation/pipeline/prerequisites.md`](../specs/estimation/pipeline/prerequisites.md). This
 document is the ML-specific overlay on top of those.
 
 For where this fits in the runtime wiring — what's already built versus what the
@@ -50,7 +50,7 @@ trained model unblocks — see
 
 ## 1. Prerequisites & environment
 
-[`specs/research/prerequisites.md`](../specs/research/prerequisites.md) is the
+[`specs/estimation/pipeline/prerequisites.md`](../specs/estimation/pipeline/prerequisites.md) is the
 authoritative list of project prerequisites. This section adds the ML-specific
 detail not duplicated there.
 
@@ -149,7 +149,7 @@ The segmenter has **27 output channels**, not 24 (Req 8.4):
 - Channel 26: `unsupported_liquid` — standalone liquid (excluded from volume; Req 8.7)
 
 Channel ordering is load-bearing. The Swift runtime indexes into the
-`ProbabilityTensor` by these exact integer offsets ([design §3.5](../specs/research/design.md#L246)).
+`ProbabilityTensor` by these exact integer offsets ([design §3.5](../specs/estimation/pipeline/design.md#L246)).
 If you reorder classes during training, the on-device pipeline breaks
 silently — voxel ownership and macro lookup both index by channel.
 
@@ -170,7 +170,7 @@ DB and the per-class β_c calibration target.
 The palette and `cofid_db.sqlite` are released as a **versioned pair**
 (Req 11.4). The DB's `meta.palette_version` (`v1`) must match the Swift
 `ClassPalette.version` (`v1`). Re-derivation across palette versions requires
-an explicit class-mapping file ([design §6.12](../specs/research/design.md#L1244));
+an explicit class-mapping file ([design §6.12](../specs/estimation/pipeline/design.md#L1244));
 that's a v2-and-beyond concern — for v1, just don't reorder.
 
 ### Class composition (composite vs single-ingredient)
@@ -496,7 +496,7 @@ shipped app is wrong.
 ## Related documentation
 
 ### Tooling and prerequisites
-- [`specs/research/prerequisites.md`](../specs/research/prerequisites.md) —
+- [`specs/estimation/pipeline/prerequisites.md`](../specs/estimation/pipeline/prerequisites.md) —
   authoritative project prerequisites (Apple Dev account, Xcode, device,
   datasets, GPU); this document is the ML-specific overlay on top of it.
 - [`tools/segmenter/README.md`](../tools/segmenter/README.md) +
@@ -504,12 +504,12 @@ shipped app is wrong.
 - `tools/segmenter/requirements.txt` — the single venv for train + export (§1).
 
 ### Spec & decisions behind the bars
-- [`specs/research/requirements.md`](../specs/research/requirements.md) — Req
+- [`specs/estimation/pipeline/requirements.md`](../specs/estimation/pipeline/requirements.md) — Req
   8.2/8.3/8.4/8.7/8.9 (budget, latency, palette, liquids, mIoU), 16.x
   (latency/ANE), 21.x (accuracy), §23 (the Phase 1 dev-stub this replaces).
-- [`specs/research/design.md`](../specs/research/design.md) — §3.5
+- [`specs/estimation/pipeline/design.md`](../specs/estimation/pipeline/design.md) — §3.5
   `ProbabilityTensor` channel indexing; §6.9 β_c states; §6.12 palette versioning.
-- [`specs/research/decision_log.md`](../specs/research/decision_log.md) —
+- [`specs/estimation/pipeline/decision_log.md`](../specs/estimation/pipeline/decision_log.md) —
   Decision 8 (composites), 25 (FP16/architecture), 28 (single-checkpoint, ONNX
   bypass).
 - [`specs/OVERVIEW.md`](../specs/OVERVIEW.md) — index of every spec + status.

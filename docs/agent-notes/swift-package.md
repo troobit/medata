@@ -86,7 +86,7 @@ nil (e.g. headless CI without a GPU).
 
 ## Foundation phase is complete
 
-Tasks 1–7 (the "Foundation" phase in `specs/research/tasks.md`) are done.
+Tasks 1–7 (the "Foundation" phase in `specs/estimation/pipeline/tasks.md`) are done.
 
 ## Capture and Detection phase is complete
 

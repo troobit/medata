@@ -64,11 +64,11 @@ MedataCore/Resources/segmenter.mlmodelc/
 
 Producing the checkpoint requires:
 
-- A PyTorch training environment with `torchvision`, `coremltools` 8.x, `ai-edge-torch` (per `specs/research/prerequisites.md:17`)
-- The FoodSeg103 dataset (per `specs/research/prerequisites.md:18`)
+- A PyTorch training environment with `torchvision`, `coremltools` 8.x, `ai-edge-torch` (per `specs/estimation/pipeline/prerequisites.md:17`)
+- The FoodSeg103 dataset (per `specs/estimation/pipeline/prerequisites.md:18`)
 - A GPU and time to transfer-learn DeepLabV3 + MobileNetV3-Large to the 27-class palette (24 food + background + unknown_food + unsupported_liquid)
-- Held-out labelled test set to measure mIoU against the bar in research Req 8.9 (`specs/research/prerequisites.md:23`)
-- Apple Neural Engine residency verification in Xcode's Core ML performance report (`specs/research/prerequisites.md:25`)
+- Held-out labelled test set to measure mIoU against the bar in research Req 8.9 (`specs/estimation/pipeline/prerequisites.md:23`)
+- Apple Neural Engine residency verification in Xcode's Core ML performance report (`specs/estimation/pipeline/prerequisites.md:25`)
 
 This is days of ML work, not a code task. It is **the** prerequisite for the food-estimation pipeline going live.
 
@@ -203,5 +203,5 @@ So it's loosened but not productionised. Don't build VisionCardDetector until th
 - Bundled food DB factory: `MedataCore/Sources/Foods/GRDBFoodDatabase.swift:21-30`
 - Persistence store wiring: `App/App.swift:61-71`
 - Segmenter export pipeline + README: `tools/segmenter/export.py`, `tools/segmenter/README.md`
-- ML prerequisites: `specs/research/prerequisites.md`
+- ML prerequisites: `specs/estimation/pipeline/prerequisites.md`
 - Sibling fix (camera config race) that came out of the same investigation: `specs/bugfixes/arview-session-config-race/report.md`, `docs/agent-notes/camera-input-fix.md`

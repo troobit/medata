@@ -8,7 +8,7 @@ correction factors. No LLM, no network call in the estimation path.
 Spec hardware floor: iPhone 13 Pro Max. OS floor: iOS 26.5. The engine relaxes the
 LiDAR requirement at runtime — non-LiDAR devices fall through to the two-view + ID-1
 card path with `noLidarConfidence` set on every meal — but the calibration and
-performance targets are measured on iPhone 13 Pro Max (`specs/research/requirements.md`
+performance targets are measured on iPhone 13 Pro Max (`specs/estimation/pipeline/requirements.md`
 Req 1.2, [`docs/ios-device-setup.md`](docs/ios-device-setup.md) device matrix).
 
 ```
@@ -18,15 +18,15 @@ photo(s) → silhouettes → visual hull → V_c (volume per class)
 
 ## Delivery phases (and what works today)
 
-V1 ships in three ordered phases (`specs/research/requirements.md` §0). Numeric
+V1 ships in three ordered phases (`specs/estimation/pipeline/requirements.md` §0). Numeric
 accuracy and segmenter-quality targets gate **Phase 3 only**; earlier phases are
 sign-off-able with a development stub in the segmenter slot.
 
 | Phase | Status | What it means in practice |
 |---|---|---|
-| **Phase 1 — running on device** | **current** | The full capture-flow + pipeline runs end-to-end on iPhone 13 Pro Max. The segmenter is a development stub (a centred ellipse food mask, per `specs/research/requirements.md` §23) so the geometry, gating, persistence and refusal paths are real but carb numbers are placeholders. |
+| **Phase 1 — running on device** | **current** | The full capture-flow + pipeline runs end-to-end on iPhone 13 Pro Max. The segmenter is a development stub (a centred ellipse food mask, per `specs/estimation/pipeline/requirements.md` §23) so the geometry, gating, persistence and refusal paths are real but carb numbers are placeholders. |
 | Phase 2 — UI/UX iteration | not started | Capture-flow polish, gating affordances, result view, history and settings, refined against real-device usage. Still on the dev-stub segmenter. |
-| Phase 3 — data veracity & modelling | not started | The trained Core ML segmenter ships, β_c calibration runs offline (`specs/research/requirements.md` §11.7), and end-to-end MAPE/MAE bars (§21.3) are measured. |
+| Phase 3 — data veracity & modelling | not started | The trained Core ML segmenter ships, β_c calibration runs offline (`specs/estimation/pipeline/requirements.md` §11.7), and end-to-end MAPE/MAE bars (§21.3) are measured. |
 
 ### Why the fruit-plate MVP
 
@@ -73,7 +73,7 @@ medata/
 │   ├── Tests/                   Swift Testing unit tests (not wired in by default)
 │   └── UITests/                 XCUITests for the capture flow
 ├── specs/                     Per-feature requirements / design / decisions / tasks
-│   ├── research/                the on-device estimation pipeline
+│   ├── estimation/              the on-device carb-estimation pipeline (+ volume, scale)
 │   └── ui/                      the SwiftUI capture-flow shell
 ├── docs/                      Architecture overview, device setup, agent notes
 ├── tools/                     dev/CI scripts (segmenter export, food DB, appicon, linters)
@@ -97,7 +97,7 @@ Read in this order if you're new to the project:
 | [`docs/README.md`](docs/README.md) | Index of all docs and how they relate to the specs. |
 | [`docs/agent-notes/`](docs/agent-notes/) | Module-level implementation notes and gotchas — read the relevant one before working in a module. |
 | [`specs/OVERVIEW.md`](specs/OVERVIEW.md) | **The spec index** — every feature/bugfix spec with status, summary, and links into its requirements / design / decision log / tasks. |
-| [`specs/research/`](specs/research/) | The core pipeline: requirements (incl. §0 phase plan and §1.2 hardware floor), design (algorithms, schemas), decisions, tasks. |
+| [`specs/estimation/pipeline/`](specs/estimation/pipeline/) | The core pipeline: requirements (incl. §0 phase plan and §1.2 hardware floor), design (algorithms, schemas), decisions, tasks. |
 | [`specs/ui/iphone-experience/`](specs/ui/iphone-experience/) | The capture-flow shell: state machine, components, AR-session ownership, decisions. |
 | [`tools/segmenter/README.md`](tools/segmenter/README.md) | PyTorch → Core ML / TFLite export pipeline for the Phase 3 trained segmenter. |
 | [`docs/ml-training.md`](docs/ml-training.md) | End-to-end training recipe for the Phase 3 segmenter + β_c calibration. |

@@ -7,7 +7,7 @@
 
 ### Context
 
-`selectCapturePath` in `MedataCore/Sources/Pipeline/CapturePathDispatch.swift:40-50` returns `.singleViewLidar` only when LiDAR is available, a support plane is detected, and `foodRegionCoveragePercent >= 80`. The third clause has never been honest in production: `App/CaptureFlowModel.swift:461-465` feeds whole-frame LiDAR coverage into `LiDARStatus.foodRegionCoveragePercent`, so the value is always wrong and `selectCapturePath` is currently routed only through `App/CapturePathDecider.swift` behind the `AUTO_CAPTURE_MODE` compile flag. The production app instead honours the user's `CaptureMode` toggle per `specs/research/decision_log.md` Decision 35.
+`selectCapturePath` in `MedataCore/Sources/Pipeline/CapturePathDispatch.swift:40-50` returns `.singleViewLidar` only when LiDAR is available, a support plane is detected, and `foodRegionCoveragePercent >= 80`. The third clause has never been honest in production: `App/CaptureFlowModel.swift:461-465` feeds whole-frame LiDAR coverage into `LiDARStatus.foodRegionCoveragePercent`, so the value is always wrong and `selectCapturePath` is currently routed only through `App/CapturePathDecider.swift` behind the `AUTO_CAPTURE_MODE` compile flag. The production app instead honours the user's `CaptureMode` toggle per `specs/estimation/pipeline/decision_log.md` Decision 35.
 
 This spec must decide whether to re-enable auto-selection now that the coverage value will be honest, or to keep the v1 user-toggle contract and treat the corrected signal as future-proof telemetry.
 

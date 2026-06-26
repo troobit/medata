@@ -3,13 +3,13 @@
 > How specs are written, tracked, and turned into code: [PROCESS.md](PROCESS.md).
 > Cross-cutting architectural decisions are distilled in the meta decision log: [DECISIONS.md](DECISIONS.md). Per-spec decision logs below remain authoritative for detail.
 
-> **Domain** ([PROCESS.md §3](PROCESS.md#3-directory-structure-spec-boundaries-and-naming)) — every spec lives at `specs/<domain>/<capability>/`; the domain is one of `platform · capture · estimation · data · ui`. `research/` is still flat pending its rename into `estimation/`.
+> **Domain** ([PROCESS.md §3](PROCESS.md#3-directory-structure-spec-boundaries-and-naming)) — every spec lives at `specs/<domain>/<capability>/`; the domain is one of `platform · capture · estimation · data · ui`.
 > **Mode** ([PROCESS.md §5](PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative)) — `full` / `smol` / `iterative`; a `·iterative` suffix marks a target-driven concern inside an otherwise deterministic spec.
 > **Imported** — specs marked *imported* carry intent from the SvelteKit line (the `ui-restoration` branch); the code is out of scope here, the requirements travel so the intent is not lost (PROCESS.md §9).
 
 | Name | Domain | Created | Status | Mode | Summary |
 |------|--------|---------|--------|------|---------|
-| [Research](#research) | estimation* | 2026-05-24 | Done | full ·iterative | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. |
+| [Research](#research) | estimation | 2026-05-24 | Done | full ·iterative | Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. |
 | [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | estimation | 2026-06-13 | Done | full | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
 | [Minimum Viable Volume Estimator](#minimum-viable-volume-estimator) | estimation | 2026-06-22 | Done | smol | Decouple the dev-stub volume path from the per-class segmenter so two-view capture completes with a rough, low-confidence carb number instead of refusing `noFoodVolumeRecovered`. |
 | [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | estimation | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
@@ -21,19 +21,17 @@
 | [UI Restoration](#ui-restoration) | ui | 2026-06-08 | Draft · imported | full | Archive the removed MeData design system (logo, motion, icon suite, UI primitives) into a Figma file as the browsable record; code restoration not in scope. |
 | [MVP Refinement](#mvp-refinement) | platform | 2026-03-12 | Draft · imported | full | Make the SvelteKit MVP function end-to-end — mobile camera capture, AI food recognition with a real API key, and the full capture → recognise → edit → save → view flow. |
 
-\* `research/` is estimation-domain but remains flat until its rename into `specs/estimation/` (PROCESS.md §3, “Legacy names”).
-
 ---
 
 ## Research
 
-Low-compute on-device system estimating carbohydrate content from one or two iPhone photos.
+Low-compute on-device system estimating carbohydrate content from one or two iPhone photos. (Folder: `estimation/pipeline/`; formerly the flat `research/` spec.)
 
-- [decision_log.md](research/decision_log.md)
-- [design.md](research/design.md)
-- [prerequisites.md](research/prerequisites.md)
-- [requirements.md](research/requirements.md)
-- [tasks.md](research/tasks.md)
+- [decision_log.md](estimation/pipeline/decision_log.md)
+- [design.md](estimation/pipeline/design.md)
+- [prerequisites.md](estimation/pipeline/prerequisites.md)
+- [requirements.md](estimation/pipeline/requirements.md)
+- [tasks.md](estimation/pipeline/tasks.md)
 
 ## Pipeline Real Device Correctness
 

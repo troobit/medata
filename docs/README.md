@@ -6,7 +6,7 @@ path). Start with the project [`README.md`](../README.md) for structure, build c
 and the **Phase 1 / 2 / 3 delivery plan**.
 
 **Current state:** Phase 1 — full pipeline runs on iPhone 13 Pro Max with a development
-stub in the segmenter slot (`specs/research/requirements.md` §23). Carb numbers are
+stub in the segmenter slot (`specs/estimation/pipeline/requirements.md` §23). Carb numbers are
 placeholders; capture flow, gating, persistence and refusal paths are real.
 
 ## Documents
@@ -33,7 +33,7 @@ feature.
 
 The two foundational specs the architecture sits on top of:
 
-- `specs/research/` — the on-device estimation pipeline (the core). §0 has the phase
+- `specs/estimation/pipeline/` — the on-device estimation pipeline (the core). §0 has the phase
   plan; §1.2 has the hardware floor; §23 covers the Phase 1 dev-stub.
 - `specs/ui/iphone-experience/` — the SwiftUI capture-flow shell.
 

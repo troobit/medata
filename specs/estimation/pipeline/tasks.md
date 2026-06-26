@@ -1,8 +1,8 @@
 ---
 references:
-    - specs/research/requirements.md
-    - specs/research/design.md
-    - specs/research/decision_log.md
+    - specs/estimation/pipeline/requirements.md
+    - specs/estimation/pipeline/design.md
+    - specs/estimation/pipeline/decision_log.md
 ---
 # Research — Implementation Tasks
 

@@ -15,7 +15,7 @@ This spec lifts three Phase-1 stop-gaps that currently let the on-device pipelin
 - New live-indicator state for "no food detected". Empty / degenerate masks surface via the existing refusal-modal path; no extra UI ships in this spec.
 - New refusal copy or new `EstimationFailure` cases. Empty masks reuse `EstimationFailure.noFoodPixels` or `.lidarFitDegenerate`.
 - Replacing the in-shutter segmentation stage. Phase 1 keeps the in-shutter pass at 1920×1440 against the dev-stub engine; this spec adds a separate pre-shutter pass.
-- Training / shipping the production Core ML segmenter. Phase 3 owns model rollout (per `specs/research/` Decision 42). The pre-shutter pass must work against whichever engine `PipelineFactory.makeForDevice` wires.
+- Training / shipping the production Core ML segmenter. Phase 3 owns model rollout (per `specs/estimation/pipeline/` Decision 42). The pre-shutter pass must work against whichever engine `PipelineFactory.makeForDevice` wires.
 - Removing `NullCardDetector` from the test surface. Tests inject mock `CardDetector` conformances; the production swap is the App-target Vision implementation.
 - Card detection used as a pre-shutter gate or surfaced in a live badge. Detection runs at shutter time only.
 

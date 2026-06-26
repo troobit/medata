@@ -14,7 +14,7 @@ Alternatives / Consequences of any item, follow its **Sources** line.
 For the spec index see [OVERVIEW.md](OVERVIEW.md). For the
 per-decision format see `rules/references/decision-log-format.md`.
 
-**Source citation key:** `research D9` = Decision 9 in `specs/research/decision_log.md`;
+**Source citation key:** `research D9` = Decision 9 in `specs/estimation/pipeline/decision_log.md`;
 `ui D15` = Decision 15 in `specs/ui/iphone-experience/decision_log.md`; `event-log D3` =
 `specs/data/event-log-schema/decision_log.md`; `pipeline-rdc D4` =
 `specs/estimation/pipeline-real-device-correctness/decision_log.md`; `lidar-fallback D1` =

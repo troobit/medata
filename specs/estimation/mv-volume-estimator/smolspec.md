@@ -30,4 +30,4 @@ The two-view capture → volume → carb-estimate flow currently refuses with `n
 - **Risk:** the synthetic single-class carve silently swallows a genuinely empty capture. **Mitigation:** the negligible-mask refusal requirement above — keep a minimum food-region area/volume threshold below which the path still refuses.
 - **Assumption:** `preShutterFoodMask` is populated on the device path (the support-plane fitter already relies on it today).
 - **Prerequisite:** the two-view path must actually reach the volume stage — the recurring `lidarFitDegenerate` support-plane refusal (Track 1, `lidar-plane-fit-degenerate-on-clean-capture`) must be resolved first, or the flow refuses before volume runs.
-- **Continuity:** this degrades from the full per-class design in `specs/research/` (§ Volume Estimation, tasks 24–34) and absorbs the volume half of `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 4 option (b) for MVP purposes.
+- **Continuity:** this degrades from the full per-class design in `specs/estimation/pipeline/` (§ Volume Estimation, tasks 24–34) and absorbs the volume half of `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 4 option (b) for MVP purposes.

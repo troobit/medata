@@ -18,7 +18,7 @@ MeData estimates the carbohydrate content of a meal from one or two iPhone photo
 using **deterministic on-device computer vision** — geometry, an on-device food
 segmenter, a bundled food-composition database, and offline-calibrated per-class
 correction factors. There is no LLM and no network call in the estimation path
-(it supersedes an earlier LLM-based MVP — `specs/research/decision_log.md` Decision 1).
+(it supersedes an earlier LLM-based MVP — `specs/estimation/pipeline/decision_log.md` Decision 1).
 
 The core transformation is:
 
@@ -27,24 +27,24 @@ photo(s) → silhouettes → visual hull H → V_c (volume per class)
          → m_c = V_c · ρ_c (mass) → C = Σ m_c · κ_c / 100 (carbs)
 ```
 
-See `specs/research/requirements.md` for the full mathematical pipeline, modelling
+See `specs/estimation/pipeline/requirements.md` for the full mathematical pipeline, modelling
 assumptions, and academic provenance.
 
 **Hardware floor:** iPhone 13 Pro Max and later (rear LiDAR). **OS floor:** iOS 26.5.
-(`specs/research/requirements.md` Req 1.2. The capture engine relaxes this at runtime
+(`specs/estimation/pipeline/requirements.md` Req 1.2. The capture engine relaxes this at runtime
 for non-LiDAR devices — see [`docs/ios-device-setup.md`](ios-device-setup.md) device
 matrix — but calibration and performance bars are measured on iPhone 13 Pro Max.)
 
 ### 1.1 Delivery phases — what works today
 
-V1 ships in three ordered phases (`specs/research/requirements.md` §0). Phases 1 and 2
+V1 ships in three ordered phases (`specs/estimation/pipeline/requirements.md` §0). Phases 1 and 2
 ship with a development stub in the segmenter slot; numeric accuracy targets gate
 **Phase 3 only**.
 
 - **Phase 1 — running on device (current).** Full capture → segmentation (dev-stub) →
   volume → macros → result on iPhone 13 Pro Max. Capture flow, gating, persistence,
   refusal paths and confidence combination are real; the segmenter emits a centred
-  ellipse food mask (`specs/research/requirements.md` §23.2) so carb numbers are
+  ellipse food mask (`specs/estimation/pipeline/requirements.md` §23.2) so carb numbers are
   placeholders. `DEV_STUB_SEGMENTER` is the swift-build flag that selects this engine.
 - **Phase 2 — UI/UX iteration.** Capture-flow polish against real-device usage; no new
   pipeline algorithms.
@@ -98,7 +98,7 @@ flowchart LR
 **Why the split:** every algorithm module in `MedataCore` is free of iOS-only types so
 the maths can be re-derived on Android later, and so the whole pipeline runs headless on
 macOS under `HarnessCLI` for calibration and accuracy testing
-(`specs/research/decision_log.md` Decision 2). The app target imports only the `Pipeline`
+(`specs/estimation/pipeline/decision_log.md` Decision 2). The app target imports only the `Pipeline`
 module and a small SwiftUI surface.
 
 > The Xcode project references `App/*.swift` and the local SPM by relative path
@@ -159,7 +159,7 @@ flowchart TD
 | `Pipeline` | Orchestrates the per-path stage graph | `Pipeline.estimate(_:)` |
 
 Detailed signatures and the portable algorithm pseudocode are in
-`specs/research/design.md` §3 (Components and Interfaces) and §6 (Algorithms).
+`specs/estimation/pipeline/design.md` §3 (Components and Interfaces) and §6 (Algorithms).
 
 ### 3.1 Estimation data flow
 
@@ -266,7 +266,7 @@ Apple-specific vector types and lets a future Android port share the same wire f
 Persistent records are protobuf (`Pb*` types generated from `.proto` schemas in
 `PortableContracts/Schemas/`, `swift_prefix = "Pb"`). Serialisation is protobuf-JSON via
 `SwiftProtobuf.jsonString()`, guaranteeing byte-identical encoding across a future
-Kotlin consumer (`specs/research/decision_log.md` Decision 31). Regenerate with
+Kotlin consumer (`specs/estimation/pipeline/decision_log.md` Decision 31). Regenerate with
 `bash MedataCore/Sources/PortableContracts/Schemas/generate.sh`.
 
 ### 5.2 Swift 6 concurrency model
@@ -331,7 +331,7 @@ the committed Xcode project; add a temporary test target to run them (see
 Hashable` (Hashable is required by `NavigationStack`'s `navigationDestination`). Composite
 fields use `Pb*` sub-types so `Persistence` need not import the native algorithm modules.
 
-The SQLite schema (`specs/research/design.md` §4.1) has five tables: `meals`,
+The SQLite schema (`specs/estimation/pipeline/design.md` §4.1) has five tables: `meals`,
 `meal_classes`, `meal_artefacts`, `corrections`, `meta`. **Corrections are immutable** —
 always INSERT, never UPDATE — so the original estimate is never mutated. Retention sweeps
 run via `BackgroundTasks` with a foreground fallback that fires if the last sweep is older
@@ -350,7 +350,7 @@ The per-class bulk-correction factors (β_c) are **calibrated offline on macOS**
 device. `HarnessCore` runs the full `Pipeline` headless over a fixture test set
 (`MealFixture` protobuf schema), and `HarnessCLI` is the SwiftPM executable that drives
 accuracy reporting, the segmenter mIoU bench, and β-calibration. This is only possible
-because `MedataCore` has no iOS-only dependencies (§2). See `specs/research/design.md`
+because `MedataCore` has no iOS-only dependencies (§2). See `specs/estimation/pipeline/design.md`
 §6.9 and §7.3.
 
 ---
@@ -367,10 +367,10 @@ The two foundational specs this architecture sits on top of:
 
 | Spec | What it covers |
 |---|---|
-| [`specs/research/requirements.md`](../specs/research/requirements.md) | Numbered requirements, §0 phase plan, §1.2 hardware floor (iPhone 13 Pro Max + iOS 26.5), §23 dev-stub phasing, mathematical pipeline, modelling assumptions, academic sources |
-| [`specs/research/design.md`](../specs/research/design.md) | Module map, interfaces (§3), data models (§4), portable algorithm pseudocode (§6), testing strategy (§7) |
-| [`specs/research/decision_log.md`](../specs/research/decision_log.md) | Architectural decisions D1–D47 (LLM→CV, platform-neutral core, protobuf contracts, …) |
-| [`specs/research/tasks.md`](../specs/research/tasks.md) | Implementation task breakdown |
+| [`specs/estimation/pipeline/requirements.md`](../specs/estimation/pipeline/requirements.md) | Numbered requirements, §0 phase plan, §1.2 hardware floor (iPhone 13 Pro Max + iOS 26.5), §23 dev-stub phasing, mathematical pipeline, modelling assumptions, academic sources |
+| [`specs/estimation/pipeline/design.md`](../specs/estimation/pipeline/design.md) | Module map, interfaces (§3), data models (§4), portable algorithm pseudocode (§6), testing strategy (§7) |
+| [`specs/estimation/pipeline/decision_log.md`](../specs/estimation/pipeline/decision_log.md) | Architectural decisions D1–D47 (LLM→CV, platform-neutral core, protobuf contracts, …) |
+| [`specs/estimation/pipeline/tasks.md`](../specs/estimation/pipeline/tasks.md) | Implementation task breakdown |
 | [`specs/ui/iphone-experience/requirements.md`](../specs/ui/iphone-experience/requirements.md) | Capture-flow UI requirements |
 | [`specs/ui/iphone-experience/design.md`](../specs/ui/iphone-experience/design.md) | `CaptureFlowModel` state machine, components, AR-session ownership, test seams |
 | [`specs/ui/iphone-experience/decision_log.md`](../specs/ui/iphone-experience/decision_log.md) | UI decisions (live-signal source, best-effort backgrounding, single-session fix, …) |
@@ -389,7 +389,7 @@ under `specs/bugfixes/` — go through `specs/OVERVIEW.md`.
 | Adjust live tilt/distance/coverage maths | `App/LiveSampleObserver.swift` (`LiveSampleMath`) |
 | Change the single-vs-two-view rule | `Pipeline/CapturePathDispatch.swift` **and** `App/CapturePathDecider.swift` |
 | Add/modify a persisted field | edit the `.proto` in `PortableContracts/Schemas/`, regenerate, update `Persistence` |
-| Change a volume algorithm | `Volume/` (Metal kernels in `Volume/Kernels/`) + `specs/research/design.md` §6.6/§6.7 |
+| Change a volume algorithm | `Volume/` (Metal kernels in `Volume/Kernels/`) + `specs/estimation/pipeline/design.md` §6.6/§6.7 |
 | Retrain/replace the segmenter | `tools/segmenter/export.py` → `segmenter.mlpackage` (the canonical artefact name everywhere: export output, `.gitignore`, and the `PipelineFactory.makeSegmenter` loader all agree). **Known gap (Phase 3):** the loader reads it from `Bundle.main` rather than via `Bundle.module` / the `GRDBFoodDatabase.bundled()` pattern, and the resource is not yet declared in `Package.swift`; align the loader to the `Bundle.module` pattern when the trained model lands. |
 | Regenerate the food DB | `tools/food_db/generate.py` |
 | Change confidence thresholds | `Confidence/` + `App/ResultView.swift` (pill labels) |

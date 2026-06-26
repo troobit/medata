@@ -1399,9 +1399,9 @@ The compile-flag approach is the smallest mechanism that satisfies both the "no 
 
 ### Impact
 
-- `specs/research/requirements.md` §21 preamble rewritten; new acceptance criterion §21.9 added covering the compile flag.
-- `specs/research/design.md` §0 row for §21 harness updated to "feature-flagged, not removed"; §6.9, §6.13, §7.3, §7.5 "Deferred in v1 per §0 and Decision 34" notes replaced with "Built only when `-D HARNESS_ENABLED` is set."
-- `specs/research/tasks.md` section "Harness and Calibration — DEFERRED (REMOVED in v1)" renamed; tasks 55–67 unchecked and rewritten to "restore + gate behind `#if HARNESS_ENABLED`"; new task added to define the compile flag in `Package.swift`.
+- `specs/estimation/pipeline/requirements.md` §21 preamble rewritten; new acceptance criterion §21.9 added covering the compile flag.
+- `specs/estimation/pipeline/design.md` §0 row for §21 harness updated to "feature-flagged, not removed"; §6.9, §6.13, §7.3, §7.5 "Deferred in v1 per §0 and Decision 34" notes replaced with "Built only when `-D HARNESS_ENABLED` is set."
+- `specs/estimation/pipeline/tasks.md` section "Harness and Calibration — DEFERRED (REMOVED in v1)" renamed; tasks 55–67 unchecked and rewritten to "restore + gate behind `#if HARNESS_ENABLED`"; new task added to define the compile flag in `Package.swift`.
 - Working tree restoration of the deleted files is the work described by the unchecked tasks; not done as part of this decision.
 
 ---
@@ -1460,9 +1460,9 @@ Phasing the delivery (Phase 1 RUNNING DEVICE → Phase 2 UI/UX → Phase 3 data 
 
 ### Impact
 
-- `specs/research/requirements.md` introduction gains a "Delivery phases" subsection; new §23 "Phased Delivery and Development Stubs" added; §8.9 annotated as Phase-3-only; §8.10 added for the Phase-1 stub.
-- `specs/research/design.md` §0 gains three rows (Phase 1 segmenter, Pipeline wiring, Delivery phasing); §2.5 added documenting the `Pipeline.makeForDevice` factory and the `PipelineEstimator` signature fix; §3.5 Segmentation gains a `StubInferenceEngine` sketch and a paragraph on its compile-flag selection and `segmenterSource` provenance.
-- `specs/research/tasks.md` gains a "Phase 1 — Device MVP (RUNNING DEVICE)" phase with tasks 76–83 covering the signature fix, the stub engine, the compile flag, the factory, the App wiring, the `segmenterSource` persistence, and the placeholder banner. Task 72 (`CaptureMode` toggle, already implemented in `CaptureFlowModel.swift` + `SettingsKeys.swift`) marked complete.
+- `specs/estimation/pipeline/requirements.md` introduction gains a "Delivery phases" subsection; new §23 "Phased Delivery and Development Stubs" added; §8.9 annotated as Phase-3-only; §8.10 added for the Phase-1 stub.
+- `specs/estimation/pipeline/design.md` §0 gains three rows (Phase 1 segmenter, Pipeline wiring, Delivery phasing); §2.5 added documenting the `Pipeline.makeForDevice` factory and the `PipelineEstimator` signature fix; §3.5 Segmentation gains a `StubInferenceEngine` sketch and a paragraph on its compile-flag selection and `segmenterSource` provenance.
+- `specs/estimation/pipeline/tasks.md` gains a "Phase 1 — Device MVP (RUNNING DEVICE)" phase with tasks 76–83 covering the signature fix, the stub engine, the compile flag, the factory, the App wiring, the `segmenterSource` persistence, and the placeholder banner. Task 72 (`CaptureMode` toggle, already implemented in `CaptureFlowModel.swift` + `SettingsKeys.swift`) marked complete.
 - No changes to portable contracts beyond the additive `segmenterSource: String` field on `MealRecord`. No changes to confidence combination, volume estimation, macros, or persistence other than the new column.
 
 ---
