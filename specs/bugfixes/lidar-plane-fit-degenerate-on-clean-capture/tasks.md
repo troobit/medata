@@ -2,6 +2,13 @@
 references:
     - specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/smolspec.md
     - specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/decision_log.md
+reopen_2026_06_16: >-
+    Re-open context for tasks 6-9: after Decision 1's centre-rectangle helper was retired by
+    specs/estimation/pipeline-real-device-correctness/ and the real PreShutterSegmenter mask
+    was wired through CaptureResult.preShutterFoodMask, on-device verification on PhoneMax
+    (Double mode, build 288c5a7) surfaced lidarFitDegenerate immediately after
+    event=supportplane.start ... source=pre_shutter. Root cause + fix in smolspec.md
+    (## Re-open 2026-06-16); rationale in decision_log.md Decision 2.
 ---
 # LiDAR Plane Fit Degenerate on Clean Capture — Tasks
 
@@ -40,8 +47,6 @@ references:
   - Blocked-by: yzh4wgt (Pipeline.fitSupportPlane builds a centred-rectangle roughMask via a tested helper), yzh4wgu (Unit test pins the centre-rectangle helper's pixel layout), yzh4wgv (Regression test reproduces noLidarPoints under an all-ones mask and a successful fit under the centre-rectangle mask), yzh4wgw (DEBUG-only instrumentation logs candidate-point count and SupportPlaneError kind at the fitSupportPlane call site)
 
 ## Re-open 2026-06-16 — real-mask path regresses the fit
-
-After Decision 1's centre-rectangle helper was retired by `specs/estimation/pipeline-real-device-correctness/` and the real `PreShutterSegmenter` mask was wired through `CaptureResult.preShutterFoodMask`, on-device verification on PhoneMax (Double mode, build `288c5a7`) surfaced `lidarFitDegenerate` immediately after `event=supportplane.start ... source=pre_shutter`. Root cause + fix in smolspec.md (`## Re-open 2026-06-16`); rationale in `decision_log.md` Decision 2.
 
 - [x] 6. `LiDARPlaneFitter.collectCandidatePoints` scans four edge bands around the food bbox <!-- id:bb3f201 -->
   - **Outcome:** `collectCandidatePoints` collects candidates from four bands (bottom, top, left, right) around the food bbox, each as thick as the bbox dimension perpendicular to it, clipped to image bounds. `BBox` gains a `widthPx` accessor mirroring `heightPx`. `LiDARPlaneFitter.Inputs`, `LiDARSupportPlaneFitter`, and `Pipeline.fitSupportPlane` are unchanged.
