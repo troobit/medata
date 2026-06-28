@@ -53,6 +53,7 @@ The cleanup's stated intent is to retain only the bubble with no leftover scaffo
 ### Alternatives Considered
 
 - **Leave comments as-is**: Less edit surface - rejected because it leaves stale documentation referencing deleted symbols, defeating the cleanup's purpose.
+- **Delete the comment blocks outright instead of rewriting them**: Smallest possible diff - rejected because the bubble's per-stage target/tolerance behaviour and its `tiltGuide` / `tiltGuide.puck` accessibility contract are worth documenting; stripping the prose would lose useful context for the next reader rather than just removing the stale parts.
 
 ### Consequences
 
