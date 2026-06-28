@@ -2,7 +2,7 @@
 
 ## Overview
 
-Metric scale in the capture pipeline should come from LiDAR when LiDAR depth is present, with the card being the fallback only when LiDAR is unavailable. Today `Pipeline.estimate` Stage C (`MedataCore/Sources/Pipeline/Pipeline.swift:117-135`) hard-aborts the whole estimate on a card-pose-solve failure (`cardTooOblique` / `degenerateCardPose`) even when LiDAR depth is available — despite the support-plane fitter and the metric-scale resolver already supporting a LiDAR-only path. This change makes those two card-solve failures non-fatal when LiDAR depth is present, so a mis-read card no longer blocks an otherwise-valid LiDAR estimate. (Roadmap open Decision 2; aligns the pipeline with documented design §6.4.)
+Metric scale in the capture pipeline should come from LiDAR when LiDAR depth is present, with the card being the fallback only when LiDAR is unavailable. Before this change `Pipeline.estimate` Stage C (card detection/pose block in `MedataCore/Sources/Pipeline/Pipeline.swift`) hard-aborted the whole estimate on a card-pose-solve failure (`cardTooOblique` / `degenerateCardPose`) even when LiDAR depth was available — despite the support-plane fitter and the metric-scale resolver already supporting a LiDAR-only path. This change makes those two card-solve failures non-fatal when LiDAR depth is present, so a mis-read card no longer blocks an otherwise-valid LiDAR estimate. (Roadmap open Decision 2; aligns the pipeline with documented design §6.4.)
 
 ## Requirements
 
