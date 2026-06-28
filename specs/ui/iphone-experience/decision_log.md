@@ -828,3 +828,51 @@ The tab-switch change follows from the same principle: if the user can dismiss t
 - `specs/bugfixes/surface-not-detected/report.md` — full investigation and verification trace.
 
 ---
+
+## Decision 21: Validation pass — rune-parseable ledger, stale anchor remap, Δθ-stub known limitation
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+A spec-validation pass over `specs/ui/iphone-experience/` (post domain-migration to `specs/ui/<capability>/`) surfaced three reconciliation items between the documents and the as-built `App/` code:
+
+1. `tasks.md` opened with a multi-line root-level blockquote ("Reading note — v1.0 tasks superseded by v1.1"). The `rune` parser (PROCESS §7) only accepts task lines, H2 phase headers, and blank lines at root; any other root-level prose makes `rune list` fail with "unexpected content at this indentation level". The ledger was therefore unparseable and could not be reconciled via the CLI.
+2. Task 12 ("Write tests for CaptureFlowModel state-machine transitions") referenced `requirements.md#2.4`. Requirement §2 was reduced to 2.1–2.3 when tilt stopped gating the shutter (Decisions 18/19); the former §2.4 ("the shutter SHALL be disabled while the tilt indicator is out of range") was deleted, leaving a dangling anchor.
+3. `ResultView`'s `ResultFormat.maxDeltaThetaDeg(for:)` returns a hardcoded `0` (with a TODO), so the §9.3 / Decision 17 very-low-confidence surface always reads "Capture was at 0° from target." The persisted `PbConfidenceResult` does not yet carry `deltaThetaNadirDeg` / `deltaThetaObliqueDeg`; those fields are owned by a sibling research-side spec.
+
+### Decision
+
+1. Move the reading note from a body blockquote into a `reading_note:` front-matter block scalar in `tasks.md`. `rune` reads front matter and tolerates the extra key, so the ledger parses (60/60 complete) while the supersession guidance stays co-located with the tasks it describes.
+2. Remap task 12's `2.4` reference to `2.1` — the surviving §2 requirement (the live Δθ + σ_tilt readout) that the state-machine re-emit-on-tilt-change transition row actually exercises.
+3. Record the Δθ-stub as a "Known limitation (best-effort enforcement)" note on requirement §9.3 (mirroring the existing §8.3 cancellation note) and as an out-of-band sibling-spec dependency in `prerequisites.md`. The §9.3 surface, copy, and Retake / Keep-as-is controls remain fully satisfied; only the numeric Δθ value is stubbed pending the research-side fields.
+
+### Rationale
+
+The spec is the source of truth (PROCESS §1) and a `rune`-managed ledger that the CLI cannot parse is a broken ledger (§7). Front matter is the only place in a `tasks.md` that holds free prose without tripping the parser, so it is the natural home for a human-facing reading note. The `2.4 → 2.1` remap restores a resolving anchor without inventing a requirement. The Δθ note reconciles an honest spec↔code disagreement rather than overstating what the build does, and follows the precedent already set for the §8.3 cancellation gap.
+
+### Alternatives Considered
+
+- **Delete the reading note entirely**: Rejected — the v1.0-superseded-by-v1.1 task mapping is genuinely useful to a reader of `tasks.md`, and its content is only partly duplicated in the requirements/design status headers.
+- **Leave the blockquote and accept the `rune` failure**: Rejected — violates PROCESS §7; the ledger must be CLI-reconcilable.
+- **Remap `2.4` to §2.3 (the oblique tilt hard cap)**: Rejected — §2.3 is a shutter-gating concern already covered by §7.2 in the same task; §2.1 is the live-tilt readout the model test directly drives.
+- **Implement a real Δθ lookup now**: Rejected — the source fields live in a sibling research-side spec; fabricating a UI-local value would misrepresent the pipeline output.
+
+### Consequences
+
+**Positive:**
+- `rune list` parses the ledger again; deterministic state (60/60 complete) is CLI-verifiable.
+- All `tasks.md → requirements.md` anchors resolve.
+- The §9.3 Δθ gap is documented where a reader and the sibling-spec author will see it.
+
+**Negative:**
+- The `reading_note:` front-matter key is not a `rune`-recognised field, so a future `rune` write that rewrites `tasks.md` could drop it. Acceptable for a Done spec (no further task mutations expected); the same content also lives in the requirements/design v1.1 status headers and Decisions 15–20.
+
+### Impact
+
+- `specs/ui/iphone-experience/tasks.md` — reading note relocated to front matter; task 12 anchor `2.4 → 2.1`.
+- `specs/ui/iphone-experience/requirements.md` — §9.3 known-limitation note added.
+- `specs/ui/iphone-experience/prerequisites.md` — Δθ-fields sibling-spec dependency added to "Out of band".
+
+---

@@ -3,21 +3,27 @@ references:
     - specs/ui/iphone-experience/requirements.md
     - specs/ui/iphone-experience/design.md
     - specs/ui/iphone-experience/decision_log.md
+reading_note: |
+  v1.0 tasks superseded by v1.1 — this list is layered. The v1.1 sections
+  ("Tab navigation + Meals tab", "Visual design", "Tilt-tolerant capture")
+  supersede earlier v1.0 task content where they conflict. The authoritative
+  current behaviour is the latest decision (UI decision log Decisions 15-20)
+  + estimation/pipeline/requirements.md. Against the as-built code:
+  - Confidence pill is four-tier (High / Moderate / Low / Very Low, retake at
+    sigma < 0.20) per Decision 17 / tasks 52-60 — the three-tier thresholds
+    (sigma < 0.60 prompt, Low/Moderate/High at 0.60/0.75) in v1.0 tasks 5, 20,
+    43 are superseded.
+  - No active auto path-selection: CapturePathDecider (tasks 8-9) exists only
+    behind the deferred #if AUTO_CAPTURE_MODE flag (research Req 3.9 /
+    Decision 35); the captureMode toggle is authoritative.
+  - .forcingTwoView removed from CaptureState (Decision 35) — 8 cases.
+  - OS floor is iOS 26.5 (research Req 1.2 / §0; UI Decision 4's iOS-17 baseline
+    is superseded).
+  - Retention picker + IFCDB toggle removed (research §0 / Decision 39).
+  Held in front matter (not a body blockquote) so `rune` can parse the ledger;
+  root-level prose breaks the parser. See decision_log Decision 21.
 ---
 # UI — Implementation Tasks
-
-> **Reading note — v1.0 tasks superseded by v1.1.** This list is layered: the **v1.1 sections**
-> ("Tab navigation + Meals tab", "Visual design", "Tilt-tolerant capture") supersede earlier v1.0 task
-> content where they conflict. The authoritative current behaviour is the **latest** decision (UI
-> decision log Decisions 15–20) + `estimation/pipeline/requirements.md`. Specifically, against the as-built code:
-> - **Confidence pill is four-tier** (High / Moderate / Low / Very Low, retake at σ < 0.20) per Decision 17
->   / tasks 52–60 — the **three-tier** thresholds (σ < 0.60 prompt, Low/Moderate/High at 0.60/0.75) in the
->   v1.0 tasks (5, 20, 43) are superseded.
-> - **No active auto path-selection.** `CapturePathDecider` (tasks 8–9) exists only behind the deferred
->   `#if AUTO_CAPTURE_MODE` flag (research Req 3.9 / Decision 35); the `captureMode` toggle is authoritative.
-> - **`.forcingTwoView` was removed** from `CaptureState` (Decision 35) — `CaptureState` has 8 cases.
-> - **OS floor is iOS 26.5** (research Req 1.2 / §0; UI Decision 4's iOS-17 baseline is superseded).
-> - **Retention picker + IFCDB toggle removed** (research §0 / Decision 39).
 
 ## SPM prerequisites
 
@@ -128,7 +134,7 @@ references:
   - Include AR interruption .began → .trackingLost + .ended → .initialising
   - Blocked-by: 7pbwp44 (Implement ARKitCaptureEngine accessors arSession, frames, interruptions plus ARSessionObserver interruption methods), 7pbwp45 (Add PipelineEstimator protocol and Pipeline conformance), 7pbwp48 (Add App/GatingSnapshot.swift struct), 7pbwp49 (Add App/CaptureState.swift enum and PermissionSubject + CaptureStage sub-enums), 7pbwp4c (Add App/LiveIndicatorModel.swift child @Observable)
   - Stream: 1
-  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.6](requirements.md#1.6), [2.4](requirements.md#2.4), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [5.1](requirements.md#5.1), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [13.1](requirements.md#13.1), [13.2](requirements.md#13.2), [13.3](requirements.md#13.3), [14.3](requirements.md#14.3), [16.1](requirements.md#16.1)
+  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.6](requirements.md#1.6), [2.1](requirements.md#2.1), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [5.1](requirements.md#5.1), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [13.1](requirements.md#13.1), [13.2](requirements.md#13.2), [13.3](requirements.md#13.3), [14.3](requirements.md#14.3), [16.1](requirements.md#16.1)
 
 - [x] 13. Implement App/CaptureFlowModel.swift orchestrator <!-- id:7pbwp4f -->
   - @Observable @MainActor final class CaptureFlowModel conforming to CaptureFlowDelegate
