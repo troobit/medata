@@ -96,3 +96,44 @@ The fix is contained to `LiDARPlaneFitter.swift` (~20 LOC delta in `collectCandi
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`collectCandidatePoints` reworked to four-band; `BBox.widthPx` accessor added). `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` (one new test `testFitsCentredMaskWithBboxAtImageBottomEdge`). No call-site changes anywhere else; no public-API changes; `LiDARSupportPlaneFitter` protocol unchanged.
 
 ---
+
+## Decision 3: Move the re-open narrative into front-matter so `tasks.md` parses with rune
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+`tasks.md` failed to parse with the `rune` CLI (`rune list … → "line 38: unexpected content at this indentation level"`), so the task ledger could not be listed or reconciled programmatically (PROCESS §7 requires task state to live in a rune-managed ledger). The cause was a free-prose paragraph placed between the `## Re-open 2026-06-16` phase heading and its first task (task 6). Empirically, rune's parser tolerates no free prose in the task body — not between a phase heading and its first task, not under the H1 title, and not between a task block and the next phase heading; the only block it accepts outside tasks/phase-headings is the YAML front-matter.
+
+### Decision
+
+Relocate the re-open narrative verbatim into a `reopen_2026_06_16` YAML block scalar in the `tasks.md` front-matter and leave the `## Re-open 2026-06-16` phase heading immediately followed by task 6. No task's checked state was altered: tasks 1–7 remain `[x]` (Completed), tasks 8–9 remain `[ ]` (Pending), confirmed via `rune list` after the change.
+
+### Rationale
+
+The narrative is contextual metadata, not an executable task, so front-matter is its natural home and the one location rune accepts. The block scalar preserves the full text (links to `specs/estimation/pipeline-real-device-correctness/`, `decision_log.md` Decision 2, and the build/log evidence), so no information is lost — the same root-cause detail also lives in `smolspec.md` (`## Re-open 2026-06-16`) and Decision 2 above. Keeping the heading lets rune attribute tasks 6–9 to the re-open phase, which it does (the `PHASE` column shows the re-open label).
+
+### Alternatives Considered
+
+- **Inline HTML comment between heading and first task**: Replace the prose with a `<!-- … -->` block. — Rejected: rune treats a standalone comment block as unexpected body content and still fails at the same line.
+- **Prose under the H1 title or before the phase heading**: Move the paragraph elsewhere in the body. — Rejected: tested both; rune fails (`line 2` / `line 36` respectively). No in-body prose location parses.
+- **Delete the narrative outright**: It is duplicated in `smolspec.md` and Decision 2. — Rejected: the brief mandates moving, not losing, load-bearing narrative; keeping a pointer in the ledger's own metadata is cheap and aids readers of `tasks.md` alone.
+
+### Consequences
+
+**Positive:**
+
+- `rune list` parses cleanly; the ledger is machine-reconcilable again (1–7 Completed, 8–9 Pending).
+- No task state changed; the re-open context is preserved and discoverable from `tasks.md` itself.
+
+**Negative:**
+
+- Front-matter block scalars do not render the narrative's markdown links/backticks as formatted text; readers wanting the rich version consult `smolspec.md` or Decision 2.
+- A future editor must remember rune's no-in-body-prose rule when adding phases, or the parse breaks again.
+
+### Impact
+
+`specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/tasks.md` only — front-matter gains `reopen_2026_06_16`; the body prose paragraph under the `## Re-open 2026-06-16` heading is removed. No code, no other spec files.
+
+---
