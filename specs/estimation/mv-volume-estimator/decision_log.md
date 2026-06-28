@@ -164,6 +164,69 @@ A static read of the carve shows the dev-stub masks are clean and carveable, so 
 
 ### Impact
 
-`specs/estimation/mv-volume-estimator/` is closed (superseded). Follow-on work lives in the `/fix-bug` report under `specs/bugfixes/`.
+`specs/estimation/mv-volume-estimator/` is closed (superseded). Follow-on work landed as the `/fix-bug` report `specs/bugfixes/two-view-carve-no-volume/report.md`, which then concluded the symptom is **not** a carve/volume defect but an upstream mis-aimed oblique capture / unwired tilt aim guide (Track 2) — no `VoxelCarveEstimator` change.
+
+---
+
+## Decision 6: Reconcile smolspec.md with its superseded status (validation pass)
+
+**Date**: 2026-06-28
+
+**Status**: accepted
+
+### Context
+
+A spec-validation pass found this folder internally inconsistent. `decision_log.md`
+Decision 5 (accepted, 2026-06-23) abandons the spec, but `smolspec.md` still read as a
+live, to-be-implemented plan with no status marker — the Overview/Requirements/
+Implementation Approach all describe an approach that was never built. A reader opening
+`smolspec.md` first would be misled, and OVERVIEW lists the spec as "Done", which here
+means "spec closed" not "feature shipped". PROCESS §1 requires that when a spec disagrees
+with itself it is reconciled, not left standing.
+
+Cross-checking the code confirms Decision 5 over the original premise:
+`StubInferenceEngine.swift` paints `dominantClass = 0` = `white_rice` (a real food class,
+`ClassPalette.isFoodClass(0) == true`) at ~0.99999 inside a centred ellipse in both views,
+so the dev-stub masks are carveable and the "decouple volume from the per-class segmenter"
+framing solves a problem that does not exist. The follow-on bug report
+`specs/bugfixes/two-view-carve-no-volume/report.md` further concludes the two-view
+`noFoodVolumeRecovered` symptom is an upstream capture-aim issue (Track 2), not a
+volume/carve or segmenter defect.
+
+### Decision
+
+Keep the spec closed and keep `smolspec.md` as the historical record, but add a
+prominent "Superseded / abandoned (no code landed)" banner at the top of `smolspec.md`
+pointing to Decision 5 and the follow-on bug folder. Leave `tasks.md` absent: the spec
+was abandoned before a ledger was warranted, and no work from it shipped, so a ledger
+would misrepresent the state. References are post-migration-correct and were not changed;
+Decision 5's Impact line was made concrete to name the now-existing follow-on folder.
+
+### Rationale
+
+The lowest-throwaway reconciliation is to mark the document, not delete it: the attempt
+and its three superseded decisions are useful institutional memory (they record a
+misdiagnosis and how it was caught). A banner makes the status unmissable without
+rewriting accepted history. Fabricating a `tasks.md` for abandoned, unshipped work would
+violate §5/§7 — a ledger tracks real execution state, and there is none.
+
+### Alternatives Considered
+
+- **Delete the spec folder entirely**: Rejected — destroys the audit trail of the
+  misdiagnosis and the reasoning that corrected it; OVERVIEW and the follow-on bug both
+  reference this folder.
+- **Rewrite smolspec.md's body to describe the real (Track 2) fix**: Rejected — that work
+  is owned by `specs/bugfixes/two-view-carve-no-volume/`, not this closed estimation spec;
+  duplicating it here would re-open a superseded capability.
+- **Scaffold a tasks.md for completeness**: Rejected — no tasks were ever executed; an
+  empty/fabricated ledger misrepresents the spec as in-flight.
+
+### Consequences
+
+**Positive:** `smolspec.md` can no longer be read as a live plan; the closed status is
+self-evident from any entry point into the folder; the audit trail is preserved.
+
+**Negative:** The OVERVIEW "Done" label remains ambiguous (out of this spec's scope to
+change here); a reader must open the spec to learn "Done" means "closed/superseded".
 
 ---
