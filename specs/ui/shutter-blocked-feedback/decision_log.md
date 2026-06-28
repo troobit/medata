@@ -168,6 +168,54 @@ Do not add an explicit not-enabled trait. The existing `.accessibilityValue(stat
 
 ---
 
+## Decision 6: Reconcile smolspec + tasks text with the dropped `.isNotEnabled` trait
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+A validation pass found the smolspec body and `tasks.md` still prescribed adding
+`.accessibilityAddTraits(state == .ready ? [] : [.isNotEnabled])` — in Requirements, the
+Implementation Approach, the Risks mitigation, and task 2's title and a sub-bullet — even
+though Decision 5 (accepted 2026-05-31) records that this trait was dropped because
+`AccessibilityTraits.isNotEnabled` is not a public SwiftUI API, and the shipped
+`App/ShutterButton.swift` carries no such trait (it relies on
+`.accessibilityValue(state.accessibilityValue)`). Per PROCESS §1, a spec that disagrees with
+its own decision log and the code is a defect to be reconciled.
+
+### Decision
+
+Update the smolspec Requirement, Implementation Approach bullet, and Risk mitigation, plus
+task 2's title and sub-bullet, to state that no explicit not-enabled trait is added and that
+`.accessibilityValue` carries the disabled announcement, cross-referencing Decision 5. No
+code or behaviour changes.
+
+### Rationale
+
+The decision log is the authoritative "why" (§2); Decision 5 already settled the choice, so
+the body text and ledger must follow it rather than continue to prescribe an API that does
+not exist. Leaving the contradiction would mislead a future reader into thinking the trait
+is required and missing.
+
+### Alternatives Considered
+
+- **Leave the body text and re-point only via Decision 5**: rejected — readers hit the
+  Requirement first; an unreconciled MUST that the code violates fails the SSOT gate (§8).
+- **Re-introduce `.disabled()` to recover a trait**: rejected — already rejected in Decision
+  5; it would re-swallow the blocked tap that is the point of this spec.
+
+### Consequences
+
+**Positive:**
+- Smolspec, tasks, decision log, and code now agree on the accessibility approach.
+
+**Negative:**
+- The original intent (an explicit trait) survives only as historical context in Decisions 5
+  and 6, not as a live requirement.
+
+---
+
 ## Verification Notes
 
 **Date**: 2026-05-31
