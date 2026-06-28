@@ -1674,3 +1674,42 @@ At 30% coverage, the LiDAR provides a real anchor for the height-field integrati
 
 ---
 
+## Decision 48: Relocate tasks.md ledger notes into front matter for rune-parseability
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+`tasks.md` is the rune-managed execution ledger (PROCESS §7); `rune list` / `rune complete` must be able to read and rewrite it. The file carried two explanatory Markdown blockquotes — one after the `# Research — Implementation Tasks` H1 describing what `[x]` means versus the unproduced Phase-3 data deliverables, and one after the `## Harness and Calibration` phase heading describing the harness `[x]` semantics. The `rune` parser rejects **any** prose, blockquote, or non-checkbox bullet list between an H1/phase heading and the first task, failing the entire file with `unexpected content at this indentation level`. As a result `rune list` could not read the ledger at all, so task state could not be reconciled through the CLI.
+
+### Decision
+
+Move the two ledger notes out of the document body and into the YAML front matter as a single `metadata.ledger_note` literal block, and delete the second (Harness) blockquote after folding its one load-bearing fact (v1 ships every class with β = 1.0 / `uncalibrated_unity`) into that note. The body now goes straight from each heading to its first task, which `rune` parses.
+
+### Rationale
+
+Front matter is the only location `rune` tolerates free-form text while preserving it across mutations (verified: `metadata` survives a `rune complete` round-trip). The note is genuinely load-bearing — it prevents a reader from mistaking the all-`[x]` ledger for "MVP shipped with real model + calibrated accuracy" — so deleting it was not acceptable; relocating it keeps the content version-controlled and adjacent to the ledger while restoring the tooling contract PROCESS §7 requires.
+
+### Alternatives Considered
+
+- **Keep the blockquotes in the body**: Rejected — leaves `rune list`/`complete` permanently broken, violating PROCESS §7's "managed with the rune CLI" requirement; the ledger could only be hand-edited.
+- **Move the note to a trailing `## Notes` section at end of file**: Rejected — `rune` rejects prose/blockquotes under a trailing phase heading just as it does after the H1, and trailing content risks being dropped on mutation.
+- **Delete the note entirely**: Rejected — the note is the only place documenting that `[x]` means "code + unit tests landed", not "Phase-3 data deliverables produced"; losing it would misrepresent the project's true state.
+
+### Consequences
+
+**Positive:**
+- `rune list`/`complete`/`progress` now operate on the ledger; state can be reconciled through the CLI per PROCESS §7.
+- The `[x]`-semantics / Phase-3 caveat is preserved and still travels with the file.
+
+**Negative:**
+- The note no longer renders as visible prose in a Markdown preview of `tasks.md`; it lives in front matter, which most renderers hide or show as a metadata table.
+- Markdown emphasis (`**bold**`, backticks, β/§ glyphs) in the note was flattened to plain text to keep the YAML literal block clean.
+
+### Impact
+
+`specs/estimation/pipeline/tasks.md` front matter and the two removed body blockquotes. No task state, requirement mapping, or code is affected.
+
+---
+
