@@ -2,7 +2,7 @@
 
 **Version:** 0.3
 **Date:** 2026-06-13
-**Status:** Implemented (tasks 1–16 landed; see `design.md` status note). Caveat: the Req 6.1/6.2 baseline-delta numbers were never formally recorded — budgets were sanity-checked on device, not measured against a pre-spec baseline. Two-view-path end-to-end on-device verification remains open (GAPS Group D).
+**Status:** Implemented (tasks 1–16 landed; see `design.md` status note). Caveat: the Req 6.1/6.2 baseline-delta numbers were never formally recorded — budgets were sanity-checked on device, not measured against a pre-spec baseline. Two-view-path end-to-end on-device verification remains open (tracked in `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 5).
 **Branch:** mvp-refine
 
 ## Introduction

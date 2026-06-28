@@ -67,7 +67,7 @@ references:
   - Update Pipeline.init to take supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter() parameter.
   - Logging changes (DEBUG-only, ie.medata.app / Shutter channel): supportplane.start gains source=pre_shutter; estimate.start gains maskAgeMs=<int> (if mask age is not threaded through CaptureResult, add a preShutterMaskAgeMs: Int? companion field in this task and update CaptureResult initialiser); estimate.end gains foodRegionCoveragePercent=<float>.
   - All existing Pipeline / SupportPlane tests must continue to pass; the FoodRegionCoverageTests from task 6 must now pass.
-  - Blocked-by: 81wvfir (Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field), 81wvfiv (Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space)), 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192, 256x192
+  - Blocked-by: 81wvfir (Implement SupportPlaneFitter protocol + LiDARSupportPlaneFitter + add CaptureResult.preShutterFoodMask field), 81wvfiv (Write tests for computeFoodRegionCoverage (256x192 confidence-buffer space))
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.5](requirements.md#4.5), [7.2](requirements.md#7.2), [7.4](requirements.md#7.4)
 
@@ -113,7 +113,7 @@ references:
   - Convert ArgmaxMap -> BinaryMask via existing PipelineBridges.foodMask(from:palette:).
   - DEBUG-only logging: `event=preshutter.mask.update foodPixels=<int> ageMs=<int> source=pre_shutter_stub|pre_shutter_coreml latencyMs=<int>` and `event=preshutter.cadence.miss expectedHz=2 actualMs=<int>` per design Logging section (Reqs 7.1, 7.4).
   - Inflight-task latest-wins discipline per Decision 5: cancel-then-await in awaitPaused(); drop frames while in-flight in resume(frames:).
-  - Blocked-by: 81wvfiz (Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log)), cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, cadence, 81wvfiu (Implement StubInferenceEngine centred-ellipse predicate)
+  - Blocked-by: 81wvfiz (Write tests for PreShutterSegmenter (latest-wins, awaitPaused drain, MaskBox identity, cadence violation log)), 81wvfiu (Implement StubInferenceEngine centred-ellipse predicate)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [7.1](requirements.md#7.1), [7.4](requirements.md#7.4)
 
@@ -163,6 +163,6 @@ references:
   - Remove any remaining inline references; production Pipeline.fitSupportPlane by this point delegates entirely to LiDARSupportPlaneFitter.fit(...) (task 7), so the helper has no callers.
   - Verify MedataCore/Tests/PipelineTests/CentreRectangleMaskTests.swift is also deleted (it pinned the deleted helper's output).
   - Verify the existing MedataCore/Tests/PipelineTests/SupportPlaneRoughMaskTests.swift all-ones-mask sentinel still passes -- its assertion against LiDARPlaneFitter going degenerate on an all-ones mask is independent of the centred-rectangle helper (Req 8.6).
-  - Blocked-by: 81wvfj4 (Write integration test for mask routing (Req 8.7)), routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing, routing
+  - Blocked-by: 81wvfj4 (Write integration test for mask routing (Req 8.7))
   - Stream: 1
   - Requirements: [2.2](requirements.md#2.2), [8.6](requirements.md#8.6)
