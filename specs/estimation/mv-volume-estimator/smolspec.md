@@ -1,5 +1,18 @@
 # Minimum Viable Volume Estimator
 
+> **Status: Superseded / abandoned (no code landed).** The plan below was retired
+> before tasks were written — see [`decision_log.md`](decision_log.md) Decision 5. Its
+> root-cause premise (the dev-stub produces "unusable per-class masks") was found false
+> on a static read of the source: `StubInferenceEngine` paints `white_rice` (a real food
+> class) at ~0.99999 in both views, so the per-class carve already has a carveable
+> silhouette and the decouple-the-segmenter framing solves a non-problem. The two-view
+> `noFoodVolumeRecovered` symptom was re-diagnosed as a bug; the follow-on investigation
+> [`specs/bugfixes/two-view-carve-no-volume/`](../../bugfixes/two-view-carve-no-volume/report.md)
+> then concluded it is **not** a carve/volume defect at all but an upstream **mis-aimed
+> oblique capture / unwired tilt aim guide** (Track 2). This document is kept as the
+> historical record of what was attempted; the requirements and approach below were never
+> implemented. The OVERVIEW "Done" status reflects "spec closed", not a shipped feature.
+
 ## Overview
 
 The two-view capture → volume → carb-estimate flow currently refuses with `noFoodVolumeRecovered` on the device because both volume estimators carve/integrate strictly over the per-class segmentation argmax, and the Phase-1 device build runs the dev-stub segmenter (`DEV_STUB_SEGMENTER` / `StubInferenceEngine`) whose per-class masks are unusable — no valid food class survives. This change decouples the volume path from the per-class segmenter for the MVP: when the dev-stub is active, the food region is taken from the coarse binary `CaptureResult.preShutterFoodMask`, the recovered volume is attributed to a single default food class, and the flow completes with a rough (low-confidence) carb number instead of refusing. Per-class accuracy is deferred to the real CoreML segmenter (Track 3). Target audience is TestFlight, not the App Store.
