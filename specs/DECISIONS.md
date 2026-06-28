@@ -348,16 +348,18 @@ no usable spatial prior.
 
 ### Decision
 
-Replace the O(n²) 3×n SVD with a **3×3 scatter-matrix SVD**, scan **four edge
-bands** around the food bbox when collecting candidate points (superseding the
-all-ones / single-below-band approximations), and pin a literal **250 000-candidate
-ceiling** enforced by a debug counter.
+Replace the O(n²) 3×n SVD with a **3×3 scatter-matrix SVD** (the O(n) accumulation
+that removed the 32 GB allocation), and scan **four edge bands** around the food bbox
+when collecting candidate points (superseding the all-ones / single-below-band
+approximations). A DEBUG candidate-point counter (`debugLastCandidatePointCount`) is
+emitted for diagnostics, but there is **no enforced candidate ceiling** — the
+scatter-matrix form already bounds memory regardless of n.
 
 ### Rationale
 
-The scatter-matrix form is mathematically equivalent at bounded memory; edge-band
-sampling gives the table-plane prior that food segmentation alone cannot; the point
-ceiling bounds worst-case cost independent of resolution.
+The scatter-matrix form is mathematically equivalent at bounded memory independent of
+resolution; edge-band sampling gives the table-plane prior that food segmentation alone
+cannot.
 
 ### Consequences
 

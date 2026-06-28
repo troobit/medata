@@ -1,11 +1,18 @@
 # MVP gap analysis — working-model readiness
 
 **Date:** 2026-06-28
-**Method:** one validation agent per active iOS spec (9 specs), each cross-checking its
-spec against the code tree in an isolated worktree. This note synthesises their findings
-into the path to an MVP that produces a *real* carb number (not a dev-stub placeholder).
-Per-spec detail lives in each `specs/<domain>/<capability>/decision_log.md`; the meta log
-is `specs/DECISIONS.md`.
+**Method:** one validation agent per active iOS spec (9 specs) and per bugfix folder
+(10 specs under `specs/bugfixes/`), each cross-checking its spec against the code tree in
+an isolated worktree. This note synthesises their findings into the path to an MVP that
+produces a *real* carb number (not a dev-stub placeholder). Per-spec detail lives in each
+`decision_log.md`; the meta log is `specs/DECISIONS.md`.
+
+The bugfix pass confirmed the **single-view LiDAR path verifies clean on device** (2.9 mm
+plane residual, no `lidarFitDegenerate`) and that the model-independent App-layer capture
+fixes — first-shot `noFoodPixels` race, Single/Double toggle key, ARSession-config race,
+unblockable refusal sheet — are all present and not regressed. It also corrected
+`DECISIONS.md` MD-9 (a phantom "250k candidate ceiling" that exists in neither the code nor
+the source decision logs).
 
 ## Verdict
 
@@ -81,8 +88,13 @@ cheap and worth clearing:
 - **Two-view SfS path never confirmed end-to-end on device** (iPhone 13 Pro Max, iOS 26.5).
   Tracked in `bugfixes/closeout-trail-mvp-cleanup` Phase 5 and
   `bugfixes/two-view-carve-no-volume` — the latter pins the real two-view
-  `noFoodVolumeRecovered` symptom on a mis-aimed oblique capture / unwired tilt aim guide,
-  **not** a segmenter or carve defect.
+  `noFoodVolumeRecovered` symptom on a mis-aimed oblique capture, **not** a segmenter or
+  carve defect. The recommended fix — wiring the tilt aim guide into capture — **has since
+  landed** (`TiltBubbleGuide` in `CaptureFlowView`, 2026-06-24); what remains is the
+  on-device confirmation that a well-aimed two-view trail yields `estimate.end success=true`
+  with non-zero volume. Caveat: `StubInferenceEngine` paints an *image-centred* ellipse
+  regardless of camera pose, so the dev-stub two-view path stays aim-sensitive even with the
+  guide — a world-locked stub (or the real segmenter) is the durable fix.
 - **Success path never observed to complete** (`shutter` task 5 stays Pending) — the
   dev-stub refuses with `noFoodPixels`/garbage, so a clean `estimate.end success=true` +
   ResultView render is unconfirmed. Unblocks when the real model lands.
