@@ -75,7 +75,7 @@ Two cooperating design choices, neither correct in isolation:
 
 **Contributing factors:**
 - The XCUI tests (`MeData/UITests/RefusalFlowUITests.swift`, `CaptureChromeUITests.swift`) only exercise the "Try again" button, never the swipe-down dismissal. There was no regression test covering this path.
-- The "Decision 16" comment thread documented the intent (`.refused` is preserved) without an end-to-end UX walkthrough that would have caught "the user cannot get out of this state without re-triggering capture".
+- The "Decision 15" comment thread documented the intent (`.refused` is preserved across tab switches) without an end-to-end UX walkthrough that would have caught "the user cannot get out of this state without re-triggering capture".
 
 ## Proposed Resolution
 
