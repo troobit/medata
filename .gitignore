@@ -75,6 +75,9 @@ tools/segmenter/.venv/
 # Personal working notes — not tracked
 nextup.md
 
+# In-repo per-spec worktrees (git metadata still lives in .git/worktrees/)
+.worktrees/
+
 # Python bytecode
 __pycache__/
 *.pyc
