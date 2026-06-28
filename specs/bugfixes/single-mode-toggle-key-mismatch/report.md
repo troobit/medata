@@ -68,7 +68,7 @@ had effective non-default state to preserve — the app always behaved as `.doub
   as a cheap guard against the keys drifting apart again.
 
 **Test-runner note:** the App target has no committed XCTest/Testing host
-(`docs/agent-notes/ui-capture-flow.md:71` — "no test targets exist"), so these App-target
+(`docs/agent-notes/ui-capture-flow.md:85` — "no test targets exist"), so these App-target
 cases are validated by inspection + a clean app build, matching every other suite under
 `MeData/Tests/`. They run when a temporary test target is scaffolded.
 
@@ -95,5 +95,3 @@ cases are validated by inspection + a clean app build, matching every other suit
   the same logical key as a second literal in a different module.
 - A persistence round-trip test must exercise the **production reader**, not re-read the
   same key the test itself wrote — otherwise a writer/reader key divergence passes unseen.
-</content>
-</invoke>
