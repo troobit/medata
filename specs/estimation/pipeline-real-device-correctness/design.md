@@ -2,9 +2,9 @@
 
 **Version:** 0.2
 **Date:** 2026-06-13
-**Status:** Implemented — tasks 1–16 landed (see `tasks.md` and CHANGELOG: pre-shutter mask producer, `VisionCardDetector`, real `foodRegionCoveragePercent`, `SupportPlaneFitter`). The pre-implementation baseline-capture gate was **not formally recorded**: the "Baseline numbers to capture" table below was never filled, so the Req 6.1/6.2 memory/latency *deltas* were not quantified — the budgets were sanity-checked qualitatively during on-device single-view-LiDAR runs rather than measured against a recorded pre-spec baseline. End-to-end on-device verification of the **two-view SfS path** for this spec's mask routing is still open (tracked in `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 5 and `GAPS.md` Group D).
-**Requirements:** `requirements.md` v0.2
-**Decision log:** `decision_log.md` D1–D11
+**Status:** Implemented — tasks 1–16 landed (see `tasks.md` and CHANGELOG: pre-shutter mask producer, `VisionCardDetector`, real `foodRegionCoveragePercent`, `SupportPlaneFitter`). The pre-implementation baseline-capture gate was **not formally recorded**: the "Baseline numbers to capture" table below was never filled, so the Req 6.1/6.2 memory/latency *deltas* were not quantified — the budgets were sanity-checked qualitatively during on-device single-view-LiDAR runs rather than measured against a recorded pre-spec baseline. End-to-end on-device verification of the **two-view SfS path** for this spec's mask routing is still open (tracked in `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 5).
+**Requirements:** `requirements.md` v0.3
+**Decision log:** `decision_log.md` D1–D16
 
 ## Overview
 

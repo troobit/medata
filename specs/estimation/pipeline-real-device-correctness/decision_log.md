@@ -570,3 +570,43 @@ The headline latencies (27–50 s) are almost certainly a Debug `-Onone` artifac
 `App/PreShutterSegmenter.swift` (the `resume(frames:)` inference loop and ARFrame lifetime), the dev-stub `CoreMLSegmenter`, and the pre-shutter cadence contract (Decisions 10–13). No change to the in-shutter pipeline path.
 
 ---
+
+## Decision 17: Validation-Pass Corrections After Domain Migration
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+A post-migration validation pass over this spec (now at `specs/estimation/pipeline-real-device-correctness/`) found three drift items, none of which change behaviour but each of which would mislead a future reader or tool:
+
+1. `tasks.md` carried corrupted `Blocked-by:` lines on tasks 7, 11, and 16 — a `rune` serializer artifact that duplicated a word adjacent to a parenthetical in a dependency's title (e.g. `256x192` ×20, `cadence` ×20, `routing` ×20). `rune list` resolved the real dependency IDs correctly throughout, so the ledger graph was never wrong, but the raw markdown was noisy and re-running `rune update` reshuffled rather than removed the junk.
+2. `design.md` referenced `requirements.md` v0.2 and `decision_log.md` D1–D11, both stale: requirements is at v0.3 and the log now holds D1–D16.
+3. Both `design.md` and `requirements.md` pointed the open two-view-path verification item at a `GAPS.md` Group D that does not exist anywhere in the tree.
+
+### Decision
+
+Trim the residual `Blocked-by:` junk tokens by hand (the `rune` CLI re-emits them, so a CLI-only fix is non-convergent); the canonical `ID (Title)` entries `rune list` already resolves are kept verbatim. Update the `design.md` cross-version references to v0.3 / D1–D16. Repoint the dangling `GAPS.md` Group D reference in both files to the resolvable tracker `specs/bugfixes/closeout-trail-mvp-cleanup/` Phase 5, which genuinely carries the two-view closeout.
+
+### Rationale
+
+The spec is `Implemented` and the code matches it; these are documentation-correctness fixes that keep the spec auditable. The hand-trim is the minimal change that yields a clean file `rune` still parses — verified by re-running `rune list` after the edit (blocked-by resolves to 2,6 / 10,5 / 11,12,2 / 3,9,13 / 7,13 / 15). Repointing rather than deleting the verification note preserves the open-item trail.
+
+### Alternatives Considered
+
+- **Fix the `Blocked-by:` corruption purely via `rune update`**: keeps to the "reconcile via CLI" guidance — Rejected because the `rune` serializer is the source of the junk; each write reshuffled it rather than converging to clean output.
+- **Delete the two-view verification note entirely** instead of repointing it — Rejected because the open item is real and tracked; dropping the note would lose the trail to the closeout-trail bugfix.
+- **Leave the stale references**: zero churn — Rejected because v0.2/D1–D11 and a non-existent `GAPS.md` actively mislead future readers and reviewers.
+
+### Consequences
+
+**Positive:**
+
+- `tasks.md` is clean and still `rune`-parseable; the dependency graph is unchanged.
+- `design.md` version/decision references are accurate; the open-item note resolves to a real tracker.
+
+**Negative:**
+
+- The `Blocked-by:` lines are now hand-maintained for tasks 7/11/16; a future `rune update` touching those tasks may re-introduce the serializer artifact and need re-trimming.
+
+---
