@@ -23,7 +23,7 @@ references:
 - [x] 3. swift build clean and swift test green (baseline + new regression tests) <!-- id:op0jbkx -->
   - Run swift build (clean) and swift test on the MedataCore SwiftPM target.
   - Confirm swift test reports the existing baseline (312 + 16) plus the two new regression tests, all passing.
-  - Blocked-by: op0jbkw (Diagnose suspect mechanism(s); apply minimal App-layer fix; record Root cause + Fix in smolspec.md), suspect, minimal, suspect, minimal, suspect, minimal, suspect, minimal
+  - Blocked-by: op0jbkw (Diagnose suspect mechanism(s); apply minimal App-layer fix; record Root cause + Fix in smolspec.md)
 
 ## Fix bug 2 — PreShutterSegmenter cadence stall
 
@@ -86,4 +86,4 @@ references:
   - Append a `### On-device observation (complete, rerun)` block to specs/ui/shutter-blocked-feedback/decision_log.md immediately after the existing (complete) block, mirroring its template (Date, Device, Mode tested, Outcome=success, observed trail, UI outcome, Notes).
   - Tick task 5 in specs/ui/shutter-blocked-feedback/tasks.md (the line marked id:f4inr0r) from [ ] to [x].
   - These two doc edits land alongside the smolspec `## Verification` section in the same closeout commit (per nextup.md step 8).
-  - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes)), section, success, section, success, section, success, section, success
+  - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes))
