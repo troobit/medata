@@ -54,3 +54,44 @@ This is the minimum-surface fix: one function rewritten, no public API changes, 
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` only. No call-site changes; `LiDARPlaneFitter.fit`, the RANSAC stage, and `Pipeline.fitSupportPlane` are unchanged. `LinearAlgebra.svdFull` is unchanged, so `CardDetection`/`CardPoseSolver` callers are unaffected. Test coverage adds one new file: `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterRefineScaleTests.swift`.
 
 ---
+
+## Decision 2: Validation pass — confirm fix in code and reconcile a stale cross-reference
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+This bugfix folder was re-validated against the current `spec/bugfix-lidar-plane-fit-oom-on-device-1920x1440` tree after the domain migration (`specs/<domain>/<capability>/`). Three things needed checking: (a) the documented fix is still present in code; (b) the tasks ledger parses and its checked state matches the code; (c) all cross-references resolve. Two findings emerged. First, the smolspec and report both described the follow-on spec `specs/estimation/pipeline-real-device-correctness/` as "not yet created", but that spec has since landed (Implemented; its Req 1/2 produce the pre-shutter food-region mask that feeds `LiDARPlaneFitter.Inputs.foodRegionMask`). Second, the meta decision log (`DECISIONS.md` MD-9) characterises this bug's fix as "a 3×3 scatter-matrix SVD + 250k candidate ceiling", but no candidate ceiling exists in either this spec's Decision 1 or in `LiDARPlaneFitter.swift` — the shipped fix is the scatter-matrix SVD alone.
+
+### Decision
+
+Correct the two "not yet created" annotations to "now landed" with a pointer to the follow-on spec's relevant requirements. Leave Decision 1, the tasks ledger, and the code as-is: the scatter-matrix SVD is present and correct in `LiDARPlaneFitter.refine` (lines 240–291), `LinearAlgebra.svdFull` is unchanged, and the regression suite `LiDARPlaneFitterRefineScaleTests` exists with both documented cases. The phantom "250k candidate ceiling" in MD-9 is recorded here as a meta-log discrepancy; it is not introduced into this spec or the code, because the spec correctly describes what shipped.
+
+### Rationale
+
+The spec is the source of truth for what the code does (PROCESS.md §1), and here the spec matches the code exactly: a localised scatter-matrix substitution with no candidate ceiling. Inventing a candidate ceiling to match MD-9 would mean changing code to fit a stale meta-log summary — the wrong direction of reconciliation. The "not yet created" annotations, by contrast, were true when written and are now false; correcting them keeps the cross-reference honest. MD-9 lives in `DECISIONS.md`, which is out of scope for this folder-scoped validation and is reconciled separately (PROCESS.md §9: the per-spec `decision_log.md` wins on conflict).
+
+### Alternatives Considered
+
+- **Add a 250k candidate ceiling to `collectCandidatePoints` to match MD-9**: Would make code and meta-log agree — Rejected because it changes shipped behaviour to fit a documentation summary, is out of scope for a validation pass, and the scatter-matrix fix already removes the O(n²) allocation that caused the OOM, so a ceiling adds nothing to the actual fix.
+- **Leave the "not yet created" annotations untouched**: Minimal diff — Rejected because the referenced spec demonstrably exists now; leaving the annotation misleads a future reader into thinking the follow-on work is unscheduled.
+- **Edit `DECISIONS.md` MD-9 to drop the phantom ceiling**: Fixes the discrepancy at its source — Rejected because `DECISIONS.md` is explicitly out of scope for this folder-scoped task; the meta log is reconciled in its own pass.
+
+### Consequences
+
+**Positive:**
+
+- The cross-reference to `specs/estimation/pipeline-real-device-correctness/` now resolves and reads truthfully.
+- The MD-9 vs. code discrepancy is recorded for whoever next reconciles the meta log.
+- Code, tasks ledger (2/3 complete; task 3 on-device verification correctly still pending), and spec prose are confirmed mutually consistent.
+
+**Negative:**
+
+- The MD-9 "candidate ceiling" wording remains uncorrected until a separate `DECISIONS.md` reconciliation pass runs; a reader of the meta log alone may still expect a ceiling that does not exist.
+
+### Impact
+
+Documentation only, within this bugfix folder: `smolspec.md`, `report.md`, and this `decision_log.md`. No code, no tasks-state changes.
+
+---
