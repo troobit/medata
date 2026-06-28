@@ -583,7 +583,7 @@ as ~1% rather than hitting an artificial floor.
 ## MD-17: BGRA8 pixel conversion at the capture boundary
 
 **Status**: accepted
-**Sources**: rawframe D1, D2, D5, D6, D7
+**Sources**: rawframe D1, D2, D5, D6, D7, D8
 
 ### Context
 
@@ -607,6 +607,11 @@ and standard; a dedicated error case stops misdiagnosis of unrelated failures.
 
 - **Positive:** Correct bytes downstream; honest error reporting; testable seam.
 - **Negative:** No hard per-frame wall-clock target (correctness-gated instead).
+- **Negative (latent, rawframe D8):** the adapter accepts both full- and video-range
+  YCbCr but decodes both with the full-range matrix, so a video-range source would be
+  colour-shifted (correct length/order, so no error fires). Dormant — ARKit emits
+  full-range by default — but bites a non-ARKit caller (e.g. the macOS HarnessCLI);
+  fix is to select the matrix on the four-CC or honour Req 1.5 and refuse `420v`.
 
 ---
 
@@ -647,7 +652,7 @@ and gives the developer in-app confirmation that meals persist.
 ## MD-19: Tilt-tolerant capture, always-armed shutter, four-tier confidence
 
 **Status**: accepted
-**Sources**: ui D1, ui D5, ui D17, ui D18, ui D19, ui D20; research D43
+**Sources**: ui D1, ui D5, ui D17, ui D18, ui D19, ui D20, ui D21; research D43
 
 ### Context
 
@@ -675,6 +680,10 @@ readout teaches the confidence trade-off at the moment of capture.
 
 - **Positive:** Steady-hands-not-required capture; honest, low-fatigue feedback.
 - **Negative:** Several shared UI components and their tests change with the tiers.
+- **Negative (contract gap, ui D21):** the very-low surface's per-stage Δθ readout is
+  hardcoded to 0° because the persisted `PbConfidenceResult` lacks
+  `deltaThetaNadirDeg`/`deltaThetaObliqueDeg`; the continuous live readout is real, but
+  the result-view value is inert until the estimation side adds those fields.
 
 ---
 
@@ -714,7 +723,7 @@ coordination.
 ## MD-21: Console-grade diagnostic logging for the capture trail
 
 **Status**: accepted
-**Sources**: shutter D1, D2, D3, D4, D5
+**Sources**: shutter D1, D2, D3, D4, D5, D6
 
 ### Context
 
