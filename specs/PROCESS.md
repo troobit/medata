@@ -1,6 +1,6 @@
 # Spec-Driven Development Process
 
-**Audience:** anyone adding or changing a feature in Medata.
+**Audience:** anyone adding or changing a feature in MeData.
 
 **Status:** the governing description of how specs are written, tracked, and turned into
 code in this repository. It documents the process *as practised* (the "starwave" spec
@@ -29,7 +29,7 @@ This buys three things that matter as the project grows past one person and one 
   the platform-binding layer is re-specified (see §9).
 - **Auditability.** The estimation pipeline is grounded in published research and clinical
   constraints. The decision logs record why each modelling choice was made, so a reviewer
-  can check the maths against the cited sources, not against folklore.
+  can check the work, maths, and reasoning against the cited sources.
 
 ## 2. Separation of concerns: one spec, distinct artifacts
 
@@ -47,9 +47,9 @@ own different parts of the same feature without colliding.
 
 Today **one developer wears all the hats** and the AI agents assist within each. The
 separation is not bureaucracy — it is the seam along which the team will later split:
-when a clinical or cryptographic expert joins, they own `requirements.md` or `design.md`
+when other SME's offer their time and expertise, they own `requirements.md` or `design.md`
 respectively, and the boundary already exists. Build for that seam now; do not collapse
-the documents into one just because one person currently writes all of them.
+the documents into one just because only one non-machine entity is in the loop currently.
 
 ## 3. Directory structure, spec boundaries, and naming
 
@@ -73,7 +73,7 @@ specs/
     └── <bug-name>/           # fix-bug reports keep their own decision_log.md
 ```
 
-### Domains (fixed vocabulary)
+### Domains
 
 Every spec belongs to exactly one domain. The set is **closed** — adding a domain is itself
 a logged decision, not an ad-hoc choice. For Medata:
@@ -131,7 +131,7 @@ is an additive move plus a reference rewrite (see §9), done one capability at a
 clear requirements is a **smolspec**: a single `smolspec.md` (Overview / Requirements /
 Implementation Approach / Risks) plus a `tasks.md` and `decision_log.md`. See
 `specs/estimation/lidar-first-scale-fallback/` for the shape. Do not manufacture a full five-document
-spec for a one-function change — that is process for its own sake.
+spec for a simple and easily implemented change.
 
 ## 4. The development loop
 
