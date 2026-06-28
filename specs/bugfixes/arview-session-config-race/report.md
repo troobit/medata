@@ -63,7 +63,7 @@ The Fig / FigCaptureSourceRemote errors come from step 4 — `ARView` is trying 
 ## Resolution for the Issue
 
 **Changes made:**
-- `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift:71-83` — `bindPreviewSession` sets `runRequested = true` before calling `applyRunStateIfNeeded`. Binding a real session is itself the run trigger; the placeholder is still protected by the `isBound` guard.
+- `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift:73-92` — `bindPreviewSession` sets `runRequested = true` (line 90) before calling `applyRunStateIfNeeded`. Binding a real session is itself the run trigger; the placeholder is still protected by the `isBound` guard.
 
 **Approach rationale:** Smallest change that closes the race without re-introducing per-view configuration logic in `ARPreviewView`. The single ARSession-ownership invariant from Decision 11 is preserved: the engine still runs the config, the view still hands its session over.
 
@@ -77,7 +77,7 @@ The Fig / FigCaptureSourceRemote errors come from step 4 — `ARView` is trying 
 **Test file:** `MedataCore/Tests/CaptureKitTests/ARKitCaptureEngineStreamsTests.swift`
 **Test name:** `testBindPreviewSessionRunsConfigImmediately`
 
-**What it verifies:** After `engine.bindPreviewSession(external)` returns, `external.configuration` is non-nil. Before the fix this assertion failed because the configuration was deferred to the async `start()` task; after the fix it passes because the bind synchronously runs `session.run(config, options:)`.
+**What it verifies:** After `engine.bindPreviewSession(external)` returns, the engine's internal `isRunning` flag is `true` — the post-condition proving `applyRunStateIfNeeded` cleared its guard and called `session.run(config, options:)`. The test asserts `isRunning` rather than `external.configuration` because the iOS Simulator does not reliably set `ARSession.configuration` on `run(_:)` without a camera. Before the fix the flag stayed `false` because the run was deferred to the async `start()` task; after the fix the bind runs the config synchronously.
 
 **Run command:**
 ```
