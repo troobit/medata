@@ -285,6 +285,49 @@ A new dedicated case is the smallest change that (a) stops the misdirection with
 
 ### Impact
 
-`MedataCore/Sources/Pipeline/EstimationFailure.swift`, `App/CaptureFlowModel.swift`, `App/RefusalSheet.swift`. New unit test in the App test target (or `App/Tests/CaptureFlowModelTests.swift` if it exists; otherwise a new file) covering [Req 6.5](requirements.md#6.5).
+`MedataCore/Sources/Pipeline/EstimationFailure.swift`, `App/CaptureFlowModel.swift`, `App/RefusalSheet.swift`. New unit test `MeData/Tests/CaptureFlowModelInternalErrorTests.swift` covering [Req 6.5](requirements.md#6.5).
+
+---
+
+## Decision 8: Video-range YCbCr is accepted but decoded with the full-range matrix — known divergence to reconcile
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+A spec↔code cross-check during validation found that the shipped `PixelBufferAdapter.convert` (`MedataCore/Sources/CaptureKit/PixelBufferAdapter.swift:36-40`) accepts **both** `kCVPixelFormatType_420YpCbCr8BiPlanarFullRange` and `kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange`, routing both through the *same* cached `vImage_YpCbCrToARGB` info struct — which is generated for full-range (Yp 0..255, CbCr 0..255, zero offset 128). The spec does not sanction this: [Req 1.1](requirements.md#1.1) scopes the YCbCr path to full-range only, [Req 1.5](requirements.md#1.5) requires any other source format to throw `unsupportedSourceFormat`, and the design's Error Handling supported-set table lists only `{YCbCr 420 biplanar full-range, BGRA8, RGBA8}`. The known-risk register for this spec flags a "YCbCr→RGB pre-processor mismatch [that] may still bite on real device captures"; this divergence is the concrete locus of that risk.
+
+A video-range buffer decoded with full-range coefficients still yields a contiguous, correctly-ordered, correctly-sized BGRA8 buffer — so `imageBytes.count == width*height*4` holds, `RawFrame.pixelFormat == .bgra8` holds, and `SegmenterPreProcessor.validateInputSize` passes. The defect is purely in the **colour** values: video-range luma 16..235 / chroma 16..240 stretched as if 0..255 produces raised contrast and a small hue shift that `canonicaliseToRGB8` (which only swaps channels and drops alpha) cannot detect or correct. The segmenter would receive colour-skewed input and could mis-segment with no error surfaced. ARKit's `ARFrame.capturedImage` is full-range by default and `ARKitCaptureEngine` sets no override, so this branch is dormant on the current single-mode capture path; it activates only if some device/ARSession configuration ever delivers video-range frames.
+
+### Decision
+
+Record the divergence as a known, dormant defect rather than silently leaving spec and code disagreeing. The spec's contract stands: the YCbCr path is **full-range**, and the colour contract is BT.601 full-range (Req 1.1, Req 1.2, Req 1.5). The video-range branch in the current code is therefore a latent defect, not sanctioned behaviour. Reconciliation, when a forcing function appears (a real video-range capture, or before relying on the adapter outside ARKit's full-range default), is **one of**: (a) build and cache a second video-range `vImage_YpCbCrToARGB` info struct and select on the source four-CC, or (b) honour Req 1.5 and throw `unsupportedSourceFormat("420v")` for video-range. Option (a) is preferred if video-range sources become real; (b) is the minimal change that restores spec/code agreement immediately.
+
+### Rationale
+
+Per PROCESS §1, a spec/code disagreement is a defect to reconcile, not a state to leave standing unrecorded. Because the divergence is dormant under ARKit's full-range default, it does not block this spec's MVP value (the single-mode path emits correct full-range BGRA today), but it is exactly the kind of silent colour-correctness trap that produces "garbage estimate, no error" on a future device or a non-ARKit caller (the macOS HarnessCLI use that Decision 3 anticipates). Documenting it with a concrete reconciliation path is cheaper than rediscovering it from a mis-segmentation in the field, and keeps the EARS contract (full-range) authoritative rather than retroactively blessing a wrong-matrix decode.
+
+### Alternatives Considered
+
+- **Bless video-range acceptance in the spec as-is**: amend Req 1.1/1.5 to allow video-range. Rejected — it would sanction decoding video-range with the *wrong* (full-range) matrix, i.e. encode a colour bug into the contract.
+- **Fix the code now in this validation pass**: add the video-range info struct or the throw. Rejected for this pass — the validation mandate is spec-scoped (no production-code edits), and the branch is dormant under the current full-range-only capture path, so it is not an active MVP blocker. Logged here so the implementing change is a deliberate follow-up, not an accident.
+- **Delete the video-range case from the switch silently**: would make the code match Req 1.5 but loses the analysis of why. Rejected in favour of recording the decision and the preferred (a)/(b) reconciliation.
+
+### Consequences
+
+**Positive:**
+
+- Spec and code disagreement is now explicit and traceable, with a concrete two-option fix; the EARS full-range contract stays authoritative.
+- The residual "pre-processor mismatch on real device captures" risk is pinned to a specific code branch and trigger condition rather than left as a vague worry.
+
+**Negative:**
+
+- The divergence remains in shipped code until a follow-up lands; a configuration that delivers video-range would mis-colour silently in the interim.
+- Carrying a known-defect note adds maintenance surface — the entry must be retired when the reconciliation lands.
+
+### Impact
+
+`MedataCore/Sources/CaptureKit/PixelBufferAdapter.swift` (the video-range branch and the conversion-info cache), and a future test row in `PixelBufferAdapterTests.swift` asserting whichever reconciliation (correct video-range decode, or throw) is chosen.
 
 ---
