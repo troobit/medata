@@ -12,11 +12,11 @@ references:
   - Existing in-range auto-hide behaviour and the 48pt hit slop (Req §20.4 / §20.10) MUST be preserved.
   - Verify: build cleanly; add a Swift Testing case on `LiveIndicatorModel` that `reveal()` after `scheduleHide()` keeps `visible == true` and re-arms the hide task; confirm on attached device that the badge still auto-hides 5s after gates are met.
 
-- [x] 2. ShutterButton routes disabled taps to a callback with haptic and accessibility trait <!-- id:f4inr0o -->
+- [x] 2. ShutterButton routes disabled taps to a callback with haptic and accessible disabled value <!-- id:f4inr0o -->
   - In `App/ShutterButton.swift`, add `var onBlockedTap: (() -> Void)? = nil` and `@State private var blockedTapCount: Int = 0`.
   - Replace `.disabled(!state.isInteractive)` with branching inside the button action: invoke `action()` when `state == .ready`; increment `blockedTapCount` then invoke `onBlockedTap?()` when `state == .disabled`; do nothing when `state == .capturing`.
   - Add `.sensoryFeedback(.warning, trigger: blockedTapCount)` so iOS fires the haptic on counter bump.
-  - Add `.accessibilityAddTraits(state == .ready ? [] : .isNotEnabled)` to restore the VoiceOver trait dropped with `.disabled()`.
+  - Do not add an explicit not-enabled trait — `AccessibilityTraits.isNotEnabled` is not a public SwiftUI API (Decision 5); the existing `.accessibilityValue(state.accessibilityValue)` carries the "Disabled" announcement that `.disabled()` supplied.
   - Drop the `guard state.isInteractive` in the press gesture so the press animation plays on `.disabled` taps; keep the gesture inert for `.capturing`.
   - Update `MeData/Tests/ShutterButtonTests.swift` so existing state→accessibilityValue assertions still pass; add coverage that the blocked-tap callback fires only for `.disabled` (not `.capturing`).
 
