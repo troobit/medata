@@ -1,7 +1,11 @@
 # Bugfix Report: two-view-carve-no-volume
 
 **Date:** 2026-06-23
-**Status:** Investigated — not a carve defect; root cause is upstream (mis-aimed oblique capture / unwired tilt aim guide, Track 2). No `VoxelCarveEstimator` change.
+**Status:** Open (capture-side) — not a carve defect. Root cause is upstream: a mis-aimed
+oblique capture, because at the time of writing the tilt aim guide was unwired (Track 2). No
+`VoxelCarveEstimator` change. **Update (2026-06-24):** the tilt aim guide has since been wired
+into `CaptureFlowView` (commits `96465d1`, `9f64576`); on-device verification of a well-aimed
+two-view trail remains open.
 
 ## Description of the Issue
 
@@ -67,10 +71,12 @@ the carve correctly recovers nothing.
 
 **Defect type:** Not a software defect in the volume module. Capture-geometry / UX gap.
 
-**Why it occurred:** The oblique frame cannot be aimed correctly because the **tilt aim
-guide is not wired** into `CaptureFlowView` on the shipping line (Track 2; it is built on
-the `ui` worktree but unwired on research/main). With no on-screen cue, the oblique sits
-outside the 10–40° window, so the two silhouettes never overlap.
+**Why it occurred:** At the time of investigation the oblique frame could not be aimed
+correctly because the **tilt aim guide was not wired** into `CaptureFlowView` (Track 2; it
+was built on the `ui` worktree but unwired on the shipping line). With no on-screen cue, the
+oblique sat outside the 10–40° window, so the two silhouettes never overlapped. *(Since
+fixed: `TiltBubbleGuide` — the persistent 2-D attitude level targeting the 25° oblique ring /
+10–40° band — is now wired into `CaptureFlowView` via the `tiltGuide` view; see Resolution.)*
 
 **Contributing factors:** The dev-stub's image-centred mask is geometrically forgiving
 only when the oblique is well-aimed; it does not label the *actual* food pixels the way a
@@ -80,15 +86,19 @@ real model.
 ## Resolution for the Issue
 
 **Changes made:** None to `VoxelCarveEstimator` or the volume path — the carve behaves
-correctly. The fix lives upstream of the carve and is already-scoped work:
+correctly. The fix lives upstream of the carve and was already-scoped Track 2 work:
 
-- **Track 2 — wire the tilt aim guide** (built on the `ui` worktree) into the capture
-  flow so the oblique can be armed within the 10–40° window, then re-capture a
-  well-aimed two-view trail and confirm `estimate.end success=true`.
+- **Track 2 — wire the tilt aim guide.** *Done (2026-06-24, commits `96465d1`, `9f64576`):*
+  `TiltBubbleGuide` is now wired into `CaptureFlowView` (the `tiltGuide` view), targeting the
+  25° oblique ring within the 10–40° arming band, so the oblique can be armed inside the
+  window. **Still open:** re-capture a well-aimed two-view trail on device and confirm
+  `estimate.end success=true` with a non-zero volume — the wiring is in place but has not been
+  verified against the device symptom.
 
-**Approach rationale:** The investigation shows the carve recovers volume whenever the
-views overlap; the missing piece is getting a well-aimed oblique, which is the oblique-aim
-blocker tracked in `nextup.md`, not a carve change.
+**Approach rationale:** The investigation shows the carve recovers volume whenever the views
+overlap; the missing piece was getting a well-aimed oblique. The tilt aim guide (the
+oblique-aim blocker) addresses the documented stuck-tilt failure (46–57°, outside the 10–40°
+window) at the capture surface, not a carve change.
 
 **Alternatives considered:**
 - *Mask-extrusion fallback for the dev-stub* (bypass the carve, extrude the nadir mask) —
@@ -127,8 +137,8 @@ cause of the device symptom.
 - [x] No production code modified
 
 **Manual verification:**
-- Pending on-device: wire the tilt aim guide, capture a well-aimed two-view trail, confirm
-  `estimate.end success=true` with a non-zero volume.
+- Tilt aim guide now wired (2026-06-24). Pending on-device: capture a well-aimed two-view
+  trail with the wired guide and confirm `estimate.end success=true` with a non-zero volume.
 
 ## Prevention
 
@@ -142,4 +152,6 @@ cause of the device symptom.
 - `specs/estimation/mv-volume-estimator/decision_log.md` (Decisions 4–5) — the superseded smolspec
   and the misdiagnosis chain that led here.
 - `specs/estimation/pipeline-real-device-correctness/` — device-correctness pipeline spec, Decision 16.
-- `nextup.md` — oblique-aim blocker (Track 2 tilt aim guide), two-view collection.
+- `App/TiltBubbleGuide.swift` + `App/CaptureFlowView.swift` (`tiltGuide`) — the Track 2 tilt
+  aim guide, wired 2026-06-24; the oblique-aim fix this report points to. Two-view collection
+  (a well-aimed device trail) remains the open follow-up.
