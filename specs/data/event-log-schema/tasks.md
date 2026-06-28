@@ -88,7 +88,7 @@ references:
   - GRDBPersistenceStore.deleteMeal: DELETE FROM events WHERE id=? AND event_type=?; DELETE FROM meal_artefacts WHERE meal_id=?; DELETE FROM corrections WHERE meal_id=?; remove meals/{id} directory (best-effort, swallow filesystem errors).
   - Notify eventsDidChange.
   - deleteArtefacts(olderThan:): SELECT id FROM events WHERE event_type=? AND timestamp<? and remove meals/{id} for each.
-  - Blocked-by: z0ukrwp (Rewrite meal(id:) against events table), against, against, against, against, against, against, against, against, against, against, against, against, against, against, against, against, z0ukrwq (Write tests for deleteMeal cascade, wrong-type no-op, and deleteArtefacts path-from-id)
+  - Blocked-by: z0ukrwp (Rewrite meal(id:) against events table), z0ukrwq (Write tests for deleteMeal cascade, wrong-type no-op, and deleteArtefacts path-from-id)
   - Stream: 1
   - Requirements: [4.3](requirements.md#4.3)
 
@@ -124,7 +124,7 @@ references:
   - The type predicate switches on a sentinel when type==nil.
   - Map each row to Event.
   - UUID parse failure or row decode failure throws corruptRecord and aborts the call.
-  - Blocked-by: z0ukrwt (Rewrite updatePhotoAssetID and add broadcaster notify), z0ukrwu (Write tests for events(in:type:) bounds, sort, type filter, and fail-fast on corrupt metadata), corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt, corrupt
+  - Blocked-by: z0ukrwt (Rewrite updatePhotoAssetID and add broadcaster notify), z0ukrwu (Write tests for events(in:type:) bounds, sort, type filter, and fail-fast on corrupt metadata)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5)
 

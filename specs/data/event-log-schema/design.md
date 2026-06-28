@@ -115,7 +115,7 @@ Encoded via `JSONSerialization` with no options (no sorted keys, no pretty-print
 
 **`from(metadata:)` contract.** Parses the outer JSON to `[String: Any]`, extracts the two keys, then calls `MealRecord.from(jsonString: record, paletteVersion: palette_version)`. The existing four-argument decoder is kept and called from this new entry point; old callers (none in production after this change) are removed. A missing or wrong-typed key throws `PersistenceError.corruptRecord`.
 
-**Decision 31 invariant.** The `record` string round-trips through `JSONSerialization` only as a JSON string value, not as a parsed-and-re-emitted object — string values are preserved character-for-character through any conforming JSON encoder. So the inner protobuf-JSON survives byte-identical, which is the Decision 31 guarantee that any future Android consumer of the export archive relies on. The byte-identical test asserts on the `record` field after extraction, not on the whole metadata blob.
+**`research D31` invariant.** (`research D31` = Decision 31 in `specs/estimation/pipeline/decision_log.md`, per the DECISIONS.md citation key.) The `record` string round-trips through `JSONSerialization` only as a JSON string value, not as a parsed-and-re-emitted object — string values are preserved character-for-character through any conforming JSON encoder. So the inner protobuf-JSON survives byte-identical, which is the `research D31` guarantee that any future Android consumer of the export archive relies on. The byte-identical test asserts on the `record` field after extraction, not on the whole metadata blob.
 
 **`updatePhotoAssetID` byte-identity.** The method:
 

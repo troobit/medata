@@ -317,3 +317,36 @@ Filtering keeps the meal-named API honest about its scope — `deleteMeal` does 
 - Dev DBs accumulate stale legacy tables that `exportArchive` includes verbatim; acceptable in pre-release.
 
 ---
+
+## Decision 11: Cite the cross-spec byte-identity decision with the `research D31` key
+
+**Date**: 2026-06-28
+**Status**: accepted
+
+### Context
+
+`design.md` justified the protobuf-JSON byte-identity guarantee by referring to "Decision 31". This spec's own decision log only runs 1–10, so a bare "Decision 31" reads as a dangling reference to a decision that does not exist here. The decision being cited actually lives in `specs/estimation/pipeline/decision_log.md` (Decision 31: Portable type contracts strip iOS-only types from public surfaces), which is the source of the byte-identical portable-contract guarantee an Android consumer relies on.
+
+### Decision
+
+Reference the cross-spec decision using the established citation key `research D31` (= Decision 31 in `specs/estimation/pipeline/decision_log.md`), and state the expansion inline at first use. Local decisions keep their bare `Decision N` form.
+
+### Rationale
+
+`specs/DECISIONS.md` already defines `research DN` as the citation key for the estimation/pipeline log (PROCESS §3 legacy-name note), and `specs/DECISIONS.md` itself cites `research D31`. Using the same key here makes the reference resolvable and disambiguates it from this spec's local Decision numbering, with no change to design intent.
+
+### Alternatives Considered
+
+- **Leave the bare "Decision 31"**: Rejected — it collides with this spec's local 1–10 numbering and resolves to nothing in the local log.
+- **Renumber/copy the pipeline decision into this log**: Rejected — duplicates a decision owned by another spec; PROCESS §9 says the owning per-spec log is authoritative.
+
+### Consequences
+
+**Positive:**
+- The byte-identity reference resolves unambiguously to its owning spec.
+- Consistent with the repo-wide `research DN` convention.
+
+**Negative:**
+- A reader must follow the key to the estimation/pipeline log to read the full decision; acceptable and standard for cross-spec citations.
+
+---
