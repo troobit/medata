@@ -3,21 +3,31 @@ references:
     - specs/estimation/pipeline/requirements.md
     - specs/estimation/pipeline/design.md
     - specs/estimation/pipeline/decision_log.md
+metadata:
+    ledger_note: |
+        What `[x]` means here. A checked box means the code / scaffolding for that task
+        landed and its unit tests pass — it does NOT mean the Phase-3 data deliverables
+        exist. Phase 1 (RUNNING DEVICE) is the current status: the full pipeline runs on
+        device with the dev-stub segmenter. Two checked groups have a Phase-3 deliverable
+        that is not yet produced because it depends on prerequisites the agent cannot
+        satisfy (trained model, gravimetric dataset):
+          - Tasks 22-23 — the CoreMLSegmenter wrapper and the export.py pipeline are
+            written, but no trained segmenter.mlpackage exists; Release builds throw
+            segmenterModelMissing until Phase 3 bundles it (see task 80). Inference is
+            exercised only via StubInferenceEngine.
+          - Tasks 58-65 — the beta-calibration and accuracy/mIoU harness are restored
+            under #if HARNESS_ENABLED, but their outputs (calibrated beta_c, measured
+            MAPE/MAE/mIoU) have not been produced; they require the gravimetric meal set
+            + held-out segmenter test set (see prerequisites.md, the single largest
+            project risk). Until that data exists, v1 ships every class with
+            beta = 1.0 / uncalibrated_unity, and the Harness-phase tasks (55-65) mean
+            "harness code restored under #if HARNESS_ENABLED and its unit tests pass",
+            not "harness run against real data".
+        The numeric-accuracy (Req 21.3) and mIoU (Req 8.9) bars apply to Phase 3 only.
+        This note lives in front matter, not the body, because rune rejects any prose
+        between the H1 and the first task/phase (see Decision 48).
 ---
 # Research — Implementation Tasks
-
-> **What `[x]` means here.** A checked box means the **code / scaffolding for that task landed and its
-> unit tests pass** — it does **not** mean the Phase-3 data deliverables exist. Phase 1 (RUNNING DEVICE)
-> is the current status: the full pipeline runs on device with the **dev-stub segmenter**. The following
-> checked tasks have a Phase-3 deliverable that is **not yet produced** because it depends on prerequisites
-> the agent cannot satisfy (trained model, gravimetric dataset):
-> - **Tasks 22–23** — the `CoreMLSegmenter` wrapper and the `export.py` pipeline are written, but **no
->   trained `segmenter.mlpackage` exists**; Release builds throw `segmenterModelMissing` until Phase 3
->   bundles it (see task 80). Inference is exercised only via `StubInferenceEngine`.
-> - **Tasks 58–65** — the β-calibration and accuracy/mIoU harness are restored under `#if HARNESS_ENABLED`,
->   but their outputs (calibrated β_c, measured MAPE/MAE/mIoU) **have not been produced**; they require the
->   gravimetric meal set + held-out segmenter test set (see `prerequisites.md`, the single largest project risk).
-> The numeric-accuracy (Req 21.3) and mIoU (Req 8.9) bars apply to **Phase 3 only**.
 
 ## Foundation
 
@@ -26,7 +36,7 @@ references:
   - Create iOS app target referencing MedataCore; Swift 5.9+, deployment target iOS 17.
   - Create `HarnessCLI` SPM executable target for macOS.
   - Add Package.swift, .xcodeproj, .swiftformat, .gitattributes (Git LFS for fixtures dir convention).
-  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [18.1](requirements.md#18.1), [18.2](requirements.md#18.2)
+  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [18.1](requirements.md#18.1), [18.2](requirements.md#18.2)
 
 - [x] 2. Write .proto schemas and round-trip tests for portable contracts <!-- id:0f06zz3 -->
   - Author all 24 .proto files listed in design §4.3 under `MedataCore/Sources/PortableContracts/Schemas/`.
@@ -80,9 +90,9 @@ references:
   - Capture nadir + oblique frames; record intrinsics, gravity, world transform, LiDAR depth via `ARFrame.sceneDepth`.
   - Convert iOS-private `simd_*` types to portable `Vec3`/`Mat4` before exposing `RawFrame`.
   - Map ARKit `ARConfidenceLevel.{low,medium,high}` to UInt8 `{0,127,255}` per design §6.0.
-  - Refuse capture flow on devices without rear LiDAR (Req 1.3).
+  - Refuse capture flow on devices without rear LiDAR (Req 1.2).
   - Blocked-by: 0f06zza (Write tests for `CaptureKit` configuration and `RawFrame` portable contract)
-  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5)
+  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5)
 
 - [x] 10. Write tests for ID-1 P4P card-pose recovery (§6.1) <!-- id:0f06zzc -->
   - Synthesise known card poses; perturb image points by ≤1 px noise; assert recovered translation < 2 mm.
@@ -91,14 +101,14 @@ references:
   - Test cardTooOblique refusal at |r3·ẑ_cam| < 0.2 (edge case 1).
   - Test SVD condition gate: σ_min/σ_max < 1e-6 → degenerateCardPose.
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
-  - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7)
+  - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.7](requirements.md#5.7)
 
 - [x] 11. Implement P4P card-pose recovery (custom SVD-based, no OpenCV) <!-- id:0f06zzd -->
   - `VNDetectRectanglesRequest` + custom DLT homography decomposition using Accelerate's LAPACK.
   - Recover both `s_card_init` (card-plane scale, used by §6.3) and the scale at the food plane (used by §6.4) per design §6.1.
   - Persist PnP residual as informational sub-confidence input (not consumed by σ_meal in v1).
   - Blocked-by: 0f06zzc (Write tests for ID-1 P4P card-pose recovery (§6.1))
-  - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7)
+  - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.7](requirements.md#5.7)
 
 - [x] 12. Write property-based tests for P4P round-trip <!-- id:0f06zze -->
   - Use `SwiftCheck` generators for camera intrinsics and card poses in a realistic envelope.
@@ -202,7 +212,7 @@ references:
   - Test τ_v = 0.04 ambiguous-voxel discard.
   - Test `noFoodVolumeRecovered` refusal when all classes < 1 cm³ (edge case 2).
   - Blocked-by: 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries), 0f06zzm (Implement segmenter pre/post-processing pipeline)
-  - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8), [9.9](requirements.md#9.9)
+  - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.8](requirements.md#9.8), [9.9](requirements.md#9.9)
 
 - [x] 25. Implement two-view voxel carving Metal kernel + Swift dispatcher <!-- id:0f06zzr -->
   - Metal kernel in `Volume/Kernels/voxel_carve.metal`; one thread per voxel, 8×8×8 threadgroups.
@@ -210,7 +220,7 @@ references:
   - Single-class single-view fallback: silhouette extrusion to π_sup with prior 30 mm height, applied AFTER main kernel.
   - Output mm³, convert to cm³ in dispatcher per design §6.6 (M5).
   - Blocked-by: 0f06zzq (Write tests for two-view voxel carving Metal kernel (§6.6))
-  - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
+  - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [9.6](requirements.md#9.6), [9.8](requirements.md#9.8)
 
 - [x] 26. Write tests for single-view height-field integration (§6.7) <!-- id:0f06zzs -->
   - Synthetic dome with known LiDAR depth: assert volume within 3% of analytical, cm³.
@@ -219,14 +229,14 @@ references:
   - Test `lidarCoverageTooLow` refusal at any class < 30% LiDAR coverage (Decision 47; relaxed from 50%) (edge case 6).
   - Test mm³ → cm³ conversion (M5).
   - Blocked-by: 0f06zz9 (Implement `MetalContext.shared` singleton with device/queue/libraries), 0f06zzm (Implement segmenter pre/post-processing pipeline)
-  - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8), [13.2](requirements.md#13.2)
+  - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.8](requirements.md#9.8), [13.2](requirements.md#13.2)
 
 - [x] 27. Implement single-view height-field Metal kernel + Swift dispatcher <!-- id:0f06zzt -->
   - Metal kernel in `Volume/Kernels/height_field.metal`; one thread per nadir-view pixel.
   - Pixel area `a(p) = z_t² / (f_x · f_y · cos³θ_p)` with `cosθ_p = f / sqrt(f² + (u-c_x)² + (v-c_y)²)` (Decision 29).
   - Atomic accumulator per class; inter-class occlusion detection in same kernel (single-pass 4-neighbour scan) per design §6.8.
   - Blocked-by: 0f06zzs (Write tests for single-view height-field integration (§6.7))
-  - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.7](requirements.md#9.7), [9.8](requirements.md#9.8)
+  - Requirements: [3.5](requirements.md#3.5), [9.1](requirements.md#9.1), [9.4](requirements.md#9.4), [9.8](requirements.md#9.8)
 
 - [x] 28. Write property-based tests for voxel ownership disjointness <!-- id:0f06zzu -->
   - PBT generator for arbitrary probability tensor pairs.
@@ -283,7 +293,7 @@ references:
   - Test `entry(for:edition:)` honours per-meal database edition (Decision 24).
   - Test density and macro coefficients are returned in canonical units (g/cm³, g per 100 g).
   - Blocked-by: 0f06zz4 (Generate Swift sources from .proto and integrate `swift-protobuf`)
-  - Requirements: [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9), [11.10](requirements.md#11.10)
+  - Requirements: [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9), [11.10](requirements.md#11.10)
 
 - [x] 36. Implement `FoodDatabase` via GRDB.swift (CoFID + AFCD) <!-- id:0f07002 -->
   - **Superseded by task 74** (Decision 39): IFCDB overlay + `ifcdbOverlayEnabled` setting removed.
@@ -291,7 +301,7 @@ references:
   - Build CoFID + AFCD SQLite assets from authoritative source data; bundle in app binary (Decision 27, Decision 39).
   - Persist `BetaCorrectionTable` integration: read β_c and `betaCalibrationStatus` per class per edition.
   - Blocked-by: 0f07001 (Write tests for `FoodDatabase` queries with CoFID + AFCD merge)
-  - Requirements: [10.1](requirements.md#10.1), [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.3](requirements.md#11.3), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9)
+  - Requirements: [10.1](requirements.md#10.1), [11.1](requirements.md#11.1), [11.2](requirements.md#11.2), [11.4](requirements.md#11.4), [11.5](requirements.md#11.5), [11.6](requirements.md#11.6), [11.7](requirements.md#11.7), [11.8](requirements.md#11.8), [11.9](requirements.md#11.9)
 
 - [x] 37. Write tests for `Macros` calculation (Req 12) <!-- id:0f07003 -->
   - Test per-class `m_c = V_c · ρ_c` (cm³ × g/cm³ = g).
@@ -347,13 +357,13 @@ references:
   - Test 90-day / 365-day / indefinite settings.
   - Test artefact deletion preserves macro/confidence/metadata in `meals` row (Req 17.3).
   - Blocked-by: 0f07008 (Implement `Persistence` module (SQLite via GRDB + protobuf-JSON))
-  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
+  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3)
 
 - [x] 44. ~~Implement `RetentionScheduler` with `BackgroundTasks` + foreground fallback~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Photos now live in the user's Photos library (Task 72); the app no longer has a retention sweep. Source files to delete in follow-up. <!-- id:0f0700a -->
   - Register `BackgroundTasks` identifier; schedule daily refresh.
   - `Persistence.sweepIfDue()` runs on app foregrounding and at end of every `Pipeline.estimate(_:)` if `last_sweep_at_ms` > 24 hours old.
   - Blocked-by: 0f07009 (~~Write tests for `RetentionScheduler` (Req 17)~~ **DEFERRED — REMOVED** per Req §17.3 (May 2026). Existing tests should be deleted alongside Task 44.)
-  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3), [17.4](requirements.md#17.4)
+  - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3)
 
 - [x] 45. Write tests for archive export (zip) <!-- id:0f0700b -->
   - Test export produces single zip containing `meals.sqlite` + per-meal artefact directories.
@@ -420,11 +430,6 @@ references:
   - Blocked-by: 0f0700j (Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate`)
 
 ## Harness and Calibration — Feature-flagged off (`HARNESS_ENABLED`)
-
-> **`[x]` = harness code restored under `#if HARNESS_ENABLED` and its unit tests pass.** It does **not**
-> mean the harness has been *run against real data*: calibrated β_c, measured MAPE/MAE, and segmenter
-> mIoU (tasks 58–65) require the gravimetric meal set + held-out segmenter test set, which are Phase-3
-> prerequisites not yet acquired (`prerequisites.md`). v1 ships every class with β = 1.0 / `uncalibrated_unity`.
 
 - [x] 55. Define `HARNESS_ENABLED` compile flag in `Package.swift` and restore deleted harness file tree <!-- id:0f07011 -->
   - Add the `HarnessCLI` executable target back to `Package.swift` with `swiftSettings: [.define("HARNESS_ENABLED")]`.
@@ -521,21 +526,21 @@ references:
 - [x] 66. ~~Write XCTest performance assertion: single-view P95 ≤ 1000 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700v -->
   - On-device XCTest with `XCTClockMetric` over 10 runs against a fixture batch.
   - Per Req 16.1 / 16.2 single-view path budget.
-  - Mark test as device-only; CI runs on tethered iPhone 12 Pro per Req 16.7.
+  - Mark test as device-only; CI runs on tethered iPhone 12 Pro per Req 16.1.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
-  - Requirements: [16.1](requirements.md#16.1), [16.2](requirements.md#16.2), [16.7](requirements.md#16.7), [21.5](requirements.md#21.5)
+  - Requirements: [16.1](requirements.md#16.1), [16.2](requirements.md#16.2), [21.5](requirements.md#21.5)
 
 - [x] 67. ~~Write XCTest performance assertion: two-view P95 ≤ 1800 ms~~ **DEFERRED — REPLACED** by Task 74's single 30 s soft check. <!-- id:0f0700w -->
   - Same harness as task 65, two-view fixture batch.
   - Per Req 16.1 / 16.3 two-view path budget.
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
-  - Requirements: [16.1](requirements.md#16.1), [16.3](requirements.md#16.3), [16.7](requirements.md#16.7), [21.5](requirements.md#21.5)
+  - Requirements: [16.1](requirements.md#16.1), [21.5](requirements.md#21.5)
 
 - [x] 68. ~~Implement performance harness instrumentation (per-stage timing)~~ **DEFERRED — REMOVED**: signpost intervals retained for ad-hoc Instruments inspection only; no XCTest assertions. <!-- id:0f0700x -->
   - OSSignpost intervals around each pipeline stage (CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Macros, Confidence, Persistence).
   - Surface to dev-build only (Req 16.5 CPU fallback / dev-build gates).
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
-  - Requirements: [16.2](requirements.md#16.2), [16.3](requirements.md#16.3), [16.5](requirements.md#16.5), [16.7](requirements.md#16.7)
+  - Requirements: [16.2](requirements.md#16.2), [16.5](requirements.md#16.5)
 
 - [x] 69. Write tests for Irish/British English spelling linter <!-- id:0f0700y -->
   - Test rejects 'recognized', 'color', 'fiber', 'favorite', 'center'.
@@ -550,10 +555,10 @@ references:
   - Requirements: [19.1](requirements.md#19.1), [19.2](requirements.md#19.2)
 
 - [x] 71. Move SvelteKit MVP source to `legacy/` directory <!-- id:0f07010 -->
-  - Move existing Svelte source tree to `legacy/svelte-mvp/` (Req 1.4).
+  - Move existing Svelte source tree to `legacy/svelte-mvp/` (Req 1.1).
   - Update root README to point at the new iOS app.
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
-  - Requirements: [1.4](requirements.md#1.4)
+  - Requirements: [1.1](requirements.md#1.1)
 
 ## v1 Adjustments — New Tasks (May 2026)
 
