@@ -33,16 +33,24 @@ public final class CoreMLSegmenter: @unchecked Sendable {
     public let targetSize: Int
     private let engine: SegmenterInferenceEngine
 
+    // Version of the loaded Core ML model (the checkpoint SHA-256 prefix stamped
+    // by tools/segmenter/export.py). `nil` for the dev-stub engine, which has no
+    // bundled model. Read by `Pipeline.segmenterSourceTag` to stamp
+    // `coreml_<modelVersion>` onto produced meals (Req 5.4).
+    public let modelVersion: String?
+
     public init(
         modelPath: String,
         palette: ClassPalette,
         engine: SegmenterInferenceEngine,
-        targetSize: Int = SegmenterPreProcessor.defaultTargetSize
+        targetSize: Int = SegmenterPreProcessor.defaultTargetSize,
+        modelVersion: String? = nil
     ) {
         self.modelPathString = modelPath
         self.palette = palette
         self.engine = engine
         self.targetSize = targetSize
+        self.modelVersion = modelVersion
     }
 
     public func segment(_ frame: RawFrame) async throws -> SegmentationResult {
@@ -129,11 +137,29 @@ public enum SegmenterWeightsBudget {
 // CHW [1, C, target, target] or HWC [1, target, target, C]. The output shape is
 // resolved at load time from the model description.
 public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked Sendable {
-    // Static identifier for the bundled segmenter checkpoint. Stamped on every
-    // Phase 3 MealRecord as `coreml_<modelVersion>` (Req §23.6, Decision 42).
-    // Bumped when the trained model is regenerated; Phase 1 ships without a
-    // bundled `.mlpackage`, so this value is reserved until Phase 3 wires it.
-    public static let modelVersion: String = "v0.1"
+    // Key under the model's user-defined metadata holding the model version —
+    // the first 12 hex of the training checkpoint SHA-256 (Req 1.3). Stamped by
+    // tools/segmenter/export.py (task 7); this string is the shared contract
+    // between the exporter and this loader, so the two must stay identical.
+    public static let modelVersionMetadataKey = "medata.modelVersion"
+
+    // Back-compat fallback used when a loaded model carries no
+    // `medata.modelVersion` (e.g. older fixtures, or a model exported before the
+    // stamp landed). Never produces an empty version tag.
+    public static let fallbackModelVersion: String = "v0.1"
+
+    // Pure, testable resolution of the model version from a model's user-defined
+    // metadata dictionary: returns the stamped value, or the fallback when the
+    // key is absent or empty (Req 5.4 — never an empty `coreml_` tag).
+    public static func resolveModelVersion(fromUserMetadata metadata: [String: String]) -> String {
+        if let v = metadata[modelVersionMetadataKey], !v.isEmpty { return v }
+        return fallbackModelVersion
+    }
+
+    // Version of THIS loaded model, derived from its metadata at init. Stamped
+    // onto every Phase 3 MealRecord as `coreml_<modelVersion>` (Req 5.4,
+    // Decision 42) so a persisted meal is traceable to its exact model build.
+    public let modelVersion: String
 
     private let model: MLModel
     private let inputName: String
@@ -161,6 +187,9 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         }
         self.model = loaded
         self.targetSize = targetSize
+
+        let userMeta = (loaded.modelDescription.metadata[.creatorDefinedKey] as? [String: String]) ?? [:]
+        self.modelVersion = Self.resolveModelVersion(fromUserMetadata: userMeta)
 
         let inDescs = loaded.modelDescription.inputDescriptionsByName
         guard let inEntry = inDescs.first(where: { $1.type == .multiArray }) else {

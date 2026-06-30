@@ -176,3 +176,170 @@ The oracle, preprocessing-parity, and mask-plausibility fixes close silent-failu
 **Negative:** More export-eligibility gates raise the bar to ship a model; the per-class floor and mask-plausibility check need real-run data to tune, deferred to design.
 
 ---
+
+## Decision 7: Bundle the segmenter via `.copy("Resources")` directory, not a named-file copy
+
+**Date**: 2026-06-29
+**Status**: accepted
+
+### Context
+
+Tasks 1–2 switch the Phase 3 loader from `Bundle.main` to the `Pipeline` target's
+own resource bundle (`Bundle.module`, Req 5.1). Two hard SPM constraints collide:
+(a) `Bundle.module` is only synthesised for a target that declares at least one
+resource — referencing it otherwise is a compile error; (b) a `.copy` of a named
+file fails the manifest/build for *every* configuration when that file is absent.
+The real `segmenter.mlpackage` does not exist yet — it is the gated MVP deliverable
+and is gitignored — so the literal `.copy("Resources/segmenter.mlpackage")` from the
+task draft would break `swift build`/`swift test` for everyone until a model lands.
+
+### Decision
+
+Declare `resources: [.copy("Resources")]` on the `Pipeline` target — a copy of the
+*directory*, not the named model file — and commit a `Resources/README.md` marker so
+the directory exists on clean checkouts. The model file stays gitignored at
+`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`. The loader looks it up
+with `Bundle.module.url(forResource:"segmenter", withExtension:"mlpackage", subdirectory:"Resources")`
+because a directory `.copy` preserves the `Resources/` structure inside the bundle.
+Resolution is extracted into the always-compiled helper `resolveBundledSegmenterURL(in:)`
+so the contract is testable under the Debug/DEV_STUB build, where the `#else` branch
+that calls it is compiled out.
+
+### Rationale
+
+The directory copy is the only declaration that is valid *now* (the directory exists
+via the README) yet bundles the real model automatically once `export.py` drops it in —
+no second Package.swift edit when the model arrives. Clean builds stay green, `Bundle.module`
+becomes available, and an absent model still produces exactly the intended
+`PipelineFactoryError.segmenterModelMissing` at runtime in Release. Committing a fake
+placeholder `.mlpackage` was rejected as dishonest and contrary to the gitignore intent.
+
+### Alternatives Considered
+
+- **Literal `.copy("Resources/segmenter.mlpackage")`**: Breaks all builds until the gitignored model exists — infeasible pre-training.
+- **Commit a tiny placeholder `.mlpackage`**: Makes the named-file copy valid, but ships a fake model that Release would try to load, and pollutes git with a binary the gitignore is meant to exclude.
+- **Defer the `Bundle.module` switch entirely**: Leaves `Bundle.main` in place; fails Req 5.1 and blocks the rest of the spec for no real gain.
+
+### Consequences
+
+**Positive:**
+- Loader is on `Bundle.module` now; clean Debug + Release builds both compile with no model present.
+- The real model bundles with zero further manifest changes.
+- Absent-model behaviour is the correct `segmenterModelMissing`, asserted by an always-compiled, Debug-runnable test.
+
+**Negative:**
+- Lookup must pass `subdirectory: "Resources"`; a future contributor moving the file to the bundle root would silently break resolution (mitigated by the README and this entry).
+- `.copy("Resources")` will bundle anything else placed in that directory verbatim.
+
+### Impact
+
+`Package.swift` (Pipeline target `resources:`), `PipelineFactory.swift`
+(`resolveBundledSegmenterURL`, `#else` branch), `.gitignore` (model path moved to the
+new location), and the new `MedataCore/Sources/Pipeline/Resources/README.md`.
+
+### Parity audit (Req 5.1)
+
+`grep -rn 'Bundle.main.\(url\|path\)(forResource:'` over `MedataCore/Sources/**` and
+`App/**` after the change found exactly one remaining hit:
+`CaptureKit/MetalContext.swift:66` looking up a `.metallib`. That is an app-resident
+Metal library, not a model resource, and is out of scope for this spec. The segmenter
+model is now the sole resource lookup migrated to `Bundle.module`; the food DB already
+used `Bundle.module`. Result recorded, not assumed.
+
+---
+
+## Decision 8: `segmenterSourceTag` derives from the loaded model, not a static constant
+
+**Date**: 2026-06-29
+**Status**: accepted
+
+### Context
+
+Task 5 makes the Core ML model version per-loaded-model: `CoreMLInferenceEngine.modelVersion`
+changes from a `static let "v0.1"` to an instance value read from the model's
+`userDefinedMetadata["medata.modelVersion"]` (the checkpoint SHA-256 prefix, Req 5.4).
+`Pipeline.segmenterSourceTag` previously interpolated the *static* version, so it could no
+longer compute the tag without an actual loaded segmenter.
+
+### Decision
+
+Change the public `static var segmenterSourceTag: String` to a function
+`static func segmenterSourceTag(for segmenter: CoreMLSegmenter) -> String`, and add a pure,
+always-compiled helper `coreMLSourceTag(modelVersion:)` that does the `"coreml_\(version)"`
+interpolation. `CoreMLSegmenter` gains an optional `modelVersion` (nil for the dev-stub).
+The version-from-metadata resolution lives in `CoreMLInferenceEngine.resolveModelVersion(fromUserMetadata:)`
+with a non-empty `fallbackModelVersion`, so an unstamped model never yields an empty `coreml_` tag.
+
+### Rationale
+
+The tag must reflect the model that actually produced the meal, which is only knowable from the
+loaded instance. Extracting `coreMLSourceTag` / `resolveModelVersion` as pure functions keeps the
+contract testable under the Debug/DEV_STUB build, where the `#else` (Core ML) branch is compiled out
+— the same constraint that shaped Decision 7. `preShutterSourceTag` stays a static property (it carries
+no version).
+
+### Alternatives Considered
+
+- **Keep `segmenterSourceTag` static, read a static version**: Impossible once the version is per-model; would force a global mutable, breaking the "traceable to exact build" goal.
+- **Expose the engine's `MLModel` to the Pipeline layer**: Leaks Core ML into Pipeline and is untestable without a real model; the metadata-dict seam is lighter and pure.
+
+### Consequences
+
+**Positive:** Persisted `segmenterSource` traces to the exact model build; derivation is unit-tested without a real `.mlpackage`.
+
+**Negative:** A public API signature change (`segmenterSourceTag` now takes a segmenter); the only in-repo caller (`makeForDevice`) is updated, but any external caller would need the new form.
+
+---
+
+## Decision 9: Export oracle mirrors the runtime (letterbox) preprocessing; train.py square-resize skew flagged, not fixed
+
+**Date**: 2026-06-29
+**Status**: accepted
+
+### Context
+
+Implementing the Req 4.5 preprocessing-parity gate (task 7) required a Python replica of
+the preprocessing the equivalence oracle feeds both the PyTorch checkpoint and the Core ML
+artefact. Two existing preprocessing paths disagree: the **runtime** path
+(`PreProcessing.swift`) does aspect-preserving **letterbox + pad**, while **training**
+(`train.py` `FoodSegDataset`) and the fixture/reference helper (`export.reference_input`,
+used by `make_fixtures.py`) do a **square resize** to 513×513. For non-square inputs these
+produce different tensors — a real train/serve skew.
+
+### Decision
+
+`export.preprocess_reference` replicates the **runtime** path (letterbox + ImageNet
+normalise + top-left pad with `(0−mean)/std`), and the oracle feeds inputs through it
+(Req 4.5 names "the runtime preprocessing path"). The `train.py` / `reference_input`
+square-resize discrepancy is **flagged as a follow-up**, not changed here: altering the
+training transform is a training-pipeline behaviour change outside the export-gate scope,
+and `reference_input` is still consumed by `make_fixtures.py`.
+
+### Rationale
+
+The export gate's job is to make the *shipped* path honest; the runtime path is what the
+device actually feeds the model, so the oracle mirrors it. Reconciling training to also
+letterbox is a separate, riskier change (it affects learned weights and fixtures) that
+should be decided deliberately in the training pipeline, not bundled into the export gate.
+Note the limitation: because the oracle feeds the SAME preprocessed input to both checkpoint
+and artefact, it catches checkpoint↔artefact divergence, not the train↔runtime skew itself —
+that skew is a code-parity concern the shared `preprocess_reference` makes visible.
+
+### Alternatives Considered
+
+- **Change train.py to letterbox now**: Rejected for this task — risks training behaviour/fixtures and belongs to the training pipeline spec; needs its own validation.
+- **Mirror the square resize in the oracle**: Rejected — 4.5 explicitly names the runtime path; mirroring training would bless the skew instead of exposing it.
+
+### Consequences
+
+**Positive:** The export oracle reflects real device inputs; the skew is now documented and surfaced in one shared function.
+
+**Negative:** A train/serve preprocessing mismatch remains until `train.py` is reconciled; the gate cannot numerically detect it (it compares checkpoint vs artefact on identical inputs).
+
+### Impact
+
+`tools/segmenter/export.py` (gates + `preprocess_reference` + oracle flip to the PyTorch
+checkpoint), `tools/segmenter/tests/` (new pytest suite). Follow-up: reconcile
+`train.py`/`reference_input` resize with the runtime letterbox path.
+
+---

@@ -77,6 +77,73 @@ final class PipelineFactoryTests: XCTestCase {
         )
         XCTAssertEqual(pipeline.segmenterSource, "dev_stub")
     }
+
+    // MARK: - Bundled segmenter resolution (model-production tasks 1/2)
+
+    // The `#else` (Phase 3 / CoreML) branch of `makeSegmenter` is compiled out
+    // under the DEV_STUB SPM-test build, so the bundle resolution contract is
+    // exercised directly against the always-compiled `resolveBundledSegmenterURL`
+    // helper, injecting a synthetic bundle (Req 5.1/5.2/5.3).
+
+    // Builds a `.bundle` directory laid out the way `.copy("Resources")` lays
+    // out the real Pipeline bundle: resources live under a `Resources` subdir.
+    private func makeFixtureBundle(name: String, withModel: Bool) throws -> Bundle {
+        let bundleURL = tempDir.appendingPathComponent("\(name).bundle", isDirectory: true)
+        let resourcesURL = bundleURL.appendingPathComponent("Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
+        if withModel {
+            // A real .mlpackage is a directory; an empty one is enough to prove
+            // the URL resolves (loading it is the CoreML engine's concern).
+            try FileManager.default.createDirectory(
+                at: resourcesURL.appendingPathComponent("segmenter.mlpackage", isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
+        return try XCTUnwrap(Bundle(url: bundleURL), "fixture bundle should construct")
+    }
+
+    func testResolveBundledSegmenterURLReturnsWhenPresent() throws {
+        let bundle = try makeFixtureBundle(name: "WithModel", withModel: true)
+        let url = try Pipeline.resolveBundledSegmenterURL(in: bundle)
+        XCTAssertEqual(url.lastPathComponent, "segmenter.mlpackage")
+    }
+
+    func testResolveBundledSegmenterURLThrowsWhenAbsent() throws {
+        let bundle = try makeFixtureBundle(name: "NoModel", withModel: false)
+        XCTAssertThrowsError(try Pipeline.resolveBundledSegmenterURL(in: bundle)) { error in
+            XCTAssertEqual(error as? PipelineFactoryError, .segmenterModelMissing,
+                           "an absent model must surface as segmenterModelMissing per Req 5.3")
+        }
+    }
+
+    // MARK: - Model version + source tag derivation (model-production task 4)
+
+    // `coreml_<version>` interpolation is the always-compiled seam: the
+    // `#else` branch of `segmenterSourceTag(for:)` is compiled out under the
+    // DEV_STUB SPM-test build, so the contract is asserted on the pure helper.
+    func testCoreMLSourceTagInterpolatesVersion() {
+        XCTAssertEqual(Pipeline.coreMLSourceTag(modelVersion: "abc123def456"), "coreml_abc123def456")
+        XCTAssertNotEqual(Pipeline.coreMLSourceTag(modelVersion: "abc123def456"), "dev_stub")
+    }
+
+    #if canImport(CoreML) && (os(iOS) || os(macOS))
+    func testResolveModelVersionReadsStampedKey() {
+        let meta = [CoreMLInferenceEngine.modelVersionMetadataKey: "abc123def456"]
+        XCTAssertEqual(CoreMLInferenceEngine.resolveModelVersion(fromUserMetadata: meta), "abc123def456")
+    }
+
+    func testResolveModelVersionFallsBackWhenAbsentOrEmpty() {
+        // Absent key → non-empty fallback, never an empty `coreml_` tag.
+        XCTAssertEqual(CoreMLInferenceEngine.resolveModelVersion(fromUserMetadata: [:]),
+                       CoreMLInferenceEngine.fallbackModelVersion)
+        XCTAssertFalse(CoreMLInferenceEngine.resolveModelVersion(fromUserMetadata: [:]).isEmpty)
+        // Present-but-empty value also falls back.
+        XCTAssertEqual(
+            CoreMLInferenceEngine.resolveModelVersion(
+                fromUserMetadata: [CoreMLInferenceEngine.modelVersionMetadataKey: ""]),
+            CoreMLInferenceEngine.fallbackModelVersion)
+    }
+    #endif
 }
 
 // MARK: - Test doubles

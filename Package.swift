@@ -109,6 +109,15 @@ let package = Package(
                 "Segmentation", "Volume", "Foods", "Macros", "Confidence", "Persistence"
             ],
             path: "MedataCore/Sources/Pipeline",
+            // Bundled Core ML segmenter (model-production Req 5.1/5.2, Decision 7).
+            // `.copy("Resources")` preserves the directory inside `Bundle.module`,
+            // so the gitignored `Resources/segmenter.mlpackage` (dropped in by
+            // `tools/segmenter/export.py`) is bundled when present and absent
+            // otherwise; the committed `Resources/README.md` keeps `Bundle.module`
+            // available on clean checkouts that do not yet have the model.
+            resources: [
+                .copy("Resources")
+            ],
             // DEV_STUB_SEGMENTER per Decision 42 / Req §23.4: Debug builds
             // bind StubInferenceEngine; Release builds bind CoreMLInferenceEngine.
             swiftSettings: [

@@ -22,7 +22,8 @@ import SupportPlane
 
 public enum PipelineFactoryError: Error, Equatable {
     // Phase 3: the bundled `segmenter.mlpackage` is not present in the
-    // app's main bundle. Phase 1 should never reach this branch.
+    // Pipeline target's resource bundle (`Bundle.module`). Phase 1 should
+    // never reach this branch.
     case segmenterModelMissing
 }
 
@@ -41,7 +42,7 @@ extension Pipeline {
             database: foods,
             store: store,
             supportPlaneFitter: supportPlaneFitter,
-            segmenterSource: segmenterSourceTag
+            segmenterSource: segmenterSourceTag(for: segmenter)
         )
     }
 
@@ -57,31 +58,65 @@ extension Pipeline {
         #if DEV_STUB_SEGMENTER
         let engine: any SegmenterInferenceEngine = StubInferenceEngine(palette: palette)
         let modelPath = "/dev/null"
+        let modelVersion: String? = nil
         #else
-        guard let modelURL = Bundle.main.url(
-            forResource: "segmenter", withExtension: "mlpackage"
-        ) else {
-            throw PipelineFactoryError.segmenterModelMissing
-        }
-        let engine: any SegmenterInferenceEngine = try CoreMLInferenceEngine(
+        let modelURL = try resolveBundledSegmenterURL()
+        let coreEngine = try CoreMLInferenceEngine(
             modelPath: modelURL.path, targetSize: targetSize
         )
+        let engine: any SegmenterInferenceEngine = coreEngine
         let modelPath = modelURL.path
+        let modelVersion: String? = coreEngine.modelVersion
         #endif
         return CoreMLSegmenter(
-            modelPath: modelPath, palette: palette, engine: engine, targetSize: targetSize
+            modelPath: modelPath, palette: palette, engine: engine,
+            targetSize: targetSize, modelVersion: modelVersion
         )
     }
 
-    /// `segmenterSource` tag stamped onto every `MealRecord` this pipeline
-    /// produces (Decision 42 / Req §23.6). `"dev_stub"` under Phase 1 builds,
-    /// `"coreml_<modelVersion>"` under Phase 3 / Release.
-    public static var segmenterSourceTag: String {
+    /// Resolves the bundled `segmenter.mlpackage` produced by
+    /// `tools/segmenter/export.py`, throwing `segmenterModelMissing` when the
+    /// resource is absent (Req 5.2, 5.3).
+    ///
+    /// The model lives under the `Pipeline` target's own resource bundle
+    /// (`Bundle.module`, declared via `.copy("Resources")` in `Package.swift`),
+    /// not the app's `Bundle.main` (Req 5.1). It is looked up in the
+    /// `Resources` subdirectory because `.copy` of a directory preserves that
+    /// structure inside the bundle (see model-production Decision 7).
+    ///
+    /// This is kept as an always-compiled helper — separate from the
+    /// `#if DEV_STUB_SEGMENTER` gate above — so the resolution contract is
+    /// testable under the Debug / DEV_STUB SPM-test build, where the `#else`
+    /// branch that calls it is compiled out.
+    static func resolveBundledSegmenterURL(in bundle: Bundle = .module) throws -> URL {
+        guard let url = bundle.url(
+            forResource: "segmenter", withExtension: "mlpackage", subdirectory: "Resources"
+        ) else {
+            throw PipelineFactoryError.segmenterModelMissing
+        }
+        return url
+    }
+
+    /// `segmenterSource` tag stamped onto every `MealRecord` the given segmenter
+    /// produces (Decision 42 / Req §23.6, 5.4). `"dev_stub"` under Phase 1 builds,
+    /// `"coreml_<modelVersion>"` under Phase 3 / Release — where `<modelVersion>`
+    /// is the loaded model's own version (the checkpoint SHA-256 prefix), so a
+    /// persisted meal is traceable to its exact model build.
+    public static func segmenterSourceTag(for segmenter: CoreMLSegmenter) -> String {
         #if DEV_STUB_SEGMENTER
         return "dev_stub"
         #else
-        return "coreml_\(CoreMLInferenceEngine.modelVersion)"
+        return coreMLSourceTag(
+            modelVersion: segmenter.modelVersion ?? CoreMLInferenceEngine.fallbackModelVersion
+        )
         #endif
+    }
+
+    /// Pure, always-compiled interpolation of a Core ML source tag. Kept out of
+    /// the `#if DEV_STUB_SEGMENTER` gate so the `coreml_<version>` contract is
+    /// testable under the Debug / DEV_STUB SPM-test build (Req 5.4).
+    static func coreMLSourceTag(modelVersion: String) -> String {
+        "coreml_\(modelVersion)"
     }
 
     /// Pre-shutter source tag matching the `PreShutterSegmenter.Source` enum

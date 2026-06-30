@@ -5,3 +5,7 @@ ai-edge-torch>=0.2
 tensorflow>=2.16
 pillow>=10.0
 numpy>=1.26
+
+# dev/test only — the export-gate and lineage unit tests (tools/segmenter/tests/)
+# run without torch/coremltools installed.
+pytest>=8.0

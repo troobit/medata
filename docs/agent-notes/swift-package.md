@@ -182,12 +182,43 @@ Tasks 19–23 are done. Modules added in this phase:
 - `Segmentation/CoreMLSegmenter.swift` also hosts `SegmenterWeightsBudget` which
   walks `.mlpackage` directories recursively to enforce Req 8.2 (≤ 10 MB).
 - `tools/segmenter/export.py` — PyTorch DeepLabV3 + MobileNetV3-Large → Core ML
-  (`coremltools.convert`) → `MedataCore/Resources/segmenter.mlpackage` (the name
-  the `PipelineFactory` loader expects); the same
+  (`coremltools.convert`) → `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`
+  (model-production tasks 1/2, Decision 7 — moved from the old `MedataCore/Resources/`
+  path). The `Pipeline` target declares `.copy("Resources")` so this gitignored model
+  bundles into `Bundle.module` when present; `Pipeline.resolveBundledSegmenterURL`
+  loads it with `subdirectory: "Resources"` and throws `segmenterModelMissing` when
+  absent. The `#else` (CoreML) loader branch is compiled out under DEV_STUB, so that
+  resolver is an always-compiled helper to stay testable in Debug. The same
   checkpoint also exports to TFLite via `ai-edge-torch`. ONNX hop is bypassed
   (decision 28). A reference image is run through both artefacts and per-pixel
   argmax agreement asserted >99% with max-abs logit error <0.05 — disagreement
   fails the export.
+- **Model version / lineage (model-production tasks 3–5, Decision 8).**
+  `tools/segmenter/lineage.py` (pure stdlib, no torch) builds `build/lineage.json`
+  recording `checkpoint_sha256` and its first-12-hex `model_version`, plus
+  foodseg103_source / split_seed / class_mapping_version / palette_version /
+  train_config / code_commit and null `metrics` placeholders (filled by task 9).
+  Both `train.py` (after saving) and `export.py` (when given `--checkpoint`) emit it.
+  The 12-hex `model_version` is the join key: export.py stamps it into the Core ML
+  `userDefinedMetadata["medata.modelVersion"]` (task 7), and
+  `CoreMLInferenceEngine.resolveModelVersion(fromUserMetadata:)` reads it back at
+  load (instance `modelVersion`, was a static `"v0.1"`; that string is now the
+  `fallbackModelVersion`). `Pipeline.segmenterSourceTag(for:)` then stamps
+  `coreml_<modelVersion>` onto the meal — was a static `var`, now takes the
+  segmenter because the version is per-loaded-model.
+- **Export gates (model-production tasks 6–7, Decision 9).** `export.py` gates an
+  artefact before it ships: weight budget ≤ 10 MB (`validate_weight_budget`,
+  mirrors `SegmenterWeightsBudget`), 27 output channels in palette order
+  (`validate_channel_count` + `palette_channel_names` from the class-mapping json),
+  the `model_version` metadata stamp, and an equivalence **oracle** = the PyTorch
+  checkpoint (Core ML and TFLite each validated against it: argmax agreement > 99%
+  AND max abs logit err < 0.05). `preprocess_reference` replicates the RUNTIME
+  letterbox+pad path (Req 4.5). KNOWN SKEW (Decision 9): `train.py` /
+  `reference_input` use a SQUARE resize, not letterbox — a real train/serve
+  mismatch flagged for the training pipeline, not fixed here. Pure gate logic is
+  unit-tested under `tools/segmenter/tests/` (pytest, torch/coremltools-free;
+  `import export, lineage` via conftest sys.path); the oracle/channel/stamp runtime
+  steps are gated on a trained checkpoint.
 
 `SegmentationTests` target now depends on `Segmentation`, `CaptureKit`,
 `PortableContracts`. Test count after this phase: 86 (was 62 after Capture and

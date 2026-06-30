@@ -96,6 +96,17 @@ def _load_export_module():
     return module
 
 
+def _load_lineage_module():
+    """Import the sibling lineage.py by path (pure stdlib; no torch needed)."""
+    lineage_path = Path(__file__).resolve().with_name("lineage.py")
+    spec = importlib.util.spec_from_file_location("segmenter_lineage", lineage_path)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"Could not load sibling lineage module at {lineage_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_model(num_classes: int, pretrained: bool):
     """Build the training model via export.load_checkpoint for architectural parity.
 
@@ -349,6 +360,28 @@ def _save_checkpoint(model, args, last_miou: float) -> None:
     torch.save(checkpoint, str(out))
     print(f"[train] saved checkpoint -> {out}")
 
+    # Build-lineage manifest (Req 1.3, task 3). Written alongside the checkpoint
+    # under build/; provenance only, not shipped in the app bundle. mIoU metrics
+    # are populated by the validation step (task 9), null here.
+    lineage = _load_lineage_module()
+    train_config = {
+        "num_classes": args.num_classes,
+        "target_size": args.target_size,
+        "epochs": args.epochs,
+        "batch_size": args.batch_size,
+        "lr": args.lr,
+        "pretrained": not args.no_pretrained,
+    }
+    manifest = lineage.build_lineage(
+        out,
+        train_config=train_config,
+        split_seed=args.split_seed,
+        foodseg103_source=args.foodseg103_source,
+        palette_version=PALETTE_VERSION,
+    )
+    lineage_path = lineage.write_lineage(manifest, out.parent / "lineage.json")
+    print(f"[train] lineage -> {lineage_path} (model_version={manifest['model_version']})")
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
@@ -361,6 +394,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--out", default="tools/segmenter/build/checkpoint.pt")
+    parser.add_argument("--split-seed", type=int, default=None,
+                        help="Dataset split seed (from prepare_dataset.py); recorded in build lineage.")
+    parser.add_argument("--foodseg103-source", default=None,
+                        help="FoodSeg103 source/version string; recorded in build lineage.")
     parser.add_argument("--device", default="auto",
                         help="auto (default) detects cuda/mps/cpu; or pass an explicit device.")
     parser.add_argument("--val-every", type=int, default=1,

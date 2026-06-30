@@ -22,13 +22,13 @@ metadata:
 
 ## Bundling and Loader Alignment
 
-- [ ] 1. Write loader test for the Bundle.module resource path <!-- id:qkb6beh -->
+- [x] 1. Write loader test for the Bundle.module resource path <!-- id:qkb6beh -->
   - Add a MedataCore test (Pipeline target) asserting makeSegmenter resolves a bundled `segmenter.mlpackage` via `Bundle.module` and constructs the Core ML pipeline without throwing when the resource is present (use a tiny fixture .mlpackage, or the real one once it lands).
   - Assert that when the resource is absent the factory still throws `PipelineFactoryError.segmenterModelMissing` (the dev-stub `#if DEV_STUB_SEGMENTER` path is out of scope for this test).
   - Red before task 2: fails today because the loader uses `Bundle.main` and no resource is declared.
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3)
 
-- [ ] 2. Switch loader to Bundle.module and declare the bundled package resource <!-- id:qkb6bei -->
+- [x] 2. Switch loader to Bundle.module and declare the bundled package resource <!-- id:qkb6bei -->
   - At `PipelineFactory.swift:61`, inside the `#else` / non-stub branch only, change `Bundle.main.url(forResource:withExtension:)` to `Bundle.module.url(...)`; leave the `#if DEV_STUB_SEGMENTER` branch (`:57-59`) and the `segmenterModelMissing` throw untouched (Req 5.3).
   - Declare `resources: [.copy("Resources/segmenter.mlpackage")]` on the `Pipeline` target in `Package.swift`, mirroring the `Foods` exemplar at `Package.swift:75-84`.
   - Create `MedataCore/Sources/Pipeline/Resources/` (SPM requires the resource live under the target dir) and move the export.py output path to `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` (was `MedataCore/Resources/segmenter.mlpackage`); keep this path string in lockstep with task 7 and task 13.
@@ -39,20 +39,20 @@ metadata:
 
 ## Lineage and Model Versioning
 
-- [ ] 3. Emit the build lineage manifest from train.py / export.py <!-- id:qkb6bem -->
+- [x] 3. Emit the build lineage manifest from train.py / export.py <!-- id:qkb6bem -->
   - `tools/segmenter/train.py` and `tools/segmenter/export.py` emit `build/lineage.json` recording: `checkpoint_sha256`, `foodseg103_source`, `split_seed`, `class_mapping_version`, `palette_version`, `train_config`, `code_commit`, and a `metrics` object (`mean_iou`, `per_class_iou`, `carb_priority_iou`).
   - `checkpoint_sha256` is the join key: its first 12 hex form the `modelVersion` stamped by task 7 and read by task 5; `metrics` is populated by the validation step (task 9).
   - Reproducibility is to metric level (a re-run meets the same mIoU bar), not byte-identity (design §3.3).
   - Python-side; the manifest is build provenance and is not shipped in the app bundle.
   - Requirements: [1.3](requirements.md#1.3)
 
-- [ ] 4. Write test for coreml_<sha12> source-tag derivation <!-- id:qkb6bej -->
+- [x] 4. Write test for coreml_<sha12> source-tag derivation <!-- id:qkb6bej -->
   - Add a MedataCore test: given an `MLModel` whose `userDefinedMetadata["medata.modelVersion"]` carries a known id, `segmenterSourceTag` yields `coreml_<id>` (distinct from `dev_stub`).
   - Cover the absent-key fallback: a model with no `medata.modelVersion` key falls back to the back-compat constant rather than producing an empty tag.
   - Red before task 5: today `modelVersion` is the hardcoded `"v0.1"` at `CoreMLSegmenter.swift:136`.
   - Requirements: [5.4](requirements.md#5.4)
 
-- [ ] 5. Derive modelVersion from loaded model metadata <!-- id:qkb6bek -->
+- [x] 5. Derive modelVersion from loaded model metadata <!-- id:qkb6bek -->
   - Change `CoreMLInferenceEngine.modelVersion` (`CoreMLSegmenter.swift:136`) from a static `String` to an instance value read from the loaded `MLModel.userDefinedMetadata["medata.modelVersion"]` at init (`CoreMLSegmenter.swift:146-182`); default to the existing constant only if the key is absent (back-compat for fixtures).
   - `segmenterSourceTag` (`PipelineFactory.swift:79-85`) then interpolates `coreml_<sha12>` into `MealRecord.segmenterSource` (`Pipeline.swift:435`) so a persisted meal is traceable to its exact build.
   - Key string `medata.modelVersion` is the contract shared with task 7's export stamp; keep them identical.
@@ -61,13 +61,13 @@ metadata:
 
 ## Export Gates
 
-- [ ] 6. Write export.py gate tests against a fixed reference set <!-- id:qkb6bel -->
+- [x] 6. Write export.py gate tests against a fixed reference set <!-- id:qkb6bel -->
   - Add export.py-level checks (Python): recursive `.mlpackage` weight sum ≤ 10 MB mirroring `SegmenterWeightsBudget.validate` (`CoreMLSegmenter.swift:89-95`); exported model declares 27 output channels in `ClassPalette.v1Standard` order; `userDefinedMetadata["medata.modelVersion"]` is stamped.
   - Structurally cover the equivalence oracle and preprocessing-parity assertions so the code path is exercised; the full per-pixel argmax / logit-error run against a real `checkpoint.pt` is gated on the GPU training prerequisite (stage 3).
   - Red before task 7.
   - Requirements: [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
 
-- [ ] 7. Implement the export.py equivalence, parity, channel, budget and metadata gates <!-- id:qkb6ben -->
+- [x] 7. Implement the export.py equivalence, parity, channel, budget and metadata gates <!-- id:qkb6ben -->
   - Flip the equivalence oracle to the PyTorch `checkpoint.pt` (was Core ML-vs-TFLite): run the fixed reference set through the checkpoint and the exported artefact; fail unless per-pixel argmax agreement > 99% AND max abs logit error < 0.05 (Req 4.3). TFLite, when produced, is validated against the same PyTorch oracle, not against Core ML.
   - Feed oracle inputs through the runtime preprocessing path (colour space, normalisation, resize interpolation, channel order matching training and `SegmenterPreProcessor.defaultTargetSize`) so a training/inference mismatch surfaces as an oracle failure (Req 4.5).
   - Assert 27 output channels in palette order; fail on mismatch (Req 4.4). Recursively sum the `.mlpackage` weights and fail over 10 MB, mirroring `SegmenterWeightsBudget.validate` (Req 4.2). FP16 export is unchanged (Req 4.1).
