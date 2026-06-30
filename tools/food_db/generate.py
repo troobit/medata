@@ -23,10 +23,50 @@ Requirements: python3 (no external deps beyond stdlib sqlite3)
 
 import sqlite3
 import os
+import re
+from pathlib import Path
 
 OUTPUT_DIR = "MedataCore/Sources/Foods/Resources"
 COFID_DB  = os.path.join(OUTPUT_DIR, "cofid_db.sqlite")
 AFCD_DB = os.path.join(OUTPUT_DIR, "afcd_db.sqlite")
+
+# Palette edition this bake stamps into meta.palette_version. It MUST equal
+# ClassPalette.version (the Swift single source of truth); verify_palette_lock
+# enforces that before any DB is written (Req 8.4 / design §3.6 bake lock).
+PALETTE_VERSION = "v1"
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_CLASS_PALETTE_SWIFT = _REPO_ROOT / "MedataCore/Sources/Segmentation/ClassPalette.swift"
+
+
+def class_palette_version() -> str:
+    """Read ClassPalette.version from v1Standard in ClassPalette.swift.
+
+    The lock tracks the Swift source directly rather than a duplicated constant so
+    a future palette bump there forces this bake to be reconciled rather than
+    silently shipping a stale-edition DB.
+    """
+    text = _CLASS_PALETTE_SWIFT.read_text()
+    match = re.search(r'version:\s*"([^"]+)"', text)
+    if match is None:
+        raise SystemExit(
+            f"could not read ClassPalette.version from {_CLASS_PALETTE_SWIFT}"
+        )
+    return match.group(1)
+
+
+def verify_palette_lock(baked_palette_version: str) -> None:
+    """Fail the bake when the DB edition would diverge from the segmenter palette
+    (Req 8.4). A mismatch means the class indexing the DB is keyed by no longer
+    matches the palette the model emits — shipping it would mis-key every lookup.
+    """
+    expected = class_palette_version()
+    if baked_palette_version != expected:
+        raise SystemExit(
+            f"palette/DB edition mismatch: baking palette_version "
+            f"'{baked_palette_version}' but ClassPalette.version is '{expected}' "
+            f"({_CLASS_PALETTE_SWIFT}). Bake aborted (Req 8.4)."
+        )
 
 SCHEMA_FOODS = """
 CREATE TABLE IF NOT EXISTS foods (
@@ -124,51 +164,65 @@ AFCD_DATA = [
     ("vegemite",         "Vegemite (yeast extract)",       1.20, 740.0,  16.5, 25.0,  0.1,  3.0,  1.0, "uncalibrated_unity", "AFCD 2024", "AFCD 2024"),
 ]
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+def bake() -> None:
+    """Generate cofid_db.sqlite and afcd_db.sqlite into OUTPUT_DIR.
 
-# --- CoFID database ---
-if os.path.exists(COFID_DB):
-    os.remove(COFID_DB)
+    Wrapped in a function (not run at import) so the palette-lock predicate can be
+    unit-tested without rebaking the tracked DB artefacts.
+    """
+    # Palette <-> DB edition lock (Req 8.4): abort before writing anything if the
+    # edition we would stamp has drifted from ClassPalette.version.
+    verify_palette_lock(PALETTE_VERSION)
 
-conn = sqlite3.connect(COFID_DB)
-conn.executescript(SCHEMA_FOODS)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-conn.execute("INSERT INTO meta VALUES ('edition',         'CoFID 2024')")
-conn.execute("INSERT INTO meta VALUES ('palette_version', 'v1')")
-cofid_attribution = (
-    "McCance and Widdowson's The Composition of Foods Integrated Dataset "
-    "(CoFID), Food Standards Agency, Crown Copyright, Open Government "
-    "Licence v3. https://www.gov.uk/government/publications/"
-    "composition-of-foods-integrated-dataset-cofid"
-)
-conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (cofid_attribution,))
+    # --- CoFID database ---
+    if os.path.exists(COFID_DB):
+        os.remove(COFID_DB)
 
-conn.executemany(
-    "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-    FOOD_DATA
-)
-conn.commit()
-conn.close()
-print(f"Generated {COFID_DB} with {len(FOOD_DATA)} food classes.")
+    conn = sqlite3.connect(COFID_DB)
+    conn.executescript(SCHEMA_FOODS)
 
-# --- AFCD database ---
-if os.path.exists(AFCD_DB):
-    os.remove(AFCD_DB)
+    conn.execute("INSERT INTO meta VALUES ('edition',         'CoFID 2024')")
+    conn.execute("INSERT INTO meta VALUES ('palette_version', ?)", (PALETTE_VERSION,))
+    cofid_attribution = (
+        "McCance and Widdowson's The Composition of Foods Integrated Dataset "
+        "(CoFID), Food Standards Agency, Crown Copyright, Open Government "
+        "Licence v3. https://www.gov.uk/government/publications/"
+        "composition-of-foods-integrated-dataset-cofid"
+    )
+    conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (cofid_attribution,))
 
-conn = sqlite3.connect(AFCD_DB)
-conn.executescript(SCHEMA_AFCD)
-conn.execute("INSERT INTO meta VALUES ('edition',         'AFCD 2024')")
-conn.execute("INSERT INTO meta VALUES ('palette_version', 'v1')")
-afcd_attribution = (
-    "Australian Food Composition Database (AFCD), Food Standards Australia "
-    "New Zealand, CC-BY-4.0. "
-    "https://www.foodstandards.gov.au/science/monitoringnutrients/afcd"
-)
-conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (afcd_attribution,))
-conn.executemany(
-    "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-    AFCD_DATA
-)
-conn.commit()
-conn.close()
-print(f"Generated {AFCD_DB} with {len(AFCD_DATA)} food classes.")
+    conn.executemany(
+        "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        FOOD_DATA
+    )
+    conn.commit()
+    conn.close()
+    print(f"Generated {COFID_DB} with {len(FOOD_DATA)} food classes.")
+
+    # --- AFCD database ---
+    if os.path.exists(AFCD_DB):
+        os.remove(AFCD_DB)
+
+    conn = sqlite3.connect(AFCD_DB)
+    conn.executescript(SCHEMA_AFCD)
+    conn.execute("INSERT INTO meta VALUES ('edition',         'AFCD 2024')")
+    conn.execute("INSERT INTO meta VALUES ('palette_version', ?)", (PALETTE_VERSION,))
+    afcd_attribution = (
+        "Australian Food Composition Database (AFCD), Food Standards Australia "
+        "New Zealand, CC-BY-4.0. "
+        "https://www.foodstandards.gov.au/science/monitoringnutrients/afcd"
+    )
+    conn.execute("INSERT INTO meta VALUES ('attribution', ?)", (afcd_attribution,))
+    conn.executemany(
+        "INSERT INTO foods VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        AFCD_DATA
+    )
+    conn.commit()
+    conn.close()
+    print(f"Generated {AFCD_DB} with {len(AFCD_DATA)} food classes.")
+
+
+if __name__ == "__main__":
+    bake()

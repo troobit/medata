@@ -102,12 +102,12 @@ metadata:
 
 ## Calibration Bake Lock
 
-- [ ] 11. Write test for the palette↔DB edition bake lock <!-- id:qkb6beq -->
+- [x] 11. Write test for the palette↔DB edition bake lock <!-- id:qkb6beq -->
   - Add a test that `tools/food_db/generate.py` fails the bake when `meta.palette_version` does not equal `ClassPalette.version` (currently `'v1'`).
   - Red before task 12.
   - Requirements: [8.4](requirements.md#8.4)
 
-- [ ] 12. Enforce the palette_version edition lock in generate.py <!-- id:qkb6ber -->
+- [x] 12. Enforce the palette_version edition lock in generate.py <!-- id:qkb6ber -->
   - At `tools/food_db/generate.py:136-137`, add/verify the check so baking a β_c table fails when `meta.palette_version` ≠ `ClassPalette.version` (`ClassPalette.swift:41-53`).
   - This is the only code part of the otherwise deferred β_c calibrate+bake stage (design §2.1 stage 10); fixture capture and the calibrate/bake execution are prerequisites.
   - Blocked-by: qkb6beq (Write test for the palette↔DB edition bake lock)
