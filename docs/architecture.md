@@ -390,7 +390,7 @@ under `specs/bugfixes/` — go through `specs/OVERVIEW.md`.
 | Change the single-vs-two-view rule | `Pipeline/CapturePathDispatch.swift` **and** `App/CapturePathDecider.swift` |
 | Add/modify a persisted field | edit the `.proto` in `PortableContracts/Schemas/`, regenerate, update `Persistence` |
 | Change a volume algorithm | `Volume/` (Metal kernels in `Volume/Kernels/`) + `specs/estimation/pipeline/design.md` §6.6/§6.7 |
-| Retrain/replace the segmenter | `tools/segmenter/export.py` → `segmenter.mlpackage` (the canonical artefact name everywhere: export output, `.gitignore`, and the `PipelineFactory.makeSegmenter` loader all agree). **Known gap (Phase 3):** the loader reads it from `Bundle.main` rather than via `Bundle.module` / the `GRDBFoodDatabase.bundled()` pattern, and the resource is not yet declared in `Package.swift`; align the loader to the `Bundle.module` pattern when the trained model lands. |
+| Retrain/replace the segmenter | `tools/segmenter/export.py` → `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` (the canonical artefact name everywhere: export output, `.gitignore`, and the `PipelineFactory.makeSegmenter` loader all agree). **Gap closed (model-production tasks 1–2):** the loader now resolves the model via `Bundle.module` (the `GRDBFoodDatabase.bundled()` pattern), and the `Pipeline` target declares `.copy("Resources")` in `Package.swift` so the gitignored `.mlpackage` bundles automatically; a missing model still throws `PipelineFactoryError.segmenterModelMissing`. |
 | Regenerate the food DB | `tools/food_db/generate.py` |
 | Change confidence thresholds | `Confidence/` + `App/ResultView.swift` (pill labels) |
 | Add an app-facing core type | re-export it from `Pipeline.swift` (`@_exported import`) |

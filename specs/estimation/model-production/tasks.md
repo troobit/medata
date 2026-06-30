@@ -78,13 +78,13 @@ metadata:
 
 ## Validation Reporting
 
-- [ ] 8. Write test for export-eligibility decision and IoU reporting <!-- id:qkb6beo -->
+- [x] 8. Write test for export-eligibility decision and IoU reporting <!-- id:qkb6beo -->
   - Add a test (Python) over synthetic per-class IoU inputs: a checkpoint is export-eligible only when mean IoU ≥ 0.60 AND every carb-priority class (white_rice, brown_rice, pasta, bread_white, bread_wholemeal, potato_boiled, potato_mashed, chips_fries) ≥ 0.50.
   - Assert the reporter emits mean + per-class + carb-priority IoU and records the shortfall when below bar.
   - Red before task 9. Pure decision logic — independent of the gated GPU run that produces the real IoUs.
   - Requirements: [3.2](requirements.md#3.2), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6)
 
-- [ ] 9. Implement validation mIoU / per-class / carb-priority reporting into lineage <!-- id:qkb6bep -->
+- [x] 9. Implement validation mIoU / per-class / carb-priority reporting into lineage <!-- id:qkb6bep -->
   - The validation step computes and reports mean IoU, per-class IoU, and the carb-priority-class IoU subset on the held-out split, and records export-eligibility (≥ 0.60 mean, ≥ 0.50 each carb-priority) plus any shortfall into `build/lineage.json` `metrics` (Req 3.3, 3.4).
   - A sub-bar checkpoint is marked not export-eligible; a carb-priority class that cannot meet 0.50 after refinement is surfaced as a known limitation (flag low-confidence or map to `unknown_food`) rather than blocking indefinitely (Req 3.6).
   - Python-side. The *running* of this on real held-out data is gated on the GPU training prerequisite; this task is the code that computes, reports, and records.
@@ -93,7 +93,7 @@ metadata:
 
 ## Uncalibrated Honesty
 
-- [ ] 10. Surface uncalibrated low-confidence honesty in ResultView
+- [x] 10. Surface uncalibrated low-confidence honesty in ResultView
   - In `ResultView`, when `meal.perClassCalibration` is non-`calibrated` (`uncalibrated_unity`), render a low-confidence indication reusing the `ConfidencePill` styling / very-low surface (`ResultView.swift:156`, `:220-248`); no new view type.
   - Add one new copy string (metric-only English) conveying the known upward (over-estimating) volume bias — the carbohydrate value is more likely high than low (Req 7.3). Keep it distinct from the existing `dev_stub` placeholder banner, which marks *fake* numbers; this marks a *real but uncalibrated* number.
   - Confirm (no change): β = 1.0 / `uncalibrated_unity` is already the DB default (`tools/food_db/generate.py:70-96`) and `MealRecord.perClassCalibration` already persists the status (`Pipeline.swift:428-429`) — no schema change.
@@ -102,12 +102,12 @@ metadata:
 
 ## Calibration Bake Lock
 
-- [ ] 11. Write test for the palette↔DB edition bake lock <!-- id:qkb6beq -->
+- [x] 11. Write test for the palette↔DB edition bake lock <!-- id:qkb6beq -->
   - Add a test that `tools/food_db/generate.py` fails the bake when `meta.palette_version` does not equal `ClassPalette.version` (currently `'v1'`).
   - Red before task 12.
   - Requirements: [8.4](requirements.md#8.4)
 
-- [ ] 12. Enforce the palette_version edition lock in generate.py <!-- id:qkb6ber -->
+- [x] 12. Enforce the palette_version edition lock in generate.py <!-- id:qkb6ber -->
   - At `tools/food_db/generate.py:136-137`, add/verify the check so baking a β_c table fails when `meta.palette_version` ≠ `ClassPalette.version` (`ClassPalette.swift:41-53`).
   - This is the only code part of the otherwise deferred β_c calibrate+bake stage (design §2.1 stage 10); fixture capture and the calibrate/bake execution are prerequisites.
   - Blocked-by: qkb6beq (Write test for the palette↔DB edition bake lock)
@@ -115,7 +115,7 @@ metadata:
 
 ## Runbook and Architecture Sync
 
-- [ ] 13. Sync ml-training.md and architecture.md with the loader/export change <!-- id:qkb6bes -->
+- [x] 13. Sync ml-training.md and architecture.md with the loader/export change <!-- id:qkb6bes -->
   - Update `docs/ml-training.md` §6 (export output path now `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`) and §7 (bundling via the `Bundle.module` package-resource pattern) in lockstep with tasks 2 and 7.
   - Update `docs/architecture.md:393` to record that the §9 loader gap is now closed (was `Bundle.main`).
   - Req 1.4: the runbook and the tracked process must not diverge — change them in the same commit as the code.

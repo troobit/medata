@@ -13,11 +13,11 @@ the iOS app depends on at runtime:
 
 1. **The segmenter** — a 27-class semantic segmentation network
    (`segmenter.mlpackage`) bundled into the iOS binary, run on the Apple Neural
-   Engine. `export.py` writes `segmenter.mlpackage` and
-   `PipelineFactory.makeSegmenter` loads that exact name. (Runtime bundling still
-   reads it from `Bundle.main` rather than `Bundle.module`; that loader alignment
-   is a Phase 3 task — see the "Known gap" note in
-   [`architecture.md`](architecture.md) §9.)
+   Engine. `export.py` writes it to
+   `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` and
+   `PipelineFactory.makeSegmenter` loads that exact name via `Bundle.module`
+   (the loader-alignment gap is now closed — model-production tasks 1–2; see
+   [`architecture.md`](architecture.md) §9).
 2. **The β_c table** — a per-class bulk-correction factor baked into
    `cofid_db.sqlite`, applied to volume estimates before macro calculation.
 
@@ -358,32 +358,44 @@ python tools/segmenter/export.py \
     --checkpoint tools/segmenter/build/checkpoint.pt \
     --num-classes 27 --target-size 513 \
     --reference-image tests/fixtures/segmenter/reference.png \
-    --out-coreml MedataCore/Resources/segmenter.mlpackage \
+    --out-coreml MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage \
     --out-tflite tools/segmenter/build/segmenter.tflite
 ```
 
-`--out-coreml` already defaults to `MedataCore/Resources/segmenter.mlpackage` —
-the exact name the runtime loader (`PipelineFactory.makeSegmenter`) expects.
-Don't rename it. `tests/fixtures/segmenter/reference.png` must exist and be
-representative of real plate captures.
+`--out-coreml` already defaults to
+`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` — the exact location
+the runtime loader (`PipelineFactory.makeSegmenter`) resolves via `Bundle.module`
+(model-production tasks 2/5). The path moved under the `Pipeline` target so SPM
+bundles it as a package resource; don't rename it.
+`tests/fixtures/segmenter/reference.png` must exist and be representative of real
+plate captures. The export also runs its gates (≤ 10 MB weights, 27 channels in
+palette order, PyTorch-oracle equivalence + runtime-preprocessing parity) and
+stamps the checkpoint's 12-hex `model_version` into the Core ML metadata
+(`build/lineage.json` is the join key).
 
 ## 7. Bundling into the iOS app
 
 ### Why
 
-The exported artefact lands at `MedataCore/Resources/segmenter.mlpackage`
-(gitignored; bundled at build time). The app selects its inference engine at
+The exported artefact lands at
+`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` (gitignored; bundled
+at build time as a package resource). The app selects its inference engine at
 compile time: **Debug / `DEV_STUB_SEGMENTER`** uses `StubInferenceEngine` (no
 model file, placeholder estimates, `segmenterSource = "dev_stub"`); **Release**
 loads the real model via `PipelineFactory` and stamps
-`segmenterSource = "coreml_<modelVersion>"`. So to exercise the trained model you
-must build Release. The three on-device bars (§1) are only meaningful here — and
-ANE residency in particular is a manual check that is easy to miss.
+`segmenterSource = "coreml_<modelVersion>"` (the 12-hex checkpoint id read back
+from the Core ML metadata, model-production task 5). So to exercise the trained
+model you must build Release. The three on-device bars (§1) are only meaningful
+here — and ANE residency in particular is a manual check that is easy to miss.
 
-> **Loader tidy-up (tracked, not blocking):** the loader reads
-> `segmenter.mlpackage` from `Bundle.main` rather than via `Bundle.module`, and
-> the resource is not yet declared in `Package.swift`. Align it to the
-> `GRDBFoodDatabase.bundled()` pattern when convenient — see
+> **Bundling (loader gap closed, model-production tasks 1–2):** the loader
+> resolves `segmenter.mlpackage` via `Bundle.module` (the
+> `GRDBFoodDatabase.bundled()` pattern), and the `Pipeline` target declares
+> `resources: [.copy("Resources")]` in `Package.swift`. A directory `.copy`
+> (not a named-file copy) is used so clean Debug + Release builds stay green
+> before any model exists, and the gitignored `.mlpackage` bundles automatically
+> once `export.py` drops it in (Decision 7). A missing model still throws
+> `PipelineFactoryError.segmenterModelMissing`. See
 > [`architecture.md`](architecture.md) §9.
 
 ### Runbook
@@ -528,7 +540,7 @@ shipped app is wrong.
 - [`agent-notes/pipeline-wiring-status.md`](agent-notes/pipeline-wiring-status.md)
   — what's built vs what the trained checkpoint unblocks (only Blocker 1 remains).
 - [`architecture.md`](architecture.md) §9 — the `Bundle.main` → `Bundle.module`
-  loader gap (§7).
+  loader alignment, now closed (model-production tasks 1–2; §7).
 - [`specs/capture/rawframe-rgb-conversion/`](../specs/capture/rawframe-rgb-conversion/) +
   [`agent-notes/camera-input-fix.md`](agent-notes/camera-input-fix.md) — the
   shipped BGRA8 capture conversion behind the train/serve-skew caveat (§5, §11).
