@@ -57,7 +57,7 @@ This spec defines the repeatable process that takes the on-device food segmenter
 
 **Acceptance Criteria:**
 
-1. <a name="4.1"></a>The process SHALL export `build/checkpoint.pt` to `MedataCore/Resources/segmenter.mlpackage` via `tools/segmenter/export.py` with FP16 weights.  
+1. <a name="4.1"></a>The process SHALL export `build/checkpoint.pt` to `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` via `tools/segmenter/export.py` with FP16 weights.  
 2. <a name="4.2"></a>The exported `segmenter.mlpackage` weights SHALL be ≤ 10 MB (pipeline Req 8.2) and SHALL pass `SegmenterWeightsBudget.validate(at:)`.  
 3. <a name="4.3"></a>The export SHALL run a small fixed set of reference images through the PyTorch checkpoint (the equivalence oracle) and the Core ML artefact and SHALL fail unless per-pixel argmax agreement is > 99% and maximum absolute logit error is < 0.05; the TFLite artefact, when produced, SHALL be validated against the same PyTorch oracle, not against Core ML.  
 4. <a name="4.4"></a>The exported model SHALL declare 27 output channels in the palette order of [3.3](#3.3); a channel-count mismatch SHALL fail the export.  

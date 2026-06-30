@@ -169,7 +169,7 @@ Two sources of truth, kept in sync by hand because they're tiny:
 
 | File | Role |
 | --- | --- |
-| [tools/food_db/generate.py:72-95](../tools/food_db/generate.py#L72-L95) | The 24 food class IDs + names + density / macro / β rows that get baked into `cofid_db.sqlite`. |
+| [tools/food_db/generate.py:120-148](../tools/food_db/generate.py#L120-L148) | The 24 food class IDs + names + density / macro / β rows that get baked into `cofid_db.sqlite`. |
 | [MedataCore/Sources/Segmentation/ClassPalette.swift:41-53](../MedataCore/Sources/Segmentation/ClassPalette.swift#L41-L53) | Swift `ClassPalette.v1Standard` — the runtime palette consumed by `CoreMLSegmenter`. Index order must match `FOOD_DATA`. |
 
 When training, use the Python list — that's the one that maps onto the SQLite
@@ -244,7 +244,7 @@ mkdir -p data/foodseg103
 
 **3b. Build the 103→24 class mapping.** Map each FoodSeg103 class onto one of
 our 24, fold it into a composite (`mixed_vegetables`), or drop it. The canonical
-24 IDs/names live in `tools/food_db/generate.py:72-95` — map **to that
+24 IDs/names live in `tools/food_db/generate.py:120-148` — map **to that
 ordering** (§2), never reorder. Annotate composites as a **single** region:
 pourable accompaniments belong to the solid's class (Req 8.7) — curry sauce on
 rice is the rice class, not a separate region.
@@ -492,7 +492,7 @@ shipped app is wrong.
 - **Channel ordering is load-bearing and silent on failure** (§2). The Swift
   runtime indexes `ProbabilityTensor` by exact integer offsets for voxel
   ownership *and* macro lookup. Reordering classes during training corrupts the
-  app with no crash. Always train against `tools/food_db/generate.py:72-95`.
+  app with no crash. Always train against `tools/food_db/generate.py:120-148`.
 - **Train/serve colour-space skew is invisible to mIoU** (§5). FoodSeg103 is
   RGB; the device path emits BGRA8 via `PixelBufferAdapter`. Keep the training
   input transform matched to `SegmenterPreProcessor`, and prefer validating a few
@@ -548,7 +548,7 @@ shipped app is wrong.
   resources (the `.mlpackage`, food DB) are declared and loaded.
 
 ### Sources of truth that must stay in sync (channel ordering — §2)
-- [`tools/food_db/generate.py`](../tools/food_db/generate.py) (lines 72–95) — the
+- [`tools/food_db/generate.py`](../tools/food_db/generate.py) (lines 120–148) — the
   24 class IDs/names/density/macro/β rows baked into `cofid_db.sqlite`. **Train
   against this ordering.**
 - [`ClassPalette.swift`](../MedataCore/Sources/Segmentation/ClassPalette.swift)

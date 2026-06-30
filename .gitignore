@@ -1,26 +1,14 @@
-# Dependencies
-node_modules/
-
-# Build output
-dist/
-build/
-.svelte-kit/
-
-# Deployment
-.vercel/
-.netlify/
-.cloudflare/
-.firebase/
-.amplify/
-.output/
-.wrangler/
-
 # Environment files
 .env
 env.*
 .env.*
 !env.example
 !.env.example
+
+# Tmp
+tmp/
+temp/
+
 
 # IDE
 .idea/

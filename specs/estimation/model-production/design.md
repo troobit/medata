@@ -45,14 +45,14 @@ Refinement discipline (Req [1.4](requirements.md#1.4)): a change to any stage up
 |---|---|
 | Loader (the §9 known gap) | `Pipeline.makeSegmenter` — `MedataCore/Sources/Pipeline/PipelineFactory.swift:55-74` |
 | Source tag | `Pipeline.segmenterSourceTag` — `PipelineFactory.swift:79-85`; stamped at `Pipeline.swift:435` into `MealRecord.segmenterSource` (`MealRecord.swift:20`) |
-| modelVersion source | `CoreMLInferenceEngine.modelVersion` — `CoreMLSegmenter.swift:136` (currently hardcoded `"v0.1"`) |
+| modelVersion source | `CoreMLInferenceEngine.modelVersion` — resolved from model metadata via `CoreMLSegmenter.resolveModelVersion` (`CoreMLSegmenter.swift:154`); falls back to `"v0.1"` (`:149`) when the key is absent |
 | Runtime wrapper | `CoreMLInferenceEngine` init — `CoreMLSegmenter.swift:146-182` (CHW/HWC detect, channel count, `SegmentationError.modelLoadFailed`) |
-| Weights budget | `SegmenterWeightsBudget.validate(at:)` — `CoreMLSegmenter.swift:89-95` (`maxBytes = 10*1024*1024`) |
+| Weights budget | `SegmenterWeightsBudget.validate(at:)` — `CoreMLSegmenter.swift:94-101` (`maxBytes = 10*1024*1024`) |
 | Palette | `ClassPalette.v1Standard` / `.version="v1"` — `ClassPalette.swift:41-53` |
 | Resource exemplar | `Foods` target `.copy("Resources/cofid_db.sqlite")` — `Package.swift:75-84`; pattern `GRDBFoodDatabase.bundled()` — `GRDBFoodDatabase.swift:23-32` |
 | Honesty UI | `ConfidencePill` (`App/ConfidencePill.swift:11-56`), `ConfidenceLevel` (`App/ResultView.swift:11-41`), pill render `ResultView.swift:156`, very-low surface `ResultView.swift:220-248` |
 | Calibration status | `BetaCalibrationStatus` (`FoodEntry.swift:41-45`), stamped `Pipeline.swift:428-429` → `MealRecord.perClassCalibration` (`MealRecord.swift:28`) |
-| β bake lock | `tools/food_db/generate.py:70-96` (defaults), `:136-137` (`meta.palette_version='v1'`) |
+| β bake lock | `tools/food_db/generate.py:120-148` (defaults), `:136-137` (`meta.palette_version='v1'`) |
 
 ### 2.3 Bundle.main parity audit (Req [5.1](requirements.md#5.1))
 
@@ -86,7 +86,7 @@ Invariants held: the `#if DEV_STUB_SEGMENTER` branch (`:57-59`) is untouched ([5
 
 ### 3.2 segmenterSource / modelVersion derivation (Req [5.4](requirements.md#5.4), [1.3](requirements.md#1.3))
 
-Today `segmenterSourceTag` (`PipelineFactory.swift:83`) interpolates the hardcoded `CoreMLInferenceEngine.modelVersion = "v0.1"` (`CoreMLSegmenter.swift:136`). Req [5.4](requirements.md#5.4) requires `<modelVersion>` to derive from the checkpoint SHA-256 so a persisted `MealRecord` is traceable to its exact build.
+`segmenterSourceTag` (`PipelineFactory.swift:105`) stamps `CoreMLInferenceEngine.modelVersion`, which now resolves from the loaded model's `medata.modelVersion` metadata (`CoreMLSegmenter.swift:154`), falling back to `"v0.1"` only when the key is absent. Req [5.4](requirements.md#5.4) requires `<modelVersion>` to derive from the checkpoint SHA-256 so a persisted `MealRecord` is traceable to its exact build.
 
 Design: make the model self-describing rather than carry a constant.
 
@@ -120,7 +120,7 @@ This keeps a single source of truth (the baked model), survives bundling, and ne
 | Gate | Req | export.py behavior |
 |---|---|---|
 | FP16 export | [4.1](requirements.md#4.1) | unchanged (FP16 already) |
-| Weights ≤ 10 MB | [4.2](requirements.md#4.2) | recursively sum `.mlpackage` dir; mirror `SegmenterWeightsBudget.validate` (`CoreMLSegmenter.swift:89-95`); fail on over-budget |
+| Weights ≤ 10 MB | [4.2](requirements.md#4.2) | recursively sum `.mlpackage` dir; mirror `SegmenterWeightsBudget.validate` (`CoreMLSegmenter.swift:94-101`); fail on over-budget |
 | Equivalence oracle | [4.3](requirements.md#4.3) | **changed**: oracle is now the **PyTorch checkpoint**, not the Core ML model. Run the fixed reference set through `checkpoint.pt` *and* the exported artefact; fail unless per-pixel argmax agreement > 99% **and** max abs logit error < 0.05. The current CoreML-vs-TFLite comparison is replaced; TFLite, when produced, is validated against the **same PyTorch oracle** (not against Core ML). |
 | Channel count = 27 | [4.4](requirements.md#4.4) | assert exported model declares 27 output channels in `ClassPalette.v1Standard` order; fail on mismatch (runtime also detects via `CoreMLInferenceEngine` channel resolution `:146-182`) |
 | Preprocessing parity | [4.5](requirements.md#4.5) | **new**: feed oracle inputs through the **runtime preprocessing path** (colour space, normalisation, resize interpolation, channel order matching training and `SegmenterPreProcessor.defaultTargetSize`). A training/inference preprocessing mismatch must surface as an oracle failure, not pass silently. |
@@ -130,7 +130,7 @@ The two substantive `export.py` changes are: (a) the oracle reference flips to t
 ### 3.5 Uncalibrated-honesty surface (Req [7.1](requirements.md#7.1)–[7.3](requirements.md#7.3))
 
 State already present:
-- β = 1.0 / `uncalibrated_unity` is the DB default for every class (`tools/food_db/generate.py:70-96`); **no change** needed for [7.1](requirements.md#7.1)'s value.
+- β = 1.0 / `uncalibrated_unity` is the DB default for every class (`tools/food_db/generate.py:120-148`); **no change** needed for [7.1](requirements.md#7.1)'s value.
 - `MealRecord.perClassCalibration` already persists the `BetaCalibrationStatus` used (`Pipeline.swift:428-429`, `MealRecord.swift:28`) — satisfies [7.1](requirements.md#7.1)'s "persist the status".
 
 Change needed for [7.2](requirements.md#7.2)/[7.3](requirements.md#7.3): the existing `ConfidencePill` keys on σ thresholds (`ResultView.swift:11-41`), which is *uncertainty width*, not *calibration status*. An uncalibrated meal must be flagged on its own axis. Design:
@@ -152,7 +152,7 @@ weighed meals (≥30/class, GATED) → make_fixtures.py (SHA-256-stamped, checkp
 ```
 
 - All harness code is under `#if HARNESS_ENABLED` (`Package.swift:7-16`); never in the iOS app target. No code change required now — the path is wired (pipeline tasks 58–65).
-- Bake lock (Req [8.4](requirements.md#8.4)): `tools/food_db/generate.py:136-137` must set `meta.palette_version='v1'` matching `ClassPalette.version` (`ClassPalette.swift`); a mismatch fails the bake.
+- Bake lock (Req [8.4](requirements.md#8.4)): `tools/food_db/generate.py:197,221` must set `meta.palette_version='v1'` matching `ClassPalette.version` (`ClassPalette.swift`); a mismatch fails the bake.
 - On calibration of a class (Req [8.3](requirements.md#8.3)): its `foods.beta_status` flips `uncalibrated_unity` → `calibrated` (persisted via `GRDBFoodDatabase.swift:118-119`), at which point the §3.5 honesty surface stops flagging it and the v1 accuracy bar (MAPE < 20%, MAE ≤ 25 g — pipeline Req 21.3 / MD-25) becomes measurable for that class via the existing accuracy harness.
 - Fixtures + the ≥30-meals/class acquisition (Req [8.2](requirements.md#8.2)) are recorded as the project's largest risk and explicitly deferred past the MVP gate. Cite `ml-training.md` §§8–9; do not re-document the commands.
 
@@ -185,7 +185,7 @@ New / relevant failure modes, all fail **before** a bad artefact ships or a bad 
 | Channel count ≠ 27 | `export.py` + runtime | export fails; runtime `SegmentationError.modelLoadFailed` (Req [4.4](requirements.md#4.4)) |
 | Weights > 10 MB | `export.py` + `SegmenterWeightsBudget.validate` | export fails / `SegmentationError.weightsBudgetExceeded` (Req [4.2](requirements.md#4.2)) |
 | Model absent in bundle | `PipelineFactory.makeSegmenter` | `PipelineFactoryError.segmenterModelMissing` (Req [5.3](requirements.md#5.3)) |
-| Palette↔DB edition mismatch | `tools/food_db/generate.py:136-137` | bake fails (Req [8.4](requirements.md#8.4)) |
+| Palette↔DB edition mismatch | `tools/food_db/generate.py:197,221` | bake fails (Req [8.4](requirements.md#8.4)) |
 
 Out of scope (D6): bad-model rollback / integrity / kill-switch — recovery is rebuilding and shipping the previous bundle until OTA exists.
 

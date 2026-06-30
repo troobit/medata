@@ -554,12 +554,6 @@ metadata:
   - Blocked-by: 0f0700y (Write tests for Irish/British English spelling linter)
   - Requirements: [19.1](requirements.md#19.1), [19.2](requirements.md#19.2)
 
-- [x] 71. Move SvelteKit MVP source to `legacy/` directory <!-- id:0f07010 -->
-  - Move existing Svelte source tree to `legacy/svelte-mvp/` (Req 1.1).
-  - Update root README to point at the new iOS app.
-  - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
-  - Requirements: [1.1](requirements.md#1.1)
-
 ## v1 Adjustments — New Tasks (May 2026)
 
 - [x] 72. Replace auto-derived capture path with persistent `CaptureMode` toggle

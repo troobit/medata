@@ -5,7 +5,6 @@
 
 > **Domain** ([PROCESS.md §3](PROCESS.md#3-directory-structure-spec-boundaries-and-naming)) — every spec lives at `specs/<domain>/<capability>/`; the domain is one of `platform · capture · estimation · data · ui`.
 > **Mode** ([PROCESS.md §5](PROCESS.md#5-choosing-the-mode-full-spec-smolspec-or-iterative)) — `full` / `smol` / `iterative`; a `·iterative` suffix marks a target-driven concern inside an otherwise deterministic spec.
-> **Imported** — specs marked *imported* carry intent from the SvelteKit line (the `ui-restoration` branch); the code is out of scope here, the requirements travel so the intent is not lost (PROCESS.md §9).
 
 | Name | Domain | Created | Status | Mode | Summary |
 |------|--------|---------|--------|------|---------|
@@ -19,8 +18,6 @@
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
-| [UI Restoration](#ui-restoration) | ui | 2026-06-08 | Draft · imported | full | Archive the removed MeData design system (logo, motion, icon suite, UI primitives) into a Figma file as the browsable record; code restoration not in scope. |
-| [MVP Refinement](#mvp-refinement) | platform | 2026-03-12 | Draft · imported | full | Make the SvelteKit MVP function end-to-end — mobile camera capture, AI food recognition with a real API key, and the full capture → recognise → edit → save → view flow. |
 
 ---
 
@@ -112,22 +109,3 @@ Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the devi
 - [decision_log.md](ui/bubble-only-cleanup/decision_log.md)
 - [smolspec.md](ui/bubble-only-cleanup/smolspec.md)
 - [tasks.md](ui/bubble-only-cleanup/tasks.md)
-
-## UI Restoration
-
-Archive the removed MeData design system (logo, motion, icon suite, UI primitives) into a Figma file as the browsable record; code restoration not in scope. **Imported** from the `ui-restoration` branch (SvelteKit line) for intent preservation.
-
-- [decision_log.md](ui/ui-restoration/decision_log.md)
-- [design-system.md](ui/ui-restoration/design-system.md)
-- [requirements.md](ui/ui-restoration/requirements.md)
-- [tasks.md](ui/ui-restoration/tasks.md)
-
-## MVP Refinement
-
-Make the SvelteKit MVP function end-to-end — mobile camera capture, AI food recognition with a real API key, and the full capture → recognise → edit → save → view flow. **Imported** from the `ui-restoration` branch (SvelteKit line) for intent preservation.
-
-- [decision_log.md](platform/mvp-refinement/decision_log.md)
-- [design.md](platform/mvp-refinement/design.md)
-- [prerequisites.md](platform/mvp-refinement/prerequisites.md)
-- [requirements.md](platform/mvp-refinement/requirements.md)
-- [tasks.md](platform/mvp-refinement/tasks.md)

@@ -122,7 +122,7 @@ The estimation core was renamed from the flat `research/` into `estimation/pipel
 continuity its `DECISIONS.md` citation-key label stays `research` (e.g. `research D9`), now
 resolving to `specs/estimation/pipeline/decision_log.md`. Separately, some migrated specs
 kept **effort-flavoured capability names** (`pipeline-real-device-correctness`,
-`bubble-only-cleanup`, and the imported `ui-restoration` / `mvp-refinement`); they now live
+`bubble-only-cleanup`); they now live
 under the right domain but their *name* still predates the convention. The convention binds
 new specs; a legacy name is corrected when its spec is next substantially revised — a rename
 is an additive move plus a reference rewrite (see §9), done one capability at a time.
@@ -336,9 +336,8 @@ exists. A feature branch may add its own `specs/<domain>/<capability>/` long bef
 is portable or merged — **intent lands first, code follows**.
 
 One branch is the **authoritative spec set** that aggregates all of them — for Medata today
-that is `research`, which is intended to merge to `main` and supersede it (excluding the
-existing Svelte work in the main tree). Specs converge onto it **iteratively, one capability
-at a time**, not in a single big-bang:
+that is `research`, which is intended to merge to `main` and supersede it. Specs converge
+onto it **iteratively, one capability at a time**, not in a single big-bang:
 
 ```mermaid
 flowchart LR
@@ -358,7 +357,7 @@ shared, and each has a rule that avoids hand-merging:
   already says so). Reconcile the meta log after the capability has landed.
 - **`PROCESS.md`** changes rarely and is reviewed on its own.
 
-So bringing another branch's intent in (e.g. the `ui-restoration` / `mvp-refinement` specs)
+So bringing another branch's intent in (e.g. a new data-stream or Android-binding spec)
 is the *expected* path, not an exception: copy the `specs/<domain>/<capability>/` folders
 onto the authoritative branch, regenerate `OVERVIEW.md`, reconcile `DECISIONS.md`. The code
 can follow on its own schedule.

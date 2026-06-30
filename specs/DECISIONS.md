@@ -71,10 +71,10 @@ per-decision format see `rules/references/decision-log-format.md`.
 
 ### Context
 
-The original `mvp-refinement` work was a provider-agnostic multimodal-LLM path that
-predicted macros directly from a photo. The stated objectives are a *specific*
-system (carbohydrate estimation for type-1 diabetes), low cost/compute, and outputs
-grounded in the academic literature rather than direct AI inference.
+The objective is a *specific* system (carbohydrate estimation for type-1 diabetes),
+low cost/compute, and outputs grounded in the academic literature rather than direct
+AI inference. The alternative this decision weighs against is a provider-agnostic
+multimodal-LLM path that predicts macros directly from a photo.
 
 ### Decision
 

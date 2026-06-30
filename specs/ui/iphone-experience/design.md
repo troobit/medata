@@ -163,7 +163,7 @@ Transitions (exhaustive — every other input is a programmer error and triggers
 | File | Change |
 |---|---|
 | `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` | Add three additive accessors: `var arSession: ARSession`, `var frames: AsyncStream<ARFrame>`, `var interruptions: AsyncStream<InterruptionEvent>`. Implement the two `ARSessionObserver` interruption methods to feed the interruption stream. Both streams use per-subscriber continuations with `BufferingPolicy.bufferingNewest(1)`. ~40 lines. |
-| `MedataCore/Sources/Pipeline/PipelineEstimator.swift` | **New** — `public protocol PipelineEstimator: Sendable { func estimate(captureResult: CaptureResult) async throws -> MealRecord }` plus `extension Pipeline: PipelineEstimator {}`. ~6 lines. Test seam per Decision 13. |
+| `MedataCore/Sources/Pipeline/PipelineEstimator.swift` | **New** — `public protocol PipelineEstimator: Sendable { func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord }` plus `extension Pipeline: PipelineEstimator {}`. ~6 lines. Test seam per Decision 13. |
 | `App/App.swift` | Owns `CaptureFlowModel` as `@State`; passes to `CaptureFlowView` via initialiser. Observes `@Environment(\.scenePhase)` for background/foreground transitions and forwards to the model. |
 | `App/CaptureFlowView.swift` | Rewrite from placeholder; root view of the app's `NavigationStack(path: $model.navigationPath)`. |
 | `App/LiveIndicatorView.swift` | **New** — child SwiftUI view consuming a child `@Observable LiveIndicatorModel` (split from the main model) to isolate 60Hz redraws from the rest of the capture view. Renders tilt indicator, distance state, LiDAR coverage gauge, capture-path indicator. |
@@ -333,7 +333,7 @@ Applied to the SwiftUI scene via `.tint(.medataAccent)` on `WindowGroup`'s root 
 ```swift
 // MedataCore/Sources/Pipeline/PipelineEstimator.swift
 public protocol PipelineEstimator: Sendable {
-    func estimate(captureResult: CaptureResult) async throws -> MealRecord
+    func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord
 }
 extension Pipeline: PipelineEstimator {}
 ```

@@ -1,19 +1,19 @@
 # Decision Log: research
 
-## Decision 1: Replace LLM-based MVP with voxel-carving pipeline
+## Decision 1: Adopt voxel-carving + density-lookup pipeline over LLM inference
 
 **Date**: 2026-05-05
 **Status**: accepted
 
 ### Context
 
-The existing `mvp-refinement` spec describes a provider-agnostic LLM pipeline (OpenAI-compatible vision endpoint) that asks a multimodal model to produce per-item macro estimates from a food photo. The MVP is code-complete only at the UI layer — none of the recognition is operational. Open GitHub issues (#6–#24 on `troobit/medata`) describe a different system grounded in classical computer vision and geometric reconstruction (Anthimopoulos 2014, Dehais 2017, GoCARB clinical pipeline). The two approaches are architecturally incompatible: the LLM path predicts macros directly; the geometric path measures volume and looks up density.
+The alternative approach is a provider-agnostic LLM pipeline (OpenAI-compatible vision endpoint) that asks a multimodal model to produce per-item macro estimates from a food photo. Open GitHub issues (#6–#24 on `troobit/medata`) describe a different system grounded in classical computer vision and geometric reconstruction (Anthimopoulos 2014, Dehais 2017, GoCARB clinical pipeline). The two approaches are architecturally incompatible: the LLM path predicts macros directly; the geometric path measures volume and looks up density.
 
 The user's stated objectives are (a) build a *very specific* system (carbohydrate estimation for type-1 diabetes), (b) reduce cost of use and compute, and (c) base the system on the mathematics in the academic literature rather than direct AI inference.
 
 ### Decision
 
-Discard the LLM-based MVP and adopt the voxel-carving + density-lookup pipeline as the only intended approach. The mvp-refinement Svelte frontend is treated as throwaway UI exploration. Future external validation against a cloud model is a deferred extension, not a core dependency.
+Adopt the voxel-carving + density-lookup pipeline as the only intended approach; the LLM path is discarded as the core approach. Future external validation against a cloud model is a deferred extension, not a core dependency.
 
 ### Rationale
 

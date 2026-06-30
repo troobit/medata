@@ -10,7 +10,7 @@ no meal would record from an Xcode (Debug) build.
 thing that dissolves every pain described below.** Today the capture pipeline runs
 against `StubInferenceEngine` — a placeholder that paints a fixed food region. The
 next milestone is to train and integrate the 27-class CoreML segmenter
-(`MedataCore/Resources/segmenter.mlpackage`, see `tools/segmenter/export.py`) and
+(`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`, see `tools/segmenter/export.py`) and
 drop the stub.
 
 Why it is the priority, beyond accuracy:

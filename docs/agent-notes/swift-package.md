@@ -1,9 +1,8 @@
 # Swift Package layout
 
-The repo root holds both the legacy SvelteKit MVP (to be moved to `legacy/` at task 70)
-and the new Swift Package for the iOS-first carbohydrate-estimation pipeline. They
-coexist while Foundation is being built; the Swift sources live in `MedataCore/` and
-`HarnessCLI/`.
+The repo root holds the Swift Package for the iOS-first carbohydrate-estimation
+pipeline. The Swift sources live in `MedataCore/` and `HarnessCLI/`, with the iOS
+app target in `MeData/MeData.xcodeproj` referencing the views under `App/` in place.
 
 ## Topology
 
@@ -395,21 +394,17 @@ Tasks 65–70 are done. Test count: 239 (was 207 after Harness and Calibration).
   under `MedataCore/Sources`, `HarnessCore`, `HarnessCLI`, `App` for US-English
   spellings. Uses `\b` word-boundary `grep -E`. Exits 1 on any match.
   `REPO_ROOT` can be overridden via environment variable (used by tests).
-- `SpellingLinterTests` — new test target (no dependencies). 23 XCTest cases that
-  create temp Swift files, run the linter script via `Process`, and assert exit codes.
-  Tests skip on iOS via `XCTSkip`.
+- `MedataCore/Tests/SpellingLinterTests/SpellingLinterTests.swift` — 23 XCTest cases
+  that create temp Swift files, run the linter script via `Process`, and assert exit
+  codes; tests skip on iOS via `XCTSkip`. Note: this file is **not** declared as a
+  test target in `Package.swift`, so `swift test` does not run it — the linter is
+  enforced directly via `tools/check_spelling.sh`.
 - Fixed `MealRecord.swift` comment: "denormalized" → "denormalised", "serialization"
   → "serialisation" (caught by running the linter against the codebase).
 
-### SvelteKit legacy move (task 70) and subsequent descope
+### Brand source assets
 
-- `src/`, `static/`, `svelte.config.js`, `vite.config.ts`, `package.json`,
-  `pnpm-lock.yaml`, `tsconfig.json` moved to `legacy/svelte-mvp/` per Req 1.4.
-- `README.md` updated to describe the iOS-first project structure.
-- **Post-descope (out-of-band of task 70):** `legacy/svelte-mvp/` was deleted
-  in full once SvelteKit was confirmed as completely descoped. The four brand
-  source assets (`favicon-default.svg`, `favicon-colour.svg`,
-  `favicon-contrast.svg`, `favicon.ico`) were retained at `static/` for
-  per-target icon generation (see `~/repos/rtob/scripts/generate-icons.js`
-  for the canonical sharp-based generator pattern). The rest of the SvelteKit
-  tree remains recoverable from earlier commits if needed.
+- `static/` holds the brand vector master (`icon.svg`) and the favicon source set
+  (`favicon-default.svg`, `favicon-colour.svg`, `favicon-contrast.svg`,
+  `favicon.ico`) used for per-target icon generation (see
+  `docs/agent-notes/appicon-pipeline.md`).

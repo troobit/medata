@@ -28,13 +28,11 @@ What changed since the original 2026-05-23 investigation:
   now, not lifted from a test target).
 - **Artefact name is settled: `segmenter.mlpackage`.** `export.py`, `.gitignore`,
   and `PipelineFactory.makeSegmenter` all use that one name — no renaming step.
-  The only remaining loader nuance is that it reads from `Bundle.main` rather
-  than via `Bundle.module`, and the resource isn't declared in `Package.swift`;
-  align that when the trained model lands (see `docs/architecture.md` §9).
+  The loader resolves it via `Bundle.module` and the resource is declared in
+  `Package.swift` (`.copy("Resources")`); see `docs/architecture.md` §9.
 
-**Bottom line:** only **Blocker 1** (train + export the checkpoint) remains, plus
-the minor `Bundle.module`/`Package.swift` loader tidy-up. Everything else in the
-original note is history.
+**Bottom line:** only **Blocker 1** (train + export the checkpoint) remains.
+Everything else in the original note is history.
 
 ---
 
