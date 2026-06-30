@@ -54,6 +54,16 @@ trained model unblocks — see
 authoritative list of project prerequisites. This section adds the ML-specific
 detail not duplicated there.
 
+> **Human-gated stages (cannot be automated).** Sections 3, 4, 5 (the training/validation
+> *run*), 6–7, and 8–10 below each need something no coding agent can supply — a dataset
+> download, a CUDA GPU, a Mac with Xcode, a physical iPhone, or weighed meals. The surrounding
+> code (loader, lineage, `export.py` gates, validation reporting, palette↔DB bake lock) is
+> implemented; these stages produce the model and the on-device proof the MVP gate (Req 6.3)
+> depends on. The consolidated, ordered checklist of exactly what a human must do — and which
+> stages block the MVP versus are deferred — is
+> [`specs/estimation/model-production/prerequisites.md`](../specs/estimation/model-production/prerequisites.md).
+> Use that as the "what's left for me to do" list; use the sections below for the how.
+
 ### Hardware
 
 | For | Hardware |

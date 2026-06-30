@@ -2,6 +2,21 @@
 
 These are the human/data-gated stages a coding agent cannot perform — they need a dataset download, a GPU, a Mac with Xcode, a physical iPhone, or weighed meals. The code-actionable work lives in `tasks.md`; these stages produce the artefacts and verifications those tasks (and the MVP gate, Req 6.3) depend on. Stage numbers refer to the design §2.1 process table.
 
+## The only thing left for a real MVP estimate
+
+Every surrounding subsystem is code-complete: the capture → segment → volume → macros pipeline runs end-to-end against a dev-stub segmenter, and the model-production tasks (loader on `Bundle.module`, build lineage, `modelVersion` derivation, the `export.py` equivalence/parity/channel/budget/metadata gates, validation IoU + export-eligibility reporting, and the palette↔DB edition bake lock) implement everything an agent can do. What no agent can produce is the trained model itself and the on-device proof that it runs. The MVP — the app showing a **real** carbohydrate number instead of the dev-stub — is blocked on exactly the human-gated chain below.
+
+**Ordered path to the MVP gate (each step gates the next):**
+
+1. **Stage 0 — Acquire FoodSeg103** (download). → unblocks the automated remap + split (Stages 1–2, already scripted).
+2. **Stage 3 — GPU training run** → `build/checkpoint.pt`. Export-eligible only if validation mIoU ≥ 0.60 mean **and** ≥ 0.50 for every carb-priority class.
+3. **Export (automated, gated)** — run `export.py` on macOS; the task 6/7 gates (equivalence, parity, channel order, ≤ 10 MB budget, metadata stamp) run automatically and bundle `segmenter.mlpackage`. No new human judgement, but needs a Mac + the checkpoint.
+4. **Stage 7 — On-device verification** on the iPhone 13 Pro Max (ANE residency + a real capture). **This is the MVP gate (Req 6.3).**
+
+**Off the critical path (deferred past the MVP gate):** β_c gravimetric calibration (Stages 9–10). The MVP ships every class at β = 1.0 / `uncalibrated_unity`; calibration only tightens accuracy later and is not required to ship.
+
+The detailed runbook for each stage (commands, flags, acceptance bars) is in [`docs/ml-training.md`](../../../docs/ml-training.md); this file is the human-gated checklist that runbook feeds into.
+
 ## Dataset (Stage 0)
 
 - [ ] **Acquire FoodSeg103** (Apache 2.0, https://xiongweiwu.github.io/foodseg103.html). Needed: the raw dataset on disk for the automated remap (`build_class_mapping.py`) and fixed-seed split (`prepare_dataset.py`). Record the source version / archive SHA so it can be written into `build/lineage.json` (`foodseg103_source`). Satisfies **Req 2.4**; feeds Req 1.3 lineage.
