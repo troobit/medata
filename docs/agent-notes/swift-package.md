@@ -272,6 +272,16 @@ Tasks 35–40 are done. Test count: 167 (was 86 after Segmentation + Volume phas
 
 - Pure stateless enum `Macros.compute(perClassVolumesCm3:database:edition:)`.
 - Formula: `massG = volume × density`, `carbsG = mass × carbsPer100g / 100`.
+- GOTCHA — `density` (`foods.density`, baked by `tools/food_db/generate.py`) is
+  *served-portion bulk* density, NOT material/grain density. The volume here is the
+  visual hull, which for a pile of rice/pasta/lentils encloses the inter-grain air, so
+  bulk density is well below ~1.0. Granular/piled staples must use FAO bulk values
+  (rice 0.73, pasta ~0.58, boiled potato 0.59, lentils 0.85); only contiguous solids
+  (meat, cheese block, whole fruit) keep near-material density. `density_source` tokens:
+  `FAO_DENS` = value matches an FAO/INFOODS bulk entry; `EST_BULK` = estimated pile bulk
+  (no FAO entry); `EST_SOLID` = material density of a contiguous solid. Because β ships
+  at 1.0 (`uncalibrated_unity`), any density error flows straight into the carb number.
+  See `specs/bugfixes/food-db-staple-density-fao-bulk/`.
 - Classes absent from the DB are silently skipped (no error).
 - Clinical totals (energy, protein, fat, fibre) are computed but not displayed in v1.
 - `MacrosTests` uses `StubFoodDatabase` (in-memory, no SQLite) for determinism.
