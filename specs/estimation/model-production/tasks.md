@@ -93,7 +93,7 @@ metadata:
 
 ## Uncalibrated Honesty
 
-- [ ] 10. Surface uncalibrated low-confidence honesty in ResultView
+- [x] 10. Surface uncalibrated low-confidence honesty in ResultView
   - In `ResultView`, when `meal.perClassCalibration` is non-`calibrated` (`uncalibrated_unity`), render a low-confidence indication reusing the `ConfidencePill` styling / very-low surface (`ResultView.swift:156`, `:220-248`); no new view type.
   - Add one new copy string (metric-only English) conveying the known upward (over-estimating) volume bias — the carbohydrate value is more likely high than low (Req 7.3). Keep it distinct from the existing `dev_stub` placeholder banner, which marks *fake* numbers; this marks a *real but uncalibrated* number.
   - Confirm (no change): β = 1.0 / `uncalibrated_unity` is already the DB default (`tools/food_db/generate.py:70-96`) and `MealRecord.perClassCalibration` already persists the status (`Pipeline.swift:428-429`) — no schema change.

@@ -68,6 +68,23 @@ enum ResultFormat {
     static let placeholderBannerCopy =
         "Placeholder estimate. The food recogniser is a development stub — the carbohydrate value is not a real measurement."
 
+    // Req §7.2 / §7.3 (model-production): an MVP meal applies β = 1.0
+    // (`uncalibrated_unity`) for every class because pooled β is unreachable until
+    // gravimetric calibration data exists. Such a number is REAL but carries a
+    // known upward (over-estimating) volume bias, so it is flagged on the
+    // calibration axis — distinct from the σ-keyed confidence pill and from the
+    // `dev_stub` placeholder banner, which marks *fake* numbers. Shown when any
+    // contributing class is not yet `calibrated` (or no per-class status exists).
+    static func showsUncalibratedBanner(
+        perClassCalibration: [String: PbBetaCalibrationStatus]
+    ) -> Bool {
+        perClassCalibration.isEmpty
+            || perClassCalibration.values.contains { $0 != .calibrated }
+    }
+
+    static let uncalibratedBannerCopy =
+        "Uncalibrated estimate — volume bias is not yet corrected, so this carbohydrate value is more likely too high than too low."
+
     // Decision 17 / research Decisions 43–47 (UI side): the Very-Low surface
     // surfaces the per-stage angular error Δθ that contributed to the low
     // confidence. The persisted `PbConfidenceResult` will gain
@@ -142,6 +159,15 @@ struct ResultView: View {
 
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
+    // dev_stub numbers are fake — the placeholder chip owns that case — so the
+    // real-but-uncalibrated banner is suppressed there to avoid a contradictory
+    // "real over-estimate" claim over placeholder figures (design §3.5).
+    private var showsUncalibratedBanner: Bool {
+        !showsPlaceholderChip
+            && ResultFormat.showsUncalibratedBanner(
+                perClassCalibration: record.perClassCalibration
+            )
+    }
     private var showsVeryLowSurface: Bool {
         ResultFormat.showsVeryLowSurface(sigma) && !keepAsIsDismissed
     }
@@ -155,6 +181,7 @@ struct ResultView: View {
                 carbTotal
                 ConfidencePill(sigmaMeal: sigma)
                 if showsPlaceholderChip { placeholderChip }
+                if showsUncalibratedBanner { uncalibratedBanner }
                 if showsVeryLowSurface { veryLowSurface }
                 Spacer()
                 if mode.showsActionRow { actionRow }
@@ -210,6 +237,27 @@ struct ResultView: View {
             .background(Color.placeholderBG, in: Capsule())
             .foregroundStyle(Color.placeholderFG)
             .accessibilityIdentifier("result.placeholderChip")
+    }
+
+    // Req §7.3: real-but-uncalibrated honesty surface. An up-arrow glyph plus the
+    // copy convey the upward (over-estimating) volume bias. The orange
+    // `confidenceModerate` rounded card is visually distinct from the yellow
+    // `dev_stub` placeholder capsule (which marks fake numbers) and from the
+    // grey/red Very-Low surface below.
+    private var uncalibratedBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.circle.fill")
+            Text(ResultFormat.uncalibratedBannerCopy)
+                .font(.caption.weight(.semibold))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Color.captureChromeText)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("result.uncalibratedBanner")
     }
 
     // Decision 17 / Req §9.3: surfaces below σ_meal < 0.20 with two-line
