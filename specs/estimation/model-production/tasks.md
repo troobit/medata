@@ -115,7 +115,7 @@ metadata:
 
 ## Runbook and Architecture Sync
 
-- [ ] 13. Sync ml-training.md and architecture.md with the loader/export change <!-- id:qkb6bes -->
+- [x] 13. Sync ml-training.md and architecture.md with the loader/export change <!-- id:qkb6bes -->
   - Update `docs/ml-training.md` §6 (export output path now `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`) and §7 (bundling via the `Bundle.module` package-resource pattern) in lockstep with tasks 2 and 7.
   - Update `docs/architecture.md:393` to record that the §9 loader gap is now closed (was `Bundle.main`).
   - Req 1.4: the runbook and the tracked process must not diverge — change them in the same commit as the code.
