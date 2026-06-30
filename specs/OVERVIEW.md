@@ -13,6 +13,7 @@
 | [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | estimation | 2026-06-13 | Done | full | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
 | [Minimum Viable Volume Estimator](#minimum-viable-volume-estimator) | estimation | 2026-06-22 | Superseded | smol | Retired before tasks/code (decision_log Decision 5): its premise that the dev-stub yields uncarveable masks proved false; the real two-view defect lives in `bugfixes/two-view-carve-no-volume`. |
 | [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | estimation | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
+| [Model Production](#model-production) | estimation | 2026-06-29 | Done | full | Train → Core ML export → bundle the on-device segmenter. All 13 code tasks done (Bundle.module loader, build lineage, modelVersion derivation, export.py gates, validation IoU + export-eligibility reporting, palette↔DB bake lock); producing the trained model itself is human/GPU/device-gated — see [prerequisites.md](estimation/model-production/prerequisites.md). |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
@@ -57,6 +58,16 @@ Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipe
 - [decision_log.md](estimation/lidar-first-scale-fallback/decision_log.md)
 - [smolspec.md](estimation/lidar-first-scale-fallback/smolspec.md)
 - [tasks.md](estimation/lidar-first-scale-fallback/tasks.md)
+
+## Model Production
+
+Train → Core ML export → bundle the on-device segmenter. All 13 implementable tasks are done — Bundle.module loader, build lineage manifest, modelVersion derivation, export.py equivalence/parity/channel/budget/metadata gates, validation mIoU + export-eligibility reporting, and the palette↔DB edition bake lock. What remains is human/data/hardware-gated and tracked as prerequisites, not tasks: acquire FoodSeg103, run the GPU training to the mIoU bar, run export.py on a Mac, and verify on-device (the MVP gate, Req 6.3). β_c gravimetric calibration is deferred past the MVP.
+
+- [decision_log.md](estimation/model-production/decision_log.md)
+- [design.md](estimation/model-production/design.md)
+- [prerequisites.md](estimation/model-production/prerequisites.md)
+- [requirements.md](estimation/model-production/requirements.md)
+- [tasks.md](estimation/model-production/tasks.md)
 
 ## Rawframe Rgb Conversion
 
