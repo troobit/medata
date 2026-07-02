@@ -7,6 +7,10 @@ an isolated worktree. This note synthesises their findings into the path to an M
 produces a *real* carb number (not a dev-stub placeholder). Per-spec detail lives in each
 `decision_log.md`; the meta log is `specs/DECISIONS.md`.
 
+**Update 2026-07-02:** dataset-level verification (Nutrition5k facts, Google
+mobile-food-segmenter-v1 evaluation) and the prioritised remediation plan now live in
+[dataset-strategy.md](dataset-strategy.md); the P0 verdict below is unchanged.
+
 The bugfix pass confirmed the **single-view LiDAR path verifies clean on device** (2.9 mm
 plane residual, no `lidarFitDegenerate`) and that the model-independent App-layer capture
 fixes — first-shot `noFoodPixels` race, Single/Double toggle key, ARSession-config race,
