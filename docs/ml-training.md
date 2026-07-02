@@ -68,7 +68,7 @@ detail not duplicated there.
 
 | For | Hardware |
 | --- | --- |
-| Segmenter training | Linux/Windows box with a CUDA GPU (RTX 3060 12 GB or better is comfortable; smaller works with a smaller batch size). M-series Mac with MPS is acceptable for short fine-tunes but ~5–10× slower than a mid-range CUDA card. |
+| Segmenter training | Local Apple-silicon Mac (M5 Pro-class, MPS) is a supported route: expect roughly 5–10× a mid-range CUDA card per epoch; run iteratively with `train.py --resume` (see §4 run hygiene). A Linux/Windows CUDA box (RTX 3060 12 GB or better) remains the faster alternative; smaller cards work with a smaller batch size. |
 | Export to Core ML + TFLite | macOS 14+. `coremltools` requires Apple OS; cross-OS export is not supported. |
 | On-device validation | iPhone 13 Pro Max (Req 1.2 spec floor; iOS 26.5+). Needed for the Apple Neural Engine residency check (Req 16.5) and per-stage latency bar (Req 16.2). |
 | β_c gravimetric capture | Calibrated kitchen scale, 1 g resolution or finer; ID-1 reference card (any expired credit / library card); the same iPhone used for on-device validation. |
@@ -295,6 +295,21 @@ python tools/segmenter/train.py \
 Output: a PyTorch checkpoint at `tools/segmenter/build/checkpoint.pt`. This `.pt`
 is the **single source of truth** (Decision 28) that both export paths (§6)
 consume — there is no separate iOS vs Android training run.
+
+### Run hygiene (local Mac, MPS)
+
+The trainer writes a resume sidecar (`<--out>.resume.pt`) atomically after every
+completed epoch, so an interrupted run loses at most one epoch — continue it with
+`train.py --resume <sidecar>` using identical hyperparameters (the trainer
+refuses drift, and refuses to start over an existing sidecar without `--resume`).
+For long runs on the local Mac:
+
+- Wrap the run in `caffeinate -is` so the Mac doesn't sleep mid-epoch.
+- Treat `PYTORCH_ENABLE_MPS_FALLBACK=1` as a safety net only — verify nothing
+  hot falls back to the CPU, or hours quietly become days.
+- Measure one epoch before committing to a full run; it should land in the
+  expected range (roughly 5–10× a mid-range CUDA card per epoch, §1).
+- Watch **food-class** mIoU, not overall accuracy (see "Why" above).
 
 ## 5. Validating the segmenter
 

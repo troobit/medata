@@ -52,6 +52,19 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   **suppressed for `dev_stub`** meals — the yellow placeholder capsule owns the
   *fake-number* case; this marks a *real-but-uncalibrated* number. No schema
   change (`perClassCalibration` is already persisted in `Pipeline.swift`).
+- **Resumable training** (`specs/estimation/resumable-segmenter-training/`) —
+  `train.py` writes a resume sidecar `<--out>.resume.pt` atomically
+  (temp + `os.replace`) after every completed epoch: model + optimizer state
+  (CPU tensors), epoch counter, and the run's hyperparameters. `--resume PATH`
+  validates `num_classes`/`palette_version`/`target_size`/`lr`/`batch_size`
+  against the sidecar *before* building the model and **rejects drift**
+  (Decision 3 — no reconciliation; start a fresh run). Without `--resume`, an
+  existing default sidecar refuses to start. On resume the model is built with
+  `weights=None`; `pretrained` provenance carries the sidecar's original value
+  and lineage gains `train_config.resumed_from_epoch`. The sidecar is deleted
+  after the final checkpoint save. Shipped checkpoint dict shape unchanged.
+  Tests: `tools/segmenter/tests/test_train_resume.py` (skips without torch;
+  the rest of the suite stays torch-free).
 - **β_c bake lock (tasks 11–12)** — `tools/food_db/generate.py`. The bake now runs
   under an `__main__` guard via `bake()`, so importing the module is
   side-effect-free (testable without rebaking). `verify_palette_lock(PALETTE_VERSION)`
@@ -61,6 +74,13 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 
 ## Gotchas
 
+- **torchvision refuses `aux_loss=False` alongside pretrained weights** (any
+  version `requirements.txt` allows, ≥ 0.13). `export.load_checkpoint` (and via
+  it `train.py --no-pretrained`-less runs) crashed until fixed by building with
+  `aux_loss=True` and then setting `model.aux_classifier = None` — architecture
+  and state_dict key set stay identical to an `aux_loss=False` build. The bug
+  was latent because nothing exercised `load_checkpoint` with torch installed
+  before `test_train_resume.py`.
 - **`swift test` does not cover `App/`.** The SPM package targets are CaptureKit,
   Pipeline, Foods, etc.; `App/` (the iOS app, built from `MeData.xcodeproj`, which
   is not in the repo/worktree) is not a package target. ResultView changes are
