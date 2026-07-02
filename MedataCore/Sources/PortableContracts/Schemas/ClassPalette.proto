@@ -9,4 +9,5 @@ message ClassPalette {
     int32 unknown_food = 3;
     int32 unsupported_liquid = 4;
     string version = 5;                         // matches database edition per Req 11.4
+    repeated string liquid_classes = 6;         // coarse liquid classes appended after the solids (nutrition5k-calibration Req 7.2)
 }

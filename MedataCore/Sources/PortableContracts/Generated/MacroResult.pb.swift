@@ -39,6 +39,9 @@ public nonisolated struct PbMacroResult: Sendable {
   /// Clears the value of `clinicalTotals`. Subsequent reads from it will return its default value.
   public mutating func clearClinicalTotals() {self._clinicalTotals = nil}
 
+  /// both liquid estimate paths over-read (nutrition5k-calibration Req 8.2, Decision 19)
+  public var liquidOverEstimate: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -52,7 +55,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbMacroResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MacroResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_carbs_g\0\u{3}per_class\0\u{3}clinical_totals\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}total_carbs_g\0\u{3}per_class\0\u{3}clinical_totals\0\u{3}liquid_over_estimate\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -63,6 +66,7 @@ nonisolated extension PbMacroResult: SwiftProtobuf.Message, SwiftProtobuf._Messa
       case 1: try { try decoder.decodeSingularFloatField(value: &self.totalCarbsG) }()
       case 2: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,PbPerClassMacros>.self, value: &self.perClass) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._clinicalTotals) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.liquidOverEstimate) }()
       default: break
       }
     }
@@ -82,6 +86,9 @@ nonisolated extension PbMacroResult: SwiftProtobuf.Message, SwiftProtobuf._Messa
     try { if let v = self._clinicalTotals {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    if self.liquidOverEstimate != false {
+      try visitor.visitSingularBoolField(value: self.liquidOverEstimate, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -89,6 +96,7 @@ nonisolated extension PbMacroResult: SwiftProtobuf.Message, SwiftProtobuf._Messa
     if lhs.totalCarbsG != rhs.totalCarbsG {return false}
     if lhs.perClass != rhs.perClass {return false}
     if lhs._clinicalTotals != rhs._clinicalTotals {return false}
+    if lhs.liquidOverEstimate != rhs.liquidOverEstimate {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

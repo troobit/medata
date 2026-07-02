@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `ClassPalette.liquidClasses` stored field, `isLiquidClass(_:)` predicate, and eight coarse liquid classes (`water`, `coffee`, `tea`, `milk`, `fruit_juice`, `soup`, `beer`, `wine`) appended to the in-place-redefined `v1Standard` palette — sentinel indices shift to 32/33/34, `totalClasses` becomes `foodClasses.count + liquidClasses.count + 3`, and `version` stays `"v1"` (nutrition5k-calibration Decisions 23/24). Liquid handling is strictly opt-in through `isLiquidClass`; `isFoodClass` keeps its solids-only semantics.
+- Proto contract extensions for nutrition5k-calibration (regenerated `.pb.swift` + `PbClassPalette` bridge): `MealFixture.ground_truth_protein_g`/`ground_truth_fat_g`/`source_dataset`/`estimator_path` (closed vocabulary `single_dominant` | `mixture`), `PerClassMacros.protein_g`/`fat_g`/`device_verified`/`is_liquid`, result-level `MacroResult.liquid_over_estimate`, and `ClassPalette.liquid_classes`.
+- `SegmentationModuleTests` coverage for the redefined palette: liquid ordering after the 24 solids, sentinel placement, `isFoodClass`/`isLiquidClass` over the full index range, and `PbClassPalette` round-trip including `liquid_classes`.
 - `SupportPlaneFitter` protocol + `LiDARSupportPlaneFitter` production conformance in `SupportPlane` module (Decision 9) so `Pipeline.estimate` delegates the LiDAR-vs-card dispatch through an injectable seam.
 - `CaptureResult.preShutterFoodMask` and `preShutterMaskAgeMs` fields carrying the pre-shutter food region from the App layer into the pipeline.
 - `computeFoodRegionCoverage` helper that recomputes `LiDARStatus.foodRegionCoveragePercent` in 256×192 confidence-buffer space per Decision 14.

@@ -38,4 +38,11 @@ message MealFixture {
     float ground_truth_total_carbs_g = 18;
 
     string capture_path_canonical = 19;                 // 'single_view_lidar' | 'two_view_sfs'
+
+    // nutrition5k-calibration (Req 3.5, 1.4, 3.7). Protein/fat are additive
+    // alongside the retained ground_truth_total_carbs_g.
+    float ground_truth_protein_g = 20;
+    float ground_truth_fat_g = 21;
+    string source_dataset = 22;                         // e.g. "nutrition5k@<release>/<metaver>"
+    string estimator_path = 23;                         // 'single_dominant' | 'mixture' — authoritative load-path selector; any other value malformed
 }

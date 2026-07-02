@@ -42,6 +42,16 @@ public nonisolated struct PbPerClassMacros: Sendable {
 
   public var betaStatus: PbBetaCalibrationStatus = .unspecified
 
+  /// nutrition5k-calibration (Req 10.1, 8.1): protein/fat from the same
+  /// β-corrected mass; banner inputs baked per class from the food DB.
+  public var proteinG: Float = 0
+
+  public var fatG: Float = 0
+
+  public var deviceVerified: Bool = false
+
+  public var isLiquid: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -53,7 +63,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbPerClassMacros: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PerClassMacros"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}volume_cm3\0\u{3}mass_g\0\u{3}carbs_g\0\u{3}density_source\0\u{3}coefficient_source\0\u{3}beta_used\0\u{3}beta_status\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}volume_cm3\0\u{3}mass_g\0\u{3}carbs_g\0\u{3}density_source\0\u{3}coefficient_source\0\u{3}beta_used\0\u{3}beta_status\0\u{3}protein_g\0\u{3}fat_g\0\u{3}device_verified\0\u{3}is_liquid\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -68,6 +78,10 @@ nonisolated extension PbPerClassMacros: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 5: try { try decoder.decodeSingularStringField(value: &self.coefficientSource) }()
       case 6: try { try decoder.decodeSingularFloatField(value: &self.betaUsed) }()
       case 7: try { try decoder.decodeSingularEnumField(value: &self.betaStatus) }()
+      case 8: try { try decoder.decodeSingularFloatField(value: &self.proteinG) }()
+      case 9: try { try decoder.decodeSingularFloatField(value: &self.fatG) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.deviceVerified) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.isLiquid) }()
       default: break
       }
     }
@@ -95,6 +109,18 @@ nonisolated extension PbPerClassMacros: SwiftProtobuf.Message, SwiftProtobuf._Me
     if self.betaStatus != .unspecified {
       try visitor.visitSingularEnumField(value: self.betaStatus, fieldNumber: 7)
     }
+    if self.proteinG.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.proteinG, fieldNumber: 8)
+    }
+    if self.fatG.bitPattern != 0 {
+      try visitor.visitSingularFloatField(value: self.fatG, fieldNumber: 9)
+    }
+    if self.deviceVerified != false {
+      try visitor.visitSingularBoolField(value: self.deviceVerified, fieldNumber: 10)
+    }
+    if self.isLiquid != false {
+      try visitor.visitSingularBoolField(value: self.isLiquid, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -106,6 +132,10 @@ nonisolated extension PbPerClassMacros: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.coefficientSource != rhs.coefficientSource {return false}
     if lhs.betaUsed != rhs.betaUsed {return false}
     if lhs.betaStatus != rhs.betaStatus {return false}
+    if lhs.proteinG != rhs.proteinG {return false}
+    if lhs.fatG != rhs.fatG {return false}
+    if lhs.deviceVerified != rhs.deviceVerified {return false}
+    if lhs.isLiquid != rhs.isLiquid {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
