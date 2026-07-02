@@ -29,7 +29,7 @@ references:
 
 ## Stream A — N5k ingestion (Python)
 
-- [ ] 3. Write failing tests for the N5k ingredient mapping artifact and loader <!-- id:i3we68w -->
+- [x] 3. Write failing tests for the N5k ingredient mapping artifact and loader <!-- id:i3we68w -->
   - pytest under tools/nutrition5k/tests/ (new; mirror the tools/segmenter/tests layout).
   - Cases: unmapped ingredient excluded, never reassigned (2.3); ambiguous pairs (white/brown rice, boiled/mashed potato, white/wholemeal bread) recorded status=ambiguous and excluded from both sides (2.4); loader fails loudly on palette_class_list mismatch and on n5k_metadata_version mismatch (2.5); the eight carb-priority staples present where N5k ingredients exist (2.2); class ids preserve FOOD_DATA channel order (2.1).
   - Artifact schema: {palette_class_list, n5k_metadata_version, mappings: [{n5k_ingredient_id, class_id|null, status: mapped|unmapped|ambiguous}]} — keyed to palette content, not the "v1" label (Decision 23).
@@ -38,7 +38,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5)
   - References: tools/segmenter/tests, data/metadata/ingredients_metadata.csv
 
-- [ ] 4. Build mapping_n5k_to_palette.json and its loader <!-- id:i3we68x -->
+- [x] 4. Build mapping_n5k_to_palette.json and its loader <!-- id:i3we68x -->
   - tools/nutrition5k/mapping_n5k_to_palette.json + loader (tools/nutrition5k/mapping.py).
   - Map as many of the 24 solid classes as ingredients_metadata.csv allows — the 8 staples are the floor, not the cap (design §Mapping artifact: broad coverage is what feeds the mixture path, since a plate qualifies only when ALL significant ingredients map).
   - Liquid-mapped ingredients (soup, milk, juice…) map to liquid class ids so routing can detect them; they never enter the β fit (4.7).
@@ -47,7 +47,7 @@ references:
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5)
   - References: tools/food_db/generate.py
 
-- [ ] 5. Write failing tests for ingest.py core: depth conversion, fixture emission, skip/record <!-- id:i3we68y -->
+- [x] 5. Write failing tests for ingest.py core: depth conversion, fixture emission, skip/record <!-- id:i3we68y -->
   - pytest with a tiny synthetic N5k dir fixture (a few dishes + malformed variants).
   - Depth: raw→mm = raw/10.0 as Float32 LE round-trips exactly on the integer grid (property test); sentinel 0 and at-cap pixels written as 0 so the estimator's zt>0 guard excludes them (3.2); two reference-depth checks strictly below the 0.4 m cap abort ingestion outside the documented tolerance band (3.1 — a 10x unit error must fail loudly).
   - CLI: missing dir/artifact exits non-zero naming the expected path + missing artifact (1.2); rgb/depth resolution mismatch vs the pinned model → skip + run-summary record (3.4 — the check is dimensional, not geometric); malformed depth/RGB/mass → skip + record + continue (3.8).
@@ -59,7 +59,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8)
   - References: tools/segmenter/make_fixtures.py
 
-- [ ] 6. Implement tools/nutrition5k/ingest.py (pre-checkpoint mode) and extend build_fixture_bytes <!-- id:i3we68z -->
+- [x] 6. Implement tools/nutrition5k/ingest.py (pre-checkpoint mode) and extend build_fixture_bytes <!-- id:i3we68z -->
   - tools/nutrition5k/ingest.py mirrors tools/segmenter/make_fixtures.py; extend its build_fixture_bytes for the new proto fields rather than duplicating it.
   - --n5k-dir defaults to the data/ layout documented in prerequisites.md (data/n5k/realsense_overhead/dish_<id>/{rgb.png, depth_raw.png}, data/metadata/, data/dish_ids/splits/).
   - Never write N5k imagery/metadata into the repo (1.1) — data/ is gitignored.
@@ -69,7 +69,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8)
   - References: tools/segmenter/make_fixtures.py, specs/estimation/nutrition5k-calibration/prerequisites.md
 
-- [ ] 7. Write failing tests for checkpoint-mode plate routing <!-- id:i3we690 -->
+- [x] 7. Write failing tests for checkpoint-mode plate routing <!-- id:i3we690 -->
   - Liquid check first: a plate whose liquid-mapped mass fraction ≥ 0.05 is always stamped mixture, never single_dominant (4.7 routing half).
   - τ_route = 0.90: the dominant mapped ingredient's mass fraction of TOTAL plate mass (unmapped included, so an unmapped-heavy plate cannot be stamped single-dominant) → single_dominant stamp; segmenter probs + real checkpoint SHA embedded via export.load_checkpoint / reference_input for make_fixtures.py parity.
   - Plates with unmapped mass fraction > 0.10 recorded as excluded from the mixture fit (design §Unmapped-volume bias).
@@ -79,7 +79,7 @@ references:
   - Requirements: [3.7](requirements.md#3.7), [4.7](requirements.md#4.7)
   - References: tools/segmenter/export.py
 
-- [ ] 8. Implement checkpoint-mode routing in ingest.py <!-- id:i3we691 -->
+- [x] 8. Implement checkpoint-mode routing in ingest.py <!-- id:i3we691 -->
   - --checkpoint flag; without it behaviour is unchanged (all-mixture).
   - Document regeneration semantics: when the model-production Bucket C checkpoint lands, re-run ingestion to regenerate the FULL fixture set; calibrate re-fits both paths and CalibrationMerge applies the 5.2 supersession.
   - Blocked-by: i3we690 (Write failing tests for checkpoint-mode plate routing)
