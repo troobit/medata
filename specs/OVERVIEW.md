@@ -13,6 +13,7 @@
 | [Minimum Viable Volume Estimator](#minimum-viable-volume-estimator) | estimation | 2026-06-22 | Superseded | smol | Retired before tasks/code (decision_log Decision 5): its premise that the dev-stub yields uncarveable masks proved false; the real two-view defect lives in `bugfixes/two-view-carve-no-volume`. |
 | [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | estimation | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
 | [Model Production](#model-production) | estimation | 2026-06-29 | Done | full | Train → Core ML export → bundle the on-device segmenter. All 13 code tasks done (Bundle.module loader, build lineage, modelVersion derivation, export.py gates, validation IoU + export-eligibility reporting, palette↔DB bake lock); producing the trained model itself is human/GPU/device-gated — see [prerequisites.md](estimation/model-production/prerequisites.md). |
+| [Resumable Segmenter Training](#resumable-segmenter-training) | estimation | 2026-07-02 | Done | smol | Crash-safe per-epoch resume sidecar and `--resume` flag for `tools/segmenter/train.py`, enabling interruptible long training runs on the local Apple-silicon Mac (MPS). |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
@@ -65,6 +66,14 @@ Train → Core ML export → bundle the on-device segmenter. All 13 implementabl
 - [prerequisites.md](estimation/model-production/prerequisites.md)
 - [requirements.md](estimation/model-production/requirements.md)
 - [tasks.md](estimation/model-production/tasks.md)
+
+## Resumable Segmenter Training
+
+`train.py` writes a resume sidecar (`<--out>.resume.pt`) atomically after every completed epoch and `--resume` continues an interrupted run with identical hyperparameters (drift is rejected, not reconciled — Decision 3). Provenance carries the original run's `pretrained` value and records `resumed_from_epoch`; the shipped checkpoint contract is unchanged. Includes an out-of-scope-but-necessary fix to `export.load_checkpoint` for torchvision >= 0.13 (Decision 4).
+
+- [decision_log.md](estimation/resumable-segmenter-training/decision_log.md)
+- [smolspec.md](estimation/resumable-segmenter-training/smolspec.md)
+- [tasks.md](estimation/resumable-segmenter-training/tasks.md)
 
 ## Rawframe Rgb Conversion
 

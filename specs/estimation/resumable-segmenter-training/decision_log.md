@@ -95,3 +95,34 @@ With drift rejected, the restored optimizer state is consistent with the CLI by 
 - Lowering lr mid-run requires starting a fresh run (accepted; LR schedules are out of scope).
 
 ---
+## Decision 4: Accept an out-of-scope 7-line fix to export.load_checkpoint
+
+**Date**: 2026-07-02
+**Status**: accepted
+
+### Context
+
+The smolspec lists `export.py` changes as out of scope, and its acceptance test requires the final artifact to load through `export.load_checkpoint`. During implementation that assertion crashed: every torchvision version `requirements.txt` allows (≥ 0.13) refuses `aux_loss=False` alongside pretrained weights, so `load_checkpoint`'s pretrained construction raised before any checkpoint logic ran. The bug is pre-existing on the base branch and was latent only because nothing had exercised `load_checkpoint` with torch installed before `test_train_resume.py`.
+
+### Decision
+
+Build the pretrained model with `aux_loss=True` and immediately set `model.aux_classifier = None`, leaving the architecture and state_dict key set identical to an `aux_loss=False` construction. No other `export.py` behaviour changes.
+
+### Rationale
+
+Without the fix the spec's own mandated assertion (`export.load_checkpoint` loads the trained artifact) cannot pass, so the scope exclusion and the acceptance criterion were in direct conflict; the smallest change that resolves the conflict wins. Setting the aux head to `None` removes its submodule from the state_dict, so checkpoints saved by either construction load interchangeably — verified by the passing round-trip in `test_train_resume.py`.
+
+### Alternatives Considered
+
+- **Pin torchvision < 0.13**: keeps `export.py` untouched - Rejected; the installed 2.12/0.27 toolchain is what the local MPS route (this spec's whole purpose) runs on, and pinning ancient torchvision to preserve a latent crash is backwards.
+- **Skip the load_checkpoint assertion in the test**: keeps scope pure - Rejected; it silently ships a broken export path and defeats the byte-compatibility requirement the assertion exists to prove.
+
+### Consequences
+
+**Positive:**
+- The spec-mandated compatibility assertion passes on current torchvision; a real pre-existing crash in the export path is fixed and recorded in `docs/agent-notes/model-production.md` gotchas.
+
+**Negative:**
+- A scope exclusion was overridden (documented here rather than re-running the spec); the pretrained path briefly downloads aux-head weights it then discards.
+
+---
