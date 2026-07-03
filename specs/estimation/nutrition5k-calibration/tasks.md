@@ -367,14 +367,14 @@ references:
   - Success: merge committed; make test green (report both XCTest and swift-testing totals).
   - Blocked-by: i3we69x (Commit the in-flight nutrition5k worktree changes once gates pass)
 
-- [ ] 42. Merge resumable-segmenter-training into research <!-- id:i3we69z -->
+- [x] 42. Merge resumable-segmenter-training into research <!-- id:i3we69z -->
   - git merge resumable-segmenter-training. Expected semantic conflicts in tools/segmenter/export.py and tools/segmenter/train.py: resolution must keep BOTH behaviours — the n5k palette/liquids changes AND the crash-safe --resume sidecar.
   - Do not hand-merge specs/OVERVIEW.md — it is regenerated in the next task (PROCESS.md §9).
   - Success: merge committed; make test green; pytest for tools/segmenter green.
   - Blocked-by: i3we69y (Merge nutrition5k-calibration into research)
   - References: specs/estimation/resumable-segmenter-training/smolspec.md
 
-- [ ] 43. Regenerate specs/OVERVIEW.md and spell-check <!-- id:i3we6a0 -->
+- [x] 43. Regenerate specs/OVERVIEW.md and spell-check <!-- id:i3we6a0 -->
   - Run /specs-overview to regenerate the index (never hand-merge, PROCESS.md §9); bash tools/check_spelling.sh; commit.
   - Success: OVERVIEW.md lists both merged specs; spelling lint clean.
   - Blocked-by: i3we69z (Merge resumable-segmenter-training into research)
