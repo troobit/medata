@@ -133,8 +133,9 @@ class TestParsePalette:
 # --------------------------------------------------------------------------- #
 class TestArtifactContent:
     def test_palette_class_list_preserves_food_data_channel_order(self, artifact):
-        # Req 2.1: solid class ids in FOOD_DATA channel order, then liquids.
-        assert artifact.palette_class_list[:24] == _food_data_class_ids()
+        # Req 2.1: solid class ids in FOOD_DATA channel order, then liquids
+        # (FOOD_DATA itself carries the liquid rows since the liquid-DB task).
+        assert artifact.palette_class_list == _food_data_class_ids()
         assert artifact.palette_class_list == EXPECTED_SOLIDS + EXPECTED_LIQUIDS
 
     def test_staples_mapped_where_n5k_ingredients_exist(self, artifact):

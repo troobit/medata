@@ -60,10 +60,11 @@ from pathlib import Path
 
 import numpy as np
 
-# Special-class layout of the v1 palette: 24 food classes + background +
-# unknown_food + unsupported_liquid = 27 (mirrors ClassPalette.v1Standard,
-# totalClasses = foodClasses.count + 3).
-DEFAULT_NUM_CLASSES = 27
+# Special-class layout of the redefined v1 palette: 24 solid + 8 liquid
+# classes + background + unknown_food + unsupported_liquid = 35 (mirrors
+# ClassPalette.v1Standard, totalClasses = foodClasses.count +
+# liquidClasses.count + 3; Decisions 23/24).
+DEFAULT_NUM_CLASSES = 35
 DEFAULT_TARGET_SIZE = 513
 
 # ImageNet normalisation — MUST match export.reference_input so the probs we

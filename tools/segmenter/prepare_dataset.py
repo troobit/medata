@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Remap FoodSeg103 masks to the 27-channel palette and cut splits (ml-training §3c).
+"""Remap FoodSeg103 masks to the 35-channel palette and cut splits (ml-training §3c).
 
 This is step 3c of the segmenter training pipeline. It consumes the class-mapping
 JSON produced by ``build_class_mapping.py`` (§3b) and applies it to every
 FoodSeg103 PNG mask, remapping each source category-id pixel value to the medata
-27-channel palette:
+35-channel palette:
 
-    channels 0-23 : the 24 food classes (ClassPalette.v1Standard order)
-    channel  24   : background
-    channel  25   : unknown_food
-    channel  26   : unsupported_liquid
+    channels 0-23  : the 24 solid food classes (ClassPalette.v1Standard order)
+    channels 24-31 : the 8 coarse liquid classes
+    channel  32    : background
+    channel  33    : unknown_food
+    channel  34    : unsupported_liquid
 
 Mapping entries with ``target_index: null`` (rule ``curated_drop``) are remapped
-to background (channel 24) so dropped source classes never pollute a food class.
+to background (channel 32) so dropped source classes never pollute a food class.
 
 After remapping, the full image set is shuffled deterministically with a fixed
 RNG seed and carved into held-out / val / train splits. The held-out split is the
@@ -66,9 +67,9 @@ def _import_pillow():
 
 
 # FoodSeg103 ships its background as category id 0; the mapping JSON already
-# routes id 0 -> channel 24 (background), so no special-casing is needed here.
+# routes id 0 -> channel 32 (background), so no special-casing is needed here.
 # Dropped classes (target_index null) fall back to this channel too.
-BACKGROUND_CHANNEL = 24
+BACKGROUND_CHANNEL = 32
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png")
 

@@ -210,14 +210,14 @@ references:
 
 ## Stream C — Palette lock, liquids, DB bake
 
-- [ ] 23. Write failing tests for liquid DB rows, provenance columns, and new tables <!-- id:i3we69g -->
+- [x] 23. Write failing tests for liquid DB rows, provenance columns, and new tables <!-- id:i3we69g -->
   - tools/food_db/tests: 8 coarse liquid FOOD_DATA rows (water, coffee, tea, milk, fruit_juice, soup, beer, wine) each with carb, density, and per-row source (7.1); beta_provenance TEXT NOT NULL DEFAULT 'none' + device_verified INTEGER NOT NULL DEFAULT 0 columns (5.4 / banner plumbing); liquid_servings(class_id, region, vessel, serving_ml, source) PK(class_id, region, vessel) with a CLOSED region/vessel vocabulary — a lookup miss is a hard error, not a silent zero (7.4/7.7); liquid_subclasses(class_id, sub_class, carbs_mono_100, density, source) PK(class_id, sub_class) with beer → lager/stout rows (7.5, Decision 24); the len(FOOD_DATA)==24 count guard moves to 24 solid + 8 liquid.
   - Blocked-by: i3we68v (Redefine ClassPalette v1 in place and land the proto contract extensions)
   - Stream: 4
   - Requirements: [5.4](requirements.md#5.4), [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5)
   - References: tools/food_db/generate.py, tools/food_db/tests
 
-- [ ] 24. Implement generate.py schema additions and liquid data <!-- id:i3we69h -->
+- [x] 24. Implement generate.py schema additions and liquid data <!-- id:i3we69h -->
   - tools/food_db/generate.py: CoFID-primary liquid values, AFCD/USDA-sourced values in AFCD_DATA per the existing CoFID-wins merge; canonical serving volumes region-keyed (e.g. UK pint 568 mL) with provenance — a separate table, never a foods column (region-dependent, 7.7).
   - No basis column: N5k masses are as-served by construction; the convention is recorded in a generate.py comment (design §DB bake — the density spot-check IS the assert, tested in the bake task).
   - Blocked-by: i3we69g (Write failing tests for liquid DB rows, provenance columns, and new tables)
@@ -225,7 +225,7 @@ references:
   - Requirements: [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [7.7](requirements.md#7.7)
   - References: tools/food_db/generate.py
 
-- [ ] 25. Write failing tests for the palette-lock content check and FoodSeg103 remap <!-- id:i3we69i -->
+- [x] 25. Write failing tests for the palette-lock content check and FoodSeg103 remap <!-- id:i3we69i -->
   - verify_palette_lock parses the ordered class list from ClassPalette.swift (foodClasses then liquidClasses, declaration order, sentinels excluded — extend the existing regex-read pattern) and asserts exact equality with FOOD_DATA ids/order; a stale pre-liquid list must fail on CONTENT with the "v1" label unchanged (5.7/7.2, Decision 23).
   - build_class_mapping.py: parse_palette's 24-class assert moves to the new total; wine/coffee/tea/milk/juice/soup/beer FoodSeg103 categories route to the coarse liquid classes instead of unsupported_liquid (7.2).
   - Blocked-by: i3we69h (Implement generate.py schema additions and liquid data)
@@ -233,14 +233,14 @@ references:
   - Requirements: [5.7](requirements.md#5.7), [7.2](requirements.md#7.2)
   - References: tools/food_db/generate.py, tools/segmenter/build_class_mapping.py
 
-- [ ] 26. Implement the palette-lock content check, remap update, and artifact regeneration <!-- id:i3we69j -->
+- [x] 26. Implement the palette-lock content check, remap update, and artifact regeneration <!-- id:i3we69j -->
   - Regenerate every palette-locked artifact in the same change: both sqlite DBs and tools/segmenter/class_mapping_foodseg103_v1.json (Decision 23 consequence — the content lock enforces this discipline; no CI hook per PROCESS §8, fail-loud loaders instead).
   - Blocked-by: i3we69i (Write failing tests for the palette-lock content check and FoodSeg103 remap)
   - Stream: 4
   - Requirements: [5.7](requirements.md#5.7), [7.2](requirements.md#7.2)
   - References: tools/segmenter/build_class_mapping.py, tools/segmenter/class_mapping_foodseg103_v1.json
 
-- [ ] 27. Write failing tests for bake consumption of the calibrate JSON <!-- id:i3we69k -->
+- [x] 27. Write failing tests for bake consumption of the calibrate JSON <!-- id:i3we69k -->
   - Hand-written calibrate-JSON fixture (do NOT depend on stream B landing first — the JSON contract in design §DB bake is the interface).
   - β/status/provenance/SE/effective-sample written per row with device_verified defaulting 0 (5.4); a clamped class → calibration-quality warning, never silent acceptance (5.6); supersession: prior DB holds a mixture β, JSON holds a qualifying single-dominant β → supersession recorded in lineage meta (5.2 — generate.py reads the prior DB; the JSON carries no prior-bake state); density-basis spot-check: N5k-implied density (mass ÷ measured volume) vs DB ρ outside tolerance on rice/pasta ABORTS the bake (5.3 — the spot-check IS the assert); lineage meta rows incl. the pinned intrinsics model and licence CC BY 4.0 (1.5/5.5); palette lock runs and aborts on version mismatch (5.7).
   - Blocked-by: i3we69h (Implement generate.py schema additions and liquid data)
@@ -248,14 +248,14 @@ references:
   - Requirements: [1.5](requirements.md#1.5), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7)
   - References: tools/food_db/generate.py
 
-- [ ] 28. Implement the bake path in generate.py <!-- id:i3we69l -->
+- [x] 28. Implement the bake path in generate.py <!-- id:i3we69l -->
   - generate.py consumes the JSON artifact via a flag (e.g. --calibration-json); without the flag the current uncalibrated defaults are unchanged.
   - Blocked-by: i3we69k (Write failing tests for bake consumption of the calibrate JSON)
   - Stream: 4
   - Requirements: [1.5](requirements.md#1.5), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7)
   - References: tools/food_db/generate.py
 
-- [ ] 29. Write failing property tests for liquid surface-to-plane volume <!-- id:i3we69m -->
+- [x] 29. Write failing property tests for liquid surface-to-plane volume <!-- id:i3we69m -->
   - Swift Testing property test: flat and tilted synthetic liquid surfaces integrate surface-to-plane to their analytic volume within tolerance (7.3).
   - A recognised liquid class integrates via isLiquidClass; unsupported_liquid stays skipped; carb = volume × density × carb-fraction; the estimate raises the liquid over-estimate flag — the integration includes the vessel base/walls, a known upward bias (Decision 19).
   - Blocked-by: i3we68v (Redefine ClassPalette v1 in place and land the proto contract extensions)
@@ -263,14 +263,14 @@ references:
   - Requirements: [7.3](requirements.md#7.3)
   - References: MedataCore/Sources/Volume/HeightFieldEstimator.swift
 
-- [ ] 30. Implement HeightFieldEstimator liquid integration <!-- id:i3we69n -->
+- [x] 30. Implement HeightFieldEstimator liquid integration <!-- id:i3we69n -->
   - MedataCore/Sources/Volume/HeightFieldEstimator.swift: replace the blanket liquid skip (if labelC == liquidId { continue }) — recognised liquid classes integrate to the support plane; unsupported_liquid still skipped.
   - Blocked-by: i3we69m (Write failing property tests for liquid surface-to-plane volume)
   - Stream: 4
   - Requirements: [7.3](requirements.md#7.3)
   - References: MedataCore/Sources/Volume/HeightFieldEstimator.swift
 
-- [ ] 31. Write failing tests for LiquidResolver <!-- id:i3we69o -->
+- [x] 31. Write failing tests for LiquidResolver <!-- id:i3we69o -->
   - The vessel canonical mapping is a pure function (vessel_label, sub_class, region) → liquid_servings.serving_ml × DB carb density: parameterised table test over each vessel/sub-class/region, generic coarse-row fallback when the sub-class is uncertain (7.5 — no assumed lager<stout ordering; densities from the DB), closed-vocabulary miss raises an error (7.4).
   - Precedence (7.6): recognised standard vessel → canonical-volume estimate; else recognised liquid class with usable surface depth → depth-integrated estimate; else exclude + flag — never an unbacked carb number.
   - BOTH estimate paths raise liquidOverEstimate (Decision 19). Region comes from a Settings value defaulting to UK.
@@ -279,7 +279,7 @@ references:
   - Requirements: [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [7.6](requirements.md#7.6)
   - References: specs/estimation/nutrition5k-calibration/design.md
 
-- [ ] 32. Implement MedataCore/Sources/Volume/LiquidResolver.swift <!-- id:i3we69p -->
+- [x] 32. Implement MedataCore/Sources/Volume/LiquidResolver.swift <!-- id:i3we69p -->
   - New MedataCore/Sources/Volume/LiquidResolver.swift; sits after segmentation where liquid classes are detected; returns a carb value + over-estimate flag or an exclusion + flag; sets the result-level liquidOverEstimate.
   - Vessel/sub-class recognition stays the deferred model-production dependency (7.7) — the resolver is fully unit-testable from label inputs.
   - Blocked-by: i3we69o (Write failing tests for LiquidResolver)

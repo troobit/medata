@@ -43,6 +43,16 @@ public struct ClassPalette: Sendable, Equatable {
         guard isFoodClass(classId) else { return nil }
         return foodClasses[classId]
     }
+
+    public func liquidClassName(at classId: Int) -> String? {
+        guard isLiquidClass(classId) else { return nil }
+        return liquidClasses[classId - foodClasses.count]
+    }
+
+    // Name for any solid or liquid class index; nil for the sentinels.
+    public func className(at classId: Int) -> String? {
+        foodClassName(at: classId) ?? liquidClassName(at: classId)
+    }
 }
 
 public extension ClassPalette {
