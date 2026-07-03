@@ -10,10 +10,11 @@ import PortableContracts
 // CVPixelBuffer without an ARSession (Decision 3).
 //
 // Conversion backend is vImage's biplanar YpCbCr→ARGB path with a permute map
-// `[3, 2, 1, 0]` that lands the bytes in BGRA order. The full-range BT.601
-// pixel range matches `kCVPixelFormatType_420YpCbCr8BiPlanarFullRange` —
-// ARKit's `ARFrame.capturedImage` format on every supported device. The cached
-// `vImage_YpCbCrToARGB` info struct is built once on first call (Req 4.3).
+// `[3, 2, 1, 0]` that lands the bytes in BGRA order. The matrix is selected on
+// the source four-CC: `420f` uses the full-range BT.601 range (ARKit's
+// `ARFrame.capturedImage` format on every supported device); `420v` uses the
+// video-range range so a non-ARKit caller's frames are not colour-shifted. Both
+// cached `vImage_YpCbCrToARGB` info structs are built once on first call (Req 4.3).
 public enum PixelBufferAdapter {
     public enum ConversionError: Error, Equatable {
         case unsupportedSourceFormat(fourCC: String)
@@ -33,11 +34,16 @@ public enum PixelBufferAdapter {
         let fmt = CVPixelBufferGetPixelFormatType(buffer)
 
         switch fmt {
-        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-             kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
-            // Full-range and video-range share the same plane layout; the
-            // cached info struct is generated for full-range to match ARKit.
-            return try convertYCbCr(buffer, width: width, height: height)
+        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+            // ARKit's `ARFrame.capturedImage` format on every supported device.
+            return try convertYCbCr(buffer, width: width, height: height, fullRange: true)
+
+        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+            // Same plane layout as full-range but a narrower luma/chroma range
+            // (`420v`); decoding it with the full-range matrix colour-shifts the
+            // output, so select the video-range conversion. Reachable from
+            // non-ARKit callers (e.g. a future macOS HarnessCLI).
+            return try convertYCbCr(buffer, width: width, height: height, fullRange: false)
 
         case kCVPixelFormatType_32BGRA:
             let bytes = try copyContiguous(buffer, bytesPerPixel: 4)
@@ -55,7 +61,8 @@ public enum PixelBufferAdapter {
     // MARK: - YCbCr → BGRA via vImage
 
     private static func convertYCbCr(_ buffer: CVPixelBuffer,
-                                     width: Int, height: Int) throws -> Output {
+                                     width: Int, height: Int,
+                                     fullRange: Bool) throws -> Output {
         let lockStatus = CVPixelBufferLockBaseAddress(buffer, .readOnly)
         guard lockStatus == kCVReturnSuccess else {
             throw ConversionError.conversionFailed(vImageErrorCode: Int(lockStatus))
@@ -91,7 +98,9 @@ public enum PixelBufferAdapter {
                 width: vImagePixelCount(width),
                 rowBytes: destRowBytes
             )
-            var info = ConversionInfoCache.shared.info
+            var info = fullRange
+                ? ConversionInfoCache.shared.fullRange
+                : ConversionInfoCache.shared.videoRange
             let permuteMap: [UInt8] = [3, 2, 1, 0]
             return vImageConvert_420Yp8_CbCr8ToARGB8888(
                 &ySrc, &cbcrSrc, &dest, &info,
@@ -162,12 +171,14 @@ public enum PixelBufferAdapter {
 // trivially Sendable for cross-actor reads from `PixelBufferAdapter.convert`.
 private final class ConversionInfoCache: @unchecked Sendable {
     static let shared = ConversionInfoCache()
-    let info: vImage_YpCbCrToARGB
+
+    /// Full-range BT.601 (`420f`): Yp 0..255, Cb/Cr 0..255 with offset 128.
+    let fullRange: vImage_YpCbCrToARGB
+    /// Video-range BT.601 (`420v`): Yp 16..235, Cb/Cr 16..240 with offset 128.
+    let videoRange: vImage_YpCbCrToARGB
 
     private init() {
-        var info = vImage_YpCbCrToARGB()
-        // Full-range BT.601: Yp 0..255, Cb/Cr 0..255 with zero offset 128.
-        var range = vImage_YpCbCrPixelRange(
+        fullRange = Self.makeInfo(range: vImage_YpCbCrPixelRange(
             Yp_bias: 0,
             CbCr_bias: 128,
             YpRangeMax: 255,
@@ -176,7 +187,22 @@ private final class ConversionInfoCache: @unchecked Sendable {
             YpMin: 0,
             CbCrMax: 255,
             CbCrMin: 0
-        )
+        ))
+        videoRange = Self.makeInfo(range: vImage_YpCbCrPixelRange(
+            Yp_bias: 16,
+            CbCr_bias: 128,
+            YpRangeMax: 235,
+            CbCrRangeMax: 240,
+            YpMax: 235,
+            YpMin: 16,
+            CbCrMax: 240,
+            CbCrMin: 16
+        ))
+    }
+
+    private static func makeInfo(range: vImage_YpCbCrPixelRange) -> vImage_YpCbCrToARGB {
+        var info = vImage_YpCbCrToARGB()
+        var range = range
         let err = vImageConvert_YpCbCrToARGB_GenerateConversion(
             kvImage_YpCbCrToARGBMatrix_ITU_R_601_4,
             &range,
@@ -187,6 +213,6 @@ private final class ConversionInfoCache: @unchecked Sendable {
         )
         precondition(err == kvImageNoError,
                      "vImage YpCbCr→ARGB conversion-info generation failed: \(err)")
-        self.info = info
+        return info
     }
 }
