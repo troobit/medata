@@ -31,6 +31,6 @@ Less is more. The gate for app/UI work is: **does it build + does it look right 
 ## Workflow
 
 - Specs live in `specs/` (estimation/, ui/, data/) — follow `specs/PROCESS.md`; each spec has requirements, design, decision_log, prerequisites, and tasks. `specs/OVERVIEW.md` is the index.
-- Session tracking lives in **`.nextup.md`** at the repo root (note the leading dot — treat it as `nextup.md` for the `/nextup` workflow).
+- Session tracking lives in **`nextup.md`** at the repo root  for the `/nextup` workflow.
 - Module gotchas are in `docs/agent-notes/` — read the note for a module before changing it.
 - `git push` is denied in `.claude/settings.local.json`; pushing is the user's call.
