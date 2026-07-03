@@ -4,6 +4,17 @@ The repo root holds the Swift Package for the iOS-first carbohydrate-estimation
 pipeline. The Swift sources live in `MedataCore/` and `HarnessCLI/`, with the iOS
 app target in `MeData/MeData.xcodeproj` referencing the views under `App/` in place.
 
+**Where `Package.swift` lives — read this before guessing (agents have guessed
+wrong 5+ times):** there is exactly ONE manifest, at the **repo/worktree root**
+(`<checkout>/Package.swift`). There is no `MedataCore/Package.swift`, no
+`MeData/Package.swift`, and no per-module manifest. In a git worktree the same
+holds: `<worktree-root>/Package.swift`. `swift build` / `swift test` / `make
+build` / `make test` run from that root. Separately, the Xcode project pins the
+package by RELATIVE path `../../medata`, so the app only builds from a checkout
+whose directory is literally named `medata` (see the caveat under Topology and
+in `ui-capture-flow.md`) — worktrees named after branches will resolve a stale
+sibling package.
+
 ## Topology
 
 - `Package.swift` (root) — single SwiftPM manifest declaring `MedataCore` library

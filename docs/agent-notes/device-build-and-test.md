@@ -2,7 +2,79 @@
 
 How we get a build onto a physical iPhone, why the current process has friction,
 and what removes that friction. Written 2026-06-24 after a device session where
-no meal would record from an Xcode (Debug) build.
+no meal would record from an Xcode (Debug) build. Updated 2026-07-03: the loop
+is now automated behind Make targets (below) — use those, not hand-typed
+incantations.
+
+## The canonical loop — Make targets
+
+The repo-root `Makefile` is the one true way to run the loop (the same
+xcodebuild/devicectl commands were previously retyped ~50 times):
+
+- `make build` / `make test` — SwiftPM core. `make test` prints **both** test
+  totals (XCTest ~323 + swift-testing 16). Never report only one framework's
+  slice as "the" test count.
+- `make deploy-device` — Debug build + install + launch on PhoneMax
+  (override `DEVICE_UDID=` / `DEVICE_NAME=`). UI/non-capture work only.
+- `make deploy-release-stub` — the automated Path B below (capture testing).
+- `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs
+  filtered to `subsystem == "ie.medata.app"`, to stdout and
+  `/tmp/medata-device.log`. **Post-hoc only** — macOS has no scriptable live
+  stream for an iOS device (`log stream` is host-only, devicectl has no log
+  subcommand); live viewing stays in Console.app (recipe below).
+- `make spell` — Irish/British spelling lint.
+
+Default device: PhoneMax, iPhone 13 Pro Max, devicectl identifier
+`76A45E6D-C57E-5BA6-ABAD-205C3C668572`, bundle `rtob.MeData`. Note the
+devicectl (CoreDevice) identifier is NOT the hardware UDID — `log collect
+--device-udid` wants the hardware one, which is why the Makefile matches the
+device by name instead.
+
+(This automation does not contradict "Less is more" below: it scripts the
+existing recipe verbatim and adds zero gating machinery to the codebase.)
+
+## Build stamp — always check it before trusting a trail
+
+Stale binaries on the device have silently invalidated 2–3 full capture
+rounds. Every Make-built binary logs one line at launch on the
+`ie.medata.app` / `Shutter` channel:
+
+```
+event=launch buildStamp=<git-sha>-<timestamp> segmenterSource=stub|coreml
+```
+
+The Make target prints the same stamp (`DEPLOYED BUILD STAMP: …`) at deploy
+time. **Before trusting any captured trail, match the on-device stamp against
+the deploy output**, and check `segmenterSource` is what you think you are
+testing — days were lost debugging against the stub without realising. A plain
+Xcode Run logs `buildStamp=unstamped` (the stamp comes from the
+`MEDATA_BUILD_STAMP` build setting via `MeData/Info.plist`, which only the
+Make targets set).
+
+## Debug vs Release stub matrix
+
+| Build | Segmenter | Capture-testable? |
+|---|---|---|
+| Debug (Xcode Run / `make deploy-device`) | stub at `-Onone`, ~20 s/mask | **No** — mask stale, `canShutter=false` ~19 s of every 20 |
+| Release, plain | none (real model not shipped yet) | **No** — **crashes at launch**; the stub is Debug-only |
+| Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — the only capture-testable build until the real model lands |
+
+The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
+window is unhittable; details and the log tells are in the sections below.
+
+## Console.app filter recipe (live viewing)
+
+Re-derived at least four times — this is the recipe:
+
+1. Console.app → select the iPhone in the sidebar → Start streaming.
+2. Filter field: `subsystem: ie.medata.app` (add `category: Shutter` to narrow
+   to the shutter/pipeline `event=…` lines). `process: MeData` also works but
+   picks up ARKit/Fig noise.
+3. **Action menu → Include Info Messages AND Include Debug Messages** — the
+   `event=…` lines are `.info`/`.debug` level and invisible without this.
+4. Do NOT hand-paste long trails into a chat session (one paste blew the
+   context window; several were truncated). Use `make logs-device` and grep
+   `/tmp/medata-device.log` for the relevant `event=` lines instead.
 
 ## What is next
 
@@ -64,7 +136,10 @@ above). A plain Release Run from Xcode **crashes** — the stub is Debug-only an
 real model doesn't exist, so the app launches with no segmenter.
 
 ### Path B — CLI Release with the stub forced on (what we use to test capture)
-This is the working recipe to put optimised, capture-testable code on the device:
+
+**Automated: `make deploy-release-stub`** (tools/deploy_release_stub.sh — does
+all five steps below, reverts Package.swift via a trap even on failure, and
+prints the build stamp). The manual recipe, for reference:
 
 1. **Force the stub into Release.** In `Package.swift` (~L115) change
    `.define("DEV_STUB_SEGMENTER", .when(configuration: .debug))`

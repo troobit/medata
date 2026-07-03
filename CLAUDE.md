@@ -13,9 +13,14 @@ This development cycle currently runs along the 'research' branch, with intent t
 
 ## Build, test, lint
 
-- `swift build` / `swift test` from the repo root cover all SwiftPM modules (MedataCore, HarnessCore, HarnessCLI).
-- The iOS app builds via `MeData/MeData.xcodeproj`.
-- Always run `bash tools/check_spelling.sh` before committing docs or strings.
+- Use the repo-root **Makefile**: `make build` / `make test` / `make spell` for the SwiftPM core; `make deploy-device`, `make deploy-release-stub`, `make logs-device` for the on-device loop (see `docs/agent-notes/device-build-and-test.md`).
+- `make test` prints TWO totals — XCTest and swift-testing. Always report both; the swift-testing slice alone is not "the" test count.
+- The iOS app builds via `MeData/MeData.xcodeproj`; every Make-deployed build logs `event=launch buildStamp=… segmenterSource=…` — match the stamp before trusting device output.
+- Always run `make spell` before committing docs or strings.
+
+## Test gate (MVP)
+
+Less is more. The gate for app/UI work is: **does it build + does it look right on device**. Keep the MedataCore math tests green (`make test`); do not add new test scaffolding unless explicitly asked. The app-target files under `MeData/Tests/` and `MeData/UITests/` are **documentation contracts, not an executable suite** — no committed test target runs them; never claim to have run them or write new ones expecting execution (see `docs/agent-notes/ui-capture-flow.md`).
 
 ## Feature flags and generated artifacts
 

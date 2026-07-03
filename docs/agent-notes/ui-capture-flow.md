@@ -83,10 +83,35 @@ composition only; all behaviour is in the model and is unit-tested.
 Unit tests are in `MeData/Tests/` using Swift Testing (`@Test`/`#expect`) with
 `@testable import MeData`. XCUITests are in `MeData/UITests/` (XCTest).
 **Neither is wired into the committed Xcode project** (no test targets exist —
-the pre-existing `CapturePathDeciderTests.swift` is the same). To run unit tests,
-add a temporary unit-test target with
-`TEST_HOST = $(BUILT_PRODUCTS_DIR)/MeData.app/MeData`. Validated: all 40 tests
-pass on the iPhone 17 Pro simulator.
+the pre-existing `CapturePathDeciderTests.swift` is the same).
+
+**Convention (2026-07-03): the files in `MeData/Tests/` and `MeData/UITests/`
+are documentation contracts, not an executable suite.** They compile against
+the app source and record intended behaviour, but no committed target runs
+them. Agents MUST NOT claim to have "run" them, count them in test totals
+(`make test` covers the SwiftPM core only), or write new app-target tests
+expecting execution — the MVP gate for app/UI work is "does it build + does it
+look right on device" (see CLAUDE.md). If execution is ever genuinely needed,
+the historical recipe is a temporary unit-test target with
+`TEST_HOST = $(BUILT_PRODUCTS_DIR)/MeData.app/MeData` (validated once: all 40
+passed on the iPhone 17 Pro simulator).
+
+## Adding a new file under `App/` — pbxproj checklist
+
+`App/*.swift` files are NOT auto-discovered (unlike `MeData/MeData/`, which is
+a file-system-synchronised group). Each file must be registered in
+`MeData/MeData.xcodeproj/project.pbxproj` in **four places** (copy the
+`RefusalSheet.swift` entries as a template, generating fresh 24-hex IDs):
+
+1. `PBXBuildFile` section — `<buildID> /* X.swift in Sources */ = {isa = PBXBuildFile; fileRef = <fileID> …};`
+2. `PBXFileReference` section — with `path = ../App/X.swift; sourceTree = SOURCE_ROOT;`
+3. The `PBXGroup` children list that holds the other App files
+4. The `PBXSourcesBuildPhase` files list
+
+Miss one and the build either fails or silently omits the file. Conversely,
+files dropped INSIDE `MeData/MeData/` are auto-added to the target including
+Copy Bundle Resources — which is why `MeData/Info.plist` (build stamp) lives
+outside that folder ("Multiple commands produce Info.plist" otherwise).
 
 ### XCUITests and the DEBUG harness (tasks 26–28)
 

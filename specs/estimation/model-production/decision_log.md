@@ -343,3 +343,51 @@ checkpoint), `tools/segmenter/tests/` (new pytest suite). Follow-up: reconcile
 `train.py`/`reference_input` resize with the runtime letterbox path.
 
 ---
+
+## Decision 10: Canonical model artefact name is `segmenter.mlpackage`
+
+**Date**: 2026-07-03
+**Status**: accepted
+
+### Context
+
+The trained Core ML artefact has been referred to in transcripts and drafts as
+both `segmenter.mlpackage` and `food_segmenter.mlpackage` (the latter echoing
+Google's `mobile_food_segmenter_V1` reference model in
+`docs/agent-notes/dataset-strategy.md`). The name is load-bearing: the runtime
+loader resolves it literally
+(`Bundle.module.url(forResource: "segmenter", withExtension: "mlpackage",
+subdirectory: "Resources")` in `PipelineFactory.resolveBundledSegmenterURL`),
+the gitignore lists the exact path, and `tools/segmenter/export.py` defaults
+its output to it. An artefact exported under any other name is silently NOT
+bundled and Release falls over with `segmenterModelMissing`.
+
+### Decision
+
+The one canonical name is **`segmenter.mlpackage`**, at
+`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`. Never
+`food_segmenter.mlpackage` or any other variant.
+
+### Rationale
+
+This is the name the entire committed chain already agrees on — loader,
+gitignore, export default, and Decision 7's `.copy("Resources")` bundling.
+Everything in this app segments food; the `food_` prefix adds no information
+inside this codebase and creates a run-time-only failure when the names drift.
+Recording the decision stops the drift at the source.
+
+### Alternatives Considered
+
+- **`food_segmenter.mlpackage`**: Mirrors the Google reference model's naming - Rejected: redundant prefix in a single-model food app, and would require touching loader, gitignore, and export defaults for zero benefit.
+- **Versioned file name (e.g. `segmenter_v1.mlpackage`)**: Encodes the model version in the name - Rejected: the version already travels inside the artefact and is surfaced as `coreml_<modelVersion>` via `segmenterSourceTag` (Decision 8); a moving file name would break the literal resource lookup on every retrain.
+
+### Consequences
+
+**Positive:**
+- One grep-able name across loader, tooling, gitignore, and docs.
+- Retrained models drop in without code changes.
+
+**Negative:**
+- The name alone does not distinguish model generations — traceability relies on `segmenterSourceTag` (Decision 8).
+
+---
