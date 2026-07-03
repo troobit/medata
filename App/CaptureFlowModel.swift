@@ -21,12 +21,6 @@ func defaultCaptureModeReader() -> CaptureMode {
     return raw.flatMap(CaptureMode.init(rawValue:)) ?? .double
 }
 
-// Per Decision 7 of `specs/capture/rawframe-rgb-conversion/`: device-log correlation
-// for untyped pipeline failures. The on-screen `.internalError(typeName)`
-// refusal payload (Req 6.2) is meaningful only when the device log carries
-// the same `<Type>` token, so the catch-all logs it at this subsystem.
-private let captureFlowLog = Logger(subsystem: "ie.medata.captureflow", category: "Estimation")
-
 // Orchestrator for the capture flow per `specs/ui/iphone-experience/design.md`. Owns the state
 // machine, drives the `CaptureSession` and `PipelineEstimator`, observes
 // AR-session interruptions, and re-evaluates permissions on scene-phase
@@ -595,7 +589,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             state = .refused(failure, retryStage: stage)
         } catch {
             let typeName = String(describing: type(of: error))
-            captureFlowLog.info("event=estimate.end stage=\(stage.name, privacy: .public) success=false error=\(typeName, privacy: .public)")
+            log.info("event=estimate.end stage=\(stage.name, privacy: .public) success=false error=\(typeName, privacy: .public)")
             state = .refused(.internalError(typeName), retryStage: stage)
         }
     }
@@ -639,7 +633,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         } catch {
             guard case .estimating = state else { return }
             let typeName = String(describing: type(of: error))
-            captureFlowLog.info("event=estimate.end success=false error=\(typeName, privacy: .public)")
+            log.info("event=estimate.end success=false error=\(typeName, privacy: .public)")
             state = .refused(.internalError(typeName), retryStage: retryStage)
         }
     }
