@@ -109,7 +109,19 @@ join_words() {
     echo "${BANNED_WORDS[*]}"
 }
 
-PATTERN="\\b($(join_words))\\b"
+# Strict pattern (plain word boundaries) — used for user-facing string
+# catalogs, which never contain code tokens.
+STRICT_PATTERN="\\b($(join_words))\\b"
+
+# Code pattern — used for .swift sources. Swift API identifiers are not
+# spellings we control, so exclude:
+#   - dot-prefixed member tokens:      .center, .color        (leading [^.…])
+#   - parameter/argument labels:       colors:                (trailing [^:…])
+#   - hyphenated external rule names:  color-not-only         (trailing [^-…])
+# Trade-off: a US spelling immediately followed by "-" or ":" in a comment
+# (e.g. "color-coded") now passes in code files; prose violations ("center.",
+# "the color of") are still caught, and string catalogs use STRICT_PATTERN.
+CODE_PATTERN="(^|[^.[:alnum:]_])($(join_words))(\$|[^-:[:alnum:]_])"
 
 # Directories / file globs to scan.
 SCAN_TARGETS=(
@@ -125,7 +137,7 @@ for target in "${SCAN_TARGETS[@]}"; do
         continue
     fi
     # grep -rn: recursive, line numbers. -E: extended regex. --include: limit to .swift.
-    if grep -rEn --include="*.swift" "$PATTERN" "$target" 2>/dev/null; then
+    if grep -rEn --include="*.swift" "$CODE_PATTERN" "$target" 2>/dev/null; then
         FOUND=1
     fi
 done
@@ -134,7 +146,7 @@ done
 XCSTRINGS_DIR="${REPO_ROOT}/App"
 if [[ -d "$XCSTRINGS_DIR" ]]; then
     while IFS= read -r -d '' f; do
-        if grep -En "$PATTERN" "$f" 2>/dev/null; then
+        if grep -En "$STRICT_PATTERN" "$f" 2>/dev/null; then
             FOUND=1
         fi
     done < <(find "$XCSTRINGS_DIR" -name "*.xcstrings" -print0 2>/dev/null)
