@@ -38,21 +38,36 @@ public enum LiDARPlaneFitter {
     static let stabilityRatioMin: Float = 1e-6
     static let minPoints: Int = 3
 
+    // Where candidate points are sampled relative to `foodRegionMask`.
+    public enum CandidateRegion: Sendable, Equatable {
+        // §6.2 default: table pixels outside the food mask, in edge bands
+        // around its bbox.
+        case bandsAroundFoodRegion
+        // Restrict candidates to pixels inside the mask; RANSAC then selects
+        // the dominant plane within that region. Used by the offline harness
+        // to fit the plate-top plane on a flood-filled plate region
+        // (nutrition5k-calibration §Support plane, Decision 15 amendment).
+        case insideMask
+    }
+
     public struct Inputs: Sendable {
         public let depth: DepthMap
         public let colourIntrinsics: CameraIntrinsics
         public let foodRegionMask: BinaryMask    // colour-image grid
         public let gravityCamera: Vec3           // unit vector in camera-1 frame
         public let residualMaxMm: Float          // §6.2 step 5; default 8
+        public let candidateRegion: CandidateRegion
 
         public init(depth: DepthMap, colourIntrinsics: CameraIntrinsics,
                     foodRegionMask: BinaryMask, gravityCamera: Vec3,
-                    residualMaxMm: Float = LiDARPlaneFitter.residualMaxMm) {
+                    residualMaxMm: Float = LiDARPlaneFitter.residualMaxMm,
+                    candidateRegion: CandidateRegion = .bandsAroundFoodRegion) {
             self.depth = depth
             self.colourIntrinsics = colourIntrinsics
             self.foodRegionMask = foodRegionMask
             self.gravityCamera = gravityCamera
             self.residualMaxMm = residualMaxMm
+            self.candidateRegion = candidateRegion
         }
     }
 
@@ -129,6 +144,32 @@ public enum LiDARPlaneFitter {
         // any side of the bbox sitting against the image edge.
         // Bug `lidar-plane-fit-degenerate-on-clean-capture` 2026-06-16.
         let mask = inputs.foodRegionMask
+
+        if inputs.candidateRegion == .insideMask {
+            // Sample every valid-depth pixel INSIDE the mask; the caller has
+            // already restricted the mask to the region of interest (e.g. the
+            // flood-filled plate region), so no band scan is needed.
+            var points: [Vec3] = []
+            let kc = inputs.colourIntrinsics
+            for y in 0..<mask.height {
+                for x in 0..<mask.width {
+                    guard mask.isFood(x: x, y: y) else { continue }
+                    let conf = sampleConfidenceNearest(depth: inputs.depth, colourX: x, colourY: y,
+                                                       colourWidth: mask.width, colourHeight: mask.height)
+                    if Float(conf) / 255 < confidenceThreshold { continue }
+                    guard let zMm = sampleDepthBilinear(depth: inputs.depth, colourX: Float(x), colourY: Float(y),
+                                                        colourWidth: mask.width, colourHeight: mask.height),
+                          zMm > 0 else { continue }
+                    points.append(Vec3(
+                        (Float(x) - kc.cx) / kc.fx * zMm,
+                        (Float(y) - kc.cy) / kc.fy * zMm,
+                        -zMm
+                    ))
+                }
+            }
+            return points
+        }
+
         guard let bbox = foodBBox(mask: mask) else { return [] }
         #if DEBUG
         debugLastFoodBBoxX = bbox.minX
@@ -331,6 +372,10 @@ public enum LiDARPlaneFitter {
         depth: DepthMap, colourX: Int, colourY: Int,
         colourWidth: Int, colourHeight: Int
     ) -> UInt8 {
+        // No confidence map (e.g. N5k RealSense fixtures) means no confidence
+        // filtering: invalid returns are zeroed depth, excluded by the zMm > 0
+        // guard. Device captures always carry ARKit confidence.
+        guard !depth.confidenceBytes.isEmpty else { return .max }
         let dx = min(depth.width - 1,
                      max(0, Int((Float(colourX) + 0.5) * Float(depth.width) / Float(colourWidth))))
         let dy = min(depth.height - 1,

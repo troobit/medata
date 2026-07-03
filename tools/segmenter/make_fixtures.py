@@ -60,10 +60,11 @@ from pathlib import Path
 
 import numpy as np
 
-# Special-class layout of the v1 palette: 24 food classes + background +
-# unknown_food + unsupported_liquid = 27 (mirrors ClassPalette.v1Standard,
-# totalClasses = foodClasses.count + 3).
-DEFAULT_NUM_CLASSES = 27
+# Special-class layout of the redefined v1 palette: 24 solid + 8 liquid
+# classes + background + unknown_food + unsupported_liquid = 35 (mirrors
+# ClassPalette.v1Standard, totalClasses = foodClasses.count +
+# liquidClasses.count + 3; Decisions 23/24).
+DEFAULT_NUM_CLASSES = 35
 DEFAULT_TARGET_SIZE = 513
 
 # ImageNet normalisation — MUST match export.reference_input so the probs we
@@ -194,8 +195,8 @@ def png_bytes(rgb_uint8: np.ndarray) -> bytes:
 def build_fixture_bytes(
     *,
     fixture_id: str,
-    probs_hwc: np.ndarray,
-    argmax_hw: np.ndarray,
+    probs_hwc: np.ndarray | None,
+    argmax_hw: np.ndarray | None,
     nadir_image_png: bytes,
     checkpoint_sha256: str,
     schema_dir: Path,
@@ -203,22 +204,45 @@ def build_fixture_bytes(
     palette_version: str = "v1",
     database_edition: str = "CoFID 2024 + IFCDB 2023",
     capture_path_canonical: str = "single_view_lidar",
+    depth_mm_hw: np.ndarray | None = None,
+    intrinsics: tuple[float, float, float, float, int, int] | None = None,
+    gravity: tuple[float, float, float] | None = None,
+    ground_truth_class_mass_g: dict[str, float] | None = None,
+    ground_truth_total_carbs_g: float | None = None,
+    ground_truth_protein_g: float | None = None,
+    ground_truth_fat_g: float | None = None,
+    ground_truth_class_carbs_g: dict[str, float] | None = None,
+    ground_truth_class_protein_g: dict[str, float] | None = None,
+    ground_truth_class_fat_g: dict[str, float] | None = None,
+    source_dataset: str | None = None,
+    estimator_path: str | None = None,
 ) -> bytes:
     """Serialise a single PbMealFixture from numpy arrays. Pure (no torch).
 
     ``probs_hwc``  : float array [H, W, C] — stored as FP16 LE, HWC row-major.
+                     None for mixture fixtures, which must NOT carry
+                     segmentation probabilities (nutrition5k Req 3.7).
     ``argmax_hw``  : uint8 array [H, W]     — stored as UInt8 row-major.
+                     None when there is no ground-truth mask (N5k plates).
+    ``depth_mm_hw``: float32 array [H, W]   — DepthMap.depth_bytes_mm,
+                     Float32 LE millimetres, 0 = excluded pixel (Req 3.2).
+    ``intrinsics`` : (fx, fy, cx, cy, width, height) override. Required when
+                     ``probs_hwc`` is None (there is no tensor to derive the
+                     seg-bench W/H from).
     Returns the serialised proto bytes (write these to ``<id>.fixture``).
     """
-    if probs_hwc.ndim != 3:
+    if probs_hwc is not None and probs_hwc.ndim != 3:
         raise ValueError(f"probs must be [H, W, C]; got shape {probs_hwc.shape}")
-    if argmax_hw.ndim != 2:
+    if argmax_hw is not None and argmax_hw.ndim != 2:
         raise ValueError(f"argmax must be [H, W]; got shape {argmax_hw.shape}")
-    h, w, c = probs_hwc.shape
-    if argmax_hw.shape != (h, w):
-        raise ValueError(
-            f"argmax shape {argmax_hw.shape} != probs spatial dims {(h, w)}"
-        )
+    if probs_hwc is not None and argmax_hw is not None:
+        h, w, _ = probs_hwc.shape
+        if argmax_hw.shape != (h, w):
+            raise ValueError(
+                f"argmax shape {argmax_hw.shape} != probs spatial dims {(h, w)}"
+            )
+    if probs_hwc is None and intrinsics is None:
+        raise ValueError("intrinsics are required when probs_hwc is None")
 
     pb = _import_meal_fixture_pb(schema_dir)
     fx = pb.MealFixture()
@@ -230,21 +254,77 @@ def build_fixture_bytes(
     fx.nadir_image = nadir_image_png
     fx.capture_path_canonical = capture_path_canonical
 
-    # FP16 LE, contiguous HWC row-major. astype('<f2') forces little-endian.
-    probs_fp16 = np.ascontiguousarray(probs_hwc, dtype=np.float32).astype("<f2")
-    fx.nadir_probs = probs_fp16.tobytes(order="C")
+    if probs_hwc is not None:
+        # FP16 LE, contiguous HWC row-major. astype('<f2') forces little-endian.
+        probs_fp16 = np.ascontiguousarray(probs_hwc, dtype=np.float32).astype("<f2")
+        fx.nadir_probs = probs_fp16.tobytes(order="C")
 
-    argmax = np.ascontiguousarray(argmax_hw, dtype=np.uint8)
-    fx.nadir_argmax = argmax.tobytes(order="C")
+    if argmax_hw is not None:
+        argmax = np.ascontiguousarray(argmax_hw, dtype=np.uint8)
+        fx.nadir_argmax = argmax.tobytes(order="C")
 
-    # seg-bench reads W, H from the intrinsics; focal/principal are unused there
-    # but set to sane positive values.
-    fx.nadir_intrinsics.image_width = w
-    fx.nadir_intrinsics.image_height = h
-    fx.nadir_intrinsics.fx = float(w)
-    fx.nadir_intrinsics.fy = float(w)
-    fx.nadir_intrinsics.cx = float(w) / 2.0
-    fx.nadir_intrinsics.cy = float(h) / 2.0
+    if intrinsics is not None:
+        k_fx, k_fy, k_cx, k_cy, k_w, k_h = intrinsics
+        fx.nadir_intrinsics.fx = float(k_fx)
+        fx.nadir_intrinsics.fy = float(k_fy)
+        fx.nadir_intrinsics.cx = float(k_cx)
+        fx.nadir_intrinsics.cy = float(k_cy)
+        fx.nadir_intrinsics.image_width = int(k_w)
+        fx.nadir_intrinsics.image_height = int(k_h)
+    else:
+        # seg-bench reads W, H from the intrinsics; focal/principal are unused
+        # there but set to sane positive values.
+        h, w, _ = probs_hwc.shape
+        fx.nadir_intrinsics.image_width = w
+        fx.nadir_intrinsics.image_height = h
+        fx.nadir_intrinsics.fx = float(w)
+        fx.nadir_intrinsics.fy = float(w)
+        fx.nadir_intrinsics.cx = float(w) / 2.0
+        fx.nadir_intrinsics.cy = float(h) / 2.0
+
+    if depth_mm_hw is not None:
+        if depth_mm_hw.ndim != 2:
+            raise ValueError(
+                f"depth must be [H, W]; got shape {depth_mm_hw.shape}"
+            )
+        depth = np.ascontiguousarray(depth_mm_hw).astype("<f4")
+        fx.nadir_depth.depth_bytes_mm = depth.tobytes(order="C")
+        fx.nadir_depth.height, fx.nadir_depth.width = depth.shape
+        fx.nadir_depth.row_stride_bytes = depth.shape[1] * 4
+        fx.nadir_depth.depth_intrinsics.CopyFrom(fx.nadir_intrinsics)
+        # Depth supplied this way is already registered to the RGB frame
+        # (N5k publishes registered overhead depth; the assumption is recorded
+        # in lineage), so depth_from_colour is an explicit identity — the
+        # Swift DepthMap bridge requires exactly 16 floats and fails loudly
+        # on an empty matrix.
+        del fx.nadir_depth.depth_from_colour.m[:]
+        fx.nadir_depth.depth_from_colour.m.extend(
+            1.0 if i % 5 == 0 else 0.0 for i in range(16))
+
+    if gravity is not None:
+        fx.gravity.x, fx.gravity.y, fx.gravity.z = (float(v) for v in gravity)
+
+    for class_id, grams in (ground_truth_class_mass_g or {}).items():
+        fx.ground_truth_class_mass_g[class_id] = float(grams)
+    if ground_truth_total_carbs_g is not None:
+        fx.ground_truth_total_carbs_g = float(ground_truth_total_carbs_g)
+    if ground_truth_protein_g is not None:
+        fx.ground_truth_protein_g = float(ground_truth_protein_g)
+    if ground_truth_fat_g is not None:
+        fx.ground_truth_fat_g = float(ground_truth_fat_g)
+    # Per-class GT macros summed from N5k per-ingredient values (Req 6.2/6.6)
+    # — the eval's GT basis, never re-derived from the DB composition, so the
+    # Req 6.7 cross-macro check can see composition-source errors.
+    for class_id, grams in (ground_truth_class_carbs_g or {}).items():
+        fx.ground_truth_class_carbs_g[class_id] = float(grams)
+    for class_id, grams in (ground_truth_class_protein_g or {}).items():
+        fx.ground_truth_class_protein_g[class_id] = float(grams)
+    for class_id, grams in (ground_truth_class_fat_g or {}).items():
+        fx.ground_truth_class_fat_g[class_id] = float(grams)
+    if source_dataset is not None:
+        fx.source_dataset = source_dataset
+    if estimator_path is not None:
+        fx.estimator_path = estimator_path
 
     return fx.SerializeToString()
 

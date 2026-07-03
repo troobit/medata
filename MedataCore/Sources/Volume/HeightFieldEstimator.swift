@@ -71,7 +71,6 @@ public enum HeightFieldEstimator {
         let w = probs.width
         let h = probs.height
         let bgId = palette.background
-        let liquidId = palette.unsupportedLiquid
         let k = inputs.intrinsics
         let plane = inputs.supportPlane
 
@@ -83,9 +82,9 @@ public enum HeightFieldEstimator {
         var depthTopMm = [Float](repeating: 0, count: w * h)
 
         // Walk pixels. Use a flat byte iteration into the FP16 tensor.
-        try probs.bytes.withUnsafeBytes { raw -> Void in
+        probs.bytes.withUnsafeBytes { raw -> Void in
             let buf = raw.bindMemory(to: Float16.self).baseAddress!
-            try argmax.pixels.withUnsafeBytes { argRaw -> Void in
+            argmax.pixels.withUnsafeBytes { argRaw -> Void in
                 let labels = argRaw.bindMemory(to: UInt8.self).baseAddress!
                 for y in 0..<h {
                     for x in 0..<w {
@@ -93,8 +92,12 @@ public enum HeightFieldEstimator {
                         let qBg = Float(buf[off + bgId])
                         if (1 - qBg) < tauSilhouette { continue }   // not in silhouette
                         let labelC = Int(labels[y * w + x])
-                        if !palette.isFoodClass(labelC) { continue }
-                        if labelC == liquidId { continue }
+                        // Solid food integrates as before; recognised liquid
+                        // classes integrate surface-to-plane (Req 7.3) —
+                        // strictly opt-in via isLiquidClass. unsupported_liquid
+                        // has no palette class and stays skipped.
+                        if !palette.isFoodClass(labelC)
+                            && !palette.isLiquidClass(labelC) { continue }
                         totalPixels[labelC, default: 0] += 1
 
                         let conf = sampleConfidenceUInt8(
@@ -150,12 +153,16 @@ public enum HeightFieldEstimator {
         var perClassPixelCount: [String: Int] = [:]
         var lowCoverageClasses: [String] = []
         for (cId, total) in totalPixels {
-            guard let name = palette.foodClassName(at: cId) else { continue }
+            guard let name = palette.className(at: cId) else { continue }
             let covered = coveredPixels[cId, default: 0]
             let frac = total > 0 ? Float(covered) / Float(total) : 0
             coverage[name] = frac
             perClassPixelCount[name] = total
-            if frac < coverageRefuseFraction {
+            // The coverage REFUSAL stays a solid-food rule: transparent
+            // liquids return poor depth routinely, and LiquidResolver applies
+            // the Req 7.6 usable-surface-depth precedence from the reported
+            // coverage instead of a whole-estimate error.
+            if frac < coverageRefuseFraction && palette.isFoodClass(cId) {
                 lowCoverageClasses.append(name)
             }
         }
@@ -166,7 +173,7 @@ public enum HeightFieldEstimator {
         // Convert mm³ → cm³ and apply β.
         var perClass: [String: Float] = [:]
         for (cId, rawMm3) in vRawMm3 {
-            guard let name = palette.foodClassName(at: cId) else { continue }
+            guard let name = palette.className(at: cId) else { continue }
             let cm3 = Float(rawMm3 / 1000.0)
             perClass[name] = cm3 * inputs.beta.beta(for: name)
         }

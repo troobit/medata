@@ -158,6 +158,49 @@ public nonisolated struct PbMealFixture: @unchecked Sendable {
     set {_uniqueStorage()._capturePathCanonical = newValue}
   }
 
+  /// nutrition5k-calibration (Req 3.5, 1.4, 3.7). Protein/fat are additive
+  /// alongside the retained ground_truth_total_carbs_g.
+  public var groundTruthProteinG: Float {
+    get {_storage._groundTruthProteinG}
+    set {_uniqueStorage()._groundTruthProteinG = newValue}
+  }
+
+  public var groundTruthFatG: Float {
+    get {_storage._groundTruthFatG}
+    set {_uniqueStorage()._groundTruthFatG = newValue}
+  }
+
+  /// e.g. "nutrition5k@<release>/<metaver>"
+  public var sourceDataset: String {
+    get {_storage._sourceDataset}
+    set {_uniqueStorage()._sourceDataset = newValue}
+  }
+
+  /// 'single_dominant' | 'mixture' — authoritative load-path selector; any other value malformed
+  public var estimatorPath: String {
+    get {_storage._estimatorPath}
+    set {_uniqueStorage()._estimatorPath = newValue}
+  }
+
+  /// Per-class ground-truth macros summed from N5k per-ingredient values
+  /// (Req 6.2/6.6). These are the eval's GT basis — deliberately NOT
+  /// re-derivable from the DB composition, so the Req 6.7 cross-macro
+  /// check can see mapping/composition-source errors.
+  public var groundTruthClassCarbsG: Dictionary<String,Float> {
+    get {_storage._groundTruthClassCarbsG}
+    set {_uniqueStorage()._groundTruthClassCarbsG = newValue}
+  }
+
+  public var groundTruthClassProteinG: Dictionary<String,Float> {
+    get {_storage._groundTruthClassProteinG}
+    set {_uniqueStorage()._groundTruthClassProteinG = newValue}
+  }
+
+  public var groundTruthClassFatG: Dictionary<String,Float> {
+    get {_storage._groundTruthClassFatG}
+    set {_uniqueStorage()._groundTruthClassFatG = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -171,7 +214,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MealFixture"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}fixture_id\0\u{3}fixture_revision\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_checkpoint_sha256\0\u{3}nadir_image\0\u{3}oblique_image\0\u{3}nadir_depth\0\u{3}nadir_probs\0\u{3}oblique_probs\0\u{3}nadir_argmax\0\u{3}oblique_argmax\0\u{3}nadir_intrinsics\0\u{3}oblique_intrinsics\0\u{3}t_1_to_2\0\u{1}gravity\0\u{3}ground_truth_class_mass_g\0\u{3}ground_truth_total_carbs_g\0\u{3}capture_path_canonical\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}fixture_id\0\u{3}fixture_revision\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_checkpoint_sha256\0\u{3}nadir_image\0\u{3}oblique_image\0\u{3}nadir_depth\0\u{3}nadir_probs\0\u{3}oblique_probs\0\u{3}nadir_argmax\0\u{3}oblique_argmax\0\u{3}nadir_intrinsics\0\u{3}oblique_intrinsics\0\u{3}t_1_to_2\0\u{1}gravity\0\u{3}ground_truth_class_mass_g\0\u{3}ground_truth_total_carbs_g\0\u{3}capture_path_canonical\0\u{3}ground_truth_protein_g\0\u{3}ground_truth_fat_g\0\u{3}source_dataset\0\u{3}estimator_path\0\u{3}ground_truth_class_carbs_g\0\u{3}ground_truth_class_protein_g\0\u{3}ground_truth_class_fat_g\0")
 
   fileprivate class _StorageClass {
     var _fixtureID: String = String()
@@ -193,6 +236,13 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
     var _groundTruthClassMassG: Dictionary<String,Float> = [:]
     var _groundTruthTotalCarbsG: Float = 0
     var _capturePathCanonical: String = String()
+    var _groundTruthProteinG: Float = 0
+    var _groundTruthFatG: Float = 0
+    var _sourceDataset: String = String()
+    var _estimatorPath: String = String()
+    var _groundTruthClassCarbsG: Dictionary<String,Float> = [:]
+    var _groundTruthClassProteinG: Dictionary<String,Float> = [:]
+    var _groundTruthClassFatG: Dictionary<String,Float> = [:]
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -222,6 +272,13 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
       _groundTruthClassMassG = source._groundTruthClassMassG
       _groundTruthTotalCarbsG = source._groundTruthTotalCarbsG
       _capturePathCanonical = source._capturePathCanonical
+      _groundTruthProteinG = source._groundTruthProteinG
+      _groundTruthFatG = source._groundTruthFatG
+      _sourceDataset = source._sourceDataset
+      _estimatorPath = source._estimatorPath
+      _groundTruthClassCarbsG = source._groundTruthClassCarbsG
+      _groundTruthClassProteinG = source._groundTruthClassProteinG
+      _groundTruthClassFatG = source._groundTruthClassFatG
     }
   }
 
@@ -259,6 +316,13 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
         case 17: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassMassG) }()
         case 18: try { try decoder.decodeSingularFloatField(value: &_storage._groundTruthTotalCarbsG) }()
         case 19: try { try decoder.decodeSingularStringField(value: &_storage._capturePathCanonical) }()
+        case 20: try { try decoder.decodeSingularFloatField(value: &_storage._groundTruthProteinG) }()
+        case 21: try { try decoder.decodeSingularFloatField(value: &_storage._groundTruthFatG) }()
+        case 22: try { try decoder.decodeSingularStringField(value: &_storage._sourceDataset) }()
+        case 23: try { try decoder.decodeSingularStringField(value: &_storage._estimatorPath) }()
+        case 24: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassCarbsG) }()
+        case 25: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassProteinG) }()
+        case 26: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassFatG) }()
         default: break
         }
       }
@@ -328,6 +392,27 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
       if !_storage._capturePathCanonical.isEmpty {
         try visitor.visitSingularStringField(value: _storage._capturePathCanonical, fieldNumber: 19)
       }
+      if _storage._groundTruthProteinG.bitPattern != 0 {
+        try visitor.visitSingularFloatField(value: _storage._groundTruthProteinG, fieldNumber: 20)
+      }
+      if _storage._groundTruthFatG.bitPattern != 0 {
+        try visitor.visitSingularFloatField(value: _storage._groundTruthFatG, fieldNumber: 21)
+      }
+      if !_storage._sourceDataset.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._sourceDataset, fieldNumber: 22)
+      }
+      if !_storage._estimatorPath.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._estimatorPath, fieldNumber: 23)
+      }
+      if !_storage._groundTruthClassCarbsG.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: _storage._groundTruthClassCarbsG, fieldNumber: 24)
+      }
+      if !_storage._groundTruthClassProteinG.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: _storage._groundTruthClassProteinG, fieldNumber: 25)
+      }
+      if !_storage._groundTruthClassFatG.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: _storage._groundTruthClassFatG, fieldNumber: 26)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -356,6 +441,13 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
         if _storage._groundTruthClassMassG != rhs_storage._groundTruthClassMassG {return false}
         if _storage._groundTruthTotalCarbsG != rhs_storage._groundTruthTotalCarbsG {return false}
         if _storage._capturePathCanonical != rhs_storage._capturePathCanonical {return false}
+        if _storage._groundTruthProteinG != rhs_storage._groundTruthProteinG {return false}
+        if _storage._groundTruthFatG != rhs_storage._groundTruthFatG {return false}
+        if _storage._sourceDataset != rhs_storage._sourceDataset {return false}
+        if _storage._estimatorPath != rhs_storage._estimatorPath {return false}
+        if _storage._groundTruthClassCarbsG != rhs_storage._groundTruthClassCarbsG {return false}
+        if _storage._groundTruthClassProteinG != rhs_storage._groundTruthClassProteinG {return false}
+        if _storage._groundTruthClassFatG != rhs_storage._groundTruthClassFatG {return false}
         return true
       }
       if !storagesAreEqual {return false}

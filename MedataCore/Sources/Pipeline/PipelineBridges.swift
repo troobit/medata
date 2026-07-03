@@ -52,6 +52,7 @@ enum PipelineBridges {
         ct.fatG = mr.clinicalTotals.fatG
         ct.fibreG = mr.clinicalTotals.fibreG
         out.clinicalTotals = ct
+        out.liquidOverEstimate = mr.liquidOverEstimate
         return out
     }
 
@@ -64,6 +65,10 @@ enum PipelineBridges {
         out.coefficientSource = pcm.coefficientSource
         out.betaUsed = pcm.betaUsed
         out.betaStatus = pbBetaStatus(pcm.betaStatus)
+        out.proteinG = pcm.proteinG
+        out.fatG = pcm.fatG
+        out.deviceVerified = pcm.deviceVerified
+        out.isLiquid = pcm.isLiquid
         return out
     }
 

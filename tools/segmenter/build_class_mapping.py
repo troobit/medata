@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Build the FoodSeg103 -> 27-channel palette class mapping (ml-training §3b).
+"""Build the FoodSeg103 -> 35-channel palette class mapping (ml-training §3b).
 
 FoodSeg103 ships 103 food classes (+ a background class 0); the medata segmenter
-emits **27 channels** (Req 8.4):
+emits **35 channels** (Req 8.4; redefined v1, Decisions 23/24):
 
-    channels 0-23 : the 24 food classes, in the EXACT order of
-                    ``tools/food_db/generate.py`` FOOD_DATA (== ClassPalette.v1Standard)
-    channel  24   : background
-    channel  25   : unknown_food        (looks like food, no known class)
-    channel  26   : unsupported_liquid   (standalone liquid, excluded from volume)
+    channels 0-23  : the 24 solid food classes, in the EXACT order of
+                     ``tools/food_db/generate.py`` FOOD_DATA (== ClassPalette.v1Standard)
+    channels 24-31 : the 8 coarse liquid classes (water, coffee, tea, milk,
+                     fruit_juice, soup, beer, wine), same FOOD_DATA order
+    channel  32    : background
+    channel  33    : unknown_food        (looks like food, no known class)
+    channel  34    : unsupported_liquid  (standalone liquid with no palette home)
 
 This script is the load-bearing first step of dataset preparation: every
 downstream artefact (remapped masks, training, mIoU bench) indexes by these
@@ -18,10 +20,12 @@ silently (design §3.5). So the channel order is read straight from
 ``generate.py`` rather than hand-typed here.
 
 Each FoodSeg103 class is routed to exactly one of:
-    * one of the 24 food channels (direct synonym match),
+    * one of the 24 solid food channels (direct synonym match),
     * a composite food channel (e.g. assorted veg -> ``mixed_vegetables``),
-    * ``unknown_food`` (25) when it is food but has no sensible palette home,
-    * ``unsupported_liquid`` (26) for standalone drinks,
+    * one of the 8 coarse liquid channels (wine, coffee, tea, milk, juice,
+      soup — Req 7.2),
+    * ``unknown_food`` (33) when it is food but has no sensible palette home,
+    * ``unsupported_liquid`` (34) for standalone drinks,
     * dropped (``target_index: null``) when it cannot be remapped sensibly.
 
 Output is a deterministic JSON file consumed by ``prepare_dataset.py``.
@@ -49,10 +53,14 @@ from typing import Dict, List, Optional, Tuple
 
 PALETTE_VERSION = "v1"
 
-# Special (non-food) channels, fixed by Req 8.4 / ClassPalette.v1Standard.
-BACKGROUND = 24
-UNKNOWN_FOOD = 25
-UNSUPPORTED_LIQUID = 26
+# Palette layout, fixed by Req 8.4 / ClassPalette.v1Standard (redefined v1:
+# solids, then coarse liquids, then the sentinel channels — Decisions 23/24).
+SOLID_CLASS_COUNT = 24
+LIQUID_CLASS_COUNT = 8
+TOTAL_CLASS_COUNT = SOLID_CLASS_COUNT + LIQUID_CLASS_COUNT
+BACKGROUND = TOTAL_CLASS_COUNT
+UNKNOWN_FOOD = TOTAL_CLASS_COUNT + 1
+UNSUPPORTED_LIQUID = TOTAL_CLASS_COUNT + 2
 
 # Canonical FoodSeg103 category list (id -> name), used when --foodseg-labels is
 # not supplied. id 0 is background; 1..103 are food classes. Names follow the
@@ -139,14 +147,16 @@ CURATED_RULES: Dict[str, str] = {
     "oyster mushroom": "mixed_vegetables",
     "white button mushroom": "mixed_vegetables",
     "corn": "mixed_vegetables",
-    # standalone liquids -> unsupported_liquid (26)
-    "wine": "unsupported_liquid",
+    # standalone liquids -> the coarse liquid classes (Req 7.2; no longer
+    # collapsed to unsupported_liquid). FoodSeg103 has no beer category;
+    # milkshake has no palette home and stays unsupported.
+    "wine": "wine",
+    "coffee": "coffee",
+    "juice": "fruit_juice",
+    "milk": "milk",
+    "tea": "tea",
+    "soup": "soup",
     "milkshake": "unsupported_liquid",
-    "coffee": "unsupported_liquid",
-    "juice": "unsupported_liquid",
-    "milk": "unsupported_liquid",
-    "tea": "unsupported_liquid",
-    "soup": "unsupported_liquid",
     # explicit background
     "background": "background",
     # non-food garnish / catch-all that should not pollute a food class
@@ -162,7 +172,8 @@ def normalise(name: str) -> str:
 
 
 def parse_palette(generate_py: Path) -> List[str]:
-    """Extract the 24 food class ids, in order, from generate.py FOOD_DATA.
+    """Extract the 32 class ids (24 solid + 8 liquid), in order, from
+    generate.py FOOD_DATA.
 
     Reads the first string of each FOOD_DATA tuple. The order is load-bearing
     (== channel index), so the list is returned exactly as it appears.
@@ -181,9 +192,10 @@ def parse_palette(generate_py: Path) -> List[str]:
         sm = re.search(r'"([^"]+)"', line)
         if sm:
             ids.append(sm.group(1))
-    if len(ids) != 24:
+    if len(ids) != TOTAL_CLASS_COUNT:
         raise SystemExit(
-            f"expected 24 food classes in FOOD_DATA, found {len(ids)}: {ids}"
+            f"expected {TOTAL_CLASS_COUNT} classes (24 solid + 8 liquid) in "
+            f"FOOD_DATA, found {len(ids)}: {ids}"
         )
     return ids
 

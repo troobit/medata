@@ -192,6 +192,475 @@ public enum AccuracyHarness {
     }
 }
 
+// MARK: - N5k calibration eval (nutrition5k-calibration Req 4.4/4.5/6.1–6.8)
+
+// Which estimator fitted a plate's β (Req 3.7). Only single-dominant carries
+// the Req 5.1 masking guarantee; the pool report breaks samples out per path.
+public enum EstimatorPath: String, Sendable, Codable {
+    case singleDominant = "single_dominant"
+    case mixture
+}
+
+// One evaluated plate. GT macros come from N5k per-ingredient values (mapped
+// classes only, Req 6.2/6.6) — NOT re-derived from the DB composition, so a
+// composition-source error is visible to the Req 6.7 cross-macro check.
+public struct N5kEvalPlate: Sendable {
+    public let fixtureID: String
+    public let estimatorPath: EstimatorPath
+    public let totalHullVolumeCm3: Float
+    public let massByClassG: [String: Float]
+    public let gtCarbsByClassG: [String: Float]
+    public let gtProteinByClassG: [String: Float]
+    public let gtFatByClassG: [String: Float]
+    public let wholeDishCarbsG: Float          // full GT incl unmapped (Req 6.8)
+    public let inOfficialTestSplit: Bool
+
+    public init(fixtureID: String, estimatorPath: EstimatorPath,
+                totalHullVolumeCm3: Float, massByClassG: [String: Float],
+                gtCarbsByClassG: [String: Float], gtProteinByClassG: [String: Float],
+                gtFatByClassG: [String: Float], wholeDishCarbsG: Float,
+                inOfficialTestSplit: Bool) {
+        self.fixtureID = fixtureID
+        self.estimatorPath = estimatorPath
+        self.totalHullVolumeCm3 = totalHullVolumeCm3
+        self.massByClassG = massByClassG
+        self.gtCarbsByClassG = gtCarbsByClassG
+        self.gtProteinByClassG = gtProteinByClassG
+        self.gtFatByClassG = gtFatByClassG
+        self.wholeDishCarbsG = wholeDishCarbsG
+        self.inOfficialTestSplit = inOfficialTestSplit
+    }
+}
+
+// Per-class DB values used to turn attributed volume into macro estimates —
+// the same ρ and fractions the pipeline uses at inference (Req 5.3).
+public struct ClassComposition: Sendable {
+    public let densityByClass: [String: Float]
+    public let carbFractionPer100g: [String: Float]
+    public let proteinFractionPer100g: [String: Float]
+    public let fatFractionPer100g: [String: Float]
+
+    public init(densityByClass: [String: Float],
+                carbFractionPer100g: [String: Float],
+                proteinFractionPer100g: [String: Float],
+                fatFractionPer100g: [String: Float]) {
+        self.densityByClass = densityByClass
+        self.carbFractionPer100g = carbFractionPer100g
+        self.proteinFractionPer100g = proteinFractionPer100g
+        self.fatFractionPer100g = fatFractionPer100g
+    }
+}
+
+public struct CalibrationEvalConfig: Sendable {
+    public let folds: Int
+    public let seed: UInt64                    // ONE seed: selection + folds (Req 4.4)
+    public let liquidClasses: Set<String>
+    public let carbPriorityStaples: [String]
+
+    public init(folds: Int = 5, seed: UInt64,
+                liquidClasses: Set<String> = [],
+                carbPriorityStaples: [String]) {
+        self.folds = folds
+        self.seed = seed
+        self.liquidClasses = liquidClasses
+        self.carbPriorityStaples = carbPriorityStaples
+    }
+}
+
+// β=1.0 baseline and β_c figures side by side (Req 6.3).
+public struct MacroAccuracy: Sendable {
+    public let mapeBaseline: Float
+    public let mapeCalibrated: Float
+    public let maeBaseline: Float
+    public let maeCalibrated: Float
+    public let sampleCount: Int
+}
+
+public struct MacroSection: Sendable {
+    public let overall: MacroAccuracy
+    public let perStaple: [String: MacroAccuracy]
+}
+
+// Whole-dish figures on the official depth test split (Req 6.8, Decision 21).
+public struct OfficialSplitReport: Sendable {
+    public let maeBaselineG: Float
+    public let maeCalibratedG: Float
+    public let maeOverMeanBaseline: Float
+    public let maeOverMeanCalibrated: Float
+    public let evaluatedDishCount: Int
+    public let splitTotalCount: Int            // enumerates Req 3.4/3.8 skips
+    public let mappedCarbCoverageFraction: Float
+    public let caveat: String
+}
+
+// Upstream counts the harness cannot derive itself (Req 4.5 pool arithmetic).
+public struct PoolCounts: Sendable {
+    public let rgbdDishCount: Int
+    public let depthTestSplitCount: Int
+    public let ingestionSkipCount: Int
+    // Mixture plates excluded for unmapped mass above the ingestion threshold
+    // (Req 4.1, design §Unmapped-volume bias) — from the ingestion run summary.
+    public let unmappedExcludedCount: Int
+
+    public init(rgbdDishCount: Int, depthTestSplitCount: Int, ingestionSkipCount: Int,
+                unmappedExcludedCount: Int = 0) {
+        self.rgbdDishCount = rgbdDishCount
+        self.depthTestSplitCount = depthTestSplitCount
+        self.ingestionSkipCount = ingestionSkipCount
+        self.unmappedExcludedCount = unmappedExcludedCount
+    }
+}
+
+public struct PoolReport: Sendable {
+    public let rgbdDishCount: Int
+    public let depthTestSplitCount: Int
+    public let ingestionSkipCount: Int
+    public let unmappedExcludedCount: Int      // Req 4.1
+    public let liquidExcludedCount: Int        // Req 4.7
+    public let stackingExcludedCount: Int      // Req 4.3
+    public let qualifyingPlateCount: Int
+    // estimator path raw value → class → plates at mass fraction ≥ τ_eff.
+    public let effectiveSamplesByPath: [String: [String: Int]]
+    // Documented accepted outcomes, not failures (Req 4.5).
+    public let insufficientClasses: [String]
+}
+
+public struct CalibrationReport: Sendable {
+    public let seed: UInt64
+    public let foldCount: Int
+    public let carbs: MacroSection
+    public let protein: MacroSection
+    public let fat: MacroSection
+    // Per-class β dispersion; mixture classes carry the regression SE (Req 6.4).
+    public let dispersionPerClass: [String: Float]
+    // Reported result, not a bake gate (Req 6.5, Decision 6).
+    public let mapeTargetPercent: Float
+    public let staplesMeetingTarget: [String: Bool]
+    // Classes whose carb agrees but protein/fat diverges (Req 6.7).
+    public let crossMacroFlags: [String]
+    public let officialSplit: OfficialSplitReport
+    public let pool: PoolReport
+}
+
+public extension AccuracyHarness {
+    // Documented cross-macro tolerance (Req 6.7): flag when protein or fat
+    // MAPE exceeds 1.5× the class carb MAPE. The 5-point absolute floor stops
+    // the ratio test firing on numerically tiny errors.
+    static let crossMacroToleranceFactor: Float = 1.5
+    static let crossMacroAbsoluteFloorPercent: Float = 5
+
+    static let officialSplitCaveat =
+        "Whole-dish figures consume ground-truth class identity via the "
+        + "ingredient mapping; they are reported alongside, not claimed "
+        + "comparable with, the Nutrition5k paper's image-only RGB-D baseline "
+        + "(Table 3). The β_c-vs-baseline judgement lives in the mapped-only "
+        + "figures (Req 6.3)."
+
+    // K-fold CV over the calibration pool plus the official-split whole-dish
+    // section and the Req 4.5 pool arithmetic. The bake itself fits on ALL
+    // qualifying plates (design §Split reconciliation); the folds exist only
+    // so held-out accuracy never strands a staple below the sample floor.
+    static func evaluateCalibration(
+        calibrationPlates: [N5kEvalPlate],
+        officialSplitPlates: [N5kEvalPlate],
+        composition: ClassComposition,
+        config: CalibrationEvalConfig,
+        pool: PoolCounts
+    ) -> CalibrationReport {
+        // Same plate guards as the calibrator (Req 4.3/4.7), applied to the
+        // eval pool so excluded plates neither fit nor score.
+        var liquidExcluded = 0
+        var stackingExcluded = 0
+        var evalPlates: [N5kEvalPlate] = []
+        for p in calibrationPlates {
+            let totalMass = p.massByClassG.values.reduce(0, +)
+            guard totalMass > 0 else { continue }
+            let liquidMass = p.massByClassG
+                .filter { config.liquidClasses.contains($0.key) }
+                .values.reduce(0, +)
+            if liquidMass / totalMass >= MixtureBetaCalibrator.liquidSignificantFraction {
+                liquidExcluded += 1
+                continue
+            }
+            let expectedMin = p.massByClassG.reduce(Float(0)) { acc, kv in
+                guard !config.liquidClasses.contains(kv.key),
+                      let rho = composition.densityByClass[kv.key] else { return acc }
+                return acc + kv.value / rho
+            }
+            if p.totalHullVolumeCm3 < MixtureBetaCalibrator.stackingKappa * expectedMin {
+                stackingExcluded += 1
+                continue
+            }
+            evalPlates.append(p)
+        }
+
+        // Bake fit over ALL qualifying plates: dispersion (Req 6.4), the β_c
+        // used on the official split, and pool diagnostics.
+        let bakeFit = MixtureBetaCalibrator.fit(
+            evalPlates.map(observation(for:)),
+            densityByClass: composition.densityByClass,
+            liquidClasses: config.liquidClasses)
+
+        // Seeded fold assignment (Req 4.4): shuffle once, round-robin.
+        var rng = SplitMix64(seed: config.seed)
+        var order = Array(evalPlates.indices)
+        for i in stride(from: order.count - 1, to: 0, by: -1) {
+            let j = Int(rng.next() % UInt64(i + 1))
+            order.swapAt(i, j)
+        }
+        var foldOf = [Int](repeating: 0, count: evalPlates.count)
+        for (rank, idx) in order.enumerated() { foldOf[idx] = rank % max(1, config.folds) }
+
+        // Held-out estimates per plate.
+        var accum = MacroAccumulators()
+        for fold in 0..<max(1, config.folds) {
+            let trainObs = evalPlates.indices
+                .filter { foldOf[$0] != fold }
+                .map { observation(for: evalPlates[$0]) }
+            guard !trainObs.isEmpty else { continue }
+            let foldFit = MixtureBetaCalibrator.fit(
+                trainObs, densityByClass: composition.densityByClass,
+                liquidClasses: config.liquidClasses)
+            for idx in evalPlates.indices where foldOf[idx] == fold {
+                score(plate: evalPlates[idx], beta: foldFit.betaPerClass,
+                      composition: composition, liquidClasses: config.liquidClasses,
+                      into: &accum)
+            }
+        }
+
+        let carbs = accum.carbs.section(staples: config.carbPriorityStaples)
+        let protein = accum.protein.section(staples: config.carbPriorityStaples)
+        let fat = accum.fat.section(staples: config.carbPriorityStaples)
+
+        var meetsTarget: [String: Bool] = [:]
+        var crossFlags: [String] = []
+        for staple in config.carbPriorityStaples {
+            guard let carbAcc = carbs.perStaple[staple] else { continue }
+            meetsTarget[staple] = carbAcc.mapeCalibrated < 20
+            // Req 6.7: carb agrees (meets the reported target) but protein or
+            // fat diverges beyond the documented tolerance.
+            if carbAcc.mapeCalibrated < 20 {
+                let bound = max(crossMacroToleranceFactor * carbAcc.mapeCalibrated,
+                                crossMacroAbsoluteFloorPercent)
+                let proteinMAPE = protein.perStaple[staple]?.mapeCalibrated ?? 0
+                let fatMAPE = fat.perStaple[staple]?.mapeCalibrated ?? 0
+                if proteinMAPE > bound || fatMAPE > bound {
+                    crossFlags.append(staple)
+                }
+            }
+        }
+
+        let official = officialSplitSection(
+            plates: officialSplitPlates, beta: bakeFit.betaPerClass,
+            composition: composition, liquidClasses: config.liquidClasses,
+            splitTotal: pool.depthTestSplitCount)
+
+        // Pool arithmetic (Req 4.5): effective samples per estimator path.
+        var effectiveByPath: [String: [String: Int]] = [:]
+        var effectiveTotal: [String: Int] = [:]
+        for p in evalPlates {
+            let totalMass = p.massByClassG.values.reduce(0, +)
+            guard totalMass > 0 else { continue }
+            for (c, m) in p.massByClassG where !config.liquidClasses.contains(c) {
+                if m / totalMass >= MixtureBetaCalibrator.tauEff {
+                    effectiveByPath[p.estimatorPath.rawValue, default: [:]][c, default: 0] += 1
+                    effectiveTotal[c, default: 0] += 1
+                }
+            }
+        }
+        let allSolid = Set(evalPlates.flatMap { $0.massByClassG.keys })
+            .subtracting(config.liquidClasses)
+        let insufficient = allSolid
+            .filter { effectiveTotal[$0, default: 0] < MixtureBetaCalibrator.effectiveSampleMin }
+            .sorted()
+
+        return CalibrationReport(
+            seed: config.seed,
+            foldCount: config.folds,
+            carbs: carbs, protein: protein, fat: fat,
+            dispersionPerClass: bakeFit.standardErrorPerClass,
+            mapeTargetPercent: 20,
+            staplesMeetingTarget: meetsTarget,
+            crossMacroFlags: crossFlags.sorted(),
+            officialSplit: official,
+            pool: PoolReport(
+                rgbdDishCount: pool.rgbdDishCount,
+                depthTestSplitCount: pool.depthTestSplitCount,
+                ingestionSkipCount: pool.ingestionSkipCount,
+                unmappedExcludedCount: pool.unmappedExcludedCount,
+                liquidExcludedCount: liquidExcluded,
+                stackingExcludedCount: stackingExcluded,
+                qualifyingPlateCount: evalPlates.count,
+                effectiveSamplesByPath: effectiveByPath,
+                insufficientClasses: insufficient
+            )
+        )
+    }
+
+    // MARK: eval internals
+
+    private static func observation(for plate: N5kEvalPlate)
+        -> MixtureBetaCalibrator.PlateObservation {
+        .init(fixtureID: plate.fixtureID,
+              totalHullVolumeCm3: plate.totalHullVolumeCm3,
+              massByClassG: plate.massByClassG)
+    }
+
+    // Oracle-composition estimate (design §Split reconciliation, a recorded
+    // caveat): attribute the measured hull across mapped solid classes by GT
+    // mass proportions; each share × ρ_c × β_c × macro-fraction. Liquid-mapped
+    // classes contribute zero estimate.
+    private static func estimatedMasses(
+        plate: N5kEvalPlate, beta: [String: Float],
+        composition: ClassComposition, liquidClasses: Set<String>
+    ) -> [String: Float] {
+        let solid = plate.massByClassG.filter { !liquidClasses.contains($0.key) }
+        let totalMass = solid.values.reduce(0, +)
+        guard totalMass > 0 else { return [:] }
+        var out: [String: Float] = [:]
+        for (c, m) in solid {
+            guard let rho = composition.densityByClass[c] else { continue }
+            let share = m / totalMass
+            out[c] = share * plate.totalHullVolumeCm3 * rho * beta[c, default: 1.0]
+        }
+        return out
+    }
+
+    private struct MacroAccumulator {
+        var overallPctBase: [Float] = [], overallPctCal: [Float] = []
+        var overallAbsBase: [Float] = [], overallAbsCal: [Float] = []
+        var perClassPctBase: [String: [Float]] = [:], perClassPctCal: [String: [Float]] = [:]
+        var perClassAbsBase: [String: [Float]] = [:], perClassAbsCal: [String: [Float]] = [:]
+
+        mutating func add(class c: String, gt: Float, base: Float, cal: Float) {
+            guard gt > 0 else { return }
+            perClassPctBase[c, default: []].append(abs(base - gt) / gt * 100)
+            perClassPctCal[c, default: []].append(abs(cal - gt) / gt * 100)
+            perClassAbsBase[c, default: []].append(abs(base - gt))
+            perClassAbsCal[c, default: []].append(abs(cal - gt))
+        }
+
+        mutating func addOverall(gt: Float, base: Float, cal: Float) {
+            guard gt > 0 else { return }
+            overallPctBase.append(abs(base - gt) / gt * 100)
+            overallPctCal.append(abs(cal - gt) / gt * 100)
+            overallAbsBase.append(abs(base - gt))
+            overallAbsCal.append(abs(cal - gt))
+        }
+
+        func section(staples: [String]) -> MacroSection {
+            func mean(_ xs: [Float]) -> Float {
+                xs.isEmpty ? 0 : xs.reduce(0, +) / Float(xs.count)
+            }
+            var perStaple: [String: MacroAccuracy] = [:]
+            for s in staples {
+                guard let pctBase = perClassPctBase[s] else { continue }
+                perStaple[s] = MacroAccuracy(
+                    mapeBaseline: mean(pctBase),
+                    mapeCalibrated: mean(perClassPctCal[s] ?? []),
+                    maeBaseline: mean(perClassAbsBase[s] ?? []),
+                    maeCalibrated: mean(perClassAbsCal[s] ?? []),
+                    sampleCount: pctBase.count)
+            }
+            return MacroSection(
+                overall: MacroAccuracy(
+                    mapeBaseline: mean(overallPctBase),
+                    mapeCalibrated: mean(overallPctCal),
+                    maeBaseline: mean(overallAbsBase),
+                    maeCalibrated: mean(overallAbsCal),
+                    sampleCount: overallPctBase.count),
+                perStaple: perStaple)
+        }
+    }
+
+    private struct MacroAccumulators {
+        var carbs = MacroAccumulator()
+        var protein = MacroAccumulator()
+        var fat = MacroAccumulator()
+    }
+
+    private static func score(
+        plate: N5kEvalPlate, beta: [String: Float],
+        composition: ClassComposition, liquidClasses: Set<String>,
+        into accum: inout MacroAccumulators
+    ) {
+        let massBase = estimatedMasses(plate: plate, beta: [:],
+                                       composition: composition, liquidClasses: liquidClasses)
+        let massCal = estimatedMasses(plate: plate, beta: beta,
+                                      composition: composition, liquidClasses: liquidClasses)
+        var totals = (gtC: Float(0), baseC: Float(0), calC: Float(0),
+                      gtP: Float(0), baseP: Float(0), calP: Float(0),
+                      gtF: Float(0), baseF: Float(0), calF: Float(0))
+        for c in massBase.keys {
+            let kappa = composition.carbFractionPer100g[c, default: 0] / 100
+            let prot = composition.proteinFractionPer100g[c, default: 0] / 100
+            let fatF = composition.fatFractionPer100g[c, default: 0] / 100
+            let gtC = plate.gtCarbsByClassG[c, default: 0]
+            let gtP = plate.gtProteinByClassG[c, default: 0]
+            let gtF = plate.gtFatByClassG[c, default: 0]
+            let baseC = massBase[c, default: 0] * kappa
+            let calC = massCal[c, default: 0] * kappa
+            let baseP = massBase[c, default: 0] * prot
+            let calP = massCal[c, default: 0] * prot
+            let baseF = massBase[c, default: 0] * fatF
+            let calF = massCal[c, default: 0] * fatF
+            accum.carbs.add(class: c, gt: gtC, base: baseC, cal: calC)
+            accum.protein.add(class: c, gt: gtP, base: baseP, cal: calP)
+            accum.fat.add(class: c, gt: gtF, base: baseF, cal: calF)
+            totals.gtC += gtC; totals.baseC += baseC; totals.calC += calC
+            totals.gtP += gtP; totals.baseP += baseP; totals.calP += calP
+            totals.gtF += gtF; totals.baseF += baseF; totals.calF += calF
+        }
+        accum.carbs.addOverall(gt: totals.gtC, base: totals.baseC, cal: totals.calC)
+        accum.protein.addOverall(gt: totals.gtP, base: totals.baseP, cal: totals.calP)
+        accum.fat.addOverall(gt: totals.gtF, base: totals.baseF, cal: totals.calF)
+    }
+
+    private static func officialSplitSection(
+        plates: [N5kEvalPlate], beta: [String: Float],
+        composition: ClassComposition, liquidClasses: Set<String>,
+        splitTotal: Int
+    ) -> OfficialSplitReport {
+        var absBase: [Float] = []
+        var absCal: [Float] = []
+        var actuals: [Float] = []
+        var mappedCarbs: Float = 0
+        var wholeDishCarbs: Float = 0
+        for p in plates {
+            // Whole-dish basis: unmapped AND liquid-mapped ingredients
+            // contribute zero estimate but full GT carbs (Req 6.8).
+            let massBase = estimatedMasses(plate: p, beta: [:],
+                                           composition: composition, liquidClasses: liquidClasses)
+            let massCal = estimatedMasses(plate: p, beta: beta,
+                                          composition: composition, liquidClasses: liquidClasses)
+            func carbTotal(_ masses: [String: Float]) -> Float {
+                masses.reduce(0) { acc, kv in
+                    acc + kv.value * composition.carbFractionPer100g[kv.key, default: 0] / 100
+                }
+            }
+            absBase.append(abs(carbTotal(massBase) - p.wholeDishCarbsG))
+            absCal.append(abs(carbTotal(massCal) - p.wholeDishCarbsG))
+            actuals.append(p.wholeDishCarbsG)
+            mappedCarbs += p.gtCarbsByClassG
+                .filter { !liquidClasses.contains($0.key) }
+                .values.reduce(0, +)
+            wholeDishCarbs += p.wholeDishCarbsG
+        }
+        func mean(_ xs: [Float]) -> Float { xs.isEmpty ? 0 : xs.reduce(0, +) / Float(xs.count) }
+        let meanActual = mean(actuals)
+        return OfficialSplitReport(
+            maeBaselineG: mean(absBase),
+            maeCalibratedG: mean(absCal),
+            maeOverMeanBaseline: meanActual > 0 ? mean(absBase) / meanActual : 0,
+            maeOverMeanCalibrated: meanActual > 0 ? mean(absCal) / meanActual : 0,
+            evaluatedDishCount: plates.count,
+            splitTotalCount: splitTotal,
+            mappedCarbCoverageFraction: wholeDishCarbs > 0 ? mappedCarbs / wholeDishCarbs : 0,
+            caveat: officialSplitCaveat
+        )
+    }
+}
+
 // SplitMix64 PRNG — deterministic, no external dependency.
 struct SplitMix64: RandomNumberGenerator {
     private var state: UInt64

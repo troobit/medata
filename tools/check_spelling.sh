@@ -123,6 +123,11 @@ STRICT_PATTERN="\\b($(join_words))\\b"
 # "the color of") are still caught, and string catalogs use STRICT_PATTERN.
 CODE_PATTERN="(^|[^.[:alnum:]_])($(join_words))(\$|[^-:[:alnum:]_])"
 
+# Tokens the linter must tolerate: Apple API spellings we cannot change and
+# the design-system rule name `color-not-only` (MASTER.md). Lines containing
+# any of these are excluded from the scan.
+ALLOWED_PATTERN='color-not-only|multilineTextAlignment|colors: \['
+
 # Directories / file globs to scan.
 SCAN_TARGETS=(
     "${REPO_ROOT}/MedataCore/Sources"
@@ -137,7 +142,9 @@ for target in "${SCAN_TARGETS[@]}"; do
         continue
     fi
     # grep -rn: recursive, line numbers. -E: extended regex. --include: limit to .swift.
-    if grep -rEn --include="*.swift" "$CODE_PATTERN" "$target" 2>/dev/null; then
+    matches=$(grep -rEn --include="*.swift" "$CODE_PATTERN" "$target" 2>/dev/null | grep -Ev "$ALLOWED_PATTERN" || true)
+    if [[ -n "$matches" ]]; then
+        echo "$matches"
         FOUND=1
     fi
 done

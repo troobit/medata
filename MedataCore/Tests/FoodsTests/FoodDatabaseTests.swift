@@ -36,20 +36,26 @@ final class FoodDatabaseTests: XCTestCase {
             try db.execute(sql: schemaSQL)
             try db.execute(sql: "INSERT INTO meta VALUES ('edition', 'CoFID 2024')")
             try db.execute(sql: "INSERT INTO meta VALUES ('palette_version', 'v1')")
+            // white_rice injects a calibrated + device-verified row so the
+            // beta_provenance / device_verified read path is observable
+            // (nutrition5k-calibration Req 8.1 flag injection).
             try db.execute(sql: """
                 INSERT INTO foods VALUES
                     ('white_rice', 'White rice', 1.05, 580.0, 32.0, 2.7, 0.3, 0.1,
-                     0.9, 'calibrated', 'CoFID 2024', 'CoFID 2024')
+                     0.9, 'calibrated', 'CoFID 2024', 'CoFID 2024',
+                     'n5k_single_dominant', 1)
             """)
             try db.execute(sql: """
                 INSERT INTO foods VALUES
                     ('chicken', 'Chicken breast', 0.9, 736.0, 0.0, 31.0, 3.6, 0.0,
-                     1.0, 'uncalibrated_unity', 'FAO_DENS', 'CoFID 2024')
+                     1.0, 'uncalibrated_unity', 'FAO_DENS', 'CoFID 2024',
+                     'none', 0)
             """)
             try db.execute(sql: """
                 INSERT INTO foods VALUES
                     ('potato_boiled', 'Boiled potato', 1.01, 318.0, 17.0, 1.8, 0.1, 1.1,
-                     1.0, 'uncalibrated_pooled', 'FAO_DENS', 'CoFID 2024')
+                     1.0, 'uncalibrated_pooled', 'FAO_DENS', 'CoFID 2024',
+                     'none', 0)
             """)
         }
     }
@@ -64,13 +70,15 @@ final class FoodDatabaseTests: XCTestCase {
             try db.execute(sql: """
                 INSERT INTO foods VALUES
                     ('white_rice', 'White rice (AU)', 1.10, 590.0, 30.5, 2.7, 0.3, 0.1,
-                     0.95, 'calibrated', 'AFCD 2024', 'AFCD 2024')
+                     0.95, 'calibrated', 'AFCD 2024', 'AFCD 2024',
+                     'n5k_mixture', 0)
             """)
             // AFCD-exclusive class — surfaced when CoFID lacks the class.
             try db.execute(sql: """
                 INSERT INTO foods VALUES
                     ('kumara', 'Kumara', 0.92, 386.0, 17.0, 1.6, 0.1, 3.0,
-                     1.0, 'uncalibrated_unity', 'AFCD 2024', 'AFCD 2024')
+                     1.0, 'uncalibrated_unity', 'AFCD 2024', 'AFCD 2024',
+                     'gravimetric', 1)
             """)
         }
     }
@@ -88,7 +96,9 @@ final class FoodDatabaseTests: XCTestCase {
             beta REAL NOT NULL DEFAULT 1.0,
             beta_status TEXT NOT NULL DEFAULT 'uncalibrated_unity',
             density_source TEXT NOT NULL,
-            composition_source TEXT NOT NULL
+            composition_source TEXT NOT NULL,
+            beta_provenance TEXT NOT NULL DEFAULT 'none',
+            device_verified INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
         """
@@ -163,6 +173,26 @@ final class FoodDatabaseTests: XCTestCase {
         XCTAssertEqual(rice.calibrationStatus,    .calibrated)
         XCTAssertEqual(chicken.calibrationStatus, .uncalibratedUnity)
         XCTAssertEqual(potato.calibrationStatus,  .uncalibratedPooled)
+    }
+
+    // MARK: - beta_provenance + device_verified read into FoodEntry
+    //          (nutrition5k-calibration Req 5.4 / 8.1 banner plumbing)
+
+    func testBetaProvenanceAndDeviceVerifiedReadIntoEntry() throws {
+        let db = try makePair()
+        let rice    = try XCTUnwrap(db.entry(for: "white_rice"))
+        let chicken = try XCTUnwrap(db.entry(for: "chicken"))
+        XCTAssertEqual(rice.betaProvenance, "n5k_single_dominant")
+        XCTAssertTrue(rice.deviceVerified)
+        XCTAssertEqual(chicken.betaProvenance, "none")
+        XCTAssertFalse(chicken.deviceVerified)
+    }
+
+    func testBetaProvenanceAndDeviceVerifiedSurviveAFCDFallthrough() throws {
+        let db = try makePair()
+        let kumara = try XCTUnwrap(db.entry(for: "kumara"))
+        XCTAssertEqual(kumara.betaProvenance, "gravimetric")
+        XCTAssertTrue(kumara.deviceVerified)
     }
 
     // MARK: - entry(for:edition:) returns current pair (v1 has one bundled pair)

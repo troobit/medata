@@ -38,4 +38,19 @@ message MealFixture {
     float ground_truth_total_carbs_g = 18;
 
     string capture_path_canonical = 19;                 // 'single_view_lidar' | 'two_view_sfs'
+
+    // nutrition5k-calibration (Req 3.5, 1.4, 3.7). Protein/fat are additive
+    // alongside the retained ground_truth_total_carbs_g.
+    float ground_truth_protein_g = 20;
+    float ground_truth_fat_g = 21;
+    string source_dataset = 22;                         // e.g. "nutrition5k@<release>/<metaver>"
+    string estimator_path = 23;                         // 'single_dominant' | 'mixture' — authoritative load-path selector; any other value malformed
+
+    // Per-class ground-truth macros summed from N5k per-ingredient values
+    // (Req 6.2/6.6). These are the eval's GT basis — deliberately NOT
+    // re-derivable from the DB composition, so the Req 6.7 cross-macro
+    // check can see mapping/composition-source errors.
+    map<string, float> ground_truth_class_carbs_g = 24;
+    map<string, float> ground_truth_class_protein_g = 25;
+    map<string, float> ground_truth_class_fat_g = 26;
 }

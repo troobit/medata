@@ -153,6 +153,95 @@ final class MacrosTests: XCTestCase {
         XCTAssertEqual(result.clinicalTotals, ClinicalMacros.zero)
     }
 
+    // MARK: - nutrition5k-calibration Req 10.1: per-class protein/fat from the
+    //          same β-corrected mass × DB fraction — no separate fit
+
+    func testPerClassProteinFatFormula() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0],
+            database: db,
+            edition: "CoFID 2024"
+        )
+        // m = 105.0 g; protein = 105.0 × 2.7 / 100 = 2.835; fat = 105.0 × 0.3 / 100 = 0.315
+        let entry = try! XCTUnwrap(result.perClass["white_rice"])
+        XCTAssertEqual(entry.proteinG, 2.835, accuracy: 1e-3)
+        XCTAssertEqual(entry.fatG, 0.315, accuracy: 1e-3)
+    }
+
+    // MARK: - Req 10.2: carbs stay primary, protein/fat are additive — the
+    //          per-class fields sum to the existing clinical totals and leave
+    //          totalCarbsG untouched
+
+    func testProteinFatAdditiveAgainstClinicalTotals() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0, "chicken": 80.0],
+            database: db,
+            edition: "CoFID 2024"
+        )
+        XCTAssertEqual(result.totalCarbsG, 33.6, accuracy: 1e-3)
+        let proteinSum = result.perClass.values.reduce(Float(0)) { $0 + $1.proteinG }
+        let fatSum     = result.perClass.values.reduce(Float(0)) { $0 + $1.fatG }
+        XCTAssertEqual(proteinSum, result.clinicalTotals.proteinG, accuracy: 1e-3)
+        XCTAssertEqual(fatSum,     result.clinicalTotals.fatG,     accuracy: 1e-3)
+    }
+
+    // MARK: - Req 8.1 banner inputs: deviceVerified and isLiquid copied onto
+    //          each PerClassMacros
+
+    func testDeviceVerifiedCopiedFromEntry() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0, "chicken": 80.0],
+            database: db,
+            edition: "CoFID 2024"
+        )
+        // Stub injects deviceVerified = true for white_rice only.
+        XCTAssertTrue(try! XCTUnwrap(result.perClass["white_rice"]).deviceVerified)
+        XCTAssertFalse(try! XCTUnwrap(result.perClass["chicken"]).deviceVerified)
+    }
+
+    func testIsLiquidMarkedFromLiquidClassIds() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0, "milk": 200.0],
+            database: db,
+            edition: "CoFID 2024",
+            liquidClassIds: ["milk"]
+        )
+        XCTAssertTrue(try! XCTUnwrap(result.perClass["milk"]).isLiquid)
+        XCTAssertFalse(try! XCTUnwrap(result.perClass["white_rice"]).isLiquid)
+    }
+
+    // MARK: - Req 8.2 / 7.3: liquidOverEstimate raised by a depth-integrated
+    //          liquid entry or threaded through from the vessel path
+
+    func testLiquidOverEstimateFalseForSolidsOnly() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0],
+            database: db,
+            edition: "CoFID 2024"
+        )
+        XCTAssertFalse(result.liquidOverEstimate)
+    }
+
+    func testLiquidOverEstimateRaisedByLiquidEntry() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["milk": 200.0],
+            database: db,
+            edition: "CoFID 2024",
+            liquidClassIds: ["milk"]
+        )
+        XCTAssertTrue(result.liquidOverEstimate)
+    }
+
+    func testLiquidOverEstimateThreadedFromVesselPath() {
+        let result = Macros.compute(
+            perClassVolumesCm3: ["white_rice": 100.0],
+            database: db,
+            edition: "CoFID 2024",
+            liquidOverEstimate: true
+        )
+        XCTAssertTrue(result.liquidOverEstimate)
+    }
+
     // MARK: - T37.11 Multi-class meal sums all per-class carbs
 
     func testMultiClassMealSumsCorrectly() {
@@ -176,12 +265,15 @@ private final class StubFoodDatabase: FoodDatabase, @unchecked Sendable {
     let version = "CoFID 2024"
 
     private let entries: [String: FoodEntry] = [
+        // deviceVerified injected true — otherwise unreachable within this spec
+        // (nutrition5k-calibration Req 8.1 flag injection).
         "white_rice": FoodEntry(
             classId: "white_rice", name: "White rice",
             densityGPerCm3: 1.05, energyKJPer100g: 580.0,
             carbsMonoG: 32.0, proteinG: 2.7, fatG: 0.3, fibreG: 0.1,
             beta: 0.9, calibrationStatus: .calibrated,
-            densitySource: "CoFID 2024", compositionSource: "CoFID 2024"
+            densitySource: "CoFID 2024", compositionSource: "CoFID 2024",
+            betaProvenance: "n5k_single_dominant", deviceVerified: true
         ),
         "chicken": FoodEntry(
             classId: "chicken", name: "Chicken breast",
@@ -189,6 +281,14 @@ private final class StubFoodDatabase: FoodDatabase, @unchecked Sendable {
             carbsMonoG: 0.0, proteinG: 31.0, fatG: 3.6, fibreG: 0.0,
             beta: 1.0, calibrationStatus: .uncalibratedUnity,
             densitySource: "FAO_DENS", compositionSource: "CoFID 2024"
+        ),
+        // Coarse liquid class row (Req 7.1) — β unity, DB-sourced values.
+        "milk": FoodEntry(
+            classId: "milk", name: "Milk",
+            densityGPerCm3: 1.03, energyKJPer100g: 270.0,
+            carbsMonoG: 4.7, proteinG: 3.4, fatG: 3.6, fibreG: 0.0,
+            beta: 1.0, calibrationStatus: .uncalibratedUnity,
+            densitySource: "CoFID 2024", compositionSource: "CoFID 2024"
         )
     ]
 

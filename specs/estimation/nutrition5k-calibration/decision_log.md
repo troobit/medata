@@ -424,7 +424,7 @@ Req 3.6 requires volume to integrate above the plate top, not the surrounding ta
 
 ### Decision
 
-Fit the support plane at runtime from the overhead RealSense depth. No proto field and no plate-thickness offset. **Amended after review:** the existing `FixtureRunner.fitPlaneFromDepth` passes an all-ones mask, so its RANSAC finds the largest plane in the frame — which is the table, not the plate, if the plate doesn't fill the frame. The plane fit for N5k is therefore **restricted to the plate region** (a plate mask derived from the depth, bounded by the rim discontinuity), so it lands on the plate top. Whether the plate fills the N5k overhead frame is confirmed empirically during implementation. The N5k side-angle RGB videos are not consumed in this spec; they are recorded as an available resource for the deferred pseudo-label loop (Decision 3 future work) and a possible future two-view cross-check. Plates with a high plate-plane fit residual are skipped and recorded.
+Fit the support plane at runtime from the overhead RealSense depth. No proto field and no plate-thickness offset. **Amended after review:** the existing `FixtureRunner.fitPlaneFromDepth` passes an all-ones mask, so its RANSAC finds the largest plane in the frame — which is the table, not the plate, if the plate doesn't fill the frame. The plane fit for N5k is therefore **restricted to the plate region** (a plate mask derived from the depth, bounded by the rim discontinuity), so it lands on the plate top. **Empirically confirmed 2026-07-03 (integration run):** the plate does not fill the frame in any of 60 randomly sampled real captures — every frame carries a clear table border ~40–60 mm deeper than the plate centre, with a median 53% of border pixels above the 0.4 m saturation cap (zeroed at ingestion, which hard-stops the flood fill). The plate-region restriction is therefore load-bearing, not precautionary. The N5k side-angle RGB videos are not consumed in this spec; they are recorded as an available resource for the deferred pseudo-label loop (Decision 3 future work) and a possible future two-view cross-check. Plates with a high plate-plane fit residual are skipped and recorded.
 
 ### Rationale
 
@@ -730,5 +730,165 @@ Keeps Decision 22's training scope (palette = trainable classes, exactly), satis
 
 **Negative:**
 - `LiquidResolver` does a two-level lookup (sub-class row, else coarse row); the sub-class recognition source remains a deferred model-production dependency (Req 7.7).
+
+---
+
+## Decision 25: The committed mapping artifact carries N5k ingredient names
+
+**Date**: 2026-07-03
+**Status**: accepted
+
+### Context
+
+Req 1.1 forbids committing N5k imagery, depth, or metadata. The committed `mapping_n5k_to_palette.json` reproduces every N5k ingredient id + name pair — effectively the identity columns of `ingredients_metadata.csv`. The design's artifact schema names no `n5k_ingredient_name` field; the loader merely tolerates it.
+
+### Decision
+
+Keep the ingredient names in the committed artifact, as a recorded, deliberate exception to Req 1.1's "metadata".
+
+### Rationale
+
+The names are what make the curated mapping reviewable — a mapping keyed only by opaque numeric ids cannot be audited against the palette without fetching the dataset. Nutrition5k is CC BY 4.0, which permits redistributing the identifier columns; the nutritional values, masses, imagery, and depth stay out of the repo.
+
+### Alternatives Considered
+
+- **Strip names from the artifact**: ids only - Rejected; makes mapping curation and review impossible without the gitignored download.
+- **Commit the full ingredient CSV**: names + nutrition - Rejected; that is the substantive metadata Req 1.1 exists to keep out.
+
+### Consequences
+
+**Positive:**
+- The mapping is reviewable and diffable in the repo.
+
+**Negative:**
+- 555 ingredient names from a third-party dataset live in-repo (licence-compatible, attribution recorded in SettingsView and DB lineage).
+
+---
+
+## Decision 26: Unidentifiable classes stay in the BVLS free set, flagged not fixed
+
+**Date**: 2026-07-03
+**Status**: accepted
+
+### Context
+
+Req 4.6 says a class that is under-sampled "or not individually identifiable" is held at β = 1 and moved to the right-hand side as a fixed offset. `MixtureBetaCalibrator` moves only under-sampled classes to the RHS; collinear/unidentifiable classes remain free in the solve and are surfaced via `identifiablePerClass = false` (large SE), which `CalibrationMerge` then refuses to bake.
+
+### Decision
+
+Keep unidentifiable classes in the free set and gate them out at merge time, rather than forcing them to β = 1 on the RHS.
+
+### Rationale
+
+Identifiability is only knowable after the solve (it is a property of the fitted system's conditioning), so a pre-solve RHS move is impossible without a first pass. Numerically, a collinear column does not bias co-occurring classes' estimates, whereas forcing β = 1 for a class whose true β ≠ 1 injects its residual volume into exactly the classes it co-occurs with — the misattribution Req 4.6 exists to prevent. The requirement's outcome (an unidentifiable class never bakes a fitted β) is preserved by the merge gate.
+
+### Alternatives Considered
+
+- **Two-pass solve**: fit, detect unidentifiable classes, re-solve with them on the RHS - Rejected; the re-solve biases co-occurring classes when the true β ≠ 1, and adds a second solve for no outcome change.
+- **Follow the requirement literally**: pre-solve RHS move - Rejected; identifiability cannot be determined before the solve.
+
+### Consequences
+
+**Positive:**
+- No misattribution into co-occurring classes; the merge gate still keeps unidentifiable fits out of the bake.
+
+**Negative:**
+- The implementation deviates from Req 4.6's letter (recorded here); an unidentifiable class consumes a solver column.
+
+---
+
+## Decision 27: Fixtures carry per-class GT macros from N5k per-ingredient values
+
+**Date**: 2026-07-03
+**Status**: accepted
+
+### Context
+
+Req 6.6 requires protein/fat accuracy "against N5k ground truth" and Req 6.7 a cross-macro consistency check that flags composition-source errors. The first integration run derived per-class GT macros in the CLI as GT mass × DB fraction — the same fractions the estimate uses — so per-class relative error was identical across all three macros and the Req 6.7 flag could never fire on a real run.
+
+### Decision
+
+`MealFixture.proto` gains `ground_truth_class_carbs_g` / `ground_truth_class_protein_g` / `ground_truth_class_fat_g` maps (fields 24–26), summed by `ingest.py` from N5k's per-ingredient values over mapped ingredients. The harness eval consumes these; fixtures predating the maps fall back to the DB derivation (which cannot raise the 6.7 flag — that is why the maps exist).
+
+### Rationale
+
+The dish CSVs publish per-ingredient carb/protein/fat, so an independent per-class GT basis is available at ingestion for free. Carrying it in the fixture keeps the harness dataset-agnostic (no N5k CSV parsing in Swift) and makes the eval GT auditable per fixture.
+
+### Alternatives Considered
+
+- **Parse N5k metadata in the Swift harness**: - Rejected; duplicates the ingestion's mapping logic across languages and breaks the fixture-is-the-interface boundary.
+- **Anchor only per-dish protein/fat totals**: no proto change - Rejected; per-dish totals include unmapped ingredients, so they cannot give the mapped-classes-only basis Req 6.6 requires, and per-class 6.7 flags would still be impossible.
+
+### Consequences
+
+**Positive:**
+- The Req 6.7 cross-macro check is meaningful on real runs; eval GT no longer moves when DB composition values are corrected.
+
+**Negative:**
+- Three more proto fields; the fixture set must be regenerated for the maps to be present (the DB fallback covers stale sets, minus the 6.7 flag).
+
+---
+
+## Decision 28: dev-stub records suppress the calibration banner and liquid flag
+
+**Date**: 2026-07-03
+**Status**: accepted
+
+### Context
+
+Req 8.3 says the three-state banner and additive liquid flag "SHALL be the only modifications" to ResultView. The implementation additionally suppresses both for records whose `segmenterSource == "dev_stub"` — an extra condition beyond the requirement's letter.
+
+### Decision
+
+Keep the dev-stub suppression.
+
+### Rationale
+
+Dev-stub estimates are placeholder numbers from a fake segmenter; attaching real calibration-confidence or over-read claims to them would be dishonest in the opposite direction. The existing placeholder chip already marks these records.
+
+### Alternatives Considered
+
+- **Show the banner on dev-stub records too**: strict Req 8.3 reading - Rejected; a "population-calibrated" claim about fake numbers is misleading.
+
+### Consequences
+
+**Positive:**
+- Banner semantics stay truthful; no user-facing change for real captures.
+
+**Negative:**
+- One extra condition beyond Req 8.3's letter (recorded here).
+
+---
+
+## Decision 29: Worktree consolidation is closeout tasks here, not a standalone spec
+
+**Date**: 2026-07-04
+**Status**: accepted
+
+### Context
+
+This spec and `estimation/resumable-segmenter-training` were implemented on separate git worktree branches. Both need merging into `uplift-process-fixes`, the worktrees deleted, and the branch pushed. The question was where to track that consolidation work: `specs/PROCESS.md` §3 defines a closed domain set with no home for repository operations, and a `/starwave:smolspec` run was started to spec the merge.
+
+### Decision
+
+Track the consolidation as a closeout task phase appended to this spec's `tasks.md`, with no new spec folder.
+
+### Rationale
+
+User adjudication: "Merging specs is admin work without any real gain. Adjust existing or create a new one under same pattern." The merge closes out this spec's execution (its streams produced the branch being merged), so its task ledger is the natural home. PROCESS.md §9 already defines the merge mechanics (regenerate `OVERVIEW.md`, union-merge `CHANGELOG.md`, per-spec decision logs win), so a spec would restate existing process.
+
+### Alternatives Considered
+
+- **Standalone smolspec (`specs/estimation/worktree-consolidation/`)**: A dedicated spec folder for the merge - Rejected as administrative overhead with no real gain; it delivers no capability.
+- **New `process` domain**: House repo-ops specs under a new domain - Rejected; the domain set is closed and adding one is itself a logged decision, heavier than the job warrants.
+
+### Consequences
+
+**Positive:**
+- No spec folder that exists only to describe git commands; the closeout is visible in the same ledger as the work it closes.
+- Sets a precedent: repository operations attach to the spec they serve.
+
+**Negative:**
+- The closeout tasks also cover merging `resumable-segmenter-training`, which lives outside this spec — cross-referenced rather than duplicated, per PROCESS.md §3.
 
 ---

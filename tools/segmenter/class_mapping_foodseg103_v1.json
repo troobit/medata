@@ -2,11 +2,11 @@
   "schema": "foodseg103_to_palette_v1",
   "palette_version": "v1",
   "source_dataset": "FoodSeg103",
-  "channel_count": 27,
+  "channel_count": 35,
   "special_channels": {
-    "background": 24,
-    "unknown_food": 25,
-    "unsupported_liquid": 26
+    "background": 32,
+    "unknown_food": 33,
+    "unsupported_liquid": 34
   },
   "target_channels": [
     {
@@ -107,14 +107,46 @@
     },
     {
       "index": 24,
-      "name": "background"
+      "name": "water"
     },
     {
       "index": 25,
-      "name": "unknown_food"
+      "name": "coffee"
     },
     {
       "index": 26,
+      "name": "tea"
+    },
+    {
+      "index": 27,
+      "name": "milk"
+    },
+    {
+      "index": 28,
+      "name": "fruit_juice"
+    },
+    {
+      "index": 29,
+      "name": "soup"
+    },
+    {
+      "index": 30,
+      "name": "beer"
+    },
+    {
+      "index": 31,
+      "name": "wine"
+    },
+    {
+      "index": 32,
+      "name": "background"
+    },
+    {
+      "index": 33,
+      "name": "unknown_food"
+    },
+    {
+      "index": 34,
       "name": "unsupported_liquid"
     }
   ],
@@ -122,14 +154,14 @@
     {
       "source_id": 0,
       "source_name": "background",
-      "target_index": 24,
+      "target_index": 32,
       "target_name": "background",
       "rule": "curated_background"
     },
     {
       "source_id": 1,
       "source_name": "candy",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -150,35 +182,35 @@
     {
       "source_id": 4,
       "source_name": "chocolate",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 5,
       "source_name": "biscuit",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 6,
       "source_name": "popcorn",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 7,
       "source_name": "pudding",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 8,
       "source_name": "ice cream",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -192,56 +224,56 @@
     {
       "source_id": 10,
       "source_name": "cake",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 11,
       "source_name": "wine",
-      "target_index": 26,
-      "target_name": "unsupported_liquid",
-      "rule": "curated_liquid"
+      "target_index": 31,
+      "target_name": "wine",
+      "rule": "curated_food"
     },
     {
       "source_id": 12,
       "source_name": "milkshake",
-      "target_index": 26,
+      "target_index": 34,
       "target_name": "unsupported_liquid",
       "rule": "curated_liquid"
     },
     {
       "source_id": 13,
       "source_name": "coffee",
-      "target_index": 26,
-      "target_name": "unsupported_liquid",
-      "rule": "curated_liquid"
+      "target_index": 25,
+      "target_name": "coffee",
+      "rule": "curated_food"
     },
     {
       "source_id": 14,
       "source_name": "juice",
-      "target_index": 26,
-      "target_name": "unsupported_liquid",
-      "rule": "curated_liquid"
+      "target_index": 28,
+      "target_name": "fruit_juice",
+      "rule": "curated_food"
     },
     {
       "source_id": 15,
       "source_name": "milk",
-      "target_index": 26,
-      "target_name": "unsupported_liquid",
-      "rule": "curated_liquid"
+      "target_index": 27,
+      "target_name": "milk",
+      "rule": "curated_food"
     },
     {
       "source_id": 16,
       "source_name": "tea",
       "target_index": 26,
-      "target_name": "unsupported_liquid",
-      "rule": "curated_liquid"
+      "target_name": "tea",
+      "rule": "curated_food"
     },
     {
       "source_id": 17,
       "source_name": "almond",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -255,35 +287,35 @@
     {
       "source_id": 19,
       "source_name": "cashew",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 20,
       "source_name": "dried cranberries",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 21,
       "source_name": "soy",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 22,
       "source_name": "walnut",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 23,
       "source_name": "peanut",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -304,21 +336,21 @@
     {
       "source_id": 26,
       "source_name": "date",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 27,
       "source_name": "apricot",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 28,
       "source_name": "avocado",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -332,112 +364,112 @@
     {
       "source_id": 30,
       "source_name": "strawberry",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 31,
       "source_name": "cherry",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 32,
       "source_name": "blueberry",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 33,
       "source_name": "raspberry",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 34,
       "source_name": "mango",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 35,
       "source_name": "olives",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 36,
       "source_name": "peach",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 37,
       "source_name": "lemon",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 38,
       "source_name": "pear",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 39,
       "source_name": "fig",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 40,
       "source_name": "pineapple",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 41,
       "source_name": "grape",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 42,
       "source_name": "kiwi",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 43,
       "source_name": "melon",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 44,
       "source_name": "orange",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 45,
       "source_name": "watermelon",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -493,7 +525,7 @@
     {
       "source_id": 53,
       "source_name": "crab",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -507,23 +539,23 @@
     {
       "source_id": 55,
       "source_name": "shellfish",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 56,
       "source_name": "shrimp",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 57,
       "source_name": "soup",
-      "target_index": 26,
-      "target_name": "unsupported_liquid",
-      "rule": "curated_liquid"
+      "target_index": 29,
+      "target_name": "soup",
+      "rule": "curated_food"
     },
     {
       "source_id": 58,
@@ -542,28 +574,28 @@
     {
       "source_id": 60,
       "source_name": "hamburg",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 61,
       "source_name": "pizza",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 62,
       "source_name": "hanamaki baozi",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 63,
       "source_name": "wonton dumplings",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -591,14 +623,14 @@
     {
       "source_id": 67,
       "source_name": "pie",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 68,
       "source_name": "tofu",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -619,7 +651,7 @@
     {
       "source_id": 71,
       "source_name": "garlic",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -640,14 +672,14 @@
     {
       "source_id": 74,
       "source_name": "kelp",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 75,
       "source_name": "seaweed",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -661,14 +693,14 @@
     {
       "source_id": 77,
       "source_name": "rape",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
     {
       "source_id": 78,
       "source_name": "ginger",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },
@@ -745,7 +777,7 @@
     {
       "source_id": 89,
       "source_name": "cilantro mint",
-      "target_index": 25,
+      "target_index": 33,
       "target_name": "unknown_food",
       "rule": "default_unknown_food"
     },

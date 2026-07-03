@@ -29,6 +29,11 @@ struct SettingsView: View {
                 Text("AFCD — Australian Food Composition Database, Food Standards Australia New Zealand, CC-BY-4.0.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                // nutrition5k-calibration Req 1.5: CC BY 4.0 requires indicating
+                // that the shipped values are adapted (derived β factors).
+                Text("Nutrition5k — Google Research, CC BY 4.0. Values adapted: portion-volume calibration factors are derived from the dataset.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section("Photos") {
                 Text("Captured meal photos are saved to your Photos library and managed there. Removing a photo from Photos will remove the preview from the meal record, but the carbohydrate estimate is kept.")

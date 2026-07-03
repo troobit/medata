@@ -2,7 +2,8 @@
 """Segmenter training pipeline (step 4 of docs/ml-training.md §4, decisions 25/28).
 
 Transfer-learns DeepLabV3 + MobileNetV3-Large (torchvision) at 513x513 for the
-27-class palette (24 food + background + unknown_food + unsupported_liquid),
+35-class palette (24 solid + 8 coarse liquid + background + unknown_food +
+unsupported_liquid — the redefined v1, Decisions 23/24),
 starting from the torchvision pretrained backbone, fine-tuning head + backbone on
 the remapped FoodSeg103 train split, and saving a single PyTorch checkpoint.
 
@@ -15,7 +16,7 @@ Usage (docs/ml-training.md §4)::
 
     python tools/segmenter/train.py \\
         --data data/foodseg103_remapped \\
-        --num-classes 27 --target-size 513 \\
+        --num-classes 35 --target-size 513 \\
         --epochs 60 --batch-size 16 --lr 1e-3 \\
         --out tools/segmenter/build/checkpoint.pt
 
@@ -45,9 +46,9 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 
 # Special (non-food) channels excluded from food-class mIoU. These mirror
 # class_mapping_foodseg103_v1.json:special_channels and §11 channel ordering.
-BACKGROUND_CLASS = 24
-UNKNOWN_FOOD_CLASS = 25
-UNSUPPORTED_LIQUID_CLASS = 26
+BACKGROUND_CLASS = 32
+UNKNOWN_FOOD_CLASS = 33
+UNSUPPORTED_LIQUID_CLASS = 34
 NON_FOOD_CLASSES = (BACKGROUND_CLASS, UNKNOWN_FOOD_CLASS, UNSUPPORTED_LIQUID_CLASS)
 
 PALETTE_VERSION = "v1"
@@ -388,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", default="data/foodseg103_remapped",
                         help="Remapped dataset root with train/val[/heldout] splits.")
-    parser.add_argument("--num-classes", type=int, default=27)
+    parser.add_argument("--num-classes", type=int, default=35)
     parser.add_argument("--target-size", type=int, default=513)
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=16)

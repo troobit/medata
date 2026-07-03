@@ -353,7 +353,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 **Acceptance Criteria:**
 
 1. <a name="20.1"></a>The project SHALL have a documented training-data acquisition plan before the segmenter base model is selected, covering: target images per class (initial bar: 1,000 labelled instances per class minimum), labelling protocol (polygon masks at the food/background boundary, class label per polygon), licensing of source images (own-photographed or permissively licensed), and split strategy (training / validation / held-out segmenter test).
-2. <a name="20.2"></a>The plan SHALL identify which existing public food-segmentation datasets (e.g. UECFOOD-256, Recipe1M+, FoodSeg103) overlap with the v1 class palette and which classes require new collections.
+2. <a name="20.2"></a>The plan SHALL identify which existing public food-segmentation datasets (e.g. UECFOOD-256, Recipe1M+, FoodSeg103) overlap with the v1 class palette and which classes require new collections. Nutrition5k (CC BY 4.0) also overlaps the v1 palette but carries no per-pixel masks, so it does not feed segmenter training; it is used as a population gravimetric ground-truth source to calibrate the per-class $\beta_c$ bulk-correction factors of [11.7](#11.7) — see `specs/estimation/nutrition5k-calibration/`.
 
 ### 21. Test Harness and Validation
 

@@ -23,6 +23,8 @@ EXPECTED_PALETTE = [
     "pork", "fish_white", "egg", "cheese", "salad_leaves",
     "broccoli", "carrot", "peas", "beans_baked", "lentils",
     "apple", "banana", "tomato", "mixed_vegetables",
+    "water", "coffee", "tea", "milk",
+    "fruit_juice", "soup", "beer", "wine",
     "background", "unknown_food", "unsupported_liquid",
 ]
 
@@ -31,15 +33,15 @@ EXPECTED_PALETTE = [
 
 def test_palette_channel_names_match_v1_order():
     assert export.palette_channel_names() == EXPECTED_PALETTE
-    assert len(EXPECTED_PALETTE) == export.EXPECTED_CHANNEL_COUNT == 27
+    assert len(EXPECTED_PALETTE) == export.EXPECTED_CHANNEL_COUNT == 35
 
 
-def test_validate_channel_count_accepts_27():
-    export.validate_channel_count(27)  # no raise
+def test_validate_channel_count_accepts_35():
+    export.validate_channel_count(35)  # no raise
 
 
-@pytest.mark.parametrize("n", [0, 26, 28, 103])
-def test_validate_channel_count_rejects_non_27(n):
+@pytest.mark.parametrize("n", [0, 27, 34, 36, 103])
+def test_validate_channel_count_rejects_non_35(n):
     with pytest.raises(export.ExportGateError):
         export.validate_channel_count(n)
 
@@ -120,7 +122,7 @@ def test_resize_bilinear_changes_dims():
 
 # ── Equivalence oracle (Req 4.3) ────────────────────────────────────────────────
 
-def _logits(seed=0, shape=(27, 8, 8)):
+def _logits(seed=0, shape=(35, 8, 8)):
     return np.random.default_rng(seed).standard_normal(shape).astype(np.float32)
 
 
@@ -148,8 +150,8 @@ def test_oracle_argmax_disagreement_fails():
 
 
 def test_oracle_shape_mismatch_fails():
-    err, agree, ok = export.oracle_agreement(_logits(shape=(27, 8, 8)),
-                                             _logits(shape=(27, 4, 4)))
+    err, agree, ok = export.oracle_agreement(_logits(shape=(35, 8, 8)),
+                                             _logits(shape=(35, 4, 4)))
     assert err == float("inf") and agree == 0.0 and not ok
 
 

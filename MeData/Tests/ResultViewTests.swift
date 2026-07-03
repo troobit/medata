@@ -98,6 +98,140 @@ struct ResultViewTests {
     }
 }
 
+// nutrition5k-calibration Req 8.1/8.2 (Decisions 18–19): the single
+// uncalibrated boolean becomes one three-state calibration-confidence signal
+// evaluated over contributing solid-food classes only, plus one independent
+// additive liquid over-estimate flag. The suppressed state is unreachable in
+// this spec (no class can be device-verified yet) — covered by flag injection.
+@Suite("Calibration banner three-state matrix (Req 8.1/8.2)")
+struct CalibrationBannerTests {
+
+    private func pcm(
+        _ status: PbBetaCalibrationStatus,
+        deviceVerified: Bool = false,
+        isLiquid: Bool = false
+    ) -> PbPerClassMacros {
+        var out = PbPerClassMacros()
+        out.betaStatus = status
+        out.deviceVerified = deviceVerified
+        out.isLiquid = isLiquid
+        return out
+    }
+
+    // MARK: - full: any pooled/unity solid class
+
+    @Test("any pooled or unity solid class → full banner")
+    func anyUncalibratedSolidGivesFull() {
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "potato_boiled": pcm(.uncalibratedPooled)
+        ]) == .full)
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "chicken": pcm(.uncalibratedUnity)
+        ]) == .full)
+        // One calibrated class does not soften a meal with an uncalibrated one.
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "white_rice": pcm(.calibrated, deviceVerified: true),
+            "chicken": pcm(.uncalibratedUnity)
+        ]) == .full)
+    }
+
+    @Test("no per-class data at all → full banner (conservative, pre-existing rule)")
+    func emptyPerClassGivesFull() {
+        #expect(ResultFormat.calibrationBanner(perClass: [:]) == .full)
+    }
+
+    // MARK: - softened: all calibrated, any not device-verified
+
+    @Test("all calibrated + any not device-verified → softened")
+    func calibratedNotVerifiedGivesSoftened() {
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "white_rice": pcm(.calibrated)
+        ]) == .softened)
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "white_rice": pcm(.calibrated, deviceVerified: true),
+            "pasta": pcm(.calibrated)
+        ]) == .softened)
+    }
+
+    @Test("softened copy names the population-calibrated state")
+    func softenedCopy() {
+        #expect(ResultFormat.softenedBannerCopy.contains(
+            "population-calibrated — not yet verified on this device"))
+    }
+
+    // MARK: - suppressed: all calibrated + all device-verified (injected —
+    //          otherwise unreachable in this spec)
+
+    @Test("all calibrated + all device-verified (injected) → suppressed")
+    func allVerifiedGivesSuppressed() {
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "white_rice": pcm(.calibrated, deviceVerified: true),
+            "pasta": pcm(.calibrated, deviceVerified: true)
+        ]) == .suppressed)
+    }
+
+    // MARK: - liquid classes never enter the evaluation
+
+    @Test("liquid classes are excluded from the calibration evaluation")
+    func liquidClassesExcluded() {
+        // An uncalibrated, unverified liquid cannot drag a verified solid down.
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "white_rice": pcm(.calibrated, deviceVerified: true),
+            "milk": pcm(.uncalibratedUnity, isLiquid: true)
+        ]) == .suppressed)
+        // Nor can a (nonsensical, injected) calibrated liquid rescue a pooled solid.
+        #expect(ResultFormat.calibrationBanner(perClass: [
+            "potato_boiled": pcm(.uncalibratedPooled),
+            "milk": pcm(.calibrated, deviceVerified: true, isLiquid: true)
+        ]) == .full)
+    }
+
+    // MARK: - standalone drink: stated rule, not vacuous suppression
+
+    @Test("standalone drink (no contributing solid class) → no calibration banner")
+    func standaloneDrinkShowsNoCalibrationBanner() {
+        let state = ResultFormat.calibrationBanner(perClass: [
+            "milk": pcm(.uncalibratedUnity, isLiquid: true)
+        ])
+        #expect(state == CalibrationBannerState.none)
+        #expect(state != .suppressed)
+    }
+
+    // MARK: - Req 8.2: the liquid flag is independent and additive
+
+    @Test("liquid flag renders additively with each calibration state")
+    func liquidFlagIsAdditive() {
+        // The flag is a separate result-level input — it must not replace,
+        // upgrade, or suppress the calibration state, and stands alone for a
+        // standalone drink.
+        let full: [String: PbPerClassMacros] = [
+            "chicken": pcm(.uncalibratedUnity),
+            "milk": pcm(.uncalibratedUnity, isLiquid: true)
+        ]
+        let softened: [String: PbPerClassMacros] = [
+            "white_rice": pcm(.calibrated),
+            "milk": pcm(.uncalibratedUnity, isLiquid: true)
+        ]
+        let suppressed: [String: PbPerClassMacros] = [
+            "white_rice": pcm(.calibrated, deviceVerified: true),
+            "milk": pcm(.uncalibratedUnity, isLiquid: true)
+        ]
+        let standalone: [String: PbPerClassMacros] = [
+            "milk": pcm(.uncalibratedUnity, isLiquid: true)
+        ]
+        #expect(ResultFormat.calibrationBanner(perClass: full) == .full)
+        #expect(ResultFormat.calibrationBanner(perClass: softened) == .softened)
+        #expect(ResultFormat.calibrationBanner(perClass: suppressed) == .suppressed)
+        #expect(ResultFormat.calibrationBanner(perClass: standalone) == CalibrationBannerState.none)
+        // The flag itself is read straight off the result, whatever the state.
+        var macros = PbMacroResult()
+        macros.liquidOverEstimate = true
+        #expect(ResultFormat.showsLiquidOverEstimateFlag(macros))
+        macros.liquidOverEstimate = false
+        #expect(!ResultFormat.showsLiquidOverEstimateFlag(macros))
+    }
+}
+
 private func makeMealRecord(carbs: Float, sigma: Float) -> MealRecord {
     var macros = PbMacroResult()
     macros.totalCarbsG = carbs

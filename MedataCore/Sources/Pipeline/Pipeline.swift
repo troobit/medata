@@ -394,7 +394,8 @@ public struct Pipeline: Sendable {
         let macros = Macros.compute(
             perClassVolumesCm3: pbVolumes.perClassVolumesCm3,
             database: database,
-            edition: captureResult.databaseEdition
+            edition: captureResult.databaseEdition,
+            liquidClassIds: Set(palette.liquidClasses)
         )
         #if DEBUG
         logStageEnd(name: "Macros", startedAt: macrosStartedAt)

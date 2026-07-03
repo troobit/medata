@@ -37,6 +37,9 @@ public nonisolated struct PbClassPalette: Sendable {
   /// matches database edition per Req 11.4
   public var version: String = String()
 
+  /// coarse liquid classes appended after the solids (nutrition5k-calibration Req 7.2)
+  public var liquidClasses: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -48,7 +51,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbClassPalette: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClassPalette"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}food_classes\0\u{1}background\0\u{3}unknown_food\0\u{3}unsupported_liquid\0\u{1}version\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}food_classes\0\u{1}background\0\u{3}unknown_food\0\u{3}unsupported_liquid\0\u{1}version\0\u{3}liquid_classes\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -61,6 +64,7 @@ nonisolated extension PbClassPalette: SwiftProtobuf.Message, SwiftProtobuf._Mess
       case 3: try { try decoder.decodeSingularInt32Field(value: &self.unknownFood) }()
       case 4: try { try decoder.decodeSingularInt32Field(value: &self.unsupportedLiquid) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.version) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.liquidClasses) }()
       default: break
       }
     }
@@ -82,6 +86,9 @@ nonisolated extension PbClassPalette: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if !self.version.isEmpty {
       try visitor.visitSingularStringField(value: self.version, fieldNumber: 5)
     }
+    if !self.liquidClasses.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.liquidClasses, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -91,6 +98,7 @@ nonisolated extension PbClassPalette: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.unknownFood != rhs.unknownFood {return false}
     if lhs.unsupportedLiquid != rhs.unsupportedLiquid {return false}
     if lhs.version != rhs.version {return false}
+    if lhs.liquidClasses != rhs.liquidClasses {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -13,4 +13,11 @@ message PerClassMacros {
     string coefficient_source = 5;
     float beta_used = 6;
     BetaCalibrationStatus beta_status = 7;
+
+    // nutrition5k-calibration (Req 10.1, 8.1): protein/fat from the same
+    // β-corrected mass; banner inputs baked per class from the food DB.
+    float protein_g = 8;
+    float fat_g = 9;
+    bool device_verified = 10;
+    bool is_liquid = 11;
 }

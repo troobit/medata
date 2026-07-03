@@ -13,6 +13,8 @@
 | [Minimum Viable Volume Estimator](#minimum-viable-volume-estimator) | estimation | 2026-06-22 | Superseded | smol | Retired before tasks/code (decision_log Decision 5): its premise that the dev-stub yields uncarveable masks proved false; the real two-view defect lives in `bugfixes/two-view-carve-no-volume`. |
 | [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | estimation | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
 | [Model Production](#model-production) | estimation | 2026-06-29 | Done | full | Train → Core ML export → bundle the on-device segmenter. All 13 code tasks done (Bundle.module loader, build lineage, modelVersion derivation, export.py gates, validation IoU + export-eligibility reporting, palette↔DB bake lock); producing the trained model itself is human/GPU/device-gated — see [prerequisites.md](estimation/model-production/prerequisites.md). |
+| [Nutrition5k Calibration](#nutrition5k-calibration) | estimation | 2026-07-01 | Done | full | Bridge the Nutrition5k RGB-D dataset into the harness to fit per-class β bulk-correction factors, bake them into the food DB with lineage, report carb/protein/fat accuracy against a β=1.0 baseline, and add standalone-liquid classes to a redefined palette v1. |
+| [Resumable Segmenter Training](#resumable-segmenter-training) | estimation | 2026-07-02 | No Tasks | smol | Give `train.py` crash-safe per-epoch checkpointing and a `--resume` flag for interruptible local-Mac (MPS) training runs. |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
@@ -65,6 +67,23 @@ Train → Core ML export → bundle the on-device segmenter. All 13 implementabl
 - [prerequisites.md](estimation/model-production/prerequisites.md)
 - [requirements.md](estimation/model-production/requirements.md)
 - [tasks.md](estimation/model-production/tasks.md)
+
+## Nutrition5k Calibration
+
+Bridge Google Nutrition5k overhead RGB-D + per-ingredient gravimetric labels into the existing `.fixture`/`HarnessCLI calibrate` pipeline to fit per-class β bulk-correction factors (single-dominant + mixture BVLS paths), bake them into the food DB with lineage/provenance, report carb/protein/fat accuracy against a β=1.0 baseline, and add coarse standalone-liquid classes to the in-place-redefined palette v1. All 39 tasks done, including the pre-checkpoint end-to-end run (committed artifacts under [artifacts/](estimation/nutrition5k-calibration/artifacts/)); the post-checkpoint single-dominant re-fit + supersession re-run stays a documented manual step gated on model-production Bucket C.
+
+- [decision_log.md](estimation/nutrition5k-calibration/decision_log.md)
+- [design.md](estimation/nutrition5k-calibration/design.md)
+- [prerequisites.md](estimation/nutrition5k-calibration/prerequisites.md)
+- [requirements.md](estimation/nutrition5k-calibration/requirements.md)
+- [tasks.md](estimation/nutrition5k-calibration/tasks.md)
+
+## Resumable Segmenter Training
+
+Give `train.py` crash-safe per-epoch checkpointing and a `--resume` flag for interruptible local-Mac (MPS) training runs; the shipped checkpoint format and export.py contract stay unchanged.
+
+- [decision_log.md](estimation/resumable-segmenter-training/decision_log.md)
+- [smolspec.md](estimation/resumable-segmenter-training/smolspec.md)
 
 ## Rawframe Rgb Conversion
 

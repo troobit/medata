@@ -1,0 +1,110 @@
+{
+  "carbs_overall" : {
+    "mae_baseline" : 3.2060237,
+    "mae_calibrated" : 2.7958703,
+    "mape_baseline" : 105.82441,
+    "mape_calibrated" : 81.87904,
+    "samples" : 177
+  },
+  "carbs_per_staple" : {
+    "brown_rice" : {
+      "mae_baseline" : 6.989472,
+      "mae_calibrated" : 6.989472,
+      "mape_baseline" : 114.72021,
+      "mape_calibrated" : 114.72021,
+      "samples" : 14
+    },
+    "pasta" : {
+      "mae_baseline" : 20.462673,
+      "mae_calibrated" : 20.462673,
+      "mape_baseline" : 46.56958,
+      "mape_calibrated" : 46.56958,
+      "samples" : 1
+    },
+    "white_rice" : {
+      "mae_baseline" : 6.1443634,
+      "mae_calibrated" : 6.1443634,
+      "mape_baseline" : 41.552544,
+      "mape_calibrated" : 41.552544,
+      "samples" : 19
+    }
+  },
+  "cross_macro_flags" : [
+
+  ],
+  "dispersion_per_class" : {
+    "broccoli" : 0.05777963,
+    "carrot" : 0.08820388
+  },
+  "fat_overall" : {
+    "mae_baseline" : 1.3196713,
+    "mae_calibrated" : 1.2647785,
+    "mape_baseline" : 111.57214,
+    "mape_calibrated" : 88.519684,
+    "samples" : 181
+  },
+  "folds" : 5,
+  "mape_target_percent" : 20,
+  "official_split" : {
+    "caveat" : "Whole-dish figures consume ground-truth class identity via the ingredient mapping; they are reported alongside, not claimed comparable with, the Nutrition5k paper's image-only RGB-D baseline (Table 3). The β_c-vs-baseline judgement lives in the mapped-only figures (Req 6.3).",
+    "evaluated_dish_count" : 503,
+    "mae_baseline_g" : 18.411081,
+    "mae_calibrated_g" : 18.517756,
+    "mae_over_mean_baseline" : 0.93159884,
+    "mae_over_mean_calibrated" : 0.9369965,
+    "mapped_carb_coverage_fraction" : 0.11185128,
+    "split_total_count" : 507
+  },
+  "pool" : {
+    "depth_test_split_count" : 507,
+    "effective_samples_by_path" : {
+      "mixture" : {
+        "apple" : 27,
+        "beef" : 7,
+        "broccoli" : 35,
+        "brown_rice" : 2,
+        "carrot" : 48,
+        "chicken" : 12,
+        "egg" : 7,
+        "lentils" : 1,
+        "pasta" : 1,
+        "pork" : 9,
+        "salad_leaves" : 16,
+        "tomato" : 29,
+        "white_rice" : 10
+      }
+    },
+    "ingestion_skip_count" : 5,
+    "insufficient_classes" : [
+      "apple",
+      "beef",
+      "brown_rice",
+      "chicken",
+      "egg",
+      "lentils",
+      "pasta",
+      "pork",
+      "salad_leaves",
+      "tomato",
+      "white_rice"
+    ],
+    "liquid_excluded_count" : 45,
+    "qualifying_plate_count" : 181,
+    "rgbd_dish_count" : 3473,
+    "stacking_excluded_count" : 56,
+    "unmapped_excluded_count" : 2688
+  },
+  "protein_overall" : {
+    "mae_baseline" : 6.120838,
+    "mae_calibrated" : 5.998813,
+    "mape_baseline" : 111.47256,
+    "mape_calibrated" : 88.64406,
+    "samples" : 181
+  },
+  "seed" : 42,
+  "staples_meeting_target" : {
+    "brown_rice" : false,
+    "pasta" : false,
+    "white_rice" : false
+  }
+}
