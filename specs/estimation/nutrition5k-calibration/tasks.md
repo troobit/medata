@@ -328,7 +328,7 @@ references:
 
 ## Stream E — Spec alignment (docs)
 
-- [ ] 38. Update cross-spec documentation <!-- id:i3we69v -->
+- [x] 38. Update cross-spec documentation <!-- id:i3we69v -->
   - specs/estimation/pipeline dataset-overlap section (§20.2): add Nutrition5k and its β_c calibration use (9.1).
   - specs/estimation/model-production: record the final-v1 palette class-list lock (the enumerated list incl. liquid classes) as a Stage 3 training prerequisite (9.4, Decisions 22–23).
   - tools/segmenter/README.md: document the N5k partial layout + acquisition steps per prerequisites.md (1.3).

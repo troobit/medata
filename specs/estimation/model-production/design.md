@@ -37,6 +37,8 @@ Ordered stages. "Automated" = scriptable/coding-actionable end-to-end. "Gated" =
 
 The MVP gate (Req [6.3](requirements.md#6.3)) is met when stages 1–8 hold; stages 9–10 are tracked but off the MVP critical path (D3, D5).
 
+**Stage 3 sequencing prerequisite — palette class-list lock.** The training run must not start until the palette class list is locked at the final v1: `ClassPalette.v1Standard` as redefined in place with the eight coarse liquid classes (24 solid + 8 liquid + 3 special = 35 channels; the enumerated ordered list lives in `MedataCore/Sources/Segmentation/ClassPalette.swift` and `tools/food_db/generate.py` FOOD_DATA). The trained checkpoint's output-channel count must match the shipped palette, so training against the pre-liquid layout would force a full retrain. Recorded per `specs/estimation/nutrition5k-calibration/` Req 9.4 (Decisions 22–23 of that spec); the checklist item lives in `prerequisites.md` under Training (Stage 3).
+
 Refinement discipline (Req [1.4](requirements.md#1.4)): a change to any stage updates this table **and** the corresponding `ml-training.md` section in the same change; the per-class floor and set in [3.5](requirements.md#3.5)/[3.6](requirements.md#3.6) and the mask-plausibility bound in [6.2](requirements.md#6.2) are explicitly tunable against the first real run.
 
 ### 2.2 Integration points (name the symbol)

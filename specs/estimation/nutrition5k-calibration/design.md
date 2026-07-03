@@ -236,7 +236,7 @@ The banner's visual presentation stays owned by model-production (Req 8.3); the 
 
 - Add Nutrition5k to the estimation/pipeline dataset-overlap section (§20.2) noting its β_c calibration use (Req 9.1).
 - The v1 standalone-liquid reversal is recorded in this decision log (Decision 5) and cross-referenced from Req 7 (Req 9.2).
-- Document the population-transfer assumption (β fit on N5k overhead RealSense applied to device LiDAR, compounded by the pinned nominal intrinsics of Req 3.3) as a known risk for a later device spot-check (Req 9.3).
+- The population-transfer assumption (β fit on N5k overhead RealSense applied to device LiDAR, compounded by the pinned nominal intrinsics of Req 3.3) is documented as a known risk for a later device spot-check (Req 9.3) — recorded in the intrinsics note of §N5k ingestion above, in Decision 18's context (it motivates the softened banner tier), and beside `PINNED_INTRINSICS` in `tools/nutrition5k/ingest.py`.
 - Update model-production's stage ordering to record the palette class-list lock — the final v1 including the liquid classes — as a prerequisite of its training stage (Req 9.4, Decisions 22–23).
 - Add the Nutrition5k attribution row to `SettingsView`'s "About macronutrient sources" section, matching the existing CoFID/OGL line and indicating adaptation (derived β factors), and record the licence in calibration lineage (Req 1.5).
 - Document the N5k directory layout + acquisition steps in **both** this spec's prerequisites and the ML-training docs under `tools/segmenter/README.md` (Req 1.3).
