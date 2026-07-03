@@ -29,10 +29,13 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
   (eigenvalues floored at λmax·1e-12, NOT pseudo-inverse-dropped) →
   `identifiable = false`. Under-sampled classes (< 30 effective) are held at
   β = 1 and moved to the RHS (`fixedOffsetClasses`).
-- `BetaCalibrator.calibrateWithFit` — unchanged §6.9 closed form; the new
-  `PerClassFit` mirrors the SPLIT-based fit (60/40) exactly. For the
-  no-holdout bake basis, pass all qualifying plates. `logResidualSE`
-  ≈ relative SE on β.
+- `BetaCalibrator.calibrateWithFit` — unchanged §6.9 closed form; the
+  `PerClassFit` mirrors the SPLIT-based fit (60/40) exactly — this is the
+  SELF-EVALUATION entry point only. The baked β comes from
+  `BetaCalibrator.bakeFit`, which holds nothing out (design §Split
+  reconciliation: 30-plate floor, not ~50) — `main.swift` feeds `bakeFit`'s
+  output to CalibrationMerge/the artifact and keeps the split result for the
+  legacy eval. `logResidualSE` ≈ relative SE on β.
 - `CalibrationMerge` — per-class arbitration (Req 5.2/5.4): single-dominant
   wins when effective ≥ 30 AND rel SE ≤ 0.15; else a qualifying mixture fit;
   else pooled/unity with provenance `none`. A class calibrated on raw count
@@ -50,6 +53,10 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
   section, cross-macro flag (1.5× carb MAPE with a 5-point absolute floor),
   pool arithmetic. GT macros per class come from the caller, NOT re-derived
   from the DB — that's what lets the cross-macro check see composition errors.
+- `CalibrateRun.evalPlate` builds the eval plates: GT macros from the
+  fixture's per-class N5k maps (proto fields 24–26, Decision 27); fixtures
+  predating the maps fall back to GT mass × DB fraction (circular across
+  macros — the 6.7 flag can never fire on the fallback).
 - `CalibrateRun` + `CalibrationArtifact` — CLI wiring (depth-test-split
   exclusion FIRST, τ_purity = 0.90 volume gate: failures dropped, never
   re-routed) and the calibrate JSON artifact (the sole stream B↔C interface;
@@ -89,6 +96,19 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
   effective).
 - The post-checkpoint single-dominant re-fit + supersession re-run stays a
   manual step gated on model-production Bucket C.
+
+## Review fixes (2026-07-03)
+
+- N5k runs REQUIRE `--depth-test-split` (exit 1 without it — Req 4.4 is a
+  SHALL) and warn to stderr when `--ingest-summary` is missing (the Req 4.1
+  unmapped exclusion cannot be applied without it).
+- The lineage block also records `liquid_significant_fraction`,
+  `unmapped_significant_fraction`, `relative_se_bound`,
+  `effective_sample_min` — a bake is reproducible from lineage alone.
+- FixtureLoader's mixture guard rejects `nadir/oblique_argmax` as well as
+  probs (an argmax is segmenter output too, Req 3.7).
+- Official-split dishes skipped from the whole-dish eval (non-mixture path,
+  no depth, plane-fit failure) are enumerated to stderr (Req 6.8).
 
 ## Gotchas
 

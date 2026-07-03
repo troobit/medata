@@ -24,8 +24,8 @@ Each FoodSeg103 class is routed to exactly one of:
     * a composite food channel (e.g. assorted veg -> ``mixed_vegetables``),
     * one of the 8 coarse liquid channels (wine, coffee, tea, milk, juice,
       soup — Req 7.2),
-    * ``unknown_food`` (25) when it is food but has no sensible palette home,
-    * ``unsupported_liquid`` (26) for standalone drinks,
+    * ``unknown_food`` (33) when it is food but has no sensible palette home,
+    * ``unsupported_liquid`` (34) for standalone drinks,
     * dropped (``target_index: null``) when it cannot be remapped sensibly.
 
 Output is a deterministic JSON file consumed by ``prepare_dataset.py``.

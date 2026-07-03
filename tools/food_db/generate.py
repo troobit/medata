@@ -300,17 +300,36 @@ def _load_calibration(path: str) -> dict:
     classes = cal.get("classes")
     if not isinstance(classes, dict):
         raise SystemExit(f"calibration JSON {path} has no 'classes' block")
-    if not isinstance(cal.get("lineage"), dict):
+    lineage = cal.get("lineage")
+    if not isinstance(lineage, dict):
         raise SystemExit(
             f"calibration JSON {path} has no lineage block — the bake must "
             "record calibration lineage (Req 5.5)"
         )
+    # Req 1.5/5.5 make these mandatory lineage records ("SHALL record") —
+    # a missing value must abort, not silently bake an unattributed DB.
+    for key in ("licence", "pinned_intrinsics_model"):
+        if not lineage.get(key):
+            raise SystemExit(
+                f"calibration JSON {path} lineage is missing '{key}' — "
+                "mandatory lineage record (Req 1.5/5.5); bake aborted"
+            )
     known = {row[0] for row in FOOD_DATA}
     unknown = sorted(set(classes) - known)
     if unknown:
         raise SystemExit(
             f"calibration JSON {path} names unknown class(es) {unknown} — "
             "not in FOOD_DATA; a mis-keyed artifact must not bake"
+        )
+    # Liquids never enter the β fit (Req 4.7) — the harness enforces this at
+    # fit time; rejecting liquid entries here guards against a mis-keyed
+    # artifact reaching the bake.
+    liquid_ids = {row[0] for row in FOOD_DATA[SOLID_CLASS_COUNT:]}
+    liquid_entries = sorted(set(classes) & liquid_ids)
+    if liquid_entries:
+        raise SystemExit(
+            f"calibration JSON {path} carries β entries for liquid class(es) "
+            f"{liquid_entries} — liquids never enter the β fit (Req 4.7)"
         )
     density_by_class = {row[0]: row[2] for row in FOOD_DATA}
     for class_id in DENSITY_SPOT_CHECK_CLASSES:

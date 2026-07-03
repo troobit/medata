@@ -105,9 +105,9 @@ public enum BetaCalibrator {
     // §6.9 calibration plus the per-class spread outputs (log-residual SE,
     // effective-sample count, clamped flag). `fit` describes exactly the same
     // split-based fit as `result` — same closed form, same clamp, same meals —
-    // it only surfaces the spread that CalibrationResult discards. Callers that
-    // want the no-holdout bake basis (design §Split reconciliation) pass all
-    // qualifying plates and take the fit's numbers from that run.
+    // it only surfaces the spread that CalibrationResult discards. This is
+    // the SELF-EVALUATION entry point (fit on 60%, evaluate on 40%); the
+    // baked β comes from `bakeFit`, which holds nothing out.
     public static func calibrateWithFit(
         meals: [MealCalibrationInput]
     ) -> (result: CalibrationResult, fit: PerClassFit) {
@@ -122,7 +122,19 @@ public enum BetaCalibrator {
             calibrationIndices: calIdx,
             evalIndices: evalIdx
         )
+        return (result, perClassFit(from: split))
+    }
 
+    // The no-holdout bake basis (design §Split reconciliation): the baked β
+    // fits each class on ALL its qualifying plates — the 60/40 split is used
+    // only when the calibrator self-evaluates — so a single-dominant staple
+    // needs the 30-plate effective-sample floor, not ~50. Same closed form
+    // and clamp as `calibrateWithFit`; only the meal set differs.
+    public static func bakeFit(meals: [MealCalibrationInput]) -> PerClassFit {
+        perClassFit(from: fitClasses(over: meals))
+    }
+
+    private static func perClassFit(from split: ClassFitOutputs) -> PerClassFit {
         var classes: [String: PerClassFit.ClassFit] = [:]
         for c in split.counts.keys {
             classes[c] = PerClassFit.ClassFit(
@@ -133,7 +145,7 @@ public enum BetaCalibrator {
                 clamped: split.clamped.contains(c)
             )
         }
-        return (result, PerClassFit(classes: classes, betaPool: split.betaPool))
+        return PerClassFit(classes: classes, betaPool: split.betaPool)
     }
 
     // The §6.9 per-class closed form + pooled fallback over one meal set.

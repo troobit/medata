@@ -17,6 +17,9 @@ public enum CalibrateRun {
     // τ_route is applied by tools/nutrition5k/ingest.py; recorded here only so
     // the lineage block can carry it (Req 5.5).
     public static let tauRoute: Float = 0.90
+    // Mirrors ingest.py's UNMAPPED_SIGNIFICANT_FRACTION (Req 4.1) — applied
+    // at ingestion, recorded here for the lineage block (Req 5.5).
+    public static let unmappedSignificantFraction: Float = 0.10
 
     // N5k's official RGB-D test split (dish_ids/splits/depth_test_ids.txt —
     // the depth split, NOT the rgb_* files). One dish id per line.
@@ -162,6 +165,42 @@ public enum CalibrateRun {
             totalHullVolumeCm3: hull,
             massByClassG: fixture.groundTruthClassMassG)
     }
+
+    // Build an eval plate from a mixture observation. GT macros come from the
+    // fixture's per-class N5k maps (Req 6.2/6.6) — the estimate uses the DB
+    // composition, so an independent GT basis is what lets the Req 6.7
+    // cross-macro check see mapping/composition-source errors. Fixtures
+    // predating the per-class maps (all three empty) fall back to GT mass ×
+    // DB fraction; that fallback is circular across macros and cannot raise
+    // the 6.7 flag, which is exactly why the maps exist.
+    public static func evalPlate(
+        obs: MixtureBetaCalibrator.PlateObservation,
+        fixture: PbMealFixture,
+        composition: ClassComposition,
+        official: Bool
+    ) -> N5kEvalPlate {
+        var carbs = fixture.groundTruthClassCarbsG
+        var protein = fixture.groundTruthClassProteinG
+        var fat = fixture.groundTruthClassFatG
+        if carbs.isEmpty, protein.isEmpty, fat.isEmpty {
+            for (c, m) in obs.massByClassG {
+                carbs[c] = m * composition.carbFractionPer100g[c, default: 0] / 100
+                protein[c] = m * composition.proteinFractionPer100g[c, default: 0] / 100
+                fat[c] = m * composition.fatFractionPer100g[c, default: 0] / 100
+            }
+        }
+        return N5kEvalPlate(
+            fixtureID: obs.fixtureID,
+            estimatorPath: fixture.estimatorPath == "single_dominant"
+                ? .singleDominant : .mixture,
+            totalHullVolumeCm3: obs.totalHullVolumeCm3,
+            massByClassG: obs.massByClassG,
+            gtCarbsByClassG: carbs,
+            gtProteinByClassG: protein,
+            gtFatByClassG: fat,
+            wholeDishCarbsG: fixture.groundTruthTotalCarbsG,
+            inOfficialTestSplit: official)
+    }
 }
 
 // The calibrate JSON artifact. `betaPool` and `classes` predate this spec
@@ -204,6 +243,12 @@ public struct CalibrationArtifact: Encodable {
         public let tauPurity: Float
         public let tauEff: Float
         public let kappaStacking: Float
+        // Remaining provisional gate values (design §Provisional gate
+        // values), recorded so a bake is reproducible from its lineage alone.
+        public let liquidSignificantFraction: Float
+        public let unmappedSignificantFraction: Float
+        public let relativeSEBound: Float
+        public let effectiveSampleMin: Int
         public let seed: UInt64
         public let effectiveSamplePerClass: [String: Int]
         public let conditionNumber: Float
@@ -219,6 +264,10 @@ public struct CalibrationArtifact: Encodable {
             case tauPurity = "tau_purity"
             case tauEff = "tau_eff"
             case kappaStacking = "kappa_stacking"
+            case liquidSignificantFraction = "liquid_significant_fraction"
+            case unmappedSignificantFraction = "unmapped_significant_fraction"
+            case relativeSEBound = "relative_se_bound"
+            case effectiveSampleMin = "effective_sample_min"
             case seed
             case effectiveSamplePerClass = "effective_sample_per_class"
             case conditionNumber = "condition_number"
@@ -230,6 +279,12 @@ public struct CalibrationArtifact: Encodable {
         public init(n5kRelease: String, n5kMetadataVersion: String,
                     mappingArtifactVersion: String, tauRoute: Float,
                     tauPurity: Float, tauEff: Float, kappaStacking: Float,
+                    liquidSignificantFraction: Float =
+                        MixtureBetaCalibrator.liquidSignificantFraction,
+                    unmappedSignificantFraction: Float =
+                        CalibrateRun.unmappedSignificantFraction,
+                    relativeSEBound: Float = CalibrationMerge.relativeSEBound,
+                    effectiveSampleMin: Int = CalibrationMerge.effectiveSampleMin,
                     seed: UInt64, effectiveSamplePerClass: [String: Int],
                     conditionNumber: Float, identifiablePerClass: [String: Bool],
                     pinnedIntrinsicsModel: String, licence: String) {
@@ -240,6 +295,10 @@ public struct CalibrationArtifact: Encodable {
             self.tauPurity = tauPurity
             self.tauEff = tauEff
             self.kappaStacking = kappaStacking
+            self.liquidSignificantFraction = liquidSignificantFraction
+            self.unmappedSignificantFraction = unmappedSignificantFraction
+            self.relativeSEBound = relativeSEBound
+            self.effectiveSampleMin = effectiveSampleMin
             self.seed = seed
             self.effectiveSamplePerClass = effectiveSamplePerClass
             self.conditionNumber = conditionNumber

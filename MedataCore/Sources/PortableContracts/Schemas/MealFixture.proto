@@ -45,4 +45,12 @@ message MealFixture {
     float ground_truth_fat_g = 21;
     string source_dataset = 22;                         // e.g. "nutrition5k@<release>/<metaver>"
     string estimator_path = 23;                         // 'single_dominant' | 'mixture' — authoritative load-path selector; any other value malformed
+
+    // Per-class ground-truth macros summed from N5k per-ingredient values
+    // (Req 6.2/6.6). These are the eval's GT basis — deliberately NOT
+    // re-derivable from the DB composition, so the Req 6.7 cross-macro
+    // check can see mapping/composition-source errors.
+    map<string, float> ground_truth_class_carbs_g = 24;
+    map<string, float> ground_truth_class_protein_g = 25;
+    map<string, float> ground_truth_class_fat_g = 26;
 }

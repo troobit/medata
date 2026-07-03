@@ -61,7 +61,14 @@ JSON (the sole stream B↔C interface). Key behaviours:
   serving; else usable surface volume → depth-integrated; else
   `.excludedFlagged`. BOTH estimate paths set `liquidOverEstimate = true`
   (Decision 19). A serving-table miss THROWS (`servingLookupMiss`) — never a
-  silent zero. Region defaults `.uk`; the Settings plumbing is stream D's.
+  silent zero. Region defaults `.uk`.
+- **Pending**: `LiquidResolver` has NO production caller yet — it wires in
+  when vessel/sub-class recognition lands (model-production, Req 7.7). The
+  "region from a Settings value" plumbing does not exist either; both land
+  together. Do not treat the resolver as dead code.
+- `generate.py` `_load_calibration` is strict: missing `licence` or
+  `pinned_intrinsics_model` lineage keys abort the bake (Req 1.5/5.5), and
+  β entries for liquid classes are rejected (Req 4.7).
 
 ## Gotchas
 

@@ -211,6 +211,9 @@ def build_fixture_bytes(
     ground_truth_total_carbs_g: float | None = None,
     ground_truth_protein_g: float | None = None,
     ground_truth_fat_g: float | None = None,
+    ground_truth_class_carbs_g: dict[str, float] | None = None,
+    ground_truth_class_protein_g: dict[str, float] | None = None,
+    ground_truth_class_fat_g: dict[str, float] | None = None,
     source_dataset: str | None = None,
     estimator_path: str | None = None,
 ) -> bytes:
@@ -309,6 +312,15 @@ def build_fixture_bytes(
         fx.ground_truth_protein_g = float(ground_truth_protein_g)
     if ground_truth_fat_g is not None:
         fx.ground_truth_fat_g = float(ground_truth_fat_g)
+    # Per-class GT macros summed from N5k per-ingredient values (Req 6.2/6.6)
+    # — the eval's GT basis, never re-derived from the DB composition, so the
+    # Req 6.7 cross-macro check can see composition-source errors.
+    for class_id, grams in (ground_truth_class_carbs_g or {}).items():
+        fx.ground_truth_class_carbs_g[class_id] = float(grams)
+    for class_id, grams in (ground_truth_class_protein_g or {}).items():
+        fx.ground_truth_class_protein_g[class_id] = float(grams)
+    for class_id, grams in (ground_truth_class_fat_g or {}).items():
+        fx.ground_truth_class_fat_g[class_id] = float(grams)
     if source_dataset is not None:
         fx.source_dataset = source_dataset
     if estimator_path is not None:

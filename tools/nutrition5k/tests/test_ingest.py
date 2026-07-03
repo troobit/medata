@@ -280,6 +280,20 @@ class TestEmission:
         assert fx.ground_truth_fat_g == pytest.approx(
             150.0 * 0.003 + 40.0 * 0.004 + 10.0 * 0.006)
 
+        # Req 6.2/6.6: per-class GT macros summed from N5k per-ingredient
+        # values, mapped classes only — the eval's GT basis, NOT re-derived
+        # from the DB composition (that would blind the Req 6.7 cross-macro
+        # check). Unmapped soy sauce contributes to no class.
+        assert dict(fx.ground_truth_class_carbs_g) == {
+            "white_rice": pytest.approx(150.0 * 0.280),
+            "broccoli": pytest.approx(40.0 * 0.070)}
+        assert dict(fx.ground_truth_class_protein_g) == {
+            "white_rice": pytest.approx(150.0 * 0.027),
+            "broccoli": pytest.approx(40.0 * 0.024)}
+        assert dict(fx.ground_truth_class_fat_g) == {
+            "white_rice": pytest.approx(150.0 * 0.003),
+            "broccoli": pytest.approx(40.0 * 0.004)}
+
         # Req 1.4: release-stamped dataset identity.
         assert fx.source_dataset.startswith("nutrition5k@")
         assert "/" in fx.source_dataset

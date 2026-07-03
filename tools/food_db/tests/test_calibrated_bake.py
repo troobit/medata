@@ -123,6 +123,23 @@ def test_unknown_class_in_json_aborts(out_dir):
         bake_with(out_dir, artifact({"dragonfruit": entry(0.9)}))
 
 
+def test_liquid_class_beta_in_json_aborts(out_dir):
+    # Liquids never enter the β fit (Req 4.7); a mis-keyed artifact carrying
+    # a liquid β must not bake.
+    with pytest.raises(SystemExit, match="liquid"):
+        bake_with(out_dir, artifact({"beer": entry(0.9)}))
+
+
+@pytest.mark.parametrize("key", ["licence", "pinned_intrinsics_model"])
+def test_missing_mandatory_lineage_key_aborts(out_dir, key):
+    # Req 1.5/5.5: these are SHALL-record lineage values — a missing key
+    # aborts rather than silently baking an unattributed DB.
+    lineage = {k: v for k, v in LINEAGE.items() if k != key}
+    with pytest.raises(SystemExit, match=key):
+        bake_with(out_dir, artifact({"white_rice": entry(0.82)},
+                                    lineage=lineage))
+
+
 # --- lineage meta (Req 1.5/5.5) ---
 
 def test_lineage_recorded_in_meta(out_dir):

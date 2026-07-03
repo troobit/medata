@@ -66,6 +66,22 @@ struct FixtureLoaderGuardTests {
         }
     }
 
+    @Test("A mixture fixture carrying only an argmax mask is rejected too")
+    func mixtureWithArgmaxOnlyRejected() throws {
+        // Req 3.7 forbids segmenter output on the mixture path — a
+        // pre-computed argmax is a mask even without the probability tensor.
+        let dir = makeDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var fx = makeFixture(id: "fx-mix-argmax", path: "mixture",
+                             sha: FixtureLoader.sentinelSHA, withProbs: false)
+        fx.nadirArgmax = Data(count: 4 * 4)
+        try write([fx], to: dir)
+
+        #expect(throws: FixtureLoader.Error.probabilitiesOnMixturePath(file: "fx-mix-argmax.fixture")) {
+            try FixtureLoader.load(from: dir, checkpointSHA256: Self.realSHA)
+        }
+    }
+
     @Test("A mixture fixture whose SHA is not the sentinel is rejected")
     func mixtureWithRealSHARejected() throws {
         let dir = makeDir()

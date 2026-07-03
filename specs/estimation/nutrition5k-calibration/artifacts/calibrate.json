@@ -108,6 +108,7 @@
   },
   "lineage" : {
     "condition_number" : 1.3381308,
+    "effective_sample_min" : 30,
     "effective_sample_per_class" : {
       "apple" : 27,
       "beef" : 7,
@@ -140,14 +141,17 @@
     },
     "kappa_stacking" : 0.6,
     "licence" : "CC BY 4.0",
+    "liquid_significant_fraction" : 0.05,
     "mapping_artifact_version" : "909f19f575a6",
     "n5k_metadata_version" : "87a9bbd1fd2e",
     "n5k_release" : "03adfb644f93",
     "pinned_intrinsics_model" : "realsense_d435_factory",
+    "relative_se_bound" : 0.15,
     "seed" : 42,
     "tau_eff" : 0.15,
     "tau_purity" : 0.9,
-    "tau_route" : 0.9
+    "tau_route" : 0.9,
+    "unmapped_significant_fraction" : 0.1
   },
   "run_summary" : {
     "depth_test_split_excluded" : [

@@ -75,14 +75,18 @@ DEPTH_CAP_RAW = 4000
 
 # ---- documented reference depths (Req 3.1) --------------------------------- #
 # Both strictly below the 0.4 m cap, where clamping cannot mask a scale error.
+# The bands are deliberately wide: they exist to catch order-of-magnitude
+# unit errors (raw/1000 or raw-as-mm land far outside both), not to tighten
+# the nominal geometry. Both references are quantiles of the converted
+# frames themselves — N5k publishes no independently surveyed rig distances.
 # 1. Camera-to-plate: the fixed N5k rig places the plate surface ~350-400 mm
 #    below the overhead RealSense (empirically: per-plate median of valid
-#    converted depth is 350-400 mm across the RGB-D subset).
+#    converted depth); the band's low edge leaves room for tall dishes that
+#    pull the median up towards the camera.
 CAMERA_TO_PLATE_BAND_MM = (250.0, 400.0)
 # 2. Food-top feature: the nearest food surface (1st percentile of valid
-#    depth) sits at least ~100 mm of food height above nothing — i.e. within
-#    (150, 400) mm of the camera. A raw/1000 or raw-as-mm unit error lands
-#    far outside both bands.
+#    depth) must still be a plausible camera distance — no closer than
+#    ~150 mm (roughly 250 mm of food height on the plate) and below the cap.
 FOOD_TOP_BAND_MM = (150.0, 400.0)
 # Reference verification runs over the first N convertible plates.
 REFERENCE_SAMPLE_SIZE = 25
@@ -224,8 +228,10 @@ class DishRecord:
     total_carbs_g: float
     total_protein_g: float
     total_fat_g: float
-    # (ingredient_id, name, grams) per ingredient row.
-    ingredients: list[tuple[str, str, float]]
+    # (ingredient_id, name, grams, carbs_g, protein_g, fat_g) per ingredient
+    # row — the macro columns are the N5k per-ingredient absolute values that
+    # feed the fixture's per-class GT macro maps (Req 6.2/6.6).
+    ingredients: list[tuple[str, str, float, float, float, float]]
 
 
 @dataclass(frozen=True)
@@ -246,7 +252,7 @@ def route_info(record: DishRecord, plate_mapping: mapping.Mapping,
     liquid_mass = 0.0
     unmapped_mass = 0.0
     total = 0.0
-    for ingredient_id, _name, grams in record.ingredients:
+    for ingredient_id, _name, grams, *_macros in record.ingredients:
         total += grams
         class_id = plate_mapping.class_for(ingredient_id)
         if class_id is None:
@@ -270,6 +276,27 @@ def route_info(record: DishRecord, plate_mapping: mapping.Mapping,
         dominant_class=dominant_class,
         dominant_fraction=dominant_fraction,
     )
+
+
+def class_macros(
+    record: DishRecord, plate_mapping: mapping.Mapping,
+) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
+    """Per-class GT macro sums (carbs, protein, fat) over MAPPED ingredients
+    (Req 6.2/6.6). These are N5k's own per-ingredient values — the eval's GT
+    basis, deliberately not re-derivable from the DB composition, so the
+    Req 6.7 cross-macro check can see composition-source errors."""
+    carbs: dict[str, float] = {}
+    protein: dict[str, float] = {}
+    fat: dict[str, float] = {}
+    for ingredient_id, _name, _grams, carbs_g, protein_g, fat_g \
+            in record.ingredients:
+        class_id = plate_mapping.class_for(ingredient_id)
+        if class_id is None:
+            continue
+        carbs[class_id] = carbs.get(class_id, 0.0) + carbs_g
+        protein[class_id] = protein.get(class_id, 0.0) + protein_g
+        fat[class_id] = fat.get(class_id, 0.0) + fat_g
+    return carbs, protein, fat
 
 
 def decide_estimator_path(info: RouteInfo, *, checkpoint_available: bool) -> str:
@@ -315,16 +342,24 @@ def load_dish_metadata(n5k_dir: Path) -> tuple[dict[str, DishRecord], set[str]]:
                     )
                     ingredients = []
                     for i in range(6, len(row) - 6, 7):
+                        # Per-ingredient group: id, name, grams, cal, fat,
+                        # carb, protein (absolute values for the portion).
                         grams = float(row[i + 2])
+                        ing_fat = float(row[i + 4])
+                        ing_carb = float(row[i + 5])
+                        ing_protein = float(row[i + 6])
                         ingredients.append((row[i].strip(), row[i + 1].strip(),
-                                            grams))
+                                            grams, ing_carb, ing_protein,
+                                            ing_fat))
                     if not ingredients:
                         raise ValueError("no ingredients")
-                    plate_mass = sum(g for _, _, g in ingredients)
+                    plate_mass = sum(t[2] for t in ingredients)
                     if (not np.isfinite(total_mass) or plate_mass <= 0
                             or any(not np.isfinite(g) or g < 0
-                                   for _, _, g in ingredients)):
-                        raise ValueError("non-finite or non-positive mass")
+                                   for _, _, g, *_ in ingredients)
+                            or any(not np.isfinite(m)
+                                   for t in ingredients for m in t[3:])):
+                        raise ValueError("non-finite mass or macro")
                 except (ValueError, IndexError):
                     malformed.add(dish_id)
                     continue
@@ -580,6 +615,7 @@ def main(argv: list[str] | None = None) -> int:
             probs = _run_segmenter(model, str(dish_dir / "rgb.png"),
                                    num_classes)
             sha = checkpoint_sha
+        gt_carbs, gt_protein, gt_fat = class_macros(record, plate_mapping)
         data = mf.build_fixture_bytes(
             fixture_id=dish_id,
             probs_hwc=probs,
@@ -594,6 +630,9 @@ def main(argv: list[str] | None = None) -> int:
             ground_truth_total_carbs_g=record.total_carbs_g,
             ground_truth_protein_g=record.total_protein_g,
             ground_truth_fat_g=record.total_fat_g,
+            ground_truth_class_carbs_g=gt_carbs,
+            ground_truth_class_protein_g=gt_protein,
+            ground_truth_class_fat_g=gt_fat,
             source_dataset=source_dataset,
             estimator_path=estimator_path,
         )

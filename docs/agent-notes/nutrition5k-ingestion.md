@@ -17,6 +17,11 @@ bridging N5k overhead RGB-D into `.fixture` files.
   optional kwargs: depth, intrinsics override, gravity, GT masses/macros,
   `source_dataset`, `estimator_path`; `probs_hwc`/`argmax_hw` now optional —
   mixture fixtures carry neither).
+- Fixtures also carry **per-class GT macro maps** (proto fields 24–26,
+  Decision 27): `class_macros()` sums N5k per-ingredient carb/protein/fat
+  over mapped ingredients. `DishRecord.ingredients` tuples are 6-wide
+  (id, name, grams, carbs_g, protein_g, fat_g); `route_info` tolerates
+  3-wide test tuples via `*_` unpacking, `class_macros` does not.
 
 ## Non-obvious data facts (verified 2026-07-02 on the local download)
 

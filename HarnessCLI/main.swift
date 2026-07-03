@@ -281,6 +281,22 @@ func runCalibration(args: Args, db: any FoodDatabase,
     let routed = CalibrateRun.route(fixtures: fixtures, depthTestSplit: split,
                                     unmappedExcluded: ingestSummary?.unmappedExcluded ?? [])
     let hasN5k = fixtures.contains { !$0.estimatorPath.isEmpty }
+    // Req 4.4 is a SHALL: an N5k run without the official depth-test split
+    // would silently calibrate on held-out dishes — fail loudly instead.
+    if hasN5k && split.isEmpty {
+        fputs("calibrate: N5k fixtures require --depth-test-split "
+            + "(data/dish_ids/splits/depth_test_ids.txt) so the official "
+            + "test dishes are excluded before selection (Req 4.4)\n", stderr)
+        exit(1)
+    }
+    // Fixtures carry mapped masses only, so without the ingestion run summary
+    // the >10%-unmapped-mass exclusion (Req 4.1) cannot be applied and those
+    // plates would bias co-occurring β downward.
+    if hasN5k && ingestSummary == nil {
+        fputs("calibrate: WARNING — no --ingest-summary; unmapped-heavy "
+            + "plates (Req 4.1) cannot be excluded from the mixture fit\n",
+            stderr)
+    }
 
     // Single-dominant (and legacy) fixtures via FixtureRunner; plates whose
     // pipeline run fails (e.g. poor plate-plane fit) are skipped + recorded
@@ -307,7 +323,11 @@ func runCalibration(args: Args, db: any FoodDatabase,
     let legacySD = sdInputs.filter { massDominant[$0.fixtureID] == nil }
     let gated = CalibrateRun.applyPurityGate(n5kSD, massDominantByFixture: massDominant)
     let admittedInputs = legacySD + gated.admitted
-    let (sdResult, sdFit) = BetaCalibrator.calibrateWithFit(meals: admittedInputs)
+    // The split-based result feeds the legacy self-evaluation only; the baked
+    // β fits on ALL qualifying plates (design §Split reconciliation), so a
+    // single-dominant staple needs the 30-plate floor, not ~50.
+    let (sdResult, _) = BetaCalibrator.calibrateWithFit(meals: admittedInputs)
+    let sdFit = BetaCalibrator.bakeFit(meals: admittedInputs)
 
     // Mixture fixtures: plate-region plane + depth-threshold hull volume.
     var mixtureObs: [MixtureBetaCalibrator.PlateObservation] = []
@@ -415,34 +435,6 @@ func classComposition(for classes: Set<String>, db: any FoodDatabase) -> ClassCo
                             proteinFractionPer100g: protein, fatFractionPer100g: fat)
 }
 
-// N5k eval plate from a mixture observation. Per-class GT macros derive from
-// GT mass × the DB fractions (the fixture proto carries per-dish totals only);
-// the whole-dish figure is the fixture's own N5k total.
-func n5kEvalPlate(obs: MixtureBetaCalibrator.PlateObservation,
-                  fixture: PbMealFixture,
-                  composition: ClassComposition,
-                  official: Bool) -> N5kEvalPlate {
-    var carbs: [String: Float] = [:]
-    var protein: [String: Float] = [:]
-    var fat: [String: Float] = [:]
-    for (c, m) in obs.massByClassG {
-        carbs[c] = m * composition.carbFractionPer100g[c, default: 0] / 100
-        protein[c] = m * composition.proteinFractionPer100g[c, default: 0] / 100
-        fat[c] = m * composition.fatFractionPer100g[c, default: 0] / 100
-    }
-    return N5kEvalPlate(
-        fixtureID: obs.fixtureID,
-        estimatorPath: fixture.estimatorPath == "single_dominant"
-            ? .singleDominant : .mixture,
-        totalHullVolumeCm3: obs.totalHullVolumeCm3,
-        massByClassG: obs.massByClassG,
-        gtCarbsByClassG: carbs,
-        gtProteinByClassG: protein,
-        gtFatByClassG: fat,
-        wholeDishCarbsG: fixture.groundTruthTotalCarbsG,
-        inOfficialTestSplit: official)
-}
-
 func runCalibrateAndEval(args: Args) throws {
     guard !args.fixturesDir.isEmpty else {
         fputs("calibrate-and-eval requires --fixtures-dir\n", stderr); exit(1)
@@ -468,14 +460,36 @@ func runCalibrateAndEval(args: Args) throws {
 
     let calibrationPlates: [N5kEvalPlate] = outcome.mixtureObs.compactMap { obs in
         guard let fx = fixtureByID[obs.fixtureID] else { return nil }
-        return n5kEvalPlate(obs: obs, fixture: fx, composition: composition, official: false)
+        return CalibrateRun.evalPlate(obs: obs, fixture: fx,
+                                      composition: composition, official: false)
     }
+    // Req 6.8: the report states evaluated-dish count vs split total —
+    // enumerate the skips so the shrinkage is visible, not silent. Pre-
+    // checkpoint every test dish is mixture-stamped; post-checkpoint the
+    // single-dominant-stamped ones need the masked per-class eval, which
+    // lands with the model-production re-fit (design §Accuracy reporting).
     var officialPlates: [N5kEvalPlate] = []
-    for fx in outcome.routed.depthTestExcluded where fx.estimatorPath == "mixture" {
-        guard fx.hasNadirDepth,
-              let obs = try? CalibrateRun.mixtureObservation(fixture: fx) else { continue }
-        officialPlates.append(n5kEvalPlate(obs: obs, fixture: fx,
-                                           composition: composition, official: true))
+    var officialSkipped: [String: [String]] = [:]
+    for fx in outcome.routed.depthTestExcluded {
+        guard fx.estimatorPath == "mixture" else {
+            officialSkipped["non_mixture_path", default: []].append(fx.fixtureID)
+            continue
+        }
+        guard fx.hasNadirDepth else {
+            officialSkipped["no_depth", default: []].append(fx.fixtureID)
+            continue
+        }
+        guard let obs = try? CalibrateRun.mixtureObservation(fixture: fx) else {
+            officialSkipped["plane_fit_failed", default: []].append(fx.fixtureID)
+            continue
+        }
+        officialPlates.append(CalibrateRun.evalPlate(obs: obs, fixture: fx,
+                                                     composition: composition,
+                                                     official: true))
+    }
+    for (reason, ids) in officialSkipped.sorted(by: { $0.key < $1.key }) {
+        fputs("calibrate-and-eval: official-split skip \(reason) "
+            + "(\(ids.count)): \(ids.sorted().joined(separator: " "))\n", stderr)
     }
 
     let config = CalibrationEvalConfig(

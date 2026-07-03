@@ -68,6 +68,27 @@ struct BetaCalibratorPerClassFitTests {
         #expect(!cls.clamped)
     }
 
+    @Test("bakeFit holds nothing out — a 30-49 plate class calibrates on the bake basis")
+    func bakeFitUsesAllQualifyingPlates() throws {
+        // Design §Split reconciliation: the baked β fits each class on ALL
+        // qualifying plates, so a staple needs the 30-plate floor, not ~50.
+        // 35 meals: the 60/40 self-evaluation split leaves only 21 in the
+        // calibration subset (under the floor → pooled/unity), but the bake
+        // basis fits all 35 and calibrates.
+        let meals = makeMeals(ratioA: 1.1, ratioB: 0.9, count: 35)
+        let (_, splitFit) = BetaCalibrator.calibrateWithFit(meals: meals)
+        #expect(splitFit.classes["white_rice"]?.status != .calibrated)
+
+        let bake = BetaCalibrator.bakeFit(meals: meals)
+        let cls = try #require(bake.classes["white_rice"])
+        #expect(cls.status == .calibrated)
+        #expect(cls.effectiveSample == 35)
+        // Same closed form over all 35 meals (18 × 1.1, 17 × 0.9).
+        let logs = (0..<35).map { i in Float(log(i % 2 == 0 ? 1.1 : 0.9)) }
+        let mean = logs.reduce(0, +) / 35
+        #expect(abs(cls.beta - exp(mean)) <= 1e-4)
+    }
+
     @Test("A clamped class carries the clamped flag (Req 5.6) with the value unchanged")
     func clampedFlagCarried() throws {
         // ratio 2.0 everywhere → β = 2.0 → clamped to the 1.5 ceiling.

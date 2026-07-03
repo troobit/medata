@@ -81,8 +81,10 @@ public enum FixtureLoader {
             }
         case "mixture":
             // Mixture fixtures bake without the checkpoint (Decision 17) and
-            // must not smuggle in segmenter output (Req 3.7).
-            guard fixture.nadirProbs.isEmpty, fixture.obliqueProbs.isEmpty else {
+            // must not smuggle in segmenter output (Req 3.7) — neither
+            // probabilities nor a pre-computed argmax mask.
+            guard fixture.nadirProbs.isEmpty, fixture.obliqueProbs.isEmpty,
+                  fixture.nadirArgmax.isEmpty, fixture.obliqueArgmax.isEmpty else {
                 throw Error.probabilitiesOnMixturePath(file: file)
             }
             guard sha == sentinelSHA else {

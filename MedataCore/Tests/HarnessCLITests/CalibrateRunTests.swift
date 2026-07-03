@@ -210,6 +210,13 @@ struct CalibrateRunTests {
         #expect(lineage["tau_purity"] as? Double == 0.9)
         #expect(lineage["tau_eff"] as? Double != nil)
         #expect(lineage["kappa_stacking"] as? Double != nil)
+        // The remaining provisional gate values (Req 5.5): a bake must be
+        // reproducible from its lineage alone.
+        #expect(lineage["liquid_significant_fraction"] as? Double != nil)
+        #expect(lineage["unmapped_significant_fraction"] as? Double != nil)
+        #expect(lineage["relative_se_bound"] as? Double != nil)
+        #expect(lineage["effective_sample_min"] as? Int
+                == CalibrationMerge.effectiveSampleMin)
         #expect(lineage["seed"] as? Int == 42)
         #expect((lineage["effective_sample_per_class"] as? [String: Int])?["white_rice"] == 45)
         #expect(lineage["condition_number"] as? Double != nil)
@@ -223,6 +230,55 @@ struct CalibrateRunTests {
         let data = try CalibrationArtifact.encoder().encode(makeArtifact())
         let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(json["betaPool"] as? Double == 1.0)
+    }
+
+    // MARK: - Eval-plate GT basis (Req 6.2/6.6/6.7)
+
+    @Test("Eval GT macros come from the fixture's N5k per-class maps, not the DB composition")
+    func evalPlateUsesFixtureGT() {
+        var fx = makeFixture(id: "dish_gt", path: "mixture")
+        // N5k GT deliberately differs from what mass × DB fraction would give
+        // (120 g × 28/100 = 33.6) — a composition-source error the Req 6.7
+        // cross-macro check must be able to see.
+        fx.groundTruthClassCarbsG = ["white_rice": 20]
+        fx.groundTruthClassProteinG = ["white_rice": 9]
+        fx.groundTruthClassFatG = ["white_rice": 2]
+        fx.groundTruthTotalCarbsG = 25
+        let obs = MixtureBetaCalibrator.PlateObservation(
+            fixtureID: "dish_gt", totalHullVolumeCm3: 150,
+            massByClassG: ["white_rice": 120])
+        let composition = ClassComposition(
+            densityByClass: ["white_rice": 0.9],
+            carbFractionPer100g: ["white_rice": 28],
+            proteinFractionPer100g: ["white_rice": 2.7],
+            fatFractionPer100g: ["white_rice": 0.3])
+
+        let plate = CalibrateRun.evalPlate(obs: obs, fixture: fx,
+                                           composition: composition, official: true)
+        #expect(plate.gtCarbsByClassG["white_rice"] == 20)
+        #expect(plate.gtProteinByClassG["white_rice"] == 9)
+        #expect(plate.gtFatByClassG["white_rice"] == 2)
+        #expect(plate.wholeDishCarbsG == 25)
+        #expect(plate.inOfficialTestSplit)
+        #expect(plate.estimatorPath == .mixture)
+    }
+
+    @Test("Fixtures predating the per-class GT maps fall back to GT mass × DB fraction")
+    func evalPlateDBFallback() {
+        let fx = makeFixture(id: "dish_old", path: "mixture")  // no GT maps
+        let obs = MixtureBetaCalibrator.PlateObservation(
+            fixtureID: "dish_old", totalHullVolumeCm3: 150,
+            massByClassG: ["white_rice": 120])
+        let composition = ClassComposition(
+            densityByClass: ["white_rice": 0.9],
+            carbFractionPer100g: ["white_rice": 28],
+            proteinFractionPer100g: ["white_rice": 2.7],
+            fatFractionPer100g: ["white_rice": 0.3])
+
+        let plate = CalibrateRun.evalPlate(obs: obs, fixture: fx,
+                                           composition: composition, official: false)
+        #expect(abs((plate.gtCarbsByClassG["white_rice"] ?? 0) - 120 * 0.28) < 1e-4)
+        #expect(abs((plate.gtProteinByClassG["white_rice"] ?? 0) - 120 * 0.027) < 1e-4)
     }
 }
 #endif

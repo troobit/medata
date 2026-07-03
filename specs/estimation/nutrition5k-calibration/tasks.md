@@ -350,3 +350,42 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.4](requirements.md#1.4), [4.5](requirements.md#4.5)
   - References: specs/estimation/nutrition5k-calibration/prerequisites.md
+
+## Closeout — worktree consolidation
+
+- [x] 40. Commit the in-flight nutrition5k worktree changes once gates pass <!-- id:i3we69x -->
+  - In .worktrees/nutrition5k-calibration: run swift test (report both XCTest and swift-testing totals), pytest for tools/nutrition5k tools/food_db tools/segmenter, and bash tools/check_spelling.sh.
+  - If green, commit the in-flight WIP (~560 lines across 21 files: HarnessCLI/HarnessCore calibrator work, MealFixture.proto + regenerated .pb.swift, tools, tests, agent notes, spec docs including this closeout phase and Decision 29).
+  - Success: git status clean in the worktree; all gates green.
+  - References: specs/estimation/nutrition5k-calibration/decision_log.md
+
+- [ ] 41. Merge nutrition5k-calibration into research <!-- id:i3we69y -->
+  - Retarget note (2026-07-04): uplift-process-fixes was fast-forwarded into research (both at bb314a5); the consolidation target is now the research branch, which is checked out in the main worktree and tracks origin/research.
+  - From the main worktree (/Users/r/repos/medata) on branch research: git merge nutrition5k-calibration.
+  - Expected mechanical conflicts: .gitignore and tools/check_spelling.sh (keep both sides' intent); CHANGELOG.md union-merges automatically.
+  - From this point the merged copy of this tasks file (specs/estimation/nutrition5k-calibration/tasks.md in the main worktree) is the live ledger — tick the remaining tasks there.
+  - Success: merge committed; make test green (report both XCTest and swift-testing totals).
+  - Blocked-by: i3we69x (Commit the in-flight nutrition5k worktree changes once gates pass)
+
+- [ ] 42. Merge resumable-segmenter-training into research <!-- id:i3we69z -->
+  - git merge resumable-segmenter-training. Expected semantic conflicts in tools/segmenter/export.py and tools/segmenter/train.py: resolution must keep BOTH behaviours — the n5k palette/liquids changes AND the crash-safe --resume sidecar.
+  - Do not hand-merge specs/OVERVIEW.md — it is regenerated in the next task (PROCESS.md §9).
+  - Success: merge committed; make test green; pytest for tools/segmenter green.
+  - Blocked-by: i3we69y (Merge nutrition5k-calibration into research)
+  - References: specs/estimation/resumable-segmenter-training/smolspec.md
+
+- [ ] 43. Regenerate specs/OVERVIEW.md and spell-check <!-- id:i3we6a0 -->
+  - Run /specs-overview to regenerate the index (never hand-merge, PROCESS.md §9); bash tools/check_spelling.sh; commit.
+  - Success: OVERVIEW.md lists both merged specs; spelling lint clean.
+  - Blocked-by: i3we69z (Merge resumable-segmenter-training into research)
+
+- [ ] 44. Delete both worktrees and their branches <!-- id:i3we6a1 -->
+  - git worktree remove .worktrees/nutrition5k-calibration and .worktrees/resumable-segmenter-training; then git branch -d nutrition5k-calibration resumable-segmenter-training (lowercase -d so git itself verifies both are fully merged before deletion).
+  - Success: git worktree list shows only the main worktree; both branches gone.
+  - Blocked-by: i3we6a0 (Regenerate specs/OVERVIEW.md and spell-check)
+
+- [ ] 45. Push research to origin <!-- id:i3we6a2 -->
+  - git push origin research — explicitly authorised by the user in nextup.md (push is otherwise denied in .claude/settings.local.json). If the harness denies the push, report it as blocked for the user to run rather than failing.
+  - Also safe afterwards: git branch -d uplift-process-fixes (fully merged, redundant).
+  - Success: origin/research equals local HEAD.
+  - Blocked-by: i3we6a1 (Delete both worktrees and their branches)
