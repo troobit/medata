@@ -64,7 +64,7 @@ Producing the checkpoint requires:
 
 - A PyTorch training environment with `torchvision`, `coremltools` 8.x, `ai-edge-torch` (per `specs/estimation/pipeline/prerequisites.md:17`)
 - The FoodSeg103 dataset (per `specs/estimation/pipeline/prerequisites.md:18`)
-- A GPU and time to transfer-learn DeepLabV3 + MobileNetV3-Large to the 27-class palette (24 food + background + unknown_food + unsupported_liquid)
+- A GPU and time to transfer-learn DeepLabV3 + MobileNetV3-Large to the 35-class palette (24 solid food + 8 coarse liquid + background + unknown_food + unsupported_liquid; palette v1 redefined per Decision 23 — liquids get no FoodSeg103 supervision)
 - Held-out labelled test set to measure mIoU against the bar in research Req 8.9 (`specs/estimation/pipeline/prerequisites.md:23`)
 - Apple Neural Engine residency verification in Xcode's Core ML performance report (`specs/estimation/pipeline/prerequisites.md:25`)
 

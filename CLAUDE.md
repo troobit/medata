@@ -26,7 +26,7 @@ Less is more. The gate for app/UI work is: **does it build + does it look right 
 
 - `HARNESS_ENABLED` — Debug-only; gates harness/CLI code out of the shipping iOS binary. Never make shipped code depend on it.
 - `DEV_STUB_SEGMENTER` — Debug uses a stub segmenter; Release uses the real Core ML model.
-- `segmenter.mlpackage` is **gitignored and generated** by `tools/segmenter/export.py` — never hand-edit or commit it. `food_db.sqlite` is the bundled CoFID/AFCD database, built by `tools/food_db/`.
+- `segmenter.mlpackage` is **gitignored and generated** by `tools/segmenter/export.py` — never hand-edit or commit it. The bundled food databases are `cofid_db.sqlite` + `afcd_db.sqlite` (CoFID + AFCD, CoFID-wins merge), built by `tools/food_db/generate.py` and committed under `MedataCore/Sources/Foods/Resources/`.
 
 ## Workflow
 

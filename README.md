@@ -59,13 +59,15 @@ medata/
 │   │   ├── MetricScale/         mm-per-pixel resolver
 │   │   ├── Segmentation/        Core ML wrapper + pre/post-process
 │   │   ├── Volume/              Metal voxel-carve / height-field integration
-│   │   ├── Foods/               CoFID + IFCDB food-composition DB
+│   │   ├── Foods/               CoFID + AFCD food-composition DB (cofid_db + afcd_db)
 │   │   ├── Macros/              mass → carbs per class
 │   │   ├── Confidence/          σ_meal combination
 │   │   ├── Persistence/         SQLite meal records, artefacts, retention, export
 │   │   └── Pipeline/            façade orchestrating the stage graph
-│   ├── Resources/             segmenter.mlpackage + food_db.sqlite (bundled)
 │   └── Tests/                 per-module XCTest targets
+│       (bundled resources sit beside their modules: Foods/Resources holds the
+│        committed cofid_db.sqlite + afcd_db.sqlite; Pipeline/Resources holds the
+│        gitignored, generated segmenter.mlpackage)
 ├── HarnessCore/               offline accuracy / β-calibration library
 ├── HarnessCLI/                macOS executable driving HarnessCore
 ├── MeData/                    Xcode project — iOS app target
@@ -105,14 +107,27 @@ Read in this order if you're new to the project:
 
 ## Build and test
 
+The repo-root **Makefile** is the canonical developer loop — use it rather than raw
+`swift`/`xcodebuild` invocations:
+
 ```sh
-swift build                      # all MedataCore modules + HarnessCLI
-swift test                       # all SwiftPM test targets
-bash tools/check_spelling.sh     # Irish/British spelling linter (Req 19.2)
+make build     # swift build — the MedataCore SwiftPM core + Harness targets
+make test      # swift test; prints BOTH totals (XCTest AND swift-testing)
+make spell     # Irish/British spelling linter (Req 19.2)
 ```
 
-The iOS app builds from `MeData/MeData.xcodeproj`. The clone directory must be named
-`medata` because the project references the SwiftPM package via the relative path
-`../../medata`. See [`docs/ios-device-setup.md`](docs/ios-device-setup.md) for the
-end-to-end iPhone setup.
+The on-device loop drives the Xcode app target on a connected iPhone:
+
+```sh
+make deploy-device        # Debug build → install → launch (UI / non-capture work)
+make deploy-release-stub  # Release + forced dev-stub segmenter (capture testing)
+make logs-device          # pull filtered device logs (subsystem ie.medata.app)
+```
+
+`make build`/`make test` only cover the SwiftPM core; the iOS app builds from
+`MeData/MeData.xcodeproj`. The clone directory must be named `medata` because the project
+references the SwiftPM package via the relative path `../../medata`. See
+[`docs/ios-device-setup.md`](docs/ios-device-setup.md) and
+[`docs/agent-notes/device-build-and-test.md`](docs/agent-notes/device-build-and-test.md)
+for the end-to-end iPhone setup.
 </content>

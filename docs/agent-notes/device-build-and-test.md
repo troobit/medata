@@ -81,7 +81,7 @@ Re-derived at least four times — this is the recipe:
 **The real ML segmenter model (Track 3) is the next thing to build, and it is the
 thing that dissolves every pain described below.** Today the capture pipeline runs
 against `StubInferenceEngine` — a placeholder that paints a fixed food region. The
-next milestone is to train and integrate the 27-class CoreML segmenter
+next milestone is to train and integrate the 35-class CoreML segmenter
 (`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`, see `tools/segmenter/export.py`) and
 drop the stub.
 

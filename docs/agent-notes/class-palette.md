@@ -15,6 +15,6 @@
 ## Gotchas
 
 - `segmenter.mlpackage` output-channel count must equal `totalClasses` (now 35); the final class list must be locked before the FoodSeg103 training run (Decision 22, model-production prerequisite).
-- `tools/food_db/generate.py` and `tools/segmenter/build_class_mapping.py` carry 24-class count asserts that move to the new totals in stream C — until then they are stale against the redefined palette.
+- `tools/food_db/generate.py` and `tools/segmenter/build_class_mapping.py` now assert the redefined totals (stream C landed): `generate.py` checks `len(FOOD_DATA) == 24 solid + 8 liquid`, and `build_class_mapping.py` targets the 35-channel palette.
 - `.pb.swift` under `PortableContracts/Generated/` is checked in but generated — edit the `.proto` in `Schemas/` and run `Schemas/generate.sh` (needs protoc + protoc-gen-swift, both in Homebrew).
 - `MealFixture.estimator_path` (`"single_dominant"` | `"mixture"`) is the authoritative fixture load-path selector; any other value is malformed. The sentinel SHA `"no_segmenter"` alone must never select the path (Decision 17).

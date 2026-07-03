@@ -218,7 +218,7 @@ Tasks 19–23 are done. Modules added in this phase:
   segmenter because the version is per-loaded-model.
 - **Export gates (model-production tasks 6–7, Decision 9).** `export.py` gates an
   artefact before it ships: weight budget ≤ 10 MB (`validate_weight_budget`,
-  mirrors `SegmenterWeightsBudget`), 27 output channels in palette order
+  mirrors `SegmenterWeightsBudget`), 35 output channels in palette order
   (`validate_channel_count` + `palette_channel_names` from the class-mapping json),
   the `model_version` metadata stamp, and an equivalence **oracle** = the PyTorch
   checkpoint (Core ML and TFLite each validated against it: argmax agreement > 99%
