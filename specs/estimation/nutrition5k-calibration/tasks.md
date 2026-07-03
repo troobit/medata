@@ -359,7 +359,7 @@ references:
   - Success: git status clean in the worktree; all gates green.
   - References: specs/estimation/nutrition5k-calibration/decision_log.md
 
-- [ ] 41. Merge nutrition5k-calibration into research <!-- id:i3we69y -->
+- [x] 41. Merge nutrition5k-calibration into research <!-- id:i3we69y -->
   - Retarget note (2026-07-04): uplift-process-fixes was fast-forwarded into research (both at bb314a5); the consolidation target is now the research branch, which is checked out in the main worktree and tracks origin/research.
   - From the main worktree (/Users/r/repos/medata) on branch research: git merge nutrition5k-calibration.
   - Expected mechanical conflicts: .gitignore and tools/check_spelling.sh (keep both sides' intent); CHANGELOG.md union-merges automatically.
