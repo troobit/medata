@@ -384,7 +384,7 @@ references:
   - Success: git worktree list shows only the main worktree; both branches gone.
   - Blocked-by: i3we6a0 (Regenerate specs/OVERVIEW.md and spell-check)
 
-- [ ] 45. Push research to origin <!-- id:i3we6a2 -->
+- [x] 45. Push research to origin <!-- id:i3we6a2 -->
   - git push origin research — explicitly authorised by the user in nextup.md (push is otherwise denied in .claude/settings.local.json). If the harness denies the push, report it as blocked for the user to run rather than failing.
   - Also safe afterwards: git branch -d uplift-process-fixes (fully merged, redundant).
   - Success: origin/research equals local HEAD.
