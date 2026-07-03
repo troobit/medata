@@ -126,7 +126,12 @@ def load_checkpoint(num_classes: int, checkpoint_path: str | None):
     from torchvision.models.segmentation.deeplabv3 import DeepLabHead
 
     weights = DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT
-    model = deeplabv3_mobilenet_v3_large(weights=weights, aux_loss=False)
+    # torchvision (>= 0.13) refuses aux_loss=False alongside these weights, so
+    # build with the aux head and drop it afterwards. The resulting architecture
+    # (and state_dict key set) is identical to an aux_loss=False construction,
+    # which is what train.py's weights=None path builds.
+    model = deeplabv3_mobilenet_v3_large(weights=weights, aux_loss=True)
+    model.aux_classifier = None
     in_ch = model.classifier[0].convs[0][0].in_channels
     model.classifier = DeepLabHead(in_ch, num_classes)
     if checkpoint_path is not None and Path(checkpoint_path).is_file():
