@@ -289,7 +289,7 @@ references:
 
 ## Stream D — App plumbing and banner
 
-- [ ] 33. Write failing tests for DB-read and macros plumbing <!-- id:i3we69q -->
+- [x] 33. Write failing tests for DB-read and macros plumbing <!-- id:i3we69q -->
   - FoodsTests: GRDBFoodDatabase.rowToEntry reads beta_provenance + device_verified into FoodEntry.
   - MacrosTests: Macros.compute populates PerClassMacros.proteinG/fatG from the same β-corrected per-class mass × the DB protein/fat fraction (10.1 — no separate fit); copies deviceVerified and isLiquid onto each PerClassMacros (banner inputs, 8.1); carbs stay primary, protein/fat additive (10.2); no UI surfacing (10.3).
   - Blocked-by: i3we68v (Redefine ClassPalette v1 in place and land the proto contract extensions), i3we69h (Implement generate.py schema additions and liquid data)
@@ -297,21 +297,21 @@ references:
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2)
   - References: MedataCore/Sources/Foods/GRDBFoodDatabase.swift, MedataCore/Sources/Macros/Macros.swift
 
-- [ ] 34. Implement FoodEntry/rowToEntry and Macros.compute plumbing <!-- id:i3we69r -->
+- [x] 34. Implement FoodEntry/rowToEntry and Macros.compute plumbing <!-- id:i3we69r -->
   - MedataCore/Sources/Foods/GRDBFoodDatabase.swift + MedataCore/Sources/Macros/Macros.swift; thread liquidOverEstimate through the estimate result (MacroResult) so ResultView needs no new lookups (design §Banner plumbing).
   - Blocked-by: i3we69q (Write failing tests for DB-read and macros plumbing)
   - Stream: 5
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3)
   - References: MedataCore/Sources/Foods/GRDBFoodDatabase.swift, MedataCore/Sources/Macros/Macros.swift
 
-- [ ] 35. Extend the showsUncalibratedBanner tests to the three-state matrix <!-- id:i3we69s -->
+- [x] 35. Extend the showsUncalibratedBanner tests to the three-state matrix <!-- id:i3we69s -->
   - Extend the existing ResultFormat.showsUncalibratedBanner test with the flag-injection matrix (8.1): any pooled/unity solid class → full banner; all calibrated + any not device-verified → softened; all calibrated + all device-verified (injected — otherwise unreachable in this spec) → suppressed; liquid classes never enter the evaluation; a standalone drink (no contributing solid class) shows NO calibration banner with the liquid flag standing alone (a stated rule, not vacuous suppression); the liquid flag renders additively with each of the three states (8.2).
   - Blocked-by: i3we69r (Implement FoodEntry/rowToEntry and Macros.compute plumbing)
   - Stream: 5
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2)
   - References: App/ResultView.swift
 
-- [ ] 36. Implement the three-state banner and additive liquid flag in ResultView <!-- id:i3we69t -->
+- [x] 36. Implement the three-state banner and additive liquid flag in ResultView <!-- id:i3we69t -->
   - App/ResultView.swift: showsUncalibratedBanner's boolean becomes the three-state calibration-confidence signal plus the independent additive liquid flag; softened copy "population-calibrated — not yet verified on this device"; reuse the existing banner styling — presentation stays model-production-owned (8.3).
   - British English; run bash tools/check_spelling.sh.
   - Blocked-by: i3we69s (Extend the showsUncalibratedBanner tests to the three-state matrix)
@@ -319,7 +319,7 @@ references:
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3)
   - References: App/ResultView.swift
 
-- [ ] 37. Add the Nutrition5k attribution row to SettingsView <!-- id:i3we69u -->
+- [x] 37. Add the Nutrition5k attribution row to SettingsView <!-- id:i3we69u -->
   - App/SettingsView.swift "About macronutrient sources": add a Nutrition5k row matching the existing CoFID/OGL line — Google Research, CC BY 4.0, values adapted (derived β factors) (1.5).
   - UI string wiring — TDD-exempt; run bash tools/check_spelling.sh.
   - Stream: 5

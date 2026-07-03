@@ -87,7 +87,9 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
                     c.beta               AS beta,
                     c.beta_status        AS beta_status,
                     c.density_source     AS density_source,
-                    c.composition_source AS composition_source
+                    c.composition_source AS composition_source,
+                    c.beta_provenance    AS beta_provenance,
+                    c.device_verified    AS device_verified
                 FROM foods c
                 WHERE c.class_id = ?
                 UNION ALL
@@ -103,7 +105,9 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
                     a.beta               AS beta,
                     a.beta_status        AS beta_status,
                     a.density_source     AS density_source,
-                    a.composition_source AS composition_source
+                    a.composition_source AS composition_source,
+                    a.beta_provenance    AS beta_provenance,
+                    a.device_verified    AS device_verified
                 FROM afcd.foods a
                 WHERE a.class_id = ?
                 AND NOT EXISTS (SELECT 1 FROM foods c WHERE c.class_id = a.class_id)
@@ -129,7 +133,9 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
             beta:              row["beta"],
             calibrationStatus: status,
             densitySource:     row["density_source"],
-            compositionSource: row["composition_source"]
+            compositionSource: row["composition_source"],
+            betaProvenance:    row["beta_provenance"],
+            deviceVerified:    row["device_verified"]
         )
     }
 }

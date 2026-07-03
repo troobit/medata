@@ -10,11 +10,21 @@ public struct PerClassMacros: Sendable, Codable, Equatable {
     public let coefficientSource: String
     public let betaUsed: Float
     public let betaStatus: BetaCalibrationStatus
+    // nutrition5k-calibration Req 10.1: protein/fat from the same β-corrected
+    // mass × DB fraction — carbs stay primary, these are additive (Req 10.2)
+    // and not surfaced in v1 UI (Req 10.3).
+    public let proteinG: Float
+    public let fatG: Float
+    // Banner inputs (Req 8.1): baked per class from the food DB / class kind.
+    public let deviceVerified: Bool
+    public let isLiquid: Bool
 
     public init(
         volumeCm3: Float, massG: Float, carbsG: Float,
         densitySource: String, coefficientSource: String,
-        betaUsed: Float, betaStatus: BetaCalibrationStatus
+        betaUsed: Float, betaStatus: BetaCalibrationStatus,
+        proteinG: Float = 0, fatG: Float = 0,
+        deviceVerified: Bool = false, isLiquid: Bool = false
     ) {
         self.volumeCm3 = volumeCm3
         self.massG = massG
@@ -23,6 +33,10 @@ public struct PerClassMacros: Sendable, Codable, Equatable {
         self.coefficientSource = coefficientSource
         self.betaUsed = betaUsed
         self.betaStatus = betaStatus
+        self.proteinG = proteinG
+        self.fatG = fatG
+        self.deviceVerified = deviceVerified
+        self.isLiquid = isLiquid
     }
 }
 
@@ -49,11 +63,18 @@ public struct MacroResult: Sendable, Codable, Equatable {
     public let totalCarbsG: Float
     public let perClass: [String: PerClassMacros]
     public let clinicalTotals: ClinicalMacros
+    // nutrition5k-calibration Req 8.2: both liquid estimate paths over-read
+    // (Decision 19) — raised here so ResultView needs no new lookups.
+    public let liquidOverEstimate: Bool
 
-    public init(totalCarbsG: Float, perClass: [String: PerClassMacros], clinicalTotals: ClinicalMacros) {
+    public init(
+        totalCarbsG: Float, perClass: [String: PerClassMacros],
+        clinicalTotals: ClinicalMacros, liquidOverEstimate: Bool = false
+    ) {
         self.totalCarbsG = totalCarbsG
         self.perClass = perClass
         self.clinicalTotals = clinicalTotals
+        self.liquidOverEstimate = liquidOverEstimate
     }
 }
 
@@ -65,10 +86,18 @@ public enum Macros {
     // Classes with no database entry are skipped (logged at debug level via assertion).
     // unknown_food volumes contribute 0 carbs with calibrationStatus = .uncalibratedUnity
     // (Req 8.6), which the caller should detect and flag separately.
+    //
+    // `liquidClassIds` marks entries as liquid (the palette's coarse liquid
+    // classes — liquid-ness is a palette property, not a DB column). A liquid
+    // entry here came through the depth-integrated path, which over-reads
+    // (Req 7.3), so it raises `liquidOverEstimate`; `liquidOverEstimate: true`
+    // threads the same flag from the LiquidResolver vessel path (Req 7.4/8.2).
     public static func compute(
         perClassVolumesCm3: [String: Float],
         database: FoodDatabase,
-        edition: String
+        edition: String,
+        liquidClassIds: Set<String> = [],
+        liquidOverEstimate: Bool = false
     ) -> MacroResult {
         var totalCarbsG: Float  = 0
         var totalEnergyKJ: Float = 0
@@ -83,13 +112,15 @@ public enum Macros {
                 continue
             }
 
-            let massG  = volumeCm3 * entry.densityGPerCm3          // Req 12.1
-            let carbsG = massG * entry.carbsMonoG / 100.0           // Req 12.2
+            let massG    = volumeCm3 * entry.densityGPerCm3        // Req 12.1
+            let carbsG   = massG * entry.carbsMonoG / 100.0         // Req 12.2
+            let proteinG = massG * entry.proteinG / 100.0           // Req 10.1
+            let fatG     = massG * entry.fatG     / 100.0
 
             totalCarbsG  += carbsG
             totalEnergyKJ += massG * entry.energyKJPer100g / 100.0
-            totalProteinG += massG * entry.proteinG / 100.0
-            totalFatG     += massG * entry.fatG     / 100.0
+            totalProteinG += proteinG
+            totalFatG     += fatG
             totalFibreG   += massG * entry.fibreG   / 100.0
 
             perClass[classId] = PerClassMacros(
@@ -99,7 +130,11 @@ public enum Macros {
                 densitySource:     entry.densitySource,
                 coefficientSource: entry.compositionSource,
                 betaUsed:          entry.beta,
-                betaStatus:        entry.calibrationStatus
+                betaStatus:        entry.calibrationStatus,
+                proteinG:          proteinG,
+                fatG:              fatG,
+                deviceVerified:    entry.deviceVerified,
+                isLiquid:          liquidClassIds.contains(classId)
             )
         }
 
@@ -113,7 +148,9 @@ public enum Macros {
         return MacroResult(
             totalCarbsG:     totalCarbsG,
             perClass:        perClass,
-            clinicalTotals:  clinical
+            clinicalTotals:  clinical,
+            liquidOverEstimate: liquidOverEstimate
+                || perClass.values.contains { $0.isLiquid }
         )
     }
 }
