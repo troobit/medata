@@ -89,14 +89,14 @@ references:
 
 ## Stream B — Calibrators and harness (Swift)
 
-- [ ] 9. Write failing property tests for TotalHullVolume <!-- id:i3we692 -->
+- [x] 9. Write failing property tests for TotalHullVolume <!-- id:i3we692 -->
   - Swift Testing, alongside the existing harness tests (MedataCore/Tests/HarnessCLITests).
   - Synthetic depth grid over a known plane: integrated volume matches the analytic value within tolerance; silhouette = height above plane > ε (documented); sentinel/at-cap (0) depth pixels excluded (3.2); off-axis pixel-area correction applied — reuse the VolumeTypes geometry (readDepthMm, ray-plane height).
   - Stream: 3
   - Requirements: [3.2](requirements.md#3.2), [4.1](requirements.md#4.1)
   - References: MedataCore/Sources/Volume/VolumeTypes.swift, MedataCore/Tests/HarnessCLITests
 
-- [ ] 10. Implement HarnessCore/TotalHullVolume.swift <!-- id:i3we693 -->
+- [x] 10. Implement HarnessCore/TotalHullVolume.swift <!-- id:i3we693 -->
   - New file HarnessCore/TotalHullVolume.swift (#if HARNESS_ENABLED) — NOT MedataCore/Sources/Volume; this keeps stream B's files disjoint from stream C's estimator edits (design §MixtureBetaCalibrator).
   - Depth-threshold silhouette instead of an argmax mask; same geometry helpers as HeightFieldEstimator.
   - Blocked-by: i3we692 (Write failing property tests for TotalHullVolume)
@@ -104,14 +104,14 @@ references:
   - Requirements: [4.1](requirements.md#4.1)
   - References: MedataCore/Sources/Volume/VolumeTypes.swift
 
-- [ ] 11. Write failing tests for the plate-region support-plane mask <!-- id:i3we694 -->
+- [x] 11. Write failing tests for the plate-region support-plane mask <!-- id:i3we694 -->
   - Synthetic frame: plate disc raised above a table plane. Flood fill on 4-neighbour depth continuity (|Δz| below a documented threshold) seeded at the frame centre stops at the plate-rim discontinuity; passing the resulting mask to FixtureRunner.fitPlaneFromDepth lands the RANSAC plane on the plate top, not the table (the current all-ones mask finds the table when the plate does not fill the frame — design §Support plane).
   - Poor plate-plane fit (high residualMm) → plate skipped and recorded (3.4/3.8 path).
   - Stream: 3
   - Requirements: [3.6](requirements.md#3.6)
   - References: HarnessCore/FixtureRunner.swift
 
-- [ ] 12. Implement plate-region plane masking in FixtureRunner <!-- id:i3we695 -->
+- [x] 12. Implement plate-region plane masking in FixtureRunner <!-- id:i3we695 -->
   - HarnessCore/FixtureRunner.swift: derive the plate-region mask from depth before fitPlaneFromDepth for N5k fixtures; record supportPlane.residualMm per plate.
   - Whether the plate reliably fills the N5k overhead frame is confirmed empirically in the Integration task; until confirmed the plate-region restriction is required, not assumed (Decision 15 amendment).
   - Blocked-by: i3we694 (Write failing tests for the plate-region support-plane mask)
@@ -119,7 +119,7 @@ references:
   - Requirements: [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8)
   - References: HarnessCore/FixtureRunner.swift
 
-- [ ] 13. Write failing property tests for the MixtureBetaCalibrator BVLS solver <!-- id:i3we696 -->
+- [x] 13. Write failing property tests for the MixtureBetaCalibrator BVLS solver <!-- id:i3we696 -->
   - Property tests (Swift Testing, synthetic generators): plates from known β and ρ with V_p = Σ m/(ρβ) + bounded noise → solver recovers β within tolerance.
   - Bounds x_c = 1/β_c ∈ [1/1.5, 1/0.05] enforced INSIDE the solve; a bound-resting class is marked clamped (5.6) — a post-hoc clamp would re-leak excess volume into co-occurring classes (Decision 11 refinement).
   - A deliberately collinear class → large SE, identifiablePerClass=false; an under-sampled class is held at β=1 and moved to the RHS as a fixed offset, not misattributed (4.6).
@@ -129,7 +129,7 @@ references:
   - Requirements: [4.3](requirements.md#4.3), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.7](requirements.md#4.7), [5.6](requirements.md#5.6), [6.4](requirements.md#6.4)
   - References: specs/estimation/nutrition5k-calibration/design.md
 
-- [ ] 14. Implement HarnessCore/MixtureBetaCalibrator.swift <!-- id:i3we697 -->
+- [x] 14. Implement HarnessCore/MixtureBetaCalibrator.swift <!-- id:i3we697 -->
   - New file HarnessCore/MixtureBetaCalibrator.swift: hand-rolled Lawson-Hanson active-set BVLS (Decision 14 — Swift, offline harness only, roughly 100 lines).
   - Interface per design: PlateObservation{fixtureID, totalHullVolumeCm3, massByClassG}; Result{betaPerClass, standardErrorPerClass, effectiveSamplePerClass, identifiablePerClass, conditionNumber, excludedPlates, fixedOffsetClasses}.
   - Per-class SE = residual variance × diag((AᵀA)⁻¹) over the free set; per-class conditioning (not just the global condition number) drives identifiablePerClass.
@@ -139,7 +139,7 @@ references:
   - Requirements: [4.1](requirements.md#4.1), [4.3](requirements.md#4.3), [4.6](requirements.md#4.6), [5.3](requirements.md#5.3)
   - References: HarnessCore/BetaCalibrator.swift
 
-- [ ] 15. Write failing tests for BetaCalibrator PerClassFit outputs and CalibrationMerge arbitration <!-- id:i3we698 -->
+- [x] 15. Write failing tests for BetaCalibrator PerClassFit outputs and CalibrationMerge arbitration <!-- id:i3we698 -->
   - BetaCalibrator: closed-form fit value and clamp unchanged; new PerClassFit outputs — per-class log-residual standard error + effective-sample count (the current CalibrationResult discards the spread the 5.4 SE gate needs).
   - CalibrationMerge arbitration (5.2/5.4): single-dominant β wins when it clears effective-sample ≥ 30 AND relative SE ≤ 0.15; a strong mixture fit is KEPT when single-dominant is merely under-sampled (no perverse discard); enough plates but large SE → stays pooled, not calibrated; provenance n5k_single_dominant | n5k_mixture | none recorded; clamped flag propagated.
   - Blocked-by: i3we697 (Implement HarnessCore/MixtureBetaCalibrator.swift)
@@ -147,7 +147,7 @@ references:
   - Requirements: [5.2](requirements.md#5.2), [5.4](requirements.md#5.4)
   - References: HarnessCore/BetaCalibrator.swift
 
-- [ ] 16. Extend BetaCalibrator and implement CalibrationMerge with BetaProvenance <!-- id:i3we699 -->
+- [x] 16. Extend BetaCalibrator and implement CalibrationMerge with BetaProvenance <!-- id:i3we699 -->
   - Extend HarnessCore/BetaCalibrator.swift (new outputs only — no change to fit value or clamp); new HarnessCore/CalibrationMerge.swift + BetaProvenance enum (n5k_single_dominant, n5k_mixture, gravimetric, none).
   - Decision 16: provenance is a dimension separate from BetaCalibrationStatus, which stays a three-value enum so existing consumers' switches don't break.
   - Blocked-by: i3we698 (Write failing tests for BetaCalibrator PerClassFit outputs and CalibrationMerge arbitration)
@@ -155,7 +155,7 @@ references:
   - Requirements: [5.2](requirements.md#5.2), [5.4](requirements.md#5.4)
   - References: HarnessCore/BetaCalibrator.swift
 
-- [ ] 17. Write failing tests for FixtureLoader per-path guards <!-- id:i3we69a -->
+- [x] 17. Write failing tests for FixtureLoader per-path guards <!-- id:i3we69a -->
   - Guard matrix (design §Testing, Decision 17): a mixture fixture with sentinel SHA "no_segmenter" loads on the mixture path; a mixture fixture carrying segmentation probabilities is rejected; a single_dominant fixture with a wrong, missing, empty, or sentinel SHA is rejected; an unknown estimator_path value is malformed; a missing/empty SHA is never coerced to the sentinel.
   - estimator_path is the AUTHORITATIVE path selector — the sentinel string alone must not select the path, or any fixture could bypass the hash guard by writing the magic value.
   - Blocked-by: i3we68v (Redefine ClassPalette v1 in place and land the proto contract extensions)
@@ -163,14 +163,14 @@ references:
   - Requirements: [3.7](requirements.md#3.7)
   - References: HarnessCore/FixtureLoader.swift
 
-- [ ] 18. Implement FixtureLoader per-path guards <!-- id:i3we69b -->
+- [x] 18. Implement FixtureLoader per-path guards <!-- id:i3we69b -->
   - HarnessCore/FixtureLoader.swift: per-path guards keyed off the estimator_path proto field; the existing checkpoint-SHA hash guard is unchanged on the single-dominant path.
   - Blocked-by: i3we69a (Write failing tests for FixtureLoader per-path guards)
   - Stream: 3
   - Requirements: [3.7](requirements.md#3.7)
   - References: HarnessCore/FixtureLoader.swift
 
-- [ ] 19. Write failing tests for AccuracyHarness k-fold eval and report content <!-- id:i3we69c -->
+- [x] 19. Write failing tests for AccuracyHarness k-fold eval and report content <!-- id:i3we69c -->
   - Synthetic mini-split fixtures.
   - k-fold CV over the calibration set with ONE recorded seed for selection + folds (4.4/6.1) — no staple stranded below the 30-effective-sample floor by splitting; the bake itself fits on ALL qualifying plates (design §Split reconciliation).
   - Mapped-classes-only GT basis for carbs AND protein/fat (6.2/6.6); per-staple + overall MAPE/MAE for BOTH β=1.0 and β_c (6.3); per-class dispersion — mixture classes report regression SE (6.4); MAPE<20% target stated as a reported result, not a gate (6.5).
@@ -182,7 +182,7 @@ references:
   - Requirements: [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [6.6](requirements.md#6.6), [6.7](requirements.md#6.7), [6.8](requirements.md#6.8)
   - References: HarnessCore/AccuracyHarness.swift
 
-- [ ] 20. Extend AccuracyHarness and the calibration report <!-- id:i3we69d -->
+- [x] 20. Extend AccuracyHarness and the calibration report <!-- id:i3we69d -->
   - Extend HarnessCore/AccuracyHarness.swift.
   - Multi-class eval plates: attribute the measured hull volume across mapped classes by ground-truth mass proportions (oracle composition — a recorded caveat); each share × ρ_c × β_c × carb-fraction.
   - Mixture held-out eval runs on the same hull-volume basis it was fit on; the masking-transfer gap stays a recorded caveat pre-checkpoint (5.1) — Req 3.7 forbids masks on mixture fixtures.
@@ -191,7 +191,7 @@ references:
   - Requirements: [5.1](requirements.md#5.1), [6.1](requirements.md#6.1), [6.3](requirements.md#6.3), [6.6](requirements.md#6.6), [6.8](requirements.md#6.8)
   - References: HarnessCore/AccuracyHarness.swift
 
-- [ ] 21. Write failing tests for HarnessCLI calibrate wiring and the calibrate JSON artifact <!-- id:i3we69e -->
+- [x] 21. Write failing tests for HarnessCLI calibrate wiring and the calibrate JSON artifact <!-- id:i3we69e -->
   - Depth-test-split exclusion (data/dish_ids/splits/depth_test_ids.txt — the RGB-D split, NOT the rgb_* files) applied before any selection (4.4).
   - τ_purity=0.90 volume-purity gate applied post-estimate on single_dominant fixtures: purity = above-plane volume of pixels whose segmenter argmax equals the mass-dominant class ÷ total above-plane food-region volume (sentinel/at-cap excluded); failures DROPPED and recorded, never re-routed (4.2 / 5.2 at-most-one-estimator invariant).
   - JSON artifact — the sole stream B↔C interface (design §DB bake handoff contract): per class {beta, status, provenance, standard_error, effective_sample, clamped} + a lineage block {release identifier, metadata version, mapping-artifact version, τ_route/τ_purity/τ_eff/κ thresholds, seed, per-class effective samples, conditioning diagnostics, pinned intrinsics model, licence CC BY 4.0} (5.5).
@@ -200,7 +200,7 @@ references:
   - Requirements: [4.2](requirements.md#4.2), [4.4](requirements.md#4.4), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.5](requirements.md#5.5)
   - References: HarnessCLI/main.swift
 
-- [ ] 22. Implement HarnessCLI calibrate / calibrate-and-eval wiring and JSON emission <!-- id:i3we69f -->
+- [x] 22. Implement HarnessCLI calibrate / calibrate-and-eval wiring and JSON emission <!-- id:i3we69f -->
   - HarnessCLI/main.swift calibrate + calibrate-and-eval: route fixtures per estimator_path — single_dominant through the existing BetaCalibrator on the HeightFieldEstimator masking path (5.1); mixture through TotalHullVolume + MixtureBetaCalibrator; CalibrationMerge decides per-class β; write the JSON artifact.
   - Extend the existing CalibrationJSON writer rather than adding a parallel output path.
   - Blocked-by: i3we69d (Extend AccuracyHarness and the calibration report), i3we69e (Write failing tests for HarnessCLI calibrate wiring and the calibrate JSON artifact)

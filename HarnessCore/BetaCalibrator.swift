@@ -16,6 +16,12 @@ public struct MealCalibrationInput: Sendable {
     public let actualCarbsPerClass: [String: Float]
     // Ground-truth total for MAPE / MAE
     public let groundTruthTotalCarbsG: Float
+    // Per-class uncorrected volumes (β = 1), needed by the τ_purity volume gate
+    // on single-dominant N5k fixtures (Req 4.2) — carb ratios cannot stand in
+    // for volume ratios because ρ and κ differ per class.
+    public let perClassVolumesCm3: [String: Float]
+    // Plate-plane fit residual, recorded per plate (Req 3.6).
+    public let supportPlaneResidualMm: Float?
 
     public init(
         fixtureID: String,
@@ -23,7 +29,9 @@ public struct MealCalibrationInput: Sendable {
         dominantClass: String?,
         predictedCarbsPerClass: [String: Float],
         actualCarbsPerClass: [String: Float],
-        groundTruthTotalCarbsG: Float
+        groundTruthTotalCarbsG: Float,
+        perClassVolumesCm3: [String: Float] = [:],
+        supportPlaneResidualMm: Float? = nil
     ) {
         self.fixtureID = fixtureID
         self.capturePath = capturePath
@@ -31,6 +39,8 @@ public struct MealCalibrationInput: Sendable {
         self.predictedCarbsPerClass = predictedCarbsPerClass
         self.actualCarbsPerClass = actualCarbsPerClass
         self.groundTruthTotalCarbsG = groundTruthTotalCarbsG
+        self.perClassVolumesCm3 = perClassVolumesCm3
+        self.supportPlaneResidualMm = supportPlaneResidualMm
     }
 }
 
@@ -51,72 +61,148 @@ public enum BetaCalibrator {
     public static let minCalibrationMeals = 30
     static let betaFloor: Float = 0.05
 
+    // Per-class fit statistics for the tightened Req 5.4 gate and the
+    // CalibrationMerge arbitration (nutrition5k-calibration design §Extended
+    // CalibrationResult). The fit value and clamp are the unchanged §6.9
+    // closed form; this only surfaces the spread CalibrationResult discards.
+    public struct PerClassFit: Sendable {
+        public struct ClassFit: Sendable {
+            public let beta: Float
+            public let status: BetaCalibrationStatus
+            // SE of the mean log-residual, sd(log r)/√n — approximately the
+            // relative SE on β. nil when the class did not reach the
+            // closed-form fit (under-sampled or degenerate).
+            public let logResidualSE: Float?
+            // On the single-dominant harness path each qualifying meal is
+            // dominated by the class (τ_route at ingestion, τ_purity in the
+            // harness), so the meal count IS the effective-sample count.
+            public let effectiveSample: Int
+            public let clamped: Bool                 // Req 5.6 warning input
+
+            public init(beta: Float, status: BetaCalibrationStatus,
+                        logResidualSE: Float?, effectiveSample: Int, clamped: Bool) {
+                self.beta = beta
+                self.status = status
+                self.logResidualSE = logResidualSE
+                self.effectiveSample = effectiveSample
+                self.clamped = clamped
+            }
+        }
+        public let classes: [String: ClassFit]
+        public let betaPool: Float
+
+        public init(classes: [String: ClassFit], betaPool: Float) {
+            self.classes = classes
+            self.betaPool = betaPool
+        }
+    }
+
     // Run §6.9 calibration. Returns per-class β values and the cal/eval split.
     public static func calibrate(meals: [MealCalibrationInput]) -> CalibrationResult {
+        calibrateWithFit(meals: meals).result
+    }
+
+    // §6.9 calibration plus the per-class spread outputs (log-residual SE,
+    // effective-sample count, clamped flag). `fit` describes exactly the same
+    // split-based fit as `result` — same closed form, same clamp, same meals —
+    // it only surfaces the spread that CalibrationResult discards. Callers that
+    // want the no-holdout bake basis (design §Split reconciliation) pass all
+    // qualifying plates and take the fit's numbers from that run.
+    public static func calibrateWithFit(
+        meals: [MealCalibrationInput]
+    ) -> (result: CalibrationResult, fit: PerClassFit) {
         let (calIdx, evalIdx) = stratifiedSplit(meals: meals, calFraction: 0.6)
         let calMeals = calIdx.sorted().map { meals[$0] }
 
-        let allClasses = Set(calMeals.flatMap { $0.predictedCarbsPerClass.keys })
+        let split = fitClasses(over: calMeals)
+        let result = CalibrationResult(
+            betaPerClass: split.beta,
+            statusPerClass: split.status,
+            betaPool: split.betaPool,
+            calibrationIndices: calIdx,
+            evalIndices: evalIdx
+        )
 
-        var betaPerClass: [String: Float] = [:]
-        var statusPerClass: [String: BetaCalibrationStatus] = [:]
+        var classes: [String: PerClassFit.ClassFit] = [:]
+        for c in split.counts.keys {
+            classes[c] = PerClassFit.ClassFit(
+                beta: split.beta[c] ?? 1.0,
+                status: split.status[c] ?? .uncalibratedUnity,
+                logResidualSE: split.logResidualSE[c],
+                effectiveSample: split.counts[c] ?? 0,
+                clamped: split.clamped.contains(c)
+            )
+        }
+        return (result, PerClassFit(classes: classes, betaPool: split.betaPool))
+    }
+
+    // The §6.9 per-class closed form + pooled fallback over one meal set.
+    private struct ClassFitOutputs {
+        var beta: [String: Float] = [:]
+        var status: [String: BetaCalibrationStatus] = [:]
+        var logResidualSE: [String: Float] = [:]
+        var counts: [String: Int] = [:]
+        var clamped: Set<String> = []
+        var betaPool: Float = 1.0
+    }
+
+    private static func fitClasses(over meals: [MealCalibrationInput]) -> ClassFitOutputs {
+        let allClasses = Set(meals.flatMap { $0.predictedCarbsPerClass.keys })
+        var out = ClassFitOutputs()
         var underSampledClasses: Set<String> = []
 
         for c in allClasses.sorted() {
-            let classMeals = calMeals.filter {
+            let classMeals = meals.filter {
                 $0.predictedCarbsPerClass[c] != nil && $0.actualCarbsPerClass[c] != nil
             }
+            out.counts[c] = classMeals.count
             guard classMeals.count >= minCalibrationMeals else {
                 underSampledClasses.insert(c)
-                statusPerClass[c] = .uncalibratedPooled
+                out.status[c] = .uncalibratedPooled
                 continue
             }
             // Denominator-collapse guard: any near-zero predicted carb invalidates the fit.
             let hasTiny = classMeals.contains { ($0.predictedCarbsPerClass[c] ?? 0) < 1e-9 }
             if hasTiny {
                 underSampledClasses.insert(c)
-                statusPerClass[c] = .uncalibratedPooled
+                out.status[c] = .uncalibratedPooled
                 continue
             }
             // Log-residual (geometric-mean) closed form per §6.9.
-            let logBeta = classMeals
+            let logs = classMeals
                 .map { m -> Float in log(m.actualCarbsPerClass[c]! / m.predictedCarbsPerClass[c]!) }
-                .reduce(0, +) / Float(classMeals.count)
+            let logBeta = logs.reduce(0, +) / Float(logs.count)
             var beta = exp(logBeta)
             let betaMax: Float = dominantPath(meals: classMeals) == .twoViewSfS ? 1.0 : 1.5
             if beta < betaFloor || beta > betaMax {
                 beta = max(betaFloor, min(betaMax, beta))
+                out.clamped.insert(c)
             }
-            betaPerClass[c] = beta
-            statusPerClass[c] = .calibrated
+            out.beta[c] = beta
+            out.status[c] = .calibrated
+            let variance = logs.map { ($0 - logBeta) * ($0 - logBeta) }.reduce(0, +)
+                / Float(max(1, logs.count - 1))
+            out.logResidualSE[c] = variance.squareRoot() / Float(logs.count).squareRoot()
         }
 
         // Pooled fallback over all under-sampled classes combined.
-        let pooledMeals = calMeals.filter { m in
+        let pooledMeals = meals.filter { m in
             m.predictedCarbsPerClass.keys.contains { underSampledClasses.contains($0) }
         }
-        let betaPool: Float
         if pooledMeals.count >= minCalibrationMeals {
-            betaPool = computePoolBeta(meals: pooledMeals, classes: underSampledClasses)
+            out.betaPool = computePoolBeta(meals: pooledMeals, classes: underSampledClasses)
             for c in underSampledClasses {
-                betaPerClass[c] = betaPool
-                // statusPerClass[c] remains .uncalibratedPooled
+                out.beta[c] = out.betaPool
+                // status remains .uncalibratedPooled
             }
         } else {
-            betaPool = 1.0
+            out.betaPool = 1.0
             for c in underSampledClasses {
-                betaPerClass[c] = 1.0
-                statusPerClass[c] = .uncalibratedUnity
+                out.beta[c] = 1.0
+                out.status[c] = .uncalibratedUnity
             }
         }
-
-        return CalibrationResult(
-            betaPerClass: betaPerClass,
-            statusPerClass: statusPerClass,
-            betaPool: betaPool,
-            calibrationIndices: calIdx,
-            evalIndices: evalIdx
-        )
+        return out
     }
 
     // MARK: - Private helpers
