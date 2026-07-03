@@ -102,7 +102,7 @@ struct MedataApp: App {
     // One launch line identifying WHICH binary is running and WHICH segmenter
     // it binds — days were lost debugging against stale installs and against
     // the stub without realising. `MedataBuildStamp` lives in
-    // MeData/MeData/Info.plist as `$(MEDATA_BUILD_STAMP)`, filled in by
+    // MeData/Info.plist as `$(MEDATA_BUILD_STAMP)`, filled in by
     // `make build-app` / `make deploy-release-stub` (<git sha>-<timestamp>);
     // a plain Xcode Run leaves it empty => "unstamped". Always match this
     // stamp against the one the Make target printed before trusting a
