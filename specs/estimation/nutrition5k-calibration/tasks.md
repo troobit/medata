@@ -379,7 +379,7 @@ references:
   - Success: OVERVIEW.md lists both merged specs; spelling lint clean.
   - Blocked-by: i3we69z (Merge resumable-segmenter-training into research)
 
-- [ ] 44. Delete both worktrees and their branches <!-- id:i3we6a1 -->
+- [x] 44. Delete both worktrees and their branches <!-- id:i3we6a1 -->
   - git worktree remove .worktrees/nutrition5k-calibration and .worktrees/resumable-segmenter-training; then git branch -d nutrition5k-calibration resumable-segmenter-training (lowercase -d so git itself verifies both are fully merged before deletion).
   - Success: git worktree list shows only the main worktree; both branches gone.
   - Blocked-by: i3we6a0 (Regenerate specs/OVERVIEW.md and spell-check)
