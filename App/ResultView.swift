@@ -121,15 +121,18 @@ enum ResultFormat {
 
     // Decision 17 / research Decisions 43–47 (UI side): the Very-Low surface
     // surfaces the per-stage angular error Δθ that contributed to the low
-    // confidence. The persisted `PbConfidenceResult` will gain
-    // `deltaThetaNadirDeg` / `deltaThetaObliqueDeg` fields under the research
-    // spec; until those land, we return 0 so the copy reads "0° from target"
-    // rather than crashing. Once the research-side smolspec wires the fields
-    // through PortableContracts, replace the 0 fallback with the real lookup.
+    // confidence. The persisted `PbConfidenceResult` carries
+    // `deltaThetaNadirDeg` / `deltaThetaObliqueDeg` (proto fields 5/6, threaded
+    // through `PipelineBridges.pbConfidenceResult`), so we report the larger of
+    // the two stages. `deltaThetaObliqueDeg` is unset on the single-view path;
+    // an unset record defaults to nadir 0 → "0° from target".
     static func maxDeltaThetaDeg(for record: MealRecord) -> Int {
-        // TODO: wire to record.confidence.deltaThetaNadirDeg /
-        //       deltaThetaObliqueDeg when the research-side fields land.
-        return 0
+        let confidence = record.confidence
+        var maxDelta = confidence.deltaThetaNadirDeg
+        if confidence.hasDeltaThetaObliqueDeg {
+            maxDelta = max(maxDelta, confidence.deltaThetaObliqueDeg)
+        }
+        return Int(maxDelta.rounded())
     }
 }
 
