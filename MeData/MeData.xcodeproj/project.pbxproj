@@ -379,6 +379,7 @@
 				DEVELOPMENT_TEAM = 6G974YC4Z2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "MeData uses motion data to show how level the camera is while you capture your meal.";
@@ -417,6 +418,7 @@
 				DEVELOPMENT_TEAM = 6G974YC4Z2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "MeData uses motion data to show how level the camera is while you capture your meal.";

@@ -1,5 +1,6 @@
 import ARKit
 import CaptureKit
+import OSLog
 import Pipeline
 import SwiftUI
 
@@ -17,6 +18,7 @@ struct MedataApp: App {
     #endif
 
     init() {
+        Self.logLaunchIdentity()
         let engine = ARKitCaptureEngine()
         let store = Self.makeStore()
         _engine = State(initialValue: engine)
@@ -95,6 +97,23 @@ struct MedataApp: App {
                 model.scenePhaseChanged(phase)
             }
         }
+    }
+
+    // One launch line identifying WHICH binary is running and WHICH segmenter
+    // it binds — days were lost debugging against stale installs and against
+    // the stub without realising. `MedataBuildStamp` lives in
+    // MeData/MeData/Info.plist as `$(MEDATA_BUILD_STAMP)`, filled in by
+    // `make build-app` / `make deploy-release-stub` (<git sha>-<timestamp>);
+    // a plain Xcode Run leaves it empty => "unstamped". Always match this
+    // stamp against the one the Make target printed before trusting a
+    // captured trail.
+    private static func logLaunchIdentity() {
+        let plistStamp = Bundle.main.object(forInfoDictionaryKey: "MedataBuildStamp")
+            as? String
+        let stamp = (plistStamp?.isEmpty ?? true) ? "unstamped" : plistStamp!
+        let source = Pipeline.preShutterSourceTag == "pre_shutter_stub" ? "stub" : "coreml"
+        Logger(subsystem: "ie.medata.app", category: "Shutter")
+            .info("event=launch buildStamp=\(stamp, privacy: .public) segmenterSource=\(source, privacy: .public)")
     }
 
     private static func makeStore() -> any PersistenceStore {
