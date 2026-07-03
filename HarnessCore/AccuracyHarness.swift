@@ -298,11 +298,16 @@ public struct PoolCounts: Sendable {
     public let rgbdDishCount: Int
     public let depthTestSplitCount: Int
     public let ingestionSkipCount: Int
+    // Mixture plates excluded for unmapped mass above the ingestion threshold
+    // (Req 4.1, design §Unmapped-volume bias) — from the ingestion run summary.
+    public let unmappedExcludedCount: Int
 
-    public init(rgbdDishCount: Int, depthTestSplitCount: Int, ingestionSkipCount: Int) {
+    public init(rgbdDishCount: Int, depthTestSplitCount: Int, ingestionSkipCount: Int,
+                unmappedExcludedCount: Int = 0) {
         self.rgbdDishCount = rgbdDishCount
         self.depthTestSplitCount = depthTestSplitCount
         self.ingestionSkipCount = ingestionSkipCount
+        self.unmappedExcludedCount = unmappedExcludedCount
     }
 }
 
@@ -310,6 +315,7 @@ public struct PoolReport: Sendable {
     public let rgbdDishCount: Int
     public let depthTestSplitCount: Int
     public let ingestionSkipCount: Int
+    public let unmappedExcludedCount: Int      // Req 4.1
     public let liquidExcludedCount: Int        // Req 4.7
     public let stackingExcludedCount: Int      // Req 4.3
     public let qualifyingPlateCount: Int
@@ -481,6 +487,7 @@ public extension AccuracyHarness {
                 rgbdDishCount: pool.rgbdDishCount,
                 depthTestSplitCount: pool.depthTestSplitCount,
                 ingestionSkipCount: pool.ingestionSkipCount,
+                unmappedExcludedCount: pool.unmappedExcludedCount,
                 liquidExcludedCount: liquidExcluded,
                 stackingExcludedCount: stackingExcluded,
                 qualifyingPlateCount: evalPlates.count,

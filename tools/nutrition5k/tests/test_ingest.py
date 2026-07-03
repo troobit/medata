@@ -298,6 +298,11 @@ class TestEmission:
         # Table beyond the 0.4 m cap excluded via zero (Req 3.2).
         assert depth[0, 0] == 0.0
         assert depth[240, 320] == pytest.approx(340.0)
+        # N5k depth is pre-registered to RGB (assumption recorded in lineage),
+        # so depth_from_colour must be an explicit identity — the Swift DepthMap
+        # bridge requires exactly 16 floats and fails loudly on an empty field.
+        identity = [1.0 if i % 5 == 0 else 0.0 for i in range(16)]
+        assert list(fx.nadir_depth.depth_from_colour.m) == identity
 
     def test_pinned_intrinsics_identical_for_every_plate(self, n5k):
         # Req 3.3: one documented nominal camera model, no per-plate values.

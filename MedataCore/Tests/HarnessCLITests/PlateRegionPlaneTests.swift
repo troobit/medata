@@ -37,7 +37,8 @@ struct PlateRegionPlaneTests {
         return dx * dx + dy * dy <= plateRadius * plateRadius
     }
 
-    func makeDepth(depthMm: (Int, Int) -> Float) -> DepthMap {
+    func makeDepth(confidence: Data? = nil,
+                   depthMm: (Int, Int) -> Float) -> DepthMap {
         var bytes = Data(count: Self.w * Self.h * 4)
         bytes.withUnsafeMutableBytes { raw in
             let buf = raw.bindMemory(to: Float.self).baseAddress!
@@ -49,7 +50,7 @@ struct PlateRegionPlaneTests {
         }
         return DepthMap(
             depthBytesMm: bytes,
-            confidenceBytes: Data(repeating: 255, count: Self.w * Self.h),
+            confidenceBytes: confidence ?? Data(repeating: 255, count: Self.w * Self.h),
             width: Self.w, height: Self.h, rowStrideBytes: Self.w * 4,
             depthIntrinsics: k, depthFromColour: .identity
         )
@@ -125,6 +126,20 @@ struct PlateRegionPlaneTests {
         #expect(abs(plane.distanceMm - Self.tableMm) >= 10,
                 "plane must not land on the table at \(Self.tableMm) mm")
         #expect(plane.normal.dot(gravity) > 0.9, "normal oriented n̂·gravity > 0, near-vertical")
+    }
+
+    @Test("An empty confidence map means no confidence filtering, not a crash")
+    func emptyConfidenceMapIsTolerated() throws {
+        // N5k fixtures carry no confidence bytes (RealSense publishes none;
+        // invalid returns are already zeroed and excluded by the zMm > 0
+        // guard). Found in the first real end-to-end run: subscripting the
+        // empty Data trapped inside LiDARPlaneFitter's confidence sample.
+        let depth = makeDepth(confidence: Data(), depthMm: plateSceneDepth)
+
+        let plane = try FixtureRunner.fitPlateRegionPlane(
+            depth: depth, intrinsics: k, gravity: gravity, fixtureID: "dish_noconf"
+        )
+        #expect(abs(plane.distanceMm - Self.plateMm) <= 2)
     }
 
     @Test("Poor plate-plane fit (high residual) throws so the plate is skipped and recorded")

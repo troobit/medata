@@ -340,7 +340,7 @@ references:
 
 ## Integration
 
-- [ ] 39. Run the pre-checkpoint end-to-end calibration and bake <!-- id:i3we69w -->
+- [x] 39. Run the pre-checkpoint end-to-end calibration and bake <!-- id:i3we69w -->
   - Agent-executable pre-checkpoint run (prerequisites.md): re-fetch any missing bucket files from gs://nutrition5k_dataset; tools/nutrition5k/ingest.py over data/ (all-mixture, sentinel SHA) → HarnessCLI calibrate-and-eval → calibrate JSON + accuracy report → generate.py bake → both sqlite DBs.
   - Confirm empirically whether the plate fills the N5k overhead frame (Decision 15 open check) and that the two reference-depth checks pass on real captures; verify the 4.5 pool-arithmetic/feasibility report is produced (insufficient classes are documented outcomes, not failures).
   - Commit the calibrate JSON, report, and baked DBs — never N5k imagery/metadata (1.1).

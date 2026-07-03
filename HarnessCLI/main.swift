@@ -27,6 +27,9 @@ struct Args {
     var seed: UInt64 = 42
     var mappingVersion: String = ""
     var intrinsicsModel: String = "realsense_d435_factory"
+    // Ingestion run_summary.json (Req 4.1): carries the unmapped-mass mixture
+    // exclusions the harness cannot derive from fixtures, plus skip counts.
+    var ingestSummaryPath: String = ""
 }
 
 func parseArgs() -> Args? {
@@ -50,6 +53,7 @@ func parseArgs() -> Args? {
             if let s = it.next(), let v = UInt64(s) { result.seed = v }
         case "--mapping-version":   result.mappingVersion   = it.next() ?? ""
         case "--intrinsics-model":  result.intrinsicsModel  = it.next() ?? ""
+        case "--ingest-summary":    result.ingestSummaryPath = it.next() ?? ""
         default: break
         }
     }
@@ -104,7 +108,8 @@ struct N5kEvalJSON: Encodable {
     }
     struct PoolJSON: Encodable {
         let rgbdDishCount: Int; let depthTestSplitCount: Int
-        let ingestionSkipCount: Int; let liquidExcludedCount: Int
+        let ingestionSkipCount: Int; let unmappedExcludedCount: Int
+        let liquidExcludedCount: Int
         let stackingExcludedCount: Int; let qualifyingPlateCount: Int
         let effectiveSamplesByPath: [String: [String: Int]]
         let insufficientClasses: [String]
@@ -146,6 +151,7 @@ struct N5kEvalJSON: Encodable {
             rgbdDishCount: r.pool.rgbdDishCount,
             depthTestSplitCount: r.pool.depthTestSplitCount,
             ingestionSkipCount: r.pool.ingestionSkipCount,
+            unmappedExcludedCount: r.pool.unmappedExcludedCount,
             liquidExcludedCount: r.pool.liquidExcludedCount,
             stackingExcludedCount: r.pool.stackingExcludedCount,
             qualifyingPlateCount: r.pool.qualifyingPlateCount,
@@ -253,6 +259,7 @@ struct CalibrationOutcome {
     let admittedInputs: [MealCalibrationInput]
     // True when any fixture carries an estimator_path stamp (an N5k run).
     let hasN5k: Bool
+    let ingestSummary: CalibrateRun.IngestSummary?
 }
 
 // Route fixtures per estimator_path, run both calibrators, merge, and build
@@ -267,7 +274,12 @@ func runCalibration(args: Args, db: any FoodDatabase,
         ? Set<String>()
         : try CalibrateRun.loadDepthTestSplit(
             from: URL(fileURLWithPath: args.depthTestSplitPath))
-    let routed = CalibrateRun.route(fixtures: fixtures, depthTestSplit: split)
+    let ingestSummary = args.ingestSummaryPath.isEmpty
+        ? nil
+        : try CalibrateRun.loadIngestSummary(
+            from: URL(fileURLWithPath: args.ingestSummaryPath))
+    let routed = CalibrateRun.route(fixtures: fixtures, depthTestSplit: split,
+                                    unmappedExcluded: ingestSummary?.unmappedExcluded ?? [])
     let hasN5k = fixtures.contains { !$0.estimatorPath.isEmpty }
 
     // Single-dominant (and legacy) fixtures via FixtureRunner; plates whose
@@ -342,22 +354,32 @@ func runCalibration(args: Args, db: any FoodDatabase,
     // recorded, with the drop reasons distinguished.
     fputs("""
         calibrate summary:
-          depth-test-split excluded: \(routed.depthTestExcluded.map(\.fixtureID))
+          depth-test-split excluded: \(routed.depthTestExcluded.count)
+          unmapped-mass excluded (Req 4.1): \(routed.unmappedExcluded.count)
           purity dropped (not re-routed): \(gated.dropped)
-          plane-fit/pipeline skipped: \(planeFitSkipped)
+          plane-fit/pipeline skipped: \(planeFitSkipped.count)
           stacking excluded: \(mixtureResult.excludedPlates)
           liquid excluded: \(mixtureResult.liquidExcludedPlates)\n
         """, stderr)
 
+    let runSummary = CalibrationArtifact.RunSummary(
+        depthTestSplitExcluded: routed.depthTestExcluded.map(\.fixtureID).sorted(),
+        unmappedExcluded: routed.unmappedExcluded.map(\.fixtureID).sorted(),
+        purityDropped: gated.dropped.sorted(),
+        planeFitSkipped: planeFitSkipped.sorted(),
+        stackingExcluded: mixtureResult.excludedPlates.sorted(),
+        liquidExcluded: mixtureResult.liquidExcludedPlates.sorted())
+
     return CalibrationOutcome(
         artifact: CalibrationArtifact(merged: merged, betaPool: sdFit.betaPool,
-                                      lineage: lineage),
+                                      lineage: lineage, runSummary: runSummary),
         routed: routed,
         mixtureObs: mixtureObs,
         mixtureResult: mixtureResult,
         sdResult: sdResult,
         admittedInputs: admittedInputs,
-        hasN5k: hasN5k)
+        hasN5k: hasN5k,
+        ingestSummary: ingestSummary)
 }
 
 func runCalibrate(args: Args) throws {
@@ -465,15 +487,17 @@ func runCalibrateAndEval(args: Args) throws {
         ])
     // rgbdDishCount here is the loaded-fixture proxy; the authoritative pool
     // number lives in the ingestion run summary (Req 4.5).
+    let unmappedCount = outcome.routed.unmappedExcluded.count
     let report = AccuracyHarness.evaluateCalibration(
         calibrationPlates: calibrationPlates,
         officialSplitPlates: officialPlates,
         composition: composition,
         config: config,
         pool: PoolCounts(
-            rgbdDishCount: calibrationPlates.count + officialPlates.count,
+            rgbdDishCount: calibrationPlates.count + officialPlates.count + unmappedCount,
             depthTestSplitCount: outcome.routed.depthTestExcluded.count,
-            ingestionSkipCount: 0))
+            ingestionSkipCount: outcome.ingestSummary?.ingestionSkipCount ?? 0,
+            unmappedExcludedCount: unmappedCount))
 
     try writeSnakeCaseJSON(N5kEvalJSON(report), to: args.outputPath)
 }

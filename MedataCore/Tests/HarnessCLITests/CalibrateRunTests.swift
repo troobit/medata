@@ -100,6 +100,48 @@ struct CalibrateRunTests {
                                           massDominantClass: nil) == 0)
     }
 
+    // MARK: - Ingestion run-summary consumption (Req 4.1, design §Unmapped-volume bias)
+
+    // Fixtures carry mapped masses only, so the >10%-unmapped-mass exclusion
+    // can only come from the ingestion run summary — the harness must consume
+    // it, not re-derive it.
+    @Test("The ingestion run summary parses the unmapped exclusion list and skip count")
+    func ingestSummaryParses() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("run_summary_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        {"ingested": 5,
+         "skipped": {"malformed_depth": ["dish_009"],
+                     "depth_out_of_band": ["dish_010", "dish_011"],
+                     "missing_rgb": []},
+         "mixture_fit_excluded_unmapped": ["dish_003"],
+         "liquid_excluded": ["dish_004"]}
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let summary = try CalibrateRun.loadIngestSummary(from: url)
+        #expect(summary.unmappedExcluded == ["dish_003"])
+        #expect(summary.liquidExcluded == ["dish_004"])
+        #expect(summary.ingestionSkipCount == 3)
+    }
+
+    @Test("Unmapped-heavy plates leave the mixture fit; depth-test exclusion still wins")
+    func unmappedExcludedFromMixtureFit() {
+        let fixtures = [
+            makeFixture(id: "dish_001", path: "mixture"),          // unmapped-excluded
+            makeFixture(id: "dish_002", path: "mixture"),
+            makeFixture(id: "dish_003", path: "mixture"),          // in split AND unmapped
+            makeFixture(id: "dish_004", path: "single_dominant"),
+        ]
+        let routed = CalibrateRun.route(fixtures: fixtures,
+                                        depthTestSplit: ["dish_003"],
+                                        unmappedExcluded: ["dish_001", "dish_003"])
+        #expect(routed.mixture.map(\.fixtureID) == ["dish_002"])
+        #expect(routed.unmappedExcluded.map(\.fixtureID) == ["dish_001"])
+        #expect(routed.depthTestExcluded.map(\.fixtureID) == ["dish_003"])
+        #expect(routed.singleDominant.map(\.fixtureID) == ["dish_004"])
+    }
+
     // MARK: - JSON artifact (Req 5.5, design §DB bake handoff contract)
 
     func makeArtifact() -> CalibrationArtifact {

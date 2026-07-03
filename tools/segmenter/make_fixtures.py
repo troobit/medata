@@ -289,6 +289,14 @@ def build_fixture_bytes(
         fx.nadir_depth.height, fx.nadir_depth.width = depth.shape
         fx.nadir_depth.row_stride_bytes = depth.shape[1] * 4
         fx.nadir_depth.depth_intrinsics.CopyFrom(fx.nadir_intrinsics)
+        # Depth supplied this way is already registered to the RGB frame
+        # (N5k publishes registered overhead depth; the assumption is recorded
+        # in lineage), so depth_from_colour is an explicit identity — the
+        # Swift DepthMap bridge requires exactly 16 floats and fails loudly
+        # on an empty matrix.
+        del fx.nadir_depth.depth_from_colour.m[:]
+        fx.nadir_depth.depth_from_colour.m.extend(
+            1.0 if i % 5 == 0 else 0.0 for i in range(16))
 
     if gravity is not None:
         fx.gravity.x, fx.gravity.y, fx.gravity.z = (float(v) for v in gravity)

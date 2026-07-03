@@ -56,6 +56,12 @@ bridging N5k overhead RGB-D into `.fixture` files.
 
 ## Gotchas
 
+- `build_fixture_bytes` writes an explicit identity `depth_from_colour`
+  whenever depth is supplied — the Swift `DepthMap(pb:)` bridge preconditions
+  on exactly 16 floats and crashes on an empty matrix (found in the first real
+  end-to-end run; synthetic Swift tests always built the matrix). N5k depth is
+  pre-registered to RGB, so identity is the documented assumption.
+
 - Test helpers live in `tests/n5k_testkit.py`, not `conftest.py` — `from
   conftest import …` breaks when several tool test dirs run in one pytest
   invocation (module-name collision with `tools/segmenter/tests/conftest.py`).

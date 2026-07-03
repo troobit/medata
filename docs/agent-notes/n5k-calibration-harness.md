@@ -56,6 +56,40 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
   `generate.py` consumes it). `betaPool` stays top-level for existing
   consumers.
 
+- `CalibrateRun.loadIngestSummary` + `route(fixtures:depthTestSplit:unmappedExcluded:)`
+  — the harness consumes the ingestion `run_summary.json` via HarnessCLI
+  `--ingest-summary` (Req 4.1): fixtures carry mapped masses only, so the
+  >10%-unmapped-mass mixture exclusion cannot be re-derived Swift-side.
+  Without the flag those plates would enter the fit and bias co-occurring β
+  downward. The calibrate artifact's `run_summary` block records the excluded
+  dish ids; the pool report carries `unmapped_excluded_count`.
+
+## First full pre-checkpoint run (2026-07-03, task 39)
+
+- Committed artifacts:
+  `specs/estimation/nutrition5k-calibration/artifacts/{calibrate.json,
+  accuracy_report.json}` and the calibrated
+  `MedataCore/Sources/Foods/Resources/{cofid_db,afcd_db}.sqlite`. Reproduce
+  with `.build/release/HarnessCLI calibrate[-and-eval] --fixtures-dir
+  tmp/n5k_fixtures --depth-test-split data/dish_ids/splits/depth_test_ids.txt
+  --ingest-summary tmp/n5k_fixtures/run_summary.json --mapping-version
+  <first 12 of sha256 of mapping_n5k_to_palette.json> --seed 42`, then
+  `python3 tools/food_db/generate.py --calibration-json <calibrate.json>`.
+- Pool arithmetic: 3,490 dish folders → 3,485 ingested (5 skipped: 1
+  malformed depth, 4 depth out of band; both Req 3.1 reference-depth checks
+  passed) → 507 official depth-test split, 2,688 unmapped-mass excluded,
+  45 liquid, 56 stacking → **181 qualifying mixture plates**. The unmapped
+  exclusion dominates: most N5k dishes carry ingredients outside the 24-class
+  palette.
+- Only **broccoli** calibrates (β = 0.516, eff 35, SE 0.058); carrot has eff
+  48 but is unidentifiable (collinear co-occurrence); everything else is
+  under 30 effective. All other classes stay at unity — the documented
+  Req 4.5 outcome, not a failure. Carb MAPE 105.8 → 81.9 on the k-fold pool;
+  no staple meets the 20% target (best-sampled staple is white_rice at 10
+  effective).
+- The post-checkpoint single-dominant re-fit + supersession re-run stays a
+  manual step gated on model-production Bucket C.
+
 ## Gotchas
 
 - `CalibrateRun.applyPurityGate` drops inputs with no entry in

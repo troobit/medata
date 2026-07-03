@@ -372,6 +372,10 @@ public enum LiDARPlaneFitter {
         depth: DepthMap, colourX: Int, colourY: Int,
         colourWidth: Int, colourHeight: Int
     ) -> UInt8 {
+        // No confidence map (e.g. N5k RealSense fixtures) means no confidence
+        // filtering: invalid returns are zeroed depth, excluded by the zMm > 0
+        // guard. Device captures always carry ARKit confidence.
+        guard !depth.confidenceBytes.isEmpty else { return .max }
         let dx = min(depth.width - 1,
                      max(0, Int((Float(colourX) + 0.5) * Float(depth.width) / Float(colourWidth))))
         let dy = min(depth.height - 1,

@@ -31,6 +31,38 @@ public enum CalibrateRun {
         public let mixture: [PbMealFixture]
         public let singleDominant: [PbMealFixture]   // includes legacy fixtures
         public let depthTestExcluded: [PbMealFixture]
+        // Mixture plates whose unmapped mass exceeded the ingestion threshold
+        // (Req 4.1): their hull volume contains unmapped food, so admitting
+        // them would bias co-occurring mapped β downward.
+        public let unmappedExcluded: [PbMealFixture]
+    }
+
+    // The ingestion run summary (tools/nutrition5k/ingest.py). Fixtures carry
+    // mapped masses only, so the >10%-unmapped-mass mixture-fit exclusion
+    // (design §Unmapped-volume bias) can only come from this file — the
+    // harness consumes it rather than re-deriving it.
+    public struct IngestSummary: Sendable {
+        public let unmappedExcluded: Set<String>
+        public let liquidExcluded: Set<String>
+        public let ingestionSkipCount: Int
+    }
+
+    public static func loadIngestSummary(from url: URL) throws -> IngestSummary {
+        struct Doc: Decodable {
+            let skipped: [String: [String]]
+            let mixtureFitExcludedUnmapped: [String]
+            let liquidExcluded: [String]
+            enum CodingKeys: String, CodingKey {
+                case skipped
+                case mixtureFitExcludedUnmapped = "mixture_fit_excluded_unmapped"
+                case liquidExcluded = "liquid_excluded"
+            }
+        }
+        let doc = try JSONDecoder().decode(Doc.self, from: Data(contentsOf: url))
+        return IngestSummary(
+            unmappedExcluded: Set(doc.mixtureFitExcludedUnmapped),
+            liquidExcluded: Set(doc.liquidExcluded),
+            ingestionSkipCount: doc.skipped.values.reduce(0) { $0 + $1.count })
     }
 
     // Depth-test-split exclusion FIRST — before any selection (Req 4.4) —
@@ -39,24 +71,30 @@ public enum CalibrateRun {
     // which is the pre-N5k behaviour.
     public static func route(
         fixtures: [PbMealFixture],
-        depthTestSplit: Set<String>
+        depthTestSplit: Set<String>,
+        unmappedExcluded unmappedIDs: Set<String> = []
     ) -> Routed {
         var mixture: [PbMealFixture] = []
         var singleDominant: [PbMealFixture] = []
         var excluded: [PbMealFixture] = []
+        var unmapped: [PbMealFixture] = []
         for fx in fixtures {
             if depthTestSplit.contains(fx.fixtureID) {
                 excluded.append(fx)
                 continue
             }
             if fx.estimatorPath == "mixture" {
-                mixture.append(fx)
+                if unmappedIDs.contains(fx.fixtureID) {
+                    unmapped.append(fx)
+                } else {
+                    mixture.append(fx)
+                }
             } else {
                 singleDominant.append(fx)
             }
         }
         return Routed(mixture: mixture, singleDominant: singleDominant,
-                      depthTestExcluded: excluded)
+                      depthTestExcluded: excluded, unmappedExcluded: unmapped)
     }
 
     // Purity = above-plane volume of the mass-dominant class ÷ total
@@ -211,9 +249,10 @@ public struct CalibrationArtifact: Encodable {
         }
     }
 
-    // Skip/drop accounting for the run summary (Req 3.4/3.8/4.2/4.3/4.7).
+    // Skip/drop accounting for the run summary (Req 3.4/3.8/4.1/4.2/4.3/4.7).
     public struct RunSummary: Encodable {
         public let depthTestSplitExcluded: [String]
+        public let unmappedExcluded: [String]
         public let purityDropped: [String]
         public let planeFitSkipped: [String]
         public let stackingExcluded: [String]
@@ -221,16 +260,19 @@ public struct CalibrationArtifact: Encodable {
 
         enum CodingKeys: String, CodingKey {
             case depthTestSplitExcluded = "depth_test_split_excluded"
+            case unmappedExcluded = "unmapped_excluded"
             case purityDropped = "purity_dropped"
             case planeFitSkipped = "plane_fit_skipped"
             case stackingExcluded = "stacking_excluded"
             case liquidExcluded = "liquid_excluded"
         }
 
-        public init(depthTestSplitExcluded: [String], purityDropped: [String],
+        public init(depthTestSplitExcluded: [String], unmappedExcluded: [String] = [],
+                    purityDropped: [String],
                     planeFitSkipped: [String], stackingExcluded: [String],
                     liquidExcluded: [String]) {
             self.depthTestSplitExcluded = depthTestSplitExcluded
+            self.unmappedExcluded = unmappedExcluded
             self.purityDropped = purityDropped
             self.planeFitSkipped = planeFitSkipped
             self.stackingExcluded = stackingExcluded
