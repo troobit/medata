@@ -22,6 +22,6 @@ Spec: `specs/data/libre-ingestion/`. Reference implementation: `~/repos/imgdatac
 
 `specs/ui/design-handoff-00` (parallel branch) also adds `EventType.bsl` and a DEBUG `seedDemoBslEvents()`; when both are in, keep one `bsl` constant and consider the seeder redundant once real import works. Trends reads `store.events(in:type: EventType.bsl)` — already served by this feature's rows.
 
-## Outstanding
+## Device verification
 
-- On-device visual pass of the import flow (device was locked/unavailable at merge time): Settings → Import LibreLink screenshots → pick 2–3 real screenshots → per-image counts should match `imgdata process` output for the same files.
+2026-07-04: import flow run on the iPhone 16 Pro (build stamp `82504b8-…`) by the owner — picker, extraction, and per-image summaries confirmed on device. Note the primary dev device (PhoneMax, iPhone 13 Pro Max) was offline; `make deploy-device` needed `DEVICE_UDID=6AD781BA-89FF-5A82-A2A1-B5EC9469F465` and `make logs-device DEVICE_NAME=you` (requires sudo) for that phone.
