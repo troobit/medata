@@ -353,6 +353,9 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
     """Atomic per-epoch sidecar write (temp file + os.replace) so an interrupt
     mid-save can never leave a torn file; at most one epoch of progress is lost."""
     torch = _import_torch()
+    # The first sidecar lands before _save_checkpoint's mkdir — create the
+    # directory here too or epoch 1 of a fresh run dies at its first save.
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
     state = {
         "model": _tensors_to_cpu(model.state_dict()),
         "optimizer": _tensors_to_cpu(optimizer.state_dict()),
