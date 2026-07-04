@@ -401,6 +401,61 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         return summary
     }
 
+    // MARK: - Insulin doses (PRD regression-suggestion-integration Core 2–4)
+
+    // Bounds accepted at the store layer. The UI enforces its own floor of
+    // 1 U; 0 and 60 are valid here.
+    private static let insulinUnitsRange = 0.0...60.0
+
+    public func saveInsulinDose(_ dose: InsulinDose) async throws {
+        guard Self.insulinUnitsRange.contains(dose.units) else {
+            throw PersistenceError.insulinUnitsOutOfRange(dose.units)
+        }
+        let metadata = try Self.insulinMetadataJSON(for: dose)
+        let timestampMs = Int64(dose.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    dose.id.uuidString, timestampMs, EventType.insulin,
+                    dose.units, metadata
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func deleteInsulinEvent(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a meal/bsl row sharing the id survives.
+            // Insulin events have no side tables — nothing else to cascade.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.insulin]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    // Builds the `metadata` JSON object per medreg's convention: exactly
+    // `kind`, `insulin_type`, and `schema_version` (integer), plus `note`
+    // only when provided — the key is absent, never null, when nil.
+    private static func insulinMetadataJSON(for dose: InsulinDose) throws -> String {
+        var payload: [String: Any] = [
+            "kind": dose.kind.rawValue,
+            "insulin_type": dose.insulinType,
+            "schema_version": InsulinDose.metadataSchemaVersion
+        ]
+        if let note = dose.note {
+            payload["note"] = note
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
         let ids: [String] = try await queue.read { db in
