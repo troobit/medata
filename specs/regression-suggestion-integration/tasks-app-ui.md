@@ -31,6 +31,9 @@ references:
 ## Deep link
 
 - [x] 9. Register custom URL scheme; medata://insulin/add presents dose sheet from any state, dismissing other covers — PRD App 10
+  - Covers BOTH medata-scheme deep links per the PRD amendment: medata://insulin/add presents the dose-entry sheet and medata://capture opens the Capture cover (AppRoot ActiveSheet .capture) — each from any state within one screen transition
+  - Conflicting presentations are dismissed first via AppRoot.pendingDeepLink: a cover resumes the target from fullScreenCover onDismiss; an open dose sheet resumes medata://capture from TrendsView's onInsulinSheetDismiss
+  - Scheme registered once via CFBundleURLTypes in MeData/Info.plist (cannot be an INFOPLIST_KEY_ build setting); verified present in the built product's Info.plist
 
 ## Register and verify
 

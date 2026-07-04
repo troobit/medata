@@ -27,9 +27,10 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   `kind` from the metadata JSON (rows that fail to decode are dropped).
   Week/Month markers reuse `TrendsMath.dailyBuckets` (empty days filtered),
   x-aligned with the carb bars' buckets.
-- **Deep link**: `medata://insulin/add` (CFBundleURLTypes in
-  `MeData/Info.plist`) is handled in `AppRoot.onOpenURL`. AppRoot owns the
-  sheet binding so it can present from any state.
+- **Deep links** (CFBundleURLTypes in `MeData/Info.plist`, handled in
+  `AppRoot.onOpenURL`): `medata://insulin/add` presents the dose sheet;
+  `medata://capture` opens the Capture cover. Both land from any state — the
+  lock-screen widgets (next context) are single-tap launchers to these URLs.
 
 ## Gotchas / non-obvious behaviour
 
@@ -46,10 +47,13 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   `.scrollContentBackground(.hidden)`, height pinned to
   `rowCount × defaultMinListRowHeight`. Without the height pin it collapses
   to zero inside the ScrollView.
-- **Deep link vs covers**: presenting a sheet while a fullScreenCover is
-  animating out is silently dropped, so `AppRoot.handleDeepLink` sets
-  `pendingInsulinSheet` and presents from the cover's `onDismiss`. TrendsView
-  likewise drops its options sheet when the insulin binding turns true.
+- **Deep link vs presentations**: presenting while another presentation is
+  animating out is silently dropped, so `AppRoot.handleDeepLink` records a
+  `pendingDeepLink` target and resumes it on dismissal completion — the
+  cover's `onDismiss` (a cover was up), or TrendsView's
+  `onInsulinSheetDismiss` closure (the dose sheet was up when
+  `medata://capture` arrived). TrendsView likewise drops its options sheet
+  when the insulin binding turns true.
 - **CFBundleURLTypes cannot be an `INFOPLIST_KEY_` build setting** — it lives
   in the partial `MeData/Info.plist` (already merged with the generated plist
   for the build stamp).
