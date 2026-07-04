@@ -2,17 +2,19 @@ import CaptureKit
 import Pipeline
 import SwiftUI
 
-// Root of the Photo tab (UI Req §20 / Decision 16). Composes:
-//   • `CaptureTopBar`            — close + flash/torch (top chrome)
-//   • `LiveIndicatorBadge`       — consolidated tilt/distance/coverage chip
-//   • `CaptureModeToggle`        — capsule pill above the shutter
-//   • `ShutterButton`            — 76pt circle with press feedback
-//   • `RefusalSheet`             — bottom-sheet refusal surface
-// Behaviour lives in `CaptureFlowModel`; this is composition only.
-// CaptureMode (Decision 35) is read via `@AppStorage` so any UI toggle change
-// flows here without coupling.
-// The persistent tilt guide is `TiltBubbleGuide` — a 2-D attitude level whose
-// dot distance encodes tilt and direction encodes azimuth.
+// Capture root under the handoff-00 Capture-rooted shell (Req 2, design page
+// `design-system/pages/capture.md`). Composes:
+//   • top bar        — Trends/Data buttons, mode capsule (top-centre),
+//                      `MedataBubbleLevel` (top-right)
+//   • `TelemetryCapsule` — always-visible tilt / distance / LiDAR-dot chip
+//   • transient surfaces — Initialising / hold steady / Capturing / Target 25°
+//                      / blocked-gate chip
+//   • bottom row     — mode button, `ShutterButton`, settings button
+//   • `MedataLoadingSymbol` — over frozen frames during `.estimating`
+// Behaviour lives in `CaptureFlowModel`; this is composition only. The effective
+// capture mode is read via `@AppStorage` (with a LiDAR-aware default, Req 16.2)
+// so fork-sheet / mode-button writes flow here without coupling. Torch is gone
+// (Decision 14).
 struct CaptureFlowView: View {
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
@@ -47,10 +49,29 @@ struct CaptureFlowView: View {
 
     @State private var observer: LiveSampleObserver?
     @State private var hasWarmedCardDetector = false
+    // Empty string means the capture-mode key is unset — the effective mode then
+    // forks on device capability (Req 16.2), mirroring `defaultCaptureModeReader`.
+    @AppStorage(SettingsKeys.captureMode) private var captureModeRaw: String = ""
+    @State private var showingForkSheet = false
+    // Transient failing-gate chip shown above the shutter on a blocked tap
+    // (design: parity audit — replaces the old badge reveal).
+    @State private var blockedChip: String?
+    @State private var blockedChipTask: Task<Void, Never>?
+
+    private var effectiveMode: CaptureMode {
+        if let m = CaptureMode(rawValue: captureModeRaw) { return m }
+        return model.supportsLiDAR ? .single : .double
+    }
+
+    // Top-centre mode capsule text (Req 2.2): the current stage, monospaced.
+    private var modeCapsuleText: String {
+        if model.awaitingObliqueView { return "2-VIEW · OBLIQUE" }
+        return effectiveMode == .double ? "2-VIEW · NADIR" : "1-VIEW · LiDAR"
+    }
 
     var body: some View {
         NavigationStack(path: $model.navigationPath) {
-            content
+            capture
                 .navigationDestination(for: CaptureRoute.self) { route in
                     captureDestination(route)
                 }
@@ -80,43 +101,22 @@ struct CaptureFlowView: View {
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch model.state {
-        case .permissionDenied(let subject):
-            PermissionDeniedView(subject: subject) { model.openSettings() }
-        default:
-            capture
-        }
-    }
-
+    // Full-bleed capture chrome (Req 2.1). The AR preview is the content; the
+    // chrome is a top bar (Trends/Data + mode capsule + bubble level), a
+    // telemetry capsule and transient surfaces above the shutter, and a bottom
+    // row (mode / shutter / settings). `.permissionDenied` keeps the top bar and
+    // settings rendered while disabling the shutter and mode (Req 1.6).
     private var capture: some View {
         ZStack {
-            Color.captureBackground.ignoresSafeArea()
-            // Freeze the viewfinder during estimation: swap the live AR feed for
-            // the captured frame(s) the estimator is working from, so the user
-            // sees the photo is taken and can put the phone down (Req §"Freeze
-            // viewfinder"). Every other state shows the live preview; the chrome
-            // VStack below renders unchanged over whichever layer is shown.
-            if case .estimating(let result) = model.state {
-                // Blur + dim the frozen capture so the viewfinder reads as
-                // "processing" — the same pause the tilt guide shows, applied to
-                // the camera. The live AR feed is not rendered here at all.
-                CapturedFramesView(result: result)
-                    .blur(radius: 18)
-                    .overlay(Color.captureBackground.opacity(0.25))
-                    .ignoresSafeArea()
-            } else {
-                ARPreviewView(engine: engine).ignoresSafeArea()
-            }
+            backgroundLayer
 
             VStack(spacing: 0) {
-                CaptureTopBar()
+                topBar
+                    .padding(.horizontal, 16)
                     .padding(.top, 8)
                 // While aiming the oblique view, show the banked nadir as a
-                // top-trailing inset so the user can confirm their top-down
-                // shot landed. Hidden during `.estimating`, when
-                // `CapturedFramesView` already shows both frames full-screen.
+                // top-trailing inset so the user can confirm their top-down shot
+                // landed. Hidden during `.estimating`.
                 if model.awaitingObliqueView, !isEstimating, let nadir = model.capturedNadirFrame {
                     HStack {
                         Spacer()
@@ -125,44 +125,19 @@ struct CaptureFlowView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                 }
-                Spacer().frame(height: 24)
-                if isEstimating {
-                    // Viewfinder is frozen during estimation; swap the live
-                    // tilt/distance/coverage badge for the "Estimating…" hint so
-                    // the chrome stops reading as a live camera (Req §"Freeze
-                    // viewfinder").
-                    initialisingHint
-                } else if model.currentSnapshot != nil, !isInitialising {
-                    LiveIndicatorBadge(
-                        model: model.indicators,
-                        supportsLiDAR: model.supportsLiDAR,
-                        isReady: isReady,
-                        targetTiltDegrees: model.awaitingObliqueView ? 25 : 0
-                    )
-                } else {
-                    initialisingHint
-                }
                 Spacer()
-                bottomChrome
+                if isPermissionDenied { permissionDeniedMessage }
+                Spacer()
+                bottomArea
             }
 
-            // Persistent graphical tilt guide, leading-aligned and vertically
-            // centred over the viewfinder. Unlike the badge — which auto-hides 5s
-            // after framing is in range (LiveIndicatorModel.scheduleHide) — this
-            // stays on screen the whole time the user is aiming, so the angle
-            // target never disappears mid-adjustment. Shown under the same
-            // condition as the badge; never takes hits so it can't block chrome.
-            if model.currentSnapshot != nil, !isEstimating, !isInitialising {
-                HStack {
-                    tiltGuide
-                        .padding(.leading, 16)
-                    Spacer()
-                }
-                .allowsHitTesting(false)
-            }
+            if isEstimating { estimatingOverlay }
         }
         .sheet(item: refusalBinding) { refusal in
             RefusalSheet(failure: refusal.failure) { model.retry() }
+        }
+        .sheet(isPresented: $showingForkSheet) {
+            LidarForkSheetView()
         }
         .onAppear {
             let obs = observer ?? LiveSampleObserver(model: model)
@@ -207,63 +182,91 @@ struct CaptureFlowView: View {
         }
     }
 
+    // MARK: - Background
+
     @ViewBuilder
-    private var bottomChrome: some View {
-        VStack(spacing: 16) {
-            if isEstimating {
-                // Viewfinder is frozen during estimation; suppress the live
-                // tilt message, mode toggle and shutter so the chrome stops
-                // reading as a live camera, but keep the clearance spacer so the
-                // layout footprint is preserved (Req §"Freeze viewfinder").
-                Color.clear.frame(height: ShutterButtonMetrics.bottomClearance)
-            } else {
-                // Decision 18 / research Decision 43: nadir captures always
-                // proceed regardless of tilt; the oblique stage retains a
-                // |Δθ − 25°| ≤ 30° hard cap. When the user is on the oblique
-                // stage but outside the cap, surface the Irish-English failure
-                // copy above the shutter so the disabled state has a written
-                // explanation (Req §2.3).
-                if let message = model.obliqueTiltMessage {
-                    Text(message)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.captureChromeText)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.captureChromeBG, in: Capsule())
-                        .accessibilityIdentifier("hint.obliqueTilt")
+    private var backgroundLayer: some View {
+        if case .estimating(let result) = model.state {
+            // Freeze the viewfinder during estimation: swap the live AR feed for
+            // the captured frame(s) the estimator is working from, blurred and
+            // dimmed, so the user sees the photo is taken and can put the phone
+            // down. The MedataLoadingSymbol renders over this in `estimatingOverlay`.
+            CapturedFramesView(result: result)
+                .blur(radius: 18)
+                .overlay(Color.captureBackground.opacity(0.25))
+                .ignoresSafeArea()
+        } else if isPermissionDenied {
+            Color.captureBackground.ignoresSafeArea()
+        } else {
+            ARPreviewView(engine: engine).ignoresSafeArea()
+        }
+    }
+
+    // MARK: - Top bar (Req 2.1)
+
+    private var topBar: some View {
+        ZStack {
+            // Mode capsule, top-centre (Req 2.2). Hidden while denied.
+            if !isPermissionDenied {
+                Text(modeCapsuleText)
+                    .font(.system(.caption, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(Color.captureChromeText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.captureChromeBG, in: Capsule())
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityIdentifier("modeCapsule")
+            }
+            HStack(alignment: .top) {
+                // Trends and Data buttons, top area (Req 2.1). Usable even while
+                // permission is denied (Req 1.6).
+                HStack(spacing: 12) {
+                    chromeButton("chart.xyaxis.line", label: "Trends", action: onOpenTrends)
+                    chromeButton("square.stack.3d.up", label: "Data", action: onOpenData)
                 }
-                CaptureModeToggle(supportsLiDAR: model.supportsLiDAR, interactive: !model.isBusy)
-                    .padding(.horizontal, 48)
-                ShutterButton(
-                    state: shutterState,
-                    action: { model.shutter() },
-                    onBlockedTap: { model.shutterBlockedTapped() }
-                )
-                Color.clear.frame(height: ShutterButtonMetrics.bottomClearance)
+                Spacer()
+                // Bubble level, top-right (Req 2.1). Hidden while denied.
+                if !isPermissionDenied {
+                    MedataBubbleLevel(
+                        tiltVector: model.indicators.liveTiltVector,
+                        awaitingOblique: model.awaitingObliqueView
+                    )
+                }
             }
         }
     }
 
-    // Persistent tilt guide: the 2-D attitude level reading live tilt and stage.
-    private var tiltGuide: some View {
-        TiltBubbleGuide(
-            tiltVector: model.indicators.liveTiltVector,
-            awaitingOblique: model.awaitingObliqueView
-        )
+    private func chromeButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.captureChromeText)
+                .frame(width: 40, height: 40)
+                .background(Color.captureChromeBG, in: Circle())
+        }
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("captureChrome.\(label.lowercased())")
     }
 
+    // MARK: - Bottom area (Req 2.1)
+
     @ViewBuilder
-    private var initialisingHint: some View {
-        let hint: (text: String, identifier: String, symbol: String)? = {
-            switch model.state {
-            case .initialising: return ("Initialising…", "hint.initialising", "hourglass")
-            case .trackingLost: return ("Tracking lost — hold steady", "hint.trackingLost", "arrow.triangle.2.circlepath")
-            case .estimating: return ("Estimating…", "hint.estimating", "hourglass")
-            case .capturing: return ("Capturing…", "hint.capturing", "camera")
-            default: return nil
+    private var bottomArea: some View {
+        VStack(spacing: 12) {
+            transientStatus
+            if !isPermissionDenied, !isEstimating {
+                TelemetryCapsule(model: model.indicators, supportsLiDAR: model.supportsLiDAR)
             }
-        }()
-        if let hint {
+            bottomRow
+            Color.clear.frame(height: ShutterButtonMetrics.bottomClearance)
+        }
+        .padding(.bottom, 8)
+    }
+
+    // Transient state surfaces above the shutter (Req 2.1 clause; copy inventory).
+    @ViewBuilder
+    private var transientStatus: some View {
+        if let hint = transientHint {
             Label(hint.text, systemImage: hint.symbol)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Color.captureChromeText)
@@ -272,6 +275,115 @@ struct CaptureFlowView: View {
                 .background(Color.captureChromeBG, in: Capsule())
                 .accessibilityIdentifier(hint.identifier)
         }
+    }
+
+    // Ordered so the most urgent surface wins: capture/estimation states, then
+    // the blocked-shutter chip, then the oblique guidance.
+    private var transientHint: (text: String, identifier: String, symbol: String)? {
+        switch model.state {
+        case .initialising: return ("Initialising", "hint.initialising", "hourglass")
+        case .trackingLost: return ("hold steady", "hint.trackingLost", "arrow.triangle.2.circlepath")
+        case .capturing: return ("Capturing", "hint.capturing", "camera")
+        case .estimating: return nil // the loading symbol owns this state
+        default: break
+        }
+        if let chip = blockedChip {
+            return (chip, "hint.blocked", "exclamationmark.circle")
+        }
+        if let message = model.obliqueTiltMessage {
+            return (message, "hint.obliqueTilt", "rotate.3d")
+        }
+        return nil
+    }
+
+    private var bottomRow: some View {
+        ZStack {
+            ShutterButton(
+                state: shutterState,
+                action: { model.shutter() },
+                onBlockedTap: {
+                    model.shutterBlockedTapped()
+                    flashBlockedChip()
+                }
+            )
+            HStack {
+                modeButton
+                Spacer()
+                chromeButton("gearshape.fill", label: "Settings", action: onOpenSettings)
+            }
+        }
+        .padding(.horizontal, 32)
+    }
+
+    // Bottom-left mode button (Req 2.5): tap toggles 1-view/2-view; long-press
+    // opens the capture-path fork sheet (§3). Disabled while denied or busy.
+    private var modeButton: some View {
+        Text(effectiveMode == .double ? "2-VIEW" : "1-VIEW")
+            .font(.system(.caption2, design: .monospaced).weight(.semibold))
+            .foregroundStyle(Color.captureChromeText)
+            .frame(width: 64, height: 40)
+            .background(Color.captureChromeBG, in: Capsule())
+            .contentShape(Capsule())
+            .onTapGesture { toggleMode() }
+            .onLongPressGesture { showingForkSheet = true }
+            .opacity(isPermissionDenied || model.isBusy ? 0.4 : 1)
+            .disabled(isPermissionDenied || model.isBusy)
+            .accessibilityLabel("Capture mode")
+            .accessibilityIdentifier("modeButton")
+    }
+
+    private func toggleMode() {
+        // Non-LiDAR devices are locked to two-view (Req 3.3); tapping is a no-op.
+        guard model.supportsLiDAR else { return }
+        captureModeRaw = (effectiveMode == .single ? CaptureMode.double : .single).rawValue
+    }
+
+    // MedataLoadingSymbol over the frozen frames during estimation (§1.3,
+    // closes ldsym06). Accessibility label `Estimating` per the copy inventory.
+    private var estimatingOverlay: some View {
+        MedataLoadingSymbol(mode: .loop)
+            .accessibilityElement()
+            .accessibilityLabel("Estimating")
+            .accessibilityIdentifier("hint.estimating")
+    }
+
+    // Centred refusal copy for `.permissionDenied` (Req 1.6). The top bar and
+    // settings button stay rendered; only the shutter and mode are disabled.
+    private var permissionDeniedMessage: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "camera.metering.unknown")
+                .font(.system(size: 44))
+                .foregroundStyle(Color.captureChromeText.opacity(0.7))
+            Text(permissionDeniedText)
+                .font(.body.weight(.medium))
+                .foregroundStyle(Color.captureChromeText)
+                .multilineTextAlignment(.center)
+                .accessibilityIdentifier("permissionDenied.message")
+            Button("Open Settings") { model.openSettings() }
+                .font(.body.weight(.semibold))
+                .buttonStyle(.borderedProminent)
+                .tint(.medataAccent)
+        }
+        .padding(.horizontal, 32)
+    }
+
+    private var permissionDeniedText: String {
+        if case .permissionDenied(.motion) = model.state { return "Motion access denied" }
+        return "Camera access denied"
+    }
+
+    private func flashBlockedChip() {
+        blockedChip = model.failingShutterGate ?? "wait"
+        blockedChipTask?.cancel()
+        blockedChipTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if !Task.isCancelled { blockedChip = nil }
+        }
+    }
+
+    private var isPermissionDenied: Bool {
+        if case .permissionDenied = model.state { return true }
+        return false
     }
 
     private var isInitialising: Bool {
@@ -290,6 +402,7 @@ struct CaptureFlowView: View {
     }
 
     private var shutterState: ShutterButtonState {
+        if isPermissionDenied { return .disabled }
         if model.isBusy { return .capturing }
         return model.canShutter ? .ready : .disabled
     }
@@ -432,32 +545,7 @@ private struct NadirThumbnailView: View {
         }
     }
 }
-
-// Permission-denied branch with a deep link to the app's iOS Settings (§1.3).
-private struct PermissionDeniedView: View {
-    let subject: PermissionSubject
-    let openSettings: () -> Void
-
-    private var message: String {
-        switch subject {
-        case .camera:
-            return "MeData needs camera access to capture your meal. Enable it in Settings to continue."
-        case .motion:
-            return "MeData needs motion access for the tilt indicator. Enable it in Settings to continue."
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "camera.metering.unknown")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text(message)
-                .padding(.horizontal)
-            Button("Open Settings", action: openSettings)
-                .buttonStyle(.borderedProminent)
-                .tint(.medataAccent)
-        }
-        .padding()
-    }
-}
+// The standalone `PermissionDeniedView` (full-screen, no chrome) was folded
+// into the capture layout in the handoff-00 chrome rebuild: the denial copy is
+// centred while the top bar and settings button stay rendered (Req 1.6) — see
+// `permissionDeniedMessage`.

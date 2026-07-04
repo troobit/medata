@@ -18,7 +18,7 @@ references:
 
 - [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -96,7 +96,7 @@ references:
 
 ## Capture screens
 
-- [ ] 14. Rebuild capture chrome + write design-system/pages/capture.md <!-- id:xi3gpnc -->
+- [x] 14. Rebuild capture chrome + write design-system/pages/capture.md <!-- id:xi3gpnc -->
   - TelemetryCapsule (always visible; tilt°, dist cm or 30–40 cm band non-LiDAR, LiDAR dot ● filled/○ hollow + green/grey per Req 14.4); keep LiveIndicatorBadgeState.isSigmaTiltSufficient (CaptureFlowModel.tiltInRange calls it), delete badge view
   - MedataBubbleLevel 76×76 top-right: TiltBubbleGuide maths (tiltVector, target 0°/25°, tolerance), non-gating, colour+position (Decision 8)
   - Top bar: mode capsule (1-VIEW · LiDAR / 2-VIEW · NADIR / 2-VIEW · OBLIQUE) + Trends/Data buttons; bottom row mode/shutter/settings; torch REMOVED (Decision 14)

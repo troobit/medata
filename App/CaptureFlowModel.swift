@@ -174,7 +174,28 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     var obliqueTiltMessage: String? {
         guard firstFrame != nil, case .ready = state else { return nil }
         if obliqueTiltOk(degrees: indicators.liveTiltDegrees) { return nil }
-        return EstimationFailure.obliqueTiltOutOfRange.localisedMessage
+        // Copy inventory §2.1 clause: oblique guidance above the shutter reads
+        // `Target 25°` — the same string as the §4 tilt hint.
+        return "Target 25°"
+    }
+
+    // Transient chip shown above the shutter when a blocked tap lands (design:
+    // parity audit — replaces the old badge reveal). Names the failing gate in
+    // ≤ 3 words per the §4 chip vocabulary (copy inventory). nil when the
+    // shutter is not blocked for a nameable reason.
+    var failingShutterGate: String? {
+        switch state {
+        case .trackingLost:
+            return "hold steady"
+        case .initialising:
+            return "wait"
+        case .ready(let snapshot):
+            if !distanceGateOK(snapshot) { return "too far" }
+            if firstFrame == nil, !hasUsablePreShutterMask { return "wait" }
+            return nil
+        default:
+            return nil
+        }
     }
 
     var currentSnapshot: GatingSnapshot? {
@@ -245,11 +266,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     }
 
     // Diagnostic for taps on the .disabled shutter. Does not mutate state.
-    // Surfaces the auto-hidden indicator badge and emits one .info log line
+    // The old badge reveal is gone (design: parity audit) — the view surfaces a
+    // transient failing-gate chip instead. This still emits one .info log line
     // with the full gating snapshot so a Console.app subscriber can see which
     // gate is blocking.
     func shutterBlockedTapped() {
-        indicators.reveal()
         log.info("\(self.gatingLog(event: "blocked"), privacy: .public)")
     }
 
