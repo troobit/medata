@@ -102,6 +102,13 @@ let package = Package(
             ],
             path: "MedataCore/Sources/Persistence"
         ),
+        // Libre ingestion (specs/data/libre-ingestion): LibreLink screenshot →
+        // bsl readings. Zero internal dependencies by design (Decision 2) —
+        // platform bindings are Vision/CoreGraphics/ImageIO only.
+        .target(
+            name: "GlucoseGraph",
+            path: "MedataCore/Sources/GlucoseGraph"
+        ),
         .target(
             name: "Pipeline",
             dependencies: [
@@ -213,6 +220,16 @@ let package = Package(
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
             path: "MedataCore/Tests/PersistenceTests"
+        ),
+        .testTarget(
+            name: "GlucoseGraphTests",
+            dependencies: ["GlucoseGraph"],
+            path: "MedataCore/Tests/GlucoseGraphTests",
+            // The accuracy corpus (specs/data/libre-ingestion Req 6.1,
+            // Decision 6): 9 LibreLink screenshots + ground-truth fixtures.
+            resources: [
+                .copy("Resources/corpus")
+            ]
         ),
         .testTarget(
             name: "PipelineTests",
