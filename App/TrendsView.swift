@@ -11,6 +11,7 @@ import SwiftUI
 struct TrendsView: View {
     let store: any PersistenceStore
 
+    @Environment(\.dismiss) private var dismiss
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
     @State private var showOptions = false
@@ -47,6 +48,9 @@ struct TrendsView: View {
             .navigationTitle("Trends")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    CloseCoverButton { dismiss() }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showOptions = true

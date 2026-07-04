@@ -4,10 +4,12 @@ import SwiftUI
 
 // Capture-rooted shell (Decision 11 / Req §1). The three-tab TabView is gone:
 // AppRoot hosts `CaptureFlowView` full-screen and presents Data, Trends, and
-// Settings as mutually-exclusive sheets over it via a single optional
-// `ActiveSheet`. Capture-chrome buttons set it through the closures passed into
-// `CaptureFlowView`. Presenting a sheet releases the AR session
-// (`sheetDidPresent`); dismissing re-arms it (`sheetDidDismiss`) — Req §1.5.
+// Settings as mutually-exclusive full-screen covers over it via a single
+// optional `ActiveSheet` (Decision 19 — full screens, not sheets). Capture-chrome
+// buttons set it through the closures passed into `CaptureFlowView`. Presenting a
+// cover releases the AR session (`sheetDidPresent`); dismissing re-arms it
+// (`sheetDidDismiss`) — Req §1.5. Full-screen covers have no drag-to-dismiss, so
+// each surface carries its own explicit `Close` control (Decision 19).
 @MainActor
 struct AppRoot: View {
     @Bindable var captureModel: CaptureFlowModel
@@ -55,7 +57,7 @@ struct AppRoot: View {
             onOpenSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
-        .sheet(item: $activeSheet) { sheet in
+        .fullScreenCover(item: $activeSheet) { sheet in
             switch sheet {
             case .data:
                 DataView(store: store)
@@ -63,7 +65,7 @@ struct AppRoot: View {
                 TrendsView(store: store)
             case .settings:
                 NavigationStack {
-                    SettingsView(store: store)
+                    SettingsView(store: store, hasLiDAR: captureModel.supportsLiDAR)
                 }
             }
         }

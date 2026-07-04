@@ -78,6 +78,17 @@ struct CaptureFlowView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar(.hidden, for: .navigationBar)
         }
+        // Back-gesture soft-lock resync: popping the capture stack to empty via
+        // the edge swipe / back chevron (e.g. from Segmentation review) leaves
+        // `.showingResult` armed with no on-screen surface and a dead shutter.
+        // `dismissResult()` is idempotent on an already-empty path (it only sets
+        // the path to empty and returns to `.ready`), so this brings the flow
+        // back to a live capture state.
+        .onChange(of: model.navigationPath) { _, path in
+            if path.isEmpty, case .showingResult = model.state {
+                model.dismissResult()
+            }
+        }
     }
 
     // Capture-stack routes (design: Navigation routes). runEstimation pushes
@@ -92,6 +103,7 @@ struct CaptureFlowView: View {
         case .result(let record):
             ResultView(
                 record: record,
+                store: store,
                 mode: .justCaptured,
                 onAdjust: { model.navigationPath.append(CaptureRoute.correction(record)) },
                 onDone: { model.dismissResult() },

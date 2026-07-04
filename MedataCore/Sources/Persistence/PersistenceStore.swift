@@ -133,8 +133,10 @@ public protocol PersistenceStore: Sendable {
 
     // Req 4.5. Emits after every successful event-row write or delete
     // (`save`, `deleteMeal`, `updatePhotoAssetID`, and `ingestBsl` when it
-    // stored at least one row). Does NOT emit on `appendCorrection` —
-    // corrections live in their own side table.
+    // stored at least one row). Also emits on `appendCorrection` after a
+    // successful insert (Decision 18) so Data rows and Meal overview refresh
+    // their corrected totals, even though corrections live in their own side
+    // table.
     var eventsDidChange: AsyncStream<Void> { get }
 
     // specs/data/libre-ingestion Req 5.1. True when an earlier ingest for

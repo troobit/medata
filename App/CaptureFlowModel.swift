@@ -65,6 +65,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private(set) var flowTask: Task<Void, Never>?
     private var interruptionTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
+    // True while a full-screen surface (Data / Trends / Settings) covers Capture.
+    // Set by `sheetDidPresent`, cleared by `sheetDidDismiss`. Gates the AR
+    // session re-arm in `evaluatePermissions` so a foreground transition
+    // (`scenePhaseChanged(.active)`) does not restart the session behind the
+    // cover (Req 1.5) — re-arm happens on dismiss instead.
+    private var isCovered = false
     private var firstFrame: RawFrame?
     // Tilt-at-shutter (degrees from straight-down) for the nadir frame, captured
     // when the user taps the shutter on the first stage. Stamped onto the
@@ -385,6 +391,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // already in flight. A single-item sheet state means dismiss-then-present is
     // sequential, so the AR session never double-toggles.
     func sheetDidDismiss() {
+        isCovered = false
         evaluatePermissions()
     }
 
@@ -395,6 +402,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // is preserved (no engine to release); `.refused` is treated as an implicit
     // dismissal — same baseline as `.ready`.
     func sheetDidPresent() {
+        isCovered = true
         switch state {
         case .estimating:
             // Let the pipeline finish; `flowTask` already routes the result
@@ -424,7 +432,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             startTask = nil
         case .initialising, .ready, .trackingLost, .showingResult:
             firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
-            if case .estimating = state {} else { state = .initialising }
+            // This arm never matches `.estimating` (handled above), so the reset
+            // to `.initialising` is unconditional.
+            state = .initialising
             Task { [session] in try? await session.stop() }
             startTask = nil
         }
@@ -526,7 +536,10 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         if case .permissionDenied = state {
             state = .initialising
         }
-        if startTask == nil {
+        // Do not re-arm the AR session while a full-screen surface covers Capture
+        // (Req 1.5). A foreground transition can call this while covered; the
+        // session restarts on `sheetDidDismiss` instead.
+        if startTask == nil, !isCovered {
             startTask = Task { [session] in try? await session.start() }
         }
     }

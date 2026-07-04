@@ -15,9 +15,25 @@ private struct ArchiveFile: Identifiable {
 // demo glucose so Trends is verifiable before an importer ships (Decision 13).
 struct SettingsView: View {
     let store: any PersistenceStore
+    // Fresh-install default forks on device capability (Req 16.2 / Decision 9):
+    // 1-view on LiDAR devices, 2-view otherwise. Passed from AppRoot so the
+    // Picker resolves an unset key the same way `CaptureFlowView.effectiveMode`
+    // and `defaultCaptureModeReader` do, instead of hard-defaulting to `.double`.
+    let hasLiDAR: Bool
 
-    @AppStorage(SettingsKeys.captureMode) private var captureMode: CaptureMode = .double
+    @Environment(\.dismiss) private var dismiss
+    // Empty string means the capture-mode key is unset — `captureModeBinding`
+    // then resolves the effective default from `hasLiDAR`. Writing persists the
+    // raw value back under the same `SettingsKeys.captureMode` key.
+    @AppStorage(SettingsKeys.captureMode) private var captureModeRaw: String = ""
     @AppStorage(SettingsKeys.alwaysIncludeCard) private var alwaysIncludeCard = false
+
+    private var captureModeBinding: Binding<CaptureMode> {
+        Binding(
+            get: { CaptureMode(rawValue: captureModeRaw) ?? (hasLiDAR ? .single : .double) },
+            set: { captureModeRaw = $0.rawValue }
+        )
+    }
 
     @State private var archiveFile: ArchiveFile?
     @State private var isExporting = false
@@ -49,7 +65,7 @@ struct SettingsView: View {
             }
 
             Section("Capture") {
-                Picker("Default path", selection: $captureMode) {
+                Picker("Default path", selection: captureModeBinding) {
                     Text("1-view").tag(CaptureMode.single)
                     Text("2-view").tag(CaptureMode.double)
                 }
@@ -97,6 +113,11 @@ struct SettingsView: View {
             #endif
         }
         .navigationTitle("Settings")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                CloseCoverButton { dismiss() }
+            }
+        }
         .sheet(item: $archiveFile) { file in
             ShareSheet(activityItems: [file.url])
         }

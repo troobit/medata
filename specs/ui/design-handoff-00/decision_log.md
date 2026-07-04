@@ -450,6 +450,7 @@ The requirement is binding as written and the handoff's data-only chrome has no 
 
 **Negative:**
 - Dark-scene users lose the in-app remedy; retake guidance is the only path
+- *(Post-implementation note)* No low-light `EstimationFailure` case exists in the pipeline, so the `more light` error state this decision leaned on is dormant — the copy-inventory row is retained but unimplemented until light-level detection exists (out of this spec's scope)
 
 ---
 
@@ -576,5 +577,37 @@ The alternative is per-screen ad-hoc callbacks threaded through navigation, whic
 
 **Negative:**
 - A documented behaviour change to the store contract (the event-log-schema design note saying corrections do not emit becomes stale and is updated in the same commit series)
+
+---
+
+## Decision 19: Data / Trends / Settings present as full screens, not sheets
+
+**Date**: 2026-07-04
+**Status**: accepted
+
+### Context
+
+The handoff (and Req 1.2 as approved) presented Data, Trends, and Settings as sheets over Capture. After seeing the implementation, the user directed that these surfaces be full screens rather than temporary modals above the camera.
+
+### Decision
+
+The three surfaces present full-screen (`.fullScreenCover(item:)` on the same `ActiveSheet` state). The AR-session lifecycle hooks (`sheetDidPresent`/`sheetDidDismiss`) are unchanged. Because full-screen covers have no drag-to-dismiss, each surface carries an explicit close control (xmark, accessibility label `Close`) returning to Capture. Reqs 1.2/1.5 amended (v0.5).
+
+### Rationale
+
+Direct user instruction — the user zone wins over the handoff drawing. The item-driven presentation swap keeps every behavioural guarantee (mutual exclusivity, session release/re-arm) while changing only the container.
+
+### Alternatives Considered
+
+- **Push onto the root NavigationStack**: Also full-screen - Rejected; entangles the three surfaces with the capture flow's path (review/result/correction) and gives them a back chevron into camera state instead of a deliberate close
+- **Keep sheets**: As drawn - Rejected by user
+
+### Consequences
+
+**Positive:**
+- Surfaces read as destinations, not overlays; no camera peeking through
+
+**Negative:**
+- Deviates from the archived wireframes (manifest deviation); explicit close controls become mandatory on all three surfaces
 
 ---

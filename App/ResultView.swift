@@ -171,6 +171,7 @@ enum ResultViewLayout {
 // calibration banner, liquid flag, very-low surface, and placeholder chip.
 struct ResultView: View {
     let record: MealRecord
+    let store: any PersistenceStore
     var mode: ResultPresentation = .justCaptured
     // Adjust → Manual correction; Done → dismiss (capture) / pop (history);
     // Retake and Delete live in the ⋯ menu (Decision 17). All defaulted so the
@@ -183,6 +184,10 @@ struct ResultView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.sizeCategory) private var sizeCategory
     @State private var photo: UIImage?
+    // Decision 19 / Req 7.3: the hero keeps the ORIGINAL estimate; a correction
+    // only adds the `corrected` marker. Re-read on `eventsDidChange` while
+    // visible, mirroring MealOverviewView (Decision 18).
+    @State private var isCorrected = false
     // Decision 17: "Keep as-is" hides the Very-Low surface for the current
     // view session only — navigating away and back re-shows it (no persistent
     // dismissed flag). `@State` is per-instance, so this resets on each push.
@@ -214,6 +219,7 @@ struct ResultView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     carbTotal
+                    if isCorrected { correctedMarker }
                     ConfidencePill(sigmaMeal: sigma)
                     if showsPlaceholderChip { placeholderChip }
                     switch calibrationBanner {
@@ -238,6 +244,20 @@ struct ResultView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPhoto() }
+        .task { await observeCorrections() }
+    }
+
+    // `corrected` marker (Req 7.3). Same string and capsule treatment as
+    // MealOverviewView's marker, adapted to the Result screen's dark capture
+    // palette. The hero total above it stays the original estimate.
+    private var correctedMarker: some View {
+        Text("corrected")
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(Color.captureChromeBG, in: Capsule())
+            .foregroundStyle(Color.captureChromeText.opacity(0.7))
+            .accessibilityIdentifier("result.correctedMarker")
     }
 
     // Hero: original estimate (§6.1) — the carb total is the persisted value and
@@ -510,5 +530,19 @@ struct ResultView: View {
     private func loadPhoto() async {
         // Shared with Data / Meal overview via the extracted loader (§6.8).
         self.photo = await MealPhotoLoader.loadImage(assetID: record.photoAssetID)
+    }
+
+    // Mirror of MealOverviewView.observeCorrections (Decision 18): refresh once
+    // on appear, then whenever a correction lands while the view is visible.
+    private func observeCorrections() async {
+        await refreshCorrected()
+        for await _ in store.eventsDidChange {
+            await refreshCorrected()
+        }
+    }
+
+    private func refreshCorrected() async {
+        let corrections = (try? await store.corrections(for: record.id)) ?? []
+        isCorrected = !corrections.isEmpty
     }
 }

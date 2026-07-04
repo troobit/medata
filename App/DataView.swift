@@ -11,6 +11,7 @@ import UIKit
 struct DataView: View {
     let store: any PersistenceStore
 
+    @Environment(\.dismiss) private var dismiss
     @State private var model: MealHistoryModel
     @State private var path: [MealRoute] = []
 
@@ -23,6 +24,11 @@ struct DataView: View {
         NavigationStack(path: $path) {
             content
                 .navigationTitle("Data")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        CloseCoverButton { dismiss() }
+                    }
+                }
                 .navigationDestination(for: MealRoute.self) { route in
                     mealRouteDestination(route, store: store, path: $path)
                 }
@@ -196,6 +202,7 @@ func mealRouteDestination(
     case .result(let record):
         ResultView(
             record: record,
+            store: store,
             mode: .historyDetail,
             onAdjust: { path.wrappedValue.append(.correction(record)) },
             onDone: { popOne(path) },
@@ -216,4 +223,19 @@ func mealRouteDestination(
 @MainActor
 private func popOne(_ path: Binding<[MealRoute]>) {
     if !path.wrappedValue.isEmpty { path.wrappedValue.removeLast() }
+}
+
+// Shared close control for the full-screen Data / Trends / Settings covers
+// (Decision 19). Covers have no drag-to-dismiss, so each surface's toolbar
+// carries this xmark button. Accessibility label `Close` per the copy inventory.
+struct CloseCoverButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+        }
+        .accessibilityLabel("Close")
+        .accessibilityIdentifier("cover.close")
+    }
 }

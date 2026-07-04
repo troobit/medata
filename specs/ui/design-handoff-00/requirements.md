@@ -1,6 +1,6 @@
 # UI Design Handoff 00 — Requirements
 
-**Version:** 0.4 (design-phase amendments: Decisions 15–17)
+**Version:** 0.5 (post-implementation amendment: Decision 19 — full-screen surfaces)
 **Date:** 2026-07-04
 **Status:** In review
 **Sources:** `tmp/design/design_handoff_medata/` (wireframes v1/v2 + SwiftUI scaffold), to be archived per §15. Supersedes and amends parts of `specs/ui/iphone-experience/` per the table in §16.
@@ -33,10 +33,10 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 **Acceptance Criteria:**
 
 1. <a name="1.1"></a>WHEN the app launches, THEN it SHALL present the Capture screen full-screen as the navigation root, with no tab bar.  
-2. <a name="1.2"></a>The Data (meal log), Trends, and Settings screens SHALL each be reachable from Capture-screen controls (§2.1) and SHALL present as sheets over it.  
+2. <a name="1.2"></a>The Data (meal log), Trends, and Settings screens SHALL each be reachable from Capture-screen controls (§2.1) and SHALL present as full screens (not partial-height modals over the camera), each with an explicit close control returning to Capture (amended per Decision 19).  
 3. <a name="1.3"></a>WHEN the shutter fires, THEN the app SHALL enter an estimating state — the existing draw-on Medata loading mark shown, shutter and mode controls locked — and WHEN estimation completes, THEN the flow SHALL push Segmentation review (§5), then Result (§6), then optionally Manual correction (§7), returning to Capture on dismissal.  
 4. <a name="1.4"></a>Backgrounding during estimation SHALL behave as it does today (iphone-experience 8.3 remains binding); estimation failure SHALL return to Capture with the §4 error state.  
-5. <a name="1.5"></a>WHEN a sheet is presented over Capture, THEN the AR session SHALL be released within 200 ms, and WHEN the sheet is dismissed, THEN the session SHALL restart through the existing initialising state.  
+5. <a name="1.5"></a>WHEN a full-screen surface is presented over Capture, THEN the AR session SHALL be released within 200 ms, and WHEN it is closed, THEN the session SHALL restart through the existing initialising state.  
 6. <a name="1.6"></a>Existing shell behaviours SHALL be preserved: portrait-only, AR release within 200 ms of backgrounding, and the camera-permission refusal state still reachable and recoverable, with the Data, Trends, and Settings controls remaining usable from the refusal state.
 
 ### 2. Capture screen chrome

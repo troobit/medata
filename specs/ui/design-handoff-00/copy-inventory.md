@@ -11,6 +11,7 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Mode capsule, two-view oblique | — | `2-VIEW · OBLIQUE` |
 | Telemetry labels | `tilt` / `dist` / `LiDAR` | `tilt` / `dist` / `LiDAR` |
 | Telemetry, no depth | — | `dist 30–40 cm` (static band) |
+| Bottom mode control | `1-VIEW` / `2-VIEW` | `1-VIEW` / `2-VIEW` (distinct from the top capsule) |
 | Guide capsule (distance hint) | `Move closer · ID-1 card optional` | `Move closer` |
 | Plate alignment guide | `ALIGN PLATE\nWITHIN OUTLINE` | `ALIGN PLATE` |
 | Accessibility: Trends button | — | `Trends` |
@@ -25,7 +26,7 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Distance | `Move closer` / `Hold the phone 30–40 cm from the food.` | `too far` | `30–40 cm` |
 | Tracking lost | `Tracking lost` / `We lost our place between views. Retake the second photo.` | `tracking lost` | `Retake second photo` |
 | No LiDAR, no card | `Add a card` / `Without LiDAR depth we need a reference card…` | `card needed` | `Any bank card sets scale` |
-| Low light | `More light` / `It's too dark to read the plate edge reliably.` | `more light` | `Too dark for plate edge` |
+| Low light *(dormant — no low-light failure case exists yet)* | `More light` / `It's too dark to read the plate edge reliably.` | `more light` | `Too dark for plate edge` |
 | Unsupported device | `Unsupported` / `Medata requires an iPhone with a rear LiDAR scanner.` | `no LiDAR` | `2-view still works` |
 | Actions | `Skip to 2-view` / `Cancel` | `Retry` / `2-view` / `Cancel` | — |
 
@@ -81,6 +82,12 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Preservation notice | `Original estimate is preserved. Your correction is saved alongside it.` | `Original kept · correction saved alongside` |
 | Per-food edit row | — | `{class name}` + value in `g` (stepper) |
 | Action | `Save` | `Save` |
+
+## Full-screen surfaces (Decision 19)
+
+| Context | Final |
+|---|---|
+| Close control on Data / Trends / Settings | xmark icon; accessibility label `Close` |
 
 ## Data (§8) + Meal overview (§9)
 

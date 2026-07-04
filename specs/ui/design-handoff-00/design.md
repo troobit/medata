@@ -16,7 +16,7 @@ Reskin-in-place adoption of handoff 00 (Decision 11): the TabView shell is remov
 
 | Site | Today | After |
 |---|---|---|
-| `App/AppRoot.swift` | `TabView`, `@AppStorage("selectedTab")` | Hosts `CaptureFlowView` + one `.sheet(item: $activeSheet)` where `enum ActiveSheet: Identifiable { case data, trends, settings }` — a single optional, so sheets are mutually exclusive by construction. Buttons in the capture chrome set it via closures passed into `CaptureFlowView` |
+| `App/AppRoot.swift` | `TabView`, `@AppStorage("selectedTab")` | Hosts `CaptureFlowView` + one `.fullScreenCover(item: $activeSheet)` (Decision 19 — full screens, not sheets) where `enum ActiveSheet: Identifiable { case data, trends, settings }` — a single optional, so surfaces are mutually exclusive by construction. Each surface carries an explicit close control (xmark, accessibility `Close`) since full-screen covers have no drag-to-dismiss. Buttons in the capture chrome set it via closures passed into `CaptureFlowView` |
 | `App/AppTab.swift` | Tab enum | **Deleted** (with it, the `-uitestResetSelectedTab` launch override in `App.swift`) |
 | `CaptureFlowModel.tabSelectionChanged(to:)` | Stops/starts AR per tab | Renamed: `sheetDidPresent()` (stop session ≤200 ms; `.estimating` lets pipeline finish) / `sheetDidDismiss()` (`evaluatePermissions()` → re-arm). Same bodies. Satisfies Req 1.5; single-item sheet state means dismiss-then-present is sequential, so the AR session never double-toggles |
 | `scenePhaseChanged` | — | Unchanged |
