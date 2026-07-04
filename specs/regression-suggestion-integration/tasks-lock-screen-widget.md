@@ -8,8 +8,8 @@ references:
 
 - [ ] 1. Add WidgetKit extension target (MeDataWidgets) to MeData.xcodeproj: new directory, embed in app, signing consistent with rtob.MeData — PRD Widget 1
 
-- [ ] 2. Static launcher accessory widgets (accessoryCircular + accessoryRectangular): syringe glyph + short label, single static Timeline (.never), no persistence imports, no App Group; tap opens medata://insulin/add — PRD Widget 1, 2
+- [ ] 2. Static launcher accessory widgets (accessoryCircular + accessoryRectangular) as TWO kinds: dose widget (syringe glyph, "Log dose", opens medata://insulin/add) and capture widget (camera glyph, "Capture", opens medata://capture); single static Timeline (.never), no persistence imports, no App Group — PRD Widget 1, 2
 
-- [ ] 3. systemSmall home-screen family with same deep link — PRD Widget 3 (SHOULD)
+- [ ] 3. systemSmall home-screen family for both widget kinds with the same deep links — PRD Widget 3 (SHOULD)
 
-- [ ] 4. Build verification: make build-app passes with the extension embedded; widget appears in lock-screen gallery (device check noted for user)
+- [ ] 4. Build verification: make build-app passes with the extension embedded; both widgets appear in lock-screen gallery (device check noted for user)

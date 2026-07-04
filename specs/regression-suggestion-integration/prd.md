@@ -29,7 +29,8 @@ existing `exportArchive()` ZIP is the transport medreg already consumes.
 - Logging a dose takes two taps in the common case (default 10 U bolus, now).
 - Doses are visible on the Graph in day, week, and month ranges without
   obscuring the glucose trace.
-- A lock-screen widget opens the app directly into the dose-entry sheet.
+- Lock-screen widgets open the app directly into the dose-entry sheet and,
+  via a second widget, directly into the Capture camera.
 - The Graph chart carries no obstructive full-height current-time bar.
 
 ## Non-goals
@@ -143,11 +144,12 @@ Depends on Core events.
    range).
    - Acceptance: toggling the chip hides/shows the dose markers; the stat card
      shows summed units.
-10. The app MUST register a custom URL scheme and handle a deep link (e.g.
-    `medata://insulin/add`) by presenting the dose-entry sheet from any state,
+10. The app MUST register a custom URL scheme and handle two deep links:
+    `medata://insulin/add` presents the dose-entry sheet, and
+    `medata://capture` opens the Capture cover — each from any state,
     dismissing other covers if needed.
-    - Acceptance: `xcrun simctl openurl` (or on-device tap) with the URL lands
-      on the dose sheet within one screen transition.
+    - Acceptance: `xcrun simctl openurl` (or on-device tap) with each URL lands
+      on the dose sheet / the Capture screen within one screen transition.
 
 ## Lock screen widget
 
@@ -155,19 +157,24 @@ Scope: a new WidgetKit extension target in `MeData/MeData.xcodeproj` (new
 directory, e.g. `MeDataWidgets/`). Depends on App UI (the deep link) and edits
 the same `project.pbxproj` — MUST run after App UI, never in parallel with it.
 
-1. The project MUST gain a widget extension providing lock-screen accessory
-   widgets (`accessoryCircular` and `accessoryRectangular`) whose single tap
-   opens the app via the dose-entry deep link.
-   - Acceptance: the extension builds and embeds in the app product; the widget
-     appears in the lock-screen widget gallery; tapping it opens the dose sheet.
-2. The widget MUST be a static launcher: a syringe glyph plus a short label
-   (e.g. "Log dose"), no data display, no App Group, no timeline beyond a
-   single static entry.
+1. The project MUST gain a widget extension providing TWO widget kinds, each
+   with lock-screen accessory families (`accessoryCircular` and
+   `accessoryRectangular`): a dose widget whose tap opens the app via the
+   dose-entry deep link (`medata://insulin/add`), and a capture widget whose
+   tap opens the Capture camera (`medata://capture`). Lock-screen accessory
+   widgets carry a single tap target each, which is why these are separate
+   kinds the user places side by side.
+   - Acceptance: the extension builds and embeds in the app product; both
+     widgets appear in the lock-screen widget gallery; tapping each opens its
+     screen (dose sheet / Capture).
+2. Both widgets MUST be static launchers: a glyph plus a short label (syringe
+   "Log dose"; camera "Capture"), no data display, no App Group, no timeline
+   beyond a single static entry.
    - Acceptance: widget code contains no persistence imports and no shared
      container; `Timeline` policy is `.never`.
-3. The widget SHOULD also offer a `systemSmall` home-screen family with the
+3. Both widgets SHOULD also offer a `systemSmall` home-screen family with the
    same behaviour.
-   - Acceptance: same deep link fires from the home-screen widget.
+   - Acceptance: the same deep links fire from the home-screen widgets.
 
 ## Execution notes
 
