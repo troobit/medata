@@ -31,7 +31,19 @@
 		113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */; };
 		113B22A42FD0000000272C1E /* RefusalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B42FD0000000272C1E /* RefusalSheet.swift */; };
 		113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B52FD0000000272C1E /* ActiveRefusal.swift */; };
-		112B11C12FCE000000272C1E /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D12FCE000000272C1E /* AppTab.swift */; };
+		115DA0A02FD1000000272C1E /* TelemetryCapsule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B02FD1000000272C1E /* TelemetryCapsule.swift */; };
+		115DA0A12FD1000000272C1E /* MedataBubbleLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B12FD1000000272C1E /* MedataBubbleLevel.swift */; };
+		115DA0A22FD1000000272C1E /* CaptureErrorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B22FD1000000272C1E /* CaptureErrorOverlay.swift */; };
+		115DA0A32FD1000000272C1E /* LidarForkSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B32FD1000000272C1E /* LidarForkSheetView.swift */; };
+		115DA0A42FD1000000272C1E /* SegmentationReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B42FD1000000272C1E /* SegmentationReviewView.swift */; };
+		115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */; };
+		115DA0A62FD1000000272C1E /* ManualCorrectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */; };
+		115DA0A72FD1000000272C1E /* DataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B72FD1000000272C1E /* DataView.swift */; };
+		115DA0A82FD1000000272C1E /* MealOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B82FD1000000272C1E /* MealOverviewView.swift */; };
+		115DA0A92FD1000000272C1E /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B92FD1000000272C1E /* TrendsView.swift */; };
+		115DA0AA2FD1000000272C1E /* TrendsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BA2FD1000000272C1E /* TrendsModel.swift */; };
+		115DA0AB2FD1000000272C1E /* TrendsOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */; };
+		115DA0AC2FD1000000272C1E /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BC2FD1000000272C1E /* AboutView.swift */; };
 		112B11C22FCE000000272C1E /* ConfidencePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D22FCE000000272C1E /* ConfidencePill.swift */; };
 		112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D32FCE000000272C1E /* MealHistoryModel.swift */; };
 		112B11C42FCE000000272C1E /* MealRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D42FCE000000272C1E /* MealRow.swift */; };
@@ -65,7 +77,19 @@
 		113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedataLoadingSymbol.swift; path = ../App/MedataLoadingSymbol.swift; sourceTree = SOURCE_ROOT; };
 		113B22B42FD0000000272C1E /* RefusalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RefusalSheet.swift; path = ../App/RefusalSheet.swift; sourceTree = SOURCE_ROOT; };
 		113B22B52FD0000000272C1E /* ActiveRefusal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActiveRefusal.swift; path = ../App/ActiveRefusal.swift; sourceTree = SOURCE_ROOT; };
-		112B11D12FCE000000272C1E /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppTab.swift; path = ../App/AppTab.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B02FD1000000272C1E /* TelemetryCapsule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TelemetryCapsule.swift; path = ../App/TelemetryCapsule.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B12FD1000000272C1E /* MedataBubbleLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedataBubbleLevel.swift; path = ../App/MedataBubbleLevel.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B22FD1000000272C1E /* CaptureErrorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureErrorOverlay.swift; path = ../App/CaptureErrorOverlay.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B32FD1000000272C1E /* LidarForkSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LidarForkSheetView.swift; path = ../App/LidarForkSheetView.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B42FD1000000272C1E /* SegmentationReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SegmentationReviewView.swift; path = ../App/SegmentationReviewView.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MaskOverlayLoader.swift; path = ../App/MaskOverlayLoader.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ManualCorrectionView.swift; path = ../App/ManualCorrectionView.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B72FD1000000272C1E /* DataView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DataView.swift; path = ../App/DataView.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B82FD1000000272C1E /* MealOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealOverviewView.swift; path = ../App/MealOverviewView.swift; sourceTree = SOURCE_ROOT; };
+		115DA0B92FD1000000272C1E /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsView.swift; path = ../App/TrendsView.swift; sourceTree = SOURCE_ROOT; };
+		115DA0BA2FD1000000272C1E /* TrendsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsModel.swift; path = ../App/TrendsModel.swift; sourceTree = SOURCE_ROOT; };
+		115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsOptionsSheet.swift; path = ../App/TrendsOptionsSheet.swift; sourceTree = SOURCE_ROOT; };
+		115DA0BC2FD1000000272C1E /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AboutView.swift; path = ../App/AboutView.swift; sourceTree = SOURCE_ROOT; };
 		112B11D22FCE000000272C1E /* ConfidencePill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConfidencePill.swift; path = ../App/ConfidencePill.swift; sourceTree = SOURCE_ROOT; };
 		112B11D32FCE000000272C1E /* MealHistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealHistoryModel.swift; path = ../App/MealHistoryModel.swift; sourceTree = SOURCE_ROOT; };
 		112B11D42FCE000000272C1E /* MealRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealRow.swift; path = ../App/MealRow.swift; sourceTree = SOURCE_ROOT; };
@@ -120,7 +144,19 @@
 				113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */,
 				113B22B42FD0000000272C1E /* RefusalSheet.swift */,
 				113B22B52FD0000000272C1E /* ActiveRefusal.swift */,
-				112B11D12FCE000000272C1E /* AppTab.swift */,
+				115DA0B02FD1000000272C1E /* TelemetryCapsule.swift */,
+				115DA0B12FD1000000272C1E /* MedataBubbleLevel.swift */,
+				115DA0B22FD1000000272C1E /* CaptureErrorOverlay.swift */,
+				115DA0B32FD1000000272C1E /* LidarForkSheetView.swift */,
+				115DA0B42FD1000000272C1E /* SegmentationReviewView.swift */,
+				115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */,
+				115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */,
+				115DA0B72FD1000000272C1E /* DataView.swift */,
+				115DA0B82FD1000000272C1E /* MealOverviewView.swift */,
+				115DA0B92FD1000000272C1E /* TrendsView.swift */,
+				115DA0BA2FD1000000272C1E /* TrendsModel.swift */,
+				115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */,
+				115DA0BC2FD1000000272C1E /* AboutView.swift */,
 				112B11D22FCE000000272C1E /* ConfidencePill.swift */,
 				112B11D32FCE000000272C1E /* MealHistoryModel.swift */,
 				112B11D42FCE000000272C1E /* MealRow.swift */,
@@ -241,7 +277,19 @@
 				113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */,
 				113B22A42FD0000000272C1E /* RefusalSheet.swift in Sources */,
 				113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */,
-				112B11C12FCE000000272C1E /* AppTab.swift in Sources */,
+				115DA0A02FD1000000272C1E /* TelemetryCapsule.swift in Sources */,
+				115DA0A12FD1000000272C1E /* MedataBubbleLevel.swift in Sources */,
+				115DA0A22FD1000000272C1E /* CaptureErrorOverlay.swift in Sources */,
+				115DA0A32FD1000000272C1E /* LidarForkSheetView.swift in Sources */,
+				115DA0A42FD1000000272C1E /* SegmentationReviewView.swift in Sources */,
+				115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */,
+				115DA0A62FD1000000272C1E /* ManualCorrectionView.swift in Sources */,
+				115DA0A72FD1000000272C1E /* DataView.swift in Sources */,
+				115DA0A82FD1000000272C1E /* MealOverviewView.swift in Sources */,
+				115DA0A92FD1000000272C1E /* TrendsView.swift in Sources */,
+				115DA0AA2FD1000000272C1E /* TrendsModel.swift in Sources */,
+				115DA0AB2FD1000000272C1E /* TrendsOptionsSheet.swift in Sources */,
+				115DA0AC2FD1000000272C1E /* AboutView.swift in Sources */,
 				112B11C22FCE000000272C1E /* ConfidencePill.swift in Sources */,
 				112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */,
 				112B11C42FCE000000272C1E /* MealRow.swift in Sources */,

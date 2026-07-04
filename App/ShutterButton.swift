@@ -31,7 +31,9 @@ enum ShutterButtonMetrics {
     static let innerDiameterPressed: CGFloat = 52
     static let pressDurationSeconds: Double = 0.1
     static let releaseDurationSeconds: Double = 0.15
-    static let bottomClearanceFromTabBar: CGFloat = 24
+    // Clearance below the shutter, measured from the safe-area bottom (the tab
+    // bar is gone under the Capture-rooted shell — Decision 11).
+    static let bottomClearance: CGFloat = 24
 }
 
 struct ShutterButton: View {

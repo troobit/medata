@@ -26,7 +26,6 @@ struct MedataApp: App {
 
         #if DEBUG
         if UITestSupport.isActive {
-            UITestSupport.applyLaunchOverrides()
             let harness = UITestHarness()
             _model = State(initialValue: harness.model)
             _uiTestHarness = State(initialValue: harness)
@@ -167,16 +166,6 @@ enum UITestSupport {
         switch pipelineMode {
         case .refuse: return RefusingPipeline()
         case .stall: return StallingPipeline()
-        }
-    }
-
-    // Applies launch-arg overrides that must run before UserDefaults-backed
-    // state (e.g. `@AppStorage`) is read. Currently handles
-    // `-uitestResetSelectedTab`, which clears the persisted tab so the v1.1
-    // tab-navigation XCUITests start on the Photo tab.
-    static func applyLaunchOverrides() {
-        if ProcessInfo.processInfo.arguments.contains("-uitestResetSelectedTab") {
-            UserDefaults.standard.removeObject(forKey: "selectedTab")
         }
     }
 

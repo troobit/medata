@@ -2,19 +2,21 @@ import CaptureKit
 import Persistence
 import SwiftUI
 
-// Three-tab shell per UI Decision 15 / Req §18. Owns the capture and history
-// models so they survive tab switches; the system tab bar uses its default
-// Liquid Glass material — no custom appearance (Req §18.4). `@AppStorage`
-// persists the selected tab across cold/warm launches (Req §18.6).
+// Capture-rooted shell (Decision 11 / Req §1). The three-tab TabView is gone:
+// AppRoot hosts `CaptureFlowView` full-screen and presents Data, Trends, and
+// Settings as mutually-exclusive sheets over it via a single optional
+// `ActiveSheet`. Capture-chrome buttons set it through the closures passed into
+// `CaptureFlowView`. Presenting a sheet releases the AR session
+// (`sheetDidPresent`); dismissing re-arms it (`sheetDidDismiss`) — Req §1.5.
 @MainActor
 struct AppRoot: View {
-    @AppStorage("selectedTab") private var selectedTabRaw: String = AppTab.photo.rawValue
     @Bindable var captureModel: CaptureFlowModel
-    @State private var historyModel: MealHistoryModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
     let visionCardDetector: VisionCardDetector?
     let preShutterSegmenter: PreShutterSegmenter?
+
+    @State private var activeSheet: ActiveSheet?
 
     init(
         captureModel: CaptureFlowModel,
@@ -28,39 +30,49 @@ struct AppRoot: View {
         self.store = store
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
-        _historyModel = State(initialValue: MealHistoryModel(store: store))
     }
 
-    private var selectedTab: Binding<AppTab> {
-        Binding(
-            get: { AppTab(rawValue: selectedTabRaw) ?? .photo },
-            set: { selectedTabRaw = $0.rawValue }
-        )
+    // A single optional so the three sheets are mutually exclusive by
+    // construction — dismiss-then-present is sequential, so the AR session
+    // never double-toggles (design: Shell change).
+    enum ActiveSheet: Identifiable {
+        case data
+        case trends
+        case settings
+
+        var id: Self { self }
     }
 
     var body: some View {
-        TabView(selection: selectedTab) {
-            CaptureFlowView(
-                model: captureModel,
-                engine: engine,
-                store: store,
-                visionCardDetector: visionCardDetector,
-                preShutterSegmenter: preShutterSegmenter
-            )
-            .tabItem { Label("Photo", systemImage: "camera.fill") }
-            .tag(AppTab.photo)
-            MealsTabView(model: historyModel)
-                .tabItem { Label("Meals", systemImage: "fork.knife") }
-                .tag(AppTab.meals)
-            NavigationStack {
-                SettingsView(store: store)
-            }
-            .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-            .tag(AppTab.settings)
-        }
+        CaptureFlowView(
+            model: captureModel,
+            engine: engine,
+            store: store,
+            visionCardDetector: visionCardDetector,
+            preShutterSegmenter: preShutterSegmenter,
+            onOpenData: { activeSheet = .data },
+            onOpenTrends: { activeSheet = .trends },
+            onOpenSettings: { activeSheet = .settings }
+        )
         .tint(.medataAccent)
-        .onChange(of: selectedTab.wrappedValue) { _, new in
-            captureModel.tabSelectionChanged(to: new)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .data:
+                DataView(store: store)
+            case .trends:
+                TrendsView(store: store)
+            case .settings:
+                NavigationStack {
+                    SettingsView(store: store)
+                }
+            }
+        }
+        .onChange(of: activeSheet) { _, new in
+            if new == nil {
+                captureModel.sheetDidDismiss()
+            } else {
+                captureModel.sheetDidPresent()
+            }
         }
     }
 }
