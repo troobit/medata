@@ -42,6 +42,14 @@ Two sweep modes:
 
 BGProcessingTask guard: `#if os(iOS)` (not `canImport(BackgroundTasks)` which would match macOS 12+).
 
+## Insulin events (regression-suggestion-integration)
+
+`EventType.insulin` rows follow **medreg's convention** (`~/repos/medreg/docs/insulin-event-convention.md`; parser source of truth `medreg/src/medreg/insulin.py`): `value` = units (REAL, non-negative), `timestamp` = administration time UTC ms, `metadata` = JSON object with exactly `kind` ("bolus"|"basal"), `insulin_type` (free text), `schema_version` (integer 1), plus `note` only when provided — the key is **absent, never null**, when nil. Do not add metadata keys beyond the convention.
+
+`saveInsulinDose` rejects units < 0 or > 60 (`PersistenceError.insulinUnitsOutOfRange`); 0 and 60 are accepted at the store — the UI enforces its own floor of 1 U. `deleteInsulinEvent(id:)` is gated on `event_type = insulin` so a meal/bsl row sharing the id survives; insulin has no side tables. Both notify `eventsDidChange` once (delete notifies unconditionally, matching `deleteMeal`).
+
+Cross-repo check (2026-07-05): a store-written fixture loads in medreg via `medreg.ingest.load_events` with matching units/kind/timestamp/insulin_type/note. medreg is read-only over the export archive; no adapter needed.
+
 ## GRDB version note
 
 `DatabaseQueue.read {}` is async in GRDB 6 — always `try await`. `Database.CheckpointMode` uses `.truncate` (not `.truncating`). The Archive throwing initializer is `try Archive(url:accessMode:)`.

@@ -18,4 +18,8 @@ references:
 
 - [x] 5. PersistenceTests: round-trip raw-row/metadata-shape assertions, events(in:type:) filter incl. insulin, eventsDidChange ticks, bounds rejection — PRD Core acceptance
 
-- [ ] 6. Verify a store-written fixture SQLite loads in medreg (~/repos/medreg: make setup; load_events → frames.insulin matches units/kind/timestamp); record result in task notes, no committed cross-repo test — PRD Core 2 acceptance
+- [x] 6. Verify a store-written fixture SQLite loads in medreg (~/repos/medreg: make setup; load_events → frames.insulin matches units/kind/timestamp); record result in task notes, no committed cross-repo test — PRD Core 2 acceptance
+  - Verified 2026-07-05: fixture meals.sqlite written by GRDBPersistenceStore.saveInsulinDose via a throwaway test (deleted after use); two doses — 6.5 U bolus/NovoRapid @ 1751000000000 ms (no note) and 18 U basal/Lantus @ 1751050000000 ms (with note)
+  - Command: /Users/r/repos/medreg/.venv/bin/python -c 'from medreg.ingest import load_events; load_events(<fixture path>)' with assertions on frames.insulin
+  - Result: PASS — both doses loaded; units/kind/timestamp/insulin_type/note/event_id all matched; note key absent (None) for the bolus dose
+  - No changes committed to medreg; no cross-repo test added to medata
