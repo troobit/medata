@@ -231,7 +231,8 @@ class FoodSegDataset:
         return image, mask
 
 
-def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int):
+def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int,
+                 drop_last: bool = False):
     _import_torch()  # ensure torch is present before importing its DataLoader
     from torch.utils.data import DataLoader
 
@@ -240,7 +241,7 @@ def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int):
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
-        drop_last=False,
+        drop_last=drop_last,
     )
 
 
@@ -397,7 +398,11 @@ def train(args) -> int:
     else:
         print("[train] no val split found; skipping mIoU eval")
 
-    train_loader = _make_loader(train_ds, args.batch_size, True, args.num_workers)
+    # drop_last: a trailing batch of size 1 crashes BatchNorm in train mode
+    # (ASPP's global-pool branch yields [1, C, 1, 1] — one value per channel).
+    # Val keeps every sample: eval mode uses running stats, so size-1 is fine.
+    train_loader = _make_loader(train_ds, args.batch_size, True, args.num_workers,
+                                drop_last=True)
 
     if resume_state is not None:
         # Weights come from the sidecar — build with weights=None (no download);
