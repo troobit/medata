@@ -77,7 +77,7 @@ struct SettingsView: View {
                     exportArchive()
                 } label: {
                     if isExporting {
-                        ProgressView()
+                        MedataLoadingSymbol(mode: .loop, size: 22)
                     } else {
                         Label("Export", systemImage: "square.and.arrow.up")
                     }
@@ -102,7 +102,7 @@ struct SettingsView: View {
                     seedDemoGlucose()
                 } label: {
                     if isSeeding {
-                        ProgressView()
+                        MedataLoadingSymbol(mode: .loop, size: 22)
                     } else {
                         Text("Seed demo glucose")
                     }

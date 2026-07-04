@@ -31,7 +31,7 @@ struct GlucoseImportView: View {
                 if let model, model.isProcessing {
                     Section {
                         HStack {
-                            ProgressView()
+                            MedataLoadingSymbol(mode: .loop, size: 22)
                             Text("Processing \(model.processedCount + 1) of \(model.totalCount)…")
                                 .foregroundStyle(.secondary)
                         }
