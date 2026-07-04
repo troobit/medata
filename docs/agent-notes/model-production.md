@@ -74,6 +74,12 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 
 ## Gotchas
 
+- **Never store imported modules on `FoodSegDataset` (or anything a DataLoader
+  pickles).** macOS starts DataLoader workers via `spawn`, which pickles the
+  dataset; module objects are unpicklable → `TypeError: cannot pickle 'module'
+  object` with `--num-workers > 0` (the default is 4, so single-process smoke
+  tests don't catch it). `__init__` calls `_import_torch()`/`_import_pillow()`
+  as availability checks only; `__getitem__` re-imports locally.
 - **torchvision refuses `aux_loss=False` alongside pretrained weights** (any
   version `requirements.txt` allows, ≥ 0.13). `export.load_checkpoint` (and via
   it `train.py --no-pretrained`-less runs) crashed until fixed by building with
