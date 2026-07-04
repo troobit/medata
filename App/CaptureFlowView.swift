@@ -86,7 +86,7 @@ struct CaptureFlowView: View {
     private func captureDestination(_ route: CaptureRoute) -> some View {
         switch route {
         case .review(let record):
-            SegmentationReviewView(record: record, onCarbs: {
+            SegmentationReviewView(record: record, store: store, onCarbs: {
                 model.navigationPath.append(CaptureRoute.result(record))
             })
         case .result(let record):
@@ -101,7 +101,7 @@ struct CaptureFlowView: View {
                 onDelete: { model.deleteAndDismiss(record) }
             )
         case .correction(let record):
-            ManualCorrectionView(record: record, onSave: { model.popRoute() })
+            ManualCorrectionView(record: record, store: store, onSave: { model.popRoute() })
         }
     }
 
