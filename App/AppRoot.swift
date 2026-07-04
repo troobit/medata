@@ -20,6 +20,13 @@ struct AppRoot: View {
     let preShutterSegmenter: PreShutterSegmenter?
 
     @State private var activeSheet: ActiveSheet?
+    // The insulin dose sheet is presented by TrendsView (a plain sheet, not a
+    // cover) but the state lives here so the `medata://insulin/add` deep link
+    // can raise it from any app state (PRD regression-suggestion-integration
+    // App 10). `pendingInsulinSheet` defers the present until an active
+    // cover's dismissal completes.
+    @State private var showInsulinSheet = false
+    @State private var pendingInsulinSheet = false
 
     init(
         captureModel: CaptureFlowModel,
@@ -49,12 +56,20 @@ struct AppRoot: View {
     var body: some View {
         TrendsView(
             store: store,
+            showInsulinSheet: $showInsulinSheet,
             onOpenCapture: { activeSheet = .capture },
             onOpenData: { activeSheet = .data },
             onOpenSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
-        .fullScreenCover(item: $activeSheet) { sheet in
+        .fullScreenCover(item: $activeSheet, onDismiss: {
+            // Deep-linked dose entry waits for the cover's dismissal to
+            // finish; presenting mid-animation is silently dropped by SwiftUI.
+            if pendingInsulinSheet {
+                pendingInsulinSheet = false
+                showInsulinSheet = true
+            }
+        }) { sheet in
             switch sheet {
             case .capture:
                 CaptureFlowView(
@@ -79,6 +94,22 @@ struct AppRoot: View {
             } else {
                 captureModel.captureDismissed()
             }
+        }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+    }
+
+    // medata://insulin/add — present the dose sheet from any state, dismissing
+    // an active cover first (App 10). Registered in MeData/Info.plist
+    // (CFBundleURLTypes; merged with the generated Info.plist).
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "medata", url.host == "insulin", url.path == "/add" else { return }
+        if activeSheet == nil {
+            showInsulinSheet = true
+        } else {
+            pendingInsulinSheet = true
+            activeSheet = nil
         }
     }
 }
