@@ -60,8 +60,8 @@ public struct AccuracyReport: Sendable {
     public let perClassStats: [String: ClassAccuracyStats]
     // Per-stage latency keyed by stage name, then by capturePath raw value (Req 21.5).
     public let latencyStats: [String: [String: LatencyStats]]
-    // Whether the accuracy bar is met (MAPE < 20% AND MAE ≤ 10 g).
-    public var passesBar: Bool { mape < 20.0 && mae <= 10.0 }
+    // Whether the accuracy bar is met (MAPE < 20% AND MAE ≤ 25 g, per Req 21.3).
+    public var passesBar: Bool { mape < 20.0 && mae <= 25.0 }
 }
 
 // Computes MAPE, MAE, per-class breakdown, and latency stats from eval meals.

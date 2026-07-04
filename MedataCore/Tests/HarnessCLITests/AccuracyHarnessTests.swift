@@ -25,7 +25,7 @@ final class AccuracyHarnessTests: XCTestCase {
         XCTAssertEqual(report.mae, 20.0 / 3.0, accuracy: 0.01)
     }
 
-    // MAPE < 20% AND MAE ≤ 10 g → passesBar true.
+    // MAPE < 20% AND MAE ≤ 25 g → passesBar true.
     func testPassesBarWhenMetrics() {
         let meals = (0..<10).map { i -> MealEvalInput in
             makeMeal("m\(i)", predicted: 95, actual: 100)
@@ -43,10 +43,10 @@ final class AccuracyHarnessTests: XCTestCase {
         XCTAssertFalse(report.passesBar)
     }
 
-    // MAE > 10 g → passesBar false.
-    func testFailsBarWhenMAEExceeds10g() {
-        // predicted 120, actual 100 → AE = 20 g > 10 g
-        let meals = (0..<5).map { i in makeMeal("m\(i)", predicted: 120, actual: 100) }
+    // MAE > 25 g (with MAPE < 20%, so the MAE term is what fails) → passesBar false.
+    func testFailsBarWhenMAEExceeds25g() {
+        // predicted 230, actual 200 → AE = 30 g > 25 g, APE = 15% < 20%
+        let meals = (0..<5).map { i in makeMeal("m\(i)", predicted: 230, actual: 200) }
         let report = AccuracyHarness.evaluate(meals: meals)
         XCTAssertFalse(report.passesBar)
     }

@@ -165,6 +165,11 @@ per Decision 23). `PostProcessing` asserts the model's channel count equals
 - Channel 34: `unsupported_liquid` — standalone liquid outside the 8 coarse classes
   (excluded from volume; Req 8.7)
 
+The segmenter has **35 channels**, but the food database (`cofid_db.sqlite`) carries only the
+**32 food classes** (channels 0–31: 24 solid + 8 liquid). The three sentinel channels (32–34) are
+not foods and have no DB row — so "35-class segmenter" and "32-class food DB" are the same palette,
+counted with and without the sentinels.
+
 FoodSeg103 carries **no** standalone-liquid supervision, so the 8 liquid channels train on
 little-to-no data — recognising liquids at inference is a deferred dependency owned by
 model-production (Req 7.7). They are still real channels: the runtime palette and the
