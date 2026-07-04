@@ -1,5 +1,7 @@
 # ML training pipeline
 
+> **To unblock the MVP now,** follow the ordered, time-boxed critical path in
+> [`mvp-unblock-runbook.md`](mvp-unblock-runbook.md); it links back into the sections here for detail.
 > Audience: anyone training or refining the on-device estimation models.
 > Mixed background assumed — ML concepts get a brief sentence, then commands.
 > Status: Sections 1–11 drafted (explanation + runbook). The dataset/training/

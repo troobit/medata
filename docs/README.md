@@ -15,6 +15,7 @@ placeholders; capture flow, gating, persistence and refusal paths are real.
 |---|---|
 | [`architecture.md`](architecture.md) | **Start here.** Layers, modules, abstractions, and Swift/SwiftUI conventions — written for developers joining the project. Links to the specs for detail. |
 | [`ios-device-setup.md`](ios-device-setup.md) | Build, sign, and side-load the iOS app to iPhone 13 Pro Max (or any LiDAR-equipped iPhone). |
+| [`mvp-unblock-runbook.md`](mvp-unblock-runbook.md) | **Do this now to unblock the MVP.** Ordered, time-boxed operational steps and go/no-go gates for producing the on-device segmenter — the one human/GPU/device-gated task left. Links into `ml-training.md` for detail. |
 | [`ml-training.md`](ml-training.md) | End-to-end training recipe for the Phase 3 segmenter + β_c calibration. |
 | [`agent-notes/`](agent-notes/) | Implementation-progress notes: what was built, gotchas found, and module-level details captured during tasks. |
 

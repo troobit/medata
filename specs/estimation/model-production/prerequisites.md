@@ -2,6 +2,8 @@
 
 These are the human/data-gated stages a coding agent cannot perform — they need a dataset download, a GPU, a Mac with Xcode, a physical iPhone, or weighed meals. The code-actionable work lives in `tasks.md`; these stages produce the artefacts and verifications those tasks (and the MVP gate, Req 6.3) depend on. Stage numbers refer to the design §2.1 process table.
 
+> **Operational runbook:** [`docs/mvp-unblock-runbook.md`](../../../docs/mvp-unblock-runbook.md) turns this checklist into ordered, time-boxed steps with go/no-go gates. Use it to actually run the work; use this file as the authoritative stage-by-stage checklist behind it.
+
 ## The only thing left for a real MVP estimate
 
 Every surrounding subsystem is code-complete: the capture → segment → volume → macros pipeline runs end-to-end against a dev-stub segmenter, and the model-production tasks (loader on `Bundle.module`, build lineage, `modelVersion` derivation, the `export.py` equivalence/parity/channel/budget/metadata gates, validation IoU + export-eligibility reporting, and the palette↔DB edition bake lock) implement everything an agent can do. What no agent can produce is the trained model itself and the on-device proof that it runs. The MVP — the app showing a **real** carbohydrate number instead of the dev-stub — is blocked on exactly the human-gated chain below.
