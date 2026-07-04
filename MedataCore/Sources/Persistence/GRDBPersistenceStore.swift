@@ -129,9 +129,10 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 arguments: [mealId.uuidString, correction.createdAtMs, json]
             )
         }
-        // Deliberately no broadcast: corrections live in their own side table,
-        // and the Meals tab does not redraw on a correction (design §Change
-        // broadcaster).
+        // Decision 18 (UI Design Handoff 00): notify so Data rows and Meal
+        // overview learn a correction landed without polling. This reverses the
+        // event-log-schema-era behaviour, which deliberately did not emit.
+        changeBroadcaster.notify()
     }
 
     public func meal(id: UUID) async throws -> MealRecord {
@@ -182,6 +183,55 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             .appendingPathComponent(id.uuidString, isDirectory: true)
         try? FileManager.default.removeItem(at: url)
         changeBroadcaster.notify()
+    }
+
+    public func writeArtefact(mealId: UUID, artefact: MealArtefact, data: Data) async throws {
+        // File first (Decision 15): a crash between the write and the insert
+        // leaves an orphan file, never a dangling row that the fallback cannot
+        // satisfy.
+        let mealDir = artefactsBaseURL
+            .appendingPathComponent("meals", isDirectory: true)
+            .appendingPathComponent(mealId.uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: mealDir, withIntermediateDirectories: true)
+        let fileURL = mealDir.appendingPathComponent(artefact.filename)
+        try data.write(to: fileURL, options: .atomic)
+
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO meal_artefacts
+                        (meal_id, kind, view_id, filename, bytes_size)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    mealId.uuidString,
+                    artefact.kind,
+                    artefact.viewId,
+                    artefact.filename,
+                    artefact.bytesSize
+                ]
+            )
+        }
+    }
+
+    public func artefactData(mealId: UUID, kind: String) async throws -> Data? {
+        let filename: String? = try await queue.read { db in
+            try String.fetchOne(db,
+                sql: """
+                    SELECT filename FROM meal_artefacts
+                    WHERE meal_id = ? AND kind = ?
+                    ORDER BY view_id ASC
+                    LIMIT 1
+                    """,
+                arguments: [mealId.uuidString, kind])
+        }
+        guard let filename else { return nil }
+        let fileURL = artefactsBaseURL
+            .appendingPathComponent("meals", isDirectory: true)
+            .appendingPathComponent(mealId.uuidString, isDirectory: true)
+            .appendingPathComponent(filename)
+        // Absent/unreadable file is the fallback signal, not an error.
+        return try? Data(contentsOf: fileURL)
     }
 
     public var eventsDidChange: AsyncStream<Void> { changeBroadcaster.subscribe() }
@@ -394,6 +444,57 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         )
     }
 }
+
+// MARK: - DEBUG demo glucose seeding (Decision 13)
+//
+// Trends reads `bsl` rows exclusively (Req 11.1) but no ingestion path ships in
+// this spec, so on-device verification needs synthetic rows in the real store.
+// This extension is DEBUG-only and never links into a Release build; there is
+// deliberately no public event-write API — that belongs to a future importer.
+#if DEBUG
+public extension GRDBPersistenceStore {
+
+    // Seeds 24 h of synthetic `bsl` readings at 15-minute spacing (96 rows),
+    // ending at `now`. Values are mmol/L. Triggered from a DEBUG-only Settings
+    // row.
+    func seedDemoBslEvents(now: Date = Date()) async throws {
+        let spacing: TimeInterval = 15 * 60
+        let count = 96 // 24 h / 15 min
+        let start = now.addingTimeInterval(-Double(count - 1) * spacing)
+        try await queue.write { db in
+            for i in 0..<count {
+                let t = start.addingTimeInterval(Double(i) * spacing)
+                let mmolL = GRDBPersistenceStore.demoGlucose(at: t)
+                let ms = Int64(t.timeIntervalSince1970 * 1000)
+                try db.execute(
+                    sql: """
+                        INSERT INTO events (id, timestamp, event_type, value, metadata)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                    arguments: [UUID().uuidString, ms, EventType.bsl, mmolL, "{}"]
+                )
+            }
+        }
+        changeBroadcaster.notify()
+    }
+
+    // A plausible daily curve: a diurnal baseline with three post-meal
+    // excursions, clamped to a sane physiological window.
+    private static func demoGlucose(at time: Date) -> Double {
+        let minutesOfDay = (time.timeIntervalSince1970 / 60)
+            .truncatingRemainder(dividingBy: 24 * 60)
+        let diurnal = 6.2 + 1.0 * sin(2 * Double.pi * (minutesOfDay - 300) / (24 * 60))
+        let meals: [(peakMin: Double, amplitude: Double)] = [
+            (8 * 60, 2.6), (13 * 60, 3.0), (19 * 60, 2.8)
+        ]
+        let bumps = meals.reduce(0.0) { acc, meal in
+            let delta = minutesOfDay - meal.peakMin
+            return acc + meal.amplitude * exp(-(delta * delta) / (2 * 45 * 45))
+        }
+        return max(3.6, min(11.5, diurnal + bumps))
+    }
+}
+#endif
 
 // MARK: - Change broadcaster
 //

@@ -458,6 +458,13 @@ public struct Pipeline: Sendable {
             #endif
             throw error
         }
+        // Storage-only (Decision 15): persist the segmentation label raster as an
+        // 8-bit greyscale PNG of raw class indices for the mask-overlay surfaces.
+        // Failure is logged and swallowed inside persistMask — never fails the
+        // meal save, which has already committed above.
+        await MaskArtefactWriter.persistMask(
+            argmax: nadirSeg.argmax, mealId: record.id, store: store
+        )
         #if DEBUG
         logStageEnd(name: "Persistence", startedAt: persistenceStartedAt)
         pipelineSignposter.endInterval("Persistence", persistenceInterval)
