@@ -104,3 +104,46 @@ def test_records_shortfall_into_lineage_when_sub_bar():
     metrics = out["metrics"]
     assert metrics["export_eligible"] is False
     assert metrics["shortfall"]  # non-empty: records what fell short
+
+
+# ── Developer-phase release override (Decision 11) ──────────────────────────────
+
+def test_release_override_is_attributable_and_keeps_gate_truthful():
+    lineage = {"metrics": {}}
+    validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
+    validation.record_release_override(lineage, "  dev-phase normal-use testing ")
+    metrics = lineage["metrics"]
+    assert metrics["export_eligible"] is False  # gate verdict untouched
+    assert metrics["release_override"] == {
+        "allowed": True,
+        "reason": "dev-phase normal-use testing",
+        "authorised_by": "developer",
+    }
+
+
+def test_release_override_requires_a_reason():
+    import pytest
+
+    with pytest.raises(ValueError):
+        validation.record_release_override({"metrics": {}}, "   ")
+
+
+def test_release_allowed_truth_table():
+    eligible = validation.evaluate(_food_iou(0.70))
+    below = validation.evaluate(_food_iou(0.30))
+    overridden = {"metrics": dict(below)}
+    validation.record_release_override(overridden, "dev-phase")
+
+    assert validation.release_allowed(eligible) is True
+    assert validation.release_allowed(below) is False
+    assert validation.release_allowed(overridden["metrics"]) is True
+
+
+def test_revalidation_drops_a_stale_override():
+    # A new metrics outcome must need a fresh, deliberate override.
+    lineage = {"metrics": {}}
+    validation.record_metrics_into_lineage(lineage, _food_iou(0.30))
+    validation.record_release_override(lineage, "dev-phase")
+    validation.record_metrics_into_lineage(lineage, _food_iou(0.35))
+    assert "release_override" not in lineage["metrics"]
+    assert validation.release_allowed(lineage["metrics"]) is False

@@ -41,9 +41,25 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   `shortfall()` lists what failed (incl. an absent staple — it cannot prove the
   floor, Req 3.6). `record_metrics_into_lineage()` / `update_lineage_file()` write
   the `{mean_iou, per_class_iou, carb_priority_iou, export_eligible, shortfall}`
-  block into `build/lineage.json`. Synthetic IoUs in the test; the real run is
-  GPU-gated. Carb-priority staples: white_rice, brown_rice, pasta, bread_white,
-  bread_wholemeal, potato_boiled, potato_mashed, chips_fries.
+  block into `build/lineage.json`. Carb-priority staples: white_rice, brown_rice,
+  pasta, bread_white, bread_wholemeal, potato_boiled, potato_mashed, chips_fries.
+- **Held-out validation runner** — `tools/segmenter/run_validation.py` (torch).
+  Runs a checkpoint over a remapped split (default `heldout`), computes per-class
+  IoU by palette name, records metrics into lineage. Exit 1 on strict-gate fail.
+- **Developer-phase release override (Decision 11)** — the strict gate advises,
+  not blocks, during the developer phase. `run_validation.py --allow-below-gate
+  --reason "..."` records an attributable `metrics.release_override` block and
+  exits 0; `validation.record_release_override()` / `release_allowed()` are the
+  pure primitives. `export_eligible` stays truthful; re-running validation drops
+  a stale override. Returns to hard-blocking before any non-developer release.
+- **Training recipe (Decision 12)** — train split gets hflip + random scale-up
+  crop (`--no-augment` to disable; augmentation is resume-drift-gated) and the lr
+  follows per-epoch poly-0.9 decay (`train.LR_SCHEDULE`), recorded in checkpoint +
+  lineage `train_config`. The fixed-lr, no-aug baseline plateaued at ~0.34 val
+  food-class mIoU by epoch 22/60 while train loss kept falling.
+- **`emit_lineage` preserves recorded metrics** — re-exporting the SAME checkpoint
+  no longer wipes a validation result or release override out of `lineage.json`
+  (`lineage.preserve_metrics`, SHA-matched).
 - **Uncalibrated honesty (task 10)** — `App/ResultView.swift`. At the MVP gate
   every class is `uncalibrated_unity` (β = 1.0), so the carb number is **real but
   over-estimating**. `ResultFormat.showsUncalibratedBanner(perClassCalibration:)`
@@ -74,6 +90,11 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 
 ## Gotchas
 
+- **NEVER edit `train.py` (or anything it imports) while a training run is
+  live.** DataLoader workers are respawned each epoch via `spawn` and re-import
+  the script from disk, so new code runs against the old pickled dataset object
+  — an attribute added in an edit crashed a live run at epoch 22 with
+  `AttributeError` in worker process. Land code changes between runs.
 - **Never store imported modules on `FoodSegDataset` (or anything a DataLoader
   pickles).** macOS starts DataLoader workers via `spawn`, which pickles the
   dataset; module objects are unpicklable → `TypeError: cannot pickle 'module'

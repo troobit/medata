@@ -29,6 +29,16 @@ Watch FOOD-class mIoU on val (not overall accuracy). Background dominates pixel
 counts and inflates the naive number while thin food classes quietly fail the §5
 bar of mean food-class mIoU >= 0.60 (Req 8.9).
 
+RECIPE: the train split gets geometric augmentation (horizontal flip + random
+scale-up crop, ``--no-augment`` to disable) and the learning rate follows a
+per-epoch poly-0.9 decay from ``--lr`` (LR_SCHEDULE). The first fixed-lr,
+no-augmentation baseline overfit — train loss kept falling while val food-class
+mIoU plateaued around 0.34 by epoch 22 of 60.
+
+NEVER edit this file while a run is live: DataLoader workers are respawned each
+epoch and re-import the script from disk, so they execute NEW code against the
+OLD pickled dataset object and crash the run mid-training.
+
 COLOUR SPACE (docs/ml-training.md §5, §11): training runs on RGB to match
 ``export.reference_input`` (ImageNet mean/std, CHW). The on-device capture path
 emits BGRA8 (``PixelBufferAdapter``); the training transform MUST stay matched to
@@ -58,6 +68,10 @@ UNSUPPORTED_LIQUID_CLASS = 34
 NON_FOOD_CLASSES = (BACKGROUND_CLASS, UNKNOWN_FOOD_CLASS, UNSUPPORTED_LIQUID_CLASS)
 
 PALETTE_VERSION = "v1"
+
+# Per-epoch poly learning-rate decay (standard DeepLab recipe); recorded in
+# checkpoint/lineage provenance. lr_e = base_lr * (1 - (e-1)/epochs) ** 0.9.
+LR_SCHEDULE = "poly-0.9-per-epoch"
 
 # Mask file extensions tried for each image stem, in order.
 _MASK_EXTS = (".png", ".PNG")
@@ -155,15 +169,22 @@ class FoodSegDataset:
     export.reference_input). Mask -> nearest-resized long tensor [H, W] of class
     ids. This is a torch.utils.data.Dataset; constructed lazily so the module
     imports without torch (CLI --help must work torch-free).
+
+    ``augment=True`` (train split only) applies joint GEOMETRIC augmentation —
+    horizontal flip + random scale-up crop — before normalisation. Geometry only:
+    colour handling must stay matched to ``SegmenterPreProcessor`` (module
+    docstring), so no colour jitter here without a lockstep serve-side decision.
     """
 
-    def __init__(self, split_dir: Path, target_size: int, limit: int | None = None):
+    def __init__(self, split_dir: Path, target_size: int, limit: int | None = None,
+                 augment: bool = False):
         # Availability check only — do NOT store the modules on the instance.
         # macOS DataLoader workers start via spawn, which pickles the dataset,
         # and module objects are unpicklable.
         _import_torch()
         _import_pillow()
         self.target_size = target_size
+        self.augment = augment
 
         images_dir = split_dir / "images"
         masks_dir = split_dir / "masks"
@@ -209,9 +230,16 @@ class FoodSegDataset:
         # orientation tag and their masks match the *rotated* pixels.
         from PIL import ImageOps
 
-        img = ImageOps.exif_transpose(Image.open(img_path)).convert("RGB").resize(
-            (self.target_size, self.target_size), Image.BILINEAR
-        )
+        img = ImageOps.exif_transpose(Image.open(img_path)).convert("RGB")
+        mask_img = Image.open(mask_path)
+        if self.augment:
+            img, mask_img = self._augment_pair(img, mask_img, Image)
+        else:
+            img = img.resize((self.target_size, self.target_size), Image.BILINEAR)
+            mask_img = mask_img.resize(
+                (self.target_size, self.target_size), Image.NEAREST
+            )
+
         arr = np.asarray(img, dtype=np.float32) / 255.0
         mean = np.array(IMAGENET_MEAN, dtype=np.float32)
         std = np.array(IMAGENET_STD, dtype=np.float32)
@@ -220,15 +248,35 @@ class FoodSegDataset:
         image = torch.from_numpy(np.ascontiguousarray(arr))
 
         # --- mask: NEAREST resize, long [H, W] of class ids ---
-        mask_img = Image.open(mask_path).resize(
-            (self.target_size, self.target_size), Image.NEAREST
-        )
         mask_arr = np.asarray(mask_img, dtype=np.int64)
         if mask_arr.ndim == 3:  # defensive: collapse an accidental RGB mask
             mask_arr = mask_arr[..., 0]
         mask = torch.from_numpy(np.ascontiguousarray(mask_arr))
 
         return image, mask
+
+    def _augment_pair(self, img, mask_img, Image):
+        """Joint horizontal flip + random scale-up crop of an image/mask pair.
+
+        Scale is >= 1.0 so cropping never needs padding — padding would invent
+        pixels labelled with a real class id (there is no ignore_index in the
+        loss). DataLoader workers re-seed ``random`` per epoch, so draws differ
+        across workers and epochs.
+        """
+        import random
+
+        target = self.target_size
+        if random.random() < 0.5:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            mask_img = mask_img.transpose(Image.FLIP_LEFT_RIGHT)
+
+        size = round(target * random.uniform(1.0, 1.5))
+        img = img.resize((size, size), Image.BILINEAR)
+        mask_img = mask_img.resize((size, size), Image.NEAREST)
+        left = random.randint(0, size - target)
+        top = random.randint(0, size - target)
+        box = (left, top, left + target, top + target)
+        return img.crop(box), mask_img.crop(box)
 
 
 def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int,
@@ -336,6 +384,7 @@ def _load_resume_state(args) -> dict:
         "target_size": args.target_size,
         "lr": args.lr,
         "batch_size": args.batch_size,
+        "augment": not args.no_augment,
     }
     for key, want in expected.items():
         got = state.get(key)
@@ -365,6 +414,7 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "palette_version": PALETTE_VERSION,
         "lr": args.lr,
         "batch_size": args.batch_size,
+        "augment": not args.no_augment,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -389,7 +439,9 @@ def train(args) -> int:
     print(f"[train] device = {device}")
 
     data_root = Path(args.data)
-    train_ds = FoodSegDataset(data_root / "train", args.target_size, limit=args.limit)
+    augment = not args.no_augment
+    train_ds = FoodSegDataset(data_root / "train", args.target_size, limit=args.limit,
+                              augment=augment)
     print(f"[train] train samples = {len(train_ds)}")
 
     val_dir = data_root / "val"
@@ -433,6 +485,12 @@ def train(args) -> int:
 
     last_miou = float(resume_state["last_food_class_miou"]) if resume_state else float("nan")
     for epoch in range(start_epoch, args.epochs + 1):
+        # Poly decay (standard DeepLab recipe), stepped per epoch. Stateless by
+        # design: the lr is a pure function of (epoch, args), so --resume needs
+        # no scheduler state in the sidecar.
+        lr = args.lr * (1.0 - (epoch - 1) / max(args.epochs, 1)) ** 0.9
+        for group in optimizer.param_groups:
+            group["lr"] = lr
         model.train()
         running = 0.0
         n_batches = 0
@@ -483,6 +541,8 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         "palette_version": PALETTE_VERSION,
         "epochs": args.epochs,
         "lr": args.lr,
+        "lr_schedule": LR_SCHEDULE,
+        "augment": not args.no_augment,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -499,6 +559,8 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "lr": args.lr,
+        "lr_schedule": LR_SCHEDULE,
+        "augment": not args.no_augment,
         "pretrained": pretrained,
     }
     if resumed_from_epoch is not None:
@@ -542,6 +604,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="Cap samples per split for smoke runs.")
     parser.add_argument("--no-pretrained", action="store_true",
                         help="Build with weights=None (no network download) for smoke runs.")
+    parser.add_argument("--no-augment", action="store_true",
+                        help="Disable train-split augmentation (hflip + random "
+                             "scale-up crop) — e.g. for deterministic smoke runs.")
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
 

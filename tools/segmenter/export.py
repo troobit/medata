@@ -68,7 +68,8 @@ def emit_lineage(checkpoint_path: str, out_path: str | None = None) -> str:
     if isinstance(raw, dict):
         train_config = {
             k: raw[k] for k in (
-                "num_classes", "target_size", "epochs", "lr", "pretrained"
+                "num_classes", "target_size", "epochs", "lr", "lr_schedule",
+                "augment", "pretrained"
             ) if k in raw
         }
     manifest = lineage.build_lineage(
@@ -76,6 +77,9 @@ def emit_lineage(checkpoint_path: str, out_path: str | None = None) -> str:
         train_config=train_config,
         palette_version=raw.get("palette_version") if isinstance(raw, dict) else None,
     )
+    # A re-export of the SAME checkpoint must not wipe validation metrics (or a
+    # release override) already recorded in the existing lineage file.
+    lineage.preserve_metrics(manifest, out_path or lineage.DEFAULT_LINEAGE_PATH)
     written = lineage.write_lineage(
         manifest, out_path or lineage.DEFAULT_LINEAGE_PATH
     )

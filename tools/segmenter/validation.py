@@ -15,6 +15,12 @@ A mean alone can hide a near-zero staple class that dominates the carb number
 cannot meet the floor is surfaced as a shortfall (Req 3.6: flag low-confidence or
 map to ``unknown_food``) rather than blocking indefinitely.
 
+During the developer phase the strict gate ADVISES rather than hard-blocks: a
+below-gate model may be released for normal-use testing via an explicit,
+attributable override recorded in lineage (``record_release_override`` /
+``release_allowed``, Decision 11). ``export_eligible`` itself always stays
+truthful.
+
 This module is PURE DECISION LOGIC: it takes a ``per_class_iou`` mapping (the
 output of the GPU validation run) and is independent of running the model. The
 *running* of validation on real held-out data is gated on the training
@@ -142,6 +148,42 @@ def evaluate(per_class_iou: Mapping[str, float]) -> dict[str, Any]:
         "export_eligible": is_export_eligible(per_class_iou),
         "shortfall": shortfall(per_class_iou),
     }
+
+
+def record_release_override(
+    lineage: dict[str, Any], reason: str, authorised_by: str = "developer"
+) -> dict[str, Any]:
+    """Record an explicit decision to release a model that misses the strict gate.
+
+    ``export_eligible`` stays truthful — the override is a separate, attributable
+    record inside ``metrics`` so lineage never claims a below-gate model passed.
+    Developer-phase policy (Decision 11): a below-gate model may ship for
+    normal-use testing while the model improves iteratively; the strict gate
+    returns to blocking before any non-developer release. Mutates and returns
+    ``lineage``.
+    """
+    if not reason or not reason.strip():
+        raise ValueError("a release override requires a non-empty reason")
+    metrics = lineage.setdefault("metrics", empty_metrics())
+    metrics["release_override"] = {
+        "allowed": True,
+        "reason": reason.strip(),
+        "authorised_by": authorised_by,
+    }
+    return lineage
+
+
+def release_allowed(metrics: Mapping[str, Any]) -> bool:
+    """True when the strict gate passes OR an explicit override was recorded.
+
+    This is the RELEASE decision; ``export_eligible`` remains the strict-gate
+    verdict. Re-running validation rewrites ``metrics`` and therefore drops any
+    prior override — a new metrics outcome needs a fresh, deliberate override.
+    """
+    if metrics.get("export_eligible"):
+        return True
+    override = metrics.get("release_override") or {}
+    return bool(override.get("allowed"))
 
 
 def record_metrics_into_lineage(
