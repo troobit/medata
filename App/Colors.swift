@@ -39,4 +39,11 @@ extension Color {
 
     static let placeholderBG = Color(uiColor: .systemYellow)
     static let placeholderFG = Color.black
+
+    // MARK: - Trends chart (Decision 12, design-handoff-00)
+
+    // Glucose line series on the Trends chart.
+    static let seriesGlucose = Color(uiColor: .systemOrange)
+    // 3.9–10.0 mmol/L target range band fill.
+    static let bandTarget = medataAccent.opacity(0.10)
 }

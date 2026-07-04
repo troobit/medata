@@ -1,16 +1,40 @@
 import Foundation
 import Observation
 import Persistence
+import Photos
+import PortableContracts
+import UIKit
 
-// @Observable @MainActor data source for the Meals tab (UI Req §19.1, §19.6,
-// §19.7). Loads `meals` from the store on `start()`, refreshes on every
-// `eventsDidChange` tick, and routes deletes through the store. The tab view
-// owns one instance and keeps it alive across tab switches; `cancel()` ends
-// the subscription so the model can be torn down deterministically in tests.
+// One row's worth of display data for the Data screen (design-handoff-00 §8,
+// critic R2). `reload()` composes each meal with its corrections so that a
+// landed correction actually invalidates the SwiftUI row: a value-identical
+// `MealRecord` refetch alone would diff as unchanged, so the corrected total and
+// the corrected flag are folded into this struct (which IS `Equatable`).
+struct DisplayMeal: Identifiable, Equatable {
+    let record: MealRecord
+    // True when any correction row exists for the meal (Req 7.3 marker).
+    let isCorrected: Bool
+    // The most-recent correction's total override, or nil when no correction set
+    // a total — callers fall back to the original estimate.
+    let correctedTotalCarbsG: Float?
+
+    var id: UUID { record.id }
+
+    // Total to show in the row: the corrected override when present, otherwise
+    // the pipeline's original estimate.
+    var displayTotalCarbsG: Float {
+        correctedTotalCarbsG ?? record.macros.totalCarbsG
+    }
+}
+
+// @Observable @MainActor data source for the Data screen (design-handoff-00 §8).
+// Loads meals from the store on `start()`, composes each with its corrections,
+// refreshes on every `eventsDidChange` tick (which now fires on
+// `appendCorrection` too — Decision 18), and routes deletes through the store.
 @Observable
 @MainActor
 final class MealHistoryModel {
-    var meals: [MealRecord] = []
+    var displayMeals: [DisplayMeal] = []
     private let store: any PersistenceStore
     private var subscription: Task<Void, Never>?
 
@@ -50,8 +74,57 @@ final class MealHistoryModel {
     }
 
     private func reload() async {
-        if let next = try? await store.allMeals() {
-            self.meals = next
+        guard let records = try? await store.allMeals() else { return }
+        var composed: [DisplayMeal] = []
+        composed.reserveCapacity(records.count)
+        for record in records {
+            let corrections = (try? await store.corrections(for: record.id)) ?? []
+            // Corrections are ordered created_at ASC, so the last one that set a
+            // total override is the current corrected total.
+            let correctedTotal = corrections
+                .last { $0.correctedTotalCarbsGOneof != nil }?
+                .correctedTotalCarbsG
+            composed.append(
+                DisplayMeal(
+                    record: record,
+                    isCorrected: !corrections.isEmpty,
+                    correctedTotalCarbsG: correctedTotal
+                )
+            )
+        }
+        self.displayMeals = composed
+    }
+}
+
+// Shared PHAsset → UIImage loader (extracted from ResultView so the Data,
+// Meal-overview, and Result surfaces resolve the captured photo identically —
+// design-handoff-00 §6.8 fallback). `nonisolated` so callers on any actor can
+// await it; the Photos callback resumes a single checked continuation.
+//
+// `.highQualityFormat` delivers exactly one callback: `.opportunistic` would
+// invoke the handler twice (a fast degraded image then the full one), which
+// crashes a checked continuation with "resumed more than once".
+enum MealPhotoLoader {
+    nonisolated static func loadImage(
+        assetID: String,
+        targetSize: CGSize = PHImageManagerMaximumSize
+    ) async -> UIImage? {
+        guard !assetID.isEmpty else { return nil }
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil)
+        guard let asset = assets.firstObject else { return nil }
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isSynchronous = false
+        options.isNetworkAccessAllowed = false
+        return await withCheckedContinuation { continuation in
+            PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: targetSize,
+                contentMode: .aspectFill,
+                options: options
+            ) { result, _ in
+                continuation.resume(returning: result)
+            }
         }
     }
 }
