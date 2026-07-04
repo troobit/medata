@@ -28,6 +28,7 @@
 		113B22A12FD0000000272C1E /* CaptureTopBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B12FD0000000272C1E /* CaptureTopBar.swift */; };
 		113B22A22FD0000000272C1E /* CaptureModeToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B22FD0000000272C1E /* CaptureModeToggle.swift */; };
 		113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B32FD0000000272C1E /* ShutterButton.swift */; };
+		113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */; };
 		113B22A42FD0000000272C1E /* RefusalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B42FD0000000272C1E /* RefusalSheet.swift */; };
 		113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B52FD0000000272C1E /* ActiveRefusal.swift */; };
 		112B11C12FCE000000272C1E /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D12FCE000000272C1E /* AppTab.swift */; };
@@ -61,6 +62,7 @@
 		113B22B12FD0000000272C1E /* CaptureTopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureTopBar.swift; path = ../App/CaptureTopBar.swift; sourceTree = SOURCE_ROOT; };
 		113B22B22FD0000000272C1E /* CaptureModeToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureModeToggle.swift; path = ../App/CaptureModeToggle.swift; sourceTree = SOURCE_ROOT; };
 		113B22B32FD0000000272C1E /* ShutterButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShutterButton.swift; path = ../App/ShutterButton.swift; sourceTree = SOURCE_ROOT; };
+		113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedataLoadingSymbol.swift; path = ../App/MedataLoadingSymbol.swift; sourceTree = SOURCE_ROOT; };
 		113B22B42FD0000000272C1E /* RefusalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RefusalSheet.swift; path = ../App/RefusalSheet.swift; sourceTree = SOURCE_ROOT; };
 		113B22B52FD0000000272C1E /* ActiveRefusal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActiveRefusal.swift; path = ../App/ActiveRefusal.swift; sourceTree = SOURCE_ROOT; };
 		112B11D12FCE000000272C1E /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppTab.swift; path = ../App/AppTab.swift; sourceTree = SOURCE_ROOT; };
@@ -115,6 +117,7 @@
 				113B22B12FD0000000272C1E /* CaptureTopBar.swift */,
 				113B22B22FD0000000272C1E /* CaptureModeToggle.swift */,
 				113B22B32FD0000000272C1E /* ShutterButton.swift */,
+				113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */,
 				113B22B42FD0000000272C1E /* RefusalSheet.swift */,
 				113B22B52FD0000000272C1E /* ActiveRefusal.swift */,
 				112B11D12FCE000000272C1E /* AppTab.swift */,
@@ -235,6 +238,7 @@
 				113B22A12FD0000000272C1E /* CaptureTopBar.swift in Sources */,
 				113B22A22FD0000000272C1E /* CaptureModeToggle.swift in Sources */,
 				113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */,
+				113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */,
 				113B22A42FD0000000272C1E /* RefusalSheet.swift in Sources */,
 				113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */,
 				112B11C12FCE000000272C1E /* AppTab.swift in Sources */,
