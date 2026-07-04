@@ -132,9 +132,17 @@ struct CaptureFlowView: View {
             }
 
             if isEstimating { estimatingOverlay }
-        }
-        .sheet(item: refusalBinding) { refusal in
-            RefusalSheet(failure: refusal.failure) { model.retry() }
+
+            // §4 error state: full-screen overlay replacing the old RefusalSheet.
+            if let refusal = model.refusal {
+                CaptureErrorOverlay(
+                    failure: refusal.failure,
+                    onRetry: { model.retry() },
+                    onTwoView: { model.switchToTwoViewAndRetry() },
+                    onCancel: { model.dismissRefusal() }
+                )
+                .transition(.opacity)
+            }
         }
         .sheet(isPresented: $showingForkSheet) {
             LidarForkSheetView()
@@ -407,20 +415,6 @@ struct CaptureFlowView: View {
         return model.canShutter ? .ready : .disabled
     }
 
-    // Bridges `model.refusal` into a `Binding` for `.sheet(item:)`. A swipe-down
-    // on the sheet writes `nil` here; the setter delegates to the model's
-    // explicit dismissal command, which transitions `.refused → .ready` so the
-    // sheet does not re-present on the next render (surface-not-detected
-    // bugfix). `model.refusal` itself stays derived from state — there is no
-    // separate stored refusal to keep in sync.
-    private var refusalBinding: Binding<ActiveRefusal?> {
-        Binding(
-            get: { model.refusal },
-            set: { newValue in
-                if newValue == nil { model.dismissRefusal() }
-            }
-        )
-    }
 }
 
 // Static rendering of the captured frame(s) shown in place of the live

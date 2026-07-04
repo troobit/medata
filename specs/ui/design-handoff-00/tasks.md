@@ -18,7 +18,7 @@ references:
 
 - [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -109,7 +109,7 @@ references:
   - Stream: 2
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [1.6](requirements.md#1.6), [14.4](requirements.md#14.4)
 
-- [ ] 15. CaptureErrorOverlay + capture-error.md (replaces RefusalSheet presentation) <!-- id:xi3gpnd -->
+- [x] 15. CaptureErrorOverlay + capture-error.md (replaces RefusalSheet presentation) <!-- id:xi3gpnd -->
   - Full-screen overlay: amber ghost outline, ≤3-word chip, one-clause hint, Retry / 2-view / Cancel; same ActiveRefusal model + retry()/dismissRefusal(); 2-view action = switchToTwoViewAndRetry()
   - Retry resumes at failed stage with AR live (folds old refusal 10.2/10.3); chips/hints verbatim from copy inventory
   - Blocked-by: xi3gpnb (Route enums and model commands)
