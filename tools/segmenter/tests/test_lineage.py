@@ -53,3 +53,44 @@ def test_write_lineage_round_trips(tmp_path):
     out = lineage.write_lineage(manifest, tmp_path / "build" / "lineage.json")
     assert out.is_file()
     assert json.loads(out.read_text())["model_version"] == manifest["model_version"]
+
+
+def test_preserve_metrics_carries_recorded_metrics_for_same_checkpoint(tmp_path):
+    ckpt = tmp_path / "checkpoint.pt"
+    ckpt.write_bytes(b"same-model")
+    recorded = lineage.build_lineage(ckpt, train_config={})
+    recorded["metrics"] = {"mean_iou": 0.42, "export_eligible": False,
+                           "release_override": {"allowed": True, "reason": "dev-phase",
+                                                "authorised_by": "developer"}}
+    path = tmp_path / "lineage.json"
+    lineage.write_lineage(recorded, path)
+
+    fresh = lineage.build_lineage(ckpt, train_config={})
+    lineage.preserve_metrics(fresh, path)
+    assert fresh["metrics"] == recorded["metrics"]
+
+
+def test_preserve_metrics_ignores_a_different_checkpoint(tmp_path):
+    old = tmp_path / "old.pt"
+    old.write_bytes(b"old-model")
+    recorded = lineage.build_lineage(old, train_config={})
+    recorded["metrics"] = {"mean_iou": 0.42}
+    path = tmp_path / "lineage.json"
+    lineage.write_lineage(recorded, path)
+
+    new = tmp_path / "new.pt"
+    new.write_bytes(b"new-model")
+    fresh = lineage.build_lineage(new, train_config={})
+    lineage.preserve_metrics(fresh, path)
+    assert fresh["metrics"] == lineage.empty_metrics()
+
+
+def test_preserve_metrics_tolerates_missing_or_corrupt_file(tmp_path):
+    ckpt = tmp_path / "checkpoint.pt"
+    ckpt.write_bytes(b"m")
+    fresh = lineage.build_lineage(ckpt, train_config={})
+    lineage.preserve_metrics(fresh, tmp_path / "absent.json")
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("{not json")
+    lineage.preserve_metrics(fresh, corrupt)
+    assert fresh["metrics"] == lineage.empty_metrics()

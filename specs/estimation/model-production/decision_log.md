@@ -391,3 +391,106 @@ Recording the decision stops the drift at the source.
 - The name alone does not distinguish model generations — traceability relies on `segmenterSourceTag` (Decision 8).
 
 ---
+
+## Decision 11: Developer-phase release override for the strict export gate
+
+**Date**: 2026-07-05
+**Status**: accepted
+
+### Context
+
+The export-eligibility gate (Req 3.2/3.5: mean food-class IoU ≥ 0.60 AND every
+carb-priority staple ≥ 0.50) was written as a hard block. The first real
+training run showed the FoodSeg103-remapped baseline converging around 0.34
+mean food-class IoU — well short of the bar. Every other MVP subsystem is
+complete and verified against the dev-stub; a hard gate would make model
+quality the sole blocker for merging to main, while the developer's own
+normal use of a real (if imperfect) model is itself the fastest source of
+feedback for improving it.
+
+### Decision
+
+During the developer phase, the strict gate advises rather than hard-blocks.
+`run_validation.py --allow-below-gate --reason "..."` records an attributable
+`release_override` block in `lineage.json` metrics and exits 0. Without the
+override the gate still fails the run. `export_eligible` always records the
+truthful strict-gate verdict. The gate returns to blocking before any
+non-developer release.
+
+### Rationale
+
+Model quality improves iteratively (more data, better recipe) and each
+iteration drops in without code changes (Decision 10). Blocking the merge on
+0.60 mIoU delays real-use feedback without making the interim estimates any
+better; the app already surfaces per-class calibration honesty (uncalibrated
+banner). An explicit, reasoned override keeps provenance truthful — lineage
+never claims a below-gate model passed — while unblocking the release.
+
+### Alternatives Considered
+
+- **Lower the bar (e.g. to 0.35)**: Would let the current model "pass" - Rejected: rewrites the accuracy requirement to fit the artefact; the bar stops meaning anything.
+- **Keep the hard block until 0.60 is reached**: Strictest reading of Req 3.2 - Rejected: serialises model improvement in front of all real-use testing, for a developer-phase build no one else receives.
+- **Ship the dev-stub instead**: No gate involvement - Rejected: stub estimates are garbage by construction; a below-gate real model produces genuinely useful (if imperfect) masks and exercises the true pipeline.
+
+### Consequences
+
+**Positive:**
+- Model quality stops being the only merge blocker; iteration happens against real use.
+- Every below-gate release is deliberate, reasoned, and traceable in lineage.
+- `export_eligible` stays truthful; re-validation drops stale overrides so each new metrics outcome needs a fresh decision.
+
+**Negative:**
+- A developer-phase build can ship with known-poor segmentation for some classes.
+- The "return to blocking" step is process, not code — it must be enforced at the first non-developer release (flagged alongside the Req 14.5 disclaimer revisit).
+
+---
+
+## Decision 12: Training recipe adds geometric augmentation and poly LR decay
+
+**Date**: 2026-07-05
+**Status**: accepted
+
+### Context
+
+The first full training run (fixed lr 1e-3, no augmentation, 60 epochs
+planned) overfit: train loss fell monotonically (1.12 → 0.21) while val
+food-class mIoU plateaued at ~0.33–0.34 from epoch 13 through epoch 22. The
+dataset (5,553 train images) is small for a 35-channel segmenter, and the only
+train-time variation was the square resize.
+
+### Decision
+
+`train.py` now applies joint geometric augmentation to the train split —
+horizontal flip (p=0.5) plus a random scale-up crop (scale 1.0–1.5, then a
+random 513² window) — and steps the learning rate with a per-epoch poly-0.9
+decay (`lr_e = lr · (1 − (e−1)/epochs)^0.9`). `--no-augment` restores
+deterministic loading; val/heldout are never augmented. Both are recorded in
+checkpoint provenance, the resume sidecar (augmentation is resume-gated), and
+lineage `train_config`.
+
+### Rationale
+
+Flip + scale-crop and poly decay are the standard DeepLab transfer-learning
+recipe and directly target the observed failure (memorising the small train
+set). Scale is bounded ≥ 1.0 so cropping never pads — padding would invent
+pixels carrying a real class id, since the loss has no ignore_index. The
+schedule is a pure function of the epoch number, so `--resume` needs no
+scheduler state and provenance stays reproducible.
+
+### Alternatives Considered
+
+- **Colour jitter as well**: More augmentation diversity - Rejected for now: colour handling is locked to `SegmenterPreProcessor` (train/serve match, §5); any colour-space change must be decided in lockstep with the device pre-processor, not slipped into the recipe.
+- **Per-iteration poly schedule**: Closer to the reference implementation - Rejected: per-epoch stepping is indistinguishable at 60 epochs and keeps the resume sidecar stateless.
+- **Early stopping on val mIoU instead**: Would cap wasted epochs - Rejected: does not fix overfitting, only stops at its plateau; augmentation attacks the cause.
+
+### Consequences
+
+**Positive:**
+- Directly addresses the observed train/val divergence; standard, well-understood recipe.
+- Resume safety preserved: augmentation mismatch is rejected like any other hyperparameter drift.
+
+**Negative:**
+- Epochs are no longer bit-reproducible (worker-seeded randomness), so lineage reproducibility stays metric-level (design §3.3), not byte-level.
+- Slightly slower epochs (extra resize on scaled crops).
+
+---

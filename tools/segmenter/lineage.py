@@ -116,6 +116,31 @@ def build_lineage(
     }
 
 
+def preserve_metrics(
+    manifest: dict[str, Any], existing_path: str | Path = DEFAULT_LINEAGE_PATH
+) -> dict[str, Any]:
+    """Carry recorded metrics forward when re-emitting lineage for the SAME checkpoint.
+
+    ``emit_lineage`` (export.py) rebuilds the manifest with null metrics; without
+    this, a re-export would silently wipe a validation result (and any release
+    override) already recorded for the identical checkpoint SHA. Different SHA →
+    the null placeholders stand, as those metrics belong to another model.
+    Mutates and returns ``manifest``.
+    """
+    path = Path(existing_path)
+    if not path.is_file():
+        return manifest
+    try:
+        existing = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return manifest
+    if existing.get("checkpoint_sha256") == manifest.get("checkpoint_sha256"):
+        recorded = existing.get("metrics")
+        if isinstance(recorded, dict):
+            manifest["metrics"] = recorded
+    return manifest
+
+
 def write_lineage(lineage: dict[str, Any], out_path: str | Path = DEFAULT_LINEAGE_PATH) -> Path:
     """Write the manifest as pretty JSON, creating the build dir if needed."""
     out = Path(out_path)
