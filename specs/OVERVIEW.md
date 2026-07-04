@@ -18,6 +18,7 @@
 | [Cross-dataset Calibration](#cross-dataset-calibration) | estimation | 2026-07-04 | Planned | full | Broaden per-class β calibration beyond Nutrition5k by rendering overhead depth from MetaFood3D single-food meshes and feeding them as single-class mixture rows to the existing harness, so carb staples gain samples N5k's mixed plates cannot. 23 tasks planned. |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
+| [Libre Ingestion](#libre-ingestion) | data | 2026-07-04 | Done | full | Extract glucose readings on-device from user-picked LibreLink screenshots into `bsl` events; Swift port of imgdatacollector gated by its 9-image accuracy corpus. |
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
@@ -115,6 +116,15 @@ Uplift persistence to a long-form event log with fixed timestamp/event_type/valu
 - [design.md](data/event-log-schema/design.md)
 - [requirements.md](data/event-log-schema/requirements.md)
 - [tasks.md](data/event-log-schema/tasks.md)
+
+## Libre Ingestion
+
+Extract glucose readings on-device from user-picked FreeStyle LibreLink screenshots (8-hour home view, 24-hour daily report) into `"bsl"` event rows (mmol/L): photo-picker import in Settings, Vision-OCR extraction ported verbatim from the imgdatacollector reference, keep-first merge with content-hash dedup, and the reference's 9-image ground-truth corpus committed as the `make test` accuracy gate (100% within ±0.3 mmol/L). The importer that feeds Design Handoff 00's Trends glucose series.
+
+- [decision_log.md](data/libre-ingestion/decision_log.md)
+- [design.md](data/libre-ingestion/design.md)
+- [requirements.md](data/libre-ingestion/requirements.md)
+- [tasks.md](data/libre-ingestion/tasks.md)
 
 ## iPhone Experience
 
