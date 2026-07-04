@@ -23,7 +23,7 @@
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 | [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
-| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Planned | full | Adopt the first external design handoff: Capture-rooted shell replacing the tab bar, redesigned screens, new Trends (carbs vs glucose) and Meal overview, minimal wording, versioned handoff archive. 27 tasks planned. |
+| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff: Capture-rooted full-screen shell replacing the tab bar, redesigned screens, new Trends (carbs vs glucose) and Meal overview, minimal wording, versioned handoff archive. All 27 tasks done; on-device verification checklist in prerequisites.md. |
 
 ---
 
