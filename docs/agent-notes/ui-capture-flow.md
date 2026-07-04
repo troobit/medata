@@ -1,6 +1,26 @@
 # UI capture flow (App/)
 
-The iOS SwiftUI capture flow per `specs/ui/iphone-experience/`. New code lives in `App/`; the
+> **Shell superseded by `specs/ui/design-handoff-00/` (2026-07-04).** The tab shell is gone:
+> **Graph** (`TrendsView`, renamed in UI only — Decision 21) is the launch root, and Capture /
+> Data / Settings present as mutually-exclusive `.fullScreenCover`s from Graph's toolbar
+> (`AppRoot.ActiveSheet`, Decisions 19–20). The AR session runs ONLY while the Capture cover
+> is frontmost: `CaptureFlowModel.capturePresented()` arms (via `.initialising`),
+> `captureDismissed()` releases; `evaluatePermissions` is gated on `isCapturePresented`, so
+> launch shows no camera prompt. The old `tabSelectionChanged`/`sheetDidPresent` hooks are
+> these same bodies renamed. Capture chrome: close control (top-leading, returns to Graph),
+> mode capsule (`1-VIEW · LiDAR` / `2-VIEW · NADIR` / `2-VIEW · OBLIQUE`), 76 pt bubble level
+> (stage-relative, non-gating), telemetry capsule, bottom row = mode + shutter (torch,
+> Trends/Data/Settings buttons all gone). Navigation: route enums only — `CaptureRoute`
+> (review/result/correction) on the capture stack, `MealRoute` on Graph/Data stacks;
+> `navigationDestination(for: MealRecord.self)` no longer exists, and an `.onChange` on
+> `navigationPath` resyncs `.showingResult` if the user pops via back-gesture (soft-lock fix).
+> Developer-phase copy rule (CLAUDE.md / Req 14.5): no reassurance/disclaimer strings.
+> Retired dead files: `CaptureTopBar`, `CaptureModeToggle`, `RefusalSheet` (replaced by
+> `CaptureErrorOverlay`), `MealsTabView`, `MealRow`. The architecture notes below (state
+> machine, gating, pre-shutter mask, one-ARSession rule) remain accurate.
+
+The iOS SwiftUI capture flow per `specs/ui/iphone-experience/` (shell/chrome now per
+`design-handoff-00`, see banner). New code lives in `App/`; the
 Xcode project (`MeData/MeData.xcodeproj`) references the files in place via
 `../App/*.swift`. All spec tasks (1–28) are implemented.
 

@@ -23,7 +23,7 @@
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 | [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
-| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff: Capture-rooted full-screen shell replacing the tab bar, redesigned screens, new Trends (carbs vs glucose) and Meal overview, minimal wording, versioned handoff archive. All 27 tasks done; on-device verification checklist in prerequisites.md. |
+| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root; Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
 
 ---
 
@@ -162,7 +162,7 @@ Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar�
 
 ## Design Handoff 00
 
-Adopt the first external design handoff (archived wireframes + scaffold): a Capture-rooted NavigationStack shell replacing the three-tab bar, redesigned capture/result/data screens, new Trends (carbs charted against `bsl` glucose events) and Meal overview screens, mask-artefact persistence, a verbatim minimal-wording copy inventory, and a numbered, versioned handoff archive under `design-system/wireframes/`. Supersedes parts of iPhone Experience per its §16 table. 27 tasks planned across 4 parallel streams.
+Adopt the first external design handoff (archived wireframes + scaffold), amended in use (Decisions 19–21): the three-tab bar is gone — **Graph** (carbs charted against `bsl` glucose events; renamed from Trends everywhere in UI) is the launch root, with Capture, Data, and Settings presenting as full-screen covers and the AR session running only while Capture is frontmost. Redesigned capture/result/data screens, Meal overview, mask-artefact persistence, a verbatim minimal-wording copy inventory (no reassurance/disclaimer copy — developer-phase rule, Req 14.5), and a numbered, versioned handoff archive under `design-system/wireframes/` with a 12-row deviations manifest. Supersedes parts of iPhone Experience per its §16 table. All 27 tasks done; on-device verification in prerequisites.md.
 
 - [copy-inventory.md](ui/design-handoff-00/copy-inventory.md)
 - [decision_log.md](ui/design-handoff-00/decision_log.md)

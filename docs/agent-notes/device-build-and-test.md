@@ -14,7 +14,7 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
 - `make build` / `make test` — SwiftPM core. `make test` prints **both** test
   totals (XCTest ~323 + swift-testing 16). Never report only one framework's
   slice as "the" test count.
-- `make deploy-device` — Debug build + install + launch on PhoneMax
+- `make deploy-device` — Debug build + install + launch. Makefile DEFAULTS still point at PhoneMax; the current primary device is the iPhone 16 Pro — override per invocation: `make deploy-device DEVICE_UDID=6AD781BA-89FF-5A82-A2A1-B5EC9469F465 DEVICE_NAME=you` (same overrides for `deploy-release-stub` / `logs-device`; `logs-device` needs sudo for tethered collection)
   (override `DEVICE_UDID=` / `DEVICE_NAME=`). UI/non-capture work only.
 - `make deploy-release-stub` — the automated Path B below (capture testing).
 - `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs
@@ -24,7 +24,7 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
   subcommand); live viewing stays in Console.app (recipe below).
 - `make spell` — Irish/British spelling lint.
 
-Default device: PhoneMax, iPhone 13 Pro Max, devicectl identifier
+Default device (Makefile): PhoneMax, iPhone 13 Pro Max — often unavailable; primary is now `you` (iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`). PhoneMax devicectl identifier
 `76A45E6D-C57E-5BA6-ABAD-205C3C668572`, bundle `rtob.MeData`. Note the
 devicectl (CoreDevice) identifier is NOT the hardware UDID — `log collect
 --device-udid` wants the hardware one, which is why the Makefile matches the
