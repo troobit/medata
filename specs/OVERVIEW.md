@@ -21,6 +21,8 @@
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
+| [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
+| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Planned | full | Adopt the first external design handoff: Capture-rooted shell replacing the tab bar, redesigned screens, new Trends (carbs vs glucose) and Meal overview, minimal wording, versioned handoff archive. 27 tasks planned. |
 
 ---
 
@@ -139,3 +141,22 @@ Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the devi
 - [decision_log.md](ui/bubble-only-cleanup/decision_log.md)
 - [smolspec.md](ui/bubble-only-cleanup/smolspec.md)
 - [tasks.md](ui/bubble-only-cleanup/tasks.md)
+
+## Loading Symbol Animation
+
+Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot) with loop/once modes and a Reduce-Motion static fallback; tasks 1–4 landed, on-device verify (ldsym05) and call-site adoption (ldsym06 — now absorbed by Design Handoff 00's estimating state) outstanding.
+
+- [decision_log.md](ui/loading-symbol-animation/decision_log.md)
+- [smolspec.md](ui/loading-symbol-animation/smolspec.md)
+- [tasks.md](ui/loading-symbol-animation/tasks.md)
+
+## Design Handoff 00
+
+Adopt the first external design handoff (archived wireframes + scaffold): a Capture-rooted NavigationStack shell replacing the three-tab bar, redesigned capture/result/data screens, new Trends (carbs charted against `bsl` glucose events) and Meal overview screens, mask-artefact persistence, a verbatim minimal-wording copy inventory, and a numbered, versioned handoff archive under `design-system/wireframes/`. Supersedes parts of iPhone Experience per its §16 table. 27 tasks planned across 4 parallel streams.
+
+- [copy-inventory.md](ui/design-handoff-00/copy-inventory.md)
+- [decision_log.md](ui/design-handoff-00/decision_log.md)
+- [design.md](ui/design-handoff-00/design.md)
+- [prerequisites.md](ui/design-handoff-00/prerequisites.md)
+- [requirements.md](ui/design-handoff-00/requirements.md)
+- [tasks.md](ui/design-handoff-00/tasks.md)
