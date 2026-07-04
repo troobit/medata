@@ -15,6 +15,7 @@
 | [Model Production](#model-production) | estimation | 2026-06-29 | Done | full | Train → Core ML export → bundle the on-device segmenter. All 13 code tasks done (Bundle.module loader, build lineage, modelVersion derivation, export.py gates, validation IoU + export-eligibility reporting, palette↔DB bake lock); producing the trained model itself is human/GPU/device-gated — see [prerequisites.md](estimation/model-production/prerequisites.md). |
 | [Nutrition5k Calibration](#nutrition5k-calibration) | estimation | 2026-07-01 | Done | full | Bridge the Nutrition5k RGB-D dataset into the harness to fit per-class β bulk-correction factors, bake them into the food DB with lineage, report carb/protein/fat accuracy against a β=1.0 baseline, and add standalone-liquid classes to a redefined palette v1. All 45 tasks done (39 implementation + closeout consolidation); the post-checkpoint single-dominant re-fit stays gated on model-production Bucket C. |
 | [Resumable Segmenter Training](#resumable-segmenter-training) | estimation | 2026-07-02 | Done | smol | Give `train.py` crash-safe per-epoch checkpointing and a `--resume` flag for interruptible local-Mac (MPS) training runs. |
+| [Cross-dataset Calibration](#cross-dataset-calibration) | estimation | 2026-07-04 | Planned | full | Broaden per-class β calibration beyond Nutrition5k by rendering overhead depth from MetaFood3D single-food meshes and feeding them as single-class mixture rows to the existing harness, so carb staples gain samples N5k's mixed plates cannot. 23 tasks planned. |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
@@ -85,6 +86,15 @@ Give `train.py` crash-safe per-epoch checkpointing and a `--resume` flag for int
 - [decision_log.md](estimation/resumable-segmenter-training/decision_log.md)
 - [smolspec.md](estimation/resumable-segmenter-training/smolspec.md)
 - [tasks.md](estimation/resumable-segmenter-training/tasks.md)
+
+## Cross-dataset Calibration
+
+Broaden per-class β calibration beyond Nutrition5k by rendering overhead depth from MetaFood3D single-food meshes and feeding them as single-class mixture rows to the existing harness, so carb staples gain samples N5k's mixed plates cannot.
+
+- [decision_log.md](estimation/cross-dataset-calibration/decision_log.md)
+- [design.md](estimation/cross-dataset-calibration/design.md)
+- [requirements.md](estimation/cross-dataset-calibration/requirements.md)
+- [tasks.md](estimation/cross-dataset-calibration/tasks.md)
 
 ## Rawframe Rgb Conversion
 
