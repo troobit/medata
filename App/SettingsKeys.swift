@@ -24,4 +24,16 @@ nonisolated enum SettingsKeys {
     // Glucose y-scale: false = Auto, true = Fixed at `trendsFixedMax` mmol/L.
     static let trendsScaleFixed = "medata.trends.scaleFixed"
     static let trendsFixedMax = "medata.trends.fixedMax"
+    // Insulin metric chip: show/hide the dose markers on the Graph chart
+    // (PRD regression-suggestion-integration App 9).
+    static let trendsShowInsulin = "medata.trends.showInsulin"
+
+    // Per-kind insulin product defaults (PRD regression-suggestion-integration
+    // App 5). Free-text editable in Settings; the dose sheet reads them at
+    // save time and never asks for the product. The `…Default` constants are
+    // the fallbacks when a key is unset or cleared to whitespace.
+    static let insulinTypeBolus = "medata.insulin.bolusType"
+    static let insulinTypeBasal = "medata.insulin.basalType"
+    static let insulinTypeBolusDefault = "NovoRapid"
+    static let insulinTypeBasalDefault = "Lantus"
 }
