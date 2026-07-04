@@ -1,3 +1,5 @@
+> **Superseded by design-handoff-00** — this page is superseded by [`design-system/pages/capture.md`](capture.md) (design-handoff-00, 2026-07-04). Content is preserved for history only; do not implement against it.
+
 # Photo tab — page-specific overrides
 
 **Inherits:** `design-system/MASTER.md`. This file specifies deviations and additions for the Photo tab (camera capture screen + result view).

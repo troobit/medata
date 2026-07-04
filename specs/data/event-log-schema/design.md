@@ -131,7 +131,7 @@ Byte-identity of unchanged sibling fields inside `record` is preserved because t
 
 ### Change broadcaster
 
-`ChangeBroadcaster` is unchanged in mechanics; the public stream is renamed `eventsDidChange` and fires after any successful event-row write or delete: `save`, `deleteMeal`, and (newly) `updatePhotoAssetID`. `appendCorrection` does not notify — corrections live in their side table, and the Meals tab does not redraw on a correction.
+`ChangeBroadcaster` is unchanged in mechanics; the public stream is renamed `eventsDidChange` and fires after any successful event-row write or delete: `save`, `deleteMeal`, and (newly) `updatePhotoAssetID`. `appendCorrection` **does notify `eventsDidChange`** as of design-handoff-00 ([Decision 18](../../ui/design-handoff-00/decision_log.md#decision-18-appendcorrection-now-emits-eventsdidchange)) — the Data screen and Meal overview compose corrected totals and must refresh when a correction lands; without this notification they have no way to learn of the change. The original design (corrections live in their side table; Meals tab does not redraw on a correction) is superseded by this requirement.
 
 ## Data Models
 
@@ -190,7 +190,7 @@ Tests live in `MedataCore/Tests/PersistenceTests/`. The existing `PersistenceTes
 | `deleteMeal` cascades to `meal_artefacts` and `corrections` (Req 4.3) | Insert artefact + correction rows; delete; assert both side tables empty for that id. |
 | `updatePhotoAssetID` rewrites `metadata` and emits `eventsDidChange` | Reload sees the new value; subscriber receives one tick. |
 | `corrections(for:)` returns the append log ordered by `created_at` ASC; meal event `value` unchanged | Append two corrections at distinct timestamps; assert order; assert event `value` unchanged. |
-| `eventsDidChange` yields after `save`, `delete`, `updatePhotoAssetID`; not after `appendCorrection` | Subscribe before each operation; assert tick presence/absence. |
+| `eventsDidChange` yields after `save`, `delete`, `updatePhotoAssetID`, and `appendCorrection` (design-handoff-00 [Decision 18](../../ui/design-handoff-00/decision_log.md#decision-18-appendcorrection-now-emits-eventsdidchange)) | Subscribe before each operation; assert tick presence. |
 | `deleteArtefacts(olderThan:)` resolves paths from event id, not from a stored column | Save meal with artefact dir present on disk; advance clock; sweep; assert dir gone. |
 | Protobuf-JSON byte-identical inside `metadata.record` | Encode → store → reload `metadata` → extract `record` field → equal to `original.pb.jsonString()` exact bytes. |
 

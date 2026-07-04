@@ -18,7 +18,7 @@ references:
 
 - [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -180,20 +180,20 @@ references:
 
 ## Docs and archive
 
-- [ ] 24. Archive handoff bundle + MANIFEST.md + intake-note update <!-- id:xi3gpnm -->
+- [x] 24. Archive handoff bundle + MANIFEST.md + intake-note update <!-- id:xi3gpnm -->
   - tmp/design/design_handoff_medata/ → design-system/wireframes/design-handoff-00/ verbatim, inert (no target membership)
   - MANIFEST.md: id 00, date, source, deviations each linking a decision (three-tier chip D5, retention/IFCDB D4, σ_tilt% row 2, torch D14, per-class σ D16, Save→Done D17, Trends row target 10.6, tab-bar invariant D12, copy → §14); no SHA field (Decision 10)
   - docs/agent-notes/wireframe-intake.md landing-zone section → bulk-folder scheme
   - Stream: 4
   - Requirements: [15.1](requirements.md#15.1), [15.2](requirements.md#15.2)
 
-- [ ] 25. MASTER.md amendments + supersede photo-tab/meals-tab pages <!-- id:xi3gpnn -->
+- [x] 25. MASTER.md amendments + supersede photo-tab/meals-tab pages <!-- id:xi3gpnn -->
   - Delete tab-bar layout invariant; add seriesGlucose (systemOrange) + bandTarget (medataAccent 10%) tokens (Decision 12); scaffold palette NOT adopted
   - photo-tab.md / meals-tab.md: superseded markers pointing at capture.md / data.md
   - Stream: 4
   - Requirements: [15.3](requirements.md#15.3)
 
-- [ ] 26. Supersession note in iphone-experience + event-log-schema note update <!-- id:xi3gpno -->
+- [x] 26. Supersession note in iphone-experience + event-log-schema note update <!-- id:xi3gpno -->
   - Status paragraph in specs/ui/iphone-experience/requirements.md pointing at the §16 table (Req 16.1, same commit series)
   - specs/data/event-log-schema/design.md: appendCorrection now notifies (Decision 18)
   - Stream: 4
