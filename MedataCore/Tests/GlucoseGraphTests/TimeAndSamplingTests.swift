@@ -156,9 +156,9 @@ final class TimeAndSamplingTests: XCTestCase {
     func testChooseRunCenterTakesLocalExtremum() {
         let runs = [(start: 100, end: 110), (start: 200, end: 210)]
         // Neighbours below the midpoint -> topmost run (spike apex).
-        XCTAssertEqual(chooseRunCenter(runs, neighbourY: 180), 105)
+        XCTAssertEqual(chooseRunCentre(runs, neighbourY: 180), 105)
         // Neighbours above the midpoint -> bottommost run (dip).
-        XCTAssertEqual(chooseRunCenter(runs, neighbourY: 120), 205)
+        XCTAssertEqual(chooseRunCentre(runs, neighbourY: 120), 205)
     }
 
     func testSampleTraceBridgesShortGapsAndOmitsWideOnes() {

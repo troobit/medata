@@ -251,21 +251,21 @@ func hourLabelRow(_ boxes: [TextBox], height: Int) -> [(box: TextBox, hour: Int)
     for box in boxes {
         let trimmed = box.text.trimmingCharacters(in: .whitespaces)
         guard let (hh, mm) = parseTimeLabel(trimmed), hh <= 23, mm == 0 else { continue }
-        if box.center.y < Double(height) * 0.5 { continue }
+        if box.centre.y < Double(height) * 0.5 { continue }
         candidates.append((box, hh))
     }
 
     var clusters: [[(TextBox, Int)]] = []
-    for item in candidates.sorted(by: { $0.0.center.y < $1.0.center.y }) {
+    for item in candidates.sorted(by: { $0.0.centre.y < $1.0.centre.y }) {
         if let last = clusters.last, let first = last.first,
-           item.0.center.y - first.0.center.y < 40 {
+           item.0.centre.y - first.0.centre.y < 40 {
             clusters[clusters.count - 1].append(item)
         } else {
             clusters.append([item])
         }
     }
     guard let row = clusters.max(by: { $0.count < $1.count }) else { return [] }
-    return row.sorted { $0.0.center.x < $1.0.center.x }
+    return row.sorted { $0.0.centre.x < $1.0.centre.x }
 }
 
 // Left-to-right label hours with a midnight wrap adding 24.
@@ -292,7 +292,7 @@ func checkUniform(_ labels: [(box: TextBox, hour: Int)], hours: [Int]) throws ->
     if Set(hourDiffs).count != 1 {
         throw RejectImage("cannot identify view: hour labels are not uniformly spaced")
     }
-    let xs = labels.map { $0.box.center.x }
+    let xs = labels.map { $0.box.centre.x }
     let pxPitches = zip(xs, xs.dropFirst()).map { $1 - $0 }
     let medianPitch = median(pxPitches.map(Double.init))
     if pxPitches.contains(where: { abs($0 - medianPitch) > xPitchTolerance * medianPitch }) {
@@ -308,7 +308,7 @@ func yLabelColumn(_ boxes: [TextBox], width: Int) -> [(box: TextBox, value: Int)
     boxes.compactMap { box in
         let trimmed = box.text.trimmingCharacters(in: .whitespaces)
         guard let value = parseIntLabel(trimmed),
-              box.center.x < 0.12 * Double(width),
+              box.centre.x < 0.12 * Double(width),
               box.pixelRect.width <= 70,
               box.pixelRect.height <= 60
         else { return nil }
@@ -453,7 +453,7 @@ public func classifyAndCalibrate(
     let values = Set(yLabels.map(\.value)).sorted()
     let steps = zip(values, values.dropFirst()).map { Double($1 - $0) }
     let valueStep = steps.isEmpty ? 3.0 : median(steps)
-    let yPoints = yLabels.map { (px: Double($0.box.center.y), value: Double($0.value)) }
+    let yPoints = yLabels.map { (px: Double($0.box.centre.y), value: Double($0.value)) }
     let (yFit, used) = try fitWithRetry(yPoints, valueStep: valueStep, what: "glucose axis")
     let yLabelsUsed = used.map { yLabels[$0] }
 
@@ -472,7 +472,7 @@ public func classifyAndCalibrate(
     let bottom = yFit.px(at: Double(axisRange.low)) + 0.6 * pitchPx
 
     let xPoints = zip(hourLabels, hours).map { label, hour in
-        (px: Double(label.box.center.x), value: Double(hour))
+        (px: Double(label.box.centre.x), value: Double(hour))
     }
     var xFit: LinearFit?
     if let bitmap {

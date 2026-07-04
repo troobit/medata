@@ -156,7 +156,7 @@ func weekdayWarnings(
 
     var warnings: [String] = []
     for box in boxes {
-        let cy = box.center.y
+        let cy = box.centre.y
         guard plotBottom <= cy, cy <= plotBottom + 250 else { continue }
         let trimmed = box.text.trimmingCharacters(in: .whitespaces)
         let range = NSRange(trimmed.startIndex..., in: trimmed)
@@ -172,7 +172,7 @@ func weekdayWarnings(
             // Combined boundary label: left day | truncated right day.
             ok = calibration.crossesMidnight && day == previous && expected.hasPrefix(tail)
         } else if calibration.crossesMidnight {
-            let sideDay = box.center.x < midnightPx ? previous : expected
+            let sideDay = box.centre.x < midnightPx ? previous : expected
             ok = day == sideDay
         } else {
             ok = day == expected

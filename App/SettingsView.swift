@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var archiveFile: ArchiveFile?
     @State private var isExporting = false
     @State private var exportError: String?
+    @State private var showsGlucoseImport = false
 
     var body: some View {
         Form {
@@ -37,6 +38,16 @@ struct SettingsView: View {
             }
             Section("Photos") {
                 Text("Captured meal photos are saved to your Photos library and managed there. Removing a photo from Photos will remove the preview from the meal record, but the carbohydrate estimate is kept.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Glucose data") {
+                Button {
+                    showsGlucoseImport = true
+                } label: {
+                    Label("Import LibreLink screenshots", systemImage: "waveform.path.ecg")
+                }
+                Text("Extracts glucose readings from FreeStyle LibreLink graph screenshots and stores them with your meals, entirely on this device.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -61,6 +72,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .sheet(item: $archiveFile) { file in
             ShareSheet(activityItems: [file.url])
+        }
+        .sheet(isPresented: $showsGlucoseImport) {
+            GlucoseImportView(store: store)
         }
     }
 

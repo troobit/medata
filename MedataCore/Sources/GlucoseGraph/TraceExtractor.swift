@@ -85,12 +85,12 @@ func columnRuns(_ ys: [Int], gap: Int = rejoinGap) -> [(start: Int, end: Int)] {
 // Stroke centre for a column; local extremum on multi-run columns. Multiple
 // disjoint runs mean a steep flank or spike apex: take the topmost run when
 // the neighbouring columns' centres lie below it, the bottommost when above.
-func chooseRunCenter(_ runs: [(start: Int, end: Int)], neighbourY: Double?) -> Double {
-    let centers = runs.map { Double($0.start + $0.end) / 2 }
-    if centers.count == 1 { return centers[0] }
-    guard let neighbourY else { return centers[0] }
-    let midpoint = (centers.min()! + centers.max()!) / 2
-    return neighbourY >= midpoint ? centers.min()! : centers.max()!
+func chooseRunCentre(_ runs: [(start: Int, end: Int)], neighbourY: Double?) -> Double {
+    let centres = runs.map { Double($0.start + $0.end) / 2 }
+    if centres.count == 1 { return centres[0] }
+    guard let neighbourY else { return centres[0] }
+    let midpoint = (centres.min()! + centres.max()!) / 2
+    return neighbourY >= midpoint ? centres.min()! : centres.max()!
 }
 
 // MARK: - Structural dashed-line removal
@@ -290,18 +290,18 @@ func extractTrace(
     for (x, ys) in byCol {
         if ys.count < minColumnPixels { continue }
         let runs = columnRuns(ys)
-        let center: Double
+        let centre: Double
         if runs.count == 1 {
-            center = chooseRunCenter(runs, neighbourY: nil)
+            centre = chooseRunCentre(runs, neighbourY: nil)
         } else {
             var neighbours: [Int] = []
             for dx in [-3, -2, -1, 1, 2, 3] {
                 if let column = byCol[x + dx] { neighbours.append(contentsOf: column) }
             }
             let neighbourY = neighbours.isEmpty ? nil : mean(neighbours.map(Double.init))
-            center = chooseRunCenter(runs, neighbourY: neighbourY)
+            centre = chooseRunCentre(runs, neighbourY: neighbourY)
         }
-        columns[x] = calibration.yFit.value(at: center)
+        columns[x] = calibration.yFit.value(at: centre)
     }
     return (columns, occluded)
 }

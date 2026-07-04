@@ -25,7 +25,7 @@ references:
   - Axis-tick x-fit refinement (_find_axis_line/_detect_ticks/_refine_x_fit) and plot-rect derivation
   - Constants verbatim from graph.py with reference names in comments (Decision 1)
   - RejectImage error with reason strings
-  - Blocked-by: 14pl0ec (Port OCR wrapper and bitmap decode (TextRecogniser, Bitmap)), wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper
+  - Blocked-by: 14pl0ec (Port OCR wrapper and bitmap decode (TextRecogniser, Bitmap)), wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper, wrapper
   - Stream: 1
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5)
 
@@ -53,7 +53,7 @@ references:
   - AccuracyTests parameterised over 9 corpus images: >=95% within 0.3; max <=0.6; recall >=98%; zero readings at fixture-absent marks; prints per-image MAE + max
   - Fixture local times pinned to Europe/Dublin
   - Unit tests: view classification per image; blank image rejects; 3-21 and 3-27 ranges; below-3 extrapolation unclamped; date establishment paths; DST warning; midnight crossing incl. right-edge-00:00
-  - Blocked-by: 14pl0ef (Port trace extraction and sampling (TraceExtractor, Sampler) and extract orchestrator), extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract
+  - Blocked-by: 14pl0ef (Port trace extraction and sampling (TraceExtractor, Sampler) and extract orchestrator), extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract
   - Stream: 1
   - Requirements: [2.4](requirements.md#2.4), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4)
 
@@ -84,13 +84,13 @@ references:
   - Stream: 2
   - Requirements: [4.1](requirements.md#4.1)
 
-- [ ] 10. Build import UI: GlucoseImportModel + GlucoseImportView + Settings entry <!-- id:14pl0ek -->
+- [x] 10. Build import UI: GlucoseImportModel + GlucoseImportView + Settings entry <!-- id:14pl0ek -->
   - GlucoseImportModel (@Observable @MainActor): sequential pipeline load->sha256->isProcessed->decode->asset date->extract (detached)->ingestBsl->ImageResult; cancellation after in-flight image
   - GlucoseImportView sheet: PhotosPicker (.screenshots preferred; multiple)
   - progress
   - per-image outcome rows incl. rejection reasons + warnings + discrepancy counts
   - SettingsView: Glucose data section with import row; British English copy passing make spell
-  - Blocked-by: 14pl0ef (Port trace extraction and sampling (TraceExtractor, Sampler) and extract orchestrator), extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, 14pl0ei (Implement persistence additions: EventType.bsl, processed_images, ingestBsl, isImageProcessed)
+  - Blocked-by: 14pl0ef (Port trace extraction and sampling (TraceExtractor, Sampler) and extract orchestrator), extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, 14pl0ei (Implement persistence additions: EventType.bsl, processed_images, ingestBsl, isImageProcessed)
   - Stream: 3
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.2](requirements.md#2.2), [5.4](requirements.md#5.4)
 
@@ -110,5 +110,5 @@ references:
   - port-fidelity rule
   - date-establishment gotchas)
   - Reconcile specs/DECISIONS.md if any decision is cross-cutting
-  - Blocked-by: 14pl0el (Verify: make test (both totals), make spell, device build; compare 2-3 live imports against the Python tool), compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against
+  - Blocked-by: 14pl0el (Verify: make test (both totals), make spell, device build; compare 2-3 live imports against the Python tool), compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against, compare, imports, against
   - Stream: 3

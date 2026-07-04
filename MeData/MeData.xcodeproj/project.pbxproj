@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */ = {isa = PBXBuildFile; productRef = 111EC91D2FBD45B500272C1E /* MedataCore */; };
+		118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */ = {isa = PBXBuildFile; productRef = 118B44A52FF0000000272C1E /* GlucoseGraph */; };
 		111EC9232FBD47A100272C1E /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC91F2FBD47A100272C1E /* App.swift */; };
 		111EC9242FBD47A100272C1E /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9212FBD47A100272C1E /* ResultView.swift */; };
 		111EC9252FBD47A100272C1E /* CaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9202FBD47A100272C1E /* CaptureFlowView.swift */; };
@@ -29,6 +30,8 @@
 		113B22A22FD0000000272C1E /* CaptureModeToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B22FD0000000272C1E /* CaptureModeToggle.swift */; };
 		113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B32FD0000000272C1E /* ShutterButton.swift */; };
 		113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */; };
+		118B44A02FF0000000272C1E /* GlucoseImportModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118B44A22FF0000000272C1E /* GlucoseImportModel.swift */; };
+		118B44A12FF0000000272C1E /* GlucoseImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118B44A32FF0000000272C1E /* GlucoseImportView.swift */; };
 		113B22A42FD0000000272C1E /* RefusalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B42FD0000000272C1E /* RefusalSheet.swift */; };
 		113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B52FD0000000272C1E /* ActiveRefusal.swift */; };
 		112B11C12FCE000000272C1E /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D12FCE000000272C1E /* AppTab.swift */; };
@@ -63,6 +66,8 @@
 		113B22B22FD0000000272C1E /* CaptureModeToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureModeToggle.swift; path = ../App/CaptureModeToggle.swift; sourceTree = SOURCE_ROOT; };
 		113B22B32FD0000000272C1E /* ShutterButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShutterButton.swift; path = ../App/ShutterButton.swift; sourceTree = SOURCE_ROOT; };
 		113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedataLoadingSymbol.swift; path = ../App/MedataLoadingSymbol.swift; sourceTree = SOURCE_ROOT; };
+		118B44A22FF0000000272C1E /* GlucoseImportModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseImportModel.swift; path = ../App/GlucoseImportModel.swift; sourceTree = SOURCE_ROOT; };
+		118B44A32FF0000000272C1E /* GlucoseImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseImportView.swift; path = ../App/GlucoseImportView.swift; sourceTree = SOURCE_ROOT; };
 		113B22B42FD0000000272C1E /* RefusalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RefusalSheet.swift; path = ../App/RefusalSheet.swift; sourceTree = SOURCE_ROOT; };
 		113B22B52FD0000000272C1E /* ActiveRefusal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActiveRefusal.swift; path = ../App/ActiveRefusal.swift; sourceTree = SOURCE_ROOT; };
 		112B11D12FCE000000272C1E /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppTab.swift; path = ../App/AppTab.swift; sourceTree = SOURCE_ROOT; };
@@ -88,6 +93,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */,
+				118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -118,6 +124,8 @@
 				113B22B22FD0000000272C1E /* CaptureModeToggle.swift */,
 				113B22B32FD0000000272C1E /* ShutterButton.swift */,
 				113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */,
+				118B44A22FF0000000272C1E /* GlucoseImportModel.swift */,
+				118B44A32FF0000000272C1E /* GlucoseImportView.swift */,
 				113B22B42FD0000000272C1E /* RefusalSheet.swift */,
 				113B22B52FD0000000272C1E /* ActiveRefusal.swift */,
 				112B11D12FCE000000272C1E /* AppTab.swift */,
@@ -161,6 +169,7 @@
 			name = MeData;
 			packageProductDependencies = (
 				111EC91D2FBD45B500272C1E /* MedataCore */,
+				118B44A52FF0000000272C1E /* GlucoseGraph */,
 			);
 			productName = MeData;
 			productReference = 111EC90C2FBD327D00272C1E /* MeData.app */;
@@ -239,6 +248,8 @@
 				113B22A22FD0000000272C1E /* CaptureModeToggle.swift in Sources */,
 				113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */,
 				113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */,
+				118B44A02FF0000000272C1E /* GlucoseImportModel.swift in Sources */,
+				118B44A12FF0000000272C1E /* GlucoseImportView.swift in Sources */,
 				113B22A42FD0000000272C1E /* RefusalSheet.swift in Sources */,
 				113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */,
 				112B11C12FCE000000272C1E /* AppTab.swift in Sources */,
@@ -485,6 +496,10 @@
 		111EC91D2FBD45B500272C1E /* MedataCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MedataCore;
+		};
+		118B44A52FF0000000272C1E /* GlucoseGraph */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = GlucoseGraph;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

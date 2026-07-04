@@ -22,7 +22,11 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "MedataCore", targets: ["Pipeline"])
+        .library(name: "MedataCore", targets: ["Pipeline"]),
+        // Separate product: glucose ingestion is a data stream beside the
+        // estimation pipeline, not part of it (specs/data/libre-ingestion
+        // Decision 2). The app links both.
+        .library(name: "GlucoseGraph", targets: ["GlucoseGraph"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),

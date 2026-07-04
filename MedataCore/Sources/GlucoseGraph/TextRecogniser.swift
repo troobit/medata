@@ -18,7 +18,7 @@ public struct TextBox: Sendable, Equatable {
         self.confidence = confidence
     }
 
-    public var center: CGPoint {
+    public var centre: CGPoint {
         CGPoint(x: pixelRect.midX, y: pixelRect.midY)
     }
 }
