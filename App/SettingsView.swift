@@ -59,9 +59,8 @@ struct SettingsView: View {
                 } label: {
                     Label("Import LibreLink screenshots", systemImage: "waveform.path.ecg")
                 }
-                Text("Extracts glucose readings from FreeStyle LibreLink graph screenshots and stores them with your meals, entirely on this device.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                // Explainer footnote removed under the developer-phase copy rule
+                // (Req 14.5 / Decision 21).
             }
 
             Section("Capture") {

@@ -2,49 +2,45 @@ import CaptureKit
 import Pipeline
 import SwiftUI
 
-// Capture root under the handoff-00 Capture-rooted shell (Req 2, design page
-// `design-system/pages/capture.md`). Composes:
-//   • top bar        — Trends/Data buttons, mode capsule (top-centre),
+// Capture surface under the handoff-00 Graph-rooted shell (Req 2, design page
+// `design-system/pages/capture.md`). Presented as a full-screen cover from the
+// Graph root (Decision 20). Composes:
+//   • top bar        — close control (top-leading), mode capsule (top-centre),
 //                      `MedataBubbleLevel` (top-right)
 //   • `TelemetryCapsule` — always-visible tilt / distance / LiDAR-dot chip
 //   • transient surfaces — Initialising / hold steady / Capturing / Target 25°
 //                      / blocked-gate chip
-//   • bottom row     — mode button, `ShutterButton`, settings button
+//   • bottom row     — mode button, `ShutterButton`
 //   • `MedataLoadingSymbol` — over frozen frames during `.estimating`
 // Behaviour lives in `CaptureFlowModel`; this is composition only. The effective
 // capture mode is read via `@AppStorage` (with a LiDAR-aware default, Req 16.2)
 // so fork-sheet / mode-button writes flow here without coupling. Torch is gone
-// (Decision 14).
+// (Decision 14); the Trends/Data/Settings buttons moved to the Graph root
+// (Decision 20).
 struct CaptureFlowView: View {
     @Bindable var model: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
     let visionCardDetector: VisionCardDetector?
     let preShutterSegmenter: PreShutterSegmenter?
-    // Capture-chrome buttons open the Data / Trends / Settings sheets through
-    // these closures (the shell owns the single `ActiveSheet` state — Decision 11).
-    let onOpenData: () -> Void
-    let onOpenTrends: () -> Void
-    let onOpenSettings: () -> Void
+
+    // The Capture cover has no drag-to-dismiss; the top-leading close control
+    // dismisses it back to Graph (Decision 20). Dismissing sets `AppRoot`'s
+    // `activeSheet` to nil, which fires `captureModel.captureDismissed()`.
+    @Environment(\.dismiss) private var dismiss
 
     init(
         model: CaptureFlowModel,
         engine: ARKitCaptureEngine,
         store: any PersistenceStore,
         visionCardDetector: VisionCardDetector? = nil,
-        preShutterSegmenter: PreShutterSegmenter? = nil,
-        onOpenData: @escaping () -> Void = {},
-        onOpenTrends: @escaping () -> Void = {},
-        onOpenSettings: @escaping () -> Void = {}
+        preShutterSegmenter: PreShutterSegmenter? = nil
     ) {
         self.model = model
         self.engine = engine
         self.store = store
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
-        self.onOpenData = onOpenData
-        self.onOpenTrends = onOpenTrends
-        self.onOpenSettings = onOpenSettings
     }
 
     @State private var observer: LiveSampleObserver?
@@ -118,10 +114,10 @@ struct CaptureFlowView: View {
     }
 
     // Full-bleed capture chrome (Req 2.1). The AR preview is the content; the
-    // chrome is a top bar (Trends/Data + mode capsule + bubble level), a
+    // chrome is a top bar (close control + mode capsule + bubble level), a
     // telemetry capsule and transient surfaces above the shutter, and a bottom
-    // row (mode / shutter / settings). `.permissionDenied` keeps the top bar and
-    // settings rendered while disabling the shutter and mode (Req 1.6).
+    // row (mode / shutter). `.permissionDenied` keeps the top bar (with its
+    // close control) rendered while disabling the shutter and mode (Req 1.6).
     private var capture: some View {
         ZStack {
             backgroundLayer
@@ -242,12 +238,16 @@ struct CaptureFlowView: View {
                     .accessibilityIdentifier("modeCapsule")
             }
             HStack(alignment: .top) {
-                // Trends and Data buttons, top area (Req 2.1). Usable even while
-                // permission is denied (Req 1.6).
-                HStack(spacing: 12) {
-                    chromeButton("chart.xyaxis.line", label: "Trends", action: onOpenTrends)
-                    chromeButton("square.stack.3d.up", label: "Data", action: onOpenData)
-                }
+                // Close control, top-leading (Req 2.1): dismisses the Capture
+                // cover back to Graph. Reuses `CloseCoverButton` (xmark,
+                // accessibility `Close`), wrapped in a 40pt chrome circle to
+                // match the capture aesthetic. Remains usable while permission
+                // is denied (Req 1.6).
+                CloseCoverButton { dismiss() }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.captureChromeText)
+                    .frame(width: 40, height: 40)
+                    .background(Color.captureChromeBG, in: Circle())
                 Spacer()
                 // Bubble level, top-right (Req 2.1). Hidden while denied.
                 if !isPermissionDenied {
@@ -258,18 +258,6 @@ struct CaptureFlowView: View {
                 }
             }
         }
-    }
-
-    private func chromeButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.captureChromeText)
-                .frame(width: 40, height: 40)
-                .background(Color.captureChromeBG, in: Circle())
-        }
-        .accessibilityLabel(label)
-        .accessibilityIdentifier("captureChrome.\(label.lowercased())")
     }
 
     // MARK: - Bottom area (Req 2.1)
@@ -330,10 +318,11 @@ struct CaptureFlowView: View {
                     flashBlockedChip()
                 }
             )
+            // Mode button leading, shutter centred. Settings moved to the Graph
+            // root (Decision 20), so the trailing slot is empty.
             HStack {
                 modeButton
                 Spacer()
-                chromeButton("gearshape.fill", label: "Settings", action: onOpenSettings)
             }
         }
         .padding(.horizontal, 32)
@@ -371,8 +360,9 @@ struct CaptureFlowView: View {
             .accessibilityIdentifier("hint.estimating")
     }
 
-    // Centred refusal copy for `.permissionDenied` (Req 1.6). The top bar and
-    // settings button stay rendered; only the shutter and mode are disabled.
+    // Centred refusal copy for `.permissionDenied` (Req 1.6). The top bar (with
+    // its close control) stays rendered; only the shutter and mode are disabled,
+    // so the user can always dismiss the Capture cover from the refusal state.
     private var permissionDeniedMessage: some View {
         VStack(spacing: 16) {
             Image(systemName: "camera.metering.unknown")
@@ -557,5 +547,5 @@ private struct NadirThumbnailView: View {
 }
 // The standalone `PermissionDeniedView` (full-screen, no chrome) was folded
 // into the capture layout in the handoff-00 chrome rebuild: the denial copy is
-// centred while the top bar and settings button stay rendered (Req 1.6) — see
-// `permissionDeniedMessage`.
+// centred while the top bar (with its close control) stays rendered (Req 1.6) —
+// see `permissionDeniedMessage`.

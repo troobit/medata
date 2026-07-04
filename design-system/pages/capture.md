@@ -1,8 +1,9 @@
 # Capture — page-specific overrides
 
 **Inherits:** `design-system/MASTER.md`. Deviations and additions for the
-Capture screen (the navigation root under the handoff-00 Capture-rooted shell —
-Decision 11). Supersedes `photo-tab.md`.
+Capture screen. Under the Graph-rooted shell (Decision 20) Capture is a
+full-screen cover presented from the Graph root, not the navigation root.
+Supersedes `photo-tab.md`.
 
 **Brief:** The AR preview is the content. Chrome is data-only, semi-transparent,
 and grouped so nothing distracts from framing the plate. No instructions, no
@@ -14,8 +15,8 @@ titles — the screen reads like an instrument (Req 2).
 
 ```
 ┌─────────────────────────────────────┐
-│  ◎ ◎        1-VIEW · LiDAR      ┌──┐ │  Top bar (Req 2.1)
-│  Trends/Data (leading)          │◉ │ │  • Trends + Data — 40pt captureChromeBG circles, leading
+│  ✕          1-VIEW · LiDAR      ┌──┐ │  Top bar (Req 2.1)
+│  Close (leading)                │◉ │ │  • Close control — xmark, 40pt captureChromeBG circle, leading
 │                                 └──┘ │  • Mode capsule — top-centre, monospaced
 │                                      │  • Bubble level — 76×76, top-right
 │                                      │
@@ -27,14 +28,16 @@ titles — the screen reads like an instrument (Req 2).
 │      │ tilt 1.8° · dist 34 cm │       │  tilt° · dist cm (or 30–40 cm band)
 │      │        · LiDAR ●       │       │  · LiDAR dot ● filled / ○ hollow
 │      └───────────────────────┘       │
-│   ┌──────┐        ╭───╮       ◎      │  Bottom row (Req 2.1)
-│   │2-VIEW│        │   │       ⚙      │  mode button · shutter · settings
+│   ┌──────┐        ╭───╮              │  Bottom row (Req 2.1)
+│   │2-VIEW│        │   │              │  mode button · shutter
 │   └──────┘        ╰───╯              │
 └─────────────────────────────────────┘
 ```
 
-No tab bar (the shell removed it — Decision 11). Data, Trends and Settings are
-sheets opened from the chrome buttons.
+No tab bar (the shell removed it — Decision 11). Capture, Data, Trends/Graph and
+Settings are full-screen covers; the Capture cover's close control returns to the
+Graph root (Decision 20). The Data and Settings controls live on the Graph root,
+not here.
 
 ---
 
@@ -44,8 +47,7 @@ sheets opened from the chrome buttons.
 
 | Element | Position | Spec |
 |---|---|---|
-| Trends button | Leading, 16pt gutter | `chart.xyaxis.line`, 16pt white in a 40pt `captureChromeBG` circle. Accessibility label `Trends`. Opens the Trends sheet. Stays usable while permission is denied (Req 1.6). |
-| Data button | Leading, next to Trends | `square.stack.3d.up`, same capsule. Accessibility label `Data`. Opens the Data sheet. Usable while denied. |
+| Close control | Leading, 16pt gutter | `xmark` (`CloseCoverButton`), 16pt white in a 40pt `captureChromeBG` circle. Accessibility label `Close`. Dismisses the Capture cover back to Graph (Decision 20). Stays usable while permission is denied (Req 1.6). |
 | Mode capsule | Top-centre | Monospaced `caption`, white on `captureChromeBG` capsule. Reads `1-VIEW · LiDAR` / `2-VIEW · NADIR` / `2-VIEW · OBLIQUE` per stage (Req 2.2). Read-only status — the bottom-row mode button is the control. |
 | Bubble level | Top-right | `MedataBubbleLevel`, 76×76 — see below. |
 
@@ -96,7 +98,9 @@ badge reveal is gone.
 |---|---|---|
 | Mode button | Leading | 64×40 `captureChromeBG` capsule, monospaced `1-VIEW` / `2-VIEW`. Tap toggles 1-view/2-view (LiDAR only); long-press opens the fork sheet (`fork-sheet.md`). Disabled (0.4 opacity) while denied or busy. |
 | Shutter | Centre | `ShutterButton`, 76pt, `bottomClearance` (24pt) above the safe-area bottom. |
-| Settings button | Trailing | `gearshape.fill`, 40pt `captureChromeBG` circle. Accessibility label `Settings`. Opens the Settings sheet. Usable while denied (Req 1.6). |
+
+The Settings button is gone from the bottom row — Settings lives on the Graph
+root now (Decision 20). The trailing slot is empty.
 
 Torch is removed (Decision 14); `more light` (`capture-error.md`) is the
 dark-scene guidance.
@@ -109,9 +113,10 @@ and mode are suppressed; telemetry is hidden.
 
 ### Permission denied (Req 1.6)
 
-Not a takeover. The top bar (Trends/Data) and the settings button stay rendered
-and usable; the shutter and mode button are disabled. Centred copy:
-`Camera access denied` or `Motion access denied`, with an `Open Settings` button.
+Not a takeover. The top bar (with its close control) stays rendered and usable —
+so the Capture cover is always dismissible from the refusal state (Req 1.6); the
+shutter and mode button are disabled. Centred copy: `Camera access denied` or
+`Motion access denied`, with an `Open Settings` button.
 
 ---
 

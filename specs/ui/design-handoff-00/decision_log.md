@@ -611,3 +611,67 @@ Direct user instruction — the user zone wins over the handoff drawing. The ite
 - Deviates from the archived wireframes (manifest deviation); explicit close controls become mandatory on all three surfaces
 
 ---
+
+## Decision 20: Graph is the launch root; Capture becomes a presented surface
+
+**Date**: 2026-07-04
+**Status**: accepted
+
+### Context
+
+The Capture-rooted shell (Req 1.1 as implemented) opens the app on the camera. The user finds this annoying in developer use and directed that the Graph screen be the default, with the camera one tap away.
+
+### Decision
+
+Graph is the full-screen navigation root. Capture, Data, and Settings present as full-screen covers from Graph controls, Capture's control being the most prominent. The AR session runs only while the Capture surface is presented (armed on present via the initialising state, released ≤200 ms on close/background). Capture's chrome gains a close control and loses the Trends/Data/Settings buttons, which move to Graph. Reqs 1.1/1.2/1.5/1.6/2.1 amended (v0.6).
+
+### Rationale
+
+Direct user instruction. Side benefits: no camera permission prompt or AR battery cost at launch, and the existing `isCovered` lifecycle plumbing inverts cleanly (session off by default, on while capturing).
+
+### Alternatives Considered
+
+- **Keep Capture root, add a launch preference**: Configurable - Rejected; adds a setting nobody asked for over a direct instruction
+- **Tab shell revival**: Peer surfaces - Rejected; reverses Decision 2 and the handoff shell entirely
+
+### Consequences
+
+**Positive:**
+- Launch lands on the data the developer checks most; AR runs only when needed
+
+**Negative:**
+- Second inversion of the shell in one day — the archived wireframes now describe neither root (manifest deviation); capture is two taps from cold start for real meal logging
+
+---
+
+## Decision 21: Trends renamed Graph; developer-phase copy rule bans disclaimer messaging
+
+**Date**: 2026-07-04
+**Status**: accepted
+
+### Context
+
+The user renamed Trends to `Graph` (everywhere in UI) and ordered the `Glucose is read-only…` footer removed, establishing a project rule: while the app is developer-only, reassurance/disclaimer copy is distracting noise — the developer already knows.
+
+### Decision
+
+`Trends` → `Graph` in every user-facing string (titles, buttons, accessibility labels; internal type/key names unaffected). Removed under the new §14.5 rule: the Graph read-only footer (former Req 10.7), the Settings LibreLink explainer footnote, and the correction preservation notice. The About screen stays as the sole legal/attribution surface (CoFID attribution is licence-required); functional accuracy signals (calibration banner, very-low retake) are not disclaimers and stay. Rule recorded in project CLAUDE.md.
+
+### Rationale
+
+Direct user instruction, generalised as requested ("Project rule now is to exclude this type of messaging"). Distinguishing reassurance copy (removed) from functional accuracy signals (kept) preserves the research-spec contracts while cutting the noise.
+
+### Alternatives Considered
+
+- **Remove only the named footer**: Minimal reading - Rejected; the user explicitly generalised to "this type of messaging"
+- **Strip About too**: Maximal reading - Rejected; CoFID attribution is a licence obligation and About is out of the way
+
+### Consequences
+
+**Positive:**
+- Quieter screens; one recorded rule prevents re-litigating each new string
+
+**Negative:**
+- Before any non-developer release, the removed copy (and likely more) must be revisited — the rule is explicitly phase-scoped
+
+---

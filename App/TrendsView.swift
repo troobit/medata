@@ -2,16 +2,24 @@ import Charts
 import Pipeline
 import SwiftUI
 
-// The Trends screen — design-handoff-00 §10, design-system/pages/trends.md.
-// A single-chart dual-series view: glucose as a line (mmol/L, leading axis) and
-// carbs as bars (g, trailing axis relabelled in grams) over a shared y-scale
-// (the single-scale workaround), with the 3.9–10.0 mmol/L target band. Week and
-// Month aggregate to per-day totals and averages. Reads glucose exclusively from
-// `bsl` events (Req 11.1); all bucketing / axis maths is `TrendsMath`.
+// The Graph screen (renamed from Trends — Decision 21) — design-handoff-00 §10,
+// design-system/pages/trends.md. It is the launch root under the Graph-rooted
+// shell (Decision 20): its toolbar carries the primary Capture control plus the
+// Data and Settings controls (the shell owns the single `ActiveSheet` state), so
+// it presents no close control of its own. A single-chart dual-series view:
+// glucose as a line (mmol/L, leading axis) and carbs as bars (g, trailing axis
+// relabelled in grams) over a shared y-scale (the single-scale workaround), with
+// the 3.9–10.0 mmol/L target band. Week and Month aggregate to per-day totals
+// and averages. Reads glucose exclusively from `bsl` events (Req 11.1); all
+// bucketing / axis maths is `TrendsMath`.
 struct TrendsView: View {
     let store: any PersistenceStore
+    // Graph-root controls open the Capture / Data / Settings covers through
+    // these closures (the shell owns the single `ActiveSheet` state — Decision 20).
+    var onOpenCapture: () -> Void = {}
+    var onOpenData: () -> Void = {}
+    var onOpenSettings: () -> Void = {}
 
-    @Environment(\.dismiss) private var dismiss
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
     @State private var showOptions = false
@@ -22,8 +30,16 @@ struct TrendsView: View {
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
 
-    init(store: any PersistenceStore) {
+    init(
+        store: any PersistenceStore,
+        onOpenCapture: @escaping () -> Void = {},
+        onOpenData: @escaping () -> Void = {},
+        onOpenSettings: @escaping () -> Void = {}
+    ) {
         self.store = store
+        self.onOpenCapture = onOpenCapture
+        self.onOpenData = onOpenData
+        self.onOpenSettings = onOpenSettings
         _model = State(initialValue: TrendsModel(store: store))
     }
 
@@ -40,16 +56,28 @@ struct TrendsView: View {
                     metricChips
                     statCards
                     if model.range == .day { dayMeals }
-                    footer
                 }
                 .padding(20)
             }
             .background(Color.surfacePrimary)
-            .navigationTitle("Trends")
+            .navigationTitle("Graph")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Data and Settings, top-leading (Decision 20). Capture is the
+                // primary control and lives top-trailing, made visually prominent.
                 ToolbarItem(placement: .topBarLeading) {
-                    CloseCoverButton { dismiss() }
+                    Button(action: onOpenData) {
+                        Image(systemName: "square.stack.3d.up")
+                    }
+                    .accessibilityLabel("Data")
+                    .accessibilityIdentifier("graph.data")
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onOpenSettings) {
+                        Image(systemName: "gearshape.fill")
+                    }
+                    .accessibilityLabel("Settings")
+                    .accessibilityIdentifier("graph.settings")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -59,6 +87,15 @@ struct TrendsView: View {
                     }
                     .accessibilityLabel("Options")
                     .accessibilityIdentifier("trends.options")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenCapture) {
+                        Image(systemName: "camera.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.medataAccent)
+                    .accessibilityLabel("Capture")
+                    .accessibilityIdentifier("graph.capture")
                 }
             }
             .navigationDestination(for: MealRoute.self) { route in
@@ -266,13 +303,5 @@ struct TrendsView: View {
         formatter.locale = Locale(identifier: "en_IE")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: record.createdAt)
-    }
-
-    // §10.7 safety copy — verbatim, exempt from the minimal-wording rule.
-    private var footer: some View {
-        Text("Glucose is read-only. Medata never writes to your glucose source.")
-            .font(.caption)
-            .foregroundStyle(Color.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

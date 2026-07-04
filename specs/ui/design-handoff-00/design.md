@@ -16,9 +16,9 @@ Reskin-in-place adoption of handoff 00 (Decision 11): the TabView shell is remov
 
 | Site | Today | After |
 |---|---|---|
-| `App/AppRoot.swift` | `TabView`, `@AppStorage("selectedTab")` | Hosts `CaptureFlowView` + one `.fullScreenCover(item: $activeSheet)` (Decision 19 — full screens, not sheets) where `enum ActiveSheet: Identifiable { case data, trends, settings }` — a single optional, so surfaces are mutually exclusive by construction. Each surface carries an explicit close control (xmark, accessibility `Close`) since full-screen covers have no drag-to-dismiss. Buttons in the capture chrome set it via closures passed into `CaptureFlowView` |
+| `App/AppRoot.swift` | `TabView`, `@AppStorage("selectedTab")` | **As-built (Decision 20):** the launch root is the Graph screen (`TrendsView`, own `NavigationStack`); Capture, Data, and Settings present as `.fullScreenCover(item: $activeSheet)` (Decision 19 — full screens, not sheets) where `enum ActiveSheet: Identifiable { case capture, data, settings }` — a single optional, so covers are mutually exclusive by construction. Each cover carries an explicit close control (xmark, accessibility `Close`). Graph-root toolbar buttons set the state via closures passed into `TrendsView`; presenting `.capture` arms the AR session (`capturePresented`), any other value releases it (`captureDismissed`) — so the camera runs only while Capture is frontmost |
 | `App/AppTab.swift` | Tab enum | **Deleted** (with it, the `-uitestResetSelectedTab` launch override in `App.swift`) |
-| `CaptureFlowModel.tabSelectionChanged(to:)` | Stops/starts AR per tab | Renamed: `sheetDidPresent()` (stop session ≤200 ms; `.estimating` lets pipeline finish) / `sheetDidDismiss()` (`evaluatePermissions()` → re-arm). Same bodies. Satisfies Req 1.5; single-item sheet state means dismiss-then-present is sequential, so the AR session never double-toggles |
+| `CaptureFlowModel.tabSelectionChanged(to:)` | Stops/starts AR per tab | **As-built (Decision 20):** `capturePresented()` (`evaluatePermissions()` → arm) / `captureDismissed()` (stop session ≤200 ms; `.estimating` lets pipeline finish). Same proven bodies as the earlier `sheetDidDismiss`/`sheetDidPresent`, but inverted: the session is off by default and on only while Capture is the frontmost cover (Req 1.5). Single-item cover state means dismiss-then-present is sequential, so the AR session never double-toggles |
 | `scenePhaseChanged` | — | Unchanged |
 | `ShutterButtonMetrics.bottomClearanceFromTabBar` | 24 pt above tab bar | Renamed `bottomClearance`, from safe-area bottom |
 | `defaultCaptureModeReader()` | Hard default `.double` | WHEN `SettingsKeys.captureMode` is unwritten: `hasLiDAR ? .single : .double` (Req 16.2). Existing installs that wrote the key keep their choice |
@@ -29,10 +29,10 @@ Reskin-in-place adoption of handoff 00 (Decision 11): the TabView shell is remov
 
 | Stack | Route enum | Cases |
 |---|---|---|
-| Capture (root) | `CaptureRoute` | `.review(MealRecord)` → SegmentationReviewView · `.result(MealRecord)` → ResultView(.justCaptured) · `.correction(MealRecord)` → ManualCorrectionView |
-| Data sheet | `MealRoute` | `.overview(MealRecord)` → MealOverviewView · `.result(MealRecord)` → ResultView(.historyDetail) · `.correction(MealRecord)` |
-| Trends sheet | `MealRoute` (shared) | Day-list rows push `.overview` (Req 10.6) |
-| Settings sheet | none | `AboutView` via plain `NavigationLink` |
+| Graph (root, as-built Decision 20) | `MealRoute` | Day-list rows push `.overview` (Req 10.6). Its toolbar presents the Capture / Data / Settings covers |
+| Capture cover | `CaptureRoute` | `.review(MealRecord)` → SegmentationReviewView · `.result(MealRecord)` → ResultView(.justCaptured) · `.correction(MealRecord)` → ManualCorrectionView |
+| Data cover | `MealRoute` | `.overview(MealRecord)` → MealOverviewView · `.result(MealRecord)` → ResultView(.historyDetail) · `.correction(MealRecord)` |
+| Settings cover | none | `AboutView` via plain `NavigationLink` |
 
 `runEstimation` success appends `CaptureRoute.review(record)`; the review's `Carbs` action appends `.result(record)`. `Done` in `.justCaptured` calls `model.dismissResult()` (clears path, `.ready`); `Done` in `.historyDetail` pops **one level** (Overview → Full result → Done lands back on Overview; Req 1.3's return-to-Capture applies to the capture stack only). Req 6.7 note: `.historyDetail` currently hides the action row — showing `Adjust`/`Done` there is a deliberate semantic change.
 

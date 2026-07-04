@@ -14,7 +14,7 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Bottom mode control | `1-VIEW` / `2-VIEW` | `1-VIEW` / `2-VIEW` (distinct from the top capsule) |
 | Guide capsule (distance hint) | `Move closer · ID-1 card optional` | `Move closer` |
 | Plate alignment guide | `ALIGN PLATE\nWITHIN OUTLINE` | `ALIGN PLATE` |
-| Accessibility: Trends button | — | `Trends` |
+| Accessibility: Graph button (on Graph root + capture entry) | — | `Graph` |
 | Accessibility: Data button | — | `Data` |
 | Accessibility: Settings button | — | `Settings` |
 
@@ -79,7 +79,7 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Stepper label | `TOTAL CARBS` | `TOTAL CARBS` |
 | Prior value | `was N g · auto-estimated` | `was N g` |
 | Note field | `Note (optional)` | `Note` |
-| Preservation notice | `Original estimate is preserved. Your correction is saved alongside it.` | `Original kept · correction saved alongside` |
+| Preservation notice | *(removed — Decision 21 / §14.5)* | — |
 | Per-food edit row | — | `{class name}` + value in `g` (stepper) |
 | Action | `Save` | `Save` |
 
@@ -87,7 +87,7 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 
 | Context | Final |
 |---|---|
-| Close control on Data / Trends / Settings | xmark icon; accessibility label `Close` |
+| Close control on Capture / Data / Settings (presented from Graph root) | xmark icon; accessibility label `Close` |
 
 ## Data (§8) + Meal overview (§9)
 
@@ -102,11 +102,11 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Actions | `Adjust` / `Full result` / `Delete` | `Adjust` / `Full result` / `Delete` |
 | Delete confirm | — | `Delete meal?` + `Delete` / `Cancel` |
 
-## Trends (§10)
+## Graph (§10) — renamed from Trends (Decision 21)
 
 | Context | Handoff | Final |
 |---|---|---|
-| Title | `Trends` | `Trends` |
+| Title | `Trends` | `Graph` |
 | Range control | `Day` / `Week` / `Month` | `Day` / `Week` / `Month` |
 | Metric chips | `Carbs` / `Blood glucose` / `Protein · Fat` | `Carbs` / `Glucose` / `Protein · Fat` |
 | Chip captions (options sheet) | `bars · from meal captures` / `line · from CGM / meter import` | `bars · meals` / `line · glucose import` |
@@ -118,7 +118,7 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | No-glucose state | — | `no glucose data` |
 | Empty TIR | — | `—` |
 | Day meal list header | `Meals this day` | `Meals` |
-| Footer ⚖ | `Glucose data imported from CGM — read-only. Medata never writes to your glucose device.` | `Glucose is read-only. Medata never writes to your glucose source.` |
+| Footer | *(removed — Decision 21 / §14.5)* | — |
 
 ## Settings (§12) + About (§13)
 

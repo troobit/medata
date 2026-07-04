@@ -65,12 +65,13 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private(set) var flowTask: Task<Void, Never>?
     private var interruptionTask: Task<Void, Never>?
     private var startTask: Task<Void, Never>?
-    // True while a full-screen surface (Data / Trends / Settings) covers Capture.
-    // Set by `sheetDidPresent`, cleared by `sheetDidDismiss`. Gates the AR
-    // session re-arm in `evaluatePermissions` so a foreground transition
-    // (`scenePhaseChanged(.active)`) does not restart the session behind the
-    // cover (Req 1.5) — re-arm happens on dismiss instead.
-    private var isCovered = false
+    // True while the Capture surface is the presented full-screen cover (Graph
+    // is the launch root — Decision 20). Set by `capturePresented`, cleared by
+    // `captureDismissed`. Gates the AR session arm in `evaluatePermissions` so
+    // the session runs ONLY while Capture is on screen: a fresh launch or a
+    // foreground transition (`scenePhaseChanged(.active)`) while Graph / Data /
+    // Settings is frontmost never starts the camera (Req 1.5).
+    private var isCapturePresented = false
     private var firstFrame: RawFrame?
     // Tilt-at-shutter (degrees from straight-down) for the nadir frame, captured
     // when the user taps the shutter on the first stage. Stamped onto the
@@ -383,26 +384,26 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
-    // Sheet-present re-arm per Req §1.5 (Decision 11; the `.refused` arm is
-    // superseded by Decision 20 — see specs/bugfixes/surface-not-detected/
-    // report.md). A sheet dismissal returns to Capture: re-arm the AR session.
-    // Calling `evaluatePermissions()` is idempotent — it bails out on
+    // Capture-cover present arm per Req §1.5 / Decision 20 (Graph is the launch
+    // root; the `.refused` arm is superseded — see specs/bugfixes/
+    // surface-not-detected/report.md). Presenting the Capture cover arms the AR
+    // session. Calling `evaluatePermissions()` is idempotent — it bails out on
     // permission-denied and only spawns a fresh start task when one is not
-    // already in flight. A single-item sheet state means dismiss-then-present is
+    // already in flight. A single-item cover state means dismiss-then-present is
     // sequential, so the AR session never double-toggles.
-    func sheetDidDismiss() {
-        isCovered = false
+    func capturePresented() {
+        isCapturePresented = true
         evaluatePermissions()
     }
 
-    // A sheet was presented over Capture (Req §1.5): release the AR session
-    // within 200 ms. Mirrors `scenePhaseChanged(.background)` with one carve-out:
-    // when the model is already in `.estimating`, the pipeline runs to completion
-    // and the result is presented on the next return to Capture. Permission-denied
-    // is preserved (no engine to release); `.refused` is treated as an implicit
-    // dismissal — same baseline as `.ready`.
-    func sheetDidPresent() {
-        isCovered = true
+    // The Capture cover was dismissed (Req §1.5 / Decision 20): release the AR
+    // session within 200 ms. Mirrors `scenePhaseChanged(.background)` with one
+    // carve-out: when the model is already in `.estimating`, the pipeline runs
+    // to completion and the result is presented on the next return to Capture.
+    // Permission-denied is preserved (no engine to release); `.refused` is
+    // treated as an implicit dismissal — same baseline as `.ready`.
+    func captureDismissed() {
+        isCapturePresented = false
         switch state {
         case .estimating:
             // Let the pipeline finish; `flowTask` already routes the result
@@ -536,10 +537,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         if case .permissionDenied = state {
             state = .initialising
         }
-        // Do not re-arm the AR session while a full-screen surface covers Capture
-        // (Req 1.5). A foreground transition can call this while covered; the
-        // session restarts on `sheetDidDismiss` instead.
-        if startTask == nil, !isCovered {
+        // Arm the AR session only while the Capture surface is the presented
+        // cover (Req 1.5 / Decision 20). At launch and while Graph / Data /
+        // Settings is frontmost this is false, so neither a fresh launch nor a
+        // foreground transition starts the camera; `capturePresented()` arms it.
+        if startTask == nil, isCapturePresented {
             startTask = Task { [session] in try? await session.start() }
         }
     }

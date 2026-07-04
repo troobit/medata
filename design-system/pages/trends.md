@@ -1,8 +1,10 @@
-# Trends — page-specific overrides
+# Graph — page-specific overrides
 
-**Inherits:** `design-system/MASTER.md`. The §10 Trends screen. Uses the two new
-tokens `seriesGlucose` (systemOrange) and `bandTarget` (medataAccent 10 %,
-Decision 12).
+**Inherits:** `design-system/MASTER.md`. The §10 Graph screen (renamed from Trends
+— Decision 21). It is the launch root under the Graph-rooted shell (Decision 20):
+its toolbar carries the primary Capture control plus Data and Settings, and it
+presents no close control of its own. Uses the two new tokens `seriesGlucose`
+(systemOrange) and `bandTarget` (medataAccent 10 %, Decision 12).
 
 **Brief:** Carb intake charted against the glucose curve on one chart, so a user
 can see how meals move their levels. Day plots per-meal carb bars against the raw
@@ -14,7 +16,7 @@ glucose line; Week and Month aggregate to per-day totals and averages.
 
 ```
 ┌─────────────────────────────────────┐
-│  Trends                        ⇅    │  Inline title · options button
+│ ▤ ⚙        Graph          ⇅  ◉Capture│  Data/Settings · title · options · Capture (primary)
 │  ┌ Day │ Week │ Month ┐             │  Range segmented control
 │  ┌─────────────────────────────────┐ │
 │ mmol/L        ░░ target band ░░   g │  Leading axis mmol/L · trailing axis grams
@@ -27,9 +29,6 @@ glucose line; Week and Month aggregate to per-day totals and averages.
 │  └──────────┘ └──────────┘           │
 │  Meals                              │  Day-view meal list (→ overview)
 │  14:32                       47 g  › │
-│                                      │
-│  Glucose is read-only. Medata never │  Safety footer (verbatim)
-│  writes to your glucose source.     │
 └─────────────────────────────────────┘
 ```
 
@@ -37,9 +36,12 @@ glucose line; Week and Month aggregate to per-day totals and averages.
 
 ## Specifics
 
-- **Container:** `ScrollView` on `surfacePrimary`, own `NavigationStack`. Title
-  `Trends`, inline. Options button (`slider.horizontal.3`) presents the options
-  sheet.
+- **Container:** `ScrollView` on `surfacePrimary`, own `NavigationStack`. This
+  is the launch root (Decision 20), so it has no close control. Title `Graph`,
+  inline. Toolbar: Data (`square.stack.3d.up`) and Settings (`gearshape.fill`)
+  top-leading; Options (`slider.horizontal.3`, presents the options sheet) and a
+  prominent Capture (`camera.fill`, `.borderedProminent`, accessibility
+  `Capture`) top-trailing — each opens its full-screen cover.
 - **Range control (§10.1):** segmented `Day` / `Week` / `Month`; changing it
   reloads the model.
 - **Chart (§10.2/§10.3):** `import Charts` (target 26.5, no guards). One shared
@@ -62,8 +64,9 @@ glucose line; Week and Month aggregate to per-day totals and averages.
   mmol/L, `—` when there are no readings.
 - **Day meal list (§10.6):** `Meals` header, rows `HH:mm · N g` opening
   `MealRoute.overview`; empty state `no meals`. Shown only in the Day range.
-- **Footer (§10.7, ⚖):** exactly `Glucose is read-only. Medata never writes to
-  your glucose source.` — safety copy, exempt from minimal wording.
+- **Footer (§10.7):** removed — the read-only disclaimer footer is deleted under
+  the developer-phase copy rule (§14.5 / Decision 21). The Graph carries no
+  disclaimer copy.
 - **Glucose source (§11):** read exclusively from `bsl` events, mmol/L, one
   decimal.
 
@@ -88,5 +91,5 @@ Title `Options`; a `Done` button dismisses. Persists via `@AppStorage`
 - Do NOT clip carbs at a fixed maximum — the carb axis is dynamic (§10.2).
 - Do NOT surface an error when glucose is absent — render carbs with the
   `no glucose data` state.
-- Do NOT reword the read-only footer — it is verbatim safety copy.
+- Do NOT reinstate the read-only footer or any disclaimer copy (§14.5 / Decision 21).
 - Do NOT show mg/dL — glucose is mmol/L only (units invariant).

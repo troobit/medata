@@ -30,7 +30,6 @@ struct ManualCorrectionView: View {
                     totalSection
                     perFoodSection
                     noteSection
-                    preservationNotice
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 24)
@@ -97,13 +96,9 @@ struct ManualCorrectionView: View {
         }
     }
 
-    // §7.2: the original is preserved; the correction is stored alongside it.
-    private var preservationNotice: some View {
-        Text("Original kept · correction saved alongside")
-            .font(.caption)
-            .foregroundStyle(Color.captureChromeText.opacity(0.6))
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
+    // §7.2 preservation notice removed under the developer-phase copy rule
+    // (Req 14.5 / Decision 21); the original estimate is still preserved by
+    // `appendCorrection`, which never overwrites it.
 
     private var saveAction: some View {
         Button("Save", action: save)

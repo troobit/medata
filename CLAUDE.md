@@ -8,7 +8,8 @@ This development cycle currently runs along the 'research' branch, with intent t
 
 - **No LLM and no network calls in the estimation path.** Estimation is deterministic geometry + Core ML segmentation + local SQLite lookups, fully offline.
 - **Irish/British English spelling** in all docs, comments, and user-facing strings (Req 19.2). Lint with `bash tools/check_spelling.sh`.
-- OS floor: iOS 17 / macOS 14. Primary device: iPhone 13 Pro Max (LiDAR); non-LiDAR fallback is two-view capture + ID-1 card for scale.
+- OS floor: iOS 17 / macOS 14. Primary device: iPhone 16 Pro (devicectl id `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`, name `you`); non-LiDAR fallback is two-view capture + ID-1 card for scale.
+- **Developer-phase UI copy: no reassurance or disclaimer messaging** (privacy notes, read-only warnings, data-preservation notices) in any screen — the developer already knows. About is the sole legal/attribution surface; functional accuracy signals (calibration banner, very-low retake) are not disclaimers and stay. Revisit before any non-developer release. (design-handoff-00 Decision 21, Req 14.5.)
 - The repo directory must be named `medata` for the Xcode project to resolve.
 
 ## Build, test, lint

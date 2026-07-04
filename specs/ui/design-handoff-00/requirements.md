@@ -1,6 +1,6 @@
 # UI Design Handoff 00 — Requirements
 
-**Version:** 0.5 (post-implementation amendment: Decision 19 — full-screen surfaces)
+**Version:** 0.6 (post-implementation amendments: Decision 19 — full-screen surfaces; Decisions 20–21 — Graph as launch root, Trends→Graph rename, developer-phase copy rule)
 **Date:** 2026-07-04
 **Status:** In review
 **Sources:** `tmp/design/design_handoff_medata/` (wireframes v1/v2 + SwiftUI scaffold), to be archived per §15. Supersedes and amends parts of `specs/ui/iphone-experience/` per the table in §16.
@@ -32,12 +32,12 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 **Acceptance Criteria:**
 
-1. <a name="1.1"></a>WHEN the app launches, THEN it SHALL present the Capture screen full-screen as the navigation root, with no tab bar.  
-2. <a name="1.2"></a>The Data (meal log), Trends, and Settings screens SHALL each be reachable from Capture-screen controls (§2.1) and SHALL present as full screens (not partial-height modals over the camera), each with an explicit close control returning to Capture (amended per Decision 19).  
+1. <a name="1.1"></a>WHEN the app launches, THEN it SHALL present the Graph screen full-screen as the navigation root, with no tab bar (amended per Decision 20 — Capture is no longer the launch screen).  
+2. <a name="1.2"></a>The Capture, Data (meal log), and Settings screens SHALL each be reachable from Graph-screen controls and SHALL present as full screens (not partial-height modals), each with an explicit close control returning to Graph (Decisions 19–20). The Capture control SHALL be the most prominent.  
 3. <a name="1.3"></a>WHEN the shutter fires, THEN the app SHALL enter an estimating state — the existing draw-on Medata loading mark shown, shutter and mode controls locked — and WHEN estimation completes, THEN the flow SHALL push Segmentation review (§5), then Result (§6), then optionally Manual correction (§7), returning to Capture on dismissal.  
 4. <a name="1.4"></a>Backgrounding during estimation SHALL behave as it does today (iphone-experience 8.3 remains binding); estimation failure SHALL return to Capture with the §4 error state.  
-5. <a name="1.5"></a>WHEN a full-screen surface is presented over Capture, THEN the AR session SHALL be released within 200 ms, and WHEN it is closed, THEN the session SHALL restart through the existing initialising state.  
-6. <a name="1.6"></a>Existing shell behaviours SHALL be preserved: portrait-only, AR release within 200 ms of backgrounding, and the camera-permission refusal state still reachable and recoverable, with the Data, Trends, and Settings controls remaining usable from the refusal state.
+5. <a name="1.5"></a>The AR session SHALL run only while the Capture surface is presented: armed on presentation through the existing initialising state, released within 200 ms of the surface closing or the app backgrounding (Decision 20).  
+6. <a name="1.6"></a>Existing shell behaviours SHALL be preserved: portrait-only, and the camera-permission refusal state still reachable and recoverable, with the Capture surface's close control remaining usable from the refusal state.
 
 ### 2. Capture screen chrome
 
@@ -45,7 +45,7 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 **Acceptance Criteria:**
 
-1. <a name="2.1"></a>The capture chrome SHALL contain exactly: a mode capsule (top-centre), a bubble level (top-right), Trends and Data buttons (top area), a telemetry capsule above the shutter, and a bottom row of mode button, shutter, and settings button. Transient state surfaces (status hints, the two-view nadir confirmation thumbnail, oblique guidance) are not chrome; they are preserved per §16 rows 1/2/5/12 and restyled per the capture design page.  
+1. <a name="2.1"></a>The capture chrome SHALL contain exactly: a close control (top-leading, returning to Graph), a mode capsule (top-centre), a bubble level (top-right), a telemetry capsule above the shutter, and a bottom row of mode button and shutter (Trends/Data/Settings buttons moved to the Graph root — Decision 20). Transient state surfaces (status hints, the two-view nadir confirmation thumbnail, oblique guidance) are not chrome; they are preserved per §16 rows 1/2/5/12 and restyled per the capture design page.  
 2. <a name="2.2"></a>The mode capsule SHALL read, in monospaced type: `1-VIEW · LiDAR` (single path), `2-VIEW · NADIR` (two-view first stage), or `2-VIEW · OBLIQUE` (two-view second stage).  
 3. <a name="2.3"></a>The bubble level SHALL drift continuously with device tilt relative to the current stage's target angle (flat for nadir stages, 25° for the oblique stage), tinted green within ±5° of target and amber beyond, always paired with a non-colour cue (bubble position). It SHALL NOT gate the shutter.  
 4. <a name="2.4"></a>The telemetry capsule SHALL show live tilt in degrees, subject distance in cm, and a LiDAR dot that is green WHEN depth data is available (e.g. `tilt 1.8° · dist 34 cm · LiDAR ●`). ON non-LiDAR devices the distance field SHALL show the static target band (`30–40 cm`) as guidance and the dot SHALL be grey — the grey dot is the guidance-mode indicator (amends iphone-experience 3.2/3.3).  
@@ -128,19 +128,19 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 2. <a name="9.2"></a>Per-class rows SHALL show a mask-colour swatch, mass (g), volume (cm³), and carbs (g) (no σ — Decision 16); a `corrected` marker SHALL appear when a correction exists.  
 3. <a name="9.3"></a>Actions SHALL be `Adjust` (bordered → Manual correction) and `Full result` (prominent → Result per §6.7); delete SHALL be available via a ⋯ menu with confirmation.
 
-### 10. Trends
+### 10. Graph (renamed from Trends — Decision 21; `Graph` everywhere in UI)
 
 **User Story:** As a user managing glucose, I want my carb intake charted against my glucose curve, so that I can see how meals move my levels.
 
 **Acceptance Criteria:**
 
-1. <a name="10.1"></a>The Trends screen SHALL offer Day / Week / Month ranges via a segmented control.  
+1. <a name="10.1"></a>The Graph screen SHALL offer Day / Week / Month ranges via a segmented control.  
 2. <a name="10.2"></a>The Day view SHALL chart glucose as a line (mmol/L, leading axis) and carbs as bars at meal timestamps (g, trailing axis labelled in grams) on one chart, with a translucent band marking the 3.9–10.0 mmol/L target range. The chart scale SHALL accommodate the full data range of both series (no clipping at a fixed carb maximum).  
 3. <a name="10.3"></a>The Week view SHALL show total carbs per day as bars and average glucose per day as a line; the Month view SHALL show the same semantics across the calendar month.  
 4. <a name="10.4"></a>Metric chips under the chart SHALL toggle Carbs and Glucose series inclusion; Protein and Fat chips SHALL be dashed and disabled.  
 5. <a name="10.5"></a>Summary cards SHALL show total (or average) carbs, time in range, and average glucose for the selected range. Time in range SHALL be computed time-weighted between consecutive glucose readings, excluding gaps longer than 60 minutes from the denominator; WHEN no glucose data qualifies, THEN the card SHALL show `—`.  
 6. <a name="10.6"></a>The Day view SHALL list that day's meals below the chart; each row SHALL open its Meal overview (deviation from handoff §3, logged in the manifest).  
-7. <a name="10.7"></a>A footer note SHALL state that glucose data is read-only and Medata never writes to the glucose source (true regardless of ingestion path; final copy owned by §14.2; exempt from §14.1 as safety copy).  
+7. <a name="10.7"></a>*Removed (Decision 21):* the read-only footer note is deleted; the Graph screen SHALL carry no disclaimer copy per §14.5.  
 8. <a name="10.8"></a>A graph-options sheet SHALL offer: per-metric toggles with one-line source captions, target-band toggle, disabled Protein · Fat row, and a y-scale control (Auto, or Fixed with an 8–25 mmol/L max stepper).  
 9. <a name="10.9"></a>WHEN no glucose data exists for the range, THEN the chart SHALL still render the carb series with an unobtrusive `no glucose data` state, not an error.
 
@@ -181,7 +181,8 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 1. <a name="14.1"></a>Every user-facing string SHALL use the shortest phrasing that keeps its meaning: no full sentences where a fragment works, no filler. Binding examples: `Hold the phone level` → `Hold level`; `Skip to 2-view` → `2-view`; `Hold the phone 30–40 cm from the food.` → `30–40 cm`; `It's too dark to read the plate edge reliably.` → `More light`. Exempt: legal/safety copy explicitly marked so (§10.7, §13.1).  
 2. <a name="14.2"></a>The design phase SHALL produce a copy inventory listing every user-facing string on the redesigned screens with its final minimal form; compliance with 14.1 is defined as verbatim match with the inventory.  
 3. <a name="14.3"></a>All copy SHALL use Irish/British English spelling and pass `make spell`.  
-4. <a name="14.4"></a>Every colour-coded status indicator (bubble level, confidence chips, banners, LiDAR dot) SHALL pair colour with a non-colour cue — icon, position, or text — per `design-system/MASTER.md`.
+4. <a name="14.4"></a>Every colour-coded status indicator (bubble level, confidence chips, banners, LiDAR dot) SHALL pair colour with a non-colour cue — icon, position, or text — per `design-system/MASTER.md`.  
+5. <a name="14.5"></a>WHILE the app is developer-only, screens SHALL carry no reassurance or disclaimer copy (privacy notes, read-only warnings, data-preservation notices) — the developer already knows (Decision 21). The About screen remains the sole legal/attribution surface; functional accuracy signals (calibration banner, very-low retake surface) are NOT disclaimers and stay.
 
 ### 15. Versioned design references
 
