@@ -9,66 +9,66 @@ references:
 
 ## Core (MedataCore + pipeline)
 
-- [ ] 1. Write failing TrendsMath tests (TIR, bucketing, axis mapping) <!-- id:xi3gpmz -->
+- [x] 1. Write failing TrendsMath tests (TIR, bucketing, axis mapping) <!-- id:xi3gpmz -->
   - TIR: exact crossing interpolation into [3.9, 10.0]; gaps > 60 min excluded from numerator AND denominator; nil when nothing qualifies
   - Day/week/month bucketing; carb-axis mapping round-trip with dynamic max = max(80, ceil(maxCarbs/20)*20)
   - New test file in the existing MedataCore suite (design Testing Strategy) — must fail before task 2
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
-- [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
+- [x] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing, failing, failing, failing, failing, failing, failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
-- [ ] 3. Write failing palette colour-table test (determinism) <!-- id:xi3gpn1 -->
+- [x] 3. Write failing palette colour-table test (determinism) <!-- id:xi3gpn1 -->
   - Same class id → same colour across runs; table is palette-versioned alongside ClassPalette (design: Mask artefacts)
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
-- [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
+- [x] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
-- [ ] 5. Add EventType.bsl and DEBUG-only seedDemoBslEvents() <!-- id:xi3gpn3 -->
+- [x] 5. Add EventType.bsl and DEBUG-only seedDemoBslEvents() <!-- id:xi3gpn3 -->
   - EventType.bsl = "bsl", value mmol/L (imgdatacollector row shape); types/config — TDD exempt
   - #if DEBUG extension on GRDBPersistenceStore: 24 h synthetic readings, 15-min spacing (Decision 13); no public event-write API (importer spec owns that)
   - Stream: 1
   - Requirements: [11.1](requirements.md#11.1)
 
-- [ ] 6. Write failing store artefact-transport tests <!-- id:xi3gpn4 -->
+- [x] 6. Write failing store artefact-transport tests <!-- id:xi3gpn4 -->
   - writeArtefact(mealId:artefact:data:) writes meals/{id}/{filename} THEN inserts meal_artefacts row (file-first crash ordering)
   - artefactData(mealId:kind:) returns bytes; nil (not throw) when artefact/file absent; deleteMeal cascade removes the file
   - Stream: 1
   - Requirements: [6.8](requirements.md#6.8)
 
-- [ ] 7. Implement writeArtefact/artefactData on PersistenceStore + GRDB impl <!-- id:xi3gpn5 -->
+- [x] 7. Implement writeArtefact/artefactData on PersistenceStore + GRDB impl <!-- id:xi3gpn5 -->
   - Protocol + GRDBPersistenceStore; no filesystem paths cross the store boundary (design: Mask artefacts)
   - Blocked-by: xi3gpn4 (Write failing store artefact-transport tests)
   - Stream: 1
   - Requirements: [6.8](requirements.md#6.8)
 
-- [ ] 8. Write failing test: appendCorrection emits eventsDidChange <!-- id:xi3gpn6 -->
+- [x] 8. Write failing test: appendCorrection emits eventsDidChange <!-- id:xi3gpn6 -->
   - Asserts one eventsDidChange tick after a successful correction insert (Decision 18)
   - Stream: 1
   - Requirements: [7.3](requirements.md#7.3)
 
-- [ ] 9. Emit eventsDidChange from appendCorrection <!-- id:xi3gpn7 -->
+- [x] 9. Emit eventsDidChange from appendCorrection <!-- id:xi3gpn7 -->
   - GRDBPersistenceStore one-line change; update the stale 'does not emit' note in specs/data/event-log-schema/design.md is task 26, not here
   - Blocked-by: xi3gpn6 (Write failing test: appendCorrection emits eventsDidChange)
   - Stream: 1
   - Requirements: [7.3](requirements.md#7.3)
 
-- [ ] 10. Write failing test: Stage L persists mask artefact <!-- id:xi3gpn8 -->
+- [x] 10. Write failing test: Stage L persists mask artefact <!-- id:xi3gpn8 -->
   - After estimate: meal_artefacts has kind "mask" row + decodable 8-bit greyscale PNG of label indices; encode/write failure logs and does NOT fail the meal save
   - Blocked-by: xi3gpn5 (Implement writeArtefact/artefactData on PersistenceStore + GRDB impl)
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [6.8](requirements.md#6.8)
 
-- [ ] 11. Implement Stage L mask-artefact write in Pipeline <!-- id:xi3gpn9 -->
+- [x] 11. Implement Stage L mask-artefact write in Pipeline <!-- id:xi3gpn9 -->
   - Storage only — estimation maths untouched (Decision 15 boundary; police in review)
   - No colour in the PNG; indices only, no colour profile
   - Blocked-by: xi3gpn8 (Write failing test: Stage L persists mask artefact)

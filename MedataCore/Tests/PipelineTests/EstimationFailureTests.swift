@@ -360,6 +360,8 @@ private struct NoOpPersistenceStore: PersistenceStore {
     func updatePhotoAssetID(mealId: UUID, photoAssetID: String) async throws {}
     func allMeals() async throws -> [MealRecord] { [] }
     func deleteMeal(id: UUID) async throws {}
+    func writeArtefact(mealId: UUID, artefact: MealArtefact, data: Data) async throws {}
+    func artefactData(mealId: UUID, kind: String) async throws -> Data? { nil }
     func events(in range: ClosedRange<Date>, type: String?) async throws -> [Event] {
         fatalError("unused")
     }

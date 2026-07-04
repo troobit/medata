@@ -12,6 +12,10 @@ public enum PersistenceError: Error, Equatable {
 // this namespace with additional constants.
 public enum EventType {
     public static let meal = "meal"
+    // Blood glucose reading; `value` carries mmol/L (UI Design Handoff 00,
+    // Decision 13). Trends reads exclusively these rows (Req 11.1). Ingestion is
+    // owned by a future importer spec — no public write API ships here.
+    public static let bsl = "bsl"
 }
 
 // Generic surface for a row in the events table (Decision 8). `value` is
@@ -61,6 +65,16 @@ public protocol PersistenceStore: Sendable {
     // event under `BufferingPolicy.bufferingNewest(1)`.
     func allMeals() async throws -> [MealRecord]
     func deleteMeal(id: UUID) async throws
+
+    // Per-meal artefact byte transport (UI Design Handoff 00, Decision 15). No
+    // filesystem paths cross the store boundary. `writeArtefact` writes the file
+    // under `meals/{id}/{filename}` FIRST, then inserts the `meal_artefacts`
+    // row, so a crash between the two leaves an orphan file, never a dangling
+    // row. `artefactData` returns the bytes, or nil when the artefact row or its
+    // file is absent — it NEVER throws for absence; that nil is the §6.8
+    // photo-only fallback signal.
+    func writeArtefact(mealId: UUID, artefact: MealArtefact, data: Data) async throws
+    func artefactData(mealId: UUID, kind: String) async throws -> Data?
 
     // Req 1.4, 1.5. Closed interval; both bounds inclusive. Ordered
     // `(timestamp ASC, id ASC)`. `type == nil` returns every event type;
