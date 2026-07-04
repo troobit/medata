@@ -825,7 +825,7 @@
     },
     {
       "source_id": 96,
-      "source_name": "french beans",
+      "source_name": "French beans",
       "target_index": 17,
       "target_name": "peas",
       "rule": "curated_food"

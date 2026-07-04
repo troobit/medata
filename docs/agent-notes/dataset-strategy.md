@@ -112,7 +112,59 @@ direct spec edit; each item names the vehicle.
 
 ---
 
-## 5. Public-data posture (confirmed)
+## 5. FoodSeg103 acquired locally (2026-07-04)
+
+The dataset now sits at `data/foodseg103/` in the release layout
+(`Images/img_dir/{train,test}` + `Images/ann_dir/{train,test}` +
+`category_id.txt`), verified over all 7,118 pairs — counts, mask mode, and
+class-id range all match the official release. Provenance, source URLs, and
+SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
+
+- **Source of record: the HF parquet mirror** `EduardoPacheco/FoodSeg103`
+  (original JPEG/PNG bytes + filenames embedded), reconstructed byte-for-byte.
+  Chosen over the canonical zip (2026-07-04, user decision — the SMU server
+  was 502-ing and the mirror was judged sufficient and preferable); the
+  parquet SHA-256s in SOURCE.md are the release identifier. HF "validation" =
+  official "test". The `justinsiow/FoodSeg103` HF mirror is **incomplete**
+  (405 files) — only its raw `category_id.txt` was used.
+- **EXIF gotcha:** 4 train JPEGs (00000273, 00002585, 00003969 — orientation 6;
+  00006505 — orientation 8) carry EXIF rotation; their masks match the
+  *rotated* image — an original-dataset quirk, not a mirror artefact. Plain
+  `Image.open(...)` ignores EXIF, so those 4 samples would have trained with
+  pixels/mask 90° apart — silent, because both are resized to 513×513.
+  **Fixed 2026-07-04:** `ImageOps.exif_transpose` applied at all three image
+  loads — `train.py` `__getitem__`, `export.reference_input` (shared by the
+  export oracle and `make_fixtures.py` model input), and `make_fixtures.py`'s
+  stored nadir PNG — keeping train/export/fixture parity. Masks are never
+  transposed (PNGs carry no EXIF; annotation matches the rotated pixels).
+  Verified: `reference_input` on train image 00000273 now equals the manually
+  transposed load and its dims match the mask.
+- **Palette lock verified engaged (2026-07-04).** `build_class_mapping.py`
+  re-run against the real `category_id.txt`; the committed
+  `class_mapping_foodseg103_v1.json` was regenerated (only diff: "French
+  beans" capitalisation, routing identical). `verify_palette_lock` passes and
+  both test suites are green — see the ticked Stage 0 / palette-lock entries
+  in `specs/estimation/model-production/prerequisites.md`. P0-2 above is
+  closed. §3c done (2026-07-04): `prepare_dataset.py --heldout-frac 0.12
+  --seed 1234` → `data/foodseg103_remapped/` (train 5,553 / val 711 /
+  held-out 854 of 7,118; provenance in its `splits.json`; ~1k-mask sample
+  swept, all pixel values within channels 0–34). The `exif_transpose` loader
+  fix is in (see the EXIF bullet above). Training venv:
+  `tools/segmenter/.venv` (python3.13 — the full `requirements.txt` does not
+  resolve on 3.14, tensorflow has no wheels; repo root has no venv). Stage 3
+  one-liner for the local Mac (MPS auto-detected; `caffeinate` per
+  `docs/ml-training.md` §4 run hygiene; resume sidecar lands at
+  `<--out>.resume.pt`):
+
+  ```sh
+  caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
+      --data data/foodseg103_remapped --num-classes 35 --target-size 513 \
+      --epochs 60 --batch-size 16 --lr 1e-3 --split-seed 1234 \
+      --foodseg103-source "hf:EduardoPacheco/FoodSeg103 see data/foodseg103/SOURCE.md" \
+      --out tools/segmenter/build/checkpoint.pt
+  ```
+
+## 6. Public-data posture (confirmed)
 
 The stated preference — freely available public data, no repeated work — holds across
 the plan with no gaps: FoodSeg103 (Apache 2.0) for training, Nutrition5k (CC BY 4.0)
