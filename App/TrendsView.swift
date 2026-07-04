@@ -19,6 +19,14 @@ struct TrendsView: View {
     var onOpenCapture: () -> Void = {}
     var onOpenData: () -> Void = {}
     var onOpenSettings: () -> Void = {}
+    // The insulin dose sheet (PRD regression-suggestion-integration App 1) is
+    // a plain sheet presented HERE — lighter than the shell's full-screen
+    // covers — but AppRoot owns the binding so the `medata://insulin/add`
+    // deep link can present it after dismissing any active cover (App 10).
+    // `onInsulinSheetDismiss` fires when the sheet's dismissal completes, so
+    // AppRoot can sequence a pending medata://capture present behind it.
+    @Binding var showInsulinSheet: Bool
+    var onInsulinSheetDismiss: () -> Void = {}
 
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
@@ -26,17 +34,22 @@ struct TrendsView: View {
 
     @AppStorage(SettingsKeys.trendsShowCarbs) private var showCarbs = true
     @AppStorage(SettingsKeys.trendsShowGlucose) private var showGlucose = true
+    @AppStorage(SettingsKeys.trendsShowInsulin) private var showInsulin = true
     @AppStorage(SettingsKeys.trendsShowTargetBand) private var showTargetBand = true
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
 
     init(
         store: any PersistenceStore,
+        showInsulinSheet: Binding<Bool> = .constant(false),
+        onInsulinSheetDismiss: @escaping () -> Void = {},
         onOpenCapture: @escaping () -> Void = {},
         onOpenData: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.store = store
+        _showInsulinSheet = showInsulinSheet
+        self.onInsulinSheetDismiss = onInsulinSheetDismiss
         self.onOpenCapture = onOpenCapture
         self.onOpenData = onOpenData
         self.onOpenSettings = onOpenSettings
@@ -55,7 +68,10 @@ struct TrendsView: View {
                     chart
                     metricChips
                     statCards
-                    if model.range == .day { dayMeals }
+                    if model.range == .day {
+                        dayMeals
+                        dayInsulin
+                    }
                 }
                 .padding(20)
             }
@@ -81,6 +97,15 @@ struct TrendsView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        showInsulinSheet = true
+                    } label: {
+                        Image(systemName: "syringe")
+                    }
+                    .accessibilityLabel("Log insulin")
+                    .accessibilityIdentifier("graph.insulin")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
                         showOptions = true
                     } label: {
                         Image(systemName: "slider.horizontal.3")
@@ -103,6 +128,15 @@ struct TrendsView: View {
             }
         }
         .sheet(isPresented: $showOptions) { TrendsOptionsSheet() }
+        .sheet(isPresented: $showInsulinSheet, onDismiss: onInsulinSheetDismiss) {
+            InsulinDoseSheet(store: store)
+        }
+        // A deep-link present while the options sheet is up: drop the options
+        // sheet; SwiftUI presents the still-requested insulin sheet once the
+        // dismissal completes.
+        .onChange(of: showInsulinSheet) { _, presented in
+            if presented { showOptions = false }
+        }
         .task { await model.start() }
         .onChange(of: model.range) { _, _ in
             Task { await model.reload() }
@@ -135,7 +169,8 @@ struct TrendsView: View {
                 ForEach(model.carbBars) { bar in
                     BarMark(
                         x: .value("Time", bar.date),
-                        y: .value("Carbs", mappedCarb(bar.value))
+                        y: .value("Carbs", mappedCarb(bar.value)),
+                        width: carbBarWidth
                     )
                     .foregroundStyle(Color.medataAccent)
                 }
@@ -150,7 +185,35 @@ struct TrendsView: View {
                     .interpolationMethod(.catmullRom)
                 }
             }
+            // Insulin band (App 6): small glyphs pinned just above the x-axis
+            // — the established CGM-app pattern — clear of the glucose plot
+            // band (3.9+ mmol/L). Day: one glyph per dose, bolus (teal circle)
+            // and basal (purple square) distinct. Week/Month: per-day total
+            // units, diamond. Unit counts sit above each glyph.
+            if showInsulin {
+                ForEach(model.insulinMarkers) { marker in
+                    PointMark(
+                        x: .value("Time", marker.date),
+                        y: .value("Insulin", insulinBandY)
+                    )
+                    .symbol(insulinSymbol(for: marker.kind))
+                    .symbolSize(60)
+                    .foregroundStyle(
+                        marker.kind == .basal
+                            ? Color.seriesInsulinBasal : Color.seriesInsulinBolus
+                    )
+                    .annotation(position: .top, spacing: 1) {
+                        Text("\(Int(marker.units.rounded()))")
+                            .font(.caption2.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+            }
         }
+        // Pin the x-domain to the whole selected range. Without this the
+        // domain shrinks to the data extent — with a single meal the day chart
+        // degenerated to a huge centred bar (see task 6 findings).
+        .chartXScale(domain: model.interval.start...model.interval.end)
         .chartYScale(domain: 0...glucoseAxisMax)
         .chartYAxis {
             AxisMarks(position: .leading) { value in
@@ -191,12 +254,33 @@ struct TrendsView: View {
         TrendsMath.mapCarbsToAxis(carbs, carbAxisMax: model.carbAxisMax, glucoseAxisMax: glucoseAxisMax)
     }
 
+    // Day bars sit on a continuous time axis where the automatic width is
+    // plot-width ÷ mark-count — a lone meal rendered as an obstructive slab at
+    // its timestamp (task 6). A fixed narrow width keeps every meal a slim
+    // bar; Week/Month keep the automatic per-day width.
+    private var carbBarWidth: MarkDimension {
+        model.range == .day ? .fixed(6) : .automatic
+    }
+
+    // The insulin band's y-position: a whisker above the axis line, well below
+    // the glucose trace's plot band whichever y-scale is active.
+    private var insulinBandY: Double { glucoseAxisMax * 0.04 }
+
+    private func insulinSymbol(for kind: InsulinKind?) -> BasicChartSymbolShape {
+        switch kind {
+        case .bolus: return .circle
+        case .basal: return .square
+        case nil: return .diamond  // per-day aggregate (Week/Month)
+        }
+    }
+
     // MARK: - Metric chips (§10.4)
 
     private var metricChips: some View {
         HStack(spacing: 10) {
             metricChip("Carbs", isOn: showCarbs) { showCarbs.toggle() }
             metricChip("Glucose", isOn: showGlucose) { showGlucose.toggle() }
+            metricChip("Insulin", isOn: showInsulin) { showInsulin.toggle() }
             disabledChip("Protein · Fat")
             Spacer()
         }
@@ -237,6 +321,7 @@ struct TrendsView: View {
             statCard("Avg carbs/day", "\(Int(model.avgCarbsPerDay.rounded())) g")
             statCard("In range", inRangeValue)
             statCard("Avg glucose", avgGlucoseValue)
+            statCard("Total insulin", "\(Int(model.totalInsulinUnits.rounded())) U")
         }
     }
 
@@ -299,9 +384,71 @@ struct TrendsView: View {
     }
 
     private func mealTime(_ record: MealRecord) -> String {
+        timeLabel(record.createdAt)
+    }
+
+    private func timeLabel(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_IE")
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: record.createdAt)
+        return formatter.string(from: date)
+    }
+
+    // MARK: - Day insulin list (App 8)
+
+    // The day's doses beside the Meals list. Swipe-to-delete lives on a List
+    // (the only SwiftUI surface with row swipe actions); it is height-pinned
+    // and scroll-disabled so it reads as a plain section of the ScrollView.
+    private let doseRowHeight: CGFloat = 44
+
+    private var dayInsulin: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Insulin")
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+            if model.dayDoses.isEmpty {
+                Text("no doses")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+            } else {
+                List {
+                    ForEach(model.dayDoses) { dose in
+                        doseRow(dose)
+                            .listRowBackground(Color.surfacePrimary)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    }
+                    .onDelete { offsets in
+                        let ids = offsets.map { model.dayDoses[$0].id }
+                        Task {
+                            for id in ids { await model.deleteDose(id: id) }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .environment(\.defaultMinListRowHeight, doseRowHeight)
+                .frame(height: CGFloat(model.dayDoses.count) * doseRowHeight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func doseRow(_ dose: InsulinEntry) -> some View {
+        HStack {
+            Text(timeLabel(dose.timestamp))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.textPrimary)
+            Text(dose.kind == .bolus ? "Bolus" : "Basal")
+                .font(.subheadline)
+                .foregroundStyle(
+                    dose.kind == .basal ? Color.seriesInsulinBasal : Color.seriesInsulinBolus
+                )
+            Spacer()
+            Text("\(Int(dose.units.rounded())) U")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Color.textSecondary)
+        }
+        .accessibilityIdentifier("graph.dose.\(dose.id.uuidString)")
     }
 }
