@@ -299,7 +299,7 @@ the naive number while thin food classes quietly fail the §5 bar.
 ```sh
 python tools/segmenter/train.py \
     --data data/foodseg103_remapped \
-    --num-classes 27 --target-size 513 \
+    --num-classes 35 --target-size 513 \
     --epochs 60 --batch-size 16 --lr 1e-3 \
     --out tools/segmenter/build/checkpoint.pt                # (exists)
 ```
@@ -383,7 +383,7 @@ Run on **macOS**:
 ```sh
 python tools/segmenter/export.py \
     --checkpoint tools/segmenter/build/checkpoint.pt \
-    --num-classes 27 --target-size 513 \
+    --num-classes 35 --target-size 513 \
     --reference-image tests/fixtures/segmenter/reference.png \
     --out-coreml MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage \
     --out-tflite tools/segmenter/build/segmenter.tflite
