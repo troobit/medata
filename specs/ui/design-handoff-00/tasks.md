@@ -18,7 +18,7 @@ references:
 
 - [x] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [x] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -124,7 +124,7 @@ references:
   - Stream: 2
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
 
-- [ ] 17. SegmentationReviewView + MaskOverlayLoader + segmentation-review.md <!-- id:xi3gpnf -->
+- [x] 17. SegmentationReviewView + MaskOverlayLoader + segmentation-review.md <!-- id:xi3gpnf -->
   - MaskOverlayLoader takes the store, artefactData(mealId:kind:"mask"), reads raw bitmap via CGDataProvider (NOT colour-managed UIImage decode), tints per colour table; nil anywhere → photo-only (Req 6.8)
   - Class list with mask-colour swatches, no per-class confidence (Decision 16); unknown/liquid banners icon+text; primary action Carbs → appends .result(record)
   - Blocked-by: xi3gpn2 (Implement id→colour table beside ClassPalette)
@@ -139,7 +139,7 @@ references:
   - Stream: 2
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [6.6](requirements.md#6.6), [6.7](requirements.md#6.7), [6.8](requirements.md#6.8)
 
-- [ ] 19. ManualCorrectionView + correction.md <!-- id:xi3gpnh -->
+- [x] 19. ManualCorrectionView + correction.md <!-- id:xi3gpnh -->
   - Total stepper + per-food edits + Note; store.appendCorrection; was N g from corrections(for:); Save pops one level
   - Copy: Original kept · correction saved alongside (minimised, no exemption)
   - Blocked-by: xi3gpn7 (Emit eventsDidChange from appendCorrection)
