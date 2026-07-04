@@ -276,6 +276,40 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         state = .ready(freshSnapshot())
     }
 
+    // Fresh-capture ⋯ Delete (Decision 17): the meal is already persisted, so
+    // discarding means deleting it from the store, then clearing the capture
+    // stack. `ResultView` holds no store reference — it calls this. The
+    // `.showingResult` guard in `dismissResult()` still holds because the delete
+    // runs asynchronously and this method calls `dismissResult()` synchronously
+    // before yielding.
+    func deleteAndDismiss(_ record: MealRecord) {
+        guard case .showingResult = state else { return }
+        if let store {
+            Task { [store] in try? await store.deleteMeal(id: record.id) }
+        }
+        dismissResult()
+    }
+
+    // Error-overlay `2-view` action (§4). A plain `retry()` would re-run the
+    // frozen single-mode attempt; instead clear `inFlightMode`, persist `.double`
+    // (same semantics as tapping the mode toggle), and return to a live `.ready`
+    // state so the next shutter runs the two-view path with the AR session live.
+    func switchToTwoViewAndRetry() {
+        guard case .refused = state else { return }
+        UserDefaults.standard.set(CaptureMode.double.rawValue, forKey: SettingsKeys.captureMode)
+        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
+        inFlightMode = nil
+        state = .ready(freshSnapshot())
+    }
+
+    // Pops one level off the capture stack, back to whichever screen pushed the
+    // current one (correction Save, history-detail Done — design: Navigation
+    // routes). Guards against an empty path.
+    func popRoute() {
+        guard !navigationPath.isEmpty else { return }
+        navigationPath.removeLast()
+    }
+
     // Sheet swipe-down on the RefusalSheet (Req §20.7 / Decision 16). Clears
     // the captured nadir and any in-flight mode so the user lands back at the
     // viewfinder in a fresh state. The explicit retry path (`tryAgain`) is
@@ -626,7 +660,10 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             lastMeal = stamped
             log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
             state = .showingResult(stamped)
-            navigationPath.append(stamped)
+            // Flow lands on Segmentation review first (§1.3); its Carbs action
+            // pushes `.result`. `.showingResult` holds across review → result →
+            // correction, so dismissResult/deleteAndDismiss guards still fire.
+            navigationPath.append(CaptureRoute.review(stamped))
         } catch is CancellationError {
             return
         } catch let failure as EstimationFailure {

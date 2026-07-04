@@ -18,7 +18,7 @@ references:
 
 - [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -86,7 +86,7 @@ references:
   - Stream: 2
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.5](requirements.md#1.5), [16.2](requirements.md#16.2)
 
-- [ ] 13. Route enums and model commands <!-- id:xi3gpnb -->
+- [x] 13. Route enums and model commands <!-- id:xi3gpnb -->
   - CaptureRoute(review/result/correction) on capture stack; MealRoute(overview/result/correction) shared by Data+Trends sheet stacks; REMOVE navigationDestination(for: MealRecord.self)
   - runEstimation appends .review(record); Done(.justCaptured) → model.dismissResult(); Done(.historyDetail) pops one level; correction Save pops one level
   - New model commands: deleteAndDismiss(record) (store.deleteMeal then dismissResult; .showingResult guard holds) and switchToTwoViewAndRetry() (clear inFlightMode, persist .double, restart) — plain retry() would re-run the frozen single-mode attempt

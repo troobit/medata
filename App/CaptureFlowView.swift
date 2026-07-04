@@ -51,16 +51,32 @@ struct CaptureFlowView: View {
     var body: some View {
         NavigationStack(path: $model.navigationPath) {
             content
-                .navigationDestination(for: MealRecord.self) { record in
-                    ResultView(
-                        record: record,
-                        mode: .justCaptured,
-                        onNewCapture: { model.dismissResult() },
-                        onRetake: { model.dismissResult() }
-                    )
+                .navigationDestination(for: CaptureRoute.self) { route in
+                    captureDestination(route)
                 }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    // Capture-stack routes (design: Navigation routes). runEstimation pushes
+    // `.review`; its Carbs action pushes `.result`; `Adjust` pushes `.correction`.
+    @ViewBuilder
+    private func captureDestination(_ route: CaptureRoute) -> some View {
+        switch route {
+        case .review(let record):
+            SegmentationReviewView(record: record, onCarbs: {
+                model.navigationPath.append(CaptureRoute.result(record))
+            })
+        case .result(let record):
+            ResultView(
+                record: record,
+                mode: .justCaptured,
+                onNewCapture: { model.dismissResult() },
+                onRetake: { model.dismissResult() }
+            )
+        case .correction(let record):
+            ManualCorrectionView(record: record, onSave: { model.popRoute() })
         }
     }
 
