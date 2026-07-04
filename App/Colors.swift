@@ -46,4 +46,10 @@ extension Color {
     static let seriesGlucose = Color(uiColor: .systemOrange)
     // 3.9–10.0 mmol/L target range band fill.
     static let bandTarget = medataAccent.opacity(0.10)
+    // Insulin dose markers (PRD regression-suggestion-integration App 6):
+    // bolus and basal must be distinct from each other AND from the glucose
+    // (orange) and carb (accent green) series. Week/Month per-day aggregate
+    // markers reuse the bolus teal.
+    static let seriesInsulinBolus = Color(uiColor: .systemTeal)
+    static let seriesInsulinBasal = Color(uiColor: .systemPurple)
 }
