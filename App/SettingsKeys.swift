@@ -11,4 +11,8 @@
 // string constants are inherently thread-safe.
 nonisolated enum SettingsKeys {
     static let captureMode = "medata.captureMode"
+    // Fork sheet §3.2 / Settings §12.1: the persistent "always include a
+    // reference card" default. The fork-sheet card toggle seeds from this; a
+    // per-capture override lives on CaptureFlowModel and does not write here.
+    static let alwaysIncludeCard = "medata.alwaysIncludeCard"
 }

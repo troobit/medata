@@ -5,6 +5,25 @@ enum CaptureStage: Equatable, Sendable {
     case oblique
 }
 
+// Route enums replace `navigationDestination(for: MealRecord.self)` (design:
+// Navigation routes). Each navigation stack keys exactly one enum.
+//
+// The capture stack (rooted in `CaptureFlowView`) drives a fresh capture through
+// review → result → correction.
+enum CaptureRoute: Hashable {
+    case review(MealRecord)      // → SegmentationReviewView
+    case result(MealRecord)      // → ResultView(.justCaptured)
+    case correction(MealRecord)  // → ManualCorrectionView
+}
+
+// The Data and Trends sheet stacks share this enum: a day/list row pushes
+// `.overview`, which can push the full `.result` or `.correction`.
+enum MealRoute: Hashable {
+    case overview(MealRecord)    // → MealOverviewView
+    case result(MealRecord)      // → ResultView(.historyDetail)
+    case correction(MealRecord)  // → ManualCorrectionView
+}
+
 enum PermissionSubject: Equatable, Sendable {
     case camera
     case motion

@@ -7,18 +7,19 @@ import os
 import Pipeline
 import SwiftUI
 
-// Resolves the persistent CaptureMode from UserDefaults; defaults to `.double`
-// on first install (Decision 35). Defined at file scope (not on the @MainActor
-// class) so it can be used as the default parameter for the @Sendable closure
-// on `CaptureFlowModel.init`. `nonisolated` is required because the project
-// sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which would otherwise make
-// this free function implicitly MainActor-isolated and incompatible with the
-// `@Sendable () -> CaptureMode` parameter type. The UserDefaults read is
-// thread-safe (Apple documents internal locking), so no isolation is needed.
+// Resolves the persistent CaptureMode from UserDefaults. When the key is unset
+// (fresh install) the default forks on device capability: 1-view on LiDAR
+// devices, 2-view on non-LiDAR devices (Req 16.2 / Decision 9). Existing
+// installs that wrote the key keep their choice. `nonisolated` is required
+// because the project sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which
+// would otherwise make this free function implicitly MainActor-isolated and
+// incompatible with the `@Sendable () -> CaptureMode` parameter type. The
+// UserDefaults read is thread-safe (Apple documents internal locking).
 nonisolated
-func defaultCaptureModeReader() -> CaptureMode {
+func defaultCaptureModeReader(hasLiDAR: Bool) -> CaptureMode {
     let raw = UserDefaults.standard.string(forKey: SettingsKeys.captureMode)
-    return raw.flatMap(CaptureMode.init(rawValue:)) ?? .double
+    if let stored = raw.flatMap(CaptureMode.init(rawValue:)) { return stored }
+    return hasLiDAR ? .single : .double
 }
 
 // Orchestrator for the capture flow per `specs/ui/iphone-experience/design.md`. Owns the state
@@ -39,6 +40,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     var navigationPath = NavigationPath()
     let indicators: LiveIndicatorModel
     let supportsLiDAR: Bool
+    // Per-capture reference-card override (fork sheet §3.2). Seeds from the
+    // `alwaysIncludeCard` default when the fork sheet opens; the sheet mutates it
+    // for the next capture only. NOT persisted — it drives card-placement
+    // guidance during two-view capture; card detection itself stays automatic in
+    // the pipeline.
+    var includeCardThisCapture: Bool = false
 
     private let session: CaptureSession
     private let pipeline: any PipelineEstimator
@@ -101,7 +108,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         motionAvailable: @escaping @Sendable () -> Bool = {
             CMMotionManager().isDeviceMotionAvailable
         },
-        captureModeReader: @escaping @Sendable () -> CaptureMode = defaultCaptureModeReader
+        captureModeReader: (@Sendable () -> CaptureMode)? = nil
     ) {
         self.session = session
         self.pipeline = pipeline
@@ -114,7 +121,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         self.preShutterSegmenter = preShutterSegmenter
         self.cameraAuthorisation = cameraAuthorisation
         self.motionAvailable = motionAvailable
-        self.captureModeReader = captureModeReader
+        // When no explicit reader is injected, resolve the persistent mode with
+        // the capability-aware default (Req 16.2). `hasLiDAR` captures the Bool
+        // param, keeping the closure @Sendable.
+        let hasLiDAR = supportsLiDAR
+        self.captureModeReader = captureModeReader ?? { defaultCaptureModeReader(hasLiDAR: hasLiDAR) }
 
         evaluatePermissions()
         observeInterruptions(stream: interruptions)
@@ -169,7 +180,28 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     var obliqueTiltMessage: String? {
         guard firstFrame != nil, case .ready = state else { return nil }
         if obliqueTiltOk(degrees: indicators.liveTiltDegrees) { return nil }
-        return EstimationFailure.obliqueTiltOutOfRange.localisedMessage
+        // Copy inventory §2.1 clause: oblique guidance above the shutter reads
+        // `Target 25°` — the same string as the §4 tilt hint.
+        return "Target 25°"
+    }
+
+    // Transient chip shown above the shutter when a blocked tap lands (design:
+    // parity audit — replaces the old badge reveal). Names the failing gate in
+    // ≤ 3 words per the §4 chip vocabulary (copy inventory). nil when the
+    // shutter is not blocked for a nameable reason.
+    var failingShutterGate: String? {
+        switch state {
+        case .trackingLost:
+            return "hold steady"
+        case .initialising:
+            return "wait"
+        case .ready(let snapshot):
+            if !distanceGateOK(snapshot) { return "too far" }
+            if firstFrame == nil, !hasUsablePreShutterMask { return "wait" }
+            return nil
+        default:
+            return nil
+        }
     }
 
     var currentSnapshot: GatingSnapshot? {
@@ -240,11 +272,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     }
 
     // Diagnostic for taps on the .disabled shutter. Does not mutate state.
-    // Surfaces the auto-hidden indicator badge and emits one .info log line
+    // The old badge reveal is gone (design: parity audit) — the view surfaces a
+    // transient failing-gate chip instead. This still emits one .info log line
     // with the full gating snapshot so a Console.app subscriber can see which
     // gate is blocking.
     func shutterBlockedTapped() {
-        indicators.reveal()
         log.info("\(self.gatingLog(event: "blocked"), privacy: .public)")
     }
 
@@ -269,6 +301,40 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
         inFlightMode = nil
         state = .ready(freshSnapshot())
+    }
+
+    // Fresh-capture ⋯ Delete (Decision 17): the meal is already persisted, so
+    // discarding means deleting it from the store, then clearing the capture
+    // stack. `ResultView` holds no store reference — it calls this. The
+    // `.showingResult` guard in `dismissResult()` still holds because the delete
+    // runs asynchronously and this method calls `dismissResult()` synchronously
+    // before yielding.
+    func deleteAndDismiss(_ record: MealRecord) {
+        guard case .showingResult = state else { return }
+        if let store {
+            Task { [store] in try? await store.deleteMeal(id: record.id) }
+        }
+        dismissResult()
+    }
+
+    // Error-overlay `2-view` action (§4). A plain `retry()` would re-run the
+    // frozen single-mode attempt; instead clear `inFlightMode`, persist `.double`
+    // (same semantics as tapping the mode toggle), and return to a live `.ready`
+    // state so the next shutter runs the two-view path with the AR session live.
+    func switchToTwoViewAndRetry() {
+        guard case .refused = state else { return }
+        UserDefaults.standard.set(CaptureMode.double.rawValue, forKey: SettingsKeys.captureMode)
+        firstFrame = nil; firstFrameTiltDeg = nil; firstFrameMaskBox = nil; firstFrameMaskAgeMs = nil
+        inFlightMode = nil
+        state = .ready(freshSnapshot())
+    }
+
+    // Pops one level off the capture stack, back to whichever screen pushed the
+    // current one (correction Save, history-detail Done — design: Navigation
+    // routes). Guards against an empty path.
+    func popRoute() {
+        guard !navigationPath.isEmpty else { return }
+        navigationPath.removeLast()
     }
 
     // Sheet swipe-down on the RefusalSheet (Req §20.7 / Decision 16). Clears
@@ -311,26 +377,24 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
-    // Tab-switch lifecycle per UI Req §1.7 / §18.7 (Decision 15; the `.refused`
-    // arm is superseded by Decision 20 — see specs/bugfixes/surface-not-detected/
-    // report.md). Mirrors `scenePhaseChanged(.background)` for non-Photo tabs
-    // with one carve-out: when the model is already in `.estimating`, the
-    // pipeline runs to completion and the result is presented on the next
-    // return to Photo. Permission-denied is preserved across the switch (no
-    // engine to release); `.refused` is treated as an implicit dismissal —
-    // same baseline as `.ready`.
-    func tabSelectionChanged(to tab: AppTab) {
-        if tab == .photo {
-            // Re-arm the AR session on return. The non-Photo branch below
-            // calls `session.stop()` and clears `startTask`; nothing in the
-            // SwiftUI lifecycle restarts it (TabView retains views, so
-            // ARPreviewView's `updateUIView` is not guaranteed to fire on
-            // re-select). Calling `evaluatePermissions()` is idempotent — it
-            // bails out on permission-denied and only spawns a fresh start
-            // task when one is not already in flight.
-            evaluatePermissions()
-            return
-        }
+    // Sheet-present re-arm per Req §1.5 (Decision 11; the `.refused` arm is
+    // superseded by Decision 20 — see specs/bugfixes/surface-not-detected/
+    // report.md). A sheet dismissal returns to Capture: re-arm the AR session.
+    // Calling `evaluatePermissions()` is idempotent — it bails out on
+    // permission-denied and only spawns a fresh start task when one is not
+    // already in flight. A single-item sheet state means dismiss-then-present is
+    // sequential, so the AR session never double-toggles.
+    func sheetDidDismiss() {
+        evaluatePermissions()
+    }
+
+    // A sheet was presented over Capture (Req §1.5): release the AR session
+    // within 200 ms. Mirrors `scenePhaseChanged(.background)` with one carve-out:
+    // when the model is already in `.estimating`, the pipeline runs to completion
+    // and the result is presented on the next return to Capture. Permission-denied
+    // is preserved (no engine to release); `.refused` is treated as an implicit
+    // dismissal — same baseline as `.ready`.
+    func sheetDidPresent() {
         switch state {
         case .estimating:
             // Let the pipeline finish; `flowTask` already routes the result
@@ -623,7 +687,10 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             lastMeal = stamped
             log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
             state = .showingResult(stamped)
-            navigationPath.append(stamped)
+            // Flow lands on Segmentation review first (§1.3); its Carbs action
+            // pushes `.result`. `.showingResult` holds across review → result →
+            // correction, so dismissResult/deleteAndDismiss guards still fire.
+            navigationPath.append(CaptureRoute.review(stamped))
         } catch is CancellationError {
             return
         } catch let failure as EstimationFailure {

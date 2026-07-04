@@ -676,12 +676,15 @@ final class PersistenceTests: XCTestCase {
         XCTAssertEqual(reloaded.macros.totalCarbsG, 33.6, accuracy: 1e-4)
     }
 
-    func testAppendCorrectionDoesNotYieldEventsDidChange() async throws {
+    // UI Design Handoff 00, Decision 18: appendCorrection now emits exactly one
+    // eventsDidChange tick so Data rows and Meal overview learn a correction
+    // landed without polling. This reverses the event-log-schema-era behaviour.
+    func testAppendCorrectionYieldsEventsDidChange() async throws {
         let record = makeMealRecord()
         try await store.save(record, artefacts: [])
 
-        // Count ticks via an actor so the negative assertion does not race
-        // task cancellation against a timeout. A non-zero count = unwanted tick.
+        // Count ticks via an actor. Subscribing after the save means the save's
+        // own tick is not seen; only the correction's should register.
         let counter = TickCounter()
         let stream = store.eventsDidChange
         let observer = Task {
@@ -694,11 +697,11 @@ final class PersistenceTests: XCTestCase {
         correction.correctedTotalCarbsG = 50.0
         try await store.appendCorrection(mealId: record.id, correction: correction)
 
-        // Give the broadcaster ample time to fire if it were going to.
+        // Give the broadcaster ample time to fire.
         try await Task.sleep(nanoseconds: 200_000_000)
         let count = await counter.get()
         observer.cancel()
-        XCTAssertEqual(count, 0, "eventsDidChange unexpectedly yielded after appendCorrection")
+        XCTAssertEqual(count, 1, "appendCorrection must emit exactly one eventsDidChange tick (Decision 18)")
     }
 
     // MARK: - meal_artefacts rows written for each artefact

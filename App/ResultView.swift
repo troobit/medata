@@ -136,23 +136,13 @@ enum ResultFormat {
     }
 }
 
-// Controls how `ResultView` is presented. The just-captured path (Photo tab)
-// shows the "Retake" + "Done" action row; the history-detail path (Meals tab)
-// hides it because the user got there from the list and the back button is
-// the way out (UI Req §20.8 / §19.4).
+// Controls how `ResultView` is presented. Both paths now show the Adjust/Done
+// action row (Req 6.7 v0.4 — historyDetail showing the row is a deliberate
+// change from the tab-era design); the only difference is the ⋯ menu contents
+// (Retake+Delete on a fresh capture, Delete only from history — Decision 17).
 enum ResultPresentation: Equatable {
     case justCaptured
     case historyDetail
-
-    var showsActionRow: Bool {
-        switch self {
-        case .justCaptured: return true
-        case .historyDetail: return false
-        }
-    }
-
-    // Back-compat alias for the test-suite name introduced in v1.1 tab phase.
-    var showsNewCapture: Bool { showsActionRow }
 }
 
 enum ResultViewLayout {
@@ -174,17 +164,22 @@ enum ResultViewLayout {
     }
 }
 
-// Post-capture result. Shows only the carb total and the confidence pill —
-// no per-class breakdown, no clinical macros (Req §9.5, Decision 3).
-// Visual treatment per `design-system/pages/photo-tab.md` §"ResultView"
-// (Decision 16 / Req §20.2 / §20.8): full-bleed dimmed photo background, carb
-// total at the `display` type-scale, confidence pill below, placeholder chip
-// when `segmenterSource == "dev_stub"`.
+// Result screen (§6, design-system/pages/result.md). Hero carb total (original
+// estimate) + four-tier confidence pill, a summary card (thumbnail, foods count,
+// total mass, `CoFID + AFCD`), a per-food breakdown (name/mass/volume/carbs — no
+// σ, Decision 16), dashed macro placeholders, and an Adjust/Done action row with
+// a ⋯ menu (Retake+Delete fresh, Delete from history — Decision 17). Keeps the
+// calibration banner, liquid flag, very-low surface, and placeholder chip.
 struct ResultView: View {
     let record: MealRecord
     var mode: ResultPresentation = .justCaptured
-    var onNewCapture: () -> Void = {}
+    // Adjust → Manual correction; Done → dismiss (capture) / pop (history);
+    // Retake and Delete live in the ⋯ menu (Decision 17). All defaulted so the
+    // history stack (stream 3) and the retired MealsTabView both compile.
+    var onAdjust: () -> Void = {}
+    var onDone: () -> Void = {}
     var onRetake: () -> Void = {}
+    var onDelete: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.sizeCategory) private var sizeCategory
@@ -215,64 +210,177 @@ struct ResultView: View {
     private var displayPoints: CGFloat { ResultViewLayout.displayPoints(sizeCategory) }
 
     var body: some View {
-        ZStack {
-            background
-            VStack(spacing: 16) {
-                Spacer()
-                carbTotal
-                ConfidencePill(sigmaMeal: sigma)
-                if showsPlaceholderChip { placeholderChip }
-                switch calibrationBanner {
-                case .full:      calibrationBannerCard(ResultFormat.uncalibratedBannerCopy)
-                case .softened:  calibrationBannerCard(ResultFormat.softenedBannerCopy)
-                case .suppressed, .none: EmptyView()
+        ZStack(alignment: .bottom) {
+            Color.captureBackground.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 20) {
+                    carbTotal
+                    ConfidencePill(sigmaMeal: sigma)
+                    if showsPlaceholderChip { placeholderChip }
+                    switch calibrationBanner {
+                    case .full:      calibrationBannerCard(ResultFormat.uncalibratedBannerCopy)
+                    case .softened:  calibrationBannerCard(ResultFormat.softenedBannerCopy)
+                    case .suppressed, .none: EmptyView()
+                    }
+                    if showsLiquidFlag { liquidOverEstimateFlag }
+                    if showsVeryLowSurface { veryLowSurface }
+                    summaryCard
+                    breakdown
+                    macroPlaceholders
                 }
-                if showsLiquidFlag { liquidOverEstimateFlag }
-                if showsVeryLowSurface { veryLowSurface }
-                Spacer()
-                if mode.showsActionRow { actionRow }
+                .padding(.horizontal, 24)
+                .padding(.top, 24)
+                // Leave room so the pinned action row never overlaps content.
+                .padding(.bottom, 96)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            actionRow
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
         }
-        .background(Color.captureBackground)
-        // Only the background layers (photo + gradient, below) ignore the safe
-        // area for the full-bleed look. The ZStack itself must NOT — otherwise
-        // its content and hit region extend under the system tab bar and
-        // swallow tab taps, leaving the result screen unable to switch tabs.
-        // The tab bar is not a takeover; it stays visible and reachable in both
-        // .justCaptured and .historyDetail (bugfix/result-view-covers-tab-bar).
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPhoto() }
     }
 
-    @ViewBuilder
-    private var background: some View {
-        if let photo {
-            Image(uiImage: photo)
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
-        } else {
-            Color.captureBackground
-                .ignoresSafeArea()
+    // Hero: original estimate (§6.1) — the carb total is the persisted value and
+    // is never replaced by a correction here (corrected totals surface in Data /
+    // Overview). `g carbs` suffix per the copy inventory.
+    private var carbTotal: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
+            Text("\(ResultFormat.carbsGrams(record.macros.totalCarbsG))")
+                .font(.system(size: displayPoints, weight: .heavy, design: .default).monospacedDigit())
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .animation(reduceMotion ? nil : .smooth, value: record.macros.totalCarbsG)
+            Text("g carbs")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.captureChromeText.opacity(0.7))
         }
-        LinearGradient(
-            colors: [Color.captureScrim, Color.clear, Color.captureScrim],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        .foregroundStyle(Color.captureChromeText)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("result.carbsTotal")
     }
 
-    private var carbTotal: some View {
-        Text("\(ResultFormat.carbsGrams(record.macros.totalCarbsG)) g")
-            .font(.system(size: displayPoints, weight: .heavy, design: .default).monospacedDigit())
-            .foregroundStyle(Color.captureChromeText)
-            .contentTransition(reduceMotion ? .identity : .numericText())
-            .animation(reduceMotion ? nil : .smooth, value: record.macros.totalCarbsG)
-            .accessibilityIdentifier("result.carbsTotal")
+    // Summary card (§6.3): thumbnail (with §6.8 fallback), foods count, total
+    // mass, and the food-database edition.
+    private var summaryCard: some View {
+        HStack(spacing: 16) {
+            thumbnail
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(foodCount) foods")
+                    .font(.headline)
+                    .foregroundStyle(Color.captureChromeText)
+                Text("\(totalMassGrams) g total")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.captureChromeText.opacity(0.8))
+                Text("CoFID + AFCD")
+                    .font(.caption)
+                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(Color.captureChromeBG, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityIdentifier("result.summaryCard")
+    }
+
+    // §6.8 fallback: neutral placeholder when the photo asset is unavailable.
+    private var thumbnail: some View {
+        Group {
+            if let photo {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Color.captureChromeBG
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 24))
+                        .foregroundStyle(Color.captureChromeText.opacity(0.5))
+                }
+                .accessibilityIdentifier("result.thumbnailFallback")
+            }
+        }
+        .frame(width: 64, height: 64)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // Per-food breakdown (§6.4): name, mass, volume, carbs — no σ (Decision 16).
+    private var breakdown: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Per food")
+                .font(.headline)
+                .foregroundStyle(Color.captureChromeText)
+            ForEach(perClassRows, id: \.name) { row in
+                HStack {
+                    Text(row.displayName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.captureChromeText)
+                    Spacer()
+                    Text("\(row.massG) g · \(row.volumeCm3) cm³ · \(row.carbsG) g carbs")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("result.breakdown")
+    }
+
+    // Dashed, disabled macro placeholders that hold layout space (§6.5).
+    private var macroPlaceholders: some View {
+        HStack(spacing: 12) {
+            macroPlaceholder("Protein — soon")
+            macroPlaceholder("Fat — soon")
+        }
+    }
+
+    private func macroPlaceholder(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.captureChromeText.opacity(0.5))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        Color.captureChromeText.opacity(0.3),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+            )
+    }
+
+    private var foodCount: Int { record.macros.perClass.count }
+    private var totalMassGrams: Int {
+        Int(record.macros.perClass.values.reduce(Float(0)) { $0 + $1.massG }.rounded())
+    }
+
+    private struct PerClassRow {
+        let name: String
+        let displayName: String
+        let massG: Int
+        let volumeCm3: Int
+        let carbsG: Int
+    }
+
+    // Sorted by carbs descending for a stable, meaningful order.
+    private var perClassRows: [PerClassRow] {
+        record.macros.perClass
+            .map { name, macro in
+                PerClassRow(
+                    name: name,
+                    displayName: Self.prettify(name),
+                    massG: Int(macro.massG.rounded()),
+                    volumeCm3: Int(macro.volumeCm3.rounded()),
+                    carbsG: Int(macro.carbsG.rounded())
+                )
+            }
+            .sorted { $0.carbsG > $1.carbsG }
+    }
+
+    // "white_rice" → "White rice".
+    private static func prettify(_ raw: String) -> String {
+        let spaced = raw.replacingOccurrences(of: "_", with: " ")
+        return spaced.prefix(1).uppercased() + spaced.dropFirst()
     }
 
     private var placeholderChip: some View {
@@ -362,21 +470,41 @@ struct ResultView: View {
         .accessibilityIdentifier("result.veryLowSurface")
     }
 
+    // §6.6/6.7 (Decision 17): Adjust (bordered) + Done (prominent), shown in both
+    // presentations (historyDetail now shows the action row — deliberate). The ⋯
+    // menu carries Retake + Delete on a fresh capture, Delete only from history.
     private var actionRow: some View {
-        HStack(spacing: 16) {
-            Button("Retake", action: onRetake)
+        HStack(spacing: 12) {
+            Button("Adjust", action: onAdjust)
                 .font(.body.weight(.semibold))
-                .frame(width: 120, height: 48)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
                 .foregroundStyle(Color.captureChromeText)
-                .accessibilityIdentifier("result.retake")
+                .accessibilityIdentifier("result.adjust")
 
-            Button("Done", action: onNewCapture)
+            Button("Done", action: onDone)
                 .font(.body.weight(.semibold))
-                .frame(width: 120, height: 48)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
                 .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
                 .foregroundStyle(Color.captureBackground)
-                .accessibilityIdentifier("result.newCapture")
+                .accessibilityIdentifier("result.done")
+
+            Menu {
+                if mode == .justCaptured {
+                    Button("Retake", action: onRetake)
+                }
+                Button("Delete", role: .destructive, action: onDelete)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 48, height: 48)
+                    .background(Color.captureChromeBG, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(Color.captureChromeText)
+            }
+            .accessibilityLabel("More")
+            .accessibilityIdentifier("result.menu")
         }
     }
 
