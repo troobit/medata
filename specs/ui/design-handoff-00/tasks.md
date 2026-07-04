@@ -18,7 +18,7 @@ references:
 
 - [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -77,7 +77,7 @@ references:
 
 ## Shell and routes
 
-- [ ] 12. Shell swap: remove TabView, ActiveSheet enum, stubs + pbxproj registration <!-- id:xi3gpna -->
+- [x] 12. Shell swap: remove TabView, ActiveSheet enum, stubs + pbxproj registration <!-- id:xi3gpna -->
   - AppRoot hosts CaptureFlowView + .sheet(item: $activeSheet) (single optional enum → sheets mutually exclusive); delete AppTab.swift and the -uitestResetSelectedTab override in App.swift
   - Rename tabSelectionChanged → sheetDidPresent()/sheetDidDismiss() (same bodies); ShutterButtonMetrics.bottomClearance from safe-area bottom
   - defaultCaptureModeReader: unset key → hasLiDAR ? .single : .double; written keys untouched

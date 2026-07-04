@@ -19,19 +19,30 @@ struct CaptureFlowView: View {
     let store: any PersistenceStore
     let visionCardDetector: VisionCardDetector?
     let preShutterSegmenter: PreShutterSegmenter?
+    // Capture-chrome buttons open the Data / Trends / Settings sheets through
+    // these closures (the shell owns the single `ActiveSheet` state — Decision 11).
+    let onOpenData: () -> Void
+    let onOpenTrends: () -> Void
+    let onOpenSettings: () -> Void
 
     init(
         model: CaptureFlowModel,
         engine: ARKitCaptureEngine,
         store: any PersistenceStore,
         visionCardDetector: VisionCardDetector? = nil,
-        preShutterSegmenter: PreShutterSegmenter? = nil
+        preShutterSegmenter: PreShutterSegmenter? = nil,
+        onOpenData: @escaping () -> Void = {},
+        onOpenTrends: @escaping () -> Void = {},
+        onOpenSettings: @escaping () -> Void = {}
     ) {
         self.model = model
         self.engine = engine
         self.store = store
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
+        self.onOpenData = onOpenData
+        self.onOpenTrends = onOpenTrends
+        self.onOpenSettings = onOpenSettings
     }
 
     @State private var observer: LiveSampleObserver?
@@ -188,7 +199,7 @@ struct CaptureFlowView: View {
                 // tilt message, mode toggle and shutter so the chrome stops
                 // reading as a live camera, but keep the clearance spacer so the
                 // layout footprint is preserved (Req §"Freeze viewfinder").
-                Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
+                Color.clear.frame(height: ShutterButtonMetrics.bottomClearance)
             } else {
                 // Decision 18 / research Decision 43: nadir captures always
                 // proceed regardless of tilt; the oblique stage retains a
@@ -212,7 +223,7 @@ struct CaptureFlowView: View {
                     action: { model.shutter() },
                     onBlockedTap: { model.shutterBlockedTapped() }
                 )
-                Color.clear.frame(height: ShutterButtonMetrics.bottomClearanceFromTabBar)
+                Color.clear.frame(height: ShutterButtonMetrics.bottomClearance)
             }
         }
     }

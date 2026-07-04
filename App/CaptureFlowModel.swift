@@ -7,18 +7,19 @@ import os
 import Pipeline
 import SwiftUI
 
-// Resolves the persistent CaptureMode from UserDefaults; defaults to `.double`
-// on first install (Decision 35). Defined at file scope (not on the @MainActor
-// class) so it can be used as the default parameter for the @Sendable closure
-// on `CaptureFlowModel.init`. `nonisolated` is required because the project
-// sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which would otherwise make
-// this free function implicitly MainActor-isolated and incompatible with the
-// `@Sendable () -> CaptureMode` parameter type. The UserDefaults read is
-// thread-safe (Apple documents internal locking), so no isolation is needed.
+// Resolves the persistent CaptureMode from UserDefaults. When the key is unset
+// (fresh install) the default forks on device capability: 1-view on LiDAR
+// devices, 2-view on non-LiDAR devices (Req 16.2 / Decision 9). Existing
+// installs that wrote the key keep their choice. `nonisolated` is required
+// because the project sets `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which
+// would otherwise make this free function implicitly MainActor-isolated and
+// incompatible with the `@Sendable () -> CaptureMode` parameter type. The
+// UserDefaults read is thread-safe (Apple documents internal locking).
 nonisolated
-func defaultCaptureModeReader() -> CaptureMode {
+func defaultCaptureModeReader(hasLiDAR: Bool) -> CaptureMode {
     let raw = UserDefaults.standard.string(forKey: SettingsKeys.captureMode)
-    return raw.flatMap(CaptureMode.init(rawValue:)) ?? .double
+    if let stored = raw.flatMap(CaptureMode.init(rawValue:)) { return stored }
+    return hasLiDAR ? .single : .double
 }
 
 // Orchestrator for the capture flow per `specs/ui/iphone-experience/design.md`. Owns the state
@@ -101,7 +102,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         motionAvailable: @escaping @Sendable () -> Bool = {
             CMMotionManager().isDeviceMotionAvailable
         },
-        captureModeReader: @escaping @Sendable () -> CaptureMode = defaultCaptureModeReader
+        captureModeReader: (@Sendable () -> CaptureMode)? = nil
     ) {
         self.session = session
         self.pipeline = pipeline
@@ -114,7 +115,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         self.preShutterSegmenter = preShutterSegmenter
         self.cameraAuthorisation = cameraAuthorisation
         self.motionAvailable = motionAvailable
-        self.captureModeReader = captureModeReader
+        // When no explicit reader is injected, resolve the persistent mode with
+        // the capability-aware default (Req 16.2). `hasLiDAR` captures the Bool
+        // param, keeping the closure @Sendable.
+        let hasLiDAR = supportsLiDAR
+        self.captureModeReader = captureModeReader ?? { defaultCaptureModeReader(hasLiDAR: hasLiDAR) }
 
         evaluatePermissions()
         observeInterruptions(stream: interruptions)
@@ -311,26 +316,24 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         }
     }
 
-    // Tab-switch lifecycle per UI Req §1.7 / §18.7 (Decision 15; the `.refused`
-    // arm is superseded by Decision 20 — see specs/bugfixes/surface-not-detected/
-    // report.md). Mirrors `scenePhaseChanged(.background)` for non-Photo tabs
-    // with one carve-out: when the model is already in `.estimating`, the
-    // pipeline runs to completion and the result is presented on the next
-    // return to Photo. Permission-denied is preserved across the switch (no
-    // engine to release); `.refused` is treated as an implicit dismissal —
-    // same baseline as `.ready`.
-    func tabSelectionChanged(to tab: AppTab) {
-        if tab == .photo {
-            // Re-arm the AR session on return. The non-Photo branch below
-            // calls `session.stop()` and clears `startTask`; nothing in the
-            // SwiftUI lifecycle restarts it (TabView retains views, so
-            // ARPreviewView's `updateUIView` is not guaranteed to fire on
-            // re-select). Calling `evaluatePermissions()` is idempotent — it
-            // bails out on permission-denied and only spawns a fresh start
-            // task when one is not already in flight.
-            evaluatePermissions()
-            return
-        }
+    // Sheet-present re-arm per Req §1.5 (Decision 11; the `.refused` arm is
+    // superseded by Decision 20 — see specs/bugfixes/surface-not-detected/
+    // report.md). A sheet dismissal returns to Capture: re-arm the AR session.
+    // Calling `evaluatePermissions()` is idempotent — it bails out on
+    // permission-denied and only spawns a fresh start task when one is not
+    // already in flight. A single-item sheet state means dismiss-then-present is
+    // sequential, so the AR session never double-toggles.
+    func sheetDidDismiss() {
+        evaluatePermissions()
+    }
+
+    // A sheet was presented over Capture (Req §1.5): release the AR session
+    // within 200 ms. Mirrors `scenePhaseChanged(.background)` with one carve-out:
+    // when the model is already in `.estimating`, the pipeline runs to completion
+    // and the result is presented on the next return to Capture. Permission-denied
+    // is preserved (no engine to release); `.refused` is treated as an implicit
+    // dismissal — same baseline as `.ready`.
+    func sheetDidPresent() {
         switch state {
         case .estimating:
             // Let the pipeline finish; `flowTask` already routes the result
