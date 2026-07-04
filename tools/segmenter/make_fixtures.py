@@ -479,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     Image = _import_pil()
+    from PIL import ImageOps
 
     reference_written = False
     for image_path, mask_path in pairs:
@@ -488,9 +489,11 @@ def main(argv: list[str] | None = None) -> int:
         probs_hwc = run_model_probs(model, x, args.num_classes)
         argmax_hw = load_mask(mask_path, args.target_size, args.num_classes)
 
+        # exif_transpose matches reference_input: keep the stored nadir PNG
+        # aligned with the model input for orientation-tagged JPEGs.
         rgb = (
             np.asarray(
-                Image.open(image_path).convert("RGB").resize(
+                ImageOps.exif_transpose(Image.open(image_path)).convert("RGB").resize(
                     (args.target_size, args.target_size)
                 ),
                 dtype=np.uint8,

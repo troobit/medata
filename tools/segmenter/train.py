@@ -202,7 +202,11 @@ class FoodSegDataset:
         img_path, mask_path = self.pairs[idx]
 
         # --- image: RGB, ImageNet-normalized CHW (match export.reference_input) ---
-        img = Image.open(img_path).convert("RGB").resize(
+        # exif_transpose first: a handful of FoodSeg103 JPEGs carry an EXIF
+        # orientation tag and their masks match the *rotated* pixels.
+        from PIL import ImageOps
+
+        img = ImageOps.exif_transpose(Image.open(img_path)).convert("RGB").resize(
             (self.target_size, self.target_size), Image.BILINEAR
         )
         arr = np.asarray(img, dtype=np.float32) / 255.0

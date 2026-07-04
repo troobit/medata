@@ -147,8 +147,11 @@ def reference_input(target_size: int, image_path: str | None) -> "np.ndarray":
     """Load reference image as FP32 [1, 3, target_size, target_size]; falls back to a
     deterministic synthetic image when no path is supplied."""
     if image_path and Path(image_path).is_file():
-        from PIL import Image
-        img = Image.open(image_path).convert("RGB").resize((target_size, target_size))
+        from PIL import Image, ImageOps
+        # exif_transpose matches the train.py loader: orientation-tagged JPEGs
+        # must be rotated before resize or the pixels skew against their masks.
+        img = ImageOps.exif_transpose(Image.open(image_path))
+        img = img.convert("RGB").resize((target_size, target_size))
         arr = np.asarray(img, dtype=np.float32) / 255.0
     else:
         rng = np.random.default_rng(seed=0)
