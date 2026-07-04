@@ -27,8 +27,13 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   until validation fills it.
 - **Export gates (tasks 6–7)** — `tools/segmenter/export.py`. Pure predicates
   (`validate_weight_budget`, `validate_channel_count`, `oracle_agreement`,
-  `preprocess_reference`) are unit-tested torch-free; the full oracle run is gated
-  on a real `checkpoint.pt`. The oracle is the **PyTorch checkpoint** (not Core ML
+  `preprocess_reference`) are unit-tested torch-free. First-real-export
+  recalibrations (2026-07-05): weight budget is 24 MiB (Decision 13 — the
+  Decision 25 architecture is 11.03 M params = 22.1 MB FP16, so the original
+  10 MB was never achievable; `SegmenterWeightsBudget.maxBytes` matches) and
+  the oracle abs-logit bar is 0.5 (Decision 14 — measured healthy FP16 drift is
+  0.13–0.30 with argmax agreement ≥ 0.9985; argmax > 0.99 is the functional
+  gate). The oracle is the **PyTorch checkpoint** (not Core ML
   vs TFLite); inputs flow through `preprocess_reference`, which mirrors the
   **runtime letterbox** path (Decision 9). Known limitation: the oracle feeds the
   same preprocessed input to both sides, so it catches checkpoint↔artefact drift,
@@ -46,6 +51,17 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 - **Held-out validation runner** — `tools/segmenter/run_validation.py` (torch).
   Runs a checkpoint over a remapped split (default `heldout`), computes per-class
   IoU by palette name, records metrics into lineage. Exit 1 on strict-gate fail.
+  It imports siblings via sys.path (`_load_sibling`), NOT
+  `spec_from_file_location` — spawn DataLoader workers re-import
+  `FoodSegDataset.__module__` by name, and a synthetic module name breaks the
+  unpickle (same family as the modules-on-instance gotcha below).
+- **First real model (2026-07-05)** — recipe-v2 checkpoint `0295ea61edd9`:
+  heldout mean food-class IoU 0.4259; staples white_rice 0.60 / chips_fries 0.55
+  / pasta 0.55 pass, bread_white 0.45 / potato_boiled 0.47 short, brown_rice /
+  bread_wholemeal / potato_mashed absent from heldout. Below-gate release
+  override recorded in lineage; exported and bundled. `make deploy-release`
+  (new; `tools/deploy_release.sh`) deploys plain Release with the real model —
+  expect `segmenterSource=coreml_0295ea61edd9` in the launch log.
 - **Developer-phase release override (Decision 11)** — the strict gate advises,
   not blocks, during the developer phase. `run_validation.py --allow-below-gate
   --reason "..."` records an attributable `metrics.release_override` block and

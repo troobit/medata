@@ -288,14 +288,22 @@ def read_coreml_output_channels(out_path: str) -> int:
 # model, running the PyTorch oracle) is gated on a trained checkpoint (stage 3).
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Mirrors SegmenterWeightsBudget.maxBytes (CoreMLSegmenter.swift) — pipeline Req 8.2.
-WEIGHTS_MAX_BYTES = 10 * 1024 * 1024
+# Mirrors SegmenterWeightsBudget.maxBytes (CoreMLSegmenter.swift) — pipeline Req 8.2
+# as amended by Decision 13: DeepLabV3+MobileNetV3-Large (Decision 25) is 11.03 M
+# params = 22.1 MB at FP16, so the original 10 MB budget was unachievable for this
+# architecture. 24 MiB fits FP16 with headroom and still catches an accidental
+# FP32 export (~44 MB).
+WEIGHTS_MAX_BYTES = 24 * 1024 * 1024
 # v1 palette channel count (24 solid + 8 liquid + background + unknown_food +
 # unsupported_liquid — redefined v1, Decisions 23/24).
 EXPECTED_CHANNEL_COUNT = 35
-# Equivalence oracle thresholds (Req 4.3).
+# Equivalence oracle thresholds (Req 4.3 as amended by Decision 14). Argmax
+# agreement is the functional bar; the abs-logit bar was recalibrated from 0.05
+# after the first real FP16 export measured drift of 0.13 (synthetic input) /
+# 0.30 (real image) on ~±20-magnitude logits with argmax agreement >= 0.9985.
+# Real weight corruption shifts logits by whole units and collapses argmax.
 ORACLE_ARGMAX_MIN = 0.99
-ORACLE_MAX_ABS_ERR = 0.05
+ORACLE_MAX_ABS_ERR = 0.5
 # Contract key shared with CoreMLInferenceEngine.modelVersionMetadataKey (Swift).
 MODEL_VERSION_METADATA_KEY = "medata.modelVersion"
 
@@ -336,7 +344,7 @@ def mlpackage_weight_bytes(path: str) -> int:
 
 
 def validate_weight_budget(path: str, max_bytes: int = WEIGHTS_MAX_BYTES) -> int:
-    """Req 4.2: the exported .mlpackage weights must be ≤ 10 MB. Returns the size."""
+    """Req 4.2 (amended, Decision 13): exported weights ≤ 24 MiB. Returns the size."""
     size = mlpackage_weight_bytes(path)
     if size > max_bytes:
         raise ExportGateError(f"weights {size} bytes exceed budget {max_bytes} bytes")
@@ -391,9 +399,10 @@ def preprocess_reference(
 
 
 def oracle_agreement(a: "np.ndarray", b: "np.ndarray") -> Tuple[float, float, bool]:
-    """Equivalence oracle (Req 4.3): compare two CxHxW logit tensors by per-pixel
-    argmax agreement and max abs logit error. Passes when agreement > 99% AND max
-    abs error < 0.05. Returns (max_abs_err, argmax_agreement, ok)."""
+    """Equivalence oracle (Req 4.3, amended by Decision 14): compare two CxHxW
+    logit tensors by per-pixel argmax agreement and max abs logit error. Passes
+    when agreement > 99% AND max abs error < 0.5 (FP16-compute drift tolerance).
+    Returns (max_abs_err, argmax_agreement, ok)."""
     a = a.squeeze()
     b = b.squeeze()
     if a.shape != b.shape:

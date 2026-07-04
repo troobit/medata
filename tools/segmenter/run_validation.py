@@ -23,21 +23,23 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import json
 import sys
 from pathlib import Path
 
 
+_TOOLS_DIR = str(Path(__file__).resolve().parent)
+
+
 def _load_sibling(name: str):
-    """Import a sibling module by path (same pattern as train._load_export_module)."""
-    path = Path(__file__).resolve().with_name(f"{name}.py")
-    spec = importlib.util.spec_from_file_location(f"segmenter_{name}", path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"Could not load sibling module at {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """Import a sibling module via sys.path (the conftest.py pattern), NOT
+    spec_from_file_location: spawn-based DataLoader workers re-import
+    FoodSegDataset's module by its ``__module__`` name, so the name must be
+    importable in a fresh interpreter (sys.path is inherited by workers)."""
+    if _TOOLS_DIR not in sys.path:
+        sys.path.insert(0, _TOOLS_DIR)
+    return importlib.import_module(name)
 
 
 def _channel_names() -> list[str]:

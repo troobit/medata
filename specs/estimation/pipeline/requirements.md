@@ -176,7 +176,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 **Acceptance Criteria:**
 
 1. <a name="8.1"></a>The segmenter SHALL be a single on-device convolutional semantic segmentation network producing a per-pixel class label and a per-pixel probability vector over classes.
-2. <a name="8.2"></a>The segmenter weights file, after post-training quantisation, SHALL be 10 MB or smaller.
+2. <a name="8.2"></a>The segmenter weights file SHALL be 24 MiB or smaller (amended by model-production Decision 13: the Decision 25 architecture is 22.1 MB at FP16, so the original 10 MB post-quantisation budget was unachievable without sub-8-bit palettisation; revisit if a size-optimisation pass lands).
 3. <a name="8.3"></a>The segmenter inference SHALL complete in under 250 ms per view on the v1 hardware floor.
 4. <a name="8.4"></a>The segmenter class palette SHALL contain at least 24, and mo more than 40 food classes for v1 (curated jointly with the density coverage in [11](#11-density-and-macronutrient-database)) plus a `background` class, an `unknown_food` class, and an `unsupported_liquid` class.
 5. <a name="8.5"></a>The segmenter SHALL be sourced from a single source-of-truth model that exports cleanly to both the iOS inference runtime and the Android inference runtime via ONNX or an equivalent intermediate representation.

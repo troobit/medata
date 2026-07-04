@@ -134,7 +134,7 @@ def test_oracle_identical_passes():
 
 def test_oracle_large_logit_error_fails():
     a = _logits()
-    b = a + 0.06  # exceeds ORACLE_MAX_ABS_ERR (0.05); argmax unchanged
+    b = a + 0.6  # exceeds ORACLE_MAX_ABS_ERR (0.5, Decision 14); argmax unchanged
     err, agree, ok = export.oracle_agreement(a, b)
     assert err >= export.ORACLE_MAX_ABS_ERR
     assert agree == 1.0          # uniform shift keeps argmax

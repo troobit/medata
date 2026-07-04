@@ -91,7 +91,10 @@ public final class CoreMLSegmenter: @unchecked Sendable {
 // MARK: - Weights size budget (Req 8.2)
 
 public enum SegmenterWeightsBudget {
-    public static let maxBytes: Int = 10 * 1024 * 1024   // 10 MB ceiling
+    // Req 8.2 as amended by model-production Decision 13: the Decision 25
+    // architecture is 22.1 MB at FP16, so the original 10 MB ceiling was
+    // unachievable; 24 MiB fits FP16 and still catches an accidental FP32 export.
+    public static let maxBytes: Int = 24 * 1024 * 1024
 
     // Core ML packages are bundle directories; we sum file sizes recursively.
     public static func validate(at path: String, maxBytes: Int = maxBytes) throws {

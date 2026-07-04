@@ -120,7 +120,7 @@ final class CoreMLSegmenterTests: XCTestCase {
 
     // MARK: - Weights budget (Req 8.2)
 
-    func testWeightsBudget_PassesWhenUnder10MB() throws {
+    func testWeightsBudget_PassesWhenUnderBudget() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("seg-test-\(UUID().uuidString).bin")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -128,11 +128,11 @@ final class CoreMLSegmenterTests: XCTestCase {
         XCTAssertNoThrow(try SegmenterWeightsBudget.validate(at: url.path))
     }
 
-    func testWeightsBudget_ThrowsWhenAbove10MB() throws {
+    func testWeightsBudget_ThrowsWhenAboveBudget() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("seg-test-\(UUID().uuidString).bin")
         defer { try? FileManager.default.removeItem(at: url) }
-        try Data(repeating: 0, count: 11 * 1024 * 1024).write(to: url)
+        try Data(repeating: 0, count: SegmenterWeightsBudget.maxBytes + 1).write(to: url)
         XCTAssertThrowsError(try SegmenterWeightsBudget.validate(at: url.path)) { error in
             guard case .weightsBudgetExceeded(let actual, let max_) = error as? SegmentationError else {
                 return XCTFail("expected weightsBudgetExceeded, got \(error)")
