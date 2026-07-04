@@ -18,7 +18,7 @@ references:
 
 - [x] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [x] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -148,21 +148,21 @@ references:
 
 ## Sheet screens
 
-- [ ] 20. DataView + DataRow + MealHistoryModel correction composition + data.md <!-- id:xi3gpni -->
+- [x] 20. DataView + DataRow + MealHistoryModel correction composition + data.md <!-- id:xi3gpni -->
   - MealHistoryModel.reload() composes corrections into display struct (record + corrected total + corrected flag) — value-identical MealRecord refetch alone would not invalidate SwiftUI rows (critic R2)
   - Day grouping (Today/Yesterday/date), anonymous rows: thumbnail (6.8 fallback), time, carbs, four-tier pill; row → MealRoute.overview; empty state No meals yet
   - Blocked-by: xi3gpn7 (Emit eventsDidChange from appendCorrection)
   - Stream: 3
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4), [8.5](requirements.md#8.5), [7.3](requirements.md#7.3)
 
-- [ ] 21. MealOverviewView + meal-overview.md <!-- id:xi3gpnj -->
+- [x] 21. MealOverviewView + meal-overview.md <!-- id:xi3gpnj -->
   - Photo via extracted PHAsset loader (shared with ResultView); masks via MaskOverlayLoader; metadata line {path} · {time}; corrections re-read on eventsDidChange while visible
   - Per-class rows with colour swatches (no σ); Adjust / Full result; delete via ⋯ with confirmation (Delete meal?)
   - Blocked-by: xi3gpn2 (Implement id→colour table beside ClassPalette)
   - Stream: 3
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3)
 
-- [ ] 22. TrendsView + TrendsModel + TrendsOptionsSheet + trends.md <!-- id:xi3gpnk -->
+- [x] 22. TrendsView + TrendsModel + TrendsOptionsSheet + trends.md <!-- id:xi3gpnk -->
   - import Charts (target 26.5, no guards); day dual-series (glucose line mmol/L leading axis, carb bars trailing axis in grams, 3.9–10.0 band via bandTarget token), week/month aggregates; dynamic carbAxisMax — no clipping
   - Glucose from store.events(in:type: EventType.bsl); TIR/bucketing from TrendsMath; no glucose data + — states; day meal list → MealRoute.overview; footer safety copy verbatim
   - Options sheet: metric toggles + captions, band toggle, disabled Protein · Fat, scale Auto/Fixed (8–25 stepper); options persist via @AppStorage SettingsKeys
@@ -170,7 +170,7 @@ references:
   - Stream: 3
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.4](requirements.md#10.4), [10.5](requirements.md#10.5), [10.6](requirements.md#10.6), [10.7](requirements.md#10.7), [10.8](requirements.md#10.8), [10.9](requirements.md#10.9), [11.1](requirements.md#11.1), [11.2](requirements.md#11.2)
 
-- [ ] 23. SettingsView rework + AboutView + settings.md + about.md <!-- id:xi3gpnl -->
+- [x] 23. SettingsView rework + AboutView + settings.md + about.md <!-- id:xi3gpnl -->
   - Disabled Account row; food database CoFID + AFCD (not IFCDB, Decision 4); capture defaults (Default path 1-view/2-view writing captureMode, Always include card → new SettingsKeys.alwaysIncludeCard); Export; NO retention (Req 12.3)
   - DEBUG-only Seed demo glucose row → seedDemoBslEvents()
   - AboutView: CoFID (Crown Copyright OGL v3) + AFCD attribution, method paragraph (⚖ 13.1), Not a medical device, on-device privacy line; attribution moves out of Settings inline section

@@ -15,4 +15,13 @@ nonisolated enum SettingsKeys {
     // reference card" default. The fork-sheet card toggle seeds from this; a
     // per-capture override lives on CaptureFlowModel and does not write here.
     static let alwaysIncludeCard = "medata.alwaysIncludeCard"
+
+    // Trends graph-options (design-handoff-00 §10.8). Persisted via @AppStorage
+    // so the options sheet and the chart share one source of truth.
+    static let trendsShowCarbs = "medata.trends.showCarbs"
+    static let trendsShowGlucose = "medata.trends.showGlucose"
+    static let trendsShowTargetBand = "medata.trends.showTargetBand"
+    // Glucose y-scale: false = Auto, true = Fixed at `trendsFixedMax` mmol/L.
+    static let trendsScaleFixed = "medata.trends.scaleFixed"
+    static let trendsFixedMax = "medata.trends.fixedMax"
 }

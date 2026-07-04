@@ -7,56 +7,83 @@ private struct ArchiveFile: Identifiable {
     let url: URL
 }
 
-// Settings rewritten per Decisions 37 and 39. The retention picker and the
-// IFCDB toggle are gone; photo lifecycle is delegated to the user's Photos
-// library and macros are sourced from the bundled CoFID + AFCD pair with no
-// user override.
+// The Settings screen — design-handoff-00 §12, design-system/pages/settings.md.
+// A disabled Account row, the bundled food-database editions (CoFID + AFCD, not
+// IFCDB — Decision 4), capture defaults (default path + always-include-card),
+// data export, and an About link. No photo-retention controls (Req 12.3).
+// Attribution now lives in About (§13), not inline here. A DEBUG-only row seeds
+// demo glucose so Trends is verifiable before an importer ships (Decision 13).
 struct SettingsView: View {
     let store: any PersistenceStore
+
+    @AppStorage(SettingsKeys.captureMode) private var captureMode: CaptureMode = .double
+    @AppStorage(SettingsKeys.alwaysIncludeCard) private var alwaysIncludeCard = false
 
     @State private var archiveFile: ArchiveFile?
     @State private var isExporting = false
     @State private var exportError: String?
+    @State private var isSeeding = false
 
     var body: some View {
         Form {
-            Section("About macronutrient sources") {
-                Text("Carbohydrate, energy, protein, fat and fibre values are derived from the bundled CoFID 2024 and AFCD 2024 databases.")
-                    .font(.footnote)
-                Text("CoFID — McCance & Widdowson, Food Standards Agency, Crown Copyright, Open Government Licence v3.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Text("AFCD — Australian Food Composition Database, Food Standards Australia New Zealand, CC-BY-4.0.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                // nutrition5k-calibration Req 1.5: CC BY 4.0 requires indicating
-                // that the shipped values are adapted (derived β factors).
-                Text("Nutrition5k — Google Research, CC BY 4.0. Values adapted: portion-volume calibration factors are derived from the dataset.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            Section {
+                Button("Account") {}
+                    .disabled(true)
+                    .accessibilityIdentifier("settings.account")
             }
-            Section("Photos") {
-                Text("Captured meal photos are saved to your Photos library and managed there. Removing a photo from Photos will remove the preview from the meal record, but the carbohydrate estimate is kept.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+
+            Section("Food database") {
+                Text("CoFID")
+                Text("AFCD")
             }
-            Section("Data") {
+
+            Section("Capture") {
+                Picker("Default path", selection: $captureMode) {
+                    Text("1-view").tag(CaptureMode.single)
+                    Text("2-view").tag(CaptureMode.double)
+                }
+                Toggle("Always include card", isOn: $alwaysIncludeCard)
+            }
+
+            Section {
                 Button {
                     exportArchive()
                 } label: {
                     if isExporting {
                         ProgressView()
                     } else {
-                        Label("Export archive", systemImage: "square.and.arrow.up")
+                        Label("Export", systemImage: "square.and.arrow.up")
                     }
                 }
                 .disabled(isExporting)
+                .accessibilityIdentifier("settings.export")
                 if let exportError {
                     Text(exportError)
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
             }
+
+            Section {
+                NavigationLink("About") { AboutView() }
+                    .accessibilityIdentifier("settings.about")
+            }
+
+            #if DEBUG
+            Section {
+                Button {
+                    seedDemoGlucose()
+                } label: {
+                    if isSeeding {
+                        ProgressView()
+                    } else {
+                        Text("Seed demo glucose")
+                    }
+                }
+                .disabled(isSeeding)
+                .accessibilityIdentifier("settings.seedGlucose")
+            }
+            #endif
         }
         .navigationTitle("Settings")
         .sheet(item: $archiveFile) { file in
@@ -77,4 +104,15 @@ struct SettingsView: View {
             }
         }
     }
+
+    #if DEBUG
+    private func seedDemoGlucose() {
+        guard let grdb = store as? GRDBPersistenceStore else { return }
+        isSeeding = true
+        Task {
+            defer { isSeeding = false }
+            try? await grdb.seedDemoBslEvents()
+        }
+    }
+    #endif
 }

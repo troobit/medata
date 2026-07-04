@@ -1,4 +1,3 @@
-import Photos
 import Pipeline
 import SwiftUI
 
@@ -175,7 +174,7 @@ struct ResultView: View {
     var mode: ResultPresentation = .justCaptured
     // Adjust → Manual correction; Done → dismiss (capture) / pop (history);
     // Retake and Delete live in the ⋯ menu (Decision 17). All defaulted so the
-    // history stack (stream 3) and the retired MealsTabView both compile.
+    // capture stack and the Data / Trends history stacks both compile.
     var onAdjust: () -> Void = {}
     var onDone: () -> Void = {}
     var onRetake: () -> Void = {}
@@ -509,24 +508,7 @@ struct ResultView: View {
     }
 
     private func loadPhoto() async {
-        let assetID = record.photoAssetID
-        guard !assetID.isEmpty else { return }
-        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil)
-        guard let asset = assets.firstObject else { return }
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
-        options.isSynchronous = false
-        options.isNetworkAccessAllowed = false
-        let image: UIImage? = await withCheckedContinuation { continuation in
-            PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: PHImageManagerMaximumSize,
-                contentMode: .aspectFill,
-                options: options
-            ) { result, _ in
-                continuation.resume(returning: result)
-            }
-        }
-        self.photo = image
+        // Shared with Data / Meal overview via the extracted loader (§6.8).
+        self.photo = await MealPhotoLoader.loadImage(assetID: record.photoAssetID)
     }
 }
