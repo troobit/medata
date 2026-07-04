@@ -31,6 +31,8 @@ data/
 # In per-spec worktrees data may be a symlink to the main checkout's dataset;
 # `data/` only matches directories, so ignore the root entry by name too.
 /data
+# …but the `data` spec DOMAIN (specs/PROCESS.md §3) is source, not a dataset.
+!specs/data/
 
 # Generated icons (only icon.svg is source of truth)
 static/icon-*.png
