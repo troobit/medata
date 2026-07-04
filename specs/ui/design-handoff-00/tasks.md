@@ -180,20 +180,20 @@ references:
 
 ## Docs and archive
 
-- [ ] 24. Archive handoff bundle + MANIFEST.md + intake-note update <!-- id:xi3gpnm -->
+- [x] 24. Archive handoff bundle + MANIFEST.md + intake-note update <!-- id:xi3gpnm -->
   - tmp/design/design_handoff_medata/ → design-system/wireframes/design-handoff-00/ verbatim, inert (no target membership)
   - MANIFEST.md: id 00, date, source, deviations each linking a decision (three-tier chip D5, retention/IFCDB D4, σ_tilt% row 2, torch D14, per-class σ D16, Save→Done D17, Trends row target 10.6, tab-bar invariant D12, copy → §14); no SHA field (Decision 10)
   - docs/agent-notes/wireframe-intake.md landing-zone section → bulk-folder scheme
   - Stream: 4
   - Requirements: [15.1](requirements.md#15.1), [15.2](requirements.md#15.2)
 
-- [ ] 25. MASTER.md amendments + supersede photo-tab/meals-tab pages <!-- id:xi3gpnn -->
+- [x] 25. MASTER.md amendments + supersede photo-tab/meals-tab pages <!-- id:xi3gpnn -->
   - Delete tab-bar layout invariant; add seriesGlucose (systemOrange) + bandTarget (medataAccent 10%) tokens (Decision 12); scaffold palette NOT adopted
   - photo-tab.md / meals-tab.md: superseded markers pointing at capture.md / data.md
   - Stream: 4
   - Requirements: [15.3](requirements.md#15.3)
 
-- [ ] 26. Supersession note in iphone-experience + event-log-schema note update <!-- id:xi3gpno -->
+- [x] 26. Supersession note in iphone-experience + event-log-schema note update <!-- id:xi3gpno -->
   - Status paragraph in specs/ui/iphone-experience/requirements.md pointing at the §16 table (Req 16.1, same commit series)
   - specs/data/event-log-schema/design.md: appendCorrection now notifies (Decision 18)
   - Stream: 4

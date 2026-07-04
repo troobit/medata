@@ -13,15 +13,28 @@ the repo / Google Drive) and translate it here.
 
 ## Landing zone
 
-Pasted artifacts are saved verbatim under:
+**Bulk-folder archive (current scheme — Decision 10, design-handoff-00).**
+Each design handoff arrives as a coherent bundle (wireframes + scaffold + README)
+whose internal cross-references must be preserved. Handoffs are committed verbatim
+as numbered folders:
 
 ```
-design-system/wireframes/<screen-name>.<ext>    # e.g. result-view.html, meals.jsx
+design-system/wireframes/design-handoff-NN/   # e.g. design-handoff-00/, design-handoff-01/
 ```
 
-These are **reference inputs**, not shipped code — they are the visual source of
-truth a reviewer can open, nothing imports them. One file per screen; name it
-after the screen it depicts.
+Each folder contains a `MANIFEST.md` recording the handoff id, date received,
+source description, and the list of behavioural deviations the adopting spec makes.
+No commit-SHA field — `git log -- design-system/wireframes/design-handoff-NN/`
+answers that question for free.
+
+These are **inert reference inputs**: nothing imports them, and they carry no target
+membership. Future handoffs increment the number (01, 02, …) as new archive folders
+alongside their own spec.
+
+**Superseded (one-file-per-screen scheme).**
+The earlier convention — one file per screen at
+`design-system/wireframes/<screen-name>.<ext>` — is superseded by the bulk-folder
+archive above. It is preserved here for history only.
 
 ## Translation pipeline (per screen)
 

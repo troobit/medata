@@ -50,6 +50,10 @@ extension Color {
     // Placeholder banner / chip (research Req 23.3)
     static let placeholderBG      = Color(uiColor: .systemYellow)
     static let placeholderFG      = Color.black
+
+    // Trends chart (Decision 12, design-handoff-00)
+    static let seriesGlucose      = Color(uiColor: .systemOrange) // glucose line series on the Trends chart
+    static let bandTarget         = medataAccent.opacity(0.10)    // 3.9–10.0 mmol/L target range band fill
 }
 ```
 
@@ -85,7 +89,6 @@ All styles use Dynamic Type via `.font(.system(.<role>, design: <serif/mono>))`.
 | Capture-mode toggle slide | 200ms | spring `.bouncy(duration: 0.2)` |
 | Shutter pulse on tap | 150ms | spring `.snappy` |
 | ResultView present | 280ms enter / 180ms exit | spring `.smooth` |
-| Tab change | system default (do not override) | system |
 | Reduced motion | crossfade only, no spring | system handles |
 
 Animate `transform` + `opacity` only. Never `width`/`height`/`top`/`left`.
@@ -94,8 +97,8 @@ Animate `transform` + `opacity` only. Never `width`/`height`/`top`/`left`.
 
 ## Layout primitives
 
-- **Safe area:** Photo tab respects top safe area for status bar and bottom safe area for tab bar + home indicator. AR preview can extend behind the tab bar (translucent material) but the shutter and capture-mode toggle MUST sit above the tab bar.
-- **Tab bar:** `TabView` with system default Liquid Glass material on iOS 26.5. No `toolbarBackground()` calls. Tab bar visible on all three tabs (Photo tab does NOT hide it during capture — matches platform expectations and avoids forcing a custom dismiss gesture).
+- **Shell:** Capture-rooted shell — no tab bar. `CaptureFlowView` fills the screen; Data, Trends, and Settings are sheets presented over it (Decision 2, design-handoff-00). Sheets are mutually exclusive via a single `ActiveSheet` optional.
+- **Safe area:** Capture screen respects top safe area for status bar. AR preview is full-bleed; shutter and mode controls sit above the safe-area bottom. Sheet screens use standard system grouped surfaces.
 - **Touch targets:** ≥48pt everywhere. The shutter is 76pt. Indicator chips are 32pt tall with `hitSlop` to 48pt total.
 
 ---
@@ -106,7 +109,6 @@ Animate `transform` + `opacity` only. Never `width`/`height`/`top`/`left`.
 - Multiple accent colours on one screen (one accent + system semantic colours is the budget)
 - Emojis used as icons anywhere (SF Symbols only)
 - Banners with shadow on the Photo tab — flat overlays only
-- Renaming or hiding the iOS `TabView` system labels (HIG shows label + icon on iPhone — we follow that)
 - Animating layout properties (use `transform`/`opacity`)
 - Showing the placeholder banner as a full-width bar on the Photo result — use a small pill chip below the carb total instead
 
