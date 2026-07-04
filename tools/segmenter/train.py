@@ -158,8 +158,11 @@ class FoodSegDataset:
     """
 
     def __init__(self, split_dir: Path, target_size: int, limit: int | None = None):
-        self._torch = _import_torch()
-        self._Image = _import_pillow()
+        # Availability check only — do NOT store the modules on the instance.
+        # macOS DataLoader workers start via spawn, which pickles the dataset,
+        # and module objects are unpicklable.
+        _import_torch()
+        _import_pillow()
         self.target_size = target_size
 
         images_dir = split_dir / "images"
@@ -197,8 +200,8 @@ class FoodSegDataset:
     def __getitem__(self, idx: int):
         import numpy as np
 
-        torch = self._torch
-        Image = self._Image
+        torch = _import_torch()
+        Image = _import_pillow()
         img_path, mask_path = self.pairs[idx]
 
         # --- image: RGB, ImageNet-normalized CHW (match export.reference_input) ---
