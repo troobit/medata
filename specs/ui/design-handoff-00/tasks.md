@@ -18,7 +18,7 @@ references:
 
 - [x] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping))
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [x] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism))
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -166,7 +166,7 @@ references:
   - import Charts (target 26.5, no guards); day dual-series (glucose line mmol/L leading axis, carb bars trailing axis in grams, 3.9–10.0 band via bandTarget token), week/month aggregates; dynamic carbAxisMax — no clipping
   - Glucose from store.events(in:type: EventType.bsl); TIR/bucketing from TrendsMath; no glucose data + — states; day meal list → MealRoute.overview; footer safety copy verbatim
   - Options sheet: metric toggles + captions, band toggle, disabled Protein · Fat, scale Auto/Fixed (8–25 stepper); options persist via @AppStorage SettingsKeys
-  - Blocked-by: xi3gpn0 (Implement TrendsMath (pure, MedataCore))
+  - Blocked-by: xi3gpn0 (Implement TrendsMath (pure, MedataCore) to pass tests)
   - Stream: 3
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.4](requirements.md#10.4), [10.5](requirements.md#10.5), [10.6](requirements.md#10.6), [10.7](requirements.md#10.7), [10.8](requirements.md#10.8), [10.9](requirements.md#10.9), [11.1](requirements.md#11.1), [11.2](requirements.md#11.2)
 
@@ -205,6 +205,6 @@ references:
   - Clean xcodebuild of MeData.xcodeproj (all stubs filled, pbxproj resolves); make test green — report BOTH totals (XCTest + swift-testing); make spell clean
   - Copy audit: every user-facing string in App/ matches copy-inventory.md verbatim (Req 14.2 compliance definition); Irish/British spelling (14.3)
   - Device verification is human-gated — see prerequisites.md
-  - Blocked-by: xi3gpn9 (Implement Stage L mask-artefact write in Pipeline)
+  - Blocked-by: xi3gpnf (SegmentationReviewView + MaskOverlayLoader + segmentation-review.md), xi3gpnh (ManualCorrectionView + correction.md), xi3gpni (DataView + DataRow + MealHistoryModel correction composition + data.md), xi3gpnj (MealOverviewView + meal-overview.md), xi3gpnk (TrendsView + TrendsModel + TrendsOptionsSheet + trends.md), xi3gpnl (SettingsView rework + AboutView + settings.md + about.md)
   - Stream: 1
   - Requirements: [14.1](requirements.md#14.1), [14.2](requirements.md#14.2), [14.3](requirements.md#14.3)
