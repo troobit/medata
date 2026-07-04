@@ -23,7 +23,10 @@ struct TrendsView: View {
     // a plain sheet presented HERE — lighter than the shell's full-screen
     // covers — but AppRoot owns the binding so the `medata://insulin/add`
     // deep link can present it after dismissing any active cover (App 10).
+    // `onInsulinSheetDismiss` fires when the sheet's dismissal completes, so
+    // AppRoot can sequence a pending medata://capture present behind it.
     @Binding var showInsulinSheet: Bool
+    var onInsulinSheetDismiss: () -> Void = {}
 
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
@@ -39,12 +42,14 @@ struct TrendsView: View {
     init(
         store: any PersistenceStore,
         showInsulinSheet: Binding<Bool> = .constant(false),
+        onInsulinSheetDismiss: @escaping () -> Void = {},
         onOpenCapture: @escaping () -> Void = {},
         onOpenData: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.store = store
         _showInsulinSheet = showInsulinSheet
+        self.onInsulinSheetDismiss = onInsulinSheetDismiss
         self.onOpenCapture = onOpenCapture
         self.onOpenData = onOpenData
         self.onOpenSettings = onOpenSettings
@@ -123,7 +128,9 @@ struct TrendsView: View {
             }
         }
         .sheet(isPresented: $showOptions) { TrendsOptionsSheet() }
-        .sheet(isPresented: $showInsulinSheet) { InsulinDoseSheet(store: store) }
+        .sheet(isPresented: $showInsulinSheet, onDismiss: onInsulinSheetDismiss) {
+            InsulinDoseSheet(store: store)
+        }
         // A deep-link present while the options sheet is up: drop the options
         // sheet; SwiftUI presents the still-requested insulin sheet once the
         // dismissal completes.

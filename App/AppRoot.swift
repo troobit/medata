@@ -23,10 +23,17 @@ struct AppRoot: View {
     // The insulin dose sheet is presented by TrendsView (a plain sheet, not a
     // cover) but the state lives here so the `medata://insulin/add` deep link
     // can raise it from any app state (PRD regression-suggestion-integration
-    // App 10). `pendingInsulinSheet` defers the present until an active
-    // cover's dismissal completes.
+    // App 10). `pendingDeepLink` defers a deep-linked present until the
+    // conflicting presentation's dismissal completes.
     @State private var showInsulinSheet = false
-    @State private var pendingInsulinSheet = false
+    @State private var pendingDeepLink: DeepLinkTarget?
+
+    // The two deep links under the `medata` scheme — each a single-tap
+    // lock-screen widget launcher (PRD amendment to App 10).
+    private enum DeepLinkTarget {
+        case insulinSheet  // medata://insulin/add
+        case captureCover  // medata://capture
+    }
 
     init(
         captureModel: CaptureFlowModel,
@@ -57,18 +64,31 @@ struct AppRoot: View {
         TrendsView(
             store: store,
             showInsulinSheet: $showInsulinSheet,
+            onInsulinSheetDismiss: {
+                // medata://capture arrived while the dose sheet was up: the
+                // cover presents once the sheet's dismissal completes.
+                if pendingDeepLink == .captureCover {
+                    pendingDeepLink = nil
+                    activeSheet = .capture
+                }
+            },
             onOpenCapture: { activeSheet = .capture },
             onOpenData: { activeSheet = .data },
             onOpenSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
         .fullScreenCover(item: $activeSheet, onDismiss: {
-            // Deep-linked dose entry waits for the cover's dismissal to
+            // A deep-linked present waits for the cover's dismissal to
             // finish; presenting mid-animation is silently dropped by SwiftUI.
-            if pendingInsulinSheet {
-                pendingInsulinSheet = false
+            switch pendingDeepLink {
+            case .insulinSheet:
                 showInsulinSheet = true
+            case .captureCover:
+                activeSheet = .capture
+            case nil:
+                break
             }
+            pendingDeepLink = nil
         }) { sheet in
             switch sheet {
             case .capture:
@@ -100,16 +120,33 @@ struct AppRoot: View {
         }
     }
 
-    // medata://insulin/add — present the dose sheet from any state, dismissing
-    // an active cover first (App 10). Registered in MeData/Info.plist
-    // (CFBundleURLTypes; merged with the generated Info.plist).
+    // The `medata` scheme is registered in MeData/Info.plist (CFBundleURLTypes;
+    // merged with the generated Info.plist). Both links land on their target
+    // from any state, dismissing whatever is presented first (App 10):
+    //   medata://insulin/add — the dose-entry sheet
+    //   medata://capture     — the Capture cover
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == "medata", url.host == "insulin", url.path == "/add" else { return }
-        if activeSheet == nil {
-            showInsulinSheet = true
-        } else {
-            pendingInsulinSheet = true
-            activeSheet = nil
+        guard url.scheme == "medata" else { return }
+        switch (url.host, url.path) {
+        case ("insulin", "/add"):
+            if activeSheet == nil {
+                showInsulinSheet = true
+            } else {
+                pendingDeepLink = .insulinSheet
+                activeSheet = nil
+            }
+        case ("capture", ""), ("capture", "/"):
+            if showInsulinSheet {
+                pendingDeepLink = .captureCover
+                showInsulinSheet = false
+            } else if activeSheet == nil {
+                activeSheet = .capture
+            } else if activeSheet != .capture {
+                pendingDeepLink = .captureCover
+                activeSheet = nil
+            }
+        default:
+            break
         }
     }
 }
