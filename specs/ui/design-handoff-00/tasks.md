@@ -18,7 +18,7 @@ references:
 
 - [ ] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing, failing, failing
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing, failing, failing, failing, failing, failing, failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [ ] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette, failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -131,7 +131,7 @@ references:
   - Stream: 2
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [6.8](requirements.md#6.8)
 
-- [ ] 18. Rework ResultView + result.md <!-- id:xi3gpng -->
+- [x] 18. Rework ResultView + result.md <!-- id:xi3gpng -->
   - Adds summary card (thumbnail per 6.8 fallback, N foods, mass, CoFID + AFCD), per-class rows (name/mass/volume/carbs — no σ), dashed Protein/Fat placeholders
   - Actions: Adjust / Done; ⋯ menu Retake+Delete fresh, Delete only from history (Decision 17); .historyDetail now SHOWS the action row (deliberate change)
   - Hero always shows original estimate; corrected marker via eventsDidChange re-read; keeps calibration banner, very-low surface, placeholder chip, four-tier ConfidencePill (Decision 5)

@@ -93,8 +93,12 @@ struct CaptureFlowView: View {
             ResultView(
                 record: record,
                 mode: .justCaptured,
-                onNewCapture: { model.dismissResult() },
-                onRetake: { model.dismissResult() }
+                onAdjust: { model.navigationPath.append(CaptureRoute.correction(record)) },
+                onDone: { model.dismissResult() },
+                // Retake and Delete both discard the just-captured meal (it is
+                // already persisted) and return to Capture (Decision 17).
+                onRetake: { model.deleteAndDismiss(record) },
+                onDelete: { model.deleteAndDismiss(record) }
             )
         case .correction(let record):
             ManualCorrectionView(record: record, onSave: { model.popRoute() })
