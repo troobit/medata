@@ -40,6 +40,12 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     var navigationPath = NavigationPath()
     let indicators: LiveIndicatorModel
     let supportsLiDAR: Bool
+    // Per-capture reference-card override (fork sheet §3.2). Seeds from the
+    // `alwaysIncludeCard` default when the fork sheet opens; the sheet mutates it
+    // for the next capture only. NOT persisted — it drives card-placement
+    // guidance during two-view capture; card detection itself stays automatic in
+    // the pipeline.
+    var includeCardThisCapture: Bool = false
 
     private let session: CaptureSession
     private let pipeline: any PipelineEstimator

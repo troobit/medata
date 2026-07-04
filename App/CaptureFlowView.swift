@@ -145,7 +145,7 @@ struct CaptureFlowView: View {
             }
         }
         .sheet(isPresented: $showingForkSheet) {
-            LidarForkSheetView()
+            LidarForkSheetView(model: model)
         }
         .onAppear {
             let obs = observer ?? LiveSampleObserver(model: model)
