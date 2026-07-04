@@ -207,6 +207,7 @@ func mealRouteDestination(
     case .correction(let record):
         ManualCorrectionView(
             record: record,
+            store: store,
             onSave: { popOne(path) }
         )
     }

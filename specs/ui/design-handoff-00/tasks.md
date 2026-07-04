@@ -18,7 +18,7 @@ references:
 
 - [x] 2. Implement TrendsMath (pure, MedataCore) to pass tests <!-- id:xi3gpn0 -->
   - Pure functions only — no UI imports; lives in MedataCore so the existing suite covers it
-  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping))
+  - Blocked-by: xi3gpmz (Write failing TrendsMath tests (TIR, bucketing, axis mapping)), failing
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.5](requirements.md#10.5)
 
@@ -29,7 +29,7 @@ references:
 
 - [x] 4. Implement id→colour table beside ClassPalette <!-- id:xi3gpn2 -->
   - Fixed hue wheel indexed by class id; single source for overlays, swatches, design pages; colours applied at read time only (Decision 15)
-  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism))
+  - Blocked-by: xi3gpn1 (Write failing palette colour-table test (determinism)), failing, palette
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [9.2](requirements.md#9.2)
 
@@ -201,7 +201,7 @@ references:
 
 ## Integration
 
-- [ ] 27. Integration gate: build + test + spell + copy audit <!-- id:xi3gpnp -->
+- [x] 27. Integration gate: build + test + spell + copy audit <!-- id:xi3gpnp -->
   - Clean xcodebuild of MeData.xcodeproj (all stubs filled, pbxproj resolves); make test green — report BOTH totals (XCTest + swift-testing); make spell clean
   - Copy audit: every user-facing string in App/ matches copy-inventory.md verbatim (Req 14.2 compliance definition); Irish/British spelling (14.3)
   - Device verification is human-gated — see prerequisites.md
