@@ -72,14 +72,15 @@ final class PersistenceTests: XCTestCase {
         }
     }
 
-    func testSchemaVersionIsThree() throws {
+    // Version 4 adds processed_images (specs/data/libre-ingestion Decision 4).
+    func testSchemaVersionIsFour() throws {
         let q = try DatabaseQueue(path: dbURL.path)
         try q.read { db in
             let version = try String.fetchOne(
                 db,
                 sql: "SELECT v FROM meta WHERE k = 'schema_version'"
             )
-            XCTAssertEqual(version, "3")
+            XCTAssertEqual(version, "4")
         }
     }
 

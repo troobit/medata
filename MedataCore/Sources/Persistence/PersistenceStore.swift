@@ -12,6 +12,53 @@ public enum PersistenceError: Error, Equatable {
 // this namespace with additional constants.
 public enum EventType {
     public static let meal = "meal"
+    // Blood glucose reading, value in mmol/L (specs/data/libre-ingestion;
+    // consumed by the design-handoff-00 Trends chart).
+    public static let bsl = "bsl"
+}
+
+// One extracted glucose reading bound for the event log
+// (specs/data/libre-ingestion Req 4.1).
+public struct BslReading: Sendable, Equatable {
+    public let timestampMs: Int64  // UTC ms since epoch, 5-minute grid
+    public let value: Double  // mmol/L, one decimal
+
+    public init(timestampMs: Int64, value: Double) {
+        self.timestampMs = timestampMs
+        self.value = value
+    }
+}
+
+// Per-image ingest report (specs/data/libre-ingestion Req 5.4).
+public struct BslIngestSummary: Sendable, Equatable {
+    public struct Discrepancy: Sendable, Equatable {
+        public let timestampMs: Int64
+        public let kept: Double
+        public let new: Double
+
+        public init(timestampMs: Int64, kept: Double, new: Double) {
+            self.timestampMs = timestampMs
+            self.kept = kept
+            self.new = new
+        }
+    }
+
+    public let extracted: Int
+    public let stored: Int
+    public let skippedExisting: Int
+    public let agreeing: Int  // overlapping readings within ±0.3 mmol/L
+    public let discrepant: [Discrepancy]
+
+    public init(
+        extracted: Int, stored: Int, skippedExisting: Int,
+        agreeing: Int, discrepant: [Discrepancy]
+    ) {
+        self.extracted = extracted
+        self.stored = stored
+        self.skippedExisting = skippedExisting
+        self.agreeing = agreeing
+        self.discrepant = discrepant
+    }
 }
 
 // Generic surface for a row in the events table (Decision 8). `value` is
@@ -74,7 +121,22 @@ public protocol PersistenceStore: Sendable {
     func corrections(for mealId: UUID) async throws -> [PbUserCorrection]
 
     // Req 4.5. Emits after every successful event-row write or delete
-    // (`save`, `deleteMeal`, `updatePhotoAssetID`). Does NOT emit on
-    // `appendCorrection` — corrections live in their own side table.
+    // (`save`, `deleteMeal`, `updatePhotoAssetID`, and `ingestBsl` when it
+    // stored at least one row). Does NOT emit on `appendCorrection` —
+    // corrections live in their own side table.
     var eventsDidChange: AsyncStream<Void> { get }
+
+    // specs/data/libre-ingestion Req 5.1. True when an earlier ingest for
+    // this content hash committed; rejected images are never marked.
+    func isImageProcessed(hash: String) async throws -> Bool
+
+    // specs/data/libre-ingestion Reqs 4.1–4.5, 5.2–5.4. Keep-first merge in
+    // ONE transaction together with the processed_images marker: inserts
+    // only at timestamps with no existing bsl row; overlaps are classified
+    // agreeing (≤ 0.3 mmol/L) or discrepant and never written. Notifies
+    // `eventsDidChange` once per batch, only when at least one row stored.
+    func ingestBsl(
+        readings: [BslReading], metadataJSON: String,
+        sourceHash: String, filename: String
+    ) async throws -> BslIngestSummary
 }

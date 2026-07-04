@@ -107,6 +107,15 @@ private final class FakeStore: PersistenceStore, @unchecked Sendable {
     func corrections(for mealId: UUID) async throws -> [PbUserCorrection] {
         fatalError("unused")
     }
+    func isImageProcessed(hash: String) async throws -> Bool {
+        fatalError("unused")
+    }
+    func ingestBsl(
+        readings: [BslReading], metadataJSON: String,
+        sourceHash: String, filename: String
+    ) async throws -> BslIngestSummary {
+        fatalError("unused")
+    }
 
     var eventsDidChange: AsyncStream<Void> { broadcaster.subscribe() }
 }

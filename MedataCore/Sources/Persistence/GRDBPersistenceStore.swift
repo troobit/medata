@@ -253,6 +253,104 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         }
     }
 
+    // MARK: - Bsl ingest (specs/data/libre-ingestion)
+
+    public func isImageProcessed(hash: String) async throws -> Bool {
+        try await queue.read { db in
+            try Row.fetchOne(
+                db, sql: "SELECT 1 FROM processed_images WHERE hash = ?",
+                arguments: [hash]) != nil
+        }
+    }
+
+    // Reference DISCREPANCY_LIMIT_MMOL / _FLOAT_TOLERANCE: values are
+    // one-decimal mmol/L; the tolerance keeps a decimal difference of
+    // exactly 0.3 (e.g. 9.4 vs 9.1, > 0.3 in binary floating point)
+    // "agreeing".
+    private static let discrepancyLimitMmol = 0.3
+    private static let floatTolerance = 1e-9
+
+    public func ingestBsl(
+        readings: [BslReading], metadataJSON: String,
+        sourceHash: String, filename: String
+    ) async throws -> BslIngestSummary {
+        // GRDB's serialised writer gives the reference's BEGIN IMMEDIATE
+        // guarantee: the coverage snapshot and the inserts are one unit; two
+        // concurrent ingests cannot both see a timestamp as uncovered.
+        let summary = try await queue.write { db -> BslIngestSummary in
+            var covered: [Int64: Double] = [:]
+            if !readings.isEmpty {
+                let placeholders = Array(repeating: "?", count: readings.count)
+                    .joined(separator: ",")
+                var arguments: [DatabaseValueConvertible] = [EventType.bsl]
+                arguments += readings.map(\.timestampMs)
+                let rows = try Row.fetchAll(
+                    db,
+                    sql: """
+                        SELECT timestamp, value FROM events
+                        WHERE event_type = ? AND timestamp IN (\(placeholders))
+                        """,
+                    arguments: StatementArguments(arguments)
+                )
+                for row in rows {
+                    let timestamp: Int64 = row["timestamp"]
+                    let value: Double = row["value"]
+                    covered[timestamp] = value
+                }
+            }
+
+            var stored = 0
+            var agreeing = 0
+            var discrepant: [BslIngestSummary.Discrepancy] = []
+            for reading in readings {
+                if let kept = covered[reading.timestampMs] {
+                    if abs(kept - reading.value)
+                        > Self.discrepancyLimitMmol + Self.floatTolerance {
+                        discrepant.append(.init(
+                            timestampMs: reading.timestampMs,
+                            kept: kept, new: reading.value))
+                    } else {
+                        agreeing += 1
+                    }
+                    continue
+                }
+                try db.execute(
+                    sql: """
+                        INSERT INTO events (id, timestamp, event_type, value, metadata)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                    arguments: [
+                        UUID().uuidString, reading.timestampMs, EventType.bsl,
+                        reading.value, metadataJSON,
+                    ]
+                )
+                stored += 1
+            }
+            try db.execute(
+                sql: """
+                    INSERT INTO processed_images (hash, filename, processed_at)
+                    VALUES (?, ?, ?)
+                    """,
+                arguments: [
+                    sourceHash, filename,
+                    Int64(Date().timeIntervalSince1970 * 1000),
+                ]
+            )
+            return BslIngestSummary(
+                extracted: readings.count,
+                stored: stored,
+                skippedExisting: agreeing + discrepant.count,
+                agreeing: agreeing,
+                discrepant: discrepant
+            )
+        }
+        // Req 4.4: one tick per batch, and only when the event log changed.
+        if summary.stored > 0 {
+            changeBroadcaster.notify()
+        }
+        return summary
+    }
+
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
         let ids: [String] = try await queue.read { db in
@@ -379,18 +477,25 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 PRIMARY KEY (meal_id, created_at)
             );
             CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS processed_images (
+                hash         TEXT    PRIMARY KEY,
+                filename     TEXT    NOT NULL,
+                processed_at INTEGER NOT NULL
+            );
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '3')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '4')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '3' so a dev DB carried over
-    // from an earlier code path is correctly labelled. No DDL on legacy
-    // tables (Decision 10).
+    // Idempotent: re-stamps schema_version to '4' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 4 adds
+    // processed_images (specs/data/libre-ingestion Decision 4); the CREATE
+    // IF NOT EXISTS above retrofits it onto v3 DBs. No DDL on legacy tables
+    // (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '3')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '4')"
         )
     }
 }
