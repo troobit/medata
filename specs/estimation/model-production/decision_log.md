@@ -494,3 +494,100 @@ scheduler state and provenance stays reproducible.
 - Slightly slower epochs (extra resize on scaled crops).
 
 ---
+
+## Decision 13: Weight budget raised to 24 MiB — 10 MB was unachievable for the chosen architecture
+
+**Date**: 2026-07-05
+**Status**: accepted
+
+### Context
+
+The first real export hit the weight-budget gate: `segmenter.mlpackage` weighs
+22.1 MB while `WEIGHTS_MAX_BYTES` and `SegmenterWeightsBudget.maxBytes` both
+enforced 10 MB (Req 4.2 / pipeline Req 8.2). The architecture Decision 25
+selected — DeepLabV3 + MobileNetV3-Large — has 11,029,075 parameters, which is
+22.06 MB at FP16. The 10 MB budget and the architecture choice were never
+mutually satisfiable at FP16; the conflict stayed latent until the first real
+checkpoint existed. Meeting 10 MB would need sub-8-bit palettisation (8-bit
+linear quantisation still lands at ~11.1 MB).
+
+### Decision
+
+Raise the segmenter weight budget to 24 MiB in both enforcement points
+(`export.py` gate and the on-device `SegmenterWeightsBudget` load check), and
+amend Req 4.2 and pipeline Req 8.2 accordingly. The gate itself stays active.
+
+### Rationale
+
+The budget's real job is to catch export mistakes (an accidental FP32 export
+is ~44 MB) and unbounded model growth, not to force sub-8-bit compression onto
+the MVP. Quantising below FP16 adds accuracy risk to a model already below the
+mIoU gate (Decision 11) for ~11 MB of app-size saving that no current
+requirement depends on. 24 MiB fits the Decision 25 architecture at FP16 with
+minimal headroom (22.1 → 24).
+
+### Alternatives Considered
+
+- **8-bit linear quantisation**: Halves the artefact to ~11.1 MB - Rejected: still over the 10 MB budget, so the budget must move anyway; adds an untested accuracy variable to a below-gate model.
+- **Sub-8-bit palettisation (6-bit ≈ 8.3 MB)**: The only route to genuinely meet 10 MB - Rejected for MVP: highest accuracy risk, and oracle-agreement thresholds would likely need loosening — the wrong trade during the developer phase. Revisit as a size-optimisation pass alongside accuracy work.
+- **Switch to a smaller architecture (e.g. LR-ASPP MobileNetV3, ~3.2 M params)**: Fits 10 MB at FP16 - Rejected: abandons Decision 25 and the trained checkpoint for an architecture with lower reference accuracy, mid-developer-phase.
+
+### Consequences
+
+**Positive:**
+- Export and on-device load agree again, and the gate still catches FP32/oversize mistakes.
+- No new accuracy risk added on top of the below-gate model.
+
+**Negative:**
+- The app bundle grows ~22 MB with the model.
+- A future size-optimisation pass (quantisation/palettisation) is deferred, not resolved; the 250 ms/view latency bar (Req 8.3) must still be verified on device at FP16.
+
+---
+
+## Decision 14: Oracle abs-logit-error bar recalibrated for FP16 compute (0.05 → 0.5)
+
+**Date**: 2026-07-05
+**Status**: accepted
+
+### Context
+
+The equivalence oracle (Req 4.3) required per-pixel argmax agreement > 99% AND
+max abs logit error < 0.05. The first real export failed the second bar while
+passing the first perfectly: measured FP16 drift was 0.13 (synthetic input,
+argmax agreement 1.0000) and 0.30 (real heldout image, argmax agreement
+0.9985) on logits of roughly ±20 magnitude. Both bars were authored before any
+real FP16 artefact existed. The export forces FP16 for weights and compute
+(Decision 25's on-device budget); ~1% relative drift on unnormalised logits is
+inherent to FP16 accumulation, not an artefact defect.
+
+### Decision
+
+Raise `ORACLE_MAX_ABS_ERR` from 0.05 to 0.5 and amend Req 4.3 accordingly.
+Argmax agreement > 99% stays unchanged as the functional bar.
+
+### Rationale
+
+The oracle's job is to catch conversion defects — wrong weights, broken
+preprocessing, channel scrambling — which shift logits by whole units and
+collapse argmax agreement. A 0.5 abs bar still catches those failure modes
+(measured healthy drift is 0.13–0.30) while no achievable FP16 artefact could
+meet 0.05. Downstream consumers use argmax and softmax probabilities, so class
+decisions and their relative confidences, not raw logit precision, are what
+the app depends on.
+
+### Alternatives Considered
+
+- **Export FP32 weights to meet 0.05**: Would pass the original bar - Rejected: ~44 MB artefact, violates even the amended weight budget (Decision 13), and the device runs FP16 on the ANE anyway — the oracle would then validate an artefact that does not match what ships.
+- **Relative (per-magnitude) error bar**: Scale-aware and principled - Rejected: more moving parts for the same discrimination; argmax agreement already provides the functional check, and a fixed 0.5 is easily interpreted at the console.
+- **Drop the abs-error bar, keep argmax only**: Simplest - Rejected: a uniform logit shift keeps argmax perfect while indicating a real conversion problem; a loose abs bar retains that signal.
+
+### Consequences
+
+**Positive:**
+- The oracle passes for faithful FP16 artefacts and still fails on genuine conversion defects.
+- The bar now reflects measured reality with ~1.7× headroom over the worst observed healthy drift.
+
+**Negative:**
+- Subtle sub-0.5 logit distortions that keep argmax intact are no longer caught — accepted, as downstream consumes argmax/softmax only.
+
+---

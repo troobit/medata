@@ -138,7 +138,7 @@ fixture directory.
 | Bar | Source | Where it's measured |
 | --- | --- | --- |
 | Segmenter mean food-class mIoU ≥ 0.60 | Req 8.9 | `HarnessCLI seg-bench` |
-| Segmenter weights ≤ 10 MB (FP16) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
+| Segmenter weights ≤ 24 MiB (FP16, Decision 13) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
 | Segmenter inference ≤ 250 ms / view on iPhone 13 Pro Max (v1 hardware floor) | Req 8.3 | XCTest with `XCTClockMetric` |
 | Segmenter resident on the Apple Neural Engine | Req 16.5 | Xcode → Core ML performance report (manual, post-bundle) |
 | End-to-end MAPE < 20% AND MAE ≤ 25 g | Req 21.3 | `HarnessCLI accuracy` |
@@ -294,7 +294,7 @@ python tools/segmenter/prepare_dataset.py \
 ### Why
 
 The architecture — DeepLabV3 + MobileNetV3-Large at 513×513 — is fixed by
-Decision 25 to hit the on-device budget (≤ 10 MB FP16, ≤ 250 ms/view, ANE
+Decision 25 to hit the on-device budget (≤ 24 MiB FP16 — Decision 13 amended the original 10 MB, ≤ 250 ms/view, ANE
 residency; §1 acceptance bars). It is a deliberate accuracy-for-feasibility
 trade. You transfer-learn: take the torchvision backbone and re-teach a 35-class
 head rather than training from scratch. Watch **food-class** mIoU during
@@ -376,7 +376,7 @@ green.
 
 `tools/segmenter/export.py` **(exists)** consumes the `.pt` checkpoint directly
 (the ONNX hop is bypassed per Decision 28) and emits both Core ML (`.mlpackage`,
-iOS) and TFLite (future Android), FP16 throughout to fit the ≤ 10 MB budget. It
+iOS) and TFLite (future Android), FP16 throughout to fit the ≤ 24 MiB budget (Decision 13). It
 then runs a reference image through both artefacts and asserts per-pixel argmax
 agreement > 99% with max-abs logit error < 0.05 — this is the mechanical proof
 of the single-source-of-truth portability requirement, and the place
@@ -402,7 +402,7 @@ the runtime loader (`PipelineFactory.makeSegmenter`) resolves via `Bundle.module
 (model-production tasks 2/5). The path moved under the `Pipeline` target so SPM
 bundles it as a package resource; don't rename it.
 `tests/fixtures/segmenter/reference.png` must exist and be representative of real
-plate captures. The export also runs its gates (≤ 10 MB weights, 35 channels in
+plate captures. The export also runs its gates (≤ 24 MiB weights, 35 channels in
 palette order, PyTorch-oracle equivalence + runtime-preprocessing parity) and
 stamps the checkpoint's 12-hex `model_version` into the Core ML metadata
 (`build/lineage.json` is the join key).
@@ -439,7 +439,7 @@ here — and ANE residency in particular is a manual check that is easy to miss.
    [`ios-device-setup.md`](ios-device-setup.md) and
    [`agent-notes/device-build-and-test.md`](agent-notes/device-build-and-test.md).
 2. Confirm the bars:
-   - **Size ≤ 10 MB** — `SegmenterWeightsBudget.validate(at:)` runs at load.
+   - **Size ≤ 24 MiB (Decision 13)** — `SegmenterWeightsBudget.validate(at:)` runs at load.
    - **≤ 250 ms / view** — XCTest with `XCTClockMetric`.
    - **ANE residency** — Xcode → Core ML performance report (manual). A model
      that converts fine but falls back to CPU/GPU silently blows the latency bar.

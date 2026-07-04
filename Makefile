@@ -34,7 +34,7 @@ BUILD_STAMP := $(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release-stub spell
+.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell
 
 help:
 	@echo "MeData targets:"
@@ -43,6 +43,8 @@ help:
 	@echo "  spell                Irish/British spelling lint (tools/check_spelling.sh)"
 	@echo "  build-app            xcodebuild MeData for device, Debug  [DEVICE_UDID=$(DEVICE_UDID)]"
 	@echo "  deploy-device        build-app + install + launch on the device, with build stamp"
+	@echo "  deploy-release       Release build with the REAL bundled segmenter, install + launch"
+	@echo "                       (requires an exported segmenter.mlpackage)"
 	@echo "  deploy-release-stub  Release build with DEV_STUB_SEGMENTER forced on, install + launch"
 	@echo "                       (capture testing — Debug stub is too slow to arm the shutter;"
 	@echo "                        plain Release crashes until the real model ships)"
@@ -97,6 +99,12 @@ logs-device:
 		--info --debug --style compact | tee $(LOG_FILE)
 	@echo ""
 	@echo "Filtered log also written to $(LOG_FILE) (full archive: $(LOG_ARCHIVE))"
+
+# Plain Release with the real bundled segmenter (no manifest edit). Requires
+# an exported segmenter.mlpackage; the script refuses to build without it.
+deploy-release:
+	DEVICE_UDID=$(DEVICE_UDID) BUNDLE_ID=$(BUNDLE_ID) BUILD_STAMP='$(BUILD_STAMP)' \
+	DERIVED_RELEASE=$(DERIVED_RELEASE) bash tools/deploy_release.sh
 
 # Release + stub for capture testing (docs/agent-notes/device-build-and-test.md
 # Path B, automated). Edits Package.swift to force DEV_STUB_SEGMENTER on,
