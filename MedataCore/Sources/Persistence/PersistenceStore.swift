@@ -5,6 +5,9 @@ public enum PersistenceError: Error, Equatable {
     case corruptRecord(String)
     case mealNotFound(UUID)
     case archiveFailed(String)
+    // Insulin dose rejected at the store layer: units outside 0...60
+    // (PRD regression-suggestion-integration Core 4).
+    case insulinUnitsOutOfRange(Double)
 }
 
 // Vocabulary for the `event_type` column on the events table. Centralised here
@@ -16,6 +19,50 @@ public enum EventType {
     // Decision 13; specs/data/libre-ingestion Req 4.1). Trends reads
     // exclusively these rows; ingestion writes them via `ingestBsl` below.
     public static let bsl = "bsl"
+    // Insulin dose; `value` carries units (U). Row shape follows medreg's
+    // convention (medreg docs/insulin-event-convention.md, metadata schema
+    // version 1); medreg reads these rows from the export archive.
+    public static let insulin = "insulin"
+}
+
+// Whether a dose is fast-acting meal/correction insulin or background
+// insulin. Raw values are the exact `metadata.kind` strings in the medreg
+// convention.
+public enum InsulinKind: String, Sendable, Equatable, CaseIterable {
+    case bolus
+    case basal
+}
+
+// One insulin dose bound for the event log (medreg convention). `timestamp`
+// is the administration time; `units` is the dose in international units (U);
+// `insulinType` is the free-text product string (e.g. "NovoRapid");
+// `note` is optional free text — omitted from metadata entirely when nil.
+public struct InsulinDose: Sendable, Equatable {
+    // Version of the insulin metadata convention (`metadata.schema_version`).
+    public static let metadataSchemaVersion = 1
+
+    public let id: UUID
+    public let timestamp: Date
+    public let units: Double
+    public let kind: InsulinKind
+    public let insulinType: String
+    public let note: String?
+
+    public init(
+        id: UUID = UUID(),
+        timestamp: Date,
+        units: Double,
+        kind: InsulinKind,
+        insulinType: String,
+        note: String? = nil
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.units = units
+        self.kind = kind
+        self.insulinType = insulinType
+        self.note = note
+    }
 }
 
 // One extracted glucose reading bound for the event log
@@ -152,4 +199,20 @@ public protocol PersistenceStore: Sendable {
         readings: [BslReading], metadataJSON: String,
         sourceHash: String, filename: String
     ) async throws -> BslIngestSummary
+
+    // PRD regression-suggestion-integration Core 2–4. Writes ONE `events` row
+    // per dose, exactly per medreg's convention (medreg
+    // docs/insulin-event-convention.md): `value` = units (REAL, non-negative),
+    // `timestamp` = administration time in UTC ms, `metadata` = JSON object
+    // with `kind`, `insulin_type`, `schema_version` (integer 1), plus `note`
+    // only when provided (key absent — not null — when nil). Throws
+    // `insulinUnitsOutOfRange` for units < 0 or > 60; 0 and 60 are accepted
+    // (the UI enforces its own floor). Notifies `eventsDidChange` once.
+    func saveInsulinDose(_ dose: InsulinDose) async throws
+
+    // PRD regression-suggestion-integration Core 3. Deletes a single insulin
+    // event by id. The DELETE is gated on `event_type = insulin`, so a meal or
+    // bsl row sharing the id survives, and no side tables are touched.
+    // Notifies `eventsDidChange` once.
+    func deleteInsulinEvent(id: UUID) async throws
 }

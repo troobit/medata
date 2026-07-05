@@ -27,6 +27,13 @@ struct SettingsView: View {
     // raw value back under the same `SettingsKeys.captureMode` key.
     @AppStorage(SettingsKeys.captureMode) private var captureModeRaw: String = ""
     @AppStorage(SettingsKeys.alwaysIncludeCard) private var alwaysIncludeCard = false
+    // Per-kind insulin product defaults (PRD regression-suggestion-integration
+    // App 5). The dose sheet fills `insulin_type` from these at save time and
+    // never asks for the product itself.
+    @AppStorage(SettingsKeys.insulinTypeBolus)
+    private var bolusInsulinType = SettingsKeys.insulinTypeBolusDefault
+    @AppStorage(SettingsKeys.insulinTypeBasal)
+    private var basalInsulinType = SettingsKeys.insulinTypeBasalDefault
 
     private var captureModeBinding: Binding<CaptureMode> {
         Binding(
@@ -69,6 +76,21 @@ struct SettingsView: View {
                     Text("2-view").tag(CaptureMode.double)
                 }
                 Toggle("Always include card", isOn: $alwaysIncludeCard)
+            }
+
+            Section("Insulin") {
+                LabeledContent("Bolus") {
+                    TextField(SettingsKeys.insulinTypeBolusDefault, text: $bolusInsulinType)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("settings.insulinBolus")
+                }
+                LabeledContent("Basal") {
+                    TextField(SettingsKeys.insulinTypeBasalDefault, text: $basalInsulinType)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("settings.insulinBasal")
+                }
             }
 
             Section {

@@ -154,6 +154,12 @@ private struct NoOpStore: PersistenceStore {
     ) async throws -> BslIngestSummary {
         fatalError("unused")
     }
+    func saveInsulinDose(_ dose: InsulinDose) async throws {
+        fatalError("unused")
+    }
+    func deleteInsulinEvent(id: UUID) async throws {
+        fatalError("unused")
+    }
     var eventsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
 }
 
