@@ -1,18 +1,13 @@
 import Foundation
 import CaptureKit
+import os
 #if canImport(CoreML)
 import CoreML
 #endif
-#if DEBUG
-import os
 
-// Dev-build-only sub-stage log on the `ie.medata.app` / `Shutter` channel.
-// Same channel as Pipeline's per-stage start log (`pipeline.stage.start`), so
-// a single Console.app predicate captures the full trail and the hanging
-// segmenter sub-stage is identifiable by which `segmenter.substage.start`
-// line is last in the log.
+// Structured-log channel on `ie.medata.app` / `Shutter` — same channel as
+// Pipeline's stage logs, so one Console predicate captures the full trail.
 private let segmenterLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
-#endif
 
 // Inference engine protocol: takes the FP16 LE HWC buffer produced by
 // SegmenterPreProcessor and returns logits of shape [targetSize × targetSize × C]
@@ -79,11 +74,53 @@ public final class CoreMLSegmenter: @unchecked Sendable {
             originalWidth: pre.originalWidth, originalHeight: pre.originalHeight,
             palette: palette
         )
+        // Release diagnostic: mask coverage + the dominant argmax class. A
+        // full-frame food mask (coverage≈100) means the model is over-segmenting
+        // — the support-plane fit then starves (bug under investigation). If the
+        // dominant class is 0 at ~100% coverage, the model's channel semantics
+        // are shifted vs the palette (e.g. background trained at channel 0 but
+        // read as food class 0). One integer scan; cheap enough for Release.
+        let cov = Self.maskCoverage(argmax: post.argmax, palette: palette)
+        segmenterLog.info(
+            """
+            event=segmenter.mask foodCoveragePercent=\(cov.foodPercent, privacy: .public) \
+            topClass=\(cov.topClassId, privacy: .public) \
+            topClassPercent=\(cov.topPercent, privacy: .public) \
+            distinctClasses=\(cov.distinctClasses, privacy: .public) \
+            sigmaSeg=\(post.sigmaSeg, privacy: .public)
+            """
+        )
         return SegmentationResult(
             probabilities: post.probabilities,
             argmax: post.argmax,
             perClassMeanProb: post.perClassMeanProb,
             sigmaSeg: post.sigmaSeg
+        )
+    }
+
+    // Cheap argmax histogram over the mask: fraction of pixels whose class is a
+    // food class, plus the single most common class and how many distinct
+    // classes appear. Diagnostic only.
+    private static func maskCoverage(
+        argmax: ArgmaxMap, palette: ClassPalette
+    ) -> (foodPercent: Int, topClassId: Int, topPercent: Int, distinctClasses: Int) {
+        var counts: [Int: Int] = [:]
+        var foodCount = 0
+        let total = max(1, argmax.pixels.count)
+        argmax.pixels.withUnsafeBytes { raw in
+            let buf = raw.bindMemory(to: UInt8.self)
+            for b in buf {
+                let id = Int(b)
+                counts[id, default: 0] += 1
+                if palette.isFoodClass(id) { foodCount += 1 }
+            }
+        }
+        let top = counts.max { $0.value < $1.value } ?? (0, 0)
+        return (
+            foodPercent: foodCount * 100 / total,
+            topClassId: top.key,
+            topPercent: top.value * 100 / total,
+            distinctClasses: counts.count
         )
     }
 }
@@ -175,10 +212,14 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
     public init(modelPath: String, useNeuralEngine: Bool = true, targetSize: Int) throws {
         let url = URL(fileURLWithPath: modelPath)
         let compiled: URL
-        if url.pathExtension == "mlmodel" {
-            compiled = try MLModel.compileModel(at: url)
-        } else {
+        // `MLModel(contentsOf:)` only loads a compiled `.mlmodelc`. A raw
+        // `.mlmodel` or `.mlpackage` must go through `compileModel(at:)` first —
+        // Xcode does this in its build phases, but the segmenter ships as a
+        // SwiftPM package resource (copied verbatim), so we compile at load.
+        if url.pathExtension == "mlmodelc" {
             compiled = url
+        } else {
+            compiled = try MLModel.compileModel(at: url)
         }
         let cfg = MLModelConfiguration()
         cfg.computeUnits = useNeuralEngine ? .all : .cpuOnly

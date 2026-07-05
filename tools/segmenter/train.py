@@ -60,6 +60,11 @@ from pathlib import Path
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
+# Palette background channel (ClassPalette.v1Standard / prepare_dataset.py:
+# 24 solid + 8 liquid, then background at 32). Letterbox padding is labelled
+# background so the model learns padded regions are not food.
+PALETTE_BACKGROUND = 32
+
 # Special (non-food) channels excluded from food-class mIoU. These mirror
 # class_mapping_foodseg103_v1.json:special_channels and §11 channel ordering.
 BACKGROUND_CLASS = 32
@@ -232,13 +237,7 @@ class FoodSegDataset:
 
         img = ImageOps.exif_transpose(Image.open(img_path)).convert("RGB")
         mask_img = Image.open(mask_path)
-        if self.augment:
-            img, mask_img = self._augment_pair(img, mask_img, Image)
-        else:
-            img = img.resize((self.target_size, self.target_size), Image.BILINEAR)
-            mask_img = mask_img.resize(
-                (self.target_size, self.target_size), Image.NEAREST
-            )
+        img, mask_img = self._letterbox_pair(img, mask_img, Image, augment=self.augment)
 
         arr = np.asarray(img, dtype=np.float32) / 255.0
         mean = np.array(IMAGENET_MEAN, dtype=np.float32)
@@ -255,28 +254,49 @@ class FoodSegDataset:
 
         return image, mask
 
-    def _augment_pair(self, img, mask_img, Image):
-        """Joint horizontal flip + random scale-up crop of an image/mask pair.
+    def _letterbox_pair(self, img, mask_img, Image, augment: bool):
+        """Aspect-preserving letterbox into a target×target canvas, matching the
+        on-device ``SegmenterPreProcessor`` EXACTLY on the val path:
+        ``scale = target / max(w, h)``, bilinear image / nearest mask, content
+        blitted TOP-LEFT, image padded black (which is the normalised-zero pad
+        value ``(0 - mean)/std`` after ImageNet normalisation), mask padded with
+        the background label. The previous recipe resized to a SQUARE (stretched
+        aspect); the device letterboxes, so a stretch-trained model saw
+        off-distribution input on device — the train/serve geometry skew that is
+        invisible to mIoU (docs/ml-training.md §11).
 
-        Scale is >= 1.0 so cropping never needs padding — padding would invent
-        pixels labelled with a real class id (there is no ignore_index in the
-        loss). DataLoader workers re-seed ``random`` per epoch, so draws differ
-        across workers and epochs.
+        ``augment=True`` (train split) adds a horizontal flip, a mild scale-down
+        jitter, and random placement of the content within the canvas — geometric
+        augmentation that STAYS aspect-preserving (no stretch), so it remains
+        matched to the serve path. DataLoader workers re-seed ``random`` per epoch.
         """
         import random
 
         target = self.target_size
-        if random.random() < 0.5:
+        w, h = img.size
+
+        if augment and random.random() < 0.5:
             img = img.transpose(Image.FLIP_LEFT_RIGHT)
             mask_img = mask_img.transpose(Image.FLIP_LEFT_RIGHT)
 
-        size = round(target * random.uniform(1.0, 1.5))
-        img = img.resize((size, size), Image.BILINEAR)
-        mask_img = mask_img.resize((size, size), Image.NEAREST)
-        left = random.randint(0, size - target)
-        top = random.randint(0, size - target)
-        box = (left, top, left + target, top + target)
-        return img.crop(box), mask_img.crop(box)
+        base = target / max(w, h)
+        scale = base * random.uniform(0.75, 1.0) if augment else base
+        sw = max(1, min(target, round(w * scale)))
+        sh = max(1, min(target, round(h * scale)))
+        img_r = img.resize((sw, sh), Image.BILINEAR)
+        mask_r = mask_img.resize((sw, sh), Image.NEAREST)
+
+        if augment:
+            ox = random.randint(0, target - sw)
+            oy = random.randint(0, target - sh)
+        else:
+            ox = oy = 0  # top-left, exact device parity
+
+        canvas = Image.new("RGB", (target, target), (0, 0, 0))
+        canvas.paste(img_r, (ox, oy))
+        mask_canvas = Image.new("L", (target, target), PALETTE_BACKGROUND)
+        mask_canvas.paste(mask_r, (ox, oy))
+        return canvas, mask_canvas
 
 
 def _make_loader(dataset, batch_size: int, shuffle: bool, num_workers: int,

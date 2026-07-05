@@ -5,9 +5,7 @@ import Foods
 import Foundation
 import Macros
 import MetricScale
-#if DEBUG
 import os
-#endif
 @_exported import Persistence
 @_exported import PortableContracts
 // Re-export so App-target callers (PreShutterSegmenter, CaptureFlowModel) can
@@ -25,19 +23,20 @@ private let pipelineSignposter = OSSignposter(
     category: "Stages"
 )
 
-// Dev-build-only structured-log channel for the support-plane fit. Shares the
-// `ie.medata.app` / `Shutter` channel with the existing `estimate.start` /
-// `estimate.end` events emitted from `CaptureFlowModel`, so a single Console
-// predicate captures the full shutter→result trail.
-private let supportPlaneLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
-
-// Per-stage start log. Same channel as above; emitted at every pipeline-stage
-// entry so a Console.app trail identifies the stage in progress when
-// estimate.end never fires (i.e., the pipeline hangs inside one stage). The
-// next stage's start line implies the previous stage finished — no separate
-// end line is emitted to keep the trail compact.
+// Per-stage start log. Shares the `ie.medata.app` / `Shutter` channel; emitted
+// at every pipeline-stage entry so a Console.app trail identifies the stage in
+// progress when estimate.end never fires (i.e., the pipeline hangs inside one
+// stage). The next stage's start line implies the previous stage finished — no
+// separate end line is emitted to keep the trail compact.
 private let pipelineStageLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
 #endif
+
+// Structured-log channel for the support-plane fit. Shares the `ie.medata.app`
+// / `Shutter` channel with the `estimate.start` / `estimate.end` events, so a
+// single Console predicate captures the full shutter→result trail. Emitted in
+// Release too — the `supportplane.end success=false` trace is the only
+// on-device window into a `lidarFitDegenerate` failure without a Debug build.
+private let supportPlaneLog = Logger(subsystem: "ie.medata.app", category: "Shutter")
 
 // Orchestrator for pipeline stages C–L per design §2.2.
 // Dependencies are injected at construction so the pipeline is fully testable.
@@ -536,14 +535,14 @@ public struct Pipeline: Sendable {
             #endif
             return plane
         } catch let error as SupportPlaneError {
-            #if DEBUG
-            // Failure-path trace promised by the bugfix report but lost in the
-            // `pipeline-real-device-correctness` real-mask rewrite. `failure=`
-            // carries the EXACT SupportPlaneError case so `noLidarPoints` (scan
-            // starved → remapped below to lidarFitDegenerate) is distinguishable
-            // from a genuine collinear-inlier `lidarFitDegenerate`. The candidate/
-            // inlier counts and food bbox come from the LiDAR fitter's DEBUG
-            // statics. Bug `lidar-plane-fit-degenerate-on-clean-capture`.
+            // Failure-path trace. `failure=` carries the EXACT SupportPlaneError
+            // case so `noLidarPoints` (scan starved → remapped below to
+            // lidarFitDegenerate) is distinguishable from a genuine
+            // collinear-inlier `lidarFitDegenerate`. The candidate/inlier counts
+            // and food bbox come from the LiDAR fitter's counters. Emitted in
+            // Release too — this is the only on-device window into a
+            // `lidarFitDegenerate` failure without a Debug/stub build.
+            // Bug `lidar-plane-fit-degenerate-on-clean-capture`.
             supportPlaneLog.info(
                 """
                 event=supportplane.end success=false \
@@ -556,7 +555,6 @@ public struct Pipeline: Sendable {
                 bboxH=\(LiDARPlaneFitter.debugLastFoodBBoxH, privacy: .public)
                 """
             )
-            #endif
             switch error {
             case .emptyFoodMask:
                 throw EstimationFailure.noFoodPixels
@@ -577,9 +575,8 @@ public struct Pipeline: Sendable {
         }
     }
 
-    #if DEBUG
-    // Stable kebab-ish label for the SupportPlaneError case, used only by the
-    // DEBUG `supportplane.end success=false` trace above.
+    // Stable kebab-ish label for the SupportPlaneError case, used by the
+    // `supportplane.end success=false` trace above.
     private static func supportPlaneFailureLabel(_ error: SupportPlaneError) -> String {
         switch error {
         case .lidarFitResidualTooHigh: return "lidarFitResidualTooHigh"
@@ -590,7 +587,6 @@ public struct Pipeline: Sendable {
         case .emptyFoodMask: return "emptyFoodMask"
         }
     }
-    #endif
 
     private func buildBeta(palette: ClassPalette, edition: String) -> BetaCorrection {
         var entries: [String: Float] = [:]

@@ -638,6 +638,22 @@ public extension GRDBPersistenceStore {
         changeBroadcaster.notify()
     }
 
+    // Wipes every event (meals, bsl, insulin), the meal side tables, and the
+    // processed-image ledger, then removes the on-disk artefact tree. Keeps the
+    // `meta` row so `schema_version` survives — the DB stays valid, just empty.
+    // DEBUG-only reset for the developer test loop; there is no undo.
+    func deleteAllData() async throws {
+        try await queue.write { db in
+            try db.execute(sql: "DELETE FROM events")
+            try db.execute(sql: "DELETE FROM meal_artefacts")
+            try db.execute(sql: "DELETE FROM corrections")
+            try db.execute(sql: "DELETE FROM processed_images")
+        }
+        let mealsRoot = artefactsBaseURL.appendingPathComponent("meals", isDirectory: true)
+        try? FileManager.default.removeItem(at: mealsRoot)
+        changeBroadcaster.notify()
+    }
+
     // A plausible daily curve: a diurnal baseline with three post-meal
     // excursions, clamped to a sane physiological window.
     private static func demoGlucose(at time: Date) -> Double {

@@ -69,6 +69,11 @@ struct CaptureErrorOverlay: View {
                 .frame(height: 48)
                 .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
                 .foregroundStyle(Color.captureBackground)
+                // Make the whole pill tappable: without this only the centred
+                // text label receives touches, so taps on the wide coloured area
+                // are dead (the `.frame(maxWidth:.infinity)` expansion is not
+                // hit-tested on its own).
+                .contentShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityIdentifier("captureError.retry")
 
             Button("2-view", action: onTwoView)
@@ -77,6 +82,7 @@ struct CaptureErrorOverlay: View {
                 .frame(height: 48)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
                 .foregroundStyle(Color.captureChromeText)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityIdentifier("captureError.twoView")
 
             Button("Cancel", action: onCancel)

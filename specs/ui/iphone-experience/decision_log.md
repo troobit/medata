@@ -876,3 +876,37 @@ The spec is the source of truth (PROCESS §1) and a `rune`-managed ledger that t
 - `specs/ui/iphone-experience/prerequisites.md` — Δθ-fields sibling-spec dependency added to "Out of band".
 
 ---
+
+## Decision 22: Confidence pill dropped from the Data/summary list row
+
+**Date**: 2026-07-05
+**Status**: accepted
+
+### Context
+
+Decision 15 specified the meal-history row (now the Data view row) with a thumbnail, timestamp, carbohydrate total, and the confidence pill; Decision 17 made that pill four-tier (High / Moderate / Low / Very Low). On the summary page the pill sits immediately beside the carb total. In device use the developer read the "High" pill as a statement about the *carbohydrate level* of the meal — "high carbs" — rather than the estimate's confidence. The pill's meaning (σ_meal confidence) is only clear where surrounding context names it; on a dense list row next to a gram figure it is actively misleading, and the app must not appear to be making a dietary/diagnostic judgement about a meal.
+
+### Decision
+
+Remove the confidence pill from the Data/summary list row. The row now shows thumbnail, time, carb total, and the `corrected` marker only. The four-tier pill remains on the meal-detail screen (`MealOverviewView`) and the just-captured result screen (`ResultView`), where the label reads unambiguously as confidence. This supersedes the row-composition element of Decision 15 and the summary-row application of Decision 17; the four-tier scheme and the σ < 0.20 retake surface are unchanged.
+
+### Rationale
+
+Confidence is a property of the estimate, not of the food. Presented without context next to a carb number it reads as a claim about the food, which is both wrong and outside what a deterministic carb estimator should imply. The detail and result surfaces present the carb total as the single focal figure with the pill clearly attached to the estimate, so the confidence reading survives there. Removing it from the list also declutters the densest surface.
+
+### Alternatives Considered
+
+- **Keep the pill, relabel it (e.g. "Confidence: High")**: Adds row text to the densest surface and still competes with the carb figure for the "what is this number about" reading - rejected as more clutter for a weaker fix.
+- **Remove the pill from every surface**: Overreaches; on detail and result the pill is genuinely useful and unambiguous, and the very-low retake surface depends on the same confidence signal - rejected.
+
+### Consequences
+
+**Positive:**
+- The summary page no longer implies a dietary judgement about a meal.
+- The Data row is simpler; the carb total is the unambiguous focal value.
+
+**Negative:**
+- Confidence is no longer visible at the list level; a user scanning history must open a meal to see it.
+- Confidence now surfaces in two places rather than three, so the treatment is slightly less omnipresent.
+
+---

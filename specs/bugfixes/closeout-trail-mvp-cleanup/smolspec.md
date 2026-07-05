@@ -2,7 +2,7 @@
 
 ## Overview
 
-The 2026-06-18 on-device verification of the no-food-pixels closeout (Single + Double on PhoneMax, build `903842a`) succeeded against this branch's three target bugs (lost-age, cadence, lidar) but surfaced four downstream issues — one correctness, one latency, two UX — that together block `event=estimate.end success=true` and the atomic three-spec closeout. This smolspec scopes all four as one MVP-grade bugfix on the research branch — the intent being that this is the last loose-ends pass before the research line is ready to replace `main`.
+The 2026-06-18 on-device verification of the no-food-pixels closeout (Single + Double on the iPhone 13 Pro Max, build `903842a`) succeeded against this branch's three target bugs (lost-age, cadence, lidar) but surfaced four downstream issues — one correctness, one latency, two UX — that together block `event=estimate.end success=true` and the atomic three-spec closeout. This smolspec scopes all four as one MVP-grade bugfix on the research branch — the intent being that this is the last loose-ends pass before the research line is ready to replace `main`.
 
 The findings — in order they hit the user during the trail:
 
@@ -15,7 +15,7 @@ The mask + lidar fix verification is folded into the closeout step of this spec 
 
 ## Evidence — observed trail
 
-Captured 2026-06-18 22:50-22:53, PhoneMax (iPhone 13 Pro Max iOS 26.5), build off `no-food-pixels-on-fruit-plate-mvp` @ `903842a` installed from the correct worktree DerivedData. Mode `double`, fruit plate ~40 cm.
+Captured 2026-06-18 22:50-22:53, iPhone 13 Pro Max (iOS 26.5), build off `no-food-pixels-on-fruit-plate-mvp` @ `903842a` installed from the correct worktree DerivedData. Mode `double`, fruit plate ~40 cm.
 
 ```
 22:50:19.829  event=fired stage=nadir tiltDegrees=6.2 tiltInRange=true canShutter=true
@@ -61,7 +61,7 @@ Total wall-clock from `estimate.start` to `estimate.end`: **141.7 s**.
 ### Pipeline latency (correctness-of-MVP-experience)
 
 - The system MUST surface `event=pipeline.stage.end name=<X> latencyMs=N` for every pipeline stage already emitting `pipeline.stage.start`, so the next device trail tells us which stage is slow without further instrumentation. The substage events inside `CoreMLSegmenter` already give us segment-level timing; the stage-level timing is the missing piece.
-- The combined wall-clock from `estimate.start` to `estimate.end` SHOULD be ≤ **30 s** on PhoneMax for the two-view SfS path with the dev-stub segmenter (Phase 1, Debug). The 30 s ceiling is an MVP comfort target, not the research §16 sub-second budget — Phase 3's CoreML segmenter on Neural Engine moves us toward that separately.
+- The combined wall-clock from `estimate.start` to `estimate.end` SHOULD be ≤ **30 s** on the iPhone 13 Pro Max for the two-view SfS path with the dev-stub segmenter (Phase 1, Debug). The 30 s ceiling is an MVP comfort target, not the research §16 sub-second budget — Phase 3's CoreML segmenter on Neural Engine moves us toward that separately.
 - Whichever stage the new `latencyMs` lines point at as the dominant cost MUST be optimised once if a single targeted change can cut it ≥ 50%. If the slow stage is intrinsic (e.g. `VoxelCarveEstimator.carve` at the current grid resolution) and no targeted cut exists, the work caps at one decision-log entry documenting the floor and noting the Phase 3 follow-up.
 
 ### Freeze viewfinder during estimation
@@ -92,7 +92,7 @@ Two UI-only fixes, bundled because both are state-driven view composition in the
 
 **Refusal sheet:** `App/RefusalSheet.swift:94` — change `[.fraction(0.35)]` to `[.fraction(0.35), .large]`. That's the whole code change. The `.large` detent gives the user a one-finger drag-up to read the full message. Default-on-first-appearance stays at 35% so the existing layout regression tests don't shift. If a layout regression test snapshots the sheet at the `.large` detent, adjust the snapshot; otherwise this is a one-line diff.
 
-**Frozen viewfinder:** `App/CaptureFlowView.swift:67` — wrap `ARPreviewView(engine: engine)` in a state switch. During `.estimating(captureResult: let result)`, render the captured frame(s) as a `CapturedFramesView` (new small `View` in the same file or alongside `CaptureFlowView`) instead of `ARPreviewView`. Decode a `CGImage` from `RawFrame.imageBytes` + `RawFrame.pixelFormat` (BGRA8 after the rawframe-rgb-conversion fix) using `CGDataProvider` + `CGImage.init(width:height:bitsPerComponent:bitsPerPixel:bytesPerRow:space:bitmapInfo:provider:decode:shouldInterpolate:intent:)` — inline at the call site, no new utility module. Single mode shows just nadir; two-view mode shows nadir on top half, oblique on bottom half (or side-by-side — pick whichever reads better at PhoneMax aspect). All other states render `ARPreviewView` as today. Restore happens automatically on state exit from `.estimating`.
+**Frozen viewfinder:** `App/CaptureFlowView.swift:67` — wrap `ARPreviewView(engine: engine)` in a state switch. During `.estimating(captureResult: let result)`, render the captured frame(s) as a `CapturedFramesView` (new small `View` in the same file or alongside `CaptureFlowView`) instead of `ARPreviewView`. Decode a `CGImage` from `RawFrame.imageBytes` + `RawFrame.pixelFormat` (BGRA8 after the rawframe-rgb-conversion fix) using `CGDataProvider` + `CGImage.init(width:height:bitsPerComponent:bitsPerPixel:bytesPerRow:space:bitmapInfo:provider:decode:shouldInterpolate:intent:)` — inline at the call site, no new utility module. Single mode shows just nadir; two-view mode shows nadir on top half, oblique on bottom half (or side-by-side — pick whichever reads better at the iPhone 13 Pro Max aspect). All other states render `ARPreviewView` as today. Restore happens automatically on state exit from `.estimating`.
 
 ### Phase 2 — Per-stage `pipeline.stage.end latencyMs=N` instrumentation
 
@@ -131,11 +131,11 @@ Re-run the device verification (same script as Phase 3). Once both modes show `e
 ## Risks and Assumptions
 
 - **Risk**: Phase 2's `pipeline.stage.end` lines fire on every pipeline run, so production-Debug log volume grows by N lines per estimate. **Mitigation**: lines are `.info` not `.debug`, gated by `#if DEBUG`, and only one per stage per estimate (low single digits per run). No throwaway-instrumentation cleanup needed.
-- **Risk**: Phase 1's `.large` detent introduces a layout regression on landscape or smaller-than-PhoneMax devices. **Mitigation**: `.large` is a SwiftUI standard sheet detent with platform-correct behaviour across screen sizes; we are not setting a custom large-height value. If a specific device shows a regression, fall back to wrapping the body `Text` in a `ScrollView` inside the existing 35% sheet.
+- **Risk**: Phase 1's `.large` detent introduces a layout regression on landscape or smaller devices. **Mitigation**: `.large` is a SwiftUI standard sheet detent with platform-correct behaviour across screen sizes; we are not setting a custom large-height value. If a specific device shows a regression, fall back to wrapping the body `Text` in a `ScrollView` inside the existing 35% sheet.
 - **Risk**: Phase 1's frozen-viewfinder swap holds two `RawFrame` byte buffers (~5.3 MB each at BGRA8 1920×1440) for the estimation window, on top of whatever the pipeline is already holding. **Mitigation**: the buffers are already retained by `CaptureResult` on the `.estimating` state — rendering them as `CGImage`s is a copy of references, not bytes. Memory pressure is unchanged from today.
 - **Risk**: Phase 1's frozen-viewfinder fix interacts with the `interruption`/`scenePhase` paths — backgrounding during `.estimating` already cancels the flow per Decision 12. **Mitigation**: nothing in the view-side swap changes state-machine behaviour; it's a pure render-time switch based on `model.state`. The interruption path stays as-is.
 - **Risk**: Phase 4 latency optimisation needs a Phase 3 trail before scoping, so the work is not estimable up-front. **Mitigation**: Phase 4 is bounded by the requirements — "one targeted change cutting ≥ 50%, or document the floor." No open-ended performance work.
-- **Assumption**: The Phase 3 re-test will be done by the user on PhoneMax in one session, paste-back trails as in this spec's Evidence. No XCUITest automation for this verification — the AR-gated flow has no simulator path (see `docs/agent-notes/ui-capture-flow.md`).
+- **Assumption**: The Phase 3 re-test will be done by the user on the iPhone 13 Pro Max in one session, paste-back trails as in this spec's Evidence. No XCUITest automation for this verification — the AR-gated flow has no simulator path (see `docs/agent-notes/ui-capture-flow.md`).
 - **Assumption**: The `noFoodVolumeRecovered` failure was caused by the 52° oblique tilt, not by a regression in the volume estimator. If the well-aimed re-test still fails, the assumption is wrong and Phase 4 expands.
 
 ## Follow-ups

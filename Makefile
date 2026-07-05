@@ -11,12 +11,14 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -ec
 
-# PhoneMax — iPhone 13 Pro Max, the primary LiDAR test device.
-# NOTE: this is the devicectl (CoreDevice) identifier from
+# Default device: `you` — iPhone 16 Pro, the current primary test device.
+# DEVICE_UDID is the devicectl (CoreDevice) identifier from
 # `xcrun devicectl list devices`, NOT the hardware UDID Finder/`log collect
 # --device-udid` show. `logs-device` therefore matches on DEVICE_NAME instead.
-DEVICE_UDID ?= 76A45E6D-C57E-5BA6-ABAD-205C3C668572
-DEVICE_NAME ?= PhoneMax
+# Override for another device:
+#   make <target> DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>
+DEVICE_UDID ?= 6AD781BA-89FF-5A82-A2A1-B5EC9469F465
+DEVICE_NAME ?= you
 BUNDLE_ID   ?= rtob.MeData
 
 DERIVED_DEBUG   ?= /tmp/medata-debug

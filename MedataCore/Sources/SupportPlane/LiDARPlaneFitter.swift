@@ -8,10 +8,11 @@ import PortableContracts
 // gravity. RNG is seeded by hashing the depth bytes (per §6.0) so two runs on the
 // same fixture produce identical inliers.
 public enum LiDARPlaneFitter {
-    #if DEBUG
-    // Debug-only counters exposed for the Shutter-channel structured-log
+    // Lightweight counters exposed for the Shutter-channel structured-log
     // instrumentation at `Pipeline.fitSupportPlane`. Populated by `fit(_:)`
-    // before any throw or return. Not part of the production contract.
+    // before any throw or return. Emitted in Release too (a handful of integer
+    // writes) so on-device `lidarFitDegenerate` failures can be diagnosed
+    // without a Debug/stub build.
     public nonisolated(unsafe) static var debugLastCandidatePointCount: Int = 0
     public nonisolated(unsafe) static var debugLastInlierCount: Int = 0
     // Food-region bbox in colour/mask pixel coords (min corner + size). Populated
@@ -23,7 +24,6 @@ public enum LiDARPlaneFitter {
     public nonisolated(unsafe) static var debugLastFoodBBoxY: Int = -1
     public nonisolated(unsafe) static var debugLastFoodBBoxW: Int = -1
     public nonisolated(unsafe) static var debugLastFoodBBoxH: Int = -1
-    #endif
 
     // Tunable parameters per design §6.2 ("Parameter justification").
     static let lowerEdgeBandMm: Float = 30
@@ -73,15 +73,11 @@ public enum LiDARPlaneFitter {
 
     public static func fit(_ inputs: Inputs) throws -> SupportPlane {
         // Step 1: collect candidate 3-D points in the colour-image lower-edge band.
-        #if DEBUG
         debugLastFoodBBoxX = -1; debugLastFoodBBoxY = -1
         debugLastFoodBBoxW = -1; debugLastFoodBBoxH = -1
-        #endif
         let points = try collectCandidatePoints(inputs)
-        #if DEBUG
         debugLastCandidatePointCount = points.count
         debugLastInlierCount = 0
-        #endif
         guard points.count >= minPoints else {
             throw SupportPlaneError.noLidarPoints
         }
@@ -94,9 +90,7 @@ public enum LiDARPlaneFitter {
             gravity: inputs.gravityCamera.normalised(),
             rng: &rng
         )
-        #if DEBUG
         debugLastInlierCount = bestInliers.count
-        #endif
 
         guard bestInliers.count >= minPoints else {
             throw SupportPlaneError.noLidarPoints
@@ -171,12 +165,10 @@ public enum LiDARPlaneFitter {
         }
 
         guard let bbox = foodBBox(mask: mask) else { return [] }
-        #if DEBUG
         debugLastFoodBBoxX = bbox.minX
         debugLastFoodBBoxY = bbox.minY
         debugLastFoodBBoxW = bbox.widthPx
         debugLastFoodBBoxH = bbox.heightPx
-        #endif
 
         var points: [Vec3] = []
         let kc = inputs.colourIntrinsics

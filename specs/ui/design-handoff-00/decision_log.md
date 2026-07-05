@@ -675,3 +675,36 @@ Direct user instruction, generalised as requested ("Project rule now is to exclu
 - Before any non-developer release, the removed copy (and likely more) must be revisited — the rule is explicitly phase-scoped
 
 ---
+
+## Decision 22: Confidence pill removed from the Data/summary page
+
+**Date**: 2026-07-05
+**Status**: accepted
+
+### Context
+
+Decision 5 kept the four-tier confidence pill, and its amendment (this log, Decision "per-food rows / only confidence surface") established meal-level confidence as the only confidence surface — shown on the result view and the meal-history/Data row. On device the pill on the Data/summary row, sitting directly beside the meal's carb total, read as a claim that the meal was "high" in carbohydrate rather than that the estimate was high-confidence. That is a dietary/diagnostic-sounding implication the app must not make.
+
+### Decision
+
+Drop the confidence pill from the Data/summary list row. It stays on the meal-detail screen and the just-captured result screen, where the context makes "confidence" unambiguous. This narrows the earlier "only confidence surface" claim: meal-level confidence remains the only confidence *value* surfaced, but it is no longer shown on the summary page. The four-tier scheme and the σ < 0.20 retake surface are unchanged. See iphone-experience Decision 22 for the row-level detail.
+
+### Rationale
+
+A confidence badge is a property of the estimate, not of the food. Next to a gram figure on a dense list it is misread as a judgement about the meal. The detail and result screens present the carb total as the focal figure with the pill clearly bound to the estimate, so the confidence reading holds there without the summary-page ambiguity.
+
+### Alternatives Considered
+
+- **Leave the earlier decision as written**: Keeps the misleading summary-page badge - rejected; the misread is real and observed on device.
+- **Add an explicit "confidence" caption on the row**: More text on the densest surface without resolving the competition with the carb figure - rejected.
+
+### Consequences
+
+**Positive:**
+- The summary page no longer implies anything about the meal's carbohydrate level.
+
+**Negative:**
+- Confidence is not visible until a meal is opened.
+- The earlier "only confidence surface" wording must now be read alongside this entry.
+
+---
