@@ -47,6 +47,10 @@ struct SettingsView: View {
     @State private var exportError: String?
     @State private var showsGlucoseImport = false
     @State private var isSeeding = false
+    #if DEBUG
+    @State private var isClearing = false
+    @State private var confirmsClear = false
+    #endif
 
     var body: some View {
         Form {
@@ -130,6 +134,18 @@ struct SettingsView: View {
                 }
                 .disabled(isSeeding)
                 .accessibilityIdentifier("settings.seedGlucose")
+
+                Button(role: .destructive) {
+                    confirmsClear = true
+                } label: {
+                    if isClearing {
+                        MedataLoadingSymbol(mode: .loop, size: 22)
+                    } else {
+                        Text("Clear all data")
+                    }
+                }
+                .disabled(isClearing)
+                .accessibilityIdentifier("settings.clearAllData")
             }
             #endif
         }
@@ -145,6 +161,15 @@ struct SettingsView: View {
         .sheet(isPresented: $showsGlucoseImport) {
             GlucoseImportView(store: store)
         }
+        #if DEBUG
+        .confirmationDialog(
+            "Delete all meals, glucose and insulin data?",
+            isPresented: $confirmsClear,
+            titleVisibility: .visible
+        ) {
+            Button("Clear all data", role: .destructive) { clearAllData() }
+        }
+        #endif
     }
 
     private func exportArchive() {
@@ -168,6 +193,15 @@ struct SettingsView: View {
         Task {
             defer { isSeeding = false }
             try? await grdb.seedDemoBslEvents()
+        }
+    }
+
+    private func clearAllData() {
+        guard let grdb = store as? GRDBPersistenceStore else { return }
+        isClearing = true
+        Task {
+            defer { isClearing = false }
+            try? await grdb.deleteAllData()
         }
     }
     #endif

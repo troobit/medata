@@ -15,7 +15,7 @@ references:
   - App/CaptureFlowView.swift:67 — swap ARPreviewView(engine: engine) for a state-driven choice: live preview in every state EXCEPT .estimating(captureResult: let result), where it renders a new CapturedFramesView(result: result).
   - CapturedFramesView is a small View (same file or alongside CaptureFlowView). Decodes CGImages inline from RawFrame.imageBytes + .pixelFormat (BGRA8 post-rawframe-rgb-conversion).
   - Single mode: nadir frame fills the safe area.
-  - Two-view mode: nadir + oblique stacked or side-by-side — pick whichever reads better on PhoneMax aspect; document the choice in a one-line comment.
+  - Two-view mode: nadir + oblique stacked or side-by-side — pick whichever reads better on the iPhone 13 Pro Max aspect; document the choice in a one-line comment.
   - All other chrome (top bar, Estimating… hint, badges) renders unchanged over the frozen image.
   - swift build clean; no new module; no public-surface changes.
   - Blocked-by: v6kipyy (Expand RefusalSheet to two detents)
@@ -33,7 +33,7 @@ references:
 ## Phase 3 — Re-test
 
 - [x] 4. STOP — human runs device capture; agent reads trail <!-- id:v6kipz1 -->
-  - Agent: build for device from this worktree: cd /Users/r/repos/medata.worktrees/no-food-pixels-on-fruit-plate-mvp && xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination id=76A45E6D-C57E-5BA6-ABAD-205C3C668572 -configuration Debug build
+  - Agent: build for device from this worktree: cd /Users/r/repos/medata.worktrees/no-food-pixels-on-fruit-plate-mvp && xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination id=<device-udid> -configuration Debug build
   - Agent: re-derive DerivedData path with xcodebuild ... -showBuildSettings | grep BUILT_PRODUCTS_DIR; print the install + launch commands for the user.
   - Console filter: subsystem:ie.medata.app category:Shutter, Include Info Messages.
   - User: install, launch, drive Single mode first (one nadir tap on a fruit plate, ~30-40 cm, tilt ≈ 0°). Then Double mode (nadir + oblique, oblique tilt 25 ± 10° — wait for the live indicator badge to be green before tapping oblique). Paste BOTH trails back into the conversation.

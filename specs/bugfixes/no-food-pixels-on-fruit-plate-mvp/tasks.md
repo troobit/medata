@@ -40,7 +40,7 @@ references:
   - Blocked-by: op0jbkx (swift build clean and swift test green (baseline + new regression tests))
 
 - [x] 5. STOP — human runs device capture; agent reads trail and diagnoses <!-- id:qx7n2tb -->
-  - Agent: build for device (`xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination 'id=76A45E6D-C57E-5BA6-ABAD-205C3C668572' -configuration Debug build`).
+  - Agent: build for device (`xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination 'id=<device-udid>' -configuration Debug build`).
   - Agent: print the install/launch commands and Console.app filter for the user.
   - User: install, launch, set Console filter, capture 2 shutter taps in Double mode at a fruit plate, ~30 seconds total session.
   - User: paste the full filtered Console trail back into the conversation (event lines from `onAppear` through second `estimate.end`).
@@ -69,7 +69,7 @@ references:
 
 ## Verify
 
-- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky --> <!-- BLOCKED 2026-06-16 — Blocked-by: lidar-plane-fit-degenerate-on-clean-capture (real-mask degenerate fit). Mask contract met (cadence + lost-age fixes verified; `event=estimate.start maskAgeMs=170` on PhoneMax Double; `noFoodPixels` resolved). End-to-end `estimate.end success=true` gated on the lidar fix; see `## Verification attempt 2026-06-16` in smolspec.md. -->
+- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky --> <!-- BLOCKED 2026-06-16 — Blocked-by: lidar-plane-fit-degenerate-on-clean-capture (real-mask degenerate fit). Mask contract met (cadence + lost-age fixes verified; `event=estimate.start maskAgeMs=170` on the iPhone 13 Pro Max Double; `noFoodPixels` resolved). End-to-end `estimate.end success=true` gated on the lidar fix; see `## Verification attempt 2026-06-16` in smolspec.md. -->
   - Agent: rebuild for device, print install/launch commands and Console filter.
   - User: install, launch, capture in **Single** mode first (one nadir tap at a fruit plate), then in **Double** mode (nadir + oblique at a fruit plate). Paste both trails back.
   - Success criteria (BOTH modes) — `event=estimate.start maskAgeMs=N` with `N >= 0` AND `N <= 750`.

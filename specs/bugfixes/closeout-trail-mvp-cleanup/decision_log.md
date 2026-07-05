@@ -7,7 +7,7 @@
 
 ### Context
 
-Three on-device Double-mode trails (PhoneMax, build `903842a`) fired the oblique
+Three on-device Double-mode trails (the iPhone 13 Pro Max, build `903842a`) fired the oblique
 stage at 7.6°, 52.0°, and 50.2° — never the ~25° target — and every estimate
 refused with `noFoodVolumeRecovered`. The oblique shutter arms across the entire
 `|Δθ − 25°| ≤ 30°` cap (UI Decision 18 / research Decision 43), i.e. roughly

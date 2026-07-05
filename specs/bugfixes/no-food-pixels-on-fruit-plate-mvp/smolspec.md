@@ -104,7 +104,7 @@ Added a paired `firstFrameMaskAgeMs: Int?` field on `CaptureFlowModel` next to t
 
 ## Verification attempt 2026-06-16 — H4 identified
 
-Build: `aba6427` (cadence-diagnostic instrumentation on top of lost-age fix). Installed via `xcrun devicectl device install app` on iPhone 13 Pro Max iOS 26.5 (devicectl UDID `76A45E6D-C57E-5BA6-ABAD-205C3C668572`). Mode tested: `double`, 6 nadir-oblique cycles over ~22 seconds (Console.app `Process: MeData` + `Category: Shutter`, Include Info + Debug enabled).
+Build: `aba6427` (cadence-diagnostic instrumentation on top of lost-age fix). Installed via `xcrun devicectl device install app` on iPhone 13 Pro Max iOS 26.5 (devicectl UDID `<device-udid>`). Mode tested: `double`, 6 nadir-oblique cycles over ~22 seconds (Console.app `Process: MeData` + `Category: Shutter`, Include Info + Debug enabled).
 
 Observed evidence rules in H1, H2, H3 out and surfaces H4:
 
@@ -134,7 +134,7 @@ Result: each `.ready` window produces 1-2 published masks (one segmenter cycle �
 
 ## Verification attempt 2026-06-15 — BLOCKED on deeper bug
 
-Build: `research` @ `a349118` + uncommitted lost-age fix on branch `no-food-pixels-on-fruit-plate-mvp`. Installed on iPhone 13 Pro Max iOS 26.5 (devicectl UDID `76A45E6D-C57E-5BA6-ABAD-205C3C668572`, bundle `rtob.MeData`). Mode tested: `double` twice. Outcome: same refusal trail as the 2026-06-14 baseline — `event=estimate.start maskAgeMs=-1` followed by `event=estimate.end success=false failure=noFoodPixels`. Per nextup.md step 4 classification rule ("Same refusal ⇒ stop and report, do not iterate blind"), verification halted.
+Build: `research` @ `a349118` + uncommitted lost-age fix on branch `no-food-pixels-on-fruit-plate-mvp`. Installed on iPhone 13 Pro Max iOS 26.5 (devicectl UDID `<device-udid>`, bundle `rtob.MeData`). Mode tested: `double` twice. Outcome: same refusal trail as the 2026-06-14 baseline — `event=estimate.start maskAgeMs=-1` followed by `event=estimate.end success=false failure=noFoodPixels`. Per nextup.md step 4 classification rule ("Same refusal ⇒ stop and report, do not iterate blind"), verification halted.
 
 Observed trail (oblique tap from run 1, abbreviated):
 
@@ -162,7 +162,7 @@ Diagnosis (from `event=segmenter.substage.start` cadence in the same trail): the
 
 Expected per `pipeline-real-device-correctness/design.md` Logging section: ≥ 2 publications per second sustained. Observed: ~1 publication per state transition. Between cycles 1 and 2, the producer was idle for 5.46 s; between cycle 4 and the second oblique tap (`11:12:59.407`), idle for 4.85 s. Every tap consequently misses the 750 ms staleness ceiling at `App/CaptureFlowModel.swift:477`, so `nadirMaskAgeMs` collapses to `nil` *before* the lost-age fix has anything to propagate.
 
-Confirming evidence the lost-age fix code is on-device: the build at `a349118` + local changes was installed via `xcrun devicectl device install app --device 76A45E6D-… …/Debug-iphoneos/MeData.app` and `xcodebuild` reported `** BUILD SUCCEEDED **` for the `iPhoneOS` destination. `swift test` baseline on `MedataCore` is unchanged (312 + 0 failures, 3 skipped + 16 swift-testing tests in 5 suites).
+Confirming evidence the lost-age fix code is on-device: the build at `a349118` + local changes was installed via `xcrun devicectl device install app --device <device-udid> …/Debug-iphoneos/MeData.app` and `xcodebuild` reported `** BUILD SUCCEEDED **` for the `iPhoneOS` destination. `swift test` baseline on `MedataCore` is unchanged (312 + 0 failures, 3 skipped + 16 swift-testing tests in 5 suites).
 
 ## Followups
 
@@ -172,7 +172,7 @@ Confirming evidence the lost-age fix code is on-device: the build at `a349118` +
 
 ## Verification attempt 2026-06-16 — mask contract met, blocked on `lidarFitDegenerate`
 
-**Build**: HEAD `288c5a7` (lost-age fix + cadence fix, diagnostics stripped). Device: PhoneMax (iPhone 13 Pro Max iOS 26.5, UDID `76A45E6D-C57E-5BA6-ABAD-205C3C668572`). Mode: Double. Single-mode trail still owed.
+**Build**: HEAD `288c5a7` (lost-age fix + cadence fix, diagnostics stripped). Device: iPhone 13 Pro Max (iOS 26.5, UDID `<device-udid>`). Mode: Double. Single-mode trail still owed.
 
 Filtered Console trail (OS framework chatter removed; only the app's `event=` and `segmenter.substage` lines kept):
 

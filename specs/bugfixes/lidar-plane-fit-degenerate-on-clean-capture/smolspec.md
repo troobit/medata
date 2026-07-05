@@ -109,7 +109,7 @@ With this mask:
 
 ### Evidence
 
-PhoneMax (iPhone 13 Pro Max iOS 26.5), build HEAD `288c5a7` (no-food-pixels-on-fruit-plate-mvp cadence + lost-age fixes), mode=double, 2026-06-16 (see `nextup.md` `# LOGS`):
+iPhone 13 Pro Max (iOS 26.5), build HEAD `288c5a7` (no-food-pixels-on-fruit-plate-mvp cadence + lost-age fixes), mode=double, 2026-06-16 (see `nextup.md` `# LOGS`):
 
 ```
 01:13:26.771  event=capture.end   stage=oblique success=true width=1920 height=1440

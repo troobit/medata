@@ -154,6 +154,11 @@ struct CaptureFlowView: View {
                     onCancel: { model.dismissRefusal() }
                 )
                 .transition(.opacity)
+                // Composite above the live AR layer and freeze-frame so its
+                // Retry/2-view buttons receive touches. Without this the
+                // ARPreviewView representable underneath could intercept taps in
+                // the centre of the overlay (only Cancel, lower down, responded).
+                .zIndex(1)
             }
         }
         .sheet(isPresented: $showingForkSheet) {
@@ -218,7 +223,11 @@ struct CaptureFlowView: View {
         } else if isPermissionDenied {
             Color.captureBackground.ignoresSafeArea()
         } else {
-            ARPreviewView(engine: engine).ignoresSafeArea()
+            // Stop the AR view from hit-testing while the refusal overlay is up,
+            // so its buttons — not the live camera layer — receive the taps.
+            ARPreviewView(engine: engine)
+                .ignoresSafeArea()
+                .allowsHitTesting(model.refusal == nil)
         }
     }
 

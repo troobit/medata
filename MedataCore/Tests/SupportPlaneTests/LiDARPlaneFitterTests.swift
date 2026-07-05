@@ -219,7 +219,7 @@ final class LiDARPlaneFitterTests: XCTestCase {
     }
 
     // Regression for `lidar-plane-fit-degenerate-on-clean-capture` real-mask
-    // path (2026-06-16 device verification on PhoneMax). The pre-shutter
+    // path (2026-06-16 device verification on the iPhone 13 Pro Max). The pre-shutter
     // segmenter produces a centred food mask whose bbox extends to the
     // image's bottom edge (~y=1437 of 1440 on device). Pre-fix
     // `collectCandidatePoints` only scans BELOW the bbox — the window

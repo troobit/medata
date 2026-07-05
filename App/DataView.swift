@@ -107,8 +107,11 @@ struct DataView: View {
 }
 
 // One anonymous row in the Data list (Req 8.2): thumbnail (§6.8 fallback), time,
-// carbs (the corrected total when a correction exists, with a `corrected`
-// marker), and the four-tier confidence pill. No meal name.
+// and carbs (the corrected total when a correction exists, with a `corrected`
+// marker). No meal name. No confidence pill — next to a carb total on the
+// summary page a "High/Moderate/Low" badge reads as a claim about carb level
+// rather than estimate confidence; the pill stays on meal detail and the
+// just-captured result, where the context is unambiguous.
 struct DataRow: View {
     let meal: DisplayMeal
 
@@ -132,7 +135,6 @@ struct DataRow: View {
                 }
             }
             Spacer(minLength: 8)
-            ConfidencePill(sigmaMeal: meal.record.confidence.sigmaMeal)
         }
         .padding(.vertical, 4)
         .task {
