@@ -50,10 +50,12 @@
 		112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D32FCE000000272C1E /* MealHistoryModel.swift */; };
 		114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B02FE2000000272C1E /* VisionCardDetector.swift */; };
 		114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */; };
+		11ED000E2FF2000000272C1E /* MeDataWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 11ED00012FF2000000272C1E /* MeDataWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		111EC90C2FBD327D00272C1E /* MeData.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MeData.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		11ED00012FF2000000272C1E /* MeDataWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MeDataWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		111EC91F2FBD47A100272C1E /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = App.swift; path = ../App/App.swift; sourceTree = SOURCE_ROOT; };
 		111EC9202FBD47A100272C1E /* CaptureFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureFlowView.swift; path = ../App/CaptureFlowView.swift; sourceTree = SOURCE_ROOT; };
 		111EC9212FBD47A100272C1E /* ResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ResultView.swift; path = ../App/ResultView.swift; sourceTree = SOURCE_ROOT; };
@@ -103,7 +105,39 @@
 			path = MeData;
 			sourceTree = "<group>";
 		};
+		11ED00022FF2000000272C1E /* MeDataWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				11ED00032FF2000000272C1E /* Exceptions for "MeDataWidgets" folder in "MeDataWidgets" target */,
+			);
+			path = MeDataWidgets;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		11ED00032FF2000000272C1E /* Exceptions for "MeDataWidgets" folder in "MeDataWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 11ED00042FF2000000272C1E /* MeDataWidgets */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		11ED000D2FF2000000272C1E /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				11ED000E2FF2000000272C1E /* MeDataWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		111EC9092FBD327D00272C1E /* Frameworks */ = {
@@ -112,6 +146,13 @@
 			files = (
 				111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */,
 				118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		11ED00062FF2000000272C1E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -144,6 +185,7 @@
 				118B44A32FF0000000272C1E /* GlucoseImportView.swift */,
 				11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */,
 				11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */,
+				11ED00022FF2000000272C1E /* MeDataWidgets */,
 				113B22B52FD0000000272C1E /* ActiveRefusal.swift */,
 				115DA0B02FD1000000272C1E /* TelemetryCapsule.swift */,
 				115DA0B12FD1000000272C1E /* MedataBubbleLevel.swift */,
@@ -171,6 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				111EC90C2FBD327D00272C1E /* MeData.app */,
+				11ED00012FF2000000272C1E /* MeDataWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -185,10 +228,12 @@
 				111EC9082FBD327D00272C1E /* Sources */,
 				111EC9092FBD327D00272C1E /* Frameworks */,
 				111EC90A2FBD327D00272C1E /* Resources */,
+				11ED000D2FF2000000272C1E /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				11ED000C2FF2000000272C1E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				111EC90E2FBD327D00272C1E /* MeData */,
@@ -202,6 +247,26 @@
 			productReference = 111EC90C2FBD327D00272C1E /* MeData.app */;
 			productType = "com.apple.product-type.application";
 		};
+		11ED00042FF2000000272C1E /* MeDataWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 11ED00082FF2000000272C1E /* Build configuration list for PBXNativeTarget "MeDataWidgets" */;
+			buildPhases = (
+				11ED00052FF2000000272C1E /* Sources */,
+				11ED00062FF2000000272C1E /* Frameworks */,
+				11ED00072FF2000000272C1E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				11ED00022FF2000000272C1E /* MeDataWidgets */,
+			);
+			name = MeDataWidgets;
+			productName = MeDataWidgets;
+			productReference = 11ED00012FF2000000272C1E /* MeDataWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -213,6 +278,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					111EC90B2FBD327D00272C1E = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					11ED00042FF2000000272C1E = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -235,6 +303,7 @@
 			projectRoot = "";
 			targets = (
 				111EC90B2FBD327D00272C1E /* MeData */,
+				11ED00042FF2000000272C1E /* MeDataWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -247,7 +316,32 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		11ED00072FF2000000272C1E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		11ED000B2FF2000000272C1E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 111EC9042FBD327D00272C1E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 11ED00042FF2000000272C1E;
+			remoteInfo = MeDataWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		11ED000C2FF2000000272C1E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 11ED00042FF2000000272C1E /* MeDataWidgets */;
+			targetProxy = 11ED000B2FF2000000272C1E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXSourcesBuildPhase section */
 		111EC9082FBD327D00272C1E /* Sources */ = {
@@ -295,6 +389,13 @@
 				112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */,
 				114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */,
 				114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		11ED00052FF2000000272C1E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -498,6 +599,60 @@
 			};
 			name = Release;
 		};
+		11ED00092FF2000000272C1E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6G974YC4Z2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MeDataWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MeData;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = rtob.MeData.MeDataWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Debug;
+		};
+		11ED000A2FF2000000272C1E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6G974YC4Z2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MeDataWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MeData;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = rtob.MeData.MeDataWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -515,6 +670,15 @@
 			buildConfigurations = (
 				111EC9182FBD327D00272C1E /* Debug */,
 				111EC9192FBD327D00272C1E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		11ED00082FF2000000272C1E /* Build configuration list for PBXNativeTarget "MeDataWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				11ED00092FF2000000272C1E /* Debug */,
+				11ED000A2FF2000000272C1E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
