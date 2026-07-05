@@ -265,10 +265,14 @@ class FoodSegDataset:
         off-distribution input on device — the train/serve geometry skew that is
         invisible to mIoU (docs/ml-training.md §11).
 
-        ``augment=True`` (train split) adds a horizontal flip, a mild scale-down
-        jitter, and random placement of the content within the canvas — geometric
-        augmentation that STAYS aspect-preserving (no stretch), so it remains
-        matched to the serve path. DataLoader workers re-seed ``random`` per epoch.
+        ``augment=True`` (train split) adds INDEPENDENT horizontal and vertical
+        flips (each p=0.5 → all four orientations, since the phone can be held at
+        any rotation over a top-down plate), a mild scale-down jitter, and random
+        placement of the content within the canvas — geometric augmentation that
+        STAYS aspect-preserving (no stretch), so it remains matched to the serve
+        path. The vertical flip is train-only; the val/test path stays
+        device-faithful (no flip) so mIoU measures real device parity.
+        DataLoader workers re-seed ``random`` per epoch.
         """
         import random
 
@@ -278,6 +282,9 @@ class FoodSegDataset:
         if augment and random.random() < 0.5:
             img = img.transpose(Image.FLIP_LEFT_RIGHT)
             mask_img = mask_img.transpose(Image.FLIP_LEFT_RIGHT)
+        if augment and random.random() < 0.5:
+            img = img.transpose(Image.FLIP_TOP_BOTTOM)
+            mask_img = mask_img.transpose(Image.FLIP_TOP_BOTTOM)
 
         base = target / max(w, h)
         scale = base * random.uniform(0.75, 1.0) if augment else base
