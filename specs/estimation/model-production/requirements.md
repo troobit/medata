@@ -10,8 +10,8 @@ This spec defines the repeatable process that takes the on-device food segmenter
 - Executing the gravimetric calibration campaign (acquiring ≥30 weighed meals/class) — this spec defines and tracks that process but its execution is deferred past the MVP.
 - Re-deriving the runtime inference architecture — owned by `specs/estimation/pipeline/design.md`.
 - Production TFLite / Android export — TFLite remains a validation-only output in v1.
-- Changing the 27-class palette, its membership, or its channel order.
-- A reduced or subset-class MVP model — the full 27-class v1 palette is trained.
+- Changing the 35-class palette, its membership, or its channel order.
+- A reduced or subset-class MVP model — the full 35-class v1 palette is trained.
 - Cloud / API-based food recognition — deferred per pipeline Decision 22.
 
 ## Requirements
@@ -33,7 +33,7 @@ This spec defines the repeatable process that takes the on-device food segmenter
 
 **Acceptance Criteria:**
 
-1. <a name="2.1"></a>The process SHALL remap FoodSeg103 (103 classes) to the 27-channel v1 palette via `tools/segmenter/build_class_mapping.py` and `class_mapping_foodseg103_v1.json`.  
+1. <a name="2.1"></a>The process SHALL remap FoodSeg103 (103 classes) to the 35-channel v1 palette via `tools/segmenter/build_class_mapping.py` and `class_mapping_foodseg103_v1.json`.  
 2. <a name="2.2"></a>The process SHALL cut train, validation, and held-out splits with a fixed seed so the same dataset yields identical splits across runs.  
 3. <a name="2.3"></a>The remapped class channel order SHALL match `ClassPalette.v1Standard` (24 food + background + unknown_food + unsupported_liquid); a build whose mapping reorders or drops a channel SHALL fail before training.  
 4. <a name="2.4"></a>Acquiring the FoodSeg103 dataset (Apache 2.0) SHALL be recorded as a human-gated prerequisite, not an automated step.  
@@ -60,7 +60,7 @@ This spec defines the repeatable process that takes the on-device food segmenter
 1. <a name="4.1"></a>The process SHALL export `build/checkpoint.pt` to `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage` via `tools/segmenter/export.py` with FP16 weights.  
 2. <a name="4.2"></a>The exported `segmenter.mlpackage` weights SHALL be ≤ 10 MB (pipeline Req 8.2) and SHALL pass `SegmenterWeightsBudget.validate(at:)`.  
 3. <a name="4.3"></a>The export SHALL run a small fixed set of reference images through the PyTorch checkpoint (the equivalence oracle) and the Core ML artefact and SHALL fail unless per-pixel argmax agreement is > 99% and maximum absolute logit error is < 0.05; the TFLite artefact, when produced, SHALL be validated against the same PyTorch oracle, not against Core ML.  
-4. <a name="4.4"></a>The exported model SHALL declare 27 output channels in the palette order of [3.3](#3.3); a channel-count mismatch SHALL fail the export.  
+4. <a name="4.4"></a>The exported model SHALL declare 35 output channels in the palette order of [3.3](#3.3); a channel-count mismatch SHALL fail the export.  
 5. <a name="4.5"></a>The preprocessing applied before inference (colour space, normalisation, resize interpolation, and channel order) SHALL match the preprocessing used in training; the equivalence check of [4.3](#4.3) SHALL feed inputs through the runtime preprocessing path so a training/inference mismatch fails the export.  
 
 ### 5. Bundling and Loader Alignment
