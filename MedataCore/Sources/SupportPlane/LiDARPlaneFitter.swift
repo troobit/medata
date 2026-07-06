@@ -27,7 +27,17 @@ public enum LiDARPlaneFitter {
 
     // Tunable parameters per design §6.2 ("Parameter justification").
     static let lowerEdgeBandMm: Float = 30
-    static let confidenceThreshold: Float = 0.66
+    // τ_conf: minimum normalised LiDAR confidence for a table pixel to seed the
+    // fit. ARKit maps `ARConfidenceLevel.{low,medium,high}` → bytes `{0,127,255}`
+    // (§6.0). Lowered from 0.66 (HIGH-only) to 0.40 per Decision 47 so MEDIUM
+    // (127/255 = 0.498) is accepted and only genuine LOW/zero returns are dropped.
+    // A matte / low-reflectance table returns a weaker LiDAR signal dominated by
+    // MEDIUM confidence; the HIGH-only gate starved the fit → `noLidarPoints` →
+    // the user-facing "no flat surface". The RANSAC 5 mm inlier band + 20 mm
+    // residual gate still reject a bad plane, and σ_plane = exp(−r/5) carries the
+    // extra medium-confidence noise into the confidence surface (Decision 46).
+    // Bug `lidar-plane-fit-matte-table-confidence` 2026-07-06.
+    static let confidenceThreshold: Float = 0.40
     static let maxIterations: Int = 256
     static let inlierBandMm: Float = 5
     static let gravityAngleMaxRad: Float = 15 * .pi / 180

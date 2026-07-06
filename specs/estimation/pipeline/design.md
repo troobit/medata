@@ -775,7 +775,7 @@ A point with $Z \geq 0$ is behind the camera and is treated as out-of-view.
 
 **Pixel format and colour space.** The portable contract for `RawFrame.imageData` is RGB8 in sRGB colour space at the platform-native orientation (the `RawFrame.orientation` field carries the EXIF-style orientation tag). The iOS pipeline, which receives BGRA8 from `AVFoundation`, performs a B↔R channel swap inside `Segmentation/`'s pre-processing (§6.5) before normalisation. The Android pipeline, which receives RGBA8 from `Camera2`, drops the alpha channel. **The segmenter input contract is RGB float32, normalised by ImageNet mean/std after sRGB-gamma-encoded values have been scaled to [0, 1]** — this matches `torchvision`'s convention used during training (Decision 28).
 
-**LiDAR confidence.** The portable contract is `confidence: bytes (UInt8, normalised 0..255)`, where higher = more reliable. The iOS adapter maps ARKit's `ARConfidenceLevel.{low, medium, high}` to `{0, 127, 255}`. The Android adapter rescales ARCore's uint16 confidence to UInt8. **The threshold "HIGH" used throughout §6 means $\text{confidence}[p] / 255 \geq \tau_{\text{conf}} = 0.66$.**
+**LiDAR confidence.** The portable contract is `confidence: bytes (UInt8, normalised 0..255)`, where higher = more reliable. The iOS adapter maps ARKit's `ARConfidenceLevel.{low, medium, high}` to `{0, 127, 255}`. The Android adapter rescales ARCore's uint16 confidence to UInt8. **The confidence gate used throughout §6 means $\text{confidence}[p] / 255 \geq \tau_{\text{conf}} = 0.40$** (Decision 49). This admits MEDIUM-or-better confidence ($127/255 = 0.498$) and rejects only genuine LOW/zero returns; the earlier HIGH-only value (0.66) starved the plane fit on matte / low-reflectance tables. RANSAC's 5 mm inlier band and the 20 mm residual gate still reject a bad plane, and $\sigma_{\text{plane}}$ carries the extra medium-confidence noise.
 
 **Depth-map resolution.** `DepthMap.height` and `DepthMap.width` are read from the struct, NOT assumed to be $256 \times 192$. Algorithms in §6.2, §6.6, §6.7, §6.10 resample the depth map onto the colour-image grid using bilinear interpolation when resolutions differ, then mask out any pixel whose nearest LiDAR sample has confidence $< \tau_{\text{conf}}$.
 
@@ -856,7 +856,7 @@ Output: π_sup = (n̂, d), residual_mm
 
 1. Resample confidence and depth onto the colour-image grid (bilinear for depth, nearest
    for confidence). For each pixel in food_region_mask's lower-edge band (within 30 mm of
-   the food bbox lower edge in camera-1 image coords) where confidence/255 ≥ τ_conf (0.66)
+   the food bbox lower edge in camera-1 image coords) where confidence/255 ≥ τ_conf (0.40, Decision 49)
    AND the pixel is OUTSIDE food_region_mask: back-project to 3D camera-space:
        p := K_colour^{-1} · [u, v, 1] · z(u,v)        // mm
    Collect points P = {p_k}.
