@@ -154,9 +154,21 @@ test gate.
 - [x] `make spell` clean; `make build-app` (iphoneos Debug) compiles
 
 **Manual verification:**
-- Pending: on-device Release capture (`make deploy-release`) — expect `supportplane.end
-  success=true` and, on a forced failure, working Retry/2-view buttons. Match the fresh
-  `buildStamp` in the launch log before trusting results.
+- **1-view (LiDAR): CONFIRMED fixed on device** (2026-07-06, build `09aab63`) — the plane
+  fit now succeeds and an estimate is produced, where every capture previously refused
+  "no flat surface". (Estimate *accuracy* is poor — wooden table, fruit — but that is the
+  segmenter mIoU ≈0.40 / unity-β calibration, tracked separately in
+  `mvp-capture-pipeline-status`, not this bug.)
+- **2-view: still reported "no flat plane" on device.** The `fitSupportPlane` path is
+  identical for both modes (fits from the nadir frame with the same corrected gravity), so
+  this is not a gravity regression — most likely the full-frame-bbox band-collapse noted
+  under Contributing factors, which is scene-dependent. UNDIAGNOSED: the collected log
+  archive clipped the `supportplane.end` line for the failing 2-view attempt. Re-capture
+  in 2-view and collect (`sudo make logs-device`) to get
+  `supportplane.end success=false failure=… candidates=… inliers=… bbox…` — that single
+  line decides band-starvation (`candidates` small) vs non-coplanar border pixels
+  (`inliers` small with `candidates` large) vs a residual-gate failure.
+- Overlay Retry/2-view button fix: pending a forced on-device failure to confirm.
 
 ## Prevention
 

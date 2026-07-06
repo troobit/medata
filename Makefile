@@ -25,7 +25,7 @@ DERIVED_DEBUG   ?= /tmp/medata-debug
 DERIVED_RELEASE ?= /tmp/medata-release
 LOG_FILE    ?= /tmp/medata-device.log
 LOG_ARCHIVE ?= /tmp/medata-device.logarchive
-LOG_LAST    ?= 10m
+LOG_LAST    ?= 30m
 
 # Build stamp: git short SHA + wall-clock time, injected into Info.plist and
 # logged by the app at launch (event=launch in App/App.swift). Match the stamp
