@@ -53,7 +53,10 @@ extension Pipeline {
     /// one wired into `Pipeline` (Decision 12 of
     /// `specs/estimation/pipeline-real-device-correctness/`: pre-shutter and in-shutter
     /// must not share an `MLModel` instance).
-    public static func makeSegmenter(palette: ClassPalette = .v1Standard) throws -> CoreMLSegmenter {
+    public static func makeSegmenter(
+        palette: ClassPalette = .v1Standard,
+        maskLog: CoreMLSegmenter.MaskLogCadence = .perCapture
+    ) throws -> CoreMLSegmenter {
         let targetSize = SegmenterPreProcessor.defaultTargetSize
         #if DEV_STUB_SEGMENTER
         let engine: any SegmenterInferenceEngine = StubInferenceEngine(palette: palette)
@@ -70,7 +73,7 @@ extension Pipeline {
         #endif
         return CoreMLSegmenter(
             modelPath: modelPath, palette: palette, engine: engine,
-            targetSize: targetSize, modelVersion: modelVersion
+            targetSize: targetSize, modelVersion: modelVersion, maskLog: maskLog
         )
     }
 

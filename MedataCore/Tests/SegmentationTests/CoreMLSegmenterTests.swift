@@ -29,6 +29,20 @@ final class CannedInferenceEngine: SegmenterInferenceEngine, @unchecked Sendable
 
 final class CoreMLSegmenterTests: XCTestCase {
 
+    // The `segmenter.mask` diagnostic MUST default to `.perCapture` (persisted
+    // `.info`) so the Pipeline's shutter-time capture stays visible on device.
+    // Only the pre-shutter live path opts into `.livePreview` (`.debug`) to avoid
+    // flooding the persisted store. A regression flipping this default would
+    // silently drop the on-device capture diagnostic. Bug `capture-log-flood-…`.
+    func testMaskLogDefaultsToPerCapture() {
+        let seg = CoreMLSegmenter(
+            modelPath: "/dev/null",
+            palette: makeTestPalette(),
+            engine: CannedInferenceEngine(classes: 4) { _ in [] }
+        )
+        XCTAssertEqual(seg.maskLog, .perCapture)
+    }
+
     private func makeTestPalette(numFoodClasses: Int = 2) -> ClassPalette {
         ClassPalette(
             foodClasses: (0..<numFoodClasses).map { "food_\($0)" },

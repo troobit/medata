@@ -21,11 +21,30 @@ public protocol SegmenterInferenceEngine: Sendable {
 }
 
 public final class CoreMLSegmenter: @unchecked Sendable {
+    // Where the per-frame `event=segmenter.mask` diagnostic is logged. The
+    // pre-shutter live segmenter runs at ~2–3.5 Hz continuously; at `.info`
+    // those thousands of lines flood the persisted unified-log store and EVICT
+    // the low-frequency lines that matter on device — `event=launch`
+    // (buildStamp) and `event=supportplane.end success=false` (the only window
+    // into a plane-fit refusal). Routing the live path to `.debug` keeps it in
+    // the in-memory debug tier (not the persisted store), so the persisted
+    // `.info` events survive `log collect`. The one-shot shutter-time capture
+    // stays `.perCapture` (`.info`) — one persisted line per real capture.
+    // Bug `capture-log-flood-evicts-plane-fit-diagnostics` 2026-07-06.
+    public enum MaskLogCadence: Sendable {
+        /// One persisted `.info` line per capture (the Pipeline / shutter path).
+        case perCapture
+        /// High-frequency live preview — logged at `.debug` so it does not
+        /// evict the persisted `.info` store (the pre-shutter path).
+        case livePreview
+    }
+
     // Filesystem path (string, not URL — P8 portability). The Android co-developer's
     // TFLite wrapper consumes the same string contract.
     public let modelPathString: String
     public let palette: ClassPalette
     public let targetSize: Int
+    public let maskLog: MaskLogCadence
     private let engine: SegmenterInferenceEngine
 
     // Version of the loaded Core ML model (the checkpoint SHA-256 prefix stamped
@@ -39,13 +58,15 @@ public final class CoreMLSegmenter: @unchecked Sendable {
         palette: ClassPalette,
         engine: SegmenterInferenceEngine,
         targetSize: Int = SegmenterPreProcessor.defaultTargetSize,
-        modelVersion: String? = nil
+        modelVersion: String? = nil,
+        maskLog: MaskLogCadence = .perCapture
     ) {
         self.modelPathString = modelPath
         self.palette = palette
         self.engine = engine
         self.targetSize = targetSize
         self.modelVersion = modelVersion
+        self.maskLog = maskLog
     }
 
     public func segment(_ frame: RawFrame) async throws -> SegmentationResult {
@@ -81,7 +102,9 @@ public final class CoreMLSegmenter: @unchecked Sendable {
         // are shifted vs the palette (e.g. background trained at channel 0 but
         // read as food class 0). One integer scan; cheap enough for Release.
         let cov = Self.maskCoverage(argmax: post.argmax, palette: palette)
-        segmenterLog.info(
+        let maskLogType: OSLogType = maskLog == .livePreview ? .debug : .info
+        segmenterLog.log(
+            level: maskLogType,
             """
             event=segmenter.mask foodCoveragePercent=\(cov.foodPercent, privacy: .public) \
             topClass=\(cov.topClassId, privacy: .public) \

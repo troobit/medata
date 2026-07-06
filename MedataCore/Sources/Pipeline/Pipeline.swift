@@ -549,6 +549,7 @@ public struct Pipeline: Sendable {
                 failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
                 candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
                 inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public) \
+                residual_mm=\(LiDARPlaneFitter.debugLastResidualMm, privacy: .public) \
                 bboxX=\(LiDARPlaneFitter.debugLastFoodBBoxX, privacy: .public) \
                 bboxY=\(LiDARPlaneFitter.debugLastFoodBBoxY, privacy: .public) \
                 bboxW=\(LiDARPlaneFitter.debugLastFoodBBoxW, privacy: .public) \

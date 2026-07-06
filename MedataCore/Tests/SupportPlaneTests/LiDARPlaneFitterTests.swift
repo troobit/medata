@@ -250,6 +250,37 @@ final class LiDARPlaneFitterTests: XCTestCase {
         XCTAssertEqual(plane.distanceMm, trueDist, accuracy: 2.0)
     }
 
+    // Diagnostic counter `debugLastResidualMm` feeds the on-device
+    // `supportplane.end` trace so a residual-too-high refusal (real-but-noisy
+    // plane) is distinguishable from point-starvation/degeneracy. It carries the
+    // RMS residual on a fit that reaches step 4, and the -1 sentinel when the fit
+    // refuses BEFORE residual is computed. Bug `capture-log-flood-…` round.
+    func testResidualCounterReflectsFitOutcome() throws {
+        let trueNormal = Vec3(0, 1, 0)
+        // Clean fit → residual is computed and near zero.
+        let clean = syntheticPlaneDepthMap(normal: trueNormal, distanceMm: 100)
+        let foodMask = centredFoodMask(foodRectX: 250..<390, foodRectY: 200..<320)
+        _ = try LiDARPlaneFitter.fit(.init(
+            depth: clean, colourIntrinsics: intrinsics,
+            foodRegionMask: foodMask, gravityCamera: trueNormal
+        ))
+        XCTAssertGreaterThanOrEqual(LiDARPlaneFitter.debugLastResidualMm, 0,
+                                    "a completed fit must record its residual")
+        XCTAssertLessThan(LiDARPlaneFitter.debugLastResidualMm, 5,
+                          "clean synthetic plane residual should be small")
+
+        // Point-starvation refusal (all-low confidence) → residual never reached,
+        // sentinel stays -1.
+        let starved = syntheticPlaneDepthMap(normal: trueNormal, distanceMm: 100,
+                                             uniformConfidence: 0)
+        XCTAssertThrowsError(try LiDARPlaneFitter.fit(.init(
+            depth: starved, colourIntrinsics: intrinsics,
+            foodRegionMask: foodMask, gravityCamera: trueNormal
+        )))
+        XCTAssertEqual(LiDARPlaneFitter.debugLastResidualMm, -1,
+                       "a pre-residual refusal must leave the -1 sentinel")
+    }
+
     // Guard the lower bound: genuine LOW/zero-confidence returns must STILL be
     // rejected, so a table that produces only unreliable depth refuses rather than
     // fitting a garbage plane. τ_conf accepts medium (127) but not low (0).

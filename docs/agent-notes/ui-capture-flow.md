@@ -86,6 +86,20 @@ composition only; all behaviour is in the model and is unit-tested.
   MEDIUM-or-better and drop only LOW/zero. Diagnostic tell vs the gravity bug: gravity =
   large `candidates`, `inliers=0`; confidence starvation = `candidates≈0` outright. Regression:
   `specs/bugfixes/lidar-plane-fit-matte-table-confidence/report.md`.
+- **Device logs for a capture refusal look empty because the pre-shutter mask log floods
+  them.** The pre-shutter segmenter calls `CoreMLSegmenter.segment()` at ~2–3.5 Hz, and
+  `segment()` emits `event=segmenter.mask` at `.info` every call. Over a `log collect --last`
+  window that floods the persisted unified-log store and EVICTS the low-frequency `.info`
+  lines you actually need — `event=launch` (buildStamp) and `event=supportplane.end
+  success=false` (the plane-fit refusal counters: `candidates`/`inliers`/`residual_mm`/`bbox`).
+  Symptom: `/tmp/medata-device.log` is only `segmenter.mask` lines in a few-second window,
+  no launch/supportplane/estimate. Fixed (Decision 18 / `capture-log-flood-…`): the
+  pre-shutter instance is built with `CoreMLSegmenter.MaskLogCadence.livePreview` → `.debug`
+  (in-memory tier, does not evict persisted `.info`); the Pipeline's shutter-time segmenter
+  keeps `.perCapture` → `.info`. Rule: a per-frame diagnostic MUST be `.debug`, never `.info`.
+  Note: Stage D (SupportPlane) runs BEFORE Stage F (Segmentation), so on a "no flat surface"
+  refusal there is NO shutter-time `segmenter.mask` — the `supportplane.end` bbox counters are
+  your mask-quality proxy.
 - **Speckled-coloured mask over the food photo is a MODEL artefact, not a stride/format
   bug.** The whole image pipeline (YCbCr→BGRA `PixelBufferAdapter`, `canonicaliseToRGB8`,
   letterbox preprocess, `CoreMLSegmenter` CHW↔HWC auto-detect, `PostProcessing` argmax,
