@@ -470,19 +470,25 @@ struct ResultView: View {
                 .foregroundStyle(Color.captureChromeText.opacity(0.75))
                 .multilineTextAlignment(.center)
             HStack(spacing: 16) {
-                Button("Retake", action: onRetake)
-                    .font(.body.weight(.semibold))
-                    .frame(width: 120, height: 44)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
-                    .foregroundStyle(Color.captureChromeText)
-                    .accessibilityIdentifier("result.veryLow.retake")
+                Button(action: onRetake) {
+                    Text("Retake")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 120, height: 44)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
+                        .foregroundStyle(Color.captureChromeText)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .accessibilityIdentifier("result.veryLow.retake")
 
-                Button("Keep as-is") { keepAsIsDismissed = true }
-                    .font(.body.weight(.semibold))
-                    .frame(width: 120, height: 44)
-                    .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(Color.captureBackground)
-                    .accessibilityIdentifier("result.veryLow.keepAsIs")
+                Button { keepAsIsDismissed = true } label: {
+                    Text("Keep as-is")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 120, height: 44)
+                        .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(Color.captureBackground)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .accessibilityIdentifier("result.veryLow.keepAsIs")
             }
         }
         .padding(.horizontal, 24)
@@ -494,21 +500,27 @@ struct ResultView: View {
     // menu carries Retake + Delete on a fresh capture, Delete only from history.
     private var actionRow: some View {
         HStack(spacing: 12) {
-            Button("Adjust", action: onAdjust)
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
-                .foregroundStyle(Color.captureChromeText)
-                .accessibilityIdentifier("result.adjust")
+            Button(action: onAdjust) {
+                Text("Adjust")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
+                    .foregroundStyle(Color.captureChromeText)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("result.adjust")
 
-            Button("Done", action: onDone)
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                .foregroundStyle(Color.captureBackground)
-                .accessibilityIdentifier("result.done")
+            Button(action: onDone) {
+                Text("Done")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(Color.captureBackground)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("result.done")
 
             Menu {
                 if mode == .justCaptured {

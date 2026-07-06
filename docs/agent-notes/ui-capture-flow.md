@@ -63,7 +63,14 @@ composition only; all behaviour is in the model and is unit-tested.
 - **Full-width SwiftUI buttons: sizing/`contentShape` go INSIDE the Button label.** A
   Button's tap gesture covers only its label; `.frame(maxWidth:)`/`.contentShape` applied
   outside the Button draw a wide pill whose surface is dead. `CaptureErrorOverlay` is the
-  reference pattern.
+  reference pattern. This is NOT ARView-specific — it bites any bare-string
+  `Button(_:action:)` with outside modifiers. The `09aab63` sweep fixed only
+  `CaptureErrorOverlay`; the same dead pill later blocked the whole capture flow via the
+  `SegmentationReviewView` "Carbs" button (advances to Result), and the identical latent bug
+  sat on `ResultView` Adjust/Done/Retake/Keep-as-is, `MealOverviewView` Adjust/Full-result,
+  and `ManualCorrectionView` Save. All fixed to the label-wrapping pattern in one pass —
+  regression: `specs/bugfixes/result-view-defects/report.md`. Rule: never put
+  `.frame`/`.background`/`.contentShape` on a bare-string Button; wrap the label.
 - **`RawFrame.gravity` is world-up in the §6.0 camera frame — pose-dependent.** Derived
   per-frame via `CameraGravity.worldUpInCameraFrame(worldFromCamera:)` (CaptureKit); a
   constant only looks right at the identity pose and kills the plane fitter's ±15° gravity
