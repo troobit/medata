@@ -54,6 +54,23 @@ composition only; all behaviour is in the model and is unit-tested.
 
 ## Gotchas / non-obvious behaviour
 
+- **`ARPreviewView`'s ARView must stay `isUserInteractionEnabled = false`.** RealityKit's
+  `ARView` is a real UIView with its own gesture recognisers; UIKit resolves touches to it
+  ahead of SwiftUI-drawn siblings, and `allowsHitTesting(false)`/`zIndex` on the
+  representable are NOT reliable across that boundary (the 3429ddc fix that didn't take on
+  device — Retry/2-view dead, Cancel alive). The preview is render-only; all controls are
+  SwiftUI. Regression: `specs/bugfixes/capture-no-flat-surface-gravity-frame/report.md`.
+- **Full-width SwiftUI buttons: sizing/`contentShape` go INSIDE the Button label.** A
+  Button's tap gesture covers only its label; `.frame(maxWidth:)`/`.contentShape` applied
+  outside the Button draw a wide pill whose surface is dead. `CaptureErrorOverlay` is the
+  reference pattern.
+- **`RawFrame.gravity` is world-up in the §6.0 camera frame — pose-dependent.** Derived
+  per-frame via `CameraGravity.worldUpInCameraFrame(worldFromCamera:)` (CaptureKit); a
+  constant only looks right at the identity pose and kills the plane fitter's ±15° gravity
+  gate on every real capture (`supportplane.end candidates=N inliers=0` → "no flat
+  surface" in both modes). Treat `inliers=0` with large `candidates` as a convention/input
+  bug, never a scene problem. Same bugfix report as above.
+
 - **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
 
 

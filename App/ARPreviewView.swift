@@ -21,6 +21,14 @@ struct ARPreviewView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+        // The preview is render-only: every control is SwiftUI chrome layered
+        // above it. ARView installs its own gesture recognisers and, as a real
+        // UIView, wins UIKit hit-testing over SwiftUI-drawn siblings regardless
+        // of `zIndex`/`allowsHitTesting` on the representable — which left the
+        // capture-error overlay's Retry/2-view buttons dead wherever the AR
+        // layer sat underneath (only Cancel, outside it, responded). Opting the
+        // view out of UIKit interaction entirely routes all touches to SwiftUI.
+        arView.isUserInteractionEnabled = false
         bind(to: arView.session)
         return arView
     }

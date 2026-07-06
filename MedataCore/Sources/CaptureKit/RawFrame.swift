@@ -68,7 +68,8 @@ public struct RawFrame: Sendable {
     public let imageHeight: Int
     public let timestampMonotonicNs: Int64 // §6.0: monotonic, no wall-clock semantics
     public let intrinsics: CameraIntrinsics
-    public let gravity: Vec3               // unit vector, camera frame
+    public let gravity: Vec3               // world-up unit vector in the §6.0 camera
+                                           // frame (pose-dependent — see CameraGravity)
     public let worldFromCamera: Mat4
     public let depth: DepthMap?            // nil when LiDAR unavailable
 
