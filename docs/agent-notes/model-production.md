@@ -36,9 +36,10 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   gate). The oracle is the **PyTorch checkpoint** (not Core ML
   vs TFLite); inputs flow through `preprocess_reference`, which mirrors the
   **runtime letterbox** path (Decision 9). Known limitation: the oracle feeds the
-  same preprocessed input to both sides, so it catches checkpoint↔artefact drift,
-  **not** the train↔runtime square-resize skew (`train.py`/`reference_input` still
-  square-resize — flagged follow-up).
+  same preprocessed input to both sides, so it catches checkpoint↔artefact drift
+  only. The previously flagged train↔runtime square-resize skew is **closed**
+  (2026-07-06): `train.py` now letterboxes via `_letterbox_pair`, matching the
+  runtime path — see the second real model below.
 - **Validation reporting (tasks 8–9)** — `tools/segmenter/validation.py` (pure,
   torch-free). Takes a `per_class_iou` mapping, computes food-class mean IoU
   (special channels excluded), the carb-priority subset, and the **export
@@ -60,8 +61,32 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   / pasta 0.55 pass, bread_white 0.45 / potato_boiled 0.47 short, brown_rice /
   bread_wholemeal / potato_mashed absent from heldout. Below-gate release
   override recorded in lineage; exported and bundled. `make deploy-release`
-  (new; `tools/deploy_release.sh`) deploys plain Release with the real model —
-  expect `segmenterSource=coreml_0295ea61edd9` in the launch log.
+  (new; `tools/deploy_release.sh`) deploys plain Release with the real model.
+  Superseded by `24e0b022241a` below.
+- **Second real model (2026-07-06)** — letterbox-recipe checkpoint
+  `24e0b022241a` (`build/checkpoint_letterbox.pt`, trained at code commit
+  0e5f46a: 60 epochs, lr 1e-3 poly-0.9 per-epoch, target 513, augment = hflip
+  + random scale-up crop + the new independent vertical flip). The recipe
+  change vs `0295ea61edd9` is **letterbox training preprocessing**
+  (`_letterbox_pair` in `train.py`), closing the train↔runtime square-resize
+  skew flagged in the export-gates bullet above. Final-epoch train-val
+  food-class mIoU 0.4005; heldout (`run_validation.py`, stage 9) mean
+  food-class IoU 0.4054 — staples white_rice 0.6022 / chips_fries 0.5671 /
+  pasta 0.5538 pass, bread_white 0.4315 / potato_boiled 0.4648 short,
+  brown_rice / bread_wholemeal / potato_mashed absent from heldout.
+  `export_eligible=false`; Decision 11 developer-phase override recorded in
+  `build/lineage.json` (deployed for on-device efficacy testing while the
+  model improves). The heldout mean is slightly *below* the previous model's
+  0.4259, but the letterbox parity fix is expected to improve real-device
+  behaviour, which the offline bench cannot see. Bundled
+  `segmenter.mlpackage` carries `medata.modelVersion=24e0b022241a`; deployed
+  via `make deploy-release`, build stamp `0e5f46a-20260706-120508` — expect
+  `segmenterSource=coreml_24e0b022241a` in the launch log (launch verification
+  pending; device was locked at deploy time). `HarnessCLI seg-bench`
+  (ml-training.md §5) was intentionally skipped: `run_validation.py` records
+  the same food-class-mIoU gate quantity into lineage, and the full held-out
+  fixture bundle would be ~16 GB for no new information — same
+  developer-phase precedent as the first model.
 - **Developer-phase release override (Decision 11)** — the strict gate advises,
   not blocks, during the developer phase. `run_validation.py --allow-below-gate
   --reason "..."` records an attributable `metrics.release_override` block and

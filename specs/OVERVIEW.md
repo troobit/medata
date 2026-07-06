@@ -12,7 +12,7 @@
 | [Pipeline Real Device Correctness](#pipeline-real-device-correctness) | estimation | 2026-06-13 | Done | full | Replace Phase-1 stop-gaps with a pre-shutter food-region mask, real foodRegionCoveragePercent, and Vision-backed CardDetector to unblock the iPhone 13 Pro Max fruit-plate MVP capture. |
 | [Minimum Viable Volume Estimator](#minimum-viable-volume-estimator) | estimation | 2026-06-22 | Superseded | smol | Retired before tasks/code (decision_log Decision 5): its premise that the dev-stub yields uncarveable masks proved false; the real two-view defect lives in `bugfixes/two-view-carve-no-volume`. |
 | [LiDAR First Scale Fallback](#lidar-first-scale-fallback) | estimation | 2026-06-23 | Done | smol | Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipeline falls back to LiDAR-only scale instead of aborting. |
-| [Model Production](#model-production) | estimation | 2026-06-29 | Done | full | Train → Core ML export → bundle the on-device segmenter. All 13 code tasks done (Bundle.module loader, build lineage, modelVersion derivation, export.py gates, validation IoU + export-eligibility reporting, palette↔DB bake lock); producing the trained model itself is human/GPU/device-gated — see [prerequisites.md](estimation/model-production/prerequisites.md). |
+| [Model Production](#model-production) | estimation | 2026-06-29 | Done | full | Train → Core ML export → bundle the on-device segmenter. All 13 code tasks done; two real models shipped under the Decision 11 developer-phase override (latest `24e0b022241a`, letterbox recipe, 2026-07-06) — on-device capture verify and β_c calibration remain gated, see [prerequisites.md](estimation/model-production/prerequisites.md). |
 | [Nutrition5k Calibration](#nutrition5k-calibration) | estimation | 2026-07-01 | Done | full | Bridge the Nutrition5k RGB-D dataset into the harness to fit per-class β bulk-correction factors, bake them into the food DB with lineage, report carb/protein/fat accuracy against a β=1.0 baseline, and add standalone-liquid classes to a redefined palette v1. All 45 tasks done (39 implementation + closeout consolidation); the post-checkpoint single-dominant re-fit stays gated on model-production Bucket C. |
 | [Resumable Segmenter Training](#resumable-segmenter-training) | estimation | 2026-07-02 | Done | smol | Give `train.py` crash-safe per-epoch checkpointing and a `--resume` flag for interruptible local-Mac (MPS) training runs. |
 | [Cross-dataset Calibration](#cross-dataset-calibration) | estimation | 2026-07-04 | Planned | full | Broaden per-class β calibration beyond Nutrition5k by rendering overhead depth from MetaFood3D single-food meshes and feeding them as single-class mixture rows to the existing harness, so carb staples gain samples N5k's mixed plates cannot. 23 tasks planned. |
@@ -24,6 +24,7 @@
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 | [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
 | [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root; Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
+| [Regression Suggestion Integration](#regression-suggestion-integration) | data · ui | 2026-07-05 | Done | prd | Insulin dosing as a first-class event stream conforming to medreg's insulin-event convention: dose-entry sheet from the Graph toolbar, Graph dose markers/stats, `medata://` deep links, and lock-/home-screen launcher widgets (`MeDataWidgets`). All 20 tasks across 3 contexts done. |
 
 ---
 
@@ -64,7 +65,7 @@ Make a card-pose-solve failure non-fatal when LiDAR depth is present so the pipe
 
 ## Model Production
 
-Train → Core ML export → bundle the on-device segmenter. All 13 implementable tasks are done — Bundle.module loader, build lineage manifest, modelVersion derivation, export.py equivalence/parity/channel/budget/metadata gates, validation mIoU + export-eligibility reporting, and the palette↔DB edition bake lock. What remains is human/data/hardware-gated and tracked as prerequisites, not tasks: acquire FoodSeg103, run the GPU training to the mIoU bar, run export.py on a Mac, and verify on-device (the MVP gate, Req 6.3). β_c gravimetric calibration is deferred past the MVP.
+Train → Core ML export → bundle the on-device segmenter. All 13 implementable tasks are done — Bundle.module loader, build lineage manifest, modelVersion derivation, export.py equivalence/parity/channel/budget/metadata gates, validation mIoU + export-eligibility reporting, and the palette↔DB edition bake lock. Two real models have shipped under the Decision 11 developer-phase override: `0295ea61edd9` (2026-07-05, heldout mean food-class IoU 0.4259) and the letterbox retrain `24e0b022241a` (2026-07-06, 0.4054, closing the train↔runtime square-resize skew; Decision 15 records `run_validation.py` as the developer-phase gate). Still gated as prerequisites: on-device capture verify (the MVP gate, Req 6.3) and β_c gravimetric calibration (deferred past the MVP).
 
 - [decision_log.md](estimation/model-production/decision_log.md)
 - [design.md](estimation/model-production/design.md)
@@ -170,3 +171,12 @@ Adopt the first external design handoff (archived wireframes + scaffold), amende
 - [prerequisites.md](ui/design-handoff-00/prerequisites.md)
 - [requirements.md](ui/design-handoff-00/requirements.md)
 - [tasks.md](ui/design-handoff-00/tasks.md)
+
+## Regression Suggestion Integration
+
+Insulin dosing joins meals and glucose as a first-class event stream, conforming byte-for-byte to medreg's `"insulin"` event convention so exported archives load in medreg unchanged. Dose-entry sheet from a syringe control on the Graph toolbar (two-tap default-bolus happy path, hold-to-repeat stepper, bolus/basal toggle, per-kind insulin-type Settings defaults), Graph dose markers/chip/stat card, `medata://insulin/add` and `medata://capture` deep links, and the `MeDataWidgets` extension with lock-/home-screen launcher widgets. PRD-lane spec (top-level folder, no domain directory); all 20 tasks across 3 contexts done.
+
+- [prd.md](regression-suggestion-integration/prd.md)
+- [tasks-app-ui.md](regression-suggestion-integration/tasks-app-ui.md)
+- [tasks-core-events.md](regression-suggestion-integration/tasks-core-events.md)
+- [tasks-lock-screen-widget.md](regression-suggestion-integration/tasks-lock-screen-widget.md)

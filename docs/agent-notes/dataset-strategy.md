@@ -164,6 +164,19 @@ SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
       --out tools/segmenter/build/checkpoint.pt
   ```
 
+  **Stage 3 done — two runs.** `checkpoint.pt` (square-resize recipe; shipped
+  2026-07-05 as model `0295ea61edd9`, heldout mean food-class IoU 0.4259),
+  then `checkpoint_letterbox.pt` (2026-07-06; letterbox preprocessing matching
+  the runtime path, plus independent vertical flip augmentation; shipped as
+  model `24e0b022241a`, heldout 0.4054 — slightly lower offline, but with
+  train↔runtime parity that the offline bench cannot see, expected to improve
+  real-device behaviour). Both below the strict gate; both shipped under
+  Decision 11 developer-phase overrides. `docs/ml-training.md` §5 seg-bench
+  was skipped in favour of `run_validation.py` (stage 9), which records the
+  same gate quantity into lineage without the ~16 GB fixture bundle; §6 export
+  is done — the bundled `segmenter.mlpackage` carries `24e0b022241a`. Details
+  in [model-production.md](model-production.md).
+
 ## 6. Public-data posture (confirmed)
 
 The stated preference — freely available public data, no repeated work — holds across
