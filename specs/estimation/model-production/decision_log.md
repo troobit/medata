@@ -591,3 +591,56 @@ the app depends on.
 - Subtle sub-0.5 logit distortions that keep argmax intact are no longer caught — accepted, as downstream consumes argmax/softmax only.
 
 ---
+
+## Decision 15: run_validation.py is the developer-phase validation gate; seg-bench fixture generation deferred
+
+**Date**: 2026-07-06
+**Status**: accepted
+
+### Context
+
+Two gate surfaces measure the same quantity — mean food-class mIoU on the
+held-out split. The held-out validation stage (design §2.1 stage 4,
+`tools/segmenter/run_validation.py`) computes it in Python and records it,
+per-class IoUs, the strict-gate verdict and any Decision 11 override into
+`build/lineage.json`. The `HarnessCLI seg-bench` path (`docs/ml-training.md`
+§5, pipeline Req 8.9) measures the same bar through the Swift runtime, but
+requires first generating a fixture bundle via `make_fixtures.py` — roughly
+16 GB for the full held-out split. For the second real segmenter
+(`24e0b022241a`, letterbox recipe) the question was whether to run both.
+
+### Decision
+
+During the developer phase, the held-out validation via `run_validation.py`
+— with the Decision 11 override where the strict gate is not met — is the
+recorded validation gate. §5 seg-bench fixture generation and the
+`HarnessCLI seg-bench` run are deferred; the gate quantity of record lives
+in `build/lineage.json`.
+
+### Rationale
+
+`run_validation.py` already records the identical gate quantity (mean
+food-class mIoU plus per-class IoUs) into lineage, so a seg-bench run would
+reproduce a number that is already on record. The fixture bundle costs
+~16 GB of disk and the generation compute while adding no new information
+about the model. And the offline bench is blind to the device-side gains
+the letterbox recipe specifically targets — matching the runtime
+letterbox pre-processing is only observable in on-device behaviour (stage
+7), not in an offline mIoU re-measurement.
+
+### Alternatives Considered
+
+- **Run the full seg-bench**: Exercises the Swift-side gate path end-to-end - Rejected: ~16 GB fixture bundle that duplicates the number already recorded in lineage.
+- **Subset bench (partial fixture set)**: Cheaper than the full bundle - Rejected: produces a partial mIoU that is not comparable to the recorded held-out figure or to the Req 8.9 bar.
+
+### Consequences
+
+**Positive:**
+- Zero redundant compute and disk; no 16 GB fixture bundle per iteration.
+- A single recorded gate number in `build/lineage.json` — no risk of two subtly divergent mIoU figures for the same checkpoint.
+
+**Negative:**
+- The Swift-side IoU implementation goes unexercised against real fixtures.
+- Req 8.9's named gate path (`HarnessCLI seg-bench`) stays dormant until the pre-release return-to-blocking step (Decision 11).
+
+---

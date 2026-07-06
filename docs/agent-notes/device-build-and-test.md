@@ -1,4 +1,4 @@
-# Device build & test loop (and what's next)
+# Device build & test loop
 
 How we get a build onto a physical iPhone, why the current process has friction,
 and what removes that friction. Written 2026-06-24 after a device session where
@@ -54,8 +54,8 @@ Make targets set).
 | Build | Segmenter | Capture-testable? |
 |---|---|---|
 | Debug (Xcode Run / `make deploy-device`) | stub at `-Onone`, ~20 s/mask | **No** — mask stale, `canShutter=false` ~19 s of every 20 |
-| Release, plain | none (real model not shipped yet) | **No** — **crashes at launch**; the stub is Debug-only |
-| Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — the only capture-testable build until the real model lands |
+| Release, plain (`make deploy-release`) | real Core ML model (bundled since 2026-07-05) | **Yes** — the real path; confirm `segmenterSource=coreml_<sha12>` in the launch log |
+| Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — deterministic stub masks, when the real model's output would confound the test |
 
 The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
 window is unhittable; details and the log tells are in the sections below.
@@ -74,29 +74,27 @@ Re-derived at least four times — this is the recipe:
    context window; several were truncated). Use `make logs-device` and grep
    `/tmp/medata-device.log` for the relevant `event=` lines instead.
 
-## What is next
+## The real model shipped (Track 3 — resolved)
 
-**The real ML segmenter model (Track 3) is the next thing to build, and it is the
-thing that dissolves every pain described below.** Today the capture pipeline runs
-against `StubInferenceEngine` — a placeholder that paints a fixed food region. The
-next milestone is to train and integrate the 35-class CoreML segmenter
-(`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`, see `tools/segmenter/export.py`) and
-drop the stub.
+**The real ML segmenter shipped 2026-07-05 (`coreml_0295ea61edd9`) and was
+superseded 2026-07-06 by the letterbox retrain (`coreml_24e0b022241a`)** — see
+`model-production.md`. A plain Release build now bundles the real Core ML model
+(`MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`); `make
+deploy-release` is the deploy path. That dissolved the pains this note
+predicted it would:
 
-Why it is the priority, beyond accuracy:
+1. **Estimates are real** (uncalibrated β = 1.0, so over-estimating — see the
+   model-production note), not painted by the stub's fixed food region.
+2. **Plain Release no longer crashes.** Release binds `CoreMLInferenceEngine`
+   natively; `make deploy-release-stub` remains only for stub-based capture
+   testing.
+3. **Speed friction gone on the real path** — the model runs via Core ML, not
+   the `-Onone` Debug stub.
 
-1. **It makes estimates real.** The stub labels ~38%+ of the frame as food, which
-   is why placeholder carb values are wild. The real model fixes that for free.
-2. **It removes the Debug/Release split.** Release builds are meant to bind the
-   real model (`CoreMLInferenceEngine`). It doesn't exist yet, so a plain Release
-   build has no segmenter and crashes — which is the entire reason we hand-force
-   the stub into Release to test (below). Once the model ships, Release builds run
-   the real engine natively with no flag-flipping.
-3. **It removes the speed friction.** The real model runs on the Neural Engine
-   (sub-second target). Normal Xcode Run-and-test resumes.
-
-So the friction below is **temporary and self-resolving** with Track 3. Do not
-build process tooling to paper over it (see "Less is more").
+The friction sections below are kept as history and because the Debug-stub
+slowness still applies to Debug builds; the "temporary and self-resolving"
+prediction has come true — do not build process tooling around what remains
+(see "Less is more").
 
 ## The process problem we keep hitting
 
@@ -121,17 +119,19 @@ lidarCoveragePercent=… ok … canShutter=false`. Everything green except
 `canShutter`, plus `latencyMs` in the tens of thousands → it's a Debug build and
 the mask is stale. Test on Release.
 
-This means: **any device test of the capture/shutter flow has to be a Release build
-until the real model lands.** That is the process impact — there is currently no
-quick Xcode-Run loop for the capture flow.
+This means: **any device test of the capture/shutter flow has to be a Release
+build** (`make deploy-release` for the real model, `make deploy-release-stub`
+for the stub). There is no quick Xcode-Run (Debug) loop for the capture flow —
+the Debug stub is still too slow.
 
 ## Getting a build onto the device — the two paths
 
 ### Path A — Xcode Run (Debug)
 Tap Run in Xcode, or `xcodebuild -configuration Debug -destination 'id=<udid>'`.
 Fine for UI/non-capture work. **Useless for capture testing** (stub too slow, per
-above). A plain Release Run from Xcode **crashes** — the stub is Debug-only and the
-real model doesn't exist, so the app launches with no segmenter.
+above). A plain Release Run from Xcode used to crash (no segmenter before
+2026-07-05); it now runs the real model, but logs `buildStamp=unstamped` —
+prefer `make deploy-release` so the stamp is checkable.
 
 ### Path B — CLI Release with the stub forced on (what we use to test capture)
 

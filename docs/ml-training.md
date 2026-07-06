@@ -7,8 +7,11 @@
 > Status: Sections 1–11 drafted (explanation + runbook). The dataset/training/
 > fixture scripts named in §§3–5 now exist (`build_class_mapping.py`,
 > `prepare_dataset.py`, `train.py`, `make_fixtures.py`), authored and
-> smoke-tested on synthetic data; the real runs still need the FoodSeg103
-> dataset and a GPU.
+> smoke-tested on synthetic data.
+> **Update 2026-07-06:** the real runs have happened — two real models have
+> shipped (`0295ea61edd9`, 2026-07-05; letterbox-trained `24e0b022241a`,
+> 2026-07-06), both trained locally on Apple-silicon MPS. See the §5
+> developer-phase gate note for how they were validated.
 
 This document is the end-to-end recipe for producing the two model artefacts that
 the iOS app depends on at runtime:
@@ -32,7 +35,8 @@ document is the ML-specific overlay on top of those.
 For where this fits in the runtime wiring — what's already built versus what the
 trained model unblocks — see
 [`agent-notes/pipeline-wiring-status.md`](agent-notes/pipeline-wiring-status.md)
-(only the trained checkpoint remains).
+(only the trained checkpoint remained; real checkpoints have since shipped —
+see the status note above).
 
 ## Contents
 
@@ -235,8 +239,8 @@ first.
 Scripts marked **(exists)** are in the repo today. The dataset/training/fixture
 scripts (`build_class_mapping.py`, `prepare_dataset.py`, `train.py`,
 `make_fixtures.py`) now exist alongside `export.py` and the `HarnessCLI` benches.
-They are authored and smoke-tested on tiny synthetic data; the real runs still
-need the FoodSeg103 dataset (§3a) and a GPU (§1).
+The real runs have since happened (status note at the top of this document);
+the commands below remain the canonical recipe.
 
 ## 3. Dataset preparation
 
@@ -336,6 +340,19 @@ For long runs on the local Mac:
 
 The bar is mean **food-class** mIoU ≥ 0.60 (Req 8.9). `HarnessCLI seg-bench`
 **(exists)** is the gate, but note how it works: it does **not** run the model.
+
+> **Developer-phase gate note (2026-07-06):** seg-bench has not been run for the
+> shipped models, and its held-out fixture bundle has not been generated — it
+> would be ~16 GB and record nothing beyond what
+> `tools/segmenter/run_validation.py` already writes: the same mean food-class
+> IoU gate quantity, recorded into `build/lineage.json`, with the
+> model-production Decision 11 developer-phase override
+> (`--allow-below-gate --reason "..."`) when the 0.60 bar is missed. Both shipped
+> models were gated and overridden that way (`0295ea61edd9` mean 0.4259;
+> letterbox-trained `24e0b022241a` mean 0.4054 — the letterbox recipe closes the
+> train↔runtime square-resize skew, which this offline bench cannot see).
+> seg-bench remains the mechanism described below for when fixture generation is
+> worth the disk.
 It reads fixtures containing the model's FP16 probability tensors plus
 ground-truth argmax, stamped with the checkpoint's SHA-256 (the SHA guards
 against benching stale predictions). So you first run the trained model over the
@@ -572,7 +589,8 @@ shipped app is wrong.
 
 ### Runtime wiring
 - [`agent-notes/pipeline-wiring-status.md`](agent-notes/pipeline-wiring-status.md)
-  — what's built vs what the trained checkpoint unblocks (only Blocker 1 remains).
+  — what's built vs what the trained checkpoint unblocks (written before the
+  first real checkpoint shipped; see the status note at the top).
 - [`architecture.md`](architecture.md) §9 — the `Bundle.main` → `Bundle.module`
   loader alignment, now closed (model-production tasks 1–2; §7).
 - [`specs/capture/rawframe-rgb-conversion/`](../specs/capture/rawframe-rgb-conversion/) +
