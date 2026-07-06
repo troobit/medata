@@ -22,6 +22,7 @@ private let intrinsics = CameraIntrinsics(
 private func syntheticPlaneDepthMap(
     width w: Int = 64, height h: Int = 48,
     normal: Vec3, distanceMm dPlane: Float,
+    uniformConfidence: UInt8 = 255,
     confidenceOverrides: [(x: Int, y: Int, conf: UInt8)] = [],
     depthOverrides: [(x: Int, y: Int, mm: Float)] = []
 ) -> DepthMap {
@@ -33,7 +34,7 @@ private func syntheticPlaneDepthMap(
         distortion: [], imageWidth: w, imageHeight: h
     )
     var depthBytes = Data(count: w * h * 4)
-    var confBytes = Data(repeating: 255, count: w * h)
+    var confBytes = Data(repeating: uniformConfidence, count: w * h)
     let n = normal.normalised()
     depthBytes.withUnsafeMutableBytes { rawPtr -> Void in
         let buf = rawPtr.bindMemory(to: Float.self)
@@ -216,6 +217,58 @@ final class LiDARPlaneFitterTests: XCTestCase {
     // T88: production residualMaxMm raised from 8 to 20. Verify the default value.
     func testProductionResidualMaxIsTwentyMm() {
         XCTAssertEqual(LiDARPlaneFitter.residualMaxMm, 20)
+    }
+
+    // Regression for `lidar-plane-fit-matte-table-confidence` (2026-07-06 device
+    // report: "1 view complained of no flat surface on a matte table"). ARKit maps
+    // its `ARConfidenceLevel.{low,medium,high}` to bytes `{0,127,255}` (§6.0). A
+    // matte / low-reflectance table returns a WEAKER LiDAR signal, so the
+    // confidence map is dominated by MEDIUM (127), not HIGH (255). The pre-fix
+    // τ_conf = 0.66 gate (`127/255 = 0.498 < 0.66`) rejected every medium-confidence
+    // table pixel → zero candidate points → `noLidarPoints` → the user-facing "no
+    // flat surface". The fix lowers τ_conf so medium-or-better confidence is
+    // accepted (only genuine LOW/zero returns are dropped), letting a matte table
+    // still fit; the RANSAC 5 mm inlier band + 20 mm residual gate still reject a
+    // bad plane, and σ_plane carries any degradation (consistent with Decision 46).
+    func testFitsMatteTableWithUniformMediumConfidence() throws {
+        let trueNormal = Vec3(0, 1, 0)
+        let trueDist: Float = 100
+        let depth = syntheticPlaneDepthMap(
+            normal: trueNormal, distanceMm: trueDist,
+            uniformConfidence: 127          // ARKit .medium — a matte table
+        )
+        let foodMask = centredFoodMask(foodRectX: 250..<390, foodRectY: 200..<320)
+        let plane = try LiDARPlaneFitter.fit(.init(
+            depth: depth,
+            colourIntrinsics: intrinsics,
+            foodRegionMask: foodMask,
+            gravityCamera: trueNormal
+        ))
+        let angleDeg = acos(max(-1, min(1, plane.normal.dot(trueNormal)))) * 180 / .pi
+        XCTAssertLessThan(angleDeg, 1.0,
+                          "recovered normal off by \(angleDeg)°; medium-confidence table must still fit")
+        XCTAssertEqual(plane.distanceMm, trueDist, accuracy: 2.0)
+    }
+
+    // Guard the lower bound: genuine LOW/zero-confidence returns must STILL be
+    // rejected, so a table that produces only unreliable depth refuses rather than
+    // fitting a garbage plane. τ_conf accepts medium (127) but not low (0).
+    func testRejectsUniformLowConfidenceTable() {
+        let trueNormal = Vec3(0, 1, 0)
+        let depth = syntheticPlaneDepthMap(
+            normal: trueNormal, distanceMm: 100,
+            uniformConfidence: 0            // ARKit .low — unreliable returns
+        )
+        let foodMask = centredFoodMask(foodRectX: 250..<390, foodRectY: 200..<320)
+        XCTAssertThrowsError(try LiDARPlaneFitter.fit(.init(
+            depth: depth,
+            colourIntrinsics: intrinsics,
+            foodRegionMask: foodMask,
+            gravityCamera: trueNormal
+        ))) { err in
+            XCTAssertEqual(err as? SupportPlaneError, .noLidarPoints,
+                           "all-low-confidence table must refuse, not fit a garbage plane")
+        }
     }
 
     // Regression for `lidar-plane-fit-degenerate-on-clean-capture` real-mask

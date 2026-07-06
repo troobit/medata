@@ -77,6 +77,23 @@ composition only; all behaviour is in the model and is unit-tested.
   gate on every real capture (`supportplane.end candidates=N inliers=0` → "no flat
   surface" in both modes). Treat `inliers=0` with large `candidates` as a convention/input
   bug, never a scene problem. Same bugfix report as above.
+- **"No flat surface" specifically on a *matte* table = LiDAR confidence starvation, not
+  gravity.** `LiDARPlaneFitter` seeds RANSAC only from table pixels clearing `τ_conf`.
+  ARKit maps `ARConfidenceLevel.{low,medium,high}` → bytes `{0,127,255}`; the old
+  `τ_conf = 0.66` admitted **only HIGH (255)**. Matte / low-reflectance surfaces return a
+  weaker signal → mostly **MEDIUM (127 = 0.498)** → every candidate filtered → `candidates≈0`
+  / `noLidarPoints` → "no flat surface". Lowered to `0.40` (Decision 49) to accept
+  MEDIUM-or-better and drop only LOW/zero. Diagnostic tell vs the gravity bug: gravity =
+  large `candidates`, `inliers=0`; confidence starvation = `candidates≈0` outright. Regression:
+  `specs/bugfixes/lidar-plane-fit-matte-table-confidence/report.md`.
+- **Speckled-coloured mask over the food photo is a MODEL artefact, not a stride/format
+  bug.** The whole image pipeline (YCbCr→BGRA `PixelBufferAdapter`, `canonicaliseToRGB8`,
+  letterbox preprocess, `CoreMLSegmenter` CHW↔HWC auto-detect, `PostProcessing` argmax,
+  `MaskArtefactWriter` encode, `MaskOverlayLoader` colourise) has been re-audited
+  stride-by-stride and is clean. Tell: `segmenter.mask` shows a **coherent 92–99% background**
+  (`topClass=34`) with 4–20 scattered classes — coherent background = valid model input
+  (a corrupted input gives *random* argmax). It is the under-trained segmenter's food-region
+  noise, correctly colourised. Track in the model work-stream; do not hunt for a code bug.
 
 - **RefusalSheet dismissal is wired through `dismissRefusal()`, not the binding setter (Decision 20).** `model.refusal` is strictly derived from `state == .refused` — the setter on the model is gone. The view-side `refusalBinding` calls `model.dismissRefusal()` when SwiftUI writes nil (swipe-down on the sheet). The model transitions `.refused → .ready(freshSnapshot())`, clearing `firstFrame`/`firstFrameTiltDeg`/`inFlightMode`. `tabSelectionChanged(to: nonPhoto)` also dismisses `.refused` (same shape as `.ready`/`.trackingLost`); `.permissionDenied` still preserves across tab switches. The explicit `tryAgain()` path is unchanged. Regression: `specs/bugfixes/surface-not-detected/report.md`.
 

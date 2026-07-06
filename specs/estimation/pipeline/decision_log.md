@@ -1713,3 +1713,45 @@ Front matter is the only location `rune` tolerates free-form text while preservi
 
 ---
 
+
+## Decision 49: Accept medium-confidence LiDAR points in the support-plane fit (τ_conf 0.66 → 0.40)
+
+**Date**: 2026-07-06
+**Status**: accepted
+
+### Context
+
+An on-device report (2026-07-06) said single-view (LiDAR) capture failed with "no flat surface" **specifically on a matte table**, after the gravity fix (`09aab63`) had resolved the general 1-view plane-fit failure. `LiDARPlaneFitter.collectCandidatePoints` seeds RANSAC only from table pixels whose normalised confidence clears `τ_conf`. The §6.2 value was `0.66`, defined as "HIGH": since iOS maps `ARConfidenceLevel.{low,medium,high}` to bytes `{0,127,255}`, `0.66` admits only HIGH (255) — MEDIUM (`127/255 = 0.498`) and LOW (0) are both rejected.
+
+A matte / low-reflectance surface returns a weaker LiDAR signal, so ARKit reports MEDIUM confidence across most of the table rather than HIGH. The HIGH-only gate therefore discarded nearly every candidate point on a matte table → fewer than three points → `noLidarPoints`, surfaced to the user as "no flat surface". The failure is confidence-starvation, not geometry: the table is flat and the depth is broadly correct, just certified MEDIUM.
+
+### Decision
+
+Lower `LiDARPlaneFitter.confidenceThreshold` (τ_conf) from `0.66` to `0.40`, so MEDIUM-or-better confidence (0.498) is accepted and only genuine LOW/zero returns are dropped.
+
+### Rationale
+
+Medium-confidence LiDAR depth on a real table is still approximately planar; it is noisier than high-confidence depth but not wrong. The existing gates already bound the damage: RANSAC's ±5 mm inlier band and gravity-angle gate reject off-plane and mis-oriented triples, and the 20 mm residual gate (Decision 46) rejects a fit that does not hold. Any residual medium-confidence noise is carried into the confidence surface via `σ_plane = exp(−r/5)`, the same degradation channel Decision 46 introduced when it raised the residual ceiling. Refusing outright on a flat matte table is strictly worse than fitting a slightly noisier plane and honestly down-weighting its confidence. `0.40` sits comfortably below `0.498` so MEDIUM always clears it, and comfortably above `0` so LOW never does.
+
+### Alternatives Considered
+
+- **Keep τ_conf = 0.66 (HIGH-only)**: Maximises per-point reliability - Rejected; it makes the fitter brittle to exactly the common surface (a matte table) that produces MEDIUM confidence, forcing a hard refusal where a usable fit exists.
+- **Accept all points including LOW (τ_conf = 0)**: Maximises coverage - Rejected; LOW/zero returns are frequently spurious (out-of-range, absorptive, edge pixels) and would let a garbage plane through on truly unreliable depth, defeating the refusal path that protects the estimate.
+- **Card-scale (`CardOnlyPlaneFitter`) fallback when LiDAR starves**: A different plane source - Rejected for this fix as heavier and orthogonal; single-view LiDAR mode has no card in frame, so it does not apply. Remains the fallback for the no-LiDAR two-view path.
+
+### Consequences
+
+**Positive:**
+- Single-view capture succeeds on matte / low-reflectance tables instead of refusing.
+- Consistent with Decision 46: tolerate a degraded-but-usable fit, carry the degradation in `σ_plane` rather than refusing.
+- Portable: the change is on the normalised 0..255 confidence byte, so the Android/ARCore adapter benefits identically.
+
+**Negative:**
+- Medium-confidence depth is noisier, so plane residuals rise on average and `σ_plane` drops slightly on matte captures (correctly reflected in the confidence surface, not hidden).
+- A table that produces only LOW confidence (e.g. a black matte or highly reflective surface) still refuses; that harder case is left for future work (candidate: a card-scale or relaxed-geometry fallback).
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`confidenceThreshold`). Design §6 confidence-gate references updated to 0.40. Regression tests in `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` (`testFitsMatteTableWithUniformMediumConfidence`, `testRejectsUniformLowConfidenceTable`). Bugfix report `specs/bugfixes/lidar-plane-fit-matte-table-confidence/report.md`.
+
+---
