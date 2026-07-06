@@ -71,8 +71,3 @@ xcrun devicectl device process launch --device "$DEVICE_UDID" \
 
 echo ""
 echo "DEPLOYED BUILD STAMP: $BUILD_STAMP  (Release + forced stub)"
-echo "Launch from the HOME SCREEN after this, never Xcode Run — an Xcode Run"
-echo "reinstalls a Debug build over it. Confirm on-device before trusting a"
-echo "capture: the launch log line must show buildStamp=$BUILD_STAMP and"
-echo "segmenterSource=stub, and preshutter.mask.update latencyMs must be"
-echo "sub-second (tens of thousands of ms => you are on a Debug build)."
