@@ -131,14 +131,22 @@ struct SegmentationReviewView: View {
 
     // §5.3 / Decision 7: advance to Result. `Carbs` — estimation already done, so
     // the label does not imply pending work.
+    // The pill sizing/background/contentShape live INSIDE the Button's label: a
+    // Button's tap gesture only covers its label, so `.frame(maxWidth:)` etc.
+    // applied OUTSIDE the Button draw a wide pill whose surface is dead — only
+    // the centred text was tappable, so the Carbs button read as unresponsive
+    // (same UIKit hit-testing trap fixed for CaptureErrorOverlay in 09aab63).
     private var carbsAction: some View {
-        Button("Carbs", action: onCarbs)
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(Color.captureBackground)
-            .accessibilityIdentifier("review.carbs")
+        Button(action: onCarbs) {
+            Text("Carbs")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                .foregroundStyle(Color.captureBackground)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .accessibilityIdentifier("review.carbs")
     }
 
     private struct ClassRow {

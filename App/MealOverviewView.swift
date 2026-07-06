@@ -137,23 +137,32 @@ struct MealOverviewView: View {
         .accessibilityIdentifier("overview.foods")
     }
 
+    // Pill sizing/background/contentShape live INSIDE each Button label so the
+    // whole pill is tappable, not just the centred text (the dead-surface trap
+    // fixed for CaptureErrorOverlay in 09aab63 and SegmentationReview here).
     private var actionRow: some View {
         HStack(spacing: 12) {
-            Button("Adjust", action: onAdjust)
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.textPrimary, lineWidth: 1.5))
-                .foregroundStyle(Color.textPrimary)
-                .accessibilityIdentifier("overview.adjust")
+            Button(action: onAdjust) {
+                Text("Adjust")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.textPrimary, lineWidth: 1.5))
+                    .foregroundStyle(Color.textPrimary)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("overview.adjust")
 
-            Button("Full result", action: onFullResult)
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                .foregroundStyle(Color.captureBackground)
-                .accessibilityIdentifier("overview.fullResult")
+            Button(action: onFullResult) {
+                Text("Full result")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(Color.captureBackground)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("overview.fullResult")
         }
     }
 

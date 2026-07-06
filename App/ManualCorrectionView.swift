@@ -100,14 +100,20 @@ struct ManualCorrectionView: View {
     // (Req 14.5 / Decision 21); the original estimate is still preserved by
     // `appendCorrection`, which never overwrites it.
 
+    // Pill sizing/background/contentShape live INSIDE the Button label so the
+    // whole pill is tappable, not just the centred text (the dead-surface trap
+    // fixed for CaptureErrorOverlay in 09aab63 and SegmentationReview here).
     private var saveAction: some View {
-        Button("Save", action: save)
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(Color.captureBackground)
-            .accessibilityIdentifier("correction.save")
+        Button(action: save) {
+            Text("Save")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                .foregroundStyle(Color.captureBackground)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .accessibilityIdentifier("correction.save")
     }
 
     private func perFoodBinding(_ name: String) -> Binding<Int> {
