@@ -49,7 +49,12 @@ struct MedataApp: App {
         // per Decision 12. Two `MLModel` loads at launch (< 50 ms) eliminate
         // the in-shutter / pre-shutter race entirely.
         let preShutter = PreShutterSegmenter(
-            segmenter: try! Pipeline.makeSegmenter(),
+            // `.livePreview` routes the ~2–3.5 Hz pre-shutter `segmenter.mask`
+            // log to `.debug` so it does not flood the persisted unified-log
+            // store and evict `launch` / `supportplane.end` (the on-device
+            // plane-fit-refusal diagnostics). The Pipeline's own segmenter keeps
+            // the default `.perCapture` (`.info`).
+            segmenter: try! Pipeline.makeSegmenter(maskLog: .livePreview),
             palette: .v1Standard,
             source: Pipeline.preShutterSourceTag == "pre_shutter_stub"
                 ? .preShutterStub : .preShutterCoreML

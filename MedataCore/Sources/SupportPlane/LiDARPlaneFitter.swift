@@ -24,6 +24,12 @@ public enum LiDARPlaneFitter {
     public nonisolated(unsafe) static var debugLastFoodBBoxY: Int = -1
     public nonisolated(unsafe) static var debugLastFoodBBoxW: Int = -1
     public nonisolated(unsafe) static var debugLastFoodBBoxH: Int = -1
+    // Inlier RMS residual (mm) of the last fit, populated at step 4 before the
+    // residual gate. `-1` sentinel means the fit refused BEFORE residual was
+    // computed (e.g. `noLidarPoints`/`lidarFitDegenerate`) — so the
+    // `supportplane.end` trace distinguishes a residual-too-high refusal (a
+    // real-but-noisy plane) from a point-starvation or degeneracy refusal.
+    public nonisolated(unsafe) static var debugLastResidualMm: Float = -1
 
     // Tunable parameters per design §6.2 ("Parameter justification").
     static let lowerEdgeBandMm: Float = 30
@@ -85,6 +91,7 @@ public enum LiDARPlaneFitter {
         // Step 1: collect candidate 3-D points in the colour-image lower-edge band.
         debugLastFoodBBoxX = -1; debugLastFoodBBoxY = -1
         debugLastFoodBBoxW = -1; debugLastFoodBBoxH = -1
+        debugLastResidualMm = -1
         let points = try collectCandidatePoints(inputs)
         debugLastCandidatePointCount = points.count
         debugLastInlierCount = 0
@@ -115,6 +122,7 @@ public enum LiDARPlaneFitter {
         // Step 4: residual_mm = sqrt(mean(squared inlier signed-distances)).
         let residual = computeResidual(points: bestInliers.map { points[$0] },
                                        normal: refinedNormal, d: refinedD)
+        debugLastResidualMm = residual
         if residual > inputs.residualMaxMm {
             throw SupportPlaneError.lidarFitResidualTooHigh
         }

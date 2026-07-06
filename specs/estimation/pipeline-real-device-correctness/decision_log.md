@@ -610,3 +610,44 @@ The spec is `Implemented` and the code matches it; these are documentation-corre
 - The `Blocked-by:` lines are now hand-maintained for tasks 7/11/16; a future `rune update` touching those tasks may re-introduce the serializer artifact and need re-trimming.
 
 ---
+
+## Decision 18: Pre-shutter mask log at .debug so it does not evict plane-fit diagnostics
+
+**Date**: 2026-07-06
+**Status**: accepted
+
+### Context
+
+Every on-device plane-fit investigation this session ("no flat surface" on real captures) has been blind: the collected device log for a refusal never contained `event=supportplane.end success=false` (the counters that explain the refusal) nor `event=launch buildStamp=…` (needed to confirm which build was tested). The fresh log for the matte-table failure was 22 `event=segmenter.mask` lines across a 6-second window and nothing else.
+
+Root cause: the pre-shutter live segmenter runs `CoreMLSegmenter.segment()` at ~2–3.5 Hz throughout the capture-ready states (Decision 3 cadence), and `segment()` emits `event=segmenter.mask` at `Logger.info` on every call — Release included. Over a multi-minute `log collect --last` window that is thousands of `.info` lines flooding the persisted unified-log store and evicting the low-frequency `.info` events (`launch`, `supportplane.end`, `estimate.*`) before collection.
+
+### Decision
+
+Route the pre-shutter (`.livePreview`) `segmenter.mask` log to `.debug`; keep the one-shot shutter-time (`.perCapture`) capture at `.info`. Implemented as a `CoreMLSegmenter.MaskLogCadence` set per instance (pre-shutter = `.livePreview`, Pipeline = default `.perCapture`). Also add `debugLastResidualMm` to the `supportplane.end success=false` trace so a residual-too-high refusal is distinguishable from point-starvation/degeneracy.
+
+### Rationale
+
+`.debug` logs live in the in-memory debug tier, not the persisted tracev3 store, so they cannot evict persisted `.info` events. The pre-shutter flood stops and `launch` / `supportplane.end` survive `log collect`, while the shutter-time capture keeps its single persisted `.info` mask line. `make logs-device` already passes `--debug`, so a freshly-collected pre-shutter mask is still visible — just no longer at flood volume. This is the idiomatic unified-logging split: high-frequency diagnostics at `.debug`, low-frequency events at `.info`.
+
+### Alternatives Considered
+
+- **Suppress the pre-shutter mask log entirely**: Guaranteed flood-free - Rejected; it discards a useful live-coverage signal even in Debug, where `.debug` already achieves flood-free persisted logs.
+- **Throttle the pre-shutter log to ~1/sec at .info**: Bounds volume while keeping `.info` - Rejected; still persists ~1800 lines over 30 min (partial eviction risk) and adds lock-guarded timestamp state for no benefit over the tier split.
+- **Widen the Makefile `log collect` window / narrow the predicate**: Operational tweak - Rejected; it does not address eviction — a longer window collects the same evicted store, and narrowing the predicate cannot recover lines the store already dropped.
+
+### Consequences
+
+**Positive:**
+- `launch` and `supportplane.end` (with `candidates`/`inliers`/`residual_mm`/`bbox`) survive collection → plane-fit refusals are finally diagnosable on device.
+- No estimation-path behaviour change; purely observability.
+- The build stamp is visible again, so "failed on device" can be tied to a known build.
+
+**Negative:**
+- Continuous pre-shutter coverage is no longer persisted in Release (only the in-memory debug ring); a capture must be collected reasonably promptly to see recent pre-shutter masks. Acceptable — the shutter-time `.info` mask and the `supportplane.end` bbox counters cover the capture that matters.
+
+### Impact
+
+`CoreMLSegmenter`, `PipelineFactory.makeSegmenter`, `App/App.swift`, `LiDARPlaneFitter` (residual counter), `Pipeline` (trace field). Bugfix report `specs/bugfixes/capture-log-flood-evicts-plane-fit-diagnostics/report.md`.
+
+---
