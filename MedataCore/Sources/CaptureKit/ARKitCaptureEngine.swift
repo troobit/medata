@@ -243,7 +243,12 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             imageWidth: imageWidth, imageHeight: imageHeight
         )
 
-        let gravity = Vec3(simd_float3(0, -1, 0))  // ARKit gravity-aligned: world +Y up.
+        // World-up rotated into the §6.0 camera frame (RawFrame.gravity contract).
+        // Must be pose-dependent: a constant here is only correct at the identity
+        // pose and fails the plane fitter's gravity gate on every real capture
+        // (bug capture-no-flat-surface-gravity-frame).
+        let worldFromCamera = Mat4(cam.transform)
+        let gravity = CameraGravity.worldUpInCameraFrame(worldFromCamera: worldFromCamera)
 
         let depth: DepthMap? = arFrame.sceneDepth.map { sceneDepth in
             buildDepthMap(scene: sceneDepth, depthFromColour: matrix_identity_float4x4)
@@ -260,7 +265,7 @@ public final class ARKitCaptureEngine: NSObject, CaptureEngine, @unchecked Senda
             timestampMonotonicNs: Int64(arFrame.timestamp * 1_000_000_000),
             intrinsics: intrinsics,
             gravity: gravity,
-            worldFromCamera: Mat4(cam.transform),
+            worldFromCamera: worldFromCamera,
             depth: depth
         )
     }

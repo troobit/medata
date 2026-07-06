@@ -61,35 +61,43 @@ struct CaptureErrorOverlay: View {
         .accessibilityIdentifier("captureError.chip")
     }
 
+    // The pill sizing/background/contentShape live INSIDE each Button's label:
+    // a Button's tap gesture only covers its label, so `.frame(maxWidth:)` etc.
+    // applied outside the Button draw a wide pill whose surface is dead — the
+    // ineffective shape of the first "dead error buttons" fix (3429ddc).
     private var actions: some View {
         VStack(spacing: 12) {
-            Button("Retry", action: onRetry)
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                .foregroundStyle(Color.captureBackground)
-                // Make the whole pill tappable: without this only the centred
-                // text label receives touches, so taps on the wide coloured area
-                // are dead (the `.frame(maxWidth:.infinity)` expansion is not
-                // hit-tested on its own).
-                .contentShape(RoundedRectangle(cornerRadius: 12))
-                .accessibilityIdentifier("captureError.retry")
+            Button(action: onRetry) {
+                Text("Retry")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(Color.captureBackground)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("captureError.retry")
 
-            Button("2-view", action: onTwoView)
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
-                .foregroundStyle(Color.captureChromeText)
-                .contentShape(RoundedRectangle(cornerRadius: 12))
-                .accessibilityIdentifier("captureError.twoView")
+            Button(action: onTwoView) {
+                Text("2-view")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
+                    .foregroundStyle(Color.captureChromeText)
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityIdentifier("captureError.twoView")
 
-            Button("Cancel", action: onCancel)
-                .font(.body.weight(.medium))
-                .frame(height: 44)
-                .foregroundStyle(Color.captureChromeText.opacity(0.85))
-                .accessibilityIdentifier("captureError.cancel")
+            Button(action: onCancel) {
+                Text("Cancel")
+                    .font(.body.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .foregroundStyle(Color.captureChromeText.opacity(0.85))
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("captureError.cancel")
         }
     }
 }
