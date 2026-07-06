@@ -45,6 +45,21 @@ final class TrendsModel {
     private(set) var glucose: [GlucoseReading] = []
     private(set) var insulin: [InsulinEntry] = []
 
+    // Chart series and axis maxima are shaped ONCE per reload and stored, not
+    // recomputed on every access. They were computed properties, and the chart
+    // body reads them quadratically — `mappedCarb` calls `carbAxisMax` (→
+    // `carbBars`) once per bar, each axis tick re-derives them, and every access
+    // re-ran `TrendsMath.dailyBuckets` and minted fresh point UUIDs. On Month
+    // (≈30 day-buckets over a month of seeded glucose) that blew up into a
+    // multi-second main-thread render that froze the range picker mid-selection.
+    // Storing them collapses each render to array reads with stable identity.
+    // Bug `graph-month-selection-hang` 2026-07-06.
+    private(set) var carbBars: [TrendsChartPoint] = []
+    private(set) var glucoseLine: [TrendsChartPoint] = []
+    private(set) var insulinMarkers: [InsulinMarker] = []
+    private(set) var carbAxisMax: Double = 0
+    private(set) var autoGlucoseMax: Double = 0
+
     private let store: any PersistenceStore
     private let calendar = Calendar.current
     private var subscription: Task<Void, Never>?
@@ -87,6 +102,39 @@ final class TrendsModel {
         }
         let doses = (try? await store.events(in: iv.start...iv.end, type: EventType.insulin)) ?? []
         insulin = doses.compactMap(Self.insulinEntry(from:))
+        recomputeSeries(in: iv)
+    }
+
+    // Shape the raw rows into plottable series once, after a reload. Everything
+    // here was previously a computed property re-evaluated on every chart-body
+    // access (see the `carbBars` doc comment).
+    private func recomputeSeries(in iv: DateInterval) {
+        switch range {
+        case .day:
+            carbBars = meals.map { TrendsChartPoint(date: $0.createdAt, value: carbTotal($0)) }
+            glucoseLine = glucose
+                .sorted { $0.timestamp < $1.timestamp }
+                .map { TrendsChartPoint(date: $0.timestamp, value: $0.mmolL) }
+            insulinMarkers = insulin.map {
+                InsulinMarker(date: $0.timestamp, units: $0.units, kind: $0.kind)
+            }
+        case .week, .month:
+            let carbSamples = meals.map { DatedValue(date: $0.createdAt, value: carbTotal($0)) }
+            carbBars = TrendsMath.dailyBuckets(carbSamples, in: iv, calendar: calendar)
+                .map { TrendsChartPoint(date: $0.start, value: $0.total) }
+            let glucoseSamples = glucose.map { DatedValue(date: $0.timestamp, value: $0.mmolL) }
+            glucoseLine = TrendsMath.dailyBuckets(glucoseSamples, in: iv, calendar: calendar)
+                .compactMap { bucket in
+                    bucket.average.map { TrendsChartPoint(date: bucket.start, value: $0) }
+                }
+            let insulinSamples = insulin.map { DatedValue(date: $0.timestamp, value: $0.units) }
+            insulinMarkers = TrendsMath.dailyBuckets(insulinSamples, in: iv, calendar: calendar)
+                .filter { $0.count > 0 }
+                .map { InsulinMarker(date: $0.start, units: $0.total, kind: nil) }
+        }
+        carbAxisMax = TrendsMath.carbAxisMax(forMaxCarbs: carbBars.map(\.value).max() ?? 0)
+        let dataMax = glucoseLine.map(\.value).max() ?? 0
+        autoGlucoseMax = max(TrendsMath.targetHighMmolL + 2, (dataMax + 1).rounded(.up))
     }
 
     // Decodes an `insulin` event row: `value` = units, metadata JSON carries
@@ -106,68 +154,6 @@ final class TrendsModel {
     // through the store's `eventsDidChange` tick (App 8).
     func deleteDose(id: UUID) async {
         try? await store.deleteInsulinEvent(id: id)
-    }
-
-    // MARK: - Chart series
-
-    // Day: one bar per meal at its timestamp. Week/Month: one bar per day with
-    // the day's total carbs (§10.2/§10.3).
-    var carbBars: [TrendsChartPoint] {
-        switch range {
-        case .day:
-            return meals.map { TrendsChartPoint(date: $0.createdAt, value: carbTotal($0)) }
-        case .week, .month:
-            let samples = meals.map { DatedValue(date: $0.createdAt, value: carbTotal($0)) }
-            return TrendsMath.dailyBuckets(samples, in: interval, calendar: calendar)
-                .map { TrendsChartPoint(date: $0.start, value: $0.total) }
-        }
-    }
-
-    // Day: raw readings. Week/Month: per-day average glucose, empty days dropped
-    // so the line has no false zero dips (§10.3).
-    var glucoseLine: [TrendsChartPoint] {
-        switch range {
-        case .day:
-            return glucose
-                .sorted { $0.timestamp < $1.timestamp }
-                .map { TrendsChartPoint(date: $0.timestamp, value: $0.mmolL) }
-        case .week, .month:
-            let samples = glucose.map { DatedValue(date: $0.timestamp, value: $0.mmolL) }
-            return TrendsMath.dailyBuckets(samples, in: interval, calendar: calendar)
-                .compactMap { bucket in
-                    bucket.average.map { TrendsChartPoint(date: bucket.start, value: $0) }
-                }
-        }
-    }
-
-    // Day: one marker per dose at its administration time. Week/Month: one
-    // marker per non-empty day carrying the day's total units, x-aligned with
-    // the carb bars' day buckets (App 6).
-    var insulinMarkers: [InsulinMarker] {
-        switch range {
-        case .day:
-            return insulin.map {
-                InsulinMarker(date: $0.timestamp, units: $0.units, kind: $0.kind)
-            }
-        case .week, .month:
-            let samples = insulin.map { DatedValue(date: $0.timestamp, value: $0.units) }
-            return TrendsMath.dailyBuckets(samples, in: interval, calendar: calendar)
-                .filter { $0.count > 0 }
-                .map { InsulinMarker(date: $0.start, units: $0.total, kind: nil) }
-        }
-    }
-
-    // MARK: - Axes
-
-    var carbAxisMax: Double {
-        TrendsMath.carbAxisMax(forMaxCarbs: carbBars.map(\.value).max() ?? 0)
-    }
-
-    // Auto glucose maximum: covers the data and keeps the target band's top edge
-    // (10.0) visible. The Fixed option overrides this in the view.
-    var autoGlucoseMax: Double {
-        let dataMax = glucoseLine.map(\.value).max() ?? 0
-        return max(TrendsMath.targetHighMmolL + 2, (dataMax + 1).rounded(.up))
     }
 
     // MARK: - Summary stats (§10.5)
