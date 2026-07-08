@@ -100,7 +100,7 @@ logs-device:
 	log show $(LOG_ARCHIVE) --predicate 'subsystem == "ie.medata.app"' \
 		--info --debug --style compact | tee $(LOG_FILE)
 	@echo ""
-	@echo "Filtered log also written to $(LOG_FILE) (full archive: $(LOG_ARCHIVE))"
+	@echo "Filtered log written to $(LOG_FILE) (full archive: $(LOG_ARCHIVE))"
 
 # Plain Release with the real bundled segmenter (no manifest edit). Requires
 # an exported segmenter.mlpackage; the script refuses to build without it.
