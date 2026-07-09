@@ -253,3 +253,197 @@ The user chose the simplest build for both: accept the glucose volume rather tha
 - An accidental swipe-then-tap destroys a meal plus its corrections and photos with no undo.
 
 ---
+
+## Decision 9: AppRoot stays the presentation coordinator; HomeView is root content only
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Re-rooting the shell (Req 2.1) could put presentation state (cover selection, insulin sheet, deep-link deferral, AR-session trigger) into the new `HomeView`, or keep it in `AppRoot` and only swap the root content. `AppRoot` currently owns all of that state and drives the AR session from `onChange(of: activeSheet)`.
+
+### Decision
+
+`AppRoot` remains the presentation coordinator; only its root content changes from `TrendsView` to `HomeView`. `HomeView` holds no presentation state — it invokes routes through closures injected by `AppRoot`.
+
+### Rationale
+
+The deep-link handler, deferral state, and AR-session lifecycle are already correct and centralised in `AppRoot`; moving them into `HomeView` would re-implement working logic for no gain. Swapping only the root content is the minimal change and keeps the AR-session trigger keyed on `activeSheet == .capture` regardless of what the root is.
+
+### Alternatives Considered
+
+- **HomeView owns presentation state**: Self-contained root — Rejected; duplicates/relocates working deep-link + AR-session logic and widens the change surface.
+
+### Consequences
+
+**Positive:**
+- Minimal diff; deep-link and AR-session behaviour preserved verbatim.
+
+**Negative:**
+- `AppRoot` keeps growing as the single coordinator; `HomeView` depends on injected closures rather than being self-contained.
+
+---
+
+## Decision 10: Dose stays a sheet, relocated from TrendsView to AppRoot
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Insulin dosing is today a `.sheet(isPresented: $showInsulinSheet)` presented from `TrendsView` (the old root), reachable from the Graph toolbar and `medata://insulin/add`. With Graph demoted, the Dose control lives on the home page, and Req 1.6 requires the control and the deep link to open the *same* sheet.
+
+### Decision
+
+Dose remains the existing insulin dose-entry `.sheet` (not a new `ActiveSheet` cover); its presentation and the `onInsulinSheetDismiss` pending-deep-link handoff relocate from `TrendsView` to `AppRoot`.
+
+### Rationale
+
+A `.sheet` coexists with the mutually-exclusive cover `item:`, so keeping Dose a sheet avoids collapsing it into the cover enum and preserves the exact dose-entry surface the deep link already targets. It must move to `AppRoot` because its old host (`TrendsView`) is no longer the root.
+
+### Alternatives Considered
+
+- **Make Dose a `fullScreenCover` case**: Uniform with other routes — Rejected; changes the dose surface, and the cover `item:` is single-select so it would fight the deep-link deferral that already toggles the sheet independently.
+
+### Consequences
+
+**Positive:**
+- Same dose sheet as today; deep-link deferral logic unchanged.
+
+**Negative:**
+- `AppRoot` presents both a cover `item:` and a `.sheet`; two presentation channels to reason about.
+
+---
+
+## Decision 11: Graph keeps meal tap-through; only its direct delete affordance is removed
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Req 2.4 forbids record deletion on Graph. Graph's Day view has two inline lists: day-meals whose rows navigate to `MealOverviewView` (which itself can delete), and day-insulin with swipe-to-delete. Removing the meal navigation would fully sever any delete path from Graph; keeping it re-exposes delete transitively through the shared meal detail.
+
+### Decision
+
+Remove only Graph's direct delete affordance — the day-insulin swipe-to-delete. Keep the day-meal list navigating to the shared `MealOverviewView`. Graph presents no delete UI of its own; deletion reachable via the shared meal detail is accepted.
+
+### Rationale
+
+User decision at the design gate ("keep meal tap-through"). Req 2.4 is satisfied at the Graph surface — Graph shows no delete control — while the meal detail stays a single shared screen rather than being forked into deletable and non-deletable variants.
+
+### Alternatives Considered
+
+- **Read-only, no navigation**: day breakdown non-navigating — Rejected by the user; removes a useful jump to meal detail.
+- **Drop the inline lists entirely (chart-only)**: Simplest "visualisation only" — Rejected; changes the Day view more than Req 2.2's "unchanged visualisation" intends.
+
+### Consequences
+
+**Positive:**
+- Meal detail stays one shared screen; Graph's Day view keeps its jump-to-detail.
+
+**Negative:**
+- A delete is still reachable in two taps from Graph via the shared detail; "no deletion on Graph" holds only for Graph's own chrome.
+
+---
+
+## Decision 12: Intake seam assumes IntakeView exists; designed for minimal merge conflict
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+The `intake` route's content is owned by the parallel `manual-carb-intake` spec (Track C). The user directed that this design assume that surface already exists and structure the seam so the two parallel streams rarely edit the same lines.
+
+### Decision
+
+`ActiveSheet.intake` constructs a `manual-carb-intake`-owned `IntakeView()` by name in a one-line cover branch. `RecordRow` is an open enum so `manual-carb-intake` adds a single `.intake(IntakeRecord)` case plus one additive merge source in `RecordsModel`, making manual intake records deletable in Records without reworking existing cases. The intake subtype taxonomy lives inside `IntakeRecord` (Decision 14), not in `RecordRow`.
+
+### Rationale
+
+The two seams differ in kind. The `IntakeView` seam is genuinely disjoint: home-router owns the `ActiveSheet.intake` case and its one-line cover branch; Track C owns `IntakeView` in its own file, a line home-router never edits. The `RecordRow` seam is shared-file **additive**: Track C adds a single `.intake(IntakeRecord)` case plus arms in the `timestamp`/`id` switches and one merge line in `RecordsModel` — same files home-router authored, but additive arms (Swift exhaustiveness), so low collision rather than zero. Because intake subtypes live inside `IntakeRecord` (Decision 14), adding subtypes later touches neither `RecordRow` nor home-router. Either delivery order merges cleanly. This also gives `manual-carb-intake`'s deferred edit/delete a home on the Records surface.
+
+### Alternatives Considered
+
+- **Feature-flag / placeholder / disabled interim control**: Ship Intake inert until Track C lands — Rejected per the user's "assume it exists" directive; adds throwaway code and a dead control.
+
+### Consequences
+
+**Positive:**
+- Parallel streams merge with minimal conflict; no interim placeholder code; manual carb records get delete via Records.
+
+**Negative:**
+- Home-router does not compile end-to-end on its own branch until `IntakeView` exists; the `intake` route is a forward reference until the streams meet.
+
+---
+
+## Decision 13: Unified RecordRow enum; relocate shared meal-routing symbols out of DataView
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+`RecordsView` replaces `DataView`, which is removed. Two symbols live in `DataView.swift` but are used by surfaces that remain: `mealRouteDestination(_:store:path:)` (meal-detail navigation, used by `TrendsView` and the new `RecordsView`) and `CloseCoverButton` (used by four surfaces). The three record types must render into one list.
+
+### Decision
+
+Introduce a `RecordRow` view-model enum (`meal`/`insulin`/`glucose`, open for `.intake(IntakeRecord)`) with a `timestamp` sort key and a stable `id` tie-break. `RecordRow.meal` carries a `DisplayMeal` (the corrected-total overlay), not a raw `MealRecord`; glucose carries the source `Event.id` since `GlucoseReading` has none. Relocate `mealRouteDestination` and `CloseCoverButton` from `DataView.swift` into a shared `App/MealRouting.swift` so removing `DataView` does not orphan them. `RecordsModel` maps each source **directly** (reusing `MealHistoryModel`'s corrections composition for meals); it does **not** reuse `TrendsModel`'s plotting decoders.
+
+### Rationale
+
+Records needs one row abstraction over three decode paths; relocating the shared symbols is required to delete `DataView` without breaking `TrendsView`. Two corrections surfaced in design-critic review forced the payload/decoder choices: (1) `MealRecord.macros.totalCarbsG` is the *original* estimate, so Req 3.2's corrected total must come from the `DisplayMeal`/`MealHistoryModel` overlay — the same reason those types already exist; (2) `TrendsModel`'s glucose decoder drops `Event.id`, so reusing it would leave glucose without a tie-break key, and `TrendsModel` carries a documented perf-hang history (`graph-month-selection-hang`). Mapping directly in `RecordsModel` keeps the source ids and leaves the perf-sensitive file untouched — no requirement demanded the shared-decoder DRY win.
+
+### Alternatives Considered
+
+- **Reuse `TrendsModel`'s glucose/insulin decoders via a shared helper**: DRY — Rejected; drops `Event.id` (breaks the glucose tie-break) and churns a perf-hang-prone file for no required benefit.
+- **`RecordRow.meal(MealRecord)` with the raw estimate**: Simpler payload — Rejected; cannot satisfy Req 3.2 (shows the pre-correction total).
+- **Add an `id` to `GlucoseReading`**: Uniform ids — Rejected; touches Persistence + its MedataCore test coverage when keeping the source `Event.id` at the row costs nothing.
+- **Keep the symbols in `DataView.swift` as a symbol dump**: No move — Rejected; leaves a dead view file solely to host shared helpers.
+
+### Consequences
+
+**Positive:**
+- One row abstraction; shared symbols have a clear home; each type keeps a stable id and the meal row shows the corrected total.
+- `TrendsModel` is untouched; `RecordRow` extensibility is the Track C seam (Decision 12).
+
+**Negative:**
+- A new `MealRouting.swift` file, and `RecordsModel` reuses `MealHistoryModel`'s per-meal corrections composition — a full rebuild per `eventsDidChange` tick (accepted under Decision 8).
+
+---
+
+## Decision 14: Intake is one `RecordRow` case with an internal subtype, not per-subtype cases
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+The Records seam for `manual-carb-intake` (Track C) needs a shape for manual intake records. The user's model is "intake with subsets — carb, alcohol, and so on." That could be one `RecordRow.intake` case carrying a category, or a case per subtype (`.carbIntake`, `.alcoholIntake`, …). This design owns only the *seam shape*; the taxonomy itself belongs to Track C.
+
+### Decision
+
+`RecordRow` gains a single `.intake(IntakeRecord)` case (a discriminated union) whose subtype (`carb`, `alcohol`, …) is a field inside the Track-C-owned `IntakeRecord`. Home-router renders an intake row from `IntakeRecord`'s own display value + type label and stays agnostic to the category set. The subtype identifier for alcohol is `alcohol`, not `booze`.
+
+### Rationale
+
+One case with the subtype in the payload keeps `RecordRow`'s `timestamp`/`id`/render switches stable as subtypes grow, and — key for the two parallel streams — adding a subtype later touches neither `RecordRow` nor any home-router file. It mirrors the app's event-log philosophy (one type, discriminator inside) and aligns with the route already being named `intake`. `alcohol` is the clinical/nutrition term and is substantive here (alcohol can drive delayed hypoglycaemia), so it earns a first-class subtype; `booze` is acceptable only as later UI copy, never as the code identifier. The concrete category set and `IntakeRecord`'s fields are Track C's to define — this decision fixes only that intake is one row case with an internal category.
+
+### Alternatives Considered
+
+- **A `RecordRow` case per subtype (`.carbIntake`, `.alcoholIntake`, …)**: Explicit — Rejected; explodes `RecordRow`'s switches and forces a home-router edit for every new subtype.
+- **`booze` as the code identifier**: Matches the user's casual phrasing — Rejected for code; `alcohol` is the clinical term and reads correctly in a health context. "Booze" may resurface as UI copy if wanted.
+
+### Consequences
+
+**Positive:**
+- `RecordRow` is stable against subtype growth; new intake subtypes are a pure Track C change.
+- Clear ownership split: home-router fixes the seam shape, Track C owns the taxonomy.
+
+**Negative:**
+- Home-router references `IntakeRecord` before Track C defines it (the same accepted forward-reference as `IntakeView`, Decision 12).
+- Intake-row rendering depends on `IntakeRecord` exposing a display value + label; that contract must be agreed with Track C.
+
+---
