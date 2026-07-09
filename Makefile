@@ -36,10 +36,12 @@ BUILD_STAMP := $(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell
+.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell worktree
 
 help:
 	@echo "MeData targets:"
+	@echo "  worktree             create .worktrees/<name> and share root's nextup.md into it"
+	@echo "                       (name=<dir> [branch=<branch>]; branch defaults to name, off HEAD)"
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
 	@echo "  spell                Irish/British spelling lint (tools/check_spelling.sh)"
@@ -56,6 +58,9 @@ help:
 	@echo "                       live stream — 'log stream' cannot attach to an iOS device and"
 	@echo "                       devicectl has no log subcommand. For live viewing use Console.app"
 	@echo "                       (recipe: docs/agent-notes/device-build-and-test.md)."
+
+worktree:
+	@tools/new_worktree.sh "$(name)" $(branch)
 
 build:
 	swift build
