@@ -765,28 +765,37 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         )
     }
 
-    // First-launch seed of the three authored defaults (Req 3.3): "A pint"
+    // One-shot seed of the three authored defaults (Req 3.3): "A pint"
     // (17 g), "Bagel" (45 g), "Chips" (40 g) — carbohydrate values only, no
-    // macros. Gated on `quick_presets` being empty at store-init time so a
-    // later re-init (or a DB where the user deleted/edited presets) never
-    // reseeds — same idempotent-seed intent as `INSERT OR IGNORE`, just
-    // expressed as an explicit count check since this seeds multiple rows
-    // rather than one keyed row.
+    // macros. Gated on the `quick_presets_seeded` meta flag so the seed runs
+    // at most once per DB: a user who deletes all presets (defaults are
+    // deletable like any other, Req 3.3) stays at zero across relaunches
+    // (Req 4.3). Rows are inserted only when the flag is absent AND the
+    // table is empty; a pre-flag DB that already holds presets is stamped
+    // seeded without inserting, so existing rows are never duplicated.
     private static func seedDefaultQuickPresetsIfNeeded(_ db: Database) throws {
+        let seeded = try String.fetchOne(
+            db, sql: "SELECT v FROM meta WHERE k = 'quick_presets_seeded'"
+        )
+        guard seeded == nil else { return }
         let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM quick_presets") ?? 0
-        guard count == 0 else { return }
-        let defaults: [(name: String, carbsG: Double)] = [
-            ("A pint", 17), ("Bagel", 45), ("Chips", 40)
-        ]
-        for (index, preset) in defaults.enumerated() {
-            try db.execute(
-                sql: """
-                    INSERT INTO quick_presets (id, name, carbs_g, sort_order)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                arguments: [UUID().uuidString, preset.name, preset.carbsG, index]
-            )
+        if count == 0 {
+            let defaults: [(name: String, carbsG: Double)] = [
+                ("A pint", 17), ("Bagel", 45), ("Chips", 40)
+            ]
+            for (index, preset) in defaults.enumerated() {
+                try db.execute(
+                    sql: """
+                        INSERT INTO quick_presets (id, name, carbs_g, sort_order)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                    arguments: [UUID().uuidString, preset.name, preset.carbsG, index]
+                )
+            }
         }
+        try db.execute(
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('quick_presets_seeded', '1')"
+        )
     }
 
     // MARK: - Quick-add presets (specs/data/manual-carb-intake)
@@ -826,15 +835,18 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         }
     }
 
-    private static func quickPreset(from row: Row) -> QuickPreset {
+    private static func quickPreset(from row: Row) throws -> QuickPreset {
         let idString: String = row["id"]
+        guard let id = UUID(uuidString: idString) else {
+            throw PersistenceError.corruptRecord("invalid quick_presets UUID: \(idString)")
+        }
         let macros = IntakeMacros(
             proteinG: row["protein_g"],
             fatG: row["fat_g"],
             fibreG: row["fibre_g"]
         )
         return QuickPreset(
-            id: UUID(uuidString: idString) ?? UUID(),
+            id: id,
             name: row["name"],
             carbsG: row["carbs_g"],
             macros: macros,

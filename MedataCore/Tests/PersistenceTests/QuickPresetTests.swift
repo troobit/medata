@@ -68,6 +68,21 @@ final class QuickPresetTests: XCTestCase {
         XCTAssertEqual(presets.map(\.name), ["A pint", "Bagel", "Chips"])
     }
 
+    func testDeletingAllPresetsDoesNotReseedOnReinit() async throws {
+        // Delete everything, including the three seeded defaults — they are
+        // deletable like any user-created preset (Req 3.3) and the deletion
+        // must hold across relaunches (Req 4.3).
+        for preset in try await store.quickPresets() {
+            try await store.deleteQuickPreset(id: preset.id)
+        }
+
+        let reopened = try GRDBPersistenceStore(dbURL: dbURL, artefactsBaseURL: tempDir)
+        let presets = try await reopened.quickPresets()
+
+        XCTAssertTrue(presets.isEmpty,
+                      "seed is one-shot; an emptied table must stay empty on re-init")
+    }
+
     func testSeedingIsSkippedWhenPresetsAlreadyExist() async throws {
         // Simulate a DB that already has user presets (e.g. defaults deleted,
         // one custom preset created) before a fresh store re-init runs.
