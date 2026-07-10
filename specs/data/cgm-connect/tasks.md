@@ -84,7 +84,7 @@ references:
 
 ## Phase 5 — Verify
 
-- [ ] 13. make test green (Persistence parity, ingestion logic, firewall). make build, make spell <!-- id:oecpdn2 -->
+- [x] 13. make test green (Persistence parity, ingestion logic, firewall). make build, make spell <!-- id:oecpdn2 -->
   - Blocked-by: oecpdmz (App start: construct the coordinator, register the available sources; add a @MainActor @Observable GlucoseConnectionsModel that consumes stateStream and mirrors it), oecpdn0 (SettingsGlucoseView off the existing Settings surface: source rows with state/last-reading/last-success/discrepancy, connect/disconnect, HealthKit auth sheet + LibreLinkUp credential form; functional copy only; mmol/L only; existing settings-row pattern), oecpdn1 (Capabilities: HealthKit entitlement + NSHealthShareUsageDescription; BGTaskSchedulerPermittedIdentifiers + background-modes for the LibreLinkUp refresh)
   - Stream: 1
 
