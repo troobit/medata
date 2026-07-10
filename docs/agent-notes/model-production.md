@@ -145,6 +145,24 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   reads `ClassPalette.version` from `ClassPalette.swift` (regex on the v1Standard
   literal) and aborts the bake on mismatch (Req 8.4). This only ADDS the lock; the
   baked value stays `'v1'` and `ClassPalette.version` is untouched.
+- **Segmenter-foundation phase 2 (2026-07-11)** — `prepare_dataset.py` now carves
+  a STRATIFIED heldout split by default (design §3.5; `--no-stratify` restores the
+  plain shuffle): staple presence is computed from RAW masks via the LUT in
+  `compute_staple_presence` before `write_split` remaps, quota =
+  `min(max(3, ceil(heldout_frac·n)), n//3)`, `carve_splits` returns
+  `(splits, stratification_block_or_None)`. The remap pass also writes
+  `out/co_stats.json` (per-split pixel counts + train-only presence/joint-presence,
+  stamped with split seed + class-mapping SHA-256). `--loss co_occurrence`
+  (`loss_config.py` + `train._build_criterion`) = weighted_ce + λ·presence-BCE with
+  co-occurrence pair weights; it FAILS FAST if `<data>/co_stats.json` is missing or
+  its seed/mapping-SHA mismatch the invocation (`--split-seed` becomes mandatory).
+  Lineage gained `pretrained_checkpoint` `{source_url, licence, sha256}` (via
+  `--pretrained-source-url/-licence/-sha256`) and `co_stats_sha256`;
+  `preserve_metrics` now carries both across re-exports. `spike_segformer.py`
+  (SegFormer-B0 Core ML spike, criteria 1/2/4) and `adapter_probe.py` (timm
+  in21k-MIL → torchvision state-dict round-trip, Decision 19) are CODE-ONLY so
+  far — neither has been run; both need the heavy deps (`transformers` is in
+  requirements.txt as spike-only; `timm` is installed ad hoc).
 
 ## Gotchas
 
@@ -183,3 +201,10 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   is owned separately — don't bundle a rebake into unrelated work.
 - **`rune complete` takes the numeric task id**, e.g.
   `rune complete specs/.../tasks.md 9` (not the `<!-- id:... -->` comment id).
+- **Import sibling tool modules by NAME (sys.path), not `spec_from_file_location`,
+  when identity matters.** `spec_from_file_location` creates a distinct module
+  object, so `except export.ExportGateError` (or any isinstance check) fails
+  against the conftest-imported `export`. `spike_segformer._load_export_module`
+  hit this; the `train.py` loss_config sys.path pattern is the fix. `train.py`'s
+  own `_load_export_module` still uses spec-loading deliberately (no shared
+  exception classes cross that seam).

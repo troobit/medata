@@ -3,7 +3,8 @@
 
 The PRD "Segmenter training pipeline" context adds a class-imbalance-aware loss
 option to ``train.py`` behind a CLI flag (``--loss {ce,weighted_ce,focal,dice,
-combined}``). Under a heavily class-imbalanced 35-class palette (device masks are
+combined,co_occurrence}`` — the last added by segmenter-foundation design §4.3).
+Under a heavily class-imbalanced 35-class palette (device masks are
 92–99% background) a plain unweighted cross-entropy collapses toward the dominant
 background class and the residual food pixels come through as isolated speckle —
 the "stripes of spots" the PRD targets.
@@ -32,17 +33,23 @@ cross-entropy.
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+import json
+import math
+from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 # The CLI --loss choices. "ce" is the historical default (plain unweighted
 # cross-entropy); the rest are the class-imbalance-aware options.
-LOSS_CHOICES = ("ce", "weighted_ce", "focal", "dice", "combined")
+# "co_occurrence" (segmenter-foundation design §4.3, Decision 15) is
+# L = weighted_ce + lambda * L_co, where L_co penalises image-level predicted
+# class presence against ground-truth presence with co-occurrence pair weights.
+LOSS_CHOICES = ("ce", "weighted_ce", "focal", "dice", "combined", "co_occurrence")
 DEFAULT_LOSS = "ce"
 
 # Losses that consume per-class inverse-frequency weights. "ce", "focal" (which
 # down-weights easy pixels via gamma instead) and "dice" (region-overlap, already
-# imbalance-robust) do not.
-WEIGHTED_LOSSES = ("weighted_ce", "combined")
+# imbalance-robust) do not. "co_occurrence" uses them for its weighted_ce base.
+WEIGHTED_LOSSES = ("weighted_ce", "combined", "co_occurrence")
 
 # Default focal-loss focusing parameter (Lin et al. 2017); down-weights
 # well-classified pixels so the dominant background stops swamping the gradient.
@@ -60,6 +67,42 @@ DICE_SMOOTH = 1.0
 # get an enormous inverse-frequency weight and destabilise the gradient; 10x the
 # mean is plenty of emphasis for the thin staples.
 MAX_CLASS_WEIGHT = 10.0
+
+# ── Co-occurrence loss (design §4.3, Decision 15) ───────────────────────────────
+
+# Mixing weight for the auxiliary image-level presence term:
+# L = weighted_ce + CO_LAMBDA * L_co. 0.1 keeps the image-level term
+# subordinate to the pixel loss; treated as fixed for the first run and swept
+# only if training logs show L_co dominating or vanishing (design §4.3).
+DEFAULT_CO_LAMBDA = 0.1
+
+# Image-level predicted presence pooling: p_c = maxpool(softmax_c) over the
+# spatial dims. Log-sum-exp or top-k pooling is the noted fallback if a single
+# spurious activation saturating the max proves unstable — recorded here so
+# lineage's "co_pooling" value has a documented alternative set.
+DEFAULT_CO_POOLING = "max"
+
+# Gain on the pair weight for FALSE presences: a predicted-but-absent class
+# whose co-occurrence prior with the image's ground-truth classes is near zero
+# gets weight 1 + CO_PAIR_GAIN * (1 - prior) — up to (1 + gain)x for a
+# never-co-occurring class, 1x for a fully plausible one. True presences (and
+# missed ground-truth classes — the collapse half, carried by the presence-BCE
+# term itself and the weighted_ce base) keep weight 1. The 3.0 keeps the
+# up-weighting bounded (max 4x), in the same spirit as MAX_CLASS_WEIGHT.
+CO_PAIR_GAIN = 3.0
+
+# Name of the statistics file prepare_dataset.py writes next to splits.json.
+CO_STATS_FILENAME = "co_stats.json"
+
+# Regeneration command template for the fail-fast messages (design §4.3): a
+# silent fallback to unweighted CE or stats from a different split would
+# falsify the lineage's claim about the recipe.
+_CO_STATS_REGENERATE = (
+    "regenerate with: python tools/segmenter/prepare_dataset.py "
+    "--src <foodseg103 root> "
+    "--mapping tools/segmenter/class_mapping_foodseg103_v1.json "
+    "--out <data root> --seed <split seed>"
+)
 
 
 def normalise_loss_name(name: str | None) -> str:
@@ -86,6 +129,7 @@ def resolve_loss_spec(
     *,
     focal_gamma: float = DEFAULT_FOCAL_GAMMA,
     dice_weight: float = DEFAULT_DICE_WEIGHT,
+    co_lambda: float = DEFAULT_CO_LAMBDA,
 ) -> dict[str, Any]:
     """Pure dispatch: map a ``--loss`` name to a JSON-serialisable loss spec.
 
@@ -93,7 +137,8 @@ def resolve_loss_spec(
     ``train.py`` can both (a) record it verbatim in provenance and (b) branch on
     ``spec["loss"]`` to build the torch module. Keeping the DEFAULT spec minimal
     (``{"loss": "ce"}``) is what makes an omitted flag byte-identical to a
-    pre-existing run's ``train_config``.
+    pre-existing run's ``train_config``. For ``co_occurrence`` the spec carries
+    lambda and the pooling choice — both land in lineage (design §4.3).
     """
     resolved = normalise_loss_name(name)
     spec: dict[str, Any] = {"loss": resolved}
@@ -104,6 +149,11 @@ def resolve_loss_spec(
         spec["dice_weight"] = float(dice_weight)
         spec["weighting"] = "inverse_frequency"
     elif resolved == "weighted_ce":
+        spec["weighting"] = "inverse_frequency"
+    elif resolved == "co_occurrence":
+        # co_occurrence = weighted_ce + co_lambda * L_co (design §4.3)
+        spec["co_lambda"] = float(co_lambda)
+        spec["co_pooling"] = DEFAULT_CO_POOLING
         spec["weighting"] = "inverse_frequency"
     return spec
 
@@ -192,3 +242,130 @@ def inverse_frequency_weights(
         1.0 if c in pinned else _clamp(raw[c] / mean_kept)
         for c in range(num_classes)
     ]
+
+
+# ── Co-occurrence loss helpers (design §4.3) — pure, torch-free ─────────────────
+
+def load_co_stats(
+    path: str | Path,
+    *,
+    split_seed: int | None,
+    class_mapping_sha256: str,
+) -> dict[str, Any]:
+    """Load ``co_stats.json`` and enforce the fail-fast contract (design §4.3).
+
+    The file records the split seed and class-mapping SHA-256 it was built
+    from; if the file is missing, or either value mismatches the training
+    invocation's, this raises ``SystemExit`` with the regeneration command —
+    a silent fallback to unweighted CE (or stats from a different split)
+    would falsify the lineage's claim about the recipe.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise SystemExit(
+            f"[train] co-occurrence statistics not found: {p} — {_CO_STATS_REGENERATE}"
+        )
+    stats = json.loads(p.read_text(encoding="utf-8"))
+    if split_seed is None:
+        raise SystemExit(
+            "[train] --loss co_occurrence requires --split-seed (the seed the "
+            f"dataset was prepared with) so {p.name} can be verified against "
+            f"the invocation — {_CO_STATS_REGENERATE}"
+        )
+    if stats.get("split_seed") != split_seed:
+        raise SystemExit(
+            f"[train] {p} was built for split seed {stats.get('split_seed')!r} "
+            f"but this invocation uses --split-seed {split_seed} — stale "
+            f"statistics; {_CO_STATS_REGENERATE}"
+        )
+    if stats.get("class_mapping_sha256") != class_mapping_sha256:
+        raise SystemExit(
+            f"[train] {p} was built from class mapping SHA-256 "
+            f"{stats.get('class_mapping_sha256')!r} but the committed mapping "
+            f"hashes to {class_mapping_sha256!r} — stale statistics; "
+            f"{_CO_STATS_REGENERATE}"
+        )
+    return stats
+
+
+def co_occurrence_priors(
+    joint_presence_counts: Sequence[Sequence[float]],
+    presence_counts: Sequence[float],
+) -> list[list[float]]:
+    """Conditional co-occurrence priors from the co_stats counts.
+
+    ``prior[c][k] = P(class c present | class k present)`` =
+    ``joint[c][k] / presence[k]`` — in [0, 1], with 0 when class ``k`` never
+    appears in training (no evidence either way, so a false presence alongside
+    it gets the full up-weight). The diagonal is 1 wherever the class appears.
+    Pure arithmetic on plain floats; ``train.py`` wraps the result in a torch
+    tensor.
+    """
+    n = len(presence_counts)
+    if any(len(row) != n for row in joint_presence_counts) or len(joint_presence_counts) != n:
+        raise ValueError("joint_presence_counts must be square and match presence_counts")
+    return [
+        [
+            (float(joint_presence_counts[c][k]) / float(presence_counts[k]))
+            if presence_counts[k] > 0 else 0.0
+            for k in range(n)
+        ]
+        for c in range(n)
+    ]
+
+
+def false_presence_weights(
+    priors: Sequence[Sequence[float]],
+    gt_present: Sequence[int],
+    *,
+    gain: float = CO_PAIR_GAIN,
+) -> list[float]:
+    """Per-class pair weights for one image's presence-BCE term (design §4.3).
+
+    Classes IN the ground truth keep weight 1.0 (a missed ground-truth class —
+    the collapse half — is penalised by the BCE term itself, not the pair
+    weight). Classes NOT in the ground truth are weighted
+    ``1 + gain * (1 - compat)`` where ``compat`` is the largest co-occurrence
+    prior between the class and any ground-truth class — so an implausible
+    false presence (prior near zero) is up-weighted toward ``1 + gain`` and a
+    plausible one stays near 1. With no ground-truth classes at all, every
+    weight is 1 (no prior evidence to weight by).
+    """
+    n = len(priors)
+    gt = set(gt_present)
+    if not gt:
+        return [1.0] * n
+    weights = []
+    for c in range(n):
+        if c in gt:
+            weights.append(1.0)
+        else:
+            compat = max(float(priors[c][k]) for k in gt)
+            weights.append(1.0 + gain * (1.0 - compat))
+    return weights
+
+
+def co_presence_bce(
+    pred_presence: Sequence[float],
+    gt_presence: Sequence[float],
+    weights: Sequence[float] | None = None,
+) -> float:
+    """Reference (pure-float) presence BCE for one image: the ``L_co`` term.
+
+    Mean over classes of ``w_c * BCE(p_c, y_c)``. Exactly zero when predicted
+    presence matches the ground truth (p == y at 0/1), matching the torch
+    implementation in ``train._build_criterion``. Used by the torch-free tests;
+    the training loop computes the same quantity with tensors.
+    """
+    n = len(pred_presence)
+    if len(gt_presence) != n or (weights is not None and len(weights) != n):
+        raise ValueError("pred/gt/weights must have equal length")
+    eps = 1e-12
+    total = 0.0
+    for c in range(n):
+        p = min(max(float(pred_presence[c]), 0.0), 1.0)
+        y = float(gt_presence[c])
+        w = 1.0 if weights is None else float(weights[c])
+        bce = -math.log(max(p, eps)) if y >= 0.5 else -math.log(max(1.0 - p, eps))
+        total += w * bce
+    return total / n if n else 0.0

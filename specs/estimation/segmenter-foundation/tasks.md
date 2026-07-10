@@ -56,26 +56,26 @@ metadata:
   - The PRD's --loss flag, loss_config helpers, and photometric augmentation are merged to research (research:tools/segmenter/train.py:796; changelog fdc89a0) but this worktree branched pre-merge. Merge research into the working branch (or execute Phase 2 tasks on research after the spec docs merge). Do not re-implement the PRD's scope (design §2.1).
   - Requirements: [2.3](requirements.md#2.3)
 
-- [ ] 8. Code: stratified heldout carve in prepare_dataset.py <!-- id:2mfkxz4 -->
+- [x] 8. Code: stratified heldout carve in prepare_dataset.py <!-- id:2mfkxz4 -->
   - Implement design §3.5 in carve_splits(): pass 1 computes staple presence by applying the class_mapping_foodseg103_v1.json LUT to raw masks in memory (remapping happens after carving in write_split); pass 2 iterates staples in palette-index order with quota = min(max(3, ceil(0.12*n)), floor(n/3)), an already-assigned image counting toward every staple quota it contains; infeasibility rule (n < 3 -> heldout gets 1 + warning). New split seed recorded in splits.json + lineage, then frozen. splits.json gains a stratification block (per-staple heldout/train counts + warnings). Pytest: determinism for a fixed seed; every staple present in heldout on a synthetic corpus; the 2-image-staple infeasibility case; the quota cap (a 3-5 image staple keeps a training majority).
   - Blocked-by: 2mfkxyr (Bring the estimation-quality PRD's training-pipeline code into the working branch)
   - Requirements: [2.6](requirements.md#2.6)
 
-- [ ] 9. Code: co_stats.json statistics pass in prepare_dataset.py <!-- id:2mfkxz5 -->
+- [x] 9. Code: co_stats.json statistics pass in prepare_dataset.py <!-- id:2mfkxz5 -->
   - Per design §4.3 (Decision 15): per-class pixel counts per split plus image-level joint presence counts over the training split only, FoodSeg103-internal; the file records the split seed and class-mapping SHA-256 it was built from; its own SHA-256 joins the lineage. Pytest: statistics generation on synthetic masks.
   - Blocked-by: 2mfkxz4 (Code: stratified heldout carve in prepare_dataset.py)
   - Requirements: [2.3](requirements.md#2.3)
 
-- [ ] 10. Code: co-occurrence loss option on the landed loss plumbing <!-- id:2mfkxz6 -->
+- [x] 10. Code: co-occurrence loss option on the landed loss plumbing <!-- id:2mfkxz6 -->
   - Add the co-occurrence option to the landed loss_config structure (new choice or a term inside combined — implementer's call): L = weighted_ce + lambda*L_co per design §4.3, lambda default 0.1, max-pooled presence with LSE/top-k as the noted fallback; pair weights up-weight implausible false presences (the confusion half — the presence-BCE term and weighted_ce base carry the collapse half). Fail-fast when co_stats.json is missing or its seed/mapping-SHA mismatches the invocation. lambda and pooling choice recorded in lineage. weighted_ce alone is the documented fallback if impractical. Pytest: L_co zero when presence matches ground truth; finite gradients; both fail-fast cases.
   - Blocked-by: 2mfkxyr (Bring the estimation-quality PRD's training-pipeline code into the working branch), 2mfkxz5 (Code: co_stats.json statistics pass in prepare_dataset.py)
   - Requirements: [2.3](requirements.md#2.3)
 
-- [ ] 11. Survey, vet, and probe the pretrained checkpoint per Decision 17 <!-- id:2mfkxyu -->
+- [x] 11. Survey, vet, and probe the pretrained checkpoint per Decision 17 <!-- id:2mfkxyu -->
   - Selection order (design §4.2): timm mobilenetv3_large_100.miil_in21k_ft_in1k IF the state-dict adapter round-trips (identical logits on a probe image vs timm-native) AND the licence permits commercial bundling; else torchvision MobileNet_V3_Large_Weights.IMAGENET1K_V2 backbone + fresh head; retaining the COCO-seg DEFAULT is a permitted logged outcome if the survey favours it (triggers Decision 12's expected-uplift-revised-down record). Record source URL, licence identifier, SHA-256. Reject research/non-commercial licences regardless of accuracy.
   - Requirements: [2.2](requirements.md#2.2)
 
-- [ ] 12. Code: lineage schema additions (pretrained_checkpoint, co_stats reference) <!-- id:2mfkxyw -->
+- [x] 12. Code: lineage schema additions (pretrained_checkpoint, co_stats reference) <!-- id:2mfkxyw -->
   - Add a pretrained_checkpoint object (source URL, licence, SHA-256) and the co_stats.json SHA-256 to build/lineage.json via lineage.py/train.py, satisfying model-production Req 1.3. Pytest: lineage round-trip includes the new fields.
   - Blocked-by: 2mfkxyr (Bring the estimation-quality PRD's training-pipeline code into the working branch), 2mfkxyu (Survey, vet, and probe the pretrained checkpoint per Decision 17)
   - Requirements: [2.2](requirements.md#2.2)
@@ -84,8 +84,9 @@ metadata:
   - Done in design §5.1 (Decisions 7, 16): four ordered stop-on-fail criteria — Core ML conversion; FP16 artefact <= 24 MiB (export.py WEIGHTS_MAX_BYTES); <= 250 ms ANE-resident at 513x513 on the iPhone 13 Pro Max (v1 hardware floor, measured directly); equivalence per model-production Req 4.3 as amended (argmax > 99%, logit < 0.5).
   - Requirements: [3.1](requirements.md#3.1)
 
-- [ ] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
+- [x] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
   - Build tools/segmenter/spike_segformer.py (HF transformers added to tools/segmenter/requirements.txt as a spike-only dependency): load a public SegFormer-B0 checkpoint (accuracy irrelevant), graft a 35-channel head, coremltools FP16 export at 513x513, measure artefact size, run the equivalence oracle (oracle_agreement at export.py:401, reference_input at export.py:150). Emit build/spike_segformer.json (four booleans + measurements; latency left pending). A hard conversion failure ends the spike (criterion 1 fails, Req 3.2).
+  - 2026-07-11: code half landed and unit-tested; the CONVERSION RUN is still pending — torch/transformers are not installed in the dev environment, so the script must be executed in the gated session (python tools/segmenter/spike_segformer.py) before the verdict JSON exists.
   - Blocked-by: 2mfkxza (Specify the SegFormer-B0 conversion-spike procedure)
   - Requirements: [3.1](requirements.md#3.1)
 

@@ -404,13 +404,16 @@ def _train_pixel_counts(dataset: FoodSegDataset, num_classes: int) -> list[int]:
     return total.tolist()
 
 
-def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device):
+def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
+                     co_stats: dict | None = None):
     """Build the torch loss for a loss_config spec (torch side of the recipe).
 
     ``loss_spec`` comes from ``loss_config.resolve_loss_spec`` (already
     validated); ``class_weights`` is required exactly when
-    ``loss_config.loss_uses_class_weights`` says so. The default ``ce`` returns
-    a plain ``nn.CrossEntropyLoss()`` — the historical recipe, untouched.
+    ``loss_config.loss_uses_class_weights`` says so, and ``co_stats`` (the
+    validated co_stats.json dict) exactly for ``co_occurrence``. The default
+    ``ce`` returns a plain ``nn.CrossEntropyLoss()`` — the historical recipe,
+    untouched.
     """
     torch = _import_torch()
     import torch.nn as nn
@@ -460,6 +463,49 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device)
             return dice_weight * dice(logits, targets) + (1.0 - dice_weight) * weighted_ce(logits, targets)
 
         return combined
+
+    if name == "co_occurrence":
+        # L = weighted_ce + lambda * L_co (segmenter-foundation design §4.3).
+        # L_co: image-level predicted presence p_c = maxpool(softmax_c) — the
+        # log-sum-exp / top-k pooling fallback (loss_config.DEFAULT_CO_POOLING
+        # comment) is the documented alternative if a single spurious
+        # activation saturating the max proves unstable — penalised with BCE
+        # against ground-truth presence, pair-weighting implausible FALSE
+        # presences (the confusion half); missed ground-truth classes (the
+        # collapse half) are carried by the BCE term itself and the
+        # weighted_ce base.
+        assert co_stats is not None, "co_occurrence requires validated co_stats"
+        weighted_ce = nn.CrossEntropyLoss(weight=_weights_tensor())
+        lam = float(loss_spec["co_lambda"])
+        priors = torch.tensor(
+            loss_config.co_occurrence_priors(
+                co_stats["joint_presence_counts"], co_stats["presence_counts"]
+            ),
+            dtype=torch.float32, device=device,
+        )  # [C, C]: priors[c, k] = P(c present | k present)
+
+        def co_occurrence(logits, targets):
+            base = weighted_ce(logits, targets)
+            probs = torch.softmax(logits, dim=1)                    # [B, C, H, W]
+            pred_presence = probs.amax(dim=(2, 3))                  # max-pool -> [B, C]
+            gt = torch.zeros_like(pred_presence)                    # [B, C] presence
+            gt.scatter_(1, targets.flatten(1), 1.0)
+            # compat[b, c] = max over ground-truth classes k of priors[c, k];
+            # pair weight 1 for true presences, 1 + gain*(1 - compat) for
+            # false ones (loss_config.false_presence_weights is the pure
+            # single-image reference of this batched form).
+            compat = (priors.unsqueeze(0) * gt.unsqueeze(1)).amax(dim=2)
+            weights = torch.where(
+                gt > 0,
+                torch.ones_like(gt),
+                1.0 + loss_config.CO_PAIR_GAIN * (1.0 - compat),
+            )
+            l_co = nn.functional.binary_cross_entropy(
+                pred_presence.clamp(1e-6, 1.0 - 1e-6), gt, weight=weights
+            )
+            return base + lam * l_co
+
+        return co_occurrence
 
     raise SystemExit(f"[train] unhandled loss {name!r}")  # unreachable: spec validated
 
@@ -591,6 +637,12 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
     os.replace(tmp, sidecar)
 
 
+def _loss_spec(args) -> dict:
+    """The loss spec for this invocation (single construction point so the
+    criterion and the recorded provenance can never disagree on co_lambda)."""
+    return loss_config.resolve_loss_spec(args.loss, co_lambda=args.co_lambda)
+
+
 def train(args) -> int:
     torch = _import_torch()
 
@@ -605,9 +657,27 @@ def train(args) -> int:
     device = _resolve_device(args.device)
     print(f"[train] device = {device}")
 
-    loss_spec = loss_config.resolve_loss_spec(args.loss)
+    loss_spec = _loss_spec(args)
 
     data_root = Path(args.data)
+
+    # Co-occurrence statistics: fail fast BEFORE any data/model work when the
+    # stats are missing or stale (seed / class-mapping SHA mismatch) — a silent
+    # fallback would falsify the lineage's claim about the recipe (design §4.3).
+    co_stats = None
+    co_stats_sha256 = None
+    if loss_spec["loss"] == "co_occurrence":
+        lineage = _load_lineage_module()
+        mapping_path = Path(__file__).resolve().with_name(
+            "class_mapping_foodseg103_v1.json"
+        )
+        co_stats_path = data_root / loss_config.CO_STATS_FILENAME
+        co_stats = loss_config.load_co_stats(
+            co_stats_path,
+            split_seed=args.split_seed,
+            class_mapping_sha256=lineage.file_sha256(mapping_path),
+        )
+        co_stats_sha256 = lineage.file_sha256(co_stats_path)
     augment = not args.no_augment
     train_ds = FoodSegDataset(data_root / "train", args.target_size, limit=args.limit,
                               augment=augment, photometric=args.photometric_augment)
@@ -656,7 +726,7 @@ def train(args) -> int:
         print("[train] deriving inverse-frequency class weights from train masks…")
         counts = _train_pixel_counts(train_ds, args.num_classes)
         class_weights = loss_config.inverse_frequency_weights(counts, args.num_classes)
-    criterion = _build_criterion(loss_spec, class_weights, device)
+    criterion = _build_criterion(loss_spec, class_weights, device, co_stats)
     print(f"[train] loss = {loss_spec}"
           + (" | photometric augment ON" if args.photometric_augment else ""))
 
@@ -691,15 +761,33 @@ def train(args) -> int:
         print(msg)
         _save_resume_state(sidecar, model, optimizer, args, pretrained, epoch, last_miou)
 
-    _save_checkpoint(model, args, last_miou, pretrained, resumed_from_epoch)
+    _save_checkpoint(model, args, last_miou, pretrained, resumed_from_epoch,
+                     co_stats_sha256=co_stats_sha256)
     if sidecar.is_file():
         sidecar.unlink()
         print(f"[train] removed resume sidecar {sidecar}")
     return 0
 
 
+def _pretrained_checkpoint_record(args) -> dict | None:
+    """The ``pretrained_checkpoint`` lineage object (segmenter-foundation
+    Req 2.2 / Decision 17, model-production Req 1.3): source URL, licence, and
+    SHA-256 of the published initialisation, recorded only when the invocation
+    supplies them — absent fields stay "unknown" rather than guessed."""
+    values = (args.pretrained_source_url, args.pretrained_licence,
+              args.pretrained_sha256)
+    if not any(values):
+        return None
+    return {
+        "source_url": args.pretrained_source_url or "unknown",
+        "licence": args.pretrained_licence or "unknown",
+        "sha256": args.pretrained_sha256 or "unknown",
+    }
+
+
 def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
-                     resumed_from_epoch: int | None = None) -> None:
+                     resumed_from_epoch: int | None = None,
+                     co_stats_sha256: str | None = None) -> None:
     """Save a dict consumed directly by export.load_checkpoint and make_fixtures.
 
     export.load_checkpoint does ``if isinstance(state, dict) and "model" in state:
@@ -715,8 +803,10 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     # Opt-in recipe provenance. EMPTY for the default recipe (no --loss, no
     # --photometric-augment) so a default run's checkpoint keys and recorded
     # train_config stay byte-for-byte identical to a pre-flag run; absence
-    # means the historical unweighted CE / no photometric jitter.
-    recipe_extras = loss_config.loss_train_config(loss_config.resolve_loss_spec(args.loss))
+    # means the historical unweighted CE / no photometric jitter. For the
+    # co-occurrence loss this carries co_lambda and co_pooling into lineage
+    # (design §4.3).
+    recipe_extras = loss_config.loss_train_config(_loss_spec(args))
     if args.photometric_augment:
         recipe_extras["photometric_augment"] = True
 
@@ -760,6 +850,8 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         split_seed=args.split_seed,
         foodseg103_source=args.foodseg103_source,
         palette_version=PALETTE_VERSION,
+        pretrained_checkpoint=_pretrained_checkpoint_record(args),
+        co_stats_sha256=co_stats_sha256,
     )
     lineage_path = lineage.write_lineage(manifest, out.parent / "lineage.json")
     print(f"[train] lineage -> {lineage_path} (model_version={manifest['model_version']})")
@@ -798,8 +890,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--loss", default=None, choices=loss_config.LOSS_CHOICES,
                         help="Training loss (see loss_config.py). Omit for the "
                              "historical unweighted cross-entropy; weighted_ce/"
-                             "combined derive inverse-frequency class weights "
-                             "from the train masks.")
+                             "combined/co_occurrence derive inverse-frequency "
+                             "class weights from the train masks. co_occurrence "
+                             "(design §4.3) adds an image-level presence BCE "
+                             "term weighted by the co_stats.json priors and "
+                             "requires --split-seed to match the prepared "
+                             "dataset's co_stats.json.")
+    parser.add_argument("--co-lambda", type=float,
+                        default=loss_config.DEFAULT_CO_LAMBDA,
+                        help="Mixing weight for the co-occurrence presence "
+                             "term (co_occurrence loss only); recorded in "
+                             "lineage.")
+    parser.add_argument("--pretrained-source-url", default=None,
+                        help="Source URL of the published pretrained checkpoint "
+                             "this run initialises from; recorded in lineage "
+                             "(Req 2.2).")
+    parser.add_argument("--pretrained-licence", default=None,
+                        help="Licence identifier of the pretrained checkpoint "
+                             "(e.g. BSD-3-Clause); recorded in lineage.")
+    parser.add_argument("--pretrained-sha256", default=None,
+                        help="SHA-256 of the pretrained checkpoint file; "
+                             "recorded in lineage.")
     parser.add_argument("--photometric-augment", action="store_true",
                         help="Opt-in brightness/contrast/colour jitter on the "
                              "TRAIN images only (never the mask); off by default.")
