@@ -39,7 +39,7 @@ references:
 
 ## Shell re-root & Graph demotion
 
-- [ ] 4. Extend AppRoot.ActiveSheet, present the five covers, remove DataView <!-- id:46pogp4 -->
+- [x] 4. Extend AppRoot.ActiveSheet, present the five covers, remove DataView <!-- id:46pogp4 -->
   - ActiveSheet → capture / intake / records / graph / settings; fullScreenCover(item:) presents CaptureFlowView / IntakeView / RecordsView / TrendsView / SettingsView, each carrying CloseCoverButton
   - .intake presents the Track C-owned IntakeView (forward reference, Decision 12) — the branch compiles once IntakeView lands
   - delete DataView.swift (Records supersedes the meal-only Data screen, Decision 6); the .data route is gone
@@ -48,14 +48,14 @@ references:
   - Requirements: [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [2.1](requirements.md#2.1), [3.9](requirements.md#3.9)
   - References: design.md, decision_log.md
 
-- [ ] 5. Create HomeView — the launch-root router <!-- id:46pogp5 -->
+- [x] 5. Create HomeView — the launch-root router <!-- id:46pogp5 -->
   - App/HomeView.swift; six controls (Capture, Intake, Dose, Records, Graph, Settings) firing closures injected by AppRoot; no presentation state of its own
   - Capture is the primary action — accent-prominent (.borderedProminent .tint(.medataAccent)), most prominent position
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [1.3](requirements.md#1.3)
   - References: design.md
 
-- [ ] 6. Swap AppRoot root content to HomeView and wire it <!-- id:46pogp6 -->
+- [x] 6. Swap AppRoot root content to HomeView and wire it <!-- id:46pogp6 -->
   - AppRoot.body renders HomeView instead of TrendsView; inject closures that set activeSheet / showInsulinSheet
   - keep onChange(of: activeSheet) → capturePresented()/captureDismissed() unchanged (AR session armed only while .capture, Req 1.5); keep onOpenURL + pendingDeepLink deferral in AppRoot (Decision 9)
   - Blocked-by: 46pogp4 (Extend AppRoot.ActiveSheet, present the five covers, remove DataView), 46pogp5 (Create HomeView — the launch-root router)
@@ -63,7 +63,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.5](requirements.md#1.5), [2.1](requirements.md#2.1)
   - References: design.md, decision_log.md
 
-- [ ] 7. Relocate the insulin sheet and deep-link handoff to AppRoot <!-- id:46pogp7 -->
+- [x] 7. Relocate the insulin sheet and deep-link handoff to AppRoot <!-- id:46pogp7 -->
   - move insulin .sheet(isPresented: $showInsulinSheet, onDismiss:) and the onInsulinSheetDismiss pending-.captureCover handoff from TrendsView to AppRoot (Decision 10)
   - the Dose home control and medata://insulin/add both target this sheet; preserve the deferral-behind-a-conflicting-surface behaviour
   - Blocked-by: 46pogp6 (Swap AppRoot root content to HomeView and wire it)
@@ -71,7 +71,7 @@ references:
   - Requirements: [1.6](requirements.md#1.6)
   - References: design.md, decision_log.md
 
-- [ ] 8. Demote Graph to visualisation-only in TrendsView <!-- id:46pogp8 -->
+- [x] 8. Demote Graph to visualisation-only in TrendsView <!-- id:46pogp8 -->
   - remove the graph.data / graph.settings / graph.insulin / graph.capture toolbar controls and their injected closures/bindings; remove the now-dead .onChange(of: showInsulinSheet)
   - remove the inline day-insulin .onDelete (Req 2.4); keep the chart + ranges, trends.options, and the day-meal tap-through (Decision 11)
   - add CloseCoverButton in topBarLeading (Graph is now a cover)
