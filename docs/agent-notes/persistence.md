@@ -50,6 +50,14 @@ BGProcessingTask guard: `#if os(iOS)` (not `canImport(BackgroundTasks)` which wo
 
 Cross-repo check (2026-07-05): a store-written fixture loads in medreg via `medreg.ingest.load_events` with matching units/kind/timestamp/insulin_type/note. medreg is read-only over the export archive; no adapter needed.
 
+## Bsl ingestion (libre-ingestion + cgm-connect)
+
+Both `ingestBsl` (screenshot import) and `ingestLiveBsl` (live sources, cgm-connect Phase 1) share one private keep-first merge, `mergeBslKeepFirst`, which takes per-row `(timestampMs, value, metadataJSON)` tuples and adds each freshly inserted `timestampMs` to its covered set as it goes. That covered-set update is a deliberate behavioural change to `ingestBsl` too: two same-timestamp readings in one screenshot batch previously both inserted; now the second is classified `skippedExisting` (cgm-connect design "finding #5").
+
+`ingestLiveBsl` differences from `ingestBsl`: no `processed_images` marker, per-row metadata built by the store itself (`{"source_id":…,"native_instant_ms":…,"native_id":…}`, `native_id` key absent — never null — when nil, matching the insulin convention), callers pass typed `LiveBslReading` values and never construct event JSON. Both notify `eventsDidChange` once per batch iff at least one row stored.
+
+Known limit: `mergeBslKeepFirst` seeds its covered set with a `timestamp IN (…)` query — one bound variable per reading against SQLite's 32,766 cap. A 90-day 5-minute-grid backfill is ~25,921 rows (works, ~20% headroom); a larger raw batch would throw "too many SQL variables". Scheduled fix (cgm-connect Phase 2): seed with `BETWEEN min AND max` on the indexed timestamp instead.
+
 ## GRDB version note
 
 `DatabaseQueue.read {}` is async in GRDB 6 — always `try await`. `Database.CheckpointMode` uses `.truncate` (not `.truncating`). The Archive throwing initializer is `try Archive(url:accessMode:)`.
