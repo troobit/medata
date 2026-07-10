@@ -191,3 +191,88 @@ struct FoodRegionCoverageTests {
         )
     }
 }
+
+// Fail-closed food-coverage gate (PRD estimation-quality, estimation-runtime-
+// consistency §2). A near-empty argmax mask must refuse with the EXISTING
+// `noFoodPixels` failure instead of flowing a handful of noisy pixels through
+// the volume→β→carbs chain and emitting a wildly variable number.
+@Suite("Food-coverage gate (estimation-runtime-consistency)")
+struct FoodCoverageGateTests {
+
+    private static let width = 200
+    private static let height = 100    // 20 000 px; 0.1 % threshold = 20 px
+
+    // Small palette: indices 0–1 solid food, 2 liquid, 3 background,
+    // 4 unknown_food, 5 unsupported_liquid.
+    private static let palette = ClassPalette(
+        foodClasses: ["bread", "rice"],
+        liquidClasses: ["soup"],
+        background: 3,
+        unknownFood: 4,
+        unsupportedLiquid: 5,
+        version: "v1"
+    )
+
+    private static func makeArgmax(labelAt: (Int, Int) -> UInt8) -> ArgmaxMap {
+        var pixels = Data(count: width * height)
+        pixels.withUnsafeMutableBytes { raw in
+            let buf = raw.bindMemory(to: UInt8.self).baseAddress!
+            for y in 0..<height {
+                for x in 0..<width {
+                    buf[y * width + x] = labelAt(x, y)
+                }
+            }
+        }
+        return ArgmaxMap(pixels: pixels, height: height, width: width)
+    }
+
+    @Test("near-empty mask (below 0.1 % food) refuses with noFoodPixels")
+    func nearEmptyMaskRefuses() {
+        // 19 food pixels of 20 000 (0.095 %) — just below the 20-px threshold.
+        let argmax = Self.makeArgmax { x, y in
+            (y == 0 && x < 19) ? 0 : UInt8(Self.palette.background)
+        }
+        #expect(throws: EstimationFailure.noFoodPixels) {
+            try enforceMinimumFoodCoverage(argmax: argmax, palette: Self.palette)
+        }
+    }
+
+    @Test("coverage exactly at the threshold accepts")
+    func coverageAtThresholdAccepts() throws {
+        // 20 food pixels of 20 000 = exactly 0.1 % — the boundary accepts.
+        let argmax = Self.makeArgmax { x, y in
+            (y == 0 && x < 20) ? 0 : UInt8(Self.palette.background)
+        }
+        try enforceMinimumFoodCoverage(argmax: argmax, palette: Self.palette)
+    }
+
+    @Test("a realistic plate-sized mask accepts")
+    func realisticMaskAccepts() throws {
+        // ~5 % of the frame labelled food — the low end of a genuine meal.
+        let argmax = Self.makeArgmax { x, y in
+            (x < 100 && y < 10) ? 1 : UInt8(Self.palette.background)
+        }
+        try enforceMinimumFoodCoverage(argmax: argmax, palette: Self.palette)
+    }
+
+    @Test("recognised liquid pixels count towards coverage")
+    func liquidPixelsCount() throws {
+        // All-soup frame: liquids integrate volume (Req 7.3), so a liquid-only
+        // mask is NOT near-empty.
+        let argmax = Self.makeArgmax { _, _ in 2 }
+        try enforceMinimumFoodCoverage(argmax: argmax, palette: Self.palette)
+    }
+
+    @Test("sentinel labels do not count towards coverage")
+    func sentinelLabelsDoNotCount() {
+        // unknown_food / unsupported_liquid / background never integrate
+        // volume, so a frame full of them must still refuse.
+        let argmax = Self.makeArgmax { x, _ in
+            x % 2 == 0 ? UInt8(Self.palette.unknownFood)
+                       : UInt8(Self.palette.unsupportedLiquid)
+        }
+        #expect(throws: EstimationFailure.noFoodPixels) {
+            try enforceMinimumFoodCoverage(argmax: argmax, palette: Self.palette)
+        }
+    }
+}

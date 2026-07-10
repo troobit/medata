@@ -250,6 +250,13 @@ public struct Pipeline: Sendable {
         #endif
         let palette = nadirSeg.probabilities.palette
 
+        // Fail-closed near-empty-mask gate (estimation-runtime-consistency):
+        // refuse before Volume/β when food coverage is below the stated minimum,
+        // so a speckle-only mask surfaces as a consistent `noFoodPixels` refusal
+        // rather than a wildly variable carb number. Guards both capture paths —
+        // the nadir mask is the primary silhouette for each.
+        try enforceMinimumFoodCoverage(argmax: nadirSeg.argmax, palette: palette)
+
         // β-correction table from database at current edition.
         let beta = buildBeta(palette: palette, edition: captureResult.databaseEdition)
 
