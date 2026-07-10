@@ -98,6 +98,21 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   follows per-epoch poly-0.9 decay (`train.LR_SCHEDULE`), recorded in checkpoint +
   lineage `train_config`. The fixed-lr, no-aug baseline plateaued at ~0.34 val
   food-class mIoU by epoch 22/60 while train loss kept falling.
+- **Opt-in loss + photometric augmentation (estimation-quality PRD)** —
+  `train.py --loss {ce,weighted_ce,focal,dice,combined}` selects the training
+  loss; `--photometric-augment` adds train-only brightness/contrast/colour
+  jitter (image only, applied BEFORE the letterbox so padding stays exact
+  black). Omitting both reproduces the historical recipe byte-for-byte in the
+  recorded checkpoint/`train_config` — the default `ce` and off-by-default
+  photometric record NO new keys, so absence means the historical unweighted
+  CE. The pure parts (loss-name validation, spec dispatch, inverse-frequency
+  class weights with zero-count auto-pin + `MAX_CLASS_WEIGHT` clamp) live in
+  `tools/segmenter/loss_config.py`, torch-free-tested by
+  `tests/test_loss_config.py`; the torch side is `train._build_criterion` +
+  `train._train_pixel_counts` (one PIL/numpy pass over the train masks, only
+  when the loss uses weights). The resume sidecar records/validates
+  `loss`/`photometric_augment` as drift (old sidecars without the keys read as
+  the defaults). Recommended next run: docs/ml-training.md §4.
 - **`emit_lineage` preserves recorded metrics** — re-exporting the SAME checkpoint
   no longer wipes a validation result or release override out of `lineage.json`
   (`lineage.preserve_metrics`, SHA-matched).

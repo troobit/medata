@@ -33,7 +33,10 @@ RECIPE: the train split gets geometric augmentation (horizontal flip + random
 scale-up crop, ``--no-augment`` to disable) and the learning rate follows a
 per-epoch poly-0.9 decay from ``--lr`` (LR_SCHEDULE). The first fixed-lr,
 no-augmentation baseline overfit — train loss kept falling while val food-class
-mIoU plateaued around 0.34 by epoch 22 of 60.
+mIoU plateaued around 0.34 by epoch 22 of 60. OPT-IN extensions (both default
+to the historical recipe when omitted): ``--loss`` selects a class-imbalance-
+aware loss (see ``loss_config``) and ``--photometric-augment`` adds train-only
+colour/brightness/contrast jitter to the IMAGE (never the mask).
 
 NEVER edit this file while a run is live: DataLoader workers are respawned each
 epoch and re-import the script from disk, so they execute NEW code against the
@@ -55,6 +58,16 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
+
+# Pure, torch-free loss selection + class-weight derivation. Safe to import at
+# module top: loss_config touches no heavy deps (same family as lineage.py), so
+# `--help` and the torch-free test suite still import train.py without torch.
+# Imported via sys.path (the run_validation._load_sibling pattern), NOT
+# spec_from_file_location, so spawn DataLoader workers can re-import it by name.
+_TOOLS_DIR = str(Path(__file__).resolve().parent)
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+import loss_config  # noqa: E402
 
 # ImageNet normalization -- MUST match export.reference_input (train/serve match).
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -81,6 +94,28 @@ LR_SCHEDULE = "poly-0.9-per-epoch"
 # Mask file extensions tried for each image stem, in order.
 _MASK_EXTS = (".png", ".PNG")
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG")
+
+# Opt-in photometric jitter range (--photometric-augment): each of brightness /
+# contrast / colour saturation gets an independent uniform factor from this
+# range per sample. Mild by design — the goal is robustness to kitchen
+# lighting, not a new colour distribution.
+PHOTOMETRIC_JITTER_RANGE = (0.8, 1.2)
+
+
+def _photometric_jitter(img):
+    """Brightness/contrast/colour jitter on a PIL RGB image (train split only).
+
+    Applied BEFORE the letterbox so the padding stays exact black, and NEVER to
+    the mask — photometric changes do not move class boundaries.
+    """
+    import random
+
+    from PIL import ImageEnhance
+
+    lo, hi = PHOTOMETRIC_JITTER_RANGE
+    for enhancer in (ImageEnhance.Brightness, ImageEnhance.Contrast, ImageEnhance.Color):
+        img = enhancer(img).enhance(random.uniform(lo, hi))
+    return img
 
 
 def _import_torch():
@@ -176,13 +211,20 @@ class FoodSegDataset:
     imports without torch (CLI --help must work torch-free).
 
     ``augment=True`` (train split only) applies joint GEOMETRIC augmentation —
-    horizontal flip + random scale-up crop — before normalisation. Geometry only:
-    colour handling must stay matched to ``SegmenterPreProcessor`` (module
-    docstring), so no colour jitter here without a lockstep serve-side decision.
+    horizontal flip + random scale-up crop — before normalisation.
+
+    ``photometric=True`` (train split only, opt-in via ``--photometric-augment``)
+    additionally jitters brightness/contrast/colour on the IMAGE ONLY — the mask
+    is never touched, and the jitter lands BEFORE the letterbox so the padding
+    stays exact black (normalised zero). This is augmentation, not a
+    preprocessing change: the val path and the serve-side normalisation
+    (``SegmenterPreProcessor`` — module docstring) are untouched, so train/serve
+    colour handling stays matched. Do NOT change the normalisation itself
+    without a lockstep serve-side decision.
     """
 
     def __init__(self, split_dir: Path, target_size: int, limit: int | None = None,
-                 augment: bool = False):
+                 augment: bool = False, photometric: bool = False):
         # Availability check only — do NOT store the modules on the instance.
         # macOS DataLoader workers start via spawn, which pickles the dataset,
         # and module objects are unpicklable.
@@ -190,6 +232,7 @@ class FoodSegDataset:
         _import_pillow()
         self.target_size = target_size
         self.augment = augment
+        self.photometric = photometric
 
         images_dir = split_dir / "images"
         masks_dir = split_dir / "masks"
@@ -236,6 +279,8 @@ class FoodSegDataset:
         from PIL import ImageOps
 
         img = ImageOps.exif_transpose(Image.open(img_path)).convert("RGB")
+        if self.photometric:
+            img = _photometric_jitter(img)
         mask_img = Image.open(mask_path)
         img, mask_img = self._letterbox_pair(img, mask_img, Image, augment=self.augment)
 
@@ -331,6 +376,93 @@ def _resolve_device(device_arg: str):
     return torch.device("cpu")
 
 
+def _train_pixel_counts(dataset: FoodSegDataset, num_classes: int) -> list[int]:
+    """Per-class pixel counts over the train split's ORIGINAL mask files.
+
+    One pass with PIL + numpy (no torch, no letterbox): letterbox padding is
+    always background, so counting the raw masks slightly under-counts
+    background relative to what the model sees — irrelevant for a frequency-
+    based weighting of the (rare) food classes. Values >= num_classes would be
+    a prepare_dataset.py bug and abort loudly.
+    """
+    import numpy as np
+
+    Image = _import_pillow()
+    total = np.zeros(num_classes, dtype=np.int64)
+    for _, mask_path in dataset.pairs:
+        arr = np.asarray(Image.open(mask_path), dtype=np.int64)
+        if arr.ndim == 3:  # defensive: collapse an accidental RGB mask
+            arr = arr[..., 0]
+        counts = np.bincount(arr.ravel(), minlength=num_classes)
+        if counts.size > num_classes:
+            raise SystemExit(
+                f"[train] {mask_path} contains class ids >= {num_classes}; "
+                "re-run prepare_dataset.py"
+            )
+        total += counts
+    return total.tolist()
+
+
+def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device):
+    """Build the torch loss for a loss_config spec (torch side of the recipe).
+
+    ``loss_spec`` comes from ``loss_config.resolve_loss_spec`` (already
+    validated); ``class_weights`` is required exactly when
+    ``loss_config.loss_uses_class_weights`` says so. The default ``ce`` returns
+    a plain ``nn.CrossEntropyLoss()`` — the historical recipe, untouched.
+    """
+    torch = _import_torch()
+    import torch.nn as nn
+
+    name = loss_spec["loss"]
+    if name == "ce":
+        return nn.CrossEntropyLoss()
+
+    def _weights_tensor():
+        assert class_weights is not None, f"{name} requires class weights"
+        return torch.tensor(class_weights, dtype=torch.float32, device=device)
+
+    if name == "weighted_ce":
+        return nn.CrossEntropyLoss(weight=_weights_tensor())
+
+    if name == "focal":
+        gamma = float(loss_spec["focal_gamma"])
+
+        def focal(logits, targets):
+            # Standard focal loss (Lin et al. 2017) over the per-pixel CE.
+            ce = nn.functional.cross_entropy(logits, targets, reduction="none")
+            pt = torch.exp(-ce)
+            return ((1.0 - pt) ** gamma * ce).mean()
+
+        return focal
+
+    def dice(logits, targets):
+        # Soft Dice over softmax probabilities vs one-hot targets, averaged
+        # over classes; smoothing keeps absent classes finite.
+        probs = torch.softmax(logits, dim=1)
+        one_hot = nn.functional.one_hot(targets, probs.shape[1])
+        one_hot = one_hot.permute(0, 3, 1, 2).to(probs.dtype)
+        dims = (0, 2, 3)
+        inter = (probs * one_hot).sum(dims)
+        denom = probs.sum(dims) + one_hot.sum(dims)
+        score = (2.0 * inter + loss_config.DICE_SMOOTH) / (denom + loss_config.DICE_SMOOTH)
+        return 1.0 - score.mean()
+
+    if name == "dice":
+        return dice
+
+    if name == "combined":
+        dice_weight = float(loss_spec["dice_weight"])
+        weighted_ce = nn.CrossEntropyLoss(weight=_weights_tensor())
+
+        def combined(logits, targets):
+            return dice_weight * dice(logits, targets) + (1.0 - dice_weight) * weighted_ce(logits, targets)
+
+        return combined
+
+    raise SystemExit(f"[train] unhandled loss {name!r}")  # unreachable: spec validated
+
+
 def food_class_miou(model, loader, device, num_classes: int) -> float:
     """Mean IoU over FOOD classes only (excludes 24/25/26 per §4/§5).
 
@@ -412,9 +544,14 @@ def _load_resume_state(args) -> dict:
         "lr": args.lr,
         "batch_size": args.batch_size,
         "augment": not args.no_augment,
+        "loss": loss_config.normalise_loss_name(args.loss),
+        "photometric_augment": args.photometric_augment,
     }
+    # Sidecars written before the opt-in loss/photometric flags existed lack
+    # these keys; absence means the historical defaults, not drift.
+    legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False}
     for key, want in expected.items():
-        got = state.get(key)
+        got = state.get(key, legacy_defaults.get(key))
         if got != want:
             raise SystemExit(
                 f"[train] resume mismatch on {key}: sidecar has {got!r} but this "
@@ -442,6 +579,8 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "lr": args.lr,
         "batch_size": args.batch_size,
         "augment": not args.no_augment,
+        "loss": loss_config.normalise_loss_name(args.loss),
+        "photometric_augment": args.photometric_augment,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -452,7 +591,6 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
 
 def train(args) -> int:
     torch = _import_torch()
-    import torch.nn as nn
 
     sidecar = _sidecar_path(args.out)
     if args.resume is None and sidecar.is_file():
@@ -465,10 +603,12 @@ def train(args) -> int:
     device = _resolve_device(args.device)
     print(f"[train] device = {device}")
 
+    loss_spec = loss_config.resolve_loss_spec(args.loss)
+
     data_root = Path(args.data)
     augment = not args.no_augment
     train_ds = FoodSegDataset(data_root / "train", args.target_size, limit=args.limit,
-                              augment=augment)
+                              augment=augment, photometric=args.photometric_augment)
     print(f"[train] train samples = {len(train_ds)}")
 
     val_dir = data_root / "val"
@@ -508,7 +648,15 @@ def train(args) -> int:
     if resume_state is not None:
         # load_state_dict casts restored state to each param's device/dtype.
         optimizer.load_state_dict(resume_state["optimizer"])
-    criterion = nn.CrossEntropyLoss()
+
+    class_weights = None
+    if loss_config.loss_uses_class_weights(loss_spec["loss"]):
+        print("[train] deriving inverse-frequency class weights from train masks…")
+        counts = _train_pixel_counts(train_ds, args.num_classes)
+        class_weights = loss_config.inverse_frequency_weights(counts, args.num_classes)
+    criterion = _build_criterion(loss_spec, class_weights, device)
+    print(f"[train] loss = {loss_spec}"
+          + (" | photometric augment ON" if args.photometric_augment else ""))
 
     last_miou = float(resume_state["last_food_class_miou"]) if resume_state else float("nan")
     for epoch in range(start_epoch, args.epochs + 1):
@@ -561,6 +709,15 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     torch = _import_torch()
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    # Opt-in recipe provenance. EMPTY for the default recipe (no --loss, no
+    # --photometric-augment) so a default run's checkpoint keys and recorded
+    # train_config stay byte-for-byte identical to a pre-flag run; absence
+    # means the historical unweighted CE / no photometric jitter.
+    recipe_extras = loss_config.loss_train_config(loss_config.resolve_loss_spec(args.loss))
+    if args.photometric_augment:
+        recipe_extras["photometric_augment"] = True
+
     checkpoint = {
         "model": model.state_dict(),
         "num_classes": args.num_classes,
@@ -572,6 +729,7 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         "augment": not args.no_augment,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
+        **recipe_extras,
     }
     torch.save(checkpoint, str(out))
     print(f"[train] saved checkpoint -> {out}")
@@ -589,6 +747,7 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         "lr_schedule": LR_SCHEDULE,
         "augment": not args.no_augment,
         "pretrained": pretrained,
+        **recipe_extras,
     }
     if resumed_from_epoch is not None:
         # Provenance must never claim a single uninterrupted run.
@@ -634,6 +793,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-augment", action="store_true",
                         help="Disable train-split augmentation (hflip + random "
                              "scale-up crop) — e.g. for deterministic smoke runs.")
+    parser.add_argument("--loss", default=None, choices=loss_config.LOSS_CHOICES,
+                        help="Training loss (see loss_config.py). Omit for the "
+                             "historical unweighted cross-entropy; weighted_ce/"
+                             "combined derive inverse-frequency class weights "
+                             "from the train masks.")
+    parser.add_argument("--photometric-augment", action="store_true",
+                        help="Opt-in brightness/contrast/colour jitter on the "
+                             "TRAIN images only (never the mask); off by default.")
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
 
