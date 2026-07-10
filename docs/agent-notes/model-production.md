@@ -43,7 +43,9 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 - **Validation reporting (tasks 8–9)** — `tools/segmenter/validation.py` (pure,
   torch-free). Takes a `per_class_iou` mapping, computes food-class mean IoU
   (special channels excluded), the carb-priority subset, and the **export
-  eligibility** decision: `mean ≥ 0.60 AND every carb-priority staple ≥ 0.50`.
+  eligibility** decision: `mean ≥ 0.48 AND every carb-priority staple ≥ 0.45`
+  (re-derived bars, segmenter-foundation Decisions 5/14; were 0.60/0.50 —
+  `HarnessCore/SegBench.swift` `passesBar` enforces the same 0.48 gate).
   `shortfall()` lists what failed (incl. an absent staple — it cannot prove the
   floor, Req 3.6). `record_metrics_into_lineage()` / `update_lineage_file()` write
   the `{mean_iou, per_class_iou, carb_priority_iou, export_eligible, shortfall}`

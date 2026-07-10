@@ -644,3 +644,58 @@ letterbox pre-processing is only observable in on-device behaviour (stage
 - Req 8.9's named gate path (`HarnessCLI seg-bench`) stays dormant until the pre-release return-to-blocking step (Decision 11).
 
 ---
+
+## Decision 16: Export-eligibility bars re-pointed at the segmenter-foundation re-derivation (0.60 → 0.48 mean, 0.50 → 0.45 floors)
+
+**Date**: 2026-07-11
+**Status**: accepted
+
+### Context
+
+The Track A deep-research findings (`docs/agent-notes/model-foundation-research.md`)
+showed the 0.60 mean food-class IoU gate (Req 3.2 / pipeline Decision 14) sits
+above the published FoodSeg103 achievable frontier — no published model at any
+size clears 0.60, and the ~0.52 SOTA needs 100M+ parameters against the shipped
+architecture's 11.0M. Both shipped models were released under the Decision 11
+developer-phase override, so the gate steered nothing. The `segmenter-foundation`
+spec re-derived the bars from the frontier, the pinned 0.4054 baseline, and the
+carb-priority floors: gate 0.48 (its Decision 5) and uniform per-class floors
+0.45 (its Decision 14), with the held-out split re-cut stratified under its
+Req 2.6 so every staple is measurable.
+
+### Decision
+
+Amend this spec's requirements to reference the re-derived bars, with
+`segmenter-foundation`'s decision log as the authoritative home for the values:
+Req 3.2 and Req 3.4 now cite the re-derived gate (segmenter-foundation
+Decision 5, currently 0.48; was 0.60), Req 3.5 the re-derived floors
+(segmenter-foundation Decision 14, currently 0.45; was 0.50), and Req 2.2
+carries the stratified held-out re-cut note (segmenter-foundation Req 2.6: new
+fixed seed, stratified, then frozen again).
+
+### Rationale
+
+A gate no achievable model can meet is permanently overridden and stops
+informing shipping decisions — the same shape as the 10 MB weight budget
+Decision 13 already corrected. Pointing the requirements at the
+segmenter-foundation derivation keeps one authoritative home for the numbers,
+so a future re-derivation amends one decision log instead of chasing every
+copy. The export-eligibility mechanics (validation harness, shortfall
+recording, Decision 11 override) are unchanged; only the bar values move.
+
+### Alternatives Considered
+
+- **Keep 0.60 and rely on the Decision 11 override indefinitely**: No document churn - Rejected: the gate then never blocks or steers anything; the override was designed as a developer-phase bridge, not a permanent bypass.
+- **Inline the bare numbers (0.48/0.45) without citing segmenter-foundation**: Simpler sentences - Rejected: severs the trail to the derivation and its revisit triggers (baseline re-measure shift > 0.02, staple baseline < 0.40), inviting another arbitrary-bar cycle.
+
+### Consequences
+
+**Positive:**
+- The gate is attainable, so export eligibility becomes a real shipping signal again instead of a formality to override.
+- One authoritative home (segmenter-foundation Decisions 5 and 14) for the bar values, with the amendment history visible in the requirement text.
+
+**Negative:**
+- A model can now ship as export-eligible at an accuracy the original 0.60 bar would have blocked — the bar is honest rather than aspirational.
+- Reading Req 3.2/3.5 now requires following a cross-spec reference to get the current numbers.
+
+---

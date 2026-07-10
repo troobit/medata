@@ -25,34 +25,34 @@ metadata:
   - Done: gate fixed at mean food-class IoU >= 0.48 (Decision 5, arithmetic corrected 2026-07-11), per-staple floors at 0.45 (Decision 14), label-space comparability note recorded (design §3.1), uplift set anchored to the gate (Decision 18). Logged before any training run is judged against them (Decision 2's rule).
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.6](requirements.md#1.6)
 
-- [ ] 2. Amend model-production requirements to the re-derived bars <!-- id:2mfkxyp -->
+- [x] 2. Amend model-production requirements to the re-derived bars <!-- id:2mfkxyp -->
   - Edit specs/estimation/model-production/requirements.md: Req 3.2 and 3.4 (0.60 -> "the re-derived gate, segmenter-foundation Decision 5, currently 0.48"), Req 3.5 (0.50 floors -> "the re-derived floors, Decision 14, currently 0.45"), Req 2.2 (note: heldout re-cut under segmenter-foundation Req 2.6 — new seed, stratified, then frozen again). Add one model-production decision-log entry recording the amendments, citing this spec (the Decision 13 pattern).
   - Blocked-by: 2mfkxyo (Record the re-derived bars in the decision log)
   - Requirements: [1.3](requirements.md#1.3)
 
-- [ ] 3. Amend the pipeline spec: Decision 14 superseded, Req 8.9 amended-by note <!-- id:2mfkxyq -->
+- [x] 3. Amend the pipeline spec: Decision 14 superseded, Req 8.9 amended-by note <!-- id:2mfkxyq -->
   - In specs/estimation/pipeline/decision_log.md change Decision 14's Status to 'superseded by segmenter-foundation Decision 5' (keep its text as the historical record). In specs/estimation/pipeline/requirements.md add an amended-by note to Req 8.9 in the existing Req 8.2 style.
   - Blocked-by: 2mfkxyo (Record the re-derived bars in the decision log)
   - Requirements: [1.3](requirements.md#1.3)
 
-- [ ] 4. Amend the remaining documentation sites carrying the old bars <!-- id:2mfkxz1 -->
+- [x] 4. Amend the remaining documentation sites carrying the old bars <!-- id:2mfkxz1 -->
   - docs/ml-training.md all normative 0.60/0.50 sites (lines 133, 144, 341, 350, 378, 560): new values + pointer to this spec. specs/estimation/model-production/design.md:184: gate value + pointer. model-production tasks.md/prerequisites.md: annotate ACTIVE export-eligibility wording with the new bars; do not rewrite completed/historical entries. Run make spell.
   - Blocked-by: 2mfkxyo (Record the re-derived bars in the decision log)
   - Requirements: [1.3](requirements.md#1.3)
 
-- [ ] 5. Code: update validation.py bar constants, docstrings, and tests <!-- id:2mfkxz2 -->
+- [x] 5. Code: update validation.py bar constants, docstrings, and tests <!-- id:2mfkxz2 -->
   - tools/segmenter/validation.py: MEAN_IOU_BAR = 0.48, CARB_PRIORITY_IOU_BAR = 0.45; correct the module/function docstrings still stating the 0.60/0.50 rule and "24 food-class names" (the palette has 32 food channels); update train.py:30,337 docstring/comment gate mentions in the same pass. Update the existing export-eligibility pytest cases to the new bars.
   - Blocked-by: 2mfkxyo (Record the re-derived bars in the decision log)
   - Requirements: [1.3](requirements.md#1.3)
 
-- [ ] 6. Code: update HarnessCore SegBench bar and its tests <!-- id:2mfkxz3 -->
+- [x] 6. Code: update HarnessCore SegBench bar and its tests <!-- id:2mfkxz3 -->
   - HarnessCore/SegBench.swift:40 passesBar: 0.60 -> 0.48 so seg-bench and validation.py enforce one gate; update MedataCore/Tests/HarnessCLITests/SegBenchTests.swift:25,89,101. Debug-only surface (HARNESS_ENABLED); verify with make test (report both totals).
   - Blocked-by: 2mfkxyo (Record the re-derived bars in the decision log)
   - Requirements: [1.3](requirements.md#1.3)
 
 ## Phase 2: Dataset and Recipe Code (autonomous; needs the PRD landing in-branch)
 
-- [ ] 7. Bring the estimation-quality PRD's training-pipeline code into the working branch <!-- id:2mfkxyr -->
+- [x] 7. Bring the estimation-quality PRD's training-pipeline code into the working branch <!-- id:2mfkxyr -->
   - The PRD's --loss flag, loss_config helpers, and photometric augmentation are merged to research (research:tools/segmenter/train.py:796; changelog fdc89a0) but this worktree branched pre-merge. Merge research into the working branch (or execute Phase 2 tasks on research after the spec docs merge). Do not re-implement the PRD's scope (design §2.1).
   - Requirements: [2.3](requirements.md#2.3)
 

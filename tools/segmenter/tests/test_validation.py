@@ -1,8 +1,9 @@
 """Validation reporting + export-eligibility tests (model-production task 8).
 
 Pure decision logic over synthetic per-class IoU inputs (Req 3.2 / 3.5 / 3.6):
-a checkpoint is export-eligible only when mean food-class IoU >= 0.60 AND every
-carb-priority staple >= 0.50. Independent of the gated GPU run that produces the
+a checkpoint is export-eligible only when mean food-class IoU >= 0.48 AND every
+carb-priority staple >= 0.45 (re-derived bars, segmenter-foundation Decisions 5
+and 14; were 0.60/0.50). Independent of the gated GPU run that produces the
 real IoUs — these tests feed fixed synthetic IoUs.
 """
 
@@ -17,8 +18,9 @@ def _food_iou(value: float) -> dict[str, float]:
 # ── Bars / set contract ─────────────────────────────────────────────────────────
 
 def test_bars_and_carb_priority_set_match_spec():
-    assert validation.MEAN_IOU_BAR == 0.60
-    assert validation.CARB_PRIORITY_IOU_BAR == 0.50
+    # Re-derived bars: segmenter-foundation Decision 5 (gate) and Decision 14 (floors).
+    assert validation.MEAN_IOU_BAR == 0.48
+    assert validation.CARB_PRIORITY_IOU_BAR == 0.45
     assert validation.CARB_PRIORITY_CLASSES == (
         "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
         "potato_boiled", "potato_mashed", "chips_fries",
@@ -38,14 +40,14 @@ def test_eligible_when_mean_and_carb_priority_pass():
 
 
 def test_not_eligible_when_mean_below_bar():
-    # Mean 0.55 < 0.60, even though each carb-priority staple clears its 0.50 floor.
-    report = validation.evaluate(_food_iou(0.55))
+    # Mean 0.46 < 0.48, even though each carb-priority staple clears its 0.45 floor.
+    report = validation.evaluate(_food_iou(0.46))
     assert report["export_eligible"] is False
     assert any(s["class"] == "mean" for s in report["shortfall"])
 
 
 def test_not_eligible_when_a_carb_priority_class_below_floor():
-    # Mean is high, but one staple dips under the 0.50 per-class floor (Req 3.5):
+    # Mean is high, but one staple dips under the 0.45 per-class floor (Req 3.5):
     # a mean alone would hide it (Decision 6).
     iou = _food_iou(0.90)
     iou["white_rice"] = 0.40
