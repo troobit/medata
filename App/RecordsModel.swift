@@ -136,6 +136,9 @@ final class RecordsModel {
             let carbsG = event.value,
             let data = event.metadata.data(using: .utf8),
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            // `subtype` tolerates an absent key (only .carb ships, so absence is
+            // unambiguous); `source` is strict — with two live values, a missing
+            // key cannot be defaulted without guessing, so the row is dropped.
             let subtype = IntakeSubtype(rawValue: object["subtype"] as? String ?? "carb"),
             let sourceRaw = object["source"] as? String,
             let source = IntakeSource(rawValue: sourceRaw)
