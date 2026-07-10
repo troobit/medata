@@ -320,6 +320,69 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     private static let discrepancyLimitMmol = 0.3
     private static let floatTolerance = 1e-9
 
+    // Keep-first merge shared by ingestBsl and ingestLiveBsl (specs/data/
+    // cgm-connect design "Persistence: extract the keep-first helper").
+    // Runs inside an open write transaction. `covered` is seeded from
+    // committed rows via a BETWEEN range query over the batch's min/max
+    // timestamps — three bound variables regardless of batch size, so a
+    // large backfill never hits SQLite's 32,766 bound-variable ceiling.
+    // Extra committed rows inside the range are harmless: the map is only
+    // probed at incoming timestamps. Each freshly inserted timestampMs is
+    // then added to `covered` as it happens, so two rows in the same batch
+    // landing on the same timestampMs cannot both insert — the store-level
+    // guard behind Phase 2's intra-batch collapse.
+    private func mergeBslKeepFirst(
+        _ db: Database, _ rows: [(timestampMs: Int64, value: Double, metadataJSON: String)]
+    ) throws -> (stored: Int, agreeing: Int, discrepant: [BslIngestSummary.Discrepancy]) {
+        var covered: [Int64: Double] = [:]
+        if let minTimestamp = rows.map(\.timestampMs).min(),
+            let maxTimestamp = rows.map(\.timestampMs).max() {
+            let existing = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT timestamp, value FROM events
+                    WHERE event_type = ? AND timestamp BETWEEN ? AND ?
+                    """,
+                arguments: [EventType.bsl, minTimestamp, maxTimestamp]
+            )
+            for row in existing {
+                let timestamp: Int64 = row["timestamp"]
+                let value: Double = row["value"]
+                covered[timestamp] = value
+            }
+        }
+
+        var stored = 0
+        var agreeing = 0
+        var discrepant: [BslIngestSummary.Discrepancy] = []
+        for row in rows {
+            if let kept = covered[row.timestampMs] {
+                if abs(kept - row.value)
+                    > Self.discrepancyLimitMmol + Self.floatTolerance {
+                    discrepant.append(.init(
+                        timestampMs: row.timestampMs,
+                        kept: kept, new: row.value))
+                } else {
+                    agreeing += 1
+                }
+                continue
+            }
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    UUID().uuidString, row.timestampMs, EventType.bsl,
+                    row.value, row.metadataJSON,
+                ]
+            )
+            covered[row.timestampMs] = row.value
+            stored += 1
+        }
+        return (stored: stored, agreeing: agreeing, discrepant: discrepant)
+    }
+
     public func ingestBsl(
         readings: [BslReading], metadataJSON: String,
         sourceHash: String, filename: String
@@ -328,54 +391,10 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         // guarantee: the coverage snapshot and the inserts are one unit; two
         // concurrent ingests cannot both see a timestamp as uncovered.
         let summary = try await queue.write { db -> BslIngestSummary in
-            var covered: [Int64: Double] = [:]
-            if !readings.isEmpty {
-                let placeholders = Array(repeating: "?", count: readings.count)
-                    .joined(separator: ",")
-                var arguments: [DatabaseValueConvertible] = [EventType.bsl]
-                arguments += readings.map(\.timestampMs)
-                let rows = try Row.fetchAll(
-                    db,
-                    sql: """
-                        SELECT timestamp, value FROM events
-                        WHERE event_type = ? AND timestamp IN (\(placeholders))
-                        """,
-                    arguments: StatementArguments(arguments)
-                )
-                for row in rows {
-                    let timestamp: Int64 = row["timestamp"]
-                    let value: Double = row["value"]
-                    covered[timestamp] = value
-                }
+            let rows = readings.map {
+                (timestampMs: $0.timestampMs, value: $0.value, metadataJSON: metadataJSON)
             }
-
-            var stored = 0
-            var agreeing = 0
-            var discrepant: [BslIngestSummary.Discrepancy] = []
-            for reading in readings {
-                if let kept = covered[reading.timestampMs] {
-                    if abs(kept - reading.value)
-                        > Self.discrepancyLimitMmol + Self.floatTolerance {
-                        discrepant.append(.init(
-                            timestampMs: reading.timestampMs,
-                            kept: kept, new: reading.value))
-                    } else {
-                        agreeing += 1
-                    }
-                    continue
-                }
-                try db.execute(
-                    sql: """
-                        INSERT INTO events (id, timestamp, event_type, value, metadata)
-                        VALUES (?, ?, ?, ?, ?)
-                        """,
-                    arguments: [
-                        UUID().uuidString, reading.timestampMs, EventType.bsl,
-                        reading.value, metadataJSON,
-                    ]
-                )
-                stored += 1
-            }
+            let merged = try self.mergeBslKeepFirst(db, rows)
             try db.execute(
                 sql: """
                     INSERT INTO processed_images (hash, filename, processed_at)
@@ -388,10 +407,10 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             )
             return BslIngestSummary(
                 extracted: readings.count,
-                stored: stored,
-                skippedExisting: agreeing + discrepant.count,
-                agreeing: agreeing,
-                discrepant: discrepant
+                stored: merged.stored,
+                skippedExisting: merged.agreeing + merged.discrepant.count,
+                agreeing: merged.agreeing,
+                discrepant: merged.discrepant
             )
         }
         // Req 4.4: one tick per batch, and only when the event log changed.
@@ -399,6 +418,49 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             changeBroadcaster.notify()
         }
         return summary
+    }
+
+    public func ingestLiveBsl(_ readings: [LiveBslReading]) async throws -> BslIngestSummary {
+        guard !readings.isEmpty else {
+            return BslIngestSummary(
+                extracted: 0, stored: 0, skippedExisting: 0, agreeing: 0, discrepant: [])
+        }
+        let summary = try await queue.write { db -> BslIngestSummary in
+            let rows = try readings.map {
+                (
+                    timestampMs: $0.timestampMs, value: $0.mmolL,
+                    metadataJSON: try Self.liveBslMetadataJSON(for: $0)
+                )
+            }
+            let merged = try self.mergeBslKeepFirst(db, rows)
+            return BslIngestSummary(
+                extracted: readings.count,
+                stored: merged.stored,
+                skippedExisting: merged.agreeing + merged.discrepant.count,
+                agreeing: merged.agreeing,
+                discrepant: merged.discrepant
+            )
+        }
+        // Req 4.4: one tick per batch, and only when the event log changed.
+        if summary.stored > 0 {
+            changeBroadcaster.notify()
+        }
+        return summary
+    }
+
+    // Builds the `metadata` JSON object for a live reading: `source_id`,
+    // `native_instant_ms`, and `native_id` only when provided — the key is
+    // absent, never null, when nil (mirrors insulinMetadataJSON below).
+    private static func liveBslMetadataJSON(for reading: LiveBslReading) throws -> String {
+        var payload: [String: Any] = [
+            "source_id": reading.sourceID,
+            "native_instant_ms": reading.nativeInstantMs,
+        ]
+        if let nativeID = reading.nativeID {
+            payload["native_id"] = nativeID
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
     }
 
     // MARK: - Insulin doses (PRD regression-suggestion-integration Core 2–4)

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- cgm-connect Req 2: HealthKit read access for the glucose source, plus
+	     background delivery so HKObserverQuery wakes fire while backgrounded
+	     (required for enableBackgroundDelivery since iOS 15). The signing
+	     profile must have HealthKit enabled for a device install. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.background-delivery</key>
+	<true/>
+</dict>
+</plist>

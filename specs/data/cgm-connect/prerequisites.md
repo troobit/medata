@@ -26,6 +26,15 @@ by the requirements critical review (2026-07-10).
   `kSecAttrAccessibleAfterFirstUnlock` so a background refresh on a locked device can read them
   (default `WhenUnlocked` would fail the background poll).
 
+## LibreLinkUp source — research resolved (2026-07-10)
+
+The task 7 spike confirmed the API contract (auth flow incl. region redirect and the SHA-256
+`account-id` header, payload shape, mg/dL-only `ValueInMgPerDl` consumption, no stable
+per-reading id — dedup on `(patientId, FactoryTimestamp)`, ≤15-min poll safe, self-describing
+version-floor failure). Full contract: `docs/agent-notes/librelinkup-api.md`. Verdict:
+implementable with reasonable confidence. The original open questions below are retained for
+provenance.
+
 ## LibreLinkUp source — open research (blocks Req 3 design)
 
 - **No MeData backend.** SNAQ's "paste this identity into the Libre app" flow (IMG_0629/0630)
