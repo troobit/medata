@@ -10,9 +10,9 @@
 > `.onDelete` is gone; `TrendsModel.deleteDose` is now unreferenced but deliberately left in
 > the perf-sensitive file). `RecordsView`/`RecordsModel`/`RecordRow` replaced the meal-only
 > `DataView` (deleted); the shared `mealRouteDestination`/`CloseCoverButton` live in
-> `App/MealRouting.swift`. `App/IntakeView.swift` is a compile placeholder owned by
-> `manual-carb-intake` (Track C, home-router Decision 12) — replaced wholesale by that spec;
-> do not build on it. The AR session still runs ONLY while the Capture cover is frontmost:
+> `App/MealRouting.swift`. `App/IntakeView.swift` is now the real Intake surface, landed
+> by `manual-carb-intake` (`IntakeView` + `IntakeModel` + `CarbEntrySheet`/`CarbEntryModel`
+> + `QuickPresetEditSheet`; quick-add presets live in the new `quick_presets` table). The AR session still runs ONLY while the Capture cover is frontmost:
 > `CaptureFlowModel.capturePresented()` arms (via `.initialising`),
 > `captureDismissed()` releases; `evaluatePermissions` is gated on `isCapturePresented`, so
 > launch shows no camera prompt. The old `tabSelectionChanged`/`sheetDidPresent` hooks are

@@ -114,7 +114,7 @@ references:
 
 ## Verification
 
-- [ ] 11. Register new files in project.pbxproj and build <!-- id:yh454un -->
+- [x] 11. Register new files in project.pbxproj and build <!-- id:yh454un -->
   - Register IntakeEvent.swift, CarbEntryModel.swift, CarbEntrySheet.swift, QuickPresetEditSheet.swift, IntakeModel.swift, IntakeEventTests.swift, QuickPresetTests.swift in MeData.xcodeproj/project.pbxproj (four-section checklist per docs/agent-notes/ui-capture-flow.md)
   - Run make build and make test; report both XCTest and swift-testing totals
   - Run make spell
