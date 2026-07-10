@@ -67,17 +67,17 @@ references:
 
 ## Phase 4 — App wiring, UI, capabilities
 
-- [ ] 10. App start: construct the coordinator, register the available sources; add a @MainActor @Observable GlucoseConnectionsModel that consumes stateStream() and mirrors it <!-- id:oecpdmz -->
+- [x] 10. App start: construct the coordinator, register the available sources; add a @MainActor @Observable GlucoseConnectionsModel that consumes stateStream() and mirrors it <!-- id:oecpdmz -->
   - Blocked-by: oecpdmx (HealthKit source #if canImportHealthKit in GlucoseIngestion: auth for the glucose type; read via the mmol/L HKUnit; 90-day HKSampleQuery backfill as one batch; HKObserverQuery + enableBackgroundDelivery + anchored query; foreground catch-up; ignore deletions; anchor in UserDefaults), oecpdmy (LibreLinkUp source GlucoseIngestion: Keychain credential capture/store AfterFirstUnlock, URLSession client, payload->GlucoseSample, <=15-min foreground timer + BGAppRefreshTask + foreground catch-up, failure->.failed state, disconnect clears credentials. Gated on task 7)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4)
 
-- [ ] 11. SettingsGlucoseView off the existing Settings surface: source rows with state/last-reading/last-success/discrepancy, connect/disconnect, HealthKit auth sheet + LibreLinkUp credential form; functional copy only; mmol/L only; existing settings-row pattern <!-- id:oecpdn0 -->
+- [x] 11. SettingsGlucoseView off the existing Settings surface: source rows with state/last-reading/last-success/discrepancy, connect/disconnect, HealthKit auth sheet + LibreLinkUp credential form; functional copy only; mmol/L only; existing settings-row pattern <!-- id:oecpdn0 -->
   - Blocked-by: oecpdmz (App start: construct the coordinator, register the available sources; add a @MainActor @Observable GlucoseConnectionsModel that consumes stateStream and mirrors it)
   - Stream: 1
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4)
 
-- [ ] 12. Capabilities: HealthKit entitlement + NSHealthShareUsageDescription; BGTaskSchedulerPermittedIdentifiers + background-modes for the LibreLinkUp refresh <!-- id:oecpdn1 -->
+- [x] 12. Capabilities: HealthKit entitlement + NSHealthShareUsageDescription; BGTaskSchedulerPermittedIdentifiers + background-modes for the LibreLinkUp refresh <!-- id:oecpdn1 -->
   - Blocked-by: oecpdmx (HealthKit source #if canImportHealthKit in GlucoseIngestion: auth for the glucose type; read via the mmol/L HKUnit; 90-day HKSampleQuery backfill as one batch; HKObserverQuery + enableBackgroundDelivery + anchored query; foreground catch-up; ignore deletions; anchor in UserDefaults), oecpdmy (LibreLinkUp source GlucoseIngestion: Keychain credential capture/store AfterFirstUnlock, URLSession client, payload->GlucoseSample, <=15-min foreground timer + BGAppRefreshTask + foreground catch-up, failure->.failed state, disconnect clears credentials. Gated on task 7)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [3.2](requirements.md#3.2)

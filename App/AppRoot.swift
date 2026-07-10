@@ -19,6 +19,7 @@ struct AppRoot: View {
     @Bindable var captureModel: CaptureFlowModel
     let engine: ARKitCaptureEngine
     let store: any PersistenceStore
+    let glucoseConnections: GlucoseConnectionsModel
     let visionCardDetector: VisionCardDetector?
     let preShutterSegmenter: PreShutterSegmenter?
 
@@ -43,12 +44,14 @@ struct AppRoot: View {
         captureModel: CaptureFlowModel,
         engine: ARKitCaptureEngine,
         store: any PersistenceStore,
+        glucoseConnections: GlucoseConnectionsModel,
         visionCardDetector: VisionCardDetector? = nil,
         preShutterSegmenter: PreShutterSegmenter? = nil
     ) {
         self.captureModel = captureModel
         self.engine = engine
         self.store = store
+        self.glucoseConnections = glucoseConnections
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
     }
@@ -107,7 +110,11 @@ struct AppRoot: View {
                 TrendsView(store: store)
             case .settings:
                 NavigationStack {
-                    SettingsView(store: store, hasLiDAR: captureModel.supportsLiDAR)
+                    SettingsView(
+                        store: store,
+                        hasLiDAR: captureModel.supportsLiDAR,
+                        glucoseConnections: glucoseConnections
+                    )
                 }
             }
         }

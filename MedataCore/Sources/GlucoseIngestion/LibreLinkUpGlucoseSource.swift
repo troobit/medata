@@ -217,10 +217,18 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
 
     // MARK: - Persisted last-success (Req 3.3)
 
+    // Also read by the Settings UI (Req 6.1) — static and nonisolated so the
+    // MainActor model shows the persisted last-fetch time without hopping
+    // onto the actor. Survives relaunch, unlike the session-scoped
+    // connection state (Decision 10).
+    public static func persistedLastSuccessAt() -> Date? {
+        let stored = UserDefaults.standard.double(forKey: lastSuccessDefaultsKey)
+        return stored > 0 ? Date(timeIntervalSince1970: stored) : nil
+    }
+
     private var lastSuccessAt: Date? {
         get {
-            let stored = UserDefaults.standard.double(forKey: Self.lastSuccessDefaultsKey)
-            return stored > 0 ? Date(timeIntervalSince1970: stored) : nil
+            Self.persistedLastSuccessAt()
         }
         set {
             if let newValue {
