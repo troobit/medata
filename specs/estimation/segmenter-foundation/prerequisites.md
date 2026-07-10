@@ -1,23 +1,29 @@
 # Prerequisites for Segmenter Foundation
 
-These are the human/compute-gated stages a coding agent cannot perform — a merge from another branch, a GPU, or a physical iPhone. The code-actionable work lives in `tasks.md` (Phase 1 and Phase 2, both autonomous); this file is the checklist behind the two gated stages that block completion of the spec's requirements (Requirement 2's training run and Requirement 3's spike/retrain).
+These are the human/compute-gated stages a coding agent cannot perform — a dataset on disk, a GPU/MPS run, or a physical iPhone. The code-actionable work lives in `tasks.md` (Phases 1–2, autonomous); this file is the checklist behind the gated stages (Phase 3 training track, Phase 4 spike half and retrain).
 
-## Cross-branch dependency (blocks Phase 3 entirely)
+## Cross-branch dependency — SATISFIED, one local action remains
 
-- [ ] **`debug-read` branch's estimation-quality PRD, "Segmenter training pipeline" context, merges into the branch that will run training.** That PRD (`specs/estimation/estimation-quality/prd.md`, unmerged as of this writing) lands the `--loss {ce,weighted_ce,focal,dice,combined}` flag on `tools/segmenter/train.py`, the torch-free class-weight helpers, and opt-in photometric augmentation — the code this spec's Requirement 2 recipe (tasks 4–6: pretrained-checkpoint sourcing, class-imbalance countermeasure, lineage schema) is specified against. Design §2.1 covers the sequencing reasoning: re-implementing that flag here would fork the same code change across two branches. **This is the single hardest blocker** — nothing in Phase 3 (tasks 10–12) can start before it.
+- [x] **`debug-read`'s estimation-quality PRD, "Segmenter training pipeline" context, merged to `research`.** Verified 2026-07-10: `research:tools/segmenter/train.py:796` carries the `--loss` flag and `loss_config` helpers; changelog entry `fdc89a0` records the integration.
+- [ ] **Bring that landing into the branch executing Phase 2** (tasks.md task 7): this worktree (`estimation/model-foundation`) branched off `research@1b172b2`, pre-merge — merge `research` in, or execute the Phase 2 code tasks on `research` after the spec docs merge. Do not re-implement the PRD's scope (design §2.1).
 
-## Training (Requirement 2 — Phase 3)
+## Dataset stage (Requirement 2.6 — Phase 3, task 17)
 
-- [ ] **Run the recipe-upgraded GPU training job** (`tools/segmenter/train.py`, multi-hour local MPS/GPU): DeepLabV3+MobileNetV3-Large @ 513×513, initialised from the licensed pretrained checkpoint (task 4), using the class-imbalance loss (task 5) via the `debug-read` PRD's `--loss` flag. Needs: the merged training-pipeline code (above) and a GPU. Produces the checkpoint judged by task 12.
-- [ ] **Validate the recipe-upgraded checkpoint** (`run_validation.py`, automated once the checkpoint exists): mean IoU ≥ 0.48 (the re-derived gate, task 1/Decision 5), each of the 8 carb-priority classes ≥ baseline + 0.05 with no staple regressing > 0.02 (Req 2.3), export artefact ≤ 24 MiB FP16 and ≤ 250 ms ANE-resident (Req 2.5, corrected budget per Decision 6). A sub-bar run is not a spec failure — the developer override (Decision 4) still applies — but the shortfall is recorded.
+- [ ] **FoodSeg103 on disk** (already acquired for the 2026-07-06 runs; re-listed because the re-cut re-runs `prepare_dataset.py` from it).
+- [ ] **Execute the stratified re-cut + baseline re-measure** (`prepare_dataset.py` with the new carve and a new seed, then `run_validation.py` for `24e0b022241a`). Produces the per-class baseline table every later delta anchors to, and checks both revisit triggers (mean shift > 0.02 → Decision 5; any staple < 0.40 → Decision 14).
+
+## Training (Requirement 2 — Phase 3, tasks 18–19)
+
+- [ ] **Run the recipe-upgraded training job** (`tools/segmenter/train.py`, multi-hour local MPS/GPU): chosen init (Decision 17 survey), co-occurrence loss via the landed `--loss` plumbing, re-cut splits, lineage additions.
+- [ ] **Validate against the bars as written**: mean uplift ≥ 0.03 over the re-measured baseline (Req 2.4); +0.05 for staples below the 0.48 gate at baseline, 0.45 floors for newly measurable staples, ≤ 0.02 regression elsewhere (Req 2.3 / Decision 18); the 0.48 gate reported separately as export-eligibility — a criteria-met-but-below-gate run triggers Req 1.5's residual-gap entry and may still ship under the Decision 4 override; budgets ≤ 24 MiB FP16 and ≤ 250 ms on the v1 hardware floor (Req 2.5).
 
 ## Backbone-swap spike (Requirement 3 — Phase 4)
 
-- [ ] **Autonomous half — Core ML conversion + equivalence-oracle check.** No GPU needed; runs in a Python/coremltools environment. Covered by `tasks.md` task 13, not gated, listed here only because it precedes the gated half below.
-- [ ] **On-device ANE latency and residency measurement** on the iPhone 16 Pro (devicectl id `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`, name `you`) via Xcode's Core ML performance report. Needs: a Mac + Xcode and the physical device. Confirms criterion 3 of the spike (Req 3.1) — the criterion the research flagged as the single biggest unknown ("nobody publishes Core ML / ANE latencies for these" transformer candidates).
-- [ ] **IF the spike passes all four criteria — SegFormer-B0 FoodSeg103 retrain** using the same recipe as the Requirement 2 checkpoint (not a separate unweighted baseline), compared against it on both mean IoU and the carb-staple mean (Req 3.3). A second gated GPU run, strictly after the spike passes and the Requirement 2 recipe exists to reuse. If the spike fails any criterion, this stage does not happen — Requirement 3 closes with the failure recorded (task 15) and Requirement 2 remains the sole track.
+- [ ] **Autonomous half — `spike_segformer.py` conversion + size + equivalence oracle** (tasks.md task 14; listed here only because it precedes the gated half).
+- [ ] **On-device ANE latency and residency measurement on the iPhone 13 Pro Max** — the v1 hardware floor, physically available (Decision 16); NOT the iPhone 16 Pro. Xcode Core ML performance report; confirms criterion 3 (Req 3.1), the criterion the research flagged as the single biggest unknown.
+- [ ] **IF the spike passes all four criteria — SegFormer-B0 retrain** on the same re-cut split with the same recipe, adopted only on a ≥ 0.02 win on both mean food-class IoU and the eight-staple mean (Req 3.3). If the spike fails any criterion, Requirement 3 closes with the failure recorded and Requirement 2 remains the sole track.
 
 ## Notes
 
-- Every gated stage above produces an artefact or a verdict that a later `tasks.md` task consumes (task 1's gate value informs task 12's pass/fail check; task 15's verdict gates task 16). None of them are optional for the spec's requirements to be fully satisfied, but Phase 1 and Phase 2 (the specification work) are already complete once written — the spec's *documents* do not wait on these stages, only the *training outcomes* they describe do.
-- This spec produces no code and touches no files outside `specs/estimation/segmenter-foundation/` (Hard Limit, design.md §1). The gated stages above are executed by whichever branch/session picks up `tools/segmenter/` work next, informed by tasks 1–9's specifications.
+- Every gated stage produces an artefact or verdict a later task consumes (task 17's baseline table anchors task 19's deltas; task 21's verdict gates task 22). The spec's *documents* do not wait on these stages — only the training outcomes they describe do.
+- This spec lands code in `tools/segmenter/` and one Debug-only HarnessCore bar change (design.md §1 second pass; §3.3, §3.5, §4.3, §5.2) — the earlier "produces no code" note described the first-pass design and is superseded. It still does not run training or change the production process.
