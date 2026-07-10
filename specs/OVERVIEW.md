@@ -26,6 +26,7 @@
 | [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root; Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
 | [Regression Suggestion Integration](#regression-suggestion-integration) | data · ui | 2026-07-05 | Done | prd | Insulin dosing as a first-class event stream conforming to medreg's insulin-event convention: dose-entry sheet from the Graph toolbar, Graph dose markers/stats, `medata://` deep links, and lock-/home-screen launcher widgets (`MeDataWidgets`). All 20 tasks across 3 contexts done. |
 | [CGM Connect](#cgm-connect) | data | 2026-07-10 | In Progress | full | Live glucose ingestion behind a source abstraction (HealthKit primary, LibreLinkUp follower complement) writing `bsl` events with cross-source 5-minute-grid dedup, firewalled from estimation by a package-graph test. 13/14 tasks done; on-device verify (task 14) human-gated. |
+| [Manual Carb Intake](#manual-carb-intake) | data · ui | 2026-07-07 | In Progress | full | Manual carb/macro logging without the camera: carb-entry sheet (keypad, 1–999 g, optional macros behind a disclosure), one-tap quick-add presets (`quick_presets` table, seeded defaults), inline edit/delete of manual entries, `EventType.intake` folded into the Graph carb series and Records timeline. All 11 tasks done; on-device verification checklist (design.md) human-gated. |
 
 ---
 
@@ -192,3 +193,12 @@ Live glucose ingestion behind a source abstraction: connect once, readings flow 
 - [requirements.md](data/cgm-connect/requirements.md)
 - [tasks.md](data/cgm-connect/tasks.md)
 - [userinput.md](data/cgm-connect/userinput.md)
+
+## Manual Carb Intake
+
+A direct manual carb-logging path alongside the photo pipeline: a carb-entry sheet modelled on the insulin-dose flow (numeric keypad, whole grams 1–999, back-dateable timestamp, optional protein/fat/fibre behind a disclosure — absent, never zero, when left empty) and one-tap quick-add presets (flat user-editable collection in the new `quick_presets` table, schema v5, seeded once with "A pint"/"Bagel"/"Chips"). Entries are `EventType.intake` events mirroring the insulin convention, distinguishable from photo meals, folded into the same Graph carb series and Records timeline, and editable/deletable inline from the Intake surface's recent-entries list. A manual entry can be saved as a new preset in one step. All 11 tasks done — the on-device verification checklist (design.md, Testing Strategy) awaits the human loop.
+
+- [decision_log.md](data/manual-carb-intake/decision_log.md)
+- [design.md](data/manual-carb-intake/design.md)
+- [requirements.md](data/manual-carb-intake/requirements.md)
+- [tasks.md](data/manual-carb-intake/tasks.md)
