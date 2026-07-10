@@ -3,31 +3,20 @@ import Pipeline
 import SwiftUI
 
 // The Graph screen (renamed from Trends — Decision 21) — design-handoff-00 §10,
-// design-system/pages/trends.md. It is the launch root under the Graph-rooted
-// shell (Decision 20): its toolbar carries the primary Capture control plus the
-// Data and Settings controls (the shell owns the single `ActiveSheet` state), so
-// it presents no close control of its own. A single-chart dual-series view:
-// glucose as a line (mmol/L, leading axis) and carbs as bars (g, trailing axis
-// relabelled in grams) over a shared y-scale (the single-scale workaround), with
-// the 3.9–10.0 mmol/L target band. Week and Month aggregate to per-day totals
-// and averages. Reads glucose exclusively from `bsl` events (Req 11.1); all
-// bucketing / axis maths is `TrendsMath`.
+// design-system/pages/trends.md. Visualisation only (home-router Req 2): it
+// presents as a full-screen cover from the home page, carrying the standard
+// close control; the Capture / Data / Settings / Insulin entry points moved to
+// the home page and the insulin dose sheet relocated to AppRoot (Decision 10).
+// A single-chart dual-series view: glucose as a line (mmol/L, leading axis)
+// and carbs as bars (g, trailing axis relabelled in grams) over a shared
+// y-scale (the single-scale workaround), with the 3.9–10.0 mmol/L target band.
+// Week and Month aggregate to per-day totals and averages. Reads glucose
+// exclusively from `bsl` events (Req 11.1); all bucketing / axis maths is
+// `TrendsMath`.
 struct TrendsView: View {
     let store: any PersistenceStore
-    // Graph-root controls open the Capture / Data / Settings covers through
-    // these closures (the shell owns the single `ActiveSheet` state — Decision 20).
-    var onOpenCapture: () -> Void = {}
-    var onOpenData: () -> Void = {}
-    var onOpenSettings: () -> Void = {}
-    // The insulin dose sheet (PRD regression-suggestion-integration App 1) is
-    // a plain sheet presented HERE — lighter than the shell's full-screen
-    // covers — but AppRoot owns the binding so the `medata://insulin/add`
-    // deep link can present it after dismissing any active cover (App 10).
-    // `onInsulinSheetDismiss` fires when the sheet's dismissal completes, so
-    // AppRoot can sequence a pending medata://capture present behind it.
-    @Binding var showInsulinSheet: Bool
-    var onInsulinSheetDismiss: () -> Void = {}
 
+    @Environment(\.dismiss) private var dismiss
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
     @State private var showOptions = false
@@ -39,20 +28,8 @@ struct TrendsView: View {
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
 
-    init(
-        store: any PersistenceStore,
-        showInsulinSheet: Binding<Bool> = .constant(false),
-        onInsulinSheetDismiss: @escaping () -> Void = {},
-        onOpenCapture: @escaping () -> Void = {},
-        onOpenData: @escaping () -> Void = {},
-        onOpenSettings: @escaping () -> Void = {}
-    ) {
+    init(store: any PersistenceStore) {
         self.store = store
-        _showInsulinSheet = showInsulinSheet
-        self.onInsulinSheetDismiss = onInsulinSheetDismiss
-        self.onOpenCapture = onOpenCapture
-        self.onOpenData = onOpenData
-        self.onOpenSettings = onOpenSettings
         _model = State(initialValue: TrendsModel(store: store))
     }
 
@@ -79,30 +56,12 @@ struct TrendsView: View {
             .navigationTitle("Graph")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Data and Settings, top-leading (Decision 20). Capture is the
-                // primary control and lives top-trailing, made visually prominent.
+                // Graph is a cover now (Req 1.4): the standard close control
+                // top-leading, chart options top-trailing. The navigation
+                // entry points (Capture / Data / Settings / Insulin) moved to
+                // the home page (Req 2.3).
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onOpenData) {
-                        Image(systemName: "square.stack.3d.up")
-                    }
-                    .accessibilityLabel("Data")
-                    .accessibilityIdentifier("graph.data")
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onOpenSettings) {
-                        Image(systemName: "gearshape.fill")
-                    }
-                    .accessibilityLabel("Settings")
-                    .accessibilityIdentifier("graph.settings")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showInsulinSheet = true
-                    } label: {
-                        Image(systemName: "syringe")
-                    }
-                    .accessibilityLabel("Log insulin")
-                    .accessibilityIdentifier("graph.insulin")
+                    CloseCoverButton { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -113,30 +72,12 @@ struct TrendsView: View {
                     .accessibilityLabel("Options")
                     .accessibilityIdentifier("trends.options")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onOpenCapture) {
-                        Image(systemName: "camera.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.medataAccent)
-                    .accessibilityLabel("Capture")
-                    .accessibilityIdentifier("graph.capture")
-                }
             }
             .navigationDestination(for: MealRoute.self) { route in
                 mealRouteDestination(route, store: store, path: $path)
             }
         }
         .sheet(isPresented: $showOptions) { TrendsOptionsSheet() }
-        .sheet(isPresented: $showInsulinSheet, onDismiss: onInsulinSheetDismiss) {
-            InsulinDoseSheet(store: store)
-        }
-        // A deep-link present while the options sheet is up: drop the options
-        // sheet; SwiftUI presents the still-requested insulin sheet once the
-        // dismissal completes.
-        .onChange(of: showInsulinSheet) { _, presented in
-            if presented { showOptions = false }
-        }
         .task { await model.start() }
         .onChange(of: model.range) { _, _ in
             Task { await model.reload() }
@@ -396,9 +337,9 @@ struct TrendsView: View {
 
     // MARK: - Day insulin list (App 8)
 
-    // The day's doses beside the Meals list. Swipe-to-delete lives on a List
-    // (the only SwiftUI surface with row swipe actions); it is height-pinned
-    // and scroll-disabled so it reads as a plain section of the ScrollView.
+    // The day's doses beside the Meals list, read-only (Req 2.4 — deletion
+    // lives on the Records surface). The List is height-pinned and
+    // scroll-disabled so it reads as a plain section of the ScrollView.
     private let doseRowHeight: CGFloat = 44
 
     private var dayInsulin: some View {
@@ -416,12 +357,6 @@ struct TrendsView: View {
                         doseRow(dose)
                             .listRowBackground(Color.surfacePrimary)
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                    }
-                    .onDelete { offsets in
-                        let ids = offsets.map { model.dayDoses[$0].id }
-                        Task {
-                            for id in ids { await model.deleteDose(id: id) }
-                        }
                     }
                 }
                 .listStyle(.plain)
