@@ -29,7 +29,7 @@ references:
 
 ## Persistence: quick-add presets
 
-- [ ] 3. Write tests for quick_presets table CRUD and first-launch seeding <!-- id:yh454uf -->
+- [x] 3. Write tests for quick_presets table CRUD and first-launch seeding <!-- id:yh454uf -->
   - New MedataCore/Tests/PersistenceTests/QuickPresetTests.swift, XCTest style matching InsulinEventTests.swift
   - Cover: saveQuickPreset insert + update-by-id, deleteQuickPreset, quickPresets() returns sort_order ASC, macro fields NULL when absent
   - Cover: first store-init on an empty DB seeds exactly the three authored defaults (A pint 17g, Bagel 45g, Chips 40g); a second init does NOT reseed once presets exist
@@ -37,7 +37,7 @@ references:
   - Requirements: [3.3](requirements.md#3.3), [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3)
   - References: design.md#Quick-add presets — new table
 
-- [ ] 4. Implement quick_presets schema (v4->v5 migration) and QuickPreset CRUD to pass tests <!-- id:yh454ug -->
+- [x] 4. Implement quick_presets schema (v4->v5 migration) and QuickPreset CRUD to pass tests <!-- id:yh454ug -->
   - GRDBPersistenceStore.createSchema adds CREATE TABLE IF NOT EXISTS quick_presets; migrate() re-stamps schema_version='5' matching the processed_images/v4 precedent
   - QuickPreset struct + quickPresets()/saveQuickPreset()/deleteQuickPreset() in Persistence
   - Idempotent first-launch seed of the 3 defaults gated on the table being empty at store-init
