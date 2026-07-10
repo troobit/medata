@@ -1,22 +1,5 @@
 #!/usr/bin/env bash
-# Create an in-repo git worktree under .worktrees/<name> and seed the main
-# checkout's nextup.md into it as an independent COPY.
-#
-# nextup.md is gitignored (see .gitignore), so it does NOT travel into a linked
-# worktree on its own — a fresh worktree would have no nextup.md at all. This
-# script copies it in so the worktree starts from the same nextup.md as root.
-#
-# It is a COPY, not a symlink, on purpose: the /nextup + worktree workflow wants
-# each worktree to inherit the root's USER-ZONE intent but keep its OWN local
-# MACHINE ZONE (the "Where things stand" block, rebuilt per worktree from that
-# worktree's specs). A symlink would share the machine zone across every
-# worktree and defeat that — so we seed a real file the worktree can diverge.
-#
-# Use this (or `make worktree name=<name>`) instead of a bare `git worktree add`:
-# a raw `git worktree add` will NOT bring nextup.md across — the git-lfs-owned
-# post-checkout hook is the only hook that fires and we deliberately do not
-# extend it (git-lfs overwrites it on reinstall).
-#
+# Create an in-repo git worktree under .worktrees/<name> and copy nextup.md in.
 # Usage:
 #   tools/new_worktree.sh <name> [branch]
 #     <name>    directory created under .worktrees/, and the default branch name
@@ -49,8 +32,7 @@ else
     git -C "$main_root" worktree add -b "$branch" "$wt_dir"
 fi
 
-# Seed the root's gitignored nextup.md into the new worktree as an independent
-# copy (see header: shared user-zone intent, local machine zone).
+# Copy nextup.md.
 if [ -e "$main_root/nextup.md" ]; then
     cp "$main_root/nextup.md" "$wt_dir/nextup.md"
     echo "copied nextup.md from $main_root/nextup.md"

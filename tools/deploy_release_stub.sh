@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# deploy_release_stub.sh — Release build with DEV_STUB_SEGMENTER forced on,
-# installed and launched on a connected device. Automates "Path B" from
+# deploy_release_stub.sh — Release build with DEV_STUB_SEGMENTER. Automates "Path B" from
 # docs/agent-notes/device-build-and-test.md.
 #
 # Why this exists: the Debug stub runs at ~20 s/mask (-Onone), so the shutter
