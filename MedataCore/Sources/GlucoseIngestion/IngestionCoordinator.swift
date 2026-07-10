@@ -1,0 +1,158 @@
+import Foundation
+import Persistence
+
+// Routes every source's readings through one ingestion path (Req 1.2):
+// snap each sample onto the 5-minute grid (Decision 4), collapse
+// intra-batch collisions, write the batch once through
+// `PersistenceStore.ingestLiveBsl`, and only then return — the durable ack
+// a source needs before advancing its cursor (Decision 7). Store errors
+// rethrow untouched so a failed write never advances anything.
+public actor IngestionCoordinator: GlucoseIngestSink {
+
+    private static let gridMs: Int64 = 5 * 60 * 1000
+
+    private let store: any PersistenceStore
+
+    // Registered sources (Req 1.3, 1.4). Phase 4 wires the real ones; until
+    // a source connects and ingests, its state stays whatever `state()`
+    // reported at registration (`.notConnected` for a fresh source — no
+    // error, no event-log writes).
+    private var sources: [String: any GlucoseSource] = [:]
+
+    // Per-source state mirrored to the UI via stateStream().
+    private var states: [String: GlucoseConnectionState] = [:]
+
+    // In-session discrepancy tally per source (Req 5.4, Decision 9):
+    // in-memory actor state only, reset on relaunch. Deliberately NOT part
+    // of GlucoseConnectionState (the design fixes that shape); the Settings
+    // UI reads it via `discrepancyCount(for:)`.
+    private var discrepancyTallies: [String: Int] = [:]
+
+    // Latest snapped instant a successful ingest has committed per source —
+    // the derived `lastReadingAt` in the connected state.
+    private var lastReadingMs: [String: Int64] = [:]
+
+    private var stateContinuations:
+        [UUID: AsyncStream<[String: GlucoseConnectionState]>.Continuation] = [:]
+
+    public init(store: any PersistenceStore) {
+        self.store = store
+    }
+
+    // MARK: - Source registry (Req 1.3, 1.4)
+
+    public func register(_ source: any GlucoseSource) async {
+        sources[source.id] = source
+        states[source.id] = await source.state()
+        emitStateSnapshot()
+    }
+
+    // MARK: - GlucoseIngestSink (Req 1.2, 4, 5)
+
+    public func ingest(
+        _ samples: [GlucoseSample], from sourceID: String
+    ) async throws -> BslIngestSummary {
+        // One bucket per snapped grid mark: keep the sample whose native
+        // instant is closest to the mark; ties → earliest native instant.
+        // Required because the store's keep-first loop reads only committed
+        // rows — two same-mark samples in one batch would otherwise race.
+        var buckets: [Int64: GlucoseSample] = [:]
+        for sample in samples {
+            let mark = Self.snapToGrid(Self.instantMs(sample.nativeInstant))
+            if let incumbent = buckets[mark],
+                !Self.wins(sample, over: incumbent, at: mark) {
+                continue
+            }
+            buckets[mark] = sample
+        }
+        let readings = buckets
+            .sorted { $0.key < $1.key }
+            .map { mark, sample in
+                LiveBslReading(
+                    timestampMs: mark,
+                    mmolL: (sample.mmolL * 10).rounded() / 10,
+                    sourceID: sourceID,
+                    nativeInstantMs: Self.instantMs(sample.nativeInstant),
+                    nativeID: sample.nativeID
+                )
+            }
+
+        // Durable-ack contract (Decision 7): a throw here propagates to the
+        // source, which must NOT advance its cursor.
+        let summary = try await store.ingestLiveBsl(readings)
+
+        discrepancyTallies[sourceID, default: 0] += summary.discrepant.count
+        if let latest = readings.map(\.timestampMs).max() {
+            lastReadingMs[sourceID] = max(lastReadingMs[sourceID] ?? .min, latest)
+        }
+        let lastReadingAt = lastReadingMs[sourceID].map {
+            Date(timeIntervalSince1970: Double($0) / 1000)
+        }
+        states[sourceID] = .connected(lastReadingAt: lastReadingAt)
+        emitStateSnapshot()
+        return summary
+    }
+
+    // MARK: - State to UI (Req 1.4, 6.1)
+
+    // Yields a snapshot dict (sourceID → state) on subscription and after
+    // every state change. `bufferingNewest(1)` so a slow UI consumer sees
+    // the latest snapshot, not a backlog — same policy as the store's
+    // eventsDidChange broadcaster.
+    public func stateStream() -> AsyncStream<[String: GlucoseConnectionState]> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let id = UUID()
+            stateContinuations[id] = continuation
+            continuation.onTermination = { _ in
+                Task { await self.removeStateContinuation(id) }
+            }
+            continuation.yield(states)
+        }
+    }
+
+    // In-session discrepancy tally for one source (Req 5.4, 6.1). Zero for
+    // an unknown source.
+    public func discrepancyCount(for sourceID: String) -> Int {
+        discrepancyTallies[sourceID, default: 0]
+    }
+
+    private func removeStateContinuation(_ id: UUID) {
+        stateContinuations[id] = nil
+    }
+
+    private func emitStateSnapshot() {
+        for continuation in stateContinuations.values {
+            continuation.yield(states)
+        }
+    }
+
+    // MARK: - Grid snapping (Req 5.1, Decision 4)
+
+    // Nearest 5-minute grid mark; an instant exactly halfway between two
+    // marks rounds to the LATER mark (deterministic half-to-later).
+    static func snapToGrid(_ instantMs: Int64) -> Int64 {
+        let shifted = instantMs + Self.gridMs / 2
+        let floored =
+            shifted >= 0
+            ? shifted / Self.gridMs
+            : (shifted - Self.gridMs + 1) / Self.gridMs
+        return floored * Self.gridMs
+    }
+
+    private static func instantMs(_ instant: Date) -> Int64 {
+        Int64((instant.timeIntervalSince1970 * 1000).rounded())
+    }
+
+    // Intra-batch tiebreak: nearest to the mark wins; equal distance →
+    // earliest native instant wins.
+    private static func wins(
+        _ challenger: GlucoseSample, over incumbent: GlucoseSample, at mark: Int64
+    ) -> Bool {
+        let challengerDistance = abs(instantMs(challenger.nativeInstant) - mark)
+        let incumbentDistance = abs(instantMs(incumbent.nativeInstant) - mark)
+        if challengerDistance != incumbentDistance {
+            return challengerDistance < incumbentDistance
+        }
+        return challenger.nativeInstant < incumbent.nativeInstant
+    }
+}

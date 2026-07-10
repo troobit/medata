@@ -323,27 +323,27 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     // Keep-first merge shared by ingestBsl and ingestLiveBsl (specs/data/
     // cgm-connect design "Persistence: extract the keep-first helper").
     // Runs inside an open write transaction. `covered` is seeded from
-    // committed rows via the existing timestamp IN (...) query, then each
-    // freshly inserted timestampMs is added to `covered` as it happens, so
-    // two rows in the same batch landing on the same timestampMs cannot
-    // both insert — the store-level guard behind Phase 2's intra-batch
-    // collapse.
+    // committed rows via a BETWEEN range query over the batch's min/max
+    // timestamps — three bound variables regardless of batch size, so a
+    // large backfill never hits SQLite's 32,766 bound-variable ceiling.
+    // Extra committed rows inside the range are harmless: the map is only
+    // probed at incoming timestamps. Each freshly inserted timestampMs is
+    // then added to `covered` as it happens, so two rows in the same batch
+    // landing on the same timestampMs cannot both insert — the store-level
+    // guard behind Phase 2's intra-batch collapse.
     private func mergeBslKeepFirst(
         _ db: Database, _ rows: [(timestampMs: Int64, value: Double, metadataJSON: String)]
     ) throws -> (stored: Int, agreeing: Int, discrepant: [BslIngestSummary.Discrepancy]) {
         var covered: [Int64: Double] = [:]
-        if !rows.isEmpty {
-            let placeholders = Array(repeating: "?", count: rows.count)
-                .joined(separator: ",")
-            var arguments: [DatabaseValueConvertible] = [EventType.bsl]
-            arguments += rows.map(\.timestampMs)
+        if let minTimestamp = rows.map(\.timestampMs).min(),
+            let maxTimestamp = rows.map(\.timestampMs).max() {
             let existing = try Row.fetchAll(
                 db,
                 sql: """
                     SELECT timestamp, value FROM events
-                    WHERE event_type = ? AND timestamp IN (\(placeholders))
+                    WHERE event_type = ? AND timestamp BETWEEN ? AND ?
                     """,
-                arguments: StatementArguments(arguments)
+                arguments: [EventType.bsl, minTimestamp, maxTimestamp]
             )
             for row in existing {
                 let timestamp: Int64 = row["timestamp"]
@@ -421,6 +421,10 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     }
 
     public func ingestLiveBsl(_ readings: [LiveBslReading]) async throws -> BslIngestSummary {
+        guard !readings.isEmpty else {
+            return BslIngestSummary(
+                extracted: 0, stored: 0, skippedExisting: 0, agreeing: 0, discrepant: [])
+        }
         let summary = try await queue.write { db -> BslIngestSummary in
             let rows = try readings.map {
                 (

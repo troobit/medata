@@ -25,25 +25,25 @@ references:
 
 ## Phase 2 — GlucoseIngestion module (macOS-testable core)
 
-- [ ] 3. Add the GlucoseIngestion SwiftPM target to Package.swift (deps: Persistence, PortableContracts) and a GlucoseIngestionTests test target <!-- id:oecpdmr -->
+- [x] 3. Add the GlucoseIngestion SwiftPM target to Package.swift (deps: Persistence, PortableContracts) and a GlucoseIngestionTests test target <!-- id:oecpdmr -->
   - Blocked-by: oecpdmp (Add LiveBslReading and ingestLiveBsl_ readings: async throws -> BslIngestSummary to PersistenceStore + GRDBPersistenceStore)
   - Stream: 1
   - Requirements: [7.1](requirements.md#7.1)
 
-- [ ] 4. Define GlucoseSample, GlucoseConnectionState, GlucoseIngestSink, and the GlucoseSource protocol (Sendable; connect(sink:) / disconnect() / state()) <!-- id:oecpdms -->
+- [x] 4. Define GlucoseSample, GlucoseConnectionState, GlucoseIngestSink, and the GlucoseSource protocol (Sendable; connect(sink:) / disconnect() / state()) <!-- id:oecpdms -->
   - Blocked-by: oecpdmr (Add the GlucoseIngestion SwiftPM target to Package.swift deps: Persistence, PortableContracts and a GlucoseIngestionTests test target)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1)
 
-- [ ] 5. Implement IngestionCoordinator (actor, GlucoseIngestSink): mg/dL->mmol/L normalise, grid-snap, intra-batch collapse, build [LiveBslReading], call ingestLiveBsl, in-session discrepancy tally, and a stateStream() for the UI <!-- id:oecpdmt -->
+- [x] 5. Implement IngestionCoordinator (actor, GlucoseIngestSink): mg/dL->mmol/L normalise, grid-snap, intra-batch collapse, build [LiveBslReading], call ingestLiveBsl, in-session discrepancy tally, and a stateStream() for the UI <!-- id:oecpdmt -->
   - Blocked-by: oecpdms (Define GlucoseSample, GlucoseConnectionState, GlucoseIngestSink, and the GlucoseSource protocol Sendable; connectsink: / disconnect / state)
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5)
-  - [ ] 5.1. Tests: grid-snap boundaries (exact, +2:29, +2:30, -2:30); intra-batch collapse to one row; mg/dL->mmol/L incl. 0.3-threshold boundary; cross-source dedup + discrepancy tally with stored value unchanged <!-- id:oecpdmu -->
+  - [x] 5.1. Tests: grid-snap boundaries (exact, +2:29, +2:30, -2:30); intra-batch collapse to one row; mg/dL->mmol/L incl. 0.3-threshold boundary; cross-source dedup + discrepancy tally with stored value unchanged <!-- id:oecpdmu -->
     - Stream: 1
     - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5)
 
-- [ ] 6. Firewall test: run swift package dump-package, parse the target graph, assert the transitive dependency closure of each estimation target excludes GlucoseIngestion <!-- id:oecpdmv -->
+- [x] 6. Firewall test: run swift package dump-package, parse the target graph, assert the transitive dependency closure of each estimation target excludes GlucoseIngestion <!-- id:oecpdmv -->
   - Blocked-by: oecpdmt (Implement IngestionCoordinator actor, GlucoseIngestSink: mg/dL->mmol/L normalise, grid-snap, intra-batch collapse, build [LiveBslReading], call ingestLiveBsl, in-session discrepancy tally, and a stateStream for the UI)
   - Stream: 1
   - Requirements: [7.1](requirements.md#7.1)
