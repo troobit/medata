@@ -169,33 +169,36 @@ A new `specs/ui/` home-router spec must be created (flagged in `nextup.md`). The
 
 ---
 
-## Decision 6: "Quickset" interpreted as a flat collection of presets (pending confirmation)
+## Decision 6: "Quickset" interpreted as a flat collection of presets
 
 **Date**: 2026-07-07
-**Status**: proposed
+**Status**: accepted (resolved 2026-07-10 at the design gate)
 
 ### Context
 
 The user wrote "have a quickset of options and create and add our own quicksets." This reads two ways: (a) a quickset is one preset, and the user creates many presets; or (b) a quickset is a named *group* of presets (e.g. a "pub" set, a "breakfast" set).
 
+Requirements landed with interpretation (a) (Req 3.1–3.3, Req 4.1–4.4 all describe a single collection of individually named presets, no grouping field anywhere) but this decision was left `proposed` pending confirmation. At the design gate, no new information favours (b): the home-router spec that landed in parallel treats Records as one flat, ungrouped timeline (home-router Decision 3, rejecting sectioned/filtered views for the same reason), and the project's stated bias for this spec is minimalist UI and less code.
+
 ### Decision
 
-Treat quick-add presets as a single flat, user-editable collection (interpretation a). Named/nested groups are a non-goal for this spec.
+Quick-add presets are a single flat, user-editable collection. Named/nested groups are a non-goal for this spec.
 
 ### Rationale
 
-A flat collection is the simplest thing that satisfies the one-tap goal and avoids grouping UI that works against "minimise interaction". Grouping can be added later if the user wants it.
+A flat collection is the simplest thing that satisfies the one-tap goal and avoids grouping UI (create-group, rename-group, move-preset-between-groups) that works against "minimise interaction." It matches the requirements as written and the sibling home-router spec's own flat-timeline choice. Grouping is additive later — a `groupName` field could be added to the preset row without breaking the flat rendering — so nothing here forecloses it.
 
 ### Alternatives Considered
 
-- **Named preset groups**: Organise presets into sets — Rejected as premature complexity; adds grouping UI without a demonstrated need.
+- **Named preset groups**: Organise presets into sets — Rejected as premature complexity; adds grouping UI (group CRUD, assignment) without a demonstrated need, and requirements as written describe single presets, not groups.
 
 ### Consequences
 
 **Positive:**
-- Simplest preset model and UI.
+- Simplest preset model and UI; matches requirements as written.
+- A `groupName` column could be added later without reshaping the flat list.
 
 **Negative:**
-- If the user meant named groups, this needs revisiting. **Flagged for confirmation at the requirements review gate.**
+- If the user later wants named sets (e.g. "pub" vs "breakfast"), that is new scope, not covered here.
 
 ---
