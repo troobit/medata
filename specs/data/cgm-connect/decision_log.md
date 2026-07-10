@@ -393,3 +393,54 @@ posture. Anyone needing the full history can query the event log.
 **Negative:**
 - The count resets on relaunch, so it reflects the current session only (documented in Req 6.1).
 </content>
+
+---
+
+## Decision 10: lastReadingAt is session-scoped delivery state, not event-log-derived
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+The design sketch annotated `GlucoseConnectionState.connected(lastReadingAt:)` with "derived
+from the event log". The Phase 2 implementation instead tracks, in coordinator memory, the
+newest grid instant each source has successfully delivered through a committed ingest this
+session — advancing even when keep-first stored zero new rows. The Phase 2 design-critic
+review flagged the two documents as disagreeing: after a relaunch the value is nil until the
+first ingest, and a fully-deduplicated batch still advances it.
+
+### Decision
+
+The implementation's semantics are authoritative: `lastReadingAt` is the newest snapped
+instant the source delivered through a committed `ingest` in the current app session. It is
+not persisted and not re-derived from the event log; the design sketch's annotation is
+superseded by this entry.
+
+### Rationale
+
+Keep-first dedup means a second connected source may never win a stored row, so an
+event-log-derived value would sit permanently stale for a healthy source — misreporting the
+"is it delivering?" signal Req 6.1 exists to surface. Delivery-time semantics answer that
+question directly. Session scope matches Decision 9 (the discrepancy tally): both are
+diagnostic conveniences for one developer, repopulated within minutes by the on-open
+catch-up, and need no persistence or reset machinery. Attributing rows per source from the
+event log would also require a metadata-querying store API that exists for no other purpose.
+
+### Alternatives Considered
+
+- **Query the store for the source's latest bsl row (design sketch's wording)**: Rejected:
+  needs a new metadata-filtered query API, and keep-first attribution leaves the losing
+  source permanently stale despite healthy delivery.
+- **Persist lastReadingAt per source across launches**: Rejected: storage and reset
+  lifecycle for a throwaway diagnostic — the same over-engineering Decision 9 declined.
+
+### Consequences
+
+**Positive:**
+- Reflects actual delivery, unaffected by which source wins the keep-first race.
+- No new store API, no persistence machinery; consistent with Decision 9.
+
+**Negative:**
+- Nil after relaunch until the first ingest, even though readings exist in the log (the
+  on-open catch-up repopulates it promptly).

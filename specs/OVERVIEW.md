@@ -25,6 +25,7 @@
 | [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
 | [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root; Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
 | [Regression Suggestion Integration](#regression-suggestion-integration) | data · ui | 2026-07-05 | Done | prd | Insulin dosing as a first-class event stream conforming to medreg's insulin-event convention: dose-entry sheet from the Graph toolbar, Graph dose markers/stats, `medata://` deep links, and lock-/home-screen launcher widgets (`MeDataWidgets`). All 20 tasks across 3 contexts done. |
+| [CGM Connect](#cgm-connect) | data | 2026-07-10 | In Progress | full | Live glucose ingestion behind a source abstraction (HealthKit primary, LibreLinkUp follower complement) writing `bsl` events with cross-source 5-minute-grid dedup, firewalled from estimation by a package-graph test. 13/14 tasks done; on-device verify (task 14) human-gated. |
 
 ---
 
@@ -180,3 +181,14 @@ Insulin dosing joins meals and glucose as a first-class event stream, conforming
 - [tasks-app-ui.md](regression-suggestion-integration/tasks-app-ui.md)
 - [tasks-core-events.md](regression-suggestion-integration/tasks-core-events.md)
 - [tasks-lock-screen-widget.md](regression-suggestion-integration/tasks-lock-screen-widget.md)
+
+## CGM Connect
+
+Live glucose ingestion behind a source abstraction: connect once, readings flow into the event log as `bsl` events (mmol/L). Apple HealthKit is the primary on-device source (90-day backfill, background delivery with durable-ack anchor handling); a LibreLinkUp follower connection complements it for devices not yet writing to Health (on-device auth, Keychain credentials, ≤15-minute poll + BGAppRefreshTask). All sources snap to the shared 5-minute grid so keep-first dedup extends across screenshot import and live sources; the `GlucoseIngestion` module is excluded from every estimation target's dependency closure by an executable package-graph firewall test. 13/14 tasks done — on-device verification (task 14) awaits the human loop.
+
+- [decision_log.md](data/cgm-connect/decision_log.md)
+- [design.md](data/cgm-connect/design.md)
+- [prerequisites.md](data/cgm-connect/prerequisites.md)
+- [requirements.md](data/cgm-connect/requirements.md)
+- [tasks.md](data/cgm-connect/tasks.md)
+- [userinput.md](data/cgm-connect/userinput.md)

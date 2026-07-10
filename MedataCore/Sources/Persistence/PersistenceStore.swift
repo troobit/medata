@@ -77,6 +77,29 @@ public struct BslReading: Sendable, Equatable {
     }
 }
 
+// One live glucose reading bound for the event log (specs/data/cgm-connect
+// Req 4.1, 4.2). The caller (GlucoseIngestion) has already snapped the
+// instant to the 5-minute grid and normalised the value to mmol/L at one
+// decimal (Decision 4, Req 5.5); the store builds the row's metadata JSON.
+public struct LiveBslReading: Sendable, Equatable {
+    public let timestampMs: Int64  // UTC ms since epoch, 5-minute grid
+    public let mmolL: Double  // mmol/L, one decimal
+    public let sourceID: String
+    public let nativeInstantMs: Int64  // pre-snap instant, kept in metadata
+    public let nativeID: String?  // source's native sample identity, if any
+
+    public init(
+        timestampMs: Int64, mmolL: Double, sourceID: String,
+        nativeInstantMs: Int64, nativeID: String? = nil
+    ) {
+        self.timestampMs = timestampMs
+        self.mmolL = mmolL
+        self.sourceID = sourceID
+        self.nativeInstantMs = nativeInstantMs
+        self.nativeID = nativeID
+    }
+}
+
 // Per-image ingest report (specs/data/libre-ingestion Req 5.4).
 public struct BslIngestSummary: Sendable, Equatable {
     public struct Discrepancy: Sendable, Equatable {
@@ -199,6 +222,16 @@ public protocol PersistenceStore: Sendable {
         readings: [BslReading], metadataJSON: String,
         sourceHash: String, filename: String
     ) async throws -> BslIngestSummary
+
+    // specs/data/cgm-connect Reqs 4.1–4.5. Live-ingestion sibling to
+    // ingestBsl: no processed_images marker (that's screenshot-import-only),
+    // per-row metadata built by the store itself — mirroring how
+    // saveInsulinDose builds its own JSON, GlucoseIngestion callers never
+    // construct event JSON. Same keep-first merge as ingestBsl, so a live
+    // reading and a screenshot reading at the same grid instant dedup
+    // uniformly regardless of source. One transaction; notifies
+    // `eventsDidChange` once iff at least one row was inserted.
+    func ingestLiveBsl(_ readings: [LiveBslReading]) async throws -> BslIngestSummary
 
     // PRD regression-suggestion-integration Core 2–4. Writes ONE `events` row
     // per dose, exactly per medreg's convention (medreg

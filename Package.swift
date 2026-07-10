@@ -26,7 +26,12 @@ let package = Package(
         // Separate product: glucose ingestion is a data stream beside the
         // estimation pipeline, not part of it (specs/data/libre-ingestion
         // Decision 2). The app links both.
-        .library(name: "GlucoseGraph", targets: ["GlucoseGraph"])
+        .library(name: "GlucoseGraph", targets: ["GlucoseGraph"]),
+        // Separate product for the same reason as GlucoseGraph: live glucose
+        // ingestion (specs/data/cgm-connect) is a data stream beside the
+        // estimation pipeline, deliberately NOT reachable via the MedataCore
+        // product (Req 7.1). The app links it in Phase 4.
+        .library(name: "GlucoseIngestion", targets: ["GlucoseIngestion"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
@@ -112,6 +117,17 @@ let package = Package(
         .target(
             name: "GlucoseGraph",
             path: "MedataCore/Sources/GlucoseGraph"
+        ),
+        // Live glucose ingestion (specs/data/cgm-connect): the GlucoseSource
+        // abstraction + IngestionCoordinator writing bsl events through
+        // Persistence. The estimation targets (Pipeline, CaptureKit,
+        // Segmentation, Volume, Macros, MetricScale, SupportPlane,
+        // CardDetection, Confidence, Foods) MUST NOT depend on this target
+        // (Req 7.1) — enforced by the firewall test in GlucoseIngestionTests.
+        .target(
+            name: "GlucoseIngestion",
+            dependencies: ["Persistence", "PortableContracts"],
+            path: "MedataCore/Sources/GlucoseIngestion"
         ),
         .target(
             name: "Pipeline",
@@ -234,6 +250,15 @@ let package = Package(
             resources: [
                 .copy("Resources/corpus")
             ]
+        ),
+        .testTarget(
+            name: "GlucoseIngestionTests",
+            dependencies: [
+                "GlucoseIngestion",
+                "Persistence",
+                "PortableContracts"
+            ],
+            path: "MedataCore/Tests/GlucoseIngestionTests"
         ),
         .testTarget(
             name: "PipelineTests",

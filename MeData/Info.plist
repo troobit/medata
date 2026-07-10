@@ -25,5 +25,18 @@
 			</array>
 		</dict>
 	</array>
+	<!-- cgm-connect Req 3.2: the LibreLinkUp best-effort background refresh
+	     (BGAppRefreshTask, registered in App/GlucoseConnectionsModel.swift).
+	     Array-valued keys live here because INFOPLIST_KEY_ build settings do
+	     not merge arrays. HealthKit background delivery needs no
+	     UIBackgroundModes entry — the entitlement covers it. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.medata.librelinkup.refresh</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>
