@@ -319,6 +319,34 @@ Output: a PyTorch checkpoint at `tools/segmenter/build/checkpoint.pt`. This `.pt
 is the **single source of truth** (Decision 28) that both export paths (§6)
 consume — there is no separate iOS vs Android training run.
 
+### Recommended next run (estimation-quality PRD)
+
+The plain unweighted cross-entropy above collapses toward the dominant
+background class on the imbalanced 35-class palette — the speckled masks the
+shipped models produce. The trainer now takes opt-in flags for a
+class-imbalance-aware recipe (`--loss`, see `tools/segmenter/loss_config.py`)
+and train-only photometric jitter (`--photometric-augment`); omitting them
+reproduces the historical recipe exactly. The recommended next run combines the
+Dice + inverse-frequency-weighted CE loss with photometric augmentation:
+
+```sh
+caffeinate -is python tools/segmenter/train.py \
+    --data data/foodseg103_remapped \
+    --num-classes 35 --target-size 513 \
+    --epochs 60 --batch-size 16 --lr 1e-3 \
+    --loss combined --photometric-augment \
+    --out tools/segmenter/build/checkpoint_combined.pt
+```
+
+A distinct `--out` keeps the current checkpoint and its lineage intact for
+comparison. If the run is interrupted, resume with the SAME flags plus
+`--resume tools/segmenter/build/checkpoint_combined.pt.resume.pt` — the trainer
+treats a `--loss`/`--photometric-augment` change mid-run as hyperparameter
+drift and refuses it (run hygiene below applies as usual). The selected loss
+and augmentation are recorded in the checkpoint and `build/lineage.json`
+`train_config` (absent keys mean the historical recipe); accept or reject the
+variant on held-out food-class IoU via `run_validation.py` (§5).
+
 ### Run hygiene (local Mac, MPS)
 
 The trainer writes a resume sidecar (`<--out>.resume.pt`) atomically after every
@@ -554,6 +582,8 @@ shipped app is wrong.
   and the seg-bench / accuracy JSON outputs.
 
 ### The loop
+
+> **What to try next:** [`agent-notes/segmenter-improvement-research.md`](agent-notes/segmenter-improvement-research.md) — diagnosis of the ~0.40 held-out mIoU plateau, ranked training-recipe recommendations, and the offline accept/reject threshold for recipe variants.
 
 1. Adjust the class mapping (§3b) and/or training (§4).
 2. Retrain → new `checkpoint.pt`.
