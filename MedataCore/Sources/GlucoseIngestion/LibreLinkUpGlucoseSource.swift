@@ -84,7 +84,7 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: Self.hostDefaultsKey)
         defaults.removeObject(forKey: Self.patientIDDefaultsKey)
-        defaults.removeObject(forKey: Self.lastSuccessDefaultsKey)
+        lastSuccessAt = nil
         connectionState = .notConnected
         lastDeliveredAt = nil
         await sink?.reportState(.notConnected, for: id)
@@ -145,8 +145,16 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     private func fetchOnce() async throws -> [GlucoseSample] {
         let session = try await ensureSession()
         let patientID = try await ensurePatientID(session: session)
-        let graph = try await client.graph(session: session, patientID: patientID)
-        return LibreLinkUpClient.samples(from: graph)
+        do {
+            let graph = try await client.graph(session: session, patientID: patientID)
+            return LibreLinkUpClient.samples(from: graph)
+        } catch {
+            // The cached patient id may be stale (patient unfollowed, account
+            // changed) — drop it so the next cycle re-runs the connections
+            // lookup instead of failing forever.
+            UserDefaults.standard.removeObject(forKey: Self.patientIDDefaultsKey)
+            throw error
+        }
     }
 
     // In-memory session, else the Keychain-cached one, else a fresh login
@@ -199,8 +207,10 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(Self.pollInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-                await self?.fetchAndIngest()
+                // `self` gone means the source deallocated without
+                // disconnect() — end the loop rather than spin forever.
+                guard !Task.isCancelled, let self else { break }
+                await self.fetchAndIngest()
             }
         }
     }
@@ -213,9 +223,12 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             return stored > 0 ? Date(timeIntervalSince1970: stored) : nil
         }
         set {
-            guard let newValue else { return }
-            UserDefaults.standard.set(
-                newValue.timeIntervalSince1970, forKey: Self.lastSuccessDefaultsKey)
+            if let newValue {
+                UserDefaults.standard.set(
+                    newValue.timeIntervalSince1970, forKey: Self.lastSuccessDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.lastSuccessDefaultsKey)
+            }
         }
     }
 

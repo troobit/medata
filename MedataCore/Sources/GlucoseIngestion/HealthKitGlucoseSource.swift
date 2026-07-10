@@ -38,6 +38,8 @@ public actor HealthKitGlucoseSource: GlucoseSource {
     // Newest native instant a committed ingest has delivered this session —
     // session-scoped delivery state, mirroring Decision 10.
     private var lastDeliveredAt: Date?
+    // True while an anchored ingest is running (see ingestFromAnchor).
+    private var isIngesting = false
 
     public init() {}
 
@@ -93,6 +95,13 @@ public actor HealthKitGlucoseSource: GlucoseSource {
         guard sink != nil else { return }
         do {
             try await ingestFromAnchor()
+            // A failed connect never armed ongoing delivery (Req 2.5), yet a
+            // successful catch-up flips state back to connected — so (re-)arm
+            // it here. startObserverQuery is guarded to run once; repeating
+            // enableBackgroundDelivery is harmless.
+            startObserverQuery()
+            try? await healthStore.enableBackgroundDelivery(
+                for: glucoseType, frequency: .immediate)
         } catch {
             connectionState = .failed(
                 reason: error.localizedDescription, lastSuccessAt: lastDeliveredAt)
@@ -127,12 +136,22 @@ public actor HealthKitGlucoseSource: GlucoseSource {
             try await ingestFromAnchor()
             completionHandler()
         } catch {
-            // Deliberately no ack and no anchor advance.
+            // Deliberately no ack and no anchor advance — and, unlike
+            // catchUp(), deliberately no `.failed` state either: background
+            // wake failures are retried by iOS re-delivery plus the on-open
+            // catch-up, and flapping Settings to failed on transient
+            // background errors is unwanted noise.
         }
     }
 
     private func ingestFromAnchor() async throws {
-        guard let sink else { return }
+        // Reentrancy guard: an observer wake and a catch-up can interleave on
+        // the actor and both load the same anchor. Never lossy (keep-first
+        // absorbs the re-fetch) — just wasted work and out-of-order anchor
+        // saves — so skip; the in-flight run covers it.
+        guard let sink, !isIngesting else { return }
+        isIngesting = true
+        defer { isIngesting = false }
         let (samples, newAnchor) = try await queryAnchored(from: Self.loadAnchor())
         _ = try await sink.ingest(samples.map(Self.glucoseSample(from:)), from: id)
         Self.saveAnchor(newAnchor)
