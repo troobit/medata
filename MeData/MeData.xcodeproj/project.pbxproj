@@ -45,6 +45,10 @@
 		115DA0A62FD1000000272C1E /* ManualCorrectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */; };
 		B66AE5539A5F478E793B981F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FA70734182528B1ECAEDD1 /* HomeView.swift */; };
 		877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851614006E459D54779E1B6 /* IntakeView.swift */; };
+		180BF780028C4E409B5B127F /* CarbEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85695F786A184CFFA741C58F /* CarbEntryModel.swift */; };
+		59760C101F974CC8B530459B /* CarbEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469D6F69D437403394586C88 /* CarbEntrySheet.swift */; };
+		7FDE038E77DB431B8DC8CA93 /* QuickPresetEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */; };
+		4F859171975F4BD78EEA95A3 /* IntakeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4F7BBEE94C40D984FAA06D /* IntakeModel.swift */; };
 		115DA0A82FD1000000272C1E /* MealOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B82FD1000000272C1E /* MealOverviewView.swift */; };
 		115DA0A92FD1000000272C1E /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B92FD1000000272C1E /* TrendsView.swift */; };
 		115DA0AA2FD1000000272C1E /* TrendsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BA2FD1000000272C1E /* TrendsModel.swift */; };
@@ -98,6 +102,10 @@
 		115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ManualCorrectionView.swift; path = ../App/ManualCorrectionView.swift; sourceTree = SOURCE_ROOT; };
 		39FA70734182528B1ECAEDD1 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomeView.swift; path = ../App/HomeView.swift; sourceTree = SOURCE_ROOT; };
 		0851614006E459D54779E1B6 /* IntakeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IntakeView.swift; path = ../App/IntakeView.swift; sourceTree = SOURCE_ROOT; };
+		85695F786A184CFFA741C58F /* CarbEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CarbEntryModel.swift; path = ../App/CarbEntryModel.swift; sourceTree = SOURCE_ROOT; };
+		469D6F69D437403394586C88 /* CarbEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CarbEntrySheet.swift; path = ../App/CarbEntrySheet.swift; sourceTree = SOURCE_ROOT; };
+		7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QuickPresetEditSheet.swift; path = ../App/QuickPresetEditSheet.swift; sourceTree = SOURCE_ROOT; };
+		5C4F7BBEE94C40D984FAA06D /* IntakeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IntakeModel.swift; path = ../App/IntakeModel.swift; sourceTree = SOURCE_ROOT; };
 		115DA0B82FD1000000272C1E /* MealOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealOverviewView.swift; path = ../App/MealOverviewView.swift; sourceTree = SOURCE_ROOT; };
 		115DA0B92FD1000000272C1E /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsView.swift; path = ../App/TrendsView.swift; sourceTree = SOURCE_ROOT; };
 		115DA0BA2FD1000000272C1E /* TrendsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsModel.swift; path = ../App/TrendsModel.swift; sourceTree = SOURCE_ROOT; };
@@ -224,6 +232,10 @@
 				82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */,
 				39FA70734182528B1ECAEDD1 /* HomeView.swift */,
 				0851614006E459D54779E1B6 /* IntakeView.swift */,
+				85695F786A184CFFA741C58F /* CarbEntryModel.swift */,
+				469D6F69D437403394586C88 /* CarbEntrySheet.swift */,
+				7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */,
+				5C4F7BBEE94C40D984FAA06D /* IntakeModel.swift */,
 				111EC90E2FBD327D00272C1E /* MeData */,
 				111EC90D2FBD327D00272C1E /* Products */,
 			);
@@ -416,6 +428,10 @@
 				4112908015F7E6A57CB6AC99 /* RecordsView.swift in Sources */,
 				B66AE5539A5F478E793B981F /* HomeView.swift in Sources */,
 				877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */,
+				180BF780028C4E409B5B127F /* CarbEntryModel.swift in Sources */,
+				59760C101F974CC8B530459B /* CarbEntrySheet.swift in Sources */,
+				7FDE038E77DB431B8DC8CA93 /* QuickPresetEditSheet.swift in Sources */,
+				4F859171975F4BD78EEA95A3 /* IntakeModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

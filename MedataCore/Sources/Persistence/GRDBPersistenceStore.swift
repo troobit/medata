@@ -23,6 +23,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         try queue.write { db in
             try GRDBPersistenceStore.createSchema(db)
             try GRDBPersistenceStore.migrate(db)
+            try GRDBPersistenceStore.seedDefaultQuickPresetsIfNeeded(db)
         }
     }
 
@@ -518,6 +519,94 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    // MARK: - Manual carb intake (specs/data/manual-carb-intake Phase 1)
+
+    // Bounds accepted at the store layer (Req 1.4).
+    private static let intakeCarbsRange = 1.0...999.0
+
+    public func saveIntakeEntry(_ entry: IntakeEntry) async throws {
+        guard Self.intakeCarbsRange.contains(entry.carbsG) else {
+            throw PersistenceError.intakeCarbsOutOfRange(entry.carbsG)
+        }
+        let metadata = try Self.intakeMetadataJSON(for: entry)
+        let timestampMs = Int64(entry.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    entry.id.uuidString, timestampMs, EventType.intake,
+                    entry.carbsG, metadata
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func updateIntakeEntry(_ entry: IntakeEntry) async throws {
+        guard Self.intakeCarbsRange.contains(entry.carbsG) else {
+            throw PersistenceError.intakeCarbsOutOfRange(entry.carbsG)
+        }
+        let metadata = try Self.intakeMetadataJSON(for: entry)
+        let timestampMs = Int64(entry.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            // Gated on event_type so a meal/insulin/bsl row sharing the id
+            // is untouched.
+            try db.execute(
+                sql: """
+                    UPDATE events SET timestamp = ?, value = ?, metadata = ?
+                    WHERE id = ? AND event_type = ?
+                    """,
+                arguments: [
+                    timestampMs, entry.carbsG, metadata,
+                    entry.id.uuidString, EventType.intake
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func deleteIntakeEntry(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a meal/insulin/bsl row sharing the id
+            // survives. Intake events have no side tables — nothing else to
+            // cascade.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.intake]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    // Builds the `metadata` JSON object per design.md "Event type and
+    // storage": `subtype`, `schema_version`, `source`, plus `preset_id`
+    // (only when source = quickadd) and macro keys — all omitted, never
+    // null, when absent.
+    private static func intakeMetadataJSON(for entry: IntakeEntry) throws -> String {
+        var payload: [String: Any] = [
+            "subtype": entry.subtype.rawValue,
+            "schema_version": IntakeEntry.metadataSchemaVersion,
+            "source": entry.source.rawValue
+        ]
+        if let presetID = entry.presetID {
+            payload["preset_id"] = presetID.uuidString
+        }
+        if let proteinG = entry.macros.proteinG {
+            payload["protein_g"] = proteinG
+        }
+        if let fatG = entry.macros.fatG {
+            payload["fat_g"] = fatG
+        }
+        if let fibreG = entry.macros.fibreG {
+            payload["fibre_g"] = fibreG
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
         let ids: [String] = try await queue.read { db in
@@ -649,20 +738,119 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 filename     TEXT    NOT NULL,
                 processed_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS quick_presets (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                carbs_g     REAL NOT NULL,
+                protein_g   REAL,
+                fat_g       REAL,
+                fibre_g     REAL,
+                sort_order  INTEGER NOT NULL
+            );
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '4')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '5')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '4' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 4 adds
-    // processed_images (specs/data/libre-ingestion Decision 4); the CREATE
-    // IF NOT EXISTS above retrofits it onto v3 DBs. No DDL on legacy tables
-    // (Decision 10).
+    // Idempotent: re-stamps schema_version to '5' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 5 adds
+    // quick_presets (specs/data/manual-carb-intake, design.md "Quick-add
+    // presets — new table"); the CREATE IF NOT EXISTS above retrofits it onto
+    // v4 DBs, matching the processed_images/v4 precedent exactly. No DDL on
+    // legacy tables (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '4')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '5')"
+        )
+    }
+
+    // One-shot seed of the three authored defaults (Req 3.3): "A pint"
+    // (17 g), "Bagel" (45 g), "Chips" (40 g) — carbohydrate values only, no
+    // macros. Gated on the `quick_presets_seeded` meta flag so the seed runs
+    // at most once per DB: a user who deletes all presets (defaults are
+    // deletable like any other, Req 3.3) stays at zero across relaunches
+    // (Req 4.3). Rows are inserted only when the flag is absent AND the
+    // table is empty; a pre-flag DB that already holds presets is stamped
+    // seeded without inserting, so existing rows are never duplicated.
+    private static func seedDefaultQuickPresetsIfNeeded(_ db: Database) throws {
+        let seeded = try String.fetchOne(
+            db, sql: "SELECT v FROM meta WHERE k = 'quick_presets_seeded'"
+        )
+        guard seeded == nil else { return }
+        let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM quick_presets") ?? 0
+        if count == 0 {
+            let defaults: [(name: String, carbsG: Double)] = [
+                ("A pint", 17), ("Bagel", 45), ("Chips", 40)
+            ]
+            for (index, preset) in defaults.enumerated() {
+                try db.execute(
+                    sql: """
+                        INSERT INTO quick_presets (id, name, carbs_g, sort_order)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                    arguments: [UUID().uuidString, preset.name, preset.carbsG, index]
+                )
+            }
+        }
+        try db.execute(
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('quick_presets_seeded', '1')"
+        )
+    }
+
+    // MARK: - Quick-add presets (specs/data/manual-carb-intake)
+
+    public func quickPresets() async throws -> [QuickPreset] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM quick_presets ORDER BY sort_order ASC"
+            ).map(Self.quickPreset(from:))
+        }
+    }
+
+    public func saveQuickPreset(_ preset: QuickPreset) async throws {
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO quick_presets
+                        (id, name, carbs_g, protein_g, fat_g, fibre_g, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    preset.id.uuidString, preset.name, preset.carbsG,
+                    preset.macros.proteinG, preset.macros.fatG, preset.macros.fibreG,
+                    preset.sortOrder
+                ]
+            )
+        }
+    }
+
+    public func deleteQuickPreset(id: UUID) async throws {
+        try await queue.write { db in
+            try db.execute(
+                sql: "DELETE FROM quick_presets WHERE id = ?",
+                arguments: [id.uuidString]
+            )
+        }
+    }
+
+    private static func quickPreset(from row: Row) throws -> QuickPreset {
+        let idString: String = row["id"]
+        guard let id = UUID(uuidString: idString) else {
+            throw PersistenceError.corruptRecord("invalid quick_presets UUID: \(idString)")
+        }
+        let macros = IntakeMacros(
+            proteinG: row["protein_g"],
+            fatG: row["fat_g"],
+            fibreG: row["fibre_g"]
+        )
+        return QuickPreset(
+            id: id,
+            name: row["name"],
+            carbsG: row["carbs_g"],
+            macros: macros,
+            sortOrder: row["sort_order"]
         )
     }
 }
