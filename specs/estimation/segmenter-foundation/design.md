@@ -5,13 +5,13 @@
 **Status:** Draft
 **Branch:** estimation/model-foundation
 
-This document describes the implementation design for the requirements in `requirements.md` and the decisions in `decision_log.md` (Decisions 1–4 as drafted; Decisions 5–9 added by this design pass, §8). It cites requirements by ID; it does not restate them. It overlays the production process owned by `specs/estimation/model-production/design.md` (§2.1) and the runtime architecture owned by `specs/estimation/pipeline/design.md`, referencing both rather than duplicating them. The driving research is `docs/agent-notes/model-foundation-research.md`.
+This document describes the implementation design for the requirements in `requirements.md` and the decisions in `decision_log.md` (Decisions 1–4 from requirements drafting; 5–9 from the first design pass; 10–13 from the requirements review; 14–17 from the second design pass, §8). It cites requirements by ID; it does not restate them. It overlays the production process owned by `specs/estimation/model-production/design.md` (§2.1) and the runtime architecture owned by `specs/estimation/pipeline/design.md`, referencing both rather than duplicating them. The driving research is `docs/agent-notes/model-foundation-research.md`.
 
 ---
 
 ## 1. Overview
 
-This spec answers three questions the shipped segmenter has left open: what accuracy bar is actually achievable on FoodSeg103 ([Req 1](requirements.md#1-re-derived-accuracy-gate)), what training-recipe change gets the current architecture closest to it ([Req 2](requirements.md#2-training-recipe-upgrade-primary-lever)), and whether a backbone swap is worth its conversion risk ([Req 3](requirements.md#3-backbone-swap-track-gated-on-conversion-spike)). It does not touch `tools/segmenter/` code, run training, or change the production process — it decides the *foundation* that `model-production` (process) and the `debug-read` estimation-quality PRD (the next code landing in `tools/segmenter/`) build against.
+This spec answers three questions the shipped segmenter has left open: what accuracy bar is actually achievable on FoodSeg103 ([Req 1](requirements.md#1-re-derived-accuracy-gate)), what training-recipe change gets the current architecture closest to it ([Req 2](requirements.md#2-training-recipe-upgrade-primary-lever)), and whether a backbone swap is worth its conversion risk ([Req 3](requirements.md#3-backbone-swap-track-gated-on-conversion-spike)). Its tasks specify and land `tools/segmenter/` code (carve stratification, the co-occurrence loss option, bar constants, the spike script) plus the sibling-spec amendment pass — but it does not run training or change the production process; the GPU runs and on-device measurements remain human-gated through `model-production`. (First-pass §1 claimed this spec touches no `tools/segmenter/` code; superseded by the second pass — see §3.3, §3.5, §4.3, §5.2.)
 
 The design's spine, same as `model-production`, is the **automated vs human/compute-gated** split: a coding agent can write the gate derivation, the recipe specification, and the conversion-spike procedure; it cannot run the GPU training job, measure on-device ANE latency, or judge the spike's pass/fail against real numbers. Every task below is marked accordingly.
 
@@ -19,7 +19,9 @@ The design's spine, same as `model-production`, is the **automated vs human/comp
 
 ## 2. Sequencing and prerequisites
 
-### 2.1 This spec depends on the estimation-quality PRD landing first
+### 2.1 This spec depends on the estimation-quality PRD landing first — SATISFIED
+
+**Status update (2026-07-10, second design pass):** the PRD's training-pipeline context has landed and merged to `research` — verified: `research:tools/segmenter/train.py` carries the `--loss` flag (line 796, `loss_config.LOSS_CHOICES`) and the `weighted_ce` helpers; changelog entry `fdc89a0` records the integration. The sequencing dependency below is therefore met; what remains is that **this worktree** (branched off `research@1b172b2`, pre-merge) does not contain that code, so the code-touching tasks in `tasks.md` execute on a branch containing the PRD landing (merge `research` in, or land the tasks on `research` after this spec's docs merge). The original dependency analysis is kept for the record:
 
 `tools/segmenter/` is owned this cycle by the **estimation-quality PRD** (`specs/estimation/estimation-quality/prd.md`, branch `debug-read`), specifically its "Segmenter training pipeline" context. That PRD lands, as code:
 
@@ -30,7 +32,7 @@ The design's spine, same as `model-production`, is the **automated vs human/comp
 
 Its own gated stage 6 (STOP — run the actual training job, export, and swap the bundled model) is explicitly **not** executed by that PRD; it is left as a human/compute-gated follow-on, same shape as the gated tasks in this spec.
 
-**Consequence for this spec's task sequencing:** Requirement 2 (training-recipe upgrade) specifies the recipe this spec wants — MIM-pretrained checkpoint initialisation, a class-imbalance countermeasure targeting the eight carb-priority staples, and a checkpoint-vs-baseline comparison protocol — but it does not re-implement the `--loss` flag plumbing; that is `debug-read`'s code to land. This spec's design tasks (recipe specification, checkpoint sourcing/licensing) can proceed independently and in parallel with that PRD, since they produce specification and lineage-recording requirements rather than `tools/segmenter/` edits. But the **gated training run** that exercises Requirement 2 cannot start until:
+**Consequence for this spec's task sequencing:** Requirement 2 (training-recipe upgrade) specifies the recipe this spec wants — stronger-pretraining checkpoint initialisation (§4.2; no true MIM checkpoint exists for this backbone), a class-imbalance countermeasure targeting the eight carb-priority staples, and a checkpoint-vs-baseline comparison protocol — but it does not re-implement the `--loss` flag plumbing; that is `debug-read`'s code to land. This spec's design tasks (recipe specification, checkpoint sourcing/licensing) can proceed independently and in parallel with that PRD, since they produce specification and lineage-recording requirements rather than `tools/segmenter/` edits. But the **gated training run** that exercises Requirement 2 cannot start until:
 
 1. `debug-read`'s "Segmenter training pipeline" context has merged (the `--loss` flag and class-weight helpers exist to run against), **and**
 2. this spec's gate-derivation decision (§3 below) is logged, **and**
@@ -54,7 +56,9 @@ Three named inputs, per the research (`docs/agent-notes/model-foundation-researc
 |---|---|---|
 | Published FoodSeg103 frontier at a comparable parameter budget | SOTA ≈ 0.52 mIoU (HDF, 52.25%, 100M+ params); mid-size transformer backbones (BEiT v2-L, 441M) reach 49.4%; **no published model at any size clears 0.60** | Research Q0/headline; Swin-TUNA 50.56% (arXiv 2507.17347), HDF 52.25% (10.1007/s11694-025-03647-2), BEiT v2-L 49.4% (arXiv 2306.09203) |
 | Shipped baseline | 0.4054 mean food-class IoU (`checkpoint_letterbox.pt`, `model_version=24e0b022241a`), held-out split, `run_validation.py` | `model-production/prerequisites.md` Stage 3 entry, *Done 2026-07-06* |
-| Carb-priority per-class floors | Existing model-production Req [3.5](../model-production/requirements.md#3.5): ≥ 0.50 per staple. Current run: `white_rice` 0.6022, `chips_fries` 0.5671, `pasta` 0.5538 clear it; `bread_white` 0.4315, `potato_boiled` 0.4648 fall short; `brown_rice`/`bread_wholemeal`/`potato_mashed` absent from the held-out split | `model-production/prerequisites.md` Stage 3 entry |
+| Carb-priority per-class floors | Input to Decision 5's derivation: the 0.50 floors then in force (model-production Req [3.5](../model-production/requirements.md#3.5)) — since superseded by §3.2a's re-derived 0.45 (Decision 14), which is an *output* of the gate, not an input to it. Current run: `white_rice` 0.6022, `chips_fries` 0.5671, `pasta` 0.5538; `bread_white` 0.4315, `potato_boiled` 0.4648; `brown_rice`/`bread_wholemeal`/`potato_mashed` absent from the held-out split (resolved by the §3.5 re-cut) | `model-production/prerequisites.md` Stage 3 entry; Decisions 5, 14 |
+
+**Label-space comparability (discharges Req [1.1](requirements.md#1.1)'s WHERE clause).** Published FoodSeg103 numbers are 103-class mIoU on the official split; MeData's metric is mean food-class IoU over the 32 food channels of the 35-channel palette (`validation.py:58-61` excludes `background`, `unknown_food`, `unsupported_liquid`) on a local seeded split. The remap pools confusable fine-grained labels into coarser channels, so the remapped task is plausibly easier and the two metrics are not directly comparable — the published ~0.52 SOTA bounds the *harder* task. The 0.48 gate is therefore an interpolation anchored on the baseline and required uplifts (§3.2), not a transplanted literature value.
 
 The original 0.60 gate (pipeline Decision 14) was set against a **24-class** palette assumption ("0.60 mean food-class mIoU is achievable... on a 24-class food palette") before the 35-channel palette (24 solid + 8 liquid + 3 special) landed via the `v1` redefinition-in-place (`specs/estimation/nutrition5k-calibration/decision_log.md` Decisions 23–24, 2026-07-02: liquid classes appended to `ClassPalette.v1Standard`, keeping the `"v1"` label but changing its channel count from 27 to 35 — "'v1' means something different before and after this spec"). `pipeline` Decision 25 (architecture selection) and `model-production/design.md` §3.4 (export channel-count gate) both predate that redefinition and still cite 27 channels — a known staleness in those documents, not repeated here. The frontier research shows 0.60 is unreached by any published model on FoodSeg103's **103-class** taxonomy regardless of palette remap size, so the shortfall is not explained by the extra 11 channels alone — it is a genuine ceiling.
 
@@ -64,11 +68,17 @@ The original 0.60 gate (pipeline Decision 14) was set against a **24-class** pal
 
 Derivation: the published frontier at a comparable parameter budget (the shipped architecture, DeepLabV3+MobileNetV3-Large, is 11.0M params) is well below the 100M+ models that reach 0.50–0.52. A compact-model-realistic target sits meaningfully below SOTA but meaningfully above the shipped 0.4054 baseline. 0.48 is chosen as:
 
-- **≥ baseline + 0.05** (0.4054 → 0.4554 floor from margin alone) rounded up to the nearest 0.01 that also clears the midpoint of the provisional band (0.45–0.52, Req [1.2](requirements.md#1.2)), landing at 0.48 — one point above the band's midpoint (0.485) rounded to the nearer clean value, and comfortably inside the 0.45–0.52 band without requiring justification for an out-of-band value.
+- **Above the mandatory-uplift floor with headroom:** baseline 0.4054 + the Req [2.4](requirements.md#2.4) mandatory mean uplift (≥ 0.03) gives 0.4354; the Req [2.3](requirements.md#2.3) staple-specific uplift (+0.05 on below-gate staples) pulls the mean up faster than a uniform improvement, adding roughly another 0.04 of expected headroom — landing at 0.48, inside the provisional band (0.45–0.52, Req [1.2](requirements.md#1.2)) and about half a point below its midpoint (0.485).
 - **Below the 100M+-parameter SOTA (0.50–0.52)** by a margin consistent with the compact-vs-large-model gap documented across every source in the research table (Q1): every compact candidate in the research is evaluated on general scenes, not FoodSeg103, so no compact-model FoodSeg103 number exists to anchor to directly — 0.48 is a considered interpolation between "the recipe upgrade should clear a materially higher bar than today" and "we do not credibly expect a 11M-param CNN to approach a 441M-param transformer's frontier."
-- **Consistent with the carb-priority floors already in force** (model-production Req 3.5, ≥ 0.50 per staple): a 0.48 mean is compatible with several staples already at or above 0.50 (as the current run shows) while others lag — the mean gate and the per-class floors pull in the same direction rather than one being unreachable while the other is trivial.
+- **Consistent with the re-derived per-class floors** (§3.2a: 0.45 = gate − 0.03): floors sit below the mean gate and the already-strong staples pull the staple mean above it — the mean gate and the per-class floors pull in the same direction rather than one being unreachable while the other is trivial. (The first-pass version of this bullet argued from the old 0.50 floors; superseded by §3.2a.)
 
 This value is fixed here, in design, per Decision 2 in the drafted decision log (derivation method in requirements, number in design). It supersedes 0.60 as the binding export-eligibility number.
+
+### 3.2a Re-derived per-class floors (Req [1.6](requirements.md#1.6), Decision 14)
+
+**Floor: per-class IoU ≥ 0.45 for each of the eight carb-priority staples**, uniform, replacing model-production Req 3.5's 0.50 (which inherited the same unattainable-frontier assumption as the 0.60 gate — Decision 11). Derivation: floor = gate − 0.03; reachable by the below-gate staples after Req [2.3](requirements.md#2.3)'s mandatory +0.05 uplift (`bread_white` 0.4315 → ≥ 0.4815); the already-strong staples are protected by Req 2.3's ≤ 0.02 no-regression clause, not the floor. Consistency check per Req 1.6: 0.45 floors sit below the 0.48 mean and the three strong staples pull the staple mean above it — no Decision 5 revisit triggered. Export-eligibility rule after the amendment pass: `mean_food_iou ≥ 0.48 AND every staple IoU ≥ 0.45` (`validation.py:39-40` constants `MEAN_IOU_BAR`/`CARB_PRIORITY_IOU_BAR`; override mechanics unchanged).
+
+Two clarifications under the new floors: (a) on the pre-re-cut numbers only `bread_white` (0.4315) is below the 0.45 floor — `potato_boiled` (0.4648) clears it but remains below the 0.48 gate, which is why Req 2.3's uplift set is anchored to the *gate*, not the floor (Decision 18): both weak staples keep the +0.05 obligation. (b) **Per-class revisit trigger:** IF the §3.5 re-measure leaves any staple's baseline below 0.40 — i.e. the floor is unreachable even with the mandatory +0.05 — THEN Decision 14 is revisited with a logged outcome, mirroring Req 2.6's mean-shift trigger for Decision 5.
 
 ### 3.3 Propagation to model-production (Req [1.3](requirements.md#1.3))
 
@@ -76,13 +86,39 @@ This value is fixed here, in design, per Decision 2 in the drafted decision log 
 
 > "A checkpoint SHALL be export-eligible only if it achieves mean IoU ≥ 0.60 on the held-out split (MD-12 / pipeline Req 8.9), measured by the validation harness."
 
-This is amended to reference 0.48, with the amendment logged as a `model-production` decision-log entry citing this spec (mirroring how model-production Decision 13 amended pipeline Req 8.2 for the weight budget). Pipeline Decision 14 (0.60 mIoU floor) is marked `superseded by segmenter-foundation Decision 5` rather than deleted — its context and rationale stay as the historical record of why 0.60 was originally chosen. The amendment is `tasks.md` Phase 1 (tasks 2–3) but touches only `model-production/requirements.md` text, `pipeline/decision_log.md`'s status line, and this spec's own decision log — no `tools/segmenter/` or app code changes.
+Both bars are now fixed (0.48 gate, 0.45 floors), so per Req 1.3 the full amendment set is due, executed as tasks (spec phases edit nothing outside this folder). Authoritative home for the values: this spec's decision log (Decisions 5 and 14).
+
+| Site | Edit |
+|---|---|
+| model-production `requirements.md` Req [3.2](../model-production/requirements.md#3.2), [3.4](../model-production/requirements.md#3.4) | 0.60 → "the re-derived gate (segmenter-foundation Decision 5, currently 0.48)"; amendment logged as a model-production decision-log entry citing this spec (the Decision 13 pattern) |
+| model-production `requirements.md` Req [3.5](../model-production/requirements.md#3.5) | 0.50 floors → "the re-derived floors (segmenter-foundation Decision 14, currently 0.45)" |
+| model-production `requirements.md` Req [2.2](../model-production/requirements.md#2.2) | note: heldout re-cut under segmenter-foundation Req 2.6 (new seed, stratified, then frozen again) |
+| pipeline `requirements.md` Req 8.9 | amended-by note in the existing Req 8.2 style |
+| pipeline `decision_log.md` Decision 14 | status → `superseded by segmenter-foundation Decision 5`; context/rationale kept as the historical record |
+| `docs/ml-training.md` (all normative 0.60/0.50 sites: lines 133, 144, 341, 350, 378, 560) | values + pointer to this spec |
+| model-production `design.md:184` | gate value + pointer |
+| model-production `tasks.md` / `prerequisites.md` export-eligibility wording | annotate active entries with the new bars; do not rewrite completed/historical entries |
+| `tools/segmenter/validation.py:39-40` | `MEAN_IOU_BAR = 0.48`, `CARB_PRIORITY_IOU_BAR = 0.45`, plus the module/function docstrings still stating the 0.60/0.50 rule and "24 food-class names" (the palette has 32 food channels) — code task with its unit-test update |
+| `HarnessCore/SegBench.swift:40` (`passesBar`: ≥ 0.60) + `MedataCore/Tests/HarnessCLITests/SegBenchTests.swift:25,89,101` | 0.60 → 0.48 so `seg-bench` and `validation.py` enforce one gate — a Swift code task, Debug-only surface (`HARNESS_ENABLED`), covered by `make test` |
+| `tools/segmenter/train.py:30,337` docstring/comment gate mentions | value + pointer (non-normative text, same pass as validation.py) |
 
 **Numeric-budget precedent already exists for this pattern.** The segmenter weight budget was raised from 10 MB to 24 MiB by model-production Decision 13 after the first real checkpoint showed 10 MB was unachievable for the chosen architecture (22.1 MB at FP16) — the same "gate set above the achievable frontier, amend with a logged decision" shape as this mIoU re-derivation. Note this also means the drafted `requirements.md` for this spec, which cites "≤ 10 MB" in Req [2.5](requirements.md#2.5) and Req [3.1](requirements.md#3.1)(b), carries the same stale figure Decision 13 already corrected elsewhere in the repo; design uses the current binding value (§5.4 below) and this is logged as Decision 6.
 
 ### 3.4 Override path unaffected
 
 Req [1.4](requirements.md#1.4) / Decision 4: the developer override is a runtime/process behaviour in `model-production` (shipping a below-gate checkpoint flagged low-confidence) and needs no design change here — it already operates against whatever number Req 3.2 states, so re-pointing 3.2 at 0.48 is sufficient. No code path branches on the gate's specific value; it is compared once in the export script and once (informationally) in build lineage.
+
+Req [1.5](requirements.md#1.5) (planned divergence): if the recipe-upgraded checkpoint meets its uplift criteria but lands below 0.48, the residual gap is a decision-log entry naming its owner (the Requirement 3 track if the spike passed, otherwise follow-up data work) — written when the gated run's numbers exist, not now.
+
+### 3.5 Stratified heldout re-cut and baseline re-measure (Req [2.6](requirements.md#2.6), Decision 10)
+
+**Integration point:** `prepare_dataset.py:carve_splits()` (lines 186–213) — currently a seeded shuffle with no stratification.
+
+**Mechanism:** two-pass carve. Pass 1: `carve_splits()` runs *before* remapping (`write_split` remaps after the carve), so staple presence is computed by applying the `class_mapping_foodseg103_v1.json` LUT to the raw masks in memory (or equivalently, testing raw FoodSeg103 ids against each staple's source-id set) — no remapped masks exist at carve time. Pass 2: iterate the eight staples in palette-index order; for each, deterministically (seeded) assign images to heldout until its quota is met, where **quota = min(max(3, ⌈0.12 × n⌉), ⌊n/3⌋)** for a staple appearing in `n` images — the `⌊n/3⌋` cap guarantees heldout never takes more than a third of a staple's images, so measurability is never bought with unlearnability. An image already assigned to heldout counts toward every staple quota it contains (multi-staple plates satisfy several quotas at once). The remainder is shuffled and sliced as today. A **new** split seed is chosen, recorded in `splits.json` and lineage, and then frozen again (the model-production Req 2.2 amendment above). `splits.json` gains a `stratification` block: per-staple heldout/train counts plus any warnings.
+
+**Infeasibility rule:** when `⌊n/3⌋` < 1 (a staple with fewer than 3 images in the whole dataset), heldout gets exactly 1 image, a warning lands in the `stratification` block, and a decision-log record notes that both the floor *and* learnability for that staple are judged on what exists.
+
+**Baseline re-measure:** run `run_validation.py` for `checkpoint_letterbox.pt` (model `24e0b022241a`) against the re-cut heldout split; record mean and the full per-class table in the decision log. IF |re-measured mean − 0.4054| > 0.02 THEN revisit Decision 5 (Req 2.6 trigger). All uplift deltas (Reqs 2.3, 2.4, 3.3) anchor to this re-measured table.
 
 ---
 
@@ -96,8 +132,15 @@ Architecture, input size, and output contract are unchanged: DeepLabV3+MobileNet
 
 The research's strongest lever is heavy ImageNet-1K masked-image-modelling (MIM) pretraining, not a food-specific pretraining run (Decision 3: public checkpoints only). For a MobileNetV3-Large backbone specifically:
 
-- **Preferred:** a MobileNetV3-Large checkpoint pretrained with a self-supervised or distillation-based recipe stronger than plain ImageNet-1K supervised classification (e.g. torchvision's `IMAGENET1K_V2` weights, which already use an improved training recipe over `V1`, or a published knowledge-distillation checkpoint) — whichever is available under a licence permitting commercial bundling (Apache-2.0, BSD, or MIT preferred; research/non-commercial-only licences are rejected regardless of accuracy).
-- **Fallback, per Decision 3's stated risk:** if no MIM-pretrained MobileNetV3-compatible checkpoint exists publicly (plausible — MIM literature concentrates on ViT/Swin backbones, per the research Q2 finding that "MIM transfer... better than plain conv backbones"), the recipe initialises from the best available supervised ImageNet checkpoint and the class-imbalance loss (§4.3) carries the full uplift burden. This is not a spec failure; Decision 3 already anticipated it.
+Survey candidates, in selection order (Decision 17):
+
+| Candidate | Nature | Cost/risk | Verdict rule |
+|---|---|---|---|
+| timm `mobilenetv3_large_100.miil_in21k_ft_in1k` | ImageNet-21k MIL pretraining — the strongest documented pretraining published for this exact backbone | state-dict adapter to the torchvision graph (layer naming differs); licence to vet | adopt if the adapter round-trips (identical logits on a probe image vs timm-native inference) and the licence permits commercial bundling |
+| torchvision `MobileNet_V3_Large_Weights.IMAGENET1K_V2` backbone + fresh DeepLab head | improved supervised recipe (+1.2 top-1 over V1) | zero surgery; BSD-3 | fallback if the adapter fails or the licence is unsuitable |
+| MIM checkpoints (SparK/A2MIM lineage) | true masked-image modelling | none published for MobileNetV3-Large | expected absence → Decision 12 fallback logged; the imbalance loss carries the recipe |
+
+Licence rule regardless of candidate: Apache-2.0/BSD/MIT-class permitting commercial bundling; research/non-commercial licences rejected regardless of accuracy. One trade-off is accepted knowingly: the current init (`DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT`, COCO-with-VOC-labels) already embodies dense-prediction transfer that a classification init lacks; if the survey concludes it beats both candidates for this task, retaining it is the logged outcome and Decision 12's "expected uplift revised down" applies to the pretraining half.
 - **Recording:** checkpoint source URL, licence identifier, and SHA-256 are recorded in `build/lineage.json` under a new `pretrained_checkpoint` object (alongside the existing `train_config`), satisfying model-production Req [1.3](../model-production/requirements.md#1.3)'s lineage requirement. This is a `train.py`/`lineage.py` schema addition — one field group, not new plumbing — and lands as part of the `debug-read` PRD's training-pipeline context or a direct follow-on to it (§2.1), not duplicated here.
 
 The actual checkpoint identification (searching torchvision/timm/HuggingFace hubs for a suitable licensed checkpoint) is a **research task this spec can do now** (autonomous) — the licence and SHA are static facts, not a compute-gated activity. Running the transfer-learning job that consumes it is gated (§2.1, §7).
@@ -106,7 +149,12 @@ The actual checkpoint identification (searching torchvision/timm/HuggingFace hub
 
 The research identifies a **co-occurrence-relationship loss** (Springer 10.1007/s11694-025-03647-2) as the most food-domain-relevant, evidence-backed lever: +3.72% overall FoodSeg103 mIoU, built from a co-occurrence matrix (ideally Recipe1M+ priors, up to +16.54% on tail classes) and, unlike a plain class-weighted loss, targets exactly MeData's documented failure mode — background-collapse on visually similar carb staples (rice vs. potato vs. bread) that co-occur on the same plate.
 
-Design specifies the recipe as **one of the loss options the `debug-read` PRD's `--loss` flag must be extensible to** (its scaffolding is `{ce, weighted_ce, focal, dice, combined}`; the co-occurrence loss is a distinct fifth option or a term inside `combined`). This spec does not implement the flag — it specifies which loss variant satisfies Req 2.3 and hands that specification to whichever branch lands the training code next (§2.1). If the co-occurrence loss proves impractical to implement against the current `train.py` structure (e.g. it requires a co-occurrence matrix input the pipeline doesn't currently pass), `weighted_ce` (inverse-frequency class weighting, already scaffolded in the PRD's flag set) is the documented fallback — simpler, still evidence-backed for imbalance, but without the specific co-occurrence signal.
+The PRD's `--loss` flag has landed (§2.1): `{ce, weighted_ce, focal, dice, combined}` with class-weight helpers. This spec adds a **co-occurrence option on top of that plumbing** (a new choice or a term inside `combined` — implementer's call against the landed `loss_config` structure), not a fork of it:
+
+- **Matrix source (Decision 15): FoodSeg103-internal.** `prepare_dataset.py` gains a statistics pass during remap, writing `co_stats.json`: per-class pixel counts per split (feeding the existing `weighted_ce` helpers) and image-level joint presence counts over the **training split only**. Its SHA-256 joins the lineage. Recipe1M+ priors — the configuration behind the research's +16.54% tail figure — are recorded as follow-up if tail classes stay collapsed after the first run; acquiring and licence-vetting an external dataset is out of proportion for the first iteration.
+- **Loss shape:** `L = base + λ·L_co`: image-level predicted presence `p_c` (max-pooled `softmax_c`; log-sum-exp or top-k pooling is the noted fallback if a single spurious activation saturating the max proves unstable) penalised (BCE) against ground-truth presence, with pair weights that up-weight false presences whose co-occurrence prior with the image's ground-truth classes is near zero. Honest scope: that weighting targets the *confusion* half of the failure mode (implausible false positives); the *collapse* half (staple pixels predicted as background, a false-negative failure) is carried by the presence-BCE term for missed ground-truth classes and by the `weighted_ce` base — the design does not claim the pair weighting fixes collapse directly. `base` is the landed `weighted_ce`. λ defaults to 0.1 — small enough to keep the auxiliary image-level term subordinate to the pixel loss; treated as fixed for the first run and swept only if training logs show `L_co` dominating or vanishing. λ and the pooling choice are recorded in lineage.
+- **Fail-fast contract:** `co_stats.json` records the split seed and class-mapping SHA-256 it was built from; if the file is missing, or either value mismatches the training invocation's, `train.py` fails with the regeneration command — a silent fallback to unweighted CE (or stats from a different split) would falsify the lineage's claim about the recipe.
+- **Fallback:** if the co-occurrence term proves impractical against the landed structure, `weighted_ce` alone is the documented fallback — simpler, still evidence-backed for imbalance, without the pair signal.
 
 The ≥ 0.05 mean-per-staple-IoU uplift and ≤ 0.02-regression ceiling (Req 2.3) are measured by the existing `run_validation.py` per-class report (`model-production` design §2.1 stage 4) — no new validation tooling.
 
@@ -116,7 +164,7 @@ Measured identically to the existing validation harness: `run_validation.py` aga
 
 ### 4.5 Export budgets carry over unchanged (Req [2.5](requirements.md#2.5))
 
-**Correction to the drafted requirement's stated figure.** Req [2.5](requirements.md#2.5) and Req [3.1](requirements.md#3.1)(b) as drafted say "≤ 10 MB on-disk FP16." The actual binding budget, already amended by `model-production` Decision 13 and enforced in code (`SegmenterWeightsBudget.maxBytes = 24 * 1024 * 1024`, `CoreMLSegmenter.swift:157`) and in `export.py`'s gate, is **≤ 24 MiB FP16**. The shipped baseline (DeepLabV3+MobileNetV3-Large, 11.0M params) is already 22.1 MB at FP16 — a 10 MB ceiling would reject the *current shipped model*, which cannot be the intended acceptance bar. Design uses 24 MiB as the binding number (Decision 6, §8); the 250 ms ANE latency figure is unchanged and matches pipeline Decision 13 (single-view path budget). Any future edit to `requirements.md` should correct the figure to avoid an internal contradiction with `model-production`'s own gate.
+The binding budgets, now stated correctly in Req [2.5](requirements.md#2.5) after the requirements review (the drafted "≤ 10 MB" was corrected per Decision 6): **≤ 24 MiB FP16** (model-production Decision 13; enforced by `SegmenterWeightsBudget.maxBytes`, `CoreMLSegmenter.swift:157`, and `export.py:296` `WEIGHTS_MAX_BYTES`) and **≤ 250 ms per view on the v1 hardware floor** (pipeline Req 8.3). No recipe change alters the parameter count, so the existing export gates re-verify these per build with no new tooling.
 
 ---
 
@@ -127,19 +175,19 @@ Measured identically to the existing validation harness: `run_validation.py` aga
 The spike is a small, self-contained Core ML conversion exercise — it does **not** require a trained SegFormer-B0-on-FoodSeg103 checkpoint. It uses a publicly available SegFormer-B0 checkpoint (e.g. pretrained on ADE20K or Cityscapes; accuracy is irrelevant to this spike, only conversion mechanics and latency are measured) and answers four questions in order, stopping at the first failure (Req [3.2](requirements.md#3.2)):
 
 1. **Converts to Core ML?** Run `coremltools.convert()` against the SegFormer-B0 PyTorch/ONNX graph at 513×513 input. SegFormer's MiT encoder uses overlap-patch-embedding convolutions and efficient self-attention (spatial-reduction attention) — ops with less Core ML precedent than DeepLabV3's plain convolutions. A hard conversion failure (unsupported op) ends the spike immediately.
-2. **FP16 artefact ≤ 24 MiB?** (Corrected from the drafted "≤ 10 MB" for the same reason as §4.5 — the binding budget is 24 MiB.) SegFormer-B0 is 3.8M params (research table, Q1) — roughly a third of the shipped model's 11.0M, so this criterion is the least likely to fail; recorded for completeness and because the decoder/head adds parameters the encoder-only figure excludes.
-3. **≤ 250 ms per 513×513 inference, ANE-resident, on the primary device (iPhone 16 Pro)?** Measured via Xcode's Core ML performance report, same method as `model-production` design §2.1 stage 7 (on-device verification). "ANE-resident" specifically means the Core ML performance report shows the compute units executing on the Neural Engine, not falling back to GPU/CPU — attention-heavy architectures are the most common cause of an unwanted CPU/GPU fallback, per the research's flagged unknown ("nobody publishes Core ML / ANE latencies for these").
-4. **Matches PyTorch outputs within a stated tolerance?** Reuses the equivalence-oracle pattern already implemented for the current model (`model-production` design §3, `export.py`'s per-pixel argmax agreement + max-abs-logit-error gates, Req 4.3 of that spec): run a small fixed reference set through both the PyTorch graph and the converted Core ML artefact, require > 99% per-pixel argmax agreement and max absolute logit error < 0.05 — the same numeric thresholds already in force for DeepLabV3, so the spike is judged by an existing, non-arbitrary bar rather than a new one invented for this comparison.
+2. **FP16 artefact ≤ 24 MiB?** (Reuse `export.py:296` `WEIGHTS_MAX_BYTES`.) SegFormer-B0 is 3.8M params (research table, Q1) — roughly a third of the shipped model's 11.0M, so this criterion is the least likely to fail; recorded for completeness and because the decoder/head adds parameters the encoder-only figure excludes.
+3. **≤ 250 ms per 513×513 inference, ANE-resident, on the v1 hardware floor (iPhone 13 Pro Max — physically available, Decision 16)?** Measured via Xcode's Core ML performance report, same method as `model-production` design §2.1 stage 7 (on-device verification). Measuring on the floor device directly makes the verdict authoritative — no derating argument needed. "ANE-resident" specifically means the Core ML performance report shows the compute units executing on the Neural Engine, not falling back to GPU/CPU — attention-heavy architectures are the most common cause of an unwanted CPU/GPU fallback, per the research's flagged unknown ("nobody publishes Core ML / ANE latencies for these").
+4. **Matches PyTorch outputs within the existing oracle thresholds?** Reuses the equivalence oracle already implemented for the current model (`oracle_agreement()` at `export.py:401`, `reference_input()` at `export.py:150`) with model-production Req [4.3](../model-production/requirements.md#4.3)'s thresholds **as amended**: > 99% per-pixel argmax agreement (the functional bar) and max absolute logit error < 0.5 (the FP16-drift-recalibrated bar, model-production Decision 14; the original 0.05 predates any real FP16 export). Decision 7 records this reuse; if SegFormer's attention numerics show materially different FP16 drift, the deviation is logged, not silently absorbed.
 
 All four verdicts are recorded in this spec's decision log as a single dated entry (pass/fail per criterion, with the measured numbers) whether the outcome is pass or fail.
 
 ### 5.2 Spike is human/compute-gated
 
-Criteria 1 and 4 need a Python/coremltools environment (autonomous-capable, no GPU required — conversion and the small-reference-set oracle check both run on CPU in reasonable time). Criterion 3 needs the physical iPhone 16 Pro and Xcode's performance report — this half is human-gated. The spike is therefore **split**: the conversion + equivalence half (criteria 1, 2 partially, 4) can be attempted autonomously; the on-device latency half (criterion 3, and confirming criterion 2's real artefact size from the actual conversion) is gated. Both halves are required before any verdict is logged — a spike that only completes the autonomous half is incomplete, not a pass.
+Criteria 1, 2, and 4 need only a Python/coremltools environment (autonomous-capable, no GPU required — conversion produces the FP16 artefact whose size criterion 2 measures directly, and the small-reference-set oracle check runs on CPU in reasonable time); they live in a new `tools/segmenter/spike_segformer.py` (HF `transformers` added to `tools/segmenter/requirements.txt` as a spike-only dependency), emitting a verdict JSON (`build/spike_segformer.json`: four booleans + measurements) that the decision-log entry transcribes. Criterion 3 needs the physical iPhone 13 Pro Max and Xcode's performance report — this half is human-gated. Both halves are required before any verdict is logged — a spike that only completes the autonomous half is incomplete, not a pass.
 
 ### 5.3 Retrain-and-compare gate (Req [3.2](requirements.md#3.2), Req [3.3](requirements.md#3.3))
 
-If the spike fails any criterion, Requirement 3 is closed without a training run — the failure and which criterion tripped it are logged, and Requirement 2 remains the sole track (Req 3.2). If the spike passes all four, a SegFormer-B0 FoodSeg103 retrain is scheduled using the same class-imbalance recipe developed for Requirement 2 (§4.3) — not a separate, unweighted-CE baseline — since the point of the comparison is "does the better backbone plus the same recipe beat the same recipe on the current backbone," not "does SegFormer-B0 beat an under-trained DeepLabV3." The retrained checkpoint is compared against the Requirement-2 checkpoint on both mean IoU and the carb-staple mean (Req 2.3's eight classes); SegFormer-B0 is adopted only if it wins both. A win on one and a loss on the other counts as "does not beat" per Req [3.3](requirements.md#3.3)'s conjunction ("on both").
+If the spike fails any criterion, Requirement 3 is closed without a training run — the failure and which criterion tripped it are logged, and Requirement 2 remains the sole track (Req 3.2). If the spike passes all four, a SegFormer-B0 FoodSeg103 retrain is scheduled using the same class-imbalance recipe developed for Requirement 2 (§4.3) — not a separate, unweighted-CE baseline — since the point of the comparison is "does the better backbone plus the same recipe beat the same recipe on the current backbone," not "does SegFormer-B0 beat an under-trained DeepLabV3." Both candidates are measured on the same re-cut heldout split (§3.5). The retrained checkpoint is compared against the Requirement-2 checkpoint on both mean food-class IoU and the carb-staple mean (Req 2.3's eight classes); SegFormer-B0 is adopted only if it wins both **by ≥ 0.02** (the Req [3.3](requirements.md#3.3) adoption margin — a sub-margin win buys permanent conversion/maintenance risk for what may be noise). A win on one and a loss on the other counts as "does not beat" per the conjunction. Adoption would then re-run the export-gate integration (channel count, oracle, budget) as a `model-production` concern — out of scope here beyond the spike verdict and comparison.
 
 This retrain is itself a second gated GPU run, sequenced strictly after (a) the spike passes and (b) the Requirement-2 recipe exists to reuse (§2.1's sequencing).
 
@@ -153,24 +201,37 @@ No design work: Req [4.1](requirements.md#4.1) and [4.2](requirements.md#4.2) ar
 
 ## 7. Testing / verification strategy
 
-There is no runtime code in this spec, so there is no `make build` / `make test` surface to exercise. Verification is:
+One MedataCore-adjacent exception to an otherwise `tools/segmenter/`-only footprint: the amendment pass touches `HarnessCore/SegBench.swift:40` and its tests (§3.3) — a Debug-only surface (`HARNESS_ENABLED`), covered by the existing `make test`; no shipping-app code changes. Everything else this spec's tasks add lives in `tools/segmenter/`, verified by extending its existing pytest suite:
 
-- **Gate derivation (§3):** checked by a self-review that the three named inputs (frontier, baseline, per-class floors) are cited with sources and the arithmetic in §3.2 is reproducible from them — the same bar `model-production`'s design applies to its own numeric gates.
-- **Recipe specification (§4):** no verification until the gated training run executes; the *specification* is checked for internal consistency (does it name real files, real flag names matching the `debug-read` PRD's actual scaffolding) rather than for correctness of an unrun training job.
-- **Spike procedure (§5):** the procedure itself is reviewed against `model-production` design §3's existing oracle pattern to confirm it reuses rather than reinvents the equivalence-check numeric thresholds.
-- **`make spell`:** run before commit per repo convention; this spec is prose-only so this is the only mechanical check that applies.
+- **Stratified carve (§3.5):** determinism for a fixed seed; every staple present in heldout on a synthetic corpus; the infeasibility rule on a corpus with a 2-image staple.
+- **Loss additions (§4.3):** `co_stats.json` statistics generation on synthetic masks; `L_co` is zero when predicted presence matches ground truth; the fail-fast contract for both the missing and the stale case (seed/mapping-SHA mismatch).
+- **Bar constants (§3.3):** existing export-eligibility tests updated to 0.48/0.45 in the same task as the `validation.py` change.
+- **Gate derivation (§3):** document-level — the three named inputs are cited with sources and §3.2's arithmetic is reproducible from them; no code.
+- **Spike (§5):** the verdict JSON is the artefact; the oracle path reuses already-tested `export.py` helpers. Accuracy criteria (Reqs 2.3, 2.4, 3.3) are verified by human-gated validation runs, not tests, per the requirements' closure semantics.
+- **`make spell`:** before every docs commit, per repo convention.
+
+Property-based testing is not used: the split/loss invariants are covered by direct cases on synthetic corpora, and `hypothesis` is not a project dependency — adding one contradicts the testing-minimal posture.
 
 ---
 
 ## 8. Design-time decisions
 
-Five decisions surfaced during design that extend the drafted decision log (Decisions 1–4) and are appended there, not here:
+First design pass (appended to the drafted Decisions 1–4):
 
-- **Decision 5** — fixes the re-derived gate at 0.48 mean IoU (§3.2), superseding pipeline Decision 14.
-- **Decision 6** — corrects the drafted requirements' "≤ 10 MB" figures (Req 2.5, Req 3.1(b)) to the actual binding 24 MiB budget (model-production Decision 13), and records that this is a factual correction of a stale number carried over from the research note, not a re-opening of the size-budget question.
-- **Decision 7** — records the SegFormer-B0 spike procedure's reuse of the existing equivalence-oracle thresholds (§5.1) rather than inventing new tolerances.
+- **Decision 5** — fixes the re-derived gate at 0.48 mean IoU (§3.2), superseding pipeline Decision 14 (amendment pass pending, §3.3).
+- **Decision 6** — corrects the drafted requirements' "≤ 10 MB" figures to the binding 24 MiB budget (model-production Decision 13); requirements.md has since been corrected.
+- **Decision 7** — the SegFormer-B0 spike reuses the existing equivalence-oracle thresholds (§5.1) rather than inventing new tolerances.
 - **Decision 8** — formalises the rejected-approaches list (CLIPSeg, MobileSAM/SAM3-distilled, FoodSAM) with citations, satisfying Req 4.1.
 - **Decision 9** — records the `plate`-class question as open (status `proposed`), satisfying Req 4.2.
+
+Requirements review (Decisions 10–13): stratified re-cut (10), floors re-derived alongside the gate (11), pretraining fallback (12), permitted gate/recipe divergence (13).
+
+Second design pass:
+
+- **Decision 14** — per-class staple floors fixed at 0.45 uniform (§3.2a), completing the Req 1.1/1.6 derivation with the label-space comparability note (§3.1).
+- **Decision 15** — co-occurrence matrix is FoodSeg103-internal (`co_stats.json`, §4.3); Recipe1M+ recorded as follow-up.
+- **Decision 16** — spike latency measured directly on the iPhone 13 Pro Max (available), no derating argument (§5.1.3).
+- **Decision 17** — initialisation selection order: timm in21k-MIL adapter → torchvision `IMAGENET1K_V2` → retain COCO-seg `DEFAULT` if the survey favours it, with the outcome logged either way (§4.2).
 
 See `decision_log.md` for the full entries.
 
