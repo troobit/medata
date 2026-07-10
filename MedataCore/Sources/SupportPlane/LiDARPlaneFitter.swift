@@ -53,6 +53,10 @@ public enum LiDARPlaneFitter {
     public static let residualMaxMm: Float = 20
     static let stabilityRatioMin: Float = 1e-6
     static let minPoints: Int = 3
+    // Upper bound on the deterministic consensus-polish passes after the RANSAC
+    // winner is refined (estimation-runtime-consistency, PRD estimation-quality).
+    // The loop usually exits earlier because the inlier set reaches a fixed point.
+    static let consensusPolishMaxPasses: Int = 3
 
     // Where candidate points are sampled relative to `foodRegionMask`.
     public enum CandidateRegion: Sendable, Equatable {
@@ -102,9 +106,10 @@ public enum LiDARPlaneFitter {
         // Step 2: RANSAC. Deterministic seed from the depth bytes (§6.0).
         let seed = Fnv1a64.hash(inputs.depth.depthBytesMm)
         var rng = SplitMix64(seed: seed)
+        let gravity = inputs.gravityCamera.normalised()
         let (bestNormal, _, bestInliers) = ransac(
             points: points,
-            gravity: inputs.gravityCamera.normalised(),
+            gravity: gravity,
             rng: &rng
         )
         debugLastInlierCount = bestInliers.count
@@ -119,17 +124,53 @@ public enum LiDARPlaneFitter {
             seedNormal: bestNormal
         )
 
+        // Step 3b (additive robustness, estimation-runtime-consistency): consensus
+        // polish. The RANSAC winner's ±5 mm inlier band is anchored to a 3-point
+        // candidate plane, so points near the band edge flip membership under the
+        // millimetre-level depth differences between two captures of the same
+        // plate — and the LSQ plane, whose distance feeds the mm/px scale
+        // (|d|/f at `Pipeline` stage E) and every height-field sample, inherits
+        // that sensitivity straight into the carb reading. Re-selecting inliers
+        // against the REFINED plane and re-refining until the consensus set stops
+        // changing converges to a fixed point that no longer depends on which
+        // minimal sample won. Fully deterministic: fixed pass cap, no RNG, stable
+        // ascending point order. Conservative: a re-selection that goes
+        // underpopulated, degenerate, or outside the gravity cone keeps the
+        // previous pass's plane instead of failing a fit that used to succeed.
+        var polishedNormal = refinedNormal
+        var polishedD = refinedD
+        var polishedInliers = bestInliers
+        for _ in 0..<consensusPolishMaxPasses {
+            var reselected: [Int] = []
+            reselected.reserveCapacity(points.count)
+            for idx in 0..<points.count
+            where abs(polishedNormal.dot(points[idx]) - polishedD) < inlierBandMm {
+                reselected.append(idx)
+            }
+            if reselected == polishedInliers || reselected.count < minPoints { break }
+            guard let (nextNormal, nextD) = try? refine(
+                inliers: reselected.map { points[$0] },
+                seedNormal: polishedNormal
+            ) else { break }
+            let angle = acos(max(-1, min(1, nextNormal.dot(gravity))))
+            if angle > gravityAngleMaxRad { break }
+            polishedInliers = reselected
+            polishedNormal = nextNormal
+            polishedD = nextD
+        }
+        debugLastInlierCount = polishedInliers.count
+
         // Step 4: residual_mm = sqrt(mean(squared inlier signed-distances)).
-        let residual = computeResidual(points: bestInliers.map { points[$0] },
-                                       normal: refinedNormal, d: refinedD)
+        let residual = computeResidual(points: polishedInliers.map { points[$0] },
+                                       normal: polishedNormal, d: polishedD)
         debugLastResidualMm = residual
         if residual > inputs.residualMaxMm {
             throw SupportPlaneError.lidarFitResidualTooHigh
         }
 
         return SupportPlane(
-            normal: refinedNormal,
-            distanceMm: refinedD,
+            normal: polishedNormal,
+            distanceMm: polishedD,
             residualMm: residual,
             convergedIterations: nil   // LiDAR fit per §3.3 sentinel
         )
