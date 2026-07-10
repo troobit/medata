@@ -8,7 +8,7 @@ references:
 
 ## Persistence: intake events
 
-- [ ] 1. Write tests for EventType.intake save/update/delete/range-validation <!-- id:yh454ud -->
+- [x] 1. Write tests for EventType.intake save/update/delete/range-validation <!-- id:yh454ud -->
   - New MedataCore/Tests/PersistenceTests/IntakeEventTests.swift, XCTest style matching InsulinEventTests.swift (temp GRDBPersistenceStore, setUp/tearDown)
   - Cover: saveIntakeEntry writes one events row (event_type=intake, value=carbs, metadata has subtype/schema_version/source, omits macro keys when absent per Req 2.3)
   - Cover: updateIntakeEntry updates the same row id; deleteIntakeEntry deletes only event_type=intake rows (a same-id meal/insulin/bsl row survives)
@@ -18,7 +18,7 @@ references:
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.3](requirements.md#2.3), [6.1](requirements.md#6.1), [6.3](requirements.md#6.3), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4)
   - References: design.md#Event type and storage, design.md#PersistenceStore additions
 
-- [ ] 2. Implement EventType.intake, IntakeSubtype/IntakeMacros/IntakeSource/IntakeEntry, and saveIntakeEntry/updateIntakeEntry/deleteIntakeEntry to pass tests <!-- id:yh454ue -->
+- [x] 2. Implement EventType.intake, IntakeSubtype/IntakeMacros/IntakeSource/IntakeEntry, and saveIntakeEntry/updateIntakeEntry/deleteIntakeEntry to pass tests <!-- id:yh454ue -->
   - Add EventType.intake constant; new types in MedataCore/Sources/Persistence (new IntakeEvent.swift file alongside the existing InsulinDose types)
   - Add PersistenceError.intakeCarbsOutOfRange(Double) case
   - GRDBPersistenceStore implementations mirror saveInsulinDose/deleteInsulinEvent exactly; metadata JSON omits nil macro keys, never null

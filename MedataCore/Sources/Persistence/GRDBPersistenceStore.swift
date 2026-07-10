@@ -518,6 +518,94 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    // MARK: - Manual carb intake (specs/data/manual-carb-intake Phase 1)
+
+    // Bounds accepted at the store layer (Req 1.4).
+    private static let intakeCarbsRange = 1.0...999.0
+
+    public func saveIntakeEntry(_ entry: IntakeEntry) async throws {
+        guard Self.intakeCarbsRange.contains(entry.carbsG) else {
+            throw PersistenceError.intakeCarbsOutOfRange(entry.carbsG)
+        }
+        let metadata = try Self.intakeMetadataJSON(for: entry)
+        let timestampMs = Int64(entry.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    entry.id.uuidString, timestampMs, EventType.intake,
+                    entry.carbsG, metadata
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func updateIntakeEntry(_ entry: IntakeEntry) async throws {
+        guard Self.intakeCarbsRange.contains(entry.carbsG) else {
+            throw PersistenceError.intakeCarbsOutOfRange(entry.carbsG)
+        }
+        let metadata = try Self.intakeMetadataJSON(for: entry)
+        let timestampMs = Int64(entry.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            // Gated on event_type so a meal/insulin/bsl row sharing the id
+            // is untouched.
+            try db.execute(
+                sql: """
+                    UPDATE events SET timestamp = ?, value = ?, metadata = ?
+                    WHERE id = ? AND event_type = ?
+                    """,
+                arguments: [
+                    timestampMs, entry.carbsG, metadata,
+                    entry.id.uuidString, EventType.intake
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func deleteIntakeEntry(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a meal/insulin/bsl row sharing the id
+            // survives. Intake events have no side tables — nothing else to
+            // cascade.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.intake]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    // Builds the `metadata` JSON object per design.md "Event type and
+    // storage": `subtype`, `schema_version`, `source`, plus `preset_id`
+    // (only when source = quickadd) and macro keys — all omitted, never
+    // null, when absent.
+    private static func intakeMetadataJSON(for entry: IntakeEntry) throws -> String {
+        var payload: [String: Any] = [
+            "subtype": entry.subtype.rawValue,
+            "schema_version": IntakeEntry.metadataSchemaVersion,
+            "source": entry.source.rawValue
+        ]
+        if let presetID = entry.presetID {
+            payload["preset_id"] = presetID.uuidString
+        }
+        if let proteinG = entry.macros.proteinG {
+            payload["protein_g"] = proteinG
+        }
+        if let fatG = entry.macros.fatG {
+            payload["fat_g"] = fatG
+        }
+        if let fibreG = entry.macros.fibreG {
+            payload["fibre_g"] = fibreG
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
         let ids: [String] = try await queue.read { db in
