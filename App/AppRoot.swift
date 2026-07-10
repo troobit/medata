@@ -103,7 +103,7 @@ struct AppRoot: View {
                     preShutterSegmenter: preShutterSegmenter
                 )
             case .intake:
-                IntakeView()
+                IntakeView(store: store)
             case .records:
                 RecordsView(store: store)
             case .graph:

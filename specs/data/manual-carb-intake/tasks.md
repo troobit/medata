@@ -68,7 +68,7 @@ references:
 
 ## Intake surface
 
-- [ ] 7. Build CarbEntryModel and CarbEntrySheet (new + edit) <!-- id:yh454uj -->
+- [x] 7. Build CarbEntryModel and CarbEntrySheet (new + edit) <!-- id:yh454uj -->
   - New App/CarbEntryModel.swift (@Observable @MainActor): carbs text field state clamped 1-999, macro fields with disclosure-expanded-if-editing-has-macros per design.md, timestamp defaulting to now/back-dateable, save()/update() via store, optional editing: IntakeEntry? init param
   - New App/CarbEntrySheet.swift: NavigationStack, numeric keypad TextField for carbs (no stepper), DatePicker matching InsulinDoseSheet.timeRow, DisclosureGroup for protein/fat/fibre, Save button disabled below 1g
   - No test task — App-layer UI, build+on-device gate
@@ -77,7 +77,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [7.2](requirements.md#7.2)
   - References: design.md#Views
 
-- [ ] 8. Build QuickPresetEditSheet and save-as-preset action <!-- id:yh454uk -->
+- [x] 8. Build QuickPresetEditSheet and save-as-preset action <!-- id:yh454uk -->
   - New App/QuickPresetEditSheet.swift: name field + carb/macro fields, create or edit an existing QuickPreset
   - CarbEntrySheet gains the "Save as quick-add" secondary action opening QuickPresetEditSheet pre-filled from the just-saved entry's values, independent of the entry save (cancelling creates no preset)
   - No test task — App-layer UI
@@ -86,7 +86,7 @@ references:
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.4](requirements.md#4.4)
   - References: design.md#Views
 
-- [ ] 9. Build IntakeModel <!-- id:yh454ul -->
+- [x] 9. Build IntakeModel <!-- id:yh454ul -->
   - New App/IntakeModel.swift (@Observable @MainActor): loads/reloads quickPresets() and recent intake entries via events(in:type:) with the all-time sentinel + own private intakeEntry(from:) decoder, sorted desc + truncated in Swift per design.md
   - tapPreset(_:) calls saveIntakeEntry directly with source=.quickadd/presetID set, no sheet
   - Subscribes to store.eventsDidChange, same pattern as MealHistoryModel/RecordsModel
@@ -96,7 +96,7 @@ references:
   - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [4.3](requirements.md#4.3), [7.1](requirements.md#7.1), [7.4](requirements.md#7.4)
   - References: design.md#Views
 
-- [ ] 10. Replace IntakeView.swift wholesale and wire quick-add grid + recent-entries list <!-- id:yh454um -->
+- [x] 10. Replace IntakeView.swift wholesale and wire quick-add grid + recent-entries list <!-- id:yh454um -->
   - App/IntakeView.swift body replaced (currently a Color.surfacePrimary placeholder): quick-add grid
   - one button per preset labelled with preset.name (Req 3.1)
   - "Enter amount" affordance opening CarbEntrySheet()
