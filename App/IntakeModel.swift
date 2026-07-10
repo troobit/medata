@@ -18,6 +18,14 @@ final class IntakeModel {
 
     private(set) var presets: [QuickPreset] = []
     private(set) var recentEntries: [IntakeEntry] = []
+    // In-flight quick-add marker: the tapped tile is disabled and dimmed for
+    // the duration of its write so an accidental double-tap cannot write two
+    // rows; deliberate repeat taps work again once the write returns.
+    private(set) var savingPresetID: UUID?
+    // Bumped only when a quick-add write commits — the view's
+    // `.sensoryFeedback` success haptic triggers off it, so a failed write
+    // stays silent but never fires the success haptic.
+    private(set) var quickAddSuccessCount = 0
 
     private let store: any PersistenceStore
     private var subscription: Task<Void, Never>?
@@ -63,6 +71,9 @@ final class IntakeModel {
     // preset's stored values, timestamped now — no sheet, no confirmation.
     // The entries list refreshes via the `eventsDidChange` tick the save emits.
     func tapPreset(_ preset: QuickPreset) async {
+        guard savingPresetID == nil else { return }
+        savingPresetID = preset.id
+        defer { savingPresetID = nil }
         let entry = IntakeEntry(
             timestamp: Date(),
             carbsG: preset.carbsG,
@@ -70,7 +81,13 @@ final class IntakeModel {
             source: .quickadd,
             presetID: preset.id
         )
-        try? await store.saveIntakeEntry(entry)
+        do {
+            try await store.saveIntakeEntry(entry)
+            quickAddSuccessCount += 1
+        } catch {
+            // Silent on failure (Req 3.2 minimalism) — the success haptic
+            // simply does not fire and no row appears in Recent.
+        }
     }
 
     // Best-effort deletes (MealHistoryModel pattern): a failure leaves the row

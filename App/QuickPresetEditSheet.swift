@@ -125,6 +125,12 @@ struct QuickPresetEditSheet: View {
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 72)
+                // Same sanitiser as the carb field: digits only, 3-digit cap,
+                // so pasted junk cannot persist or vanish a typed value.
+                .onChange(of: text.wrappedValue) {
+                    let clamped = CarbEntryModel.clampedDigits(text.wrappedValue)
+                    if clamped != text.wrappedValue { text.wrappedValue = clamped }
+                }
                 .accessibilityIdentifier(identifier)
             Text("g")
                 .foregroundStyle(Color.textSecondary)
@@ -156,16 +162,15 @@ struct QuickPresetEditSheet: View {
     }
 
     private func clampCarbsText() {
-        var text = String(carbsText.filter(\.isNumber).prefix(3))
-        if let value = Int(text), value > CarbEntryModel.maxCarbs {
-            text = String(CarbEntryModel.maxCarbs)
-        }
+        let text = CarbEntryModel.clampedDigits(carbsText)
         if text != carbsText { carbsText = text }
     }
 
     // Empty macro text stays absent, never 0 (Req 2.3 applies to presets too).
+    // The guard re-checks the 1 g floor: presets have no store-side range
+    // validation, so this is the only backstop against a sub-floor write.
     private func save() async {
-        guard let carbs else { return }
+        guard let carbs, carbs >= CarbEntryModel.minCarbs else { return }
         isSaving = true
         saveError = nil
         defer { isSaving = false }

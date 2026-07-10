@@ -32,6 +32,12 @@ final class CarbEntryModel {
     // `...Date()` range forbids future dates.
     var timestamp = Date()
     private(set) var isSaving = false
+    // One-way latch: set when a save commits. The save-as-quick-add path
+    // keeps the sheet open while the preset sheet animates in, and
+    // `isSaving` re-enables after the write — without the latch both save
+    // buttons become tappable again in that window and a second tap writes
+    // a duplicate ledger row.
+    private(set) var didSave = false
     private(set) var saveError: String?
 
     let editing: IntakeEntry?
@@ -54,16 +60,23 @@ final class CarbEntryModel {
 
     // Save is available only from 1 g (Req 1.4); the ceiling is held by the
     // text clamp so `carbs` can never read above 999.
-    var canSave: Bool { (carbs ?? 0) >= Self.minCarbs && !isSaving }
+    var canSave: Bool { (carbs ?? 0) >= Self.minCarbs && !isSaving && !didSave }
 
     // Called from the view's onChange: strips non-digits (hardware keyboards
     // bypass the number pad) and clamps at 999 (Req 1.4).
     func clampCarbsText() {
-        var text = String(carbsText.filter(\.isNumber).prefix(3))
-        if let value = Int(text), value > Self.maxCarbs {
-            text = String(Self.maxCarbs)
-        }
+        let text = Self.clampedDigits(carbsText)
         if text != carbsText { carbsText = text }
+    }
+
+    // Shared sanitiser for every gram-valued keypad field (carbs and macros,
+    // here and in QuickPresetEditSheet): strips non-digits so pasted text
+    // like "abc"/"-5"/"1e6" cannot persist garbage, caps at 3 digits, and
+    // round-trips through Int so leading zeros normalise ("099" → "99").
+    static func clampedDigits(_ text: String) -> String {
+        let digits = String(text.filter(\.isNumber).prefix(3))
+        guard let value = Int(digits) else { return "" }
+        return String(min(value, maxCarbs))
     }
 
     // Macro fields decode only when non-empty (Req 2.3): `Double(text)` is
@@ -105,6 +118,7 @@ final class CarbEntryModel {
                 )
                 try await store.saveIntakeEntry(entry)
             }
+            didSave = true
             return true
         } catch {
             saveError = "Save failed: \(error.localizedDescription)"
