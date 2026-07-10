@@ -48,7 +48,7 @@ references:
 
 ## Graph and Records integration
 
-- [ ] 5. Extend TrendsModel to fold .intake events into carbBars <!-- id:yh454uh -->
+- [x] 5. Extend TrendsModel to fold .intake events into carbBars <!-- id:yh454uh -->
   - App/TrendsModel.swift reload() adds a fourth events(in:type:) fetch for EventType.intake, decoded into private(set) var intakeCarbs: [DatedValue]
   - recomputeSeries merges meals+intakeCarbs into one carbBars series for both Day (per-entry TrendsChartPoint) and Week/Month (combined samples through the existing single TrendsMath.dailyBuckets call) per design.md's sketch
   - No new test task — App-layer, build+on-device gate only (testing-mvp-minimal convention)
@@ -57,7 +57,7 @@ references:
   - Requirements: [6.2](requirements.md#6.2)
   - References: design.md#Carb totals and graph series
 
-- [ ] 6. Add RecordRow.intake(IntakeRecord) case and wire RecordsModel/delete <!-- id:yh454ui -->
+- [x] 6. Add RecordRow.intake(IntakeRecord) case and wire RecordsModel/delete <!-- id:yh454ui -->
   - App/MealRouting.swift adds IntakeRecord struct (wraps IntakeEntry: id/timestamp/displayValue/typeLabel="Carbs") and the .intake case plus its timestamp/id switch arms (id via entry.id.uuidString)
   - App/RecordsModel.swift adds private loadIntake() with its own private intakeEntry(from:) decoder (not shared — matches home-router Decision 13's per-model-decoder convention), merged in reload()
   - One additive case in RecordsModel.delete(_:) calling store.deleteIntakeEntry(id:)
