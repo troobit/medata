@@ -256,8 +256,7 @@ let package = Package(
             dependencies: [
                 "GlucoseIngestion",
                 "Persistence",
-                "PortableContracts",
-                .product(name: "GRDB", package: "GRDB.swift")
+                "PortableContracts"
             ],
             path: "MedataCore/Tests/GlucoseIngestionTests"
         ),

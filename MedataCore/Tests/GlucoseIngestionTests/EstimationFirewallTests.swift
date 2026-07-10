@@ -24,6 +24,14 @@ final class EstimationFirewallTests: XCTestCase {
             graph["GlucoseIngestion"],
             "GlucoseIngestion target missing from the package graph — firewall test is vacuous")
 
+        // Positive control: edge parsing must actually see dependencies.
+        // Pipeline → Persistence is a real, load-bearing edge; if parsing
+        // rots (dump-package format change, key rename), this fails loudly
+        // instead of the exclusion checks passing vacuously.
+        XCTAssertTrue(
+            Self.transitiveClosure(of: "Pipeline", in: graph).contains("Persistence"),
+            "Pipeline's closure lacks Persistence — dependency parsing is broken, firewall vacuous")
+
         for target in Self.estimationTargets {
             XCTAssertNotNil(graph[target], "estimation target \(target) missing from dump-package")
             let closure = Self.transitiveClosure(of: target, in: graph)

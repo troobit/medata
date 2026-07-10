@@ -31,12 +31,12 @@ public struct GlucoseSample: Sendable, Equatable {
     }
 
     // mg/dL convenience for sources that report it (Req 5.5): divides by
-    // 18.0182 and rounds to one decimal, exactly once and before any
-    // duplicate check or storage comparison.
+    // 18.0182. No rounding here — the coordinator's single rounding point
+    // rounds to one decimal before the duplicate check and storage.
     public init(nativeInstant: Date, mgPerDl: Double, nativeID: String? = nil) {
         self.init(
             nativeInstant: nativeInstant,
-            mmolL: (mgPerDl / 18.0182 * 10).rounded() / 10,
+            mmolL: mgPerDl / 18.0182,
             nativeID: nativeID
         )
     }
@@ -49,6 +49,12 @@ public struct GlucoseSample: Sendable, Equatable {
 // Decision 7).
 public protocol GlucoseIngestSink: Sendable {
     func ingest(_ samples: [GlucoseSample], from sourceID: String) async throws -> BslIngestSummary
+
+    // State transitions outside the ingest path (Req 6.1): a source pushes
+    // `.failed` / `.notConnected` / `.connected` here so the UI sees them
+    // without polling. A successful `ingest` already implies `.connected`;
+    // this exists for the transitions ingest cannot express.
+    func reportState(_ state: GlucoseConnectionState, for sourceID: String) async
 }
 
 // One glucose source (Req 1.1). A source owns its own scheduling (HealthKit

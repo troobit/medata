@@ -50,17 +50,17 @@ references:
 
 ## Phase 3 — Sources
 
-- [ ] 7. LibreLinkUp API spike (prerequisite research): confirm on-device auth flow, payload shape + unit, poll rate limits, and whether a stable per-reading id exists <!-- id:oecpdmw -->
+- [x] 7. LibreLinkUp API spike (prerequisite research): confirm on-device auth flow, payload shape + unit, poll rate limits, and whether a stable per-reading id exists <!-- id:oecpdmw -->
   - Blocked-by: oecpdmv (Firewall test: run swift package dump-package, parse the target graph, assert the transitive dependency closure of each estimation target excludes GlucoseIngestion)
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5)
 
-- [ ] 8. HealthKit source (#if canImport(HealthKit) in GlucoseIngestion): auth for the glucose type; read via the mmol/L HKUnit; 90-day HKSampleQuery backfill as one batch; HKObserverQuery + enableBackgroundDelivery + anchored query; foreground catch-up; ignore deletions; anchor in UserDefaults <!-- id:oecpdmx -->
+- [x] 8. HealthKit source (#if canImport(HealthKit) in GlucoseIngestion): auth for the glucose type; read via the mmol/L HKUnit; 90-day HKSampleQuery backfill as one batch; HKObserverQuery + enableBackgroundDelivery + anchored query; foreground catch-up; ignore deletions; anchor in UserDefaults <!-- id:oecpdmx -->
   - Blocked-by: oecpdmv (Firewall test: run swift package dump-package, parse the target graph, assert the transitive dependency closure of each estimation target excludes GlucoseIngestion)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [2.7](requirements.md#2.7), [2.8](requirements.md#2.8)
 
-- [ ] 9. LibreLinkUp source (GlucoseIngestion): Keychain credential capture/store (AfterFirstUnlock), URLSession client, payload->GlucoseSample, <=15-min foreground timer + BGAppRefreshTask + foreground catch-up, failure->.failed state, disconnect clears credentials. Gated on task 7 <!-- id:oecpdmy -->
+- [x] 9. LibreLinkUp source (GlucoseIngestion): Keychain credential capture/store (AfterFirstUnlock), URLSession client, payload->GlucoseSample, <=15-min foreground timer + BGAppRefreshTask + foreground catch-up, failure->.failed state, disconnect clears credentials. Gated on task 7 <!-- id:oecpdmy -->
   - Blocked-by: oecpdmw (LibreLinkUp API spike prerequisite research: confirm on-device auth flow, payload shape + unit, poll rate limits, and whether a stable per-reading id exists)
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5)
