@@ -70,6 +70,8 @@ public actor IngestionCoordinator: GlucoseIngestSink {
             .map { mark, sample in
                 LiveBslReading(
                     timestampMs: mark,
+                    // The single rounding point (Req 5.5): one decimal,
+                    // before the store's duplicate/discrepancy comparison.
                     mmolL: (sample.mmolL * 10).rounded() / 10,
                     sourceID: sourceID,
                     nativeInstantMs: Self.instantMs(sample.nativeInstant),
@@ -88,9 +90,20 @@ public actor IngestionCoordinator: GlucoseIngestSink {
         let lastReadingAt = lastReadingMs[sourceID].map {
             Date(timeIntervalSince1970: Double($0) / 1000)
         }
+        // An unregistered sourceID minting a `.connected` entry here is
+        // accepted behaviour: sources self-announce via their first
+        // successful ingest.
         states[sourceID] = .connected(lastReadingAt: lastReadingAt)
         emitStateSnapshot()
         return summary
+    }
+
+    // State transitions outside the ingest path (Req 6.1, GlucoseIngestSink):
+    // sources push `.failed` / `.notConnected` / `.connected` here so the UI
+    // sees them without polling.
+    public func reportState(_ state: GlucoseConnectionState, for sourceID: String) {
+        states[sourceID] = state
+        emitStateSnapshot()
     }
 
     // MARK: - State to UI (Req 1.4, 6.1)

@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 import Persistence
 import PortableContracts
 import XCTest
@@ -111,10 +110,12 @@ final class IngestionCoordinatorTests: XCTestCase {
 
     // MARK: - mg/dL → mmol/L (Req 5.5)
 
-    func testMgPerDlInitConvertsAt18Point0182ToOneDecimal() {
-        // 100 / 18.0182 = 5.5499… → 5.5
+    func testMgPerDlInitConvertsAt18Point0182Unrounded() {
+        // The init only converts; rounding to one decimal is the
+        // coordinator's single rounding point.
         XCTAssertEqual(
-            GlucoseSample(nativeInstant: Date(), mgPerDl: 100).mmolL, 5.5, accuracy: 1e-12)
+            GlucoseSample(nativeInstant: Date(), mgPerDl: 100).mmolL,
+            100 / 18.0182, accuracy: 1e-12)
         // 180.182 / 18.0182 = 10.0 exactly
         XCTAssertEqual(
             GlucoseSample(nativeInstant: Date(), mgPerDl: 180.182).mmolL, 10.0, accuracy: 1e-12)
