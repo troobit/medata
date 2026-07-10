@@ -6,15 +6,15 @@ references:
 
 ## Recipe
 
-- [ ] 1. Add a class-imbalance-aware loss option to tools/segmenter/train.py via a CLI flag (--loss {ce,weighted_ce,focal,dice,combined}); omitting it reproduces todays unweighted nn.CrossEntropyLoss byte-for-byte in the recorded train_config <!-- id:pgctxe6 -->
+- [x] 1. Add a class-imbalance-aware loss option to tools/segmenter/train.py via a CLI flag (--loss {ce,weighted_ce,focal,dice,combined}); omitting it reproduces todays unweighted nn.CrossEntropyLoss byte-for-byte in the recorded train_config <!-- id:pgctxe6 -->
 
-- [ ] 2. Express loss selection and class-weight computation as pure, torch-free-testable helpers; record the selected loss + weighting scheme in the checkpoint and build/lineage.json train_config <!-- id:pgctxe7 -->
+- [x] 2. Express loss selection and class-weight computation as pure, torch-free-testable helpers; record the selected loss + weighting scheme in the checkpoint and build/lineage.json train_config <!-- id:pgctxe7 -->
 
-- [ ] 3. Add torch-free unit tests under tools/segmenter/tests/ covering weight-derivation and loss-selection; they pass without torch and the tools pytest suite stays green <!-- id:pgctxe8 -->
+- [x] 3. Add torch-free unit tests under tools/segmenter/tests/ covering weight-derivation and loss-selection; they pass without torch and the tools pytest suite stays green <!-- id:pgctxe8 -->
 
-- [ ] 4. Add opt-in photometric (colour/brightness/contrast) augmentation applied to the image only (never the mask), off by default, recorded in train_config <!-- id:pgctxe9 -->
+- [x] 4. Add opt-in photometric (colour/brightness/contrast) augmentation applied to the image only (never the mask), off by default, recorded in train_config <!-- id:pgctxe9 -->
 
-- [ ] 5. Document the recommended next run as a single copy-pasteable command in docs/ml-training.md section 4, consistent with the resume/caffeinate run-hygiene guidance; run make spell clean <!-- id:pgctxea -->
+- [x] 5. Document the recommended next run as a single copy-pasteable command in docs/ml-training.md section 4, consistent with the resume/caffeinate run-hygiene guidance; run make spell clean <!-- id:pgctxea -->
 
 ## Gated run
 
