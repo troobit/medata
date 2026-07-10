@@ -8,7 +8,7 @@ references:
 
 ## Records surface & shared plumbing
 
-- [ ] 1. Add MealRouting.swift with RecordRow and the relocated shared symbols <!-- id:46pogp1 -->
+- [x] 1. Add MealRouting.swift with RecordRow and the relocated shared symbols <!-- id:46pogp1 -->
   - New App/MealRouting.swift; move mealRouteDestination(_:store:path:) and CloseCoverButton out of DataView.swift (same module — TrendsView/SettingsView/CaptureFlowView must still resolve them)
   - RecordRow: Identifiable — cases meal(DisplayMeal), insulin(InsulinEntry), glucose(GlucoseRow); GlucoseRow carries (id: Event.id, timestamp, mmolL) since GlucoseReading has no id
   - timestamp is the sort key; id is the stable tie-break (UUID for meal/insulin, Event.id for glucose)
@@ -17,7 +17,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
   - References: design.md, decision_log.md
 
-- [ ] 2. Implement RecordsModel — merged, live, most-recent-first <!-- id:46pogp2 -->
+- [x] 2. Implement RecordsModel — merged, live, most-recent-first <!-- id:46pogp2 -->
   - @Observable; meals via allMeals() composed with the DisplayMeal/MealHistoryModel corrections overlay (store.corrections(for:) per meal) so the row shows the corrected total, not MealRecord's original estimate
   - insulin via insulinEntry(from:); glucose by mapping .bsl Events to GlucoseRow keeping Event.id — do NOT reuse TrendsModel's id-dropping decoder
   - events(in:type:) is range-bounded — pass a Date.distantPast...Date.distantFuture sentinel for the all-time list (Decision 8)
@@ -27,7 +27,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7)
   - References: design.md, decision_log.md
 
-- [ ] 3. Implement RecordsView — unified timeline with delete <!-- id:46pogp3 -->
+- [x] 3. Implement RecordsView — unified timeline with delete <!-- id:46pogp3 -->
   - NavigationStack(path: [MealRoute]); rows visibly type-distinguished, each showing key value + timestamp (meal: corrected carbs g; insulin: units + bolus/basal; glucose: mmol/L)
   - meal rows NavigationLink(value: MealRoute.overview) via the shared mealRouteDestination; insulin and glucose rows do not navigate
   - swipe-to-delete on meal + insulin rows → store.deleteMeal(id:)/deleteInsulinEvent(id:), no confirmation dialog; glucose read-only
