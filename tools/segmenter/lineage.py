@@ -19,6 +19,13 @@ Records the provenance needed to reproduce a bundled segmenter to *metric* level
   - metrics                {mean_iou, per_class_iou, carb_priority_iou} — the
                            validation step (task 9) populates these; null
                            placeholders here.
+  - pretrained_checkpoint  {source_url, licence, sha256} of the published
+                           checkpoint the run initialised from (segmenter-
+                           foundation Req 2.2 / Decision 17); null when the
+                           run did not record one.
+  - co_stats_sha256        SHA-256 of the co_stats.json the co-occurrence loss
+                           consumed (segmenter-foundation design §4.3); null
+                           when the loss did not use one.
 
 This manifest is BUILD PROVENANCE: it is written under ``tools/segmenter/build/``
 and is NOT shipped inside the app bundle. This module is pure stdlib (no torch),
@@ -40,13 +47,18 @@ DEFAULT_LINEAGE_PATH = Path("tools/segmenter/build/lineage.json")
 _MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103_v1.json")
 
 
-def checkpoint_sha256(checkpoint_path: str | Path) -> str:
-    """Streaming SHA-256 of the checkpoint file (handles multi-hundred-MB .pt)."""
+def file_sha256(path: str | Path) -> str:
+    """Streaming SHA-256 of any file (checkpoints, co_stats.json, mappings)."""
     h = hashlib.sha256()
-    with open(checkpoint_path, "rb") as f:
+    with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def checkpoint_sha256(checkpoint_path: str | Path) -> str:
+    """Streaming SHA-256 of the checkpoint file (handles multi-hundred-MB .pt)."""
+    return file_sha256(checkpoint_path)
 
 
 def model_version(sha256_hex: str) -> str:
@@ -94,11 +106,17 @@ def build_lineage(
     palette_version: str | None = None,
     class_mapping_version: str | None = None,
     metrics: dict[str, Any] | None = None,
+    pretrained_checkpoint: dict[str, Any] | None = None,
+    co_stats_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the lineage manifest for a saved checkpoint.
 
     Fields not passed explicitly fall back to the committed class-mapping meta,
     then to ``"unknown"``, so the manifest is always complete and self-describing.
+    ``pretrained_checkpoint`` is a ``{source_url, licence, sha256}`` object for
+    the published initialisation (segmenter-foundation Req 2.2, model-production
+    Req 1.3); ``co_stats_sha256`` anchors the co-occurrence statistics the loss
+    consumed (design §4.3). Both are null when the run did not record them.
     """
     sha = checkpoint_sha256(checkpoint_path)
     meta = _class_mapping_meta()
@@ -113,6 +131,8 @@ def build_lineage(
         "train_config": train_config,
         "code_commit": code_commit(),
         "metrics": metrics or empty_metrics(),
+        "pretrained_checkpoint": pretrained_checkpoint,
+        "co_stats_sha256": co_stats_sha256,
     }
 
 
@@ -123,9 +143,11 @@ def preserve_metrics(
 
     ``emit_lineage`` (export.py) rebuilds the manifest with null metrics; without
     this, a re-export would silently wipe a validation result (and any release
-    override) already recorded for the identical checkpoint SHA. Different SHA →
-    the null placeholders stand, as those metrics belong to another model.
-    Mutates and returns ``manifest``.
+    override) already recorded for the identical checkpoint SHA. The training-run
+    provenance fields (``pretrained_checkpoint``, ``co_stats_sha256``) are carried
+    forward on the same rule — they belong to the checkpoint, and a re-export
+    must not null them. Different SHA → the null placeholders stand, as those
+    values belong to another model. Mutates and returns ``manifest``.
     """
     path = Path(existing_path)
     if not path.is_file():
@@ -138,6 +160,9 @@ def preserve_metrics(
         recorded = existing.get("metrics")
         if isinstance(recorded, dict):
             manifest["metrics"] = recorded
+        for key in ("pretrained_checkpoint", "co_stats_sha256"):
+            if manifest.get(key) is None and existing.get(key) is not None:
+                manifest[key] = existing[key]
     return manifest
 
 
