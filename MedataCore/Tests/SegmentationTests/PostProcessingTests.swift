@@ -64,11 +64,15 @@ final class PostProcessingTests: XCTestCase {
         let logits = makeOneHotLogits(targetSize: targetSize, classes: classes) { _, x in
             x < 2 ? 0 : 1
         }
+        // This test asserts the RAW resize/argmax alignment, so the speckle
+        // cleanup is disabled: on a 4×4 map both 8 px halves sit below the
+        // standard minimum-region threshold and would be reassigned.
         let out = try SegmenterPostProcessor.process(
             logitsFP32: logits, targetSize: targetSize, classes: classes,
             scaledWidth: 4, scaledHeight: 4,
             originalWidth: 4, originalHeight: 4,
-            palette: palette
+            palette: palette,
+            regularisation: .disabled
         )
         // Identity resize: left half labelled 0, right half labelled 1.
         out.argmax.pixels.withUnsafeBytes { rawBuf in
@@ -80,6 +84,55 @@ final class PostProcessingTests: XCTestCase {
                 XCTAssertEqual(buf[y * 4 + 3], 1)
             }
         }
+    }
+
+    // MARK: - Spatial regularisation (speckle removal)
+
+    func testRegularisationRemovesSpeckleAndPreservesLargeRegion() {
+        let width = 64
+        let height = 64
+        let bg: UInt8 = 2
+        var labels = [UInt8](repeating: bg, count: width * height)
+
+        // Large contiguous food region: 20×20 block of class 0 (400 px, far above
+        // the 12 px threshold).
+        for y in 10..<30 {
+            for x in 10..<30 { labels[y * width + x] = 0 }
+        }
+
+        // Sub-threshold speckle: isolated single pixels and one 2×2 blob, all
+        // well away from the block and from each other (every region < 12 px).
+        let specklePixels: [(y: Int, x: Int, cls: UInt8)] = [
+            (2, 40, 0), (5, 50, 1), (40, 5, 1), (55, 55, 0),
+            (45, 40, 1), (45, 41, 1), (46, 40, 1), (46, 41, 1),   // 2×2 blob
+        ]
+        for s in specklePixels { labels[s.y * width + s.x] = s.cls }
+
+        let input = Data(labels)
+        let cleaned = regulariseLabelMap(input, width: width, height: height, config: .standard)
+        let out = [UInt8](cleaned)
+
+        // Every speckle region is reassigned to its dominant neighbour (background).
+        for s in specklePixels {
+            XCTAssertEqual(out[s.y * width + s.x], bg,
+                           "speckle at (\(s.y),\(s.x)) should be reassigned to background")
+        }
+
+        // The large contiguous food region survives with its area preserved
+        // exactly (tolerance: ±0 px of the original 400 px block).
+        let foodArea = out.filter { $0 == 0 }.count
+        XCTAssertEqual(foodArea, 400, "large contiguous food region must be preserved")
+        var blockMismatches = 0
+        for y in 10..<30 {
+            for x in 10..<30 where out[y * width + x] != 0 { blockMismatches += 1 }
+        }
+        XCTAssertEqual(blockMismatches, 0, "no pixel inside the food block may change class")
+
+        // Deterministic: identical input → identical output.
+        XCTAssertEqual(cleaned, regulariseLabelMap(input, width: width, height: height, config: .standard))
+
+        // Passthrough configuration reproduces the input byte-for-byte.
+        XCTAssertEqual(regulariseLabelMap(input, width: width, height: height, config: .disabled), input)
     }
 
     // MARK: - σ_seg (Step 12, M8 pin)
