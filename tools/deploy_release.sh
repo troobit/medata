@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# deploy_release.sh — plain Release build (real Core ML segmenter), installed
-# and launched on a connected device.
-#
-# This is deploy_release_stub.sh WITHOUT the Package.swift stub-forcing edit:
-# Release builds use the real bundled segmenter.mlpackage (DEV_STUB_SEGMENTER
-# is Debug-only). Requires the exported model at
+# deploy_release.sh — plain Release build (real MLM).
+# Requires the exported model at
 # MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage — without it the
 # app throws segmenterModelMissing at pipeline construction.
 #
@@ -45,4 +41,4 @@ xcrun devicectl device process launch --device "$DEVICE_UDID" \
     --terminate-existing "$BUNDLE_ID"
 
 echo ""
-echo "DEPLOYED BUILD STAMP: $BUILD_STAMP  (Release + real segmenter)"
+echo "DEPLOYED BUILD STAMP: $BUILD_STAMP  (Release + segmenter)"
