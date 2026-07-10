@@ -27,7 +27,8 @@ Usage (docs/ml-training.md §4)::
 
 Watch FOOD-class mIoU on val (not overall accuracy). Background dominates pixel
 counts and inflates the naive number while thin food classes quietly fail the §5
-bar of mean food-class mIoU >= 0.60 (Req 8.9).
+bar of mean food-class mIoU >= 0.48 (Req 8.9 as amended by segmenter-foundation
+Decision 5; was 0.60).
 
 RECIPE: the train split gets geometric augmentation (horizontal flip + random
 scale-up crop, ``--no-augment`` to disable) and the learning rate follows a
@@ -466,7 +467,8 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device)
 def food_class_miou(model, loader, device, num_classes: int) -> float:
     """Mean IoU over FOOD classes only (excludes 24/25/26 per §4/§5).
 
-    Background dominates pixels; food-class mIoU is the §5 gate (>= 0.60). Classes
+    Background dominates pixels; food-class mIoU is the §5 gate (>= 0.48,
+    segmenter-foundation Decision 5). Classes
     absent from the val split (no GT and no prediction) are skipped from the mean.
     """
     torch = _import_torch()

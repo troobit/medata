@@ -36,8 +36,10 @@ public struct SegBenchReport: Sendable {
     // Confusion matrix: confusionMatrix[predicted][actual] = pixel count.
     public let confusionMatrix: [[Int]]
     public let classCount: Int
-    // CI fails if meanFoodClassIoU < 0.60 (Req 8.9).
-    public var passesBar: Bool { meanFoodClassIoU >= 0.60 }
+    // CI fails if meanFoodClassIoU < 0.48 (Req 8.9 as amended by
+    // segmenter-foundation Decision 5; was 0.60 — one gate with
+    // tools/segmenter/validation.py's MEAN_IOU_BAR).
+    public var passesBar: Bool { meanFoodClassIoU >= 0.48 }
 }
 
 // Computes IoU metrics from a collection of SegBenchSamples.

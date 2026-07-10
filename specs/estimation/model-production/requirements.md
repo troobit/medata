@@ -34,7 +34,7 @@ This spec defines the repeatable process that takes the on-device food segmenter
 **Acceptance Criteria:**
 
 1. <a name="2.1"></a>The process SHALL remap FoodSeg103 (103 classes) to the 35-channel v1 palette via `tools/segmenter/build_class_mapping.py` and `class_mapping_foodseg103_v1.json`.  
-2. <a name="2.2"></a>The process SHALL cut train, validation, and held-out splits with a fixed seed so the same dataset yields identical splits across runs.  
+2. <a name="2.2"></a>The process SHALL cut train, validation, and held-out splits with a fixed seed so the same dataset yields identical splits across runs. (Amended by segmenter-foundation Req 2.6: the held-out split is re-cut stratified so every carb-priority staple has held-out instances — a new fixed seed, stratified, then frozen again.)  
 3. <a name="2.3"></a>The remapped class channel order SHALL match `ClassPalette.v1Standard` (24 food + background + unknown_food + unsupported_liquid); a build whose mapping reorders or drops a channel SHALL fail before training.  
 4. <a name="2.4"></a>Acquiring the FoodSeg103 dataset (Apache 2.0) SHALL be recorded as a human-gated prerequisite, not an automated step.  
 
@@ -45,10 +45,10 @@ This spec defines the repeatable process that takes the on-device food segmenter
 **Acceptance Criteria:**
 
 1. <a name="3.1"></a>The process SHALL transfer-learn DeepLabV3 + MobileNetV3-Large at 513×513 input via `tools/segmenter/train.py`, producing `build/checkpoint.pt`; this is a human/data-gated stage requiring the dataset and a GPU.  
-2. <a name="3.2"></a>A checkpoint SHALL be export-eligible only if it achieves mean IoU ≥ 0.60 on the held-out split (MD-12 / pipeline Req 8.9), measured by the validation harness.  
+2. <a name="3.2"></a>A checkpoint SHALL be export-eligible only if it achieves mean IoU ≥ the re-derived gate (segmenter-foundation Decision 5, currently 0.48) on the held-out split (MD-12 / pipeline Req 8.9 as amended), measured by the validation harness (amended by segmenter-foundation Decision 5: was 0.60, which sat above the published FoodSeg103 frontier).  
 3. <a name="3.3"></a>The validation step SHALL report per-class and mean IoU so classes below bar are identifiable for process refinement.  
-4. <a name="3.4"></a>IF the held-out mean IoU is below 0.60, THEN the checkpoint SHALL NOT proceed to export and the shortfall SHALL be recorded against the build.  
-5. <a name="3.5"></a>Each carb-priority class (the high-carbohydrate staples `white_rice`, `brown_rice`, `pasta`, `bread_white`, `bread_wholemeal`, `potato_boiled`, `potato_mashed`, `chips_fries`) SHALL achieve per-class IoU ≥ 0.50 on the held-out split for a checkpoint to be export-eligible; design MAY refine the floor or the set against the first real training run's per-class distribution.  
+4. <a name="3.4"></a>IF the held-out mean IoU is below the re-derived gate (segmenter-foundation Decision 5, currently 0.48; amended by segmenter-foundation Decision 5: was 0.60), THEN the checkpoint SHALL NOT proceed to export and the shortfall SHALL be recorded against the build.  
+5. <a name="3.5"></a>Each carb-priority class (the high-carbohydrate staples `white_rice`, `brown_rice`, `pasta`, `bread_white`, `bread_wholemeal`, `potato_boiled`, `potato_mashed`, `chips_fries`) SHALL achieve per-class IoU ≥ the re-derived floors (segmenter-foundation Decision 14, currently 0.45) on the held-out split for a checkpoint to be export-eligible (amended by segmenter-foundation Decision 14: was 0.50); design MAY refine the floor or the set against the first real training run's per-class distribution.  
 6. <a name="3.6"></a>IF a carb-priority class cannot meet the [3.5](#3.5) floor after refinement, THEN it SHALL be surfaced as a known limitation (flagged low-confidence or mapped to `unknown_food`) rather than indefinitely blocking the MVP.  
 
 ### 4. Core ML Export
