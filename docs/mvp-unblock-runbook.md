@@ -36,7 +36,7 @@ the pipeline produces a real number — **nothing else is on the critical path.*
 | 1 | Acquire FoodSeg103 | training box | 30–60 min | dataset on disk, archive SHA recorded |
 | 2 | Build mapping + prep splits | training box (automated) | 10–20 min | mapping summary reviewed |
 | 3 | **Train** — the long pole | CUDA GPU **or** Mac MPS | see timing note | checkpoint written |
-| 4 | Validate (seg-bench) | any | 10 min | **mean food mIoU ≥ 0.60, each carb class ≥ 0.50** |
+| 4 | Validate (seg-bench) | any | 10 min | **mean food mIoU ≥ 0.48, each carb class ≥ 0.45** (were 0.60/0.50 — re-derived by segmenter-foundation Decisions 5/14) |
 | 5 | Export to Core ML | **macOS** | 10 min | export gates pass, `.mlpackage` bundled |
 | 6 | **On-device verify = MVP gate** | iPhone 13 Pro Max | 45–60 min | `estimate.end success=true`, `segmenterSource=coreml_…`, carb > 0 |
 
@@ -137,9 +137,10 @@ swift run HarnessCLI seg-bench \
     --checkpoint-sha256 "$SHA" --output build/seg-bench.json
 ```
 
-**Gate (must pass to proceed):**
-- **Mean food-class mIoU ≥ 0.60** (exits non-zero otherwise).
-- **Every carb-priority class ≥ 0.50:** white_rice, brown_rice, pasta, bread_white, bread_wholemeal,
+**Gate (must pass to proceed):** (bars were 0.60/0.50 — re-derived by segmenter-foundation
+Decisions 5/14)
+- **Mean food-class mIoU ≥ 0.48** (`SegBench.swift` exits non-zero below 0.48).
+- **Every carb-priority class ≥ 0.45:** white_rice, brown_rice, pasta, bread_white, bread_wholemeal,
   potato_boiled, potato_mashed, chips_fries.
 
 **If it fails:** revisit the class mapping (step 2 — over-dropping shrinks the evaluable set), then

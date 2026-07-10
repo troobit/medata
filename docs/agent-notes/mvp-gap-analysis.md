@@ -59,7 +59,8 @@ coding agent can produce:
    Release builds throw `segmenterModelMissing` (`PipelineFactory.swift`). Needs:
    FoodSeg103 (or equivalent) transfer-learn of DeepLabV3+MobileNetV3-Large, the
    `tools/segmenter/export.py` Core ML export, and ANE-residency verification. Bars:
-   mean IoU ≥ 0.60 on a held-out set (MD-12).
+   mean IoU ≥ 0.60 on a held-out set (MD-12) (bars since re-derived to 0.48/0.45 —
+   segmenter-foundation D5/D14).
 2. **Calibrate β_c against a gravimetric dataset.** Every class currently ships
    `β = 1.0 / uncalibrated_unity`, so even with a good segmenter the carb number carries
    the visual-hull upward bias. Needs ≥ 30 gravimetric meals/class. `prerequisites.md`

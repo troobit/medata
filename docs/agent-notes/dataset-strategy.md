@@ -46,10 +46,10 @@ evaluated. That evaluation should be durably recorded (ADR in
 
 **As the shipped segmenter: recommend reject.** Four independent disqualifiers:
 
-1. **Palette mismatch, not adaptable.** 26 coarse categories vs our 35-class v1 palette; all eight carb-priority staples (white_rice vs brown_rice, bread_white vs bread_wholemeal, potato_boiled vs potato_mashed, chips_fries) collapse into 2–3 seefood category classes, so model-production Req 3.5 (per-staple IoU ≥ 0.50) is unsatisfiable and the palette↔DB bake lock (Req 8.4) cannot hold. `fine-tunable: false` and no released training data closes the adaptation route.
+1. **Palette mismatch, not adaptable.** 26 coarse categories vs our 35-class v1 palette; all eight carb-priority staples (white_rice vs brown_rice, bread_white vs bread_wholemeal, potato_boiled vs potato_mashed, chips_fries) collapse into 2–3 seefood category classes, so model-production Req 3.5 (per-staple IoU ≥ 0.50; bars since re-derived to 0.48/0.45 — segmenter-foundation D5/D14) is unsatisfiable and the palette↔DB bake lock (Req 8.4) cannot hold. `fine-tunable: false` and no released training data closes the adaptation route.
 2. **Fitness disclaimer.** The card states it cannot be used for accurate nutrition tracking — adverse for a carb-estimation product, both technically and for the Apache-2.0 "consult the owners beyond permissible usage" caveat.
 3. **Conversion risk.** TF1 hub module is the only Core ML input; legacy tooling, DeepLab resize-op fidelity issues, int64 argmax output.
-4. **No eval numbers** to trade off against our mIoU ≥ 0.60 bar.
+4. **No eval numbers** to trade off against our mIoU ≥ 0.60 bar (bars since re-derived to 0.48/0.45 — segmenter-foundation D5/D14).
 
 **Candidate accepted uses (each optional; adopt via its own decision entry):**
 

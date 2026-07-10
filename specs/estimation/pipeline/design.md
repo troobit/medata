@@ -1504,7 +1504,7 @@ Run on an iPhone 13 Pro Max device (the v1 hardware floor per §0). No CI thresh
 
 ### 7.5 Segmenter mIoU bench (Req 8.9)
 
-> **Feature-flagged in v1 per §0 and Decision 41.** `seg-bench` lives in `HarnessCore/SegBench.swift` under `#if HARNESS_ENABLED`. The developer runs it on demand against the held-out segmenter test set; the mIoU floor of 0.60 is interpreted by the developer rather than enforced in CI.
+> **Feature-flagged in v1 per §0 and Decision 41.** `seg-bench` lives in `HarnessCore/SegBench.swift` under `#if HARNESS_ENABLED`. The developer runs it on demand against the held-out segmenter test set; the mIoU floor of 0.48 (segmenter-foundation Decision 5; was 0.60) is interpreted by the developer rather than enforced in CI.
 
 
 `HarnessCLI seg-bench` mode loads the held-out segmenter test set, runs Core ML inference, and reports:
@@ -1513,7 +1513,7 @@ Run on an iPhone 13 Pro Max device (the v1 hardware floor per §0). No CI thresh
 - Per-class IoU.
 - Confusion matrix.
 
-The mean food-class mIoU < 0.60 reference is the developer's quality bar for interpreting the output; it does not gate CI in v1.
+The mean food-class mIoU < 0.48 reference (segmenter-foundation Decision 5; was 0.60) is the developer's quality bar for interpreting the output; it does not gate CI in v1.
 
 ---
 
