@@ -251,6 +251,8 @@ final class LibreLinkUpClient: Sendable {
             }
             throw LibreLinkUpError.httpFailure(http.statusCode)
         default:
+            // 429 Retry-After is deliberately ignored: the 15-minute poll sits
+            // far above the API's rate limits (docs/agent-notes/librelinkup-api.md).
             throw LibreLinkUpError.httpFailure(http.statusCode)
         }
         do {

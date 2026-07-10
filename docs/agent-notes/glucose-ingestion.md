@@ -71,6 +71,15 @@ Actor, entire file behind `#if canImport(HealthKit)` (Decision 8) — never exer
   dedup absorbs the overlap with the backfill; accepted cost, once per connect.
 - `enableBackgroundDelivery` is `try?` — it throws on simulator; foreground observer +
   catch-up still cover delivery.
+- A failed `connect` (auth request or backfill throw) never arms ongoing delivery, so a
+  successful `catchUp()` re-arms it: after `ingestFromAnchor()` returns it calls
+  `startObserverQuery()` (guarded to run once) and retries `enableBackgroundDelivery`.
+- `ingestFromAnchor` has an `isIngesting` reentrancy guard — an observer wake and a
+  catch-up interleaving on the actor both load the same anchor; the overlapping run is
+  skipped (never lossy, keep-first absorbs the re-fetch).
+- A failed observer-wake ingest is un-acked but surfaces NO `.failed` state — deliberate
+  asymmetry with `catchUp()`: iOS re-delivery + on-open catch-up retry it, and transient
+  background failures should not flap Settings.
 - Deletions from the anchored query are ignored entirely (Req 2.7, append-only).
 
 ## LibreLinkUpGlucoseSource + LibreLinkUpClient (Phase 3, task 9)
@@ -99,6 +108,9 @@ tests only (`LibreLinkUpMappingTests`), no URLSession stubbing. Gotchas:
 
 - Construct sources (`HealthKitGlucoseSource()`, `LibreLinkUpGlucoseSource()`), register
   with the coordinator, `connect(sink: coordinator)`.
+- The app MUST call `connect(sink:)` on EVERY launch for each source the user has
+  connected — sources hold no cross-launch sink and the observer/anchor and poll
+  lifecycles all hang off `connect`; without it, `catchUp()` no-ops and nothing ingests.
 - LibreLinkUp UI must call `setCredentials(email:password:)` BEFORE `connect`.
 - On app foreground: call each source's `catchUp()` (Req 2.6 / 3.2).
 - BGTask: register `LibreLinkUpGlucoseSource.backgroundTaskIdentifier`
