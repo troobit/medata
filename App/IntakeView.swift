@@ -53,9 +53,11 @@ struct IntakeView: View {
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                 }
-                Section("Recent") {
-                    ForEach(model.recentEntries, id: \.id) { entry in
-                        entryRow(entry)
+                if !model.recentEntries.isEmpty {
+                    Section("Recent") {
+                        ForEach(model.recentEntries, id: \.id) { entry in
+                            entryRow(entry)
+                        }
                     }
                 }
             }
@@ -70,6 +72,12 @@ struct IntakeView: View {
             }
         }
         .task { await model.start() }
+        // The cover is dismissed, not deallocated straight away — tear the
+        // eventsDidChange subscription down explicitly.
+        .onDisappear { model.cancel() }
+        // Success haptic for the one-tap quick-add (ShutterButton's
+        // sensoryFeedback pattern); failed writes never bump the trigger.
+        .sensoryFeedback(.success, trigger: model.quickAddSuccessCount)
         // Presets emit no change notification, so any sheet dismissal reloads
         // them (create/edit arrive only through these sheets); entry changes
         // refresh via the model's `eventsDidChange` subscription.
@@ -125,8 +133,11 @@ struct IntakeView: View {
     // One tap writes the preset straight to the ledger (Req 3.2 — no sheet,
     // no confirmation). Edit/delete live on the long-press context menu
     // (Req 4.2). Sizing/contentShape stay INSIDE the label (Button gotcha).
+    // The tile is disabled and dimmed while its write is in flight so a
+    // double-tap cannot write two rows.
     private func presetButton(_ preset: QuickPreset) -> some View {
-        Button {
+        let isSaving = model.savingPresetID == preset.id
+        return Button {
             Task { await model.tapPreset(preset) }
         } label: {
             VStack(spacing: 2) {
@@ -144,6 +155,8 @@ struct IntakeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isSaving)
+        .opacity(isSaving ? 0.4 : 1)
         .contextMenu {
             Button("Edit") { activeSheet = .editPreset(preset) }
             Button("Delete", role: .destructive) {

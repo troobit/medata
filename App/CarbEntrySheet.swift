@@ -13,7 +13,9 @@ struct CarbEntrySheet: View {
     @State private var model: CarbEntryModel
     // "Save as quick-add" (Req 4.4): the entry save is already committed when
     // this sub-sheet opens; cancelling it creates no preset and rolls back
-    // nothing, so its dismissal always closes the entry sheet too.
+    // nothing, so its dismissal always closes the entry sheet too. While it
+    // is up the entry sheet stays visible underneath — the model's `didSave`
+    // latch keeps both save buttons dead so no second row can be written.
     @State private var showingPresetSheet = false
 
     private let store: any PersistenceStore
@@ -123,6 +125,12 @@ struct CarbEntrySheet: View {
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 72)
+                // Same sanitiser as the carb field: digits only, 3-digit cap,
+                // so pasted junk cannot persist or vanish a typed value.
+                .onChange(of: text.wrappedValue) {
+                    let clamped = CarbEntryModel.clampedDigits(text.wrappedValue)
+                    if clamped != text.wrappedValue { text.wrappedValue = clamped }
+                }
                 .accessibilityIdentifier(identifier)
             Text("g")
                 .foregroundStyle(Color.textSecondary)
@@ -144,7 +152,7 @@ struct CarbEntrySheet: View {
                 MedataLoadingSymbol(mode: .loop, size: 22)
                     .frame(maxWidth: .infinity)
             } else {
-                Text("Save \(model.carbs ?? 0) g")
+                Text(saveLabel)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
             }
@@ -155,6 +163,13 @@ struct CarbEntrySheet: View {
         .foregroundStyle(Color.captureBackground)
         .disabled(!model.canSave)
         .accessibilityIdentifier("carb.save")
+    }
+
+    // Plain "Save" until a saveable value exists — "Save 0 g" reads as a
+    // savable zero when it is neither.
+    private var saveLabel: String {
+        guard let carbs = model.carbs, carbs >= CarbEntryModel.minCarbs else { return "Save" }
+        return "Save \(carbs) g"
     }
 
     // Secondary action (Req 4.4): commits the entry save first, then prompts
