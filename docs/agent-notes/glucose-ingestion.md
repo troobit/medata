@@ -104,17 +104,45 @@ tests only (`LibreLinkUpMappingTests`), no URLSession stubbing. Gotchas:
 - First followed patient wins when the account follows several — documented minimal
   developer-phase behaviour.
 
-### Phase 4 hand-off points
+## App wiring (Phase 4, tasks 10–12)
 
-- Construct sources (`HealthKitGlucoseSource()`, `LibreLinkUpGlucoseSource()`), register
-  with the coordinator, `connect(sink: coordinator)`.
-- The app MUST call `connect(sink:)` on EVERY launch for each source the user has
-  connected — sources hold no cross-launch sink and the observer/anchor and poll
-  lifecycles all hang off `connect`; without it, `catchUp()` no-ops and nothing ingests.
-- LibreLinkUp UI must call `setCredentials(email:password:)` BEFORE `connect`.
-- On app foreground: call each source's `catchUp()` (Req 2.6 / 3.2).
-- BGTask: register `LibreLinkUpGlucoseSource.backgroundTaskIdentifier`
-  (`com.medata.librelinkup.refresh`) in Info.plist + background-modes, handler calls
-  `performBackgroundFetch() async -> Bool` → `setTaskCompleted(success:)`. BGTask
-  registration deliberately does NOT live in this module.
-- HealthKit needs the entitlement + `NSHealthShareUsageDescription` (task 12).
+`App/GlucoseConnectionsModel.swift` (`@Observable @MainActor`) owns the one
+`IngestionCoordinator` plus both sources for the whole app; constructed in
+`MedataApp.init` right after the store, threaded MedataApp → AppRoot → SettingsView →
+`GlucoseConnectionsView` (a plain `.sheet` off the "Glucose data" section, same pattern
+as the screenshot-import row).
+
+- **Launch reconnect flags**: `glucose.source.healthkit.connected` /
+  `glucose.source.librelinkup.connected` (UserDefaults bools, set on connect, cleared on
+  disconnect). `start()` — fired as a `Task` from `MedataApp.init` so a background BGTask
+  launch still runs it — registers both sources, subscribes `stateStream()`, then calls
+  `connect(sink:)` for each flagged source. This reconnect is load-bearing: sources hold
+  no cross-launch sink and the observer/anchor and poll lifecycles all hang off
+  `connect`; without it, `catchUp()` no-ops and nothing ingests.
+- **Foreground catch-up**: `scenePhase == .active` in App.swift →
+  `catchUpConnectedSources()` (guarded by the flags; racing the launch reconnect is
+  harmless — nil sink no-ops, HealthKit has the reentrancy guard).
+- **BGTask registration point**: `registerBackgroundRefresh()` is called from
+  `MedataApp.init()` (must precede didFinishLaunching), `using: .main` so the launch
+  handler matches the model's MainActor isolation. Handler: re-schedule the next
+  `BGAppRefreshTaskRequest` (15 min) FIRST, then `performBackgroundFetch()` →
+  `setTaskCompleted(success:)`; a not-connected LibreLinkUp completes as a successful
+  no-op. Initial request submitted when LibreLinkUp connects (including launch
+  reconnect); pending request cancelled on disconnect. Expiration handler cancels the
+  work Task — cancellation surfaces through the URLSession await as a failed fetch, so
+  the task still completes.
+- **Counters on disconnect** (Req 6.2): the model calls the coordinator's
+  `resetDiscrepancyTally(for:)` (added in Phase 4) before the source's `disconnect()`.
+- **LibreLinkUp last-fetch display**: `LibreLinkUpGlucoseSource.persistedLastSuccessAt()`
+  (static, nonisolated) reads the persisted UserDefaults value so the Settings sheet
+  shows it without hopping onto the actor.
+- **Capabilities**: `MeData/MeData.entitlements` (`com.apple.developer.healthkit` +
+  `.healthkit.background-delivery`), `CODE_SIGN_ENTITLEMENTS = MeData.entitlements` in
+  both app-target configs; `INFOPLIST_KEY_NSHealthShareUsageDescription` beside the other
+  usage strings; `BGTaskSchedulerPermittedIdentifiers` (`com.medata.librelinkup.refresh`)
+  and `UIBackgroundModes = fetch` in the partial `MeData/Info.plist` (arrays cannot be
+  `INFOPLIST_KEY_` settings). Entitlements are NOT validated by the
+  `CODE_SIGNING_ALLOWED=NO` simulator build — a device install needs a signing profile
+  with HealthKit enabled.
+- LibreLinkUp UI calls `setCredentials(email:password:)` BEFORE `connect` (the model's
+  `connectLibreLinkUp(email:password:)` sequences this).

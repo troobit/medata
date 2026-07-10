@@ -20,6 +20,9 @@ struct SettingsView: View {
     // Picker resolves an unset key the same way `CaptureFlowView.effectiveMode`
     // and `defaultCaptureModeReader` do, instead of hard-defaulting to `.double`.
     let hasLiDAR: Bool
+    // Live glucose-source connections (cgm-connect Req 6), owned by MedataApp
+    // and threaded through AppRoot.
+    let glucoseConnections: GlucoseConnectionsModel
 
     @Environment(\.dismiss) private var dismiss
     // Empty string means the capture-mode key is unset — `captureModeBinding`
@@ -46,6 +49,7 @@ struct SettingsView: View {
     @State private var isExporting = false
     @State private var exportError: String?
     @State private var showsGlucoseImport = false
+    @State private var showsGlucoseSources = false
     @State private var isSeeding = false
     #if DEBUG
     @State private var isClearing = false
@@ -65,6 +69,12 @@ struct SettingsView: View {
                 Text("AFCD")
             }
             Section("Glucose data") {
+                Button {
+                    showsGlucoseSources = true
+                } label: {
+                    Label("Glucose sources", systemImage: "sensor.tag.radiowaves.forward")
+                }
+                .accessibilityIdentifier("settings.glucoseSources")
                 Button {
                     showsGlucoseImport = true
                 } label: {
@@ -160,6 +170,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showsGlucoseImport) {
             GlucoseImportView(store: store)
+        }
+        .sheet(isPresented: $showsGlucoseSources) {
+            GlucoseConnectionsView(model: glucoseConnections)
         }
         #if DEBUG
         .confirmationDialog(

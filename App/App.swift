@@ -10,6 +10,7 @@ struct MedataApp: App {
     @State private var engine: ARKitCaptureEngine
     @State private var visionCardDetector: VisionCardDetector?
     @State private var preShutterSegmenter: PreShutterSegmenter?
+    @State private var glucoseConnections: GlucoseConnectionsModel
     private let store: any PersistenceStore
     @Environment(\.scenePhase) private var scenePhase
 
@@ -23,6 +24,17 @@ struct MedataApp: App {
         let store = Self.makeStore()
         _engine = State(initialValue: engine)
         self.store = store
+
+        // Live glucose ingestion (cgm-connect Phase 4): one coordinator plus
+        // both sources for the whole app. BGTask registration must complete
+        // before the application finishes launching; start() then registers
+        // the sources and reconnects any the user has connected — sources
+        // hold no cross-launch sink, so without this connect their
+        // catchUp()/background delivery would no-op forever.
+        let glucose = GlucoseConnectionsModel(store: store)
+        _glucoseConnections = State(initialValue: glucose)
+        glucose.registerBackgroundRefresh()
+        Task { await glucose.start() }
 
         #if DEBUG
         if UITestSupport.isActive {
@@ -87,6 +99,7 @@ struct MedataApp: App {
                     captureModel: model,
                     engine: engine,
                     store: store,
+                    glucoseConnections: glucoseConnections,
                     visionCardDetector: visionCardDetector,
                     preShutterSegmenter: preShutterSegmenter
                 )
@@ -99,6 +112,11 @@ struct MedataApp: App {
             .tint(.medataAccent)
             .onChange(of: scenePhase) { _, phase in
                 model.scenePhaseChanged(phase)
+                // Req 2.6 / 3.2: opening the app forces a glucose catch-up on
+                // every connected source.
+                if phase == .active {
+                    glucoseConnections.catchUpConnectedSources()
+                }
             }
         }
     }

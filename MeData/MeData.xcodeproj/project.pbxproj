@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */ = {isa = PBXBuildFile; productRef = 111EC91D2FBD45B500272C1E /* MedataCore */; };
 		118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */ = {isa = PBXBuildFile; productRef = 118B44A52FF0000000272C1E /* GlucoseGraph */; };
+		11CC66A03000000000272C1E /* GlucoseIngestion in Frameworks */ = {isa = PBXBuildFile; productRef = 11CC66A13000000000272C1E /* GlucoseIngestion */; };
 		111EC9232FBD47A100272C1E /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC91F2FBD47A100272C1E /* App.swift */; };
 		111EC9242FBD47A100272C1E /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9212FBD47A100272C1E /* ResultView.swift */; };
 		111EC9252FBD47A100272C1E /* CaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9202FBD47A100272C1E /* CaptureFlowView.swift */; };
@@ -30,6 +31,8 @@
 		113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */; };
 		118B44A02FF0000000272C1E /* GlucoseImportModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118B44A22FF0000000272C1E /* GlucoseImportModel.swift */; };
 		118B44A12FF0000000272C1E /* GlucoseImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118B44A32FF0000000272C1E /* GlucoseImportView.swift */; };
+		11CC66A23000000000272C1E /* GlucoseConnectionsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CC66A43000000000272C1E /* GlucoseConnectionsModel.swift */; };
+		11CC66A33000000000272C1E /* GlucoseConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CC66A53000000000272C1E /* GlucoseConnectionsView.swift */; };
 		11AB55A02FF1000000272C1E /* InsulinDoseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */; };
 		11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */; };
 		113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B52FD0000000272C1E /* ActiveRefusal.swift */; };
@@ -81,6 +84,8 @@
 		113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedataLoadingSymbol.swift; path = ../App/MedataLoadingSymbol.swift; sourceTree = SOURCE_ROOT; };
 		118B44A22FF0000000272C1E /* GlucoseImportModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseImportModel.swift; path = ../App/GlucoseImportModel.swift; sourceTree = SOURCE_ROOT; };
 		118B44A32FF0000000272C1E /* GlucoseImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseImportView.swift; path = ../App/GlucoseImportView.swift; sourceTree = SOURCE_ROOT; };
+		11CC66A43000000000272C1E /* GlucoseConnectionsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseConnectionsModel.swift; path = ../App/GlucoseConnectionsModel.swift; sourceTree = SOURCE_ROOT; };
+		11CC66A53000000000272C1E /* GlucoseConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseConnectionsView.swift; path = ../App/GlucoseConnectionsView.swift; sourceTree = SOURCE_ROOT; };
 		11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InsulinDoseModel.swift; path = ../App/InsulinDoseModel.swift; sourceTree = SOURCE_ROOT; };
 		11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InsulinDoseSheet.swift; path = ../App/InsulinDoseSheet.swift; sourceTree = SOURCE_ROOT; };
 		113B22B52FD0000000272C1E /* ActiveRefusal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActiveRefusal.swift; path = ../App/ActiveRefusal.swift; sourceTree = SOURCE_ROOT; };
@@ -154,6 +159,7 @@
 			files = (
 				111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */,
 				118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */,
+				11CC66A03000000000272C1E /* GlucoseIngestion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -191,6 +197,8 @@
 				113B22C12FD0000000272C1E /* MedataLoadingSymbol.swift */,
 				118B44A22FF0000000272C1E /* GlucoseImportModel.swift */,
 				118B44A32FF0000000272C1E /* GlucoseImportView.swift */,
+				11CC66A43000000000272C1E /* GlucoseConnectionsModel.swift */,
+				11CC66A53000000000272C1E /* GlucoseConnectionsView.swift */,
 				11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */,
 				11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */,
 				11ED00022FF2000000272C1E /* MeDataWidgets */,
@@ -254,6 +262,7 @@
 			packageProductDependencies = (
 				111EC91D2FBD45B500272C1E /* MedataCore */,
 				118B44A52FF0000000272C1E /* GlucoseGraph */,
+				11CC66A13000000000272C1E /* GlucoseIngestion */,
 			);
 			productName = MeData;
 			productReference = 111EC90C2FBD327D00272C1E /* MeData.app */;
@@ -381,6 +390,8 @@
 				113B22C02FD0000000272C1E /* MedataLoadingSymbol.swift in Sources */,
 				118B44A02FF0000000272C1E /* GlucoseImportModel.swift in Sources */,
 				118B44A12FF0000000272C1E /* GlucoseImportView.swift in Sources */,
+				11CC66A23000000000272C1E /* GlucoseConnectionsModel.swift in Sources */,
+				11CC66A33000000000272C1E /* GlucoseConnectionsView.swift in Sources */,
 				11AB55A02FF1000000272C1E /* InsulinDoseModel.swift in Sources */,
 				11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */,
 				113B22A52FD0000000272C1E /* ActiveRefusal.swift in Sources */,
@@ -542,6 +553,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MeData.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6G974YC4Z2;
@@ -550,6 +562,7 @@
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "MeData reads blood glucose from Health so readings appear in the graph and records.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "MeData uses motion data to show how level the camera is while you capture your meal.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "MeData saves a copy of your meal photo to your Photos library, so the picture stays under your control alongside the carbohydrate estimate.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MeData reads thumbnails of your captured meal photos to show them in your meal history.";
@@ -581,6 +594,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MeData.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6G974YC4Z2;
@@ -589,6 +603,7 @@
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.medical";
 				INFOPLIST_KEY_NSCameraUsageDescription = "MeData uses the camera to capture a photo of your meal so it can estimate the carbohydrates on your plate.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "MeData reads blood glucose from Health so readings appear in the graph and records.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "MeData uses motion data to show how level the camera is while you capture your meal.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "MeData saves a copy of your meal photo to your Photos library, so the picture stays under your control alongside the carbohydrate estimate.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "MeData reads thumbnails of your captured meal photos to show them in your meal history.";
@@ -716,6 +731,10 @@
 		118B44A52FF0000000272C1E /* GlucoseGraph */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = GlucoseGraph;
+		};
+		11CC66A13000000000272C1E /* GlucoseIngestion */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = GlucoseIngestion;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -129,6 +129,13 @@ public actor IngestionCoordinator: GlucoseIngestSink {
         discrepancyTallies[sourceID, default: 0]
     }
 
+    // Req 6.2 / Decision 9: disconnecting a source resets its status
+    // counters. The tally is in-memory session state, so dropping the key
+    // is the whole reset.
+    public func resetDiscrepancyTally(for sourceID: String) {
+        discrepancyTallies[sourceID] = nil
+    }
+
     private func removeStateContinuation(_ id: UUID) {
         stateContinuations[id] = nil
     }
