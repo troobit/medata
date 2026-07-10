@@ -125,5 +125,14 @@ private struct ThrowingStore: PersistenceStore {
     func deleteInsulinEvent(id: UUID) async throws {
         fatalError("unused")
     }
+    func saveIntakeEntry(_ entry: IntakeEntry) async throws {
+        fatalError("unused")
+    }
+    func updateIntakeEntry(_ entry: IntakeEntry) async throws {
+        fatalError("unused")
+    }
+    func deleteIntakeEntry(id: UUID) async throws {
+        fatalError("unused")
+    }
     var eventsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
 }
