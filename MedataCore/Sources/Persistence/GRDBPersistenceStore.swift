@@ -23,6 +23,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         try queue.write { db in
             try GRDBPersistenceStore.createSchema(db)
             try GRDBPersistenceStore.migrate(db)
+            try GRDBPersistenceStore.seedDefaultQuickPresetsIfNeeded(db)
         }
     }
 
@@ -649,20 +650,107 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 filename     TEXT    NOT NULL,
                 processed_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS quick_presets (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                carbs_g     REAL NOT NULL,
+                protein_g   REAL,
+                fat_g       REAL,
+                fibre_g     REAL,
+                sort_order  INTEGER NOT NULL
+            );
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '4')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '5')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '4' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 4 adds
-    // processed_images (specs/data/libre-ingestion Decision 4); the CREATE
-    // IF NOT EXISTS above retrofits it onto v3 DBs. No DDL on legacy tables
-    // (Decision 10).
+    // Idempotent: re-stamps schema_version to '5' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 5 adds
+    // quick_presets (specs/data/manual-carb-intake, design.md "Quick-add
+    // presets — new table"); the CREATE IF NOT EXISTS above retrofits it onto
+    // v4 DBs, matching the processed_images/v4 precedent exactly. No DDL on
+    // legacy tables (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '4')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '5')"
+        )
+    }
+
+    // First-launch seed of the three authored defaults (Req 3.3): "A pint"
+    // (17 g), "Bagel" (45 g), "Chips" (40 g) — carbohydrate values only, no
+    // macros. Gated on `quick_presets` being empty at store-init time so a
+    // later re-init (or a DB where the user deleted/edited presets) never
+    // reseeds — same idempotent-seed intent as `INSERT OR IGNORE`, just
+    // expressed as an explicit count check since this seeds multiple rows
+    // rather than one keyed row.
+    private static func seedDefaultQuickPresetsIfNeeded(_ db: Database) throws {
+        let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM quick_presets") ?? 0
+        guard count == 0 else { return }
+        let defaults: [(name: String, carbsG: Double)] = [
+            ("A pint", 17), ("Bagel", 45), ("Chips", 40)
+        ]
+        for (index, preset) in defaults.enumerated() {
+            try db.execute(
+                sql: """
+                    INSERT INTO quick_presets (id, name, carbs_g, sort_order)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                arguments: [UUID().uuidString, preset.name, preset.carbsG, index]
+            )
+        }
+    }
+
+    // MARK: - Quick-add presets (specs/data/manual-carb-intake)
+
+    public func quickPresets() async throws -> [QuickPreset] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM quick_presets ORDER BY sort_order ASC"
+            ).map(Self.quickPreset(from:))
+        }
+    }
+
+    public func saveQuickPreset(_ preset: QuickPreset) async throws {
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO quick_presets
+                        (id, name, carbs_g, protein_g, fat_g, fibre_g, sort_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    preset.id.uuidString, preset.name, preset.carbsG,
+                    preset.macros.proteinG, preset.macros.fatG, preset.macros.fibreG,
+                    preset.sortOrder
+                ]
+            )
+        }
+    }
+
+    public func deleteQuickPreset(id: UUID) async throws {
+        try await queue.write { db in
+            try db.execute(
+                sql: "DELETE FROM quick_presets WHERE id = ?",
+                arguments: [id.uuidString]
+            )
+        }
+    }
+
+    private static func quickPreset(from row: Row) -> QuickPreset {
+        let idString: String = row["id"]
+        let macros = IntakeMacros(
+            proteinG: row["protein_g"],
+            fatG: row["fat_g"],
+            fibreG: row["fibre_g"]
+        )
+        return QuickPreset(
+            id: UUID(uuidString: idString) ?? UUID(),
+            name: row["name"],
+            carbsG: row["carbs_g"],
+            macros: macros,
+            sortOrder: row["sort_order"]
         )
     }
 }
