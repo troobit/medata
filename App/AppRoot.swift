@@ -2,15 +2,18 @@ import CaptureKit
 import Persistence
 import SwiftUI
 
-// Graph-rooted shell (Decision 20 / Req §1). The launch root is the Graph screen
-// (`TrendsView`, which owns its own `NavigationStack`); Capture, Data, and
-// Settings present as mutually-exclusive full-screen covers over it via a single
-// optional `ActiveSheet` (Decision 19 — full screens, not sheets). Graph-chrome
-// buttons set it through the closures passed into `TrendsView`. The AR session
-// runs ONLY while the Capture cover is presented: presenting `.capture` arms it
-// (`capturePresented`); any other value releases it (`captureDismissed`) — so at
-// launch (Graph root) the camera stays off and no permission prompt fires
-// (Req §1.5). Each cover carries its own explicit `Close` control (Decision 19).
+// Home-rooted shell (home-router Req §1, superseding design-handoff-00
+// Decision 20's Graph root). The launch root is `HomeView`, a pure router:
+// Capture, Intake, Records, Graph, and Settings present as mutually-exclusive
+// full-screen covers over it via a single optional `ActiveSheet` (Decision 19
+// — full screens, not sheets); Dose stays the plain insulin `.sheet`
+// (Decision 10) so `medata://insulin/add` and the home Dose control target the
+// same surface. `HomeView` holds no presentation state — its controls fire the
+// closures injected here (Decision 9). The AR session runs ONLY while the
+// Capture cover is presented: presenting `.capture` arms it
+// (`capturePresented`); any other value releases it (`captureDismissed`) — so
+// at launch (home root) the camera stays off and no permission prompt fires
+// (Req 1.5). Each cover carries its own explicit `Close` control (Req 1.4).
 @MainActor
 struct AppRoot: View {
     @Bindable var captureModel: CaptureFlowModel
@@ -20,11 +23,12 @@ struct AppRoot: View {
     let preShutterSegmenter: PreShutterSegmenter?
 
     @State private var activeSheet: ActiveSheet?
-    // The insulin dose sheet is presented by TrendsView (a plain sheet, not a
-    // cover) but the state lives here so the `medata://insulin/add` deep link
-    // can raise it from any app state (PRD regression-suggestion-integration
-    // App 10). `pendingDeepLink` defers a deep-linked present until the
-    // conflicting presentation's dismissal completes.
+    // The insulin dose sheet is a plain sheet, not a cover (Decision 10),
+    // presented directly from this root so the home Dose control and the
+    // `medata://insulin/add` deep link raise the same surface from any app
+    // state (PRD regression-suggestion-integration App 10). `pendingDeepLink`
+    // defers a deep-linked present until the conflicting presentation's
+    // dismissal completes.
     @State private var showInsulinSheet = false
     @State private var pendingDeepLink: DeepLinkTarget?
 
@@ -49,32 +53,28 @@ struct AppRoot: View {
         self.preShutterSegmenter = preShutterSegmenter
     }
 
-    // A single optional so the three covers are mutually exclusive by
-    // construction — dismiss-then-present is sequential, so the AR session
-    // never double-toggles (design: Shell change).
+    // A single optional so the covers are mutually exclusive by construction —
+    // dismiss-then-present is sequential, so the AR session never
+    // double-toggles (design: Shell re-root). `.intake` presents the
+    // `manual-carb-intake`-owned IntakeView (Decision 12).
     enum ActiveSheet: Identifiable {
         case capture
-        case data
+        case intake
+        case records
+        case graph
         case settings
 
         var id: Self { self }
     }
 
     var body: some View {
-        TrendsView(
-            store: store,
-            showInsulinSheet: $showInsulinSheet,
-            onInsulinSheetDismiss: {
-                // medata://capture arrived while the dose sheet was up: the
-                // cover presents once the sheet's dismissal completes.
-                if pendingDeepLink == .captureCover {
-                    pendingDeepLink = nil
-                    activeSheet = .capture
-                }
-            },
-            onOpenCapture: { activeSheet = .capture },
-            onOpenData: { activeSheet = .data },
-            onOpenSettings: { activeSheet = .settings }
+        HomeView(
+            onCapture: { activeSheet = .capture },
+            onIntake: { activeSheet = .intake },
+            onDose: { showInsulinSheet = true },
+            onRecords: { activeSheet = .records },
+            onGraph: { activeSheet = .graph },
+            onSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
         .fullScreenCover(item: $activeSheet, onDismiss: {
@@ -99,13 +99,29 @@ struct AppRoot: View {
                     visionCardDetector: visionCardDetector,
                     preShutterSegmenter: preShutterSegmenter
                 )
-            case .data:
-                DataView(store: store)
+            case .intake:
+                IntakeView()
+            case .records:
+                RecordsView(store: store)
+            case .graph:
+                TrendsView(store: store)
             case .settings:
                 NavigationStack {
                     SettingsView(store: store, hasLiDAR: captureModel.supportsLiDAR)
                 }
             }
+        }
+        // Relocated from TrendsView (Decision 10): the dose sheet keeps its
+        // native drag-to-dismiss (no CloseCoverButton — design: Cover
+        // vocabulary). `onDismiss` sequences a pending medata://capture
+        // present behind the sheet's dismissal.
+        .sheet(isPresented: $showInsulinSheet, onDismiss: {
+            if pendingDeepLink == .captureCover {
+                pendingDeepLink = nil
+                activeSheet = .capture
+            }
+        }) {
+            InsulinDoseSheet(store: store)
         }
         .onChange(of: activeSheet) { _, new in
             // The AR session runs only while Capture is the frontmost cover.
