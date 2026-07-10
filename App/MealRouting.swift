@@ -72,14 +72,14 @@ struct CloseCoverButton: View {
 }
 
 // One row on the unified Records timeline (design: Components and Interfaces).
-// Open enum: `manual-carb-intake` (Track C) adds a single `.intake(IntakeRecord)`
-// case plus one additive merge source in RecordsModel — the taxonomy of intake
-// subtypes (carb, alcohol, …) lives inside `IntakeRecord` itself, not as
-// separate RecordRow cases (Decision 14). Do NOT add that case here.
+// Open enum: `.intake(IntakeRecord)` is `manual-carb-intake`'s single additive
+// case (Track C) — the taxonomy of intake subtypes (carb, alcohol, …) lives
+// inside `IntakeRecord` itself, not as separate RecordRow cases (Decision 14).
 enum RecordRow: Identifiable {
     case meal(DisplayMeal)      // corrected total folded in (Req 3.2), not raw MealRecord
     case insulin(InsulinEntry)  // .id is UUID
     case glucose(GlucoseRow)    // (id: Event.id, timestamp, mmolL) — GlucoseReading has no id
+    case intake(IntakeRecord)   // manual carb entry (manual-carb-intake Req 6.1)
 
     // Sort key for the Records timeline (Req 3.1, most-recent-first).
     var timestamp: Date {
@@ -87,18 +87,34 @@ enum RecordRow: Identifiable {
         case .meal(let meal): meal.record.createdAt
         case .insulin(let entry): entry.timestamp
         case .glucose(let row): row.timestamp
+        case .intake(let record): record.timestamp
         }
     }
 
     // Stable tie-break for rows sharing a timestamp (Req 3.1): the source
-    // UUID for meal/insulin, the source Event.id for glucose.
+    // UUID for meal/insulin/intake, the source Event.id for glucose.
     var id: String {
         switch self {
         case .meal(let meal): meal.id.uuidString
         case .insulin(let entry): entry.id.uuidString
         case .glucose(let row): row.id.uuidString
+        case .intake(let record): record.id.uuidString
         }
     }
+}
+
+// A manual carb entry wrapped with the display contract RecordsView's row
+// renderer needs (manual-carb-intake design: Records integration), so the
+// renderer stays agnostic to intake's category set.
+struct IntakeRecord: Identifiable, Equatable {
+    let entry: IntakeEntry
+    var id: UUID { entry.id }
+    var timestamp: Date { entry.timestamp }
+    var displayValue: String { "\(Int(entry.carbsG.rounded())) g" }
+    // Only .carb ships in manual-carb-intake (Decision 6 / home-router
+    // Decision 14), so the label is a plain constant, not a branch
+    // pre-guessing a subtype this spec does not implement.
+    var typeLabel: String { "Carbs" }
 }
 
 // A glucose reading kept with its source Event.id (design: Records data flow).
