@@ -72,15 +72,17 @@ final class PersistenceTests: XCTestCase {
         }
     }
 
-    // Version 4 adds processed_images (specs/data/libre-ingestion Decision 4).
-    func testSchemaVersionIsFour() throws {
+    // Version 5 adds quick_presets (specs/data/manual-carb-intake, design.md
+    // "Quick-add presets — new table"), matching the processed_images/v4
+    // precedent (specs/data/libre-ingestion Decision 4).
+    func testSchemaVersionIsFive() throws {
         let q = try DatabaseQueue(path: dbURL.path)
         try q.read { db in
             let version = try String.fetchOne(
                 db,
                 sql: "SELECT v FROM meta WHERE k = 'schema_version'"
             )
-            XCTAssertEqual(version, "4")
+            XCTAssertEqual(version, "5")
         }
     }
 

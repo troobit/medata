@@ -242,4 +242,13 @@ private struct ThrowingPersistenceStore: PersistenceStore {
     func deleteInsulinEvent(id: UUID) async throws {
         fatalError("unused")
     }
+    func quickPresets() async throws -> [QuickPreset] {
+        fatalError("unused")
+    }
+    func saveQuickPreset(_ preset: QuickPreset) async throws {
+        fatalError("unused")
+    }
+    func deleteQuickPreset(id: UUID) async throws {
+        fatalError("unused")
+    }
 }
