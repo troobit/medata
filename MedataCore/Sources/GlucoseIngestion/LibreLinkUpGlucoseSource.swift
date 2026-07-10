@@ -38,6 +38,11 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // Newest native instant a committed ingest has delivered this session
     // (Decision 10 semantics).
     private var lastDeliveredAt: Date?
+    // Bumped by disconnect(). Awaiting code captures the value at entry and
+    // bails out of its continuations when it changed, so a disconnect that
+    // interleaves an in-flight connect leaves no poll loop and no
+    // `.connected` state behind.
+    private var connectionGeneration = 0
 
     public init() {
         self.client = LibreLinkUpClient()
@@ -62,6 +67,7 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // the 15-minute poll loop starts only when credentials exist. Fetch
     // failures surface through the connection state (Req 3.4), not throws.
     public func connect(sink: any GlucoseIngestSink) async throws {
+        let generation = connectionGeneration
         self.sink = sink
         guard keychain.credentials() != nil else {
             connectionState = .failed(
@@ -71,12 +77,15 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             return
         }
         await fetchAndIngest()
+        // A disconnect that interleaved the fetch must not resurrect polling.
+        guard generation == connectionGeneration else { return }
         startPolling()
     }
 
     // Req 6.2: stops ingestion, clears stored credentials + token and the
     // cached host/patient, leaves stored readings intact.
     public func disconnect() async {
+        connectionGeneration += 1
         pollTask?.cancel()
         pollTask = nil
         session = nil
@@ -108,11 +117,16 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     @discardableResult
     private func fetchAndIngest() async -> Bool {
         guard let sink else { return false }
+        let generation = connectionGeneration
         do {
             let samples = try await fetchSamples()
+            // A disconnect that interleaved the fetch must not ingest or
+            // report `.connected` for a source that no longer is.
+            guard generation == connectionGeneration else { return false }
             // Durable ack (Decision 7): only a normal return advances
             // anything — last-success time and delivery state.
             _ = try await sink.ingest(samples, from: id)
+            guard generation == connectionGeneration else { return false }
             lastSuccessAt = Date()
             if let latest = samples.map(\.nativeInstant).max() {
                 lastDeliveredAt = max(lastDeliveredAt ?? .distantPast, latest)
@@ -120,6 +134,7 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             connectionState = .connected(lastReadingAt: lastDeliveredAt)
             return true
         } catch {
+            guard generation == connectionGeneration else { return false }
             // Req 3.4: surface the failure and the last-success time; stored
             // readings are untouched; the next scheduled fetch retries.
             connectionState = .failed(

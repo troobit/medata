@@ -23,17 +23,31 @@ final class GlucoseConnectionsModel {
     // In-session discrepancy tallies (Req 5.4/6.1, Decision 9), polled from
     // the coordinator whenever a snapshot arrives.
     private(set) var discrepancyCounts: [String: Int] = [:]
+    // Observable mirror of the persisted connected flags — the view reads
+    // ONLY this (UserDefaults reads inside a view body are invisible to
+    // @Observable tracking). Seeded from UserDefaults at init, mutated in
+    // setConnectedFlag alongside the persisted write.
+    private(set) var connectedSourceIDs: Set<String> = []
+    // Sources with a connect/disconnect intent Task in flight — the view
+    // disables the buttons so a slow connect cannot be double-tapped into
+    // concurrent setCredentials/connect calls.
+    private(set) var busySourceIDs: Set<String> = []
 
     private let coordinator: IngestionCoordinator
     private let healthKit = HealthKitGlucoseSource()
     private let libreLinkUp = LibreLinkUpGlucoseSource()
     private var subscription: Task<Void, Never>?
+    private var startTask: Task<Void, Never>?
 
     var healthKitID: String { healthKit.id }
     var libreLinkUpID: String { libreLinkUp.id }
 
     init(store: any PersistenceStore) {
         coordinator = IngestionCoordinator(store: store)
+        for id in [healthKit.id, libreLinkUp.id]
+        where UserDefaults.standard.bool(forKey: Self.connectedKey(id)) {
+            connectedSourceIDs.insert(id)
+        }
     }
 
     // MARK: - Launch (Req 1.3, 1.4)
@@ -43,9 +57,15 @@ final class GlucoseConnectionsModel {
     // log — Req 1.4), starts mirroring the state stream, then reconnects
     // every source the user has previously connected (the agent-note
     // contract: the observer/anchor and poll lifecycles all hang off
-    // `connect`, every launch).
-    func start() async {
-        guard subscription == nil else { return }
+    // `connect`, every launch). The Task is retained so the background-
+    // refresh handler can await it — a background cold launch must not run
+    // performBackgroundFetch() before the reconnect has attached the sink.
+    func start() {
+        guard startTask == nil else { return }
+        startTask = Task { await runStart() }
+    }
+
+    private func runStart() async {
         await coordinator.register(healthKit)
         await coordinator.register(libreLinkUp)
         let stream = await coordinator.stateStream()
@@ -60,12 +80,11 @@ final class GlucoseConnectionsModel {
                 self.discrepancyCounts = counts
             }
         }
-        if userHasConnected(healthKitID) {
+        if connectedSourceIDs.contains(healthKitID) {
             await connectHealthKitNow()
         }
-        if userHasConnected(libreLinkUpID) {
-            try? await libreLinkUp.connect(sink: coordinator)
-            scheduleBackgroundRefresh()
+        if connectedSourceIDs.contains(libreLinkUpID) {
+            await connectLibreLinkUpNow()
         }
     }
 
@@ -73,26 +92,37 @@ final class GlucoseConnectionsModel {
 
     // Triggers the OS authorisation sheet via the source's connect (Req 2.1).
     func connectHealthKit() {
+        guard !busySourceIDs.contains(healthKitID) else { return }
         setConnectedFlag(true, for: healthKitID)
-        Task { await connectHealthKitNow() }
+        busySourceIDs.insert(healthKitID)
+        Task {
+            await connectHealthKitNow()
+            busySourceIDs.remove(healthKitID)
+        }
     }
 
     // Credentials go to the Keychain via the source BEFORE connect (Req 3.1);
-    // fetch failures surface through the source's `.failed` state.
+    // fetch failures surface through the source's `.failed` state. A failed
+    // credential store clears the connected flag again — nothing was stored,
+    // so a launch reconnect would only re-surface "no credentials".
     func connectLibreLinkUp(email: String, password: String) {
+        guard !busySourceIDs.contains(libreLinkUpID) else { return }
         setConnectedFlag(true, for: libreLinkUpID)
+        busySourceIDs.insert(libreLinkUpID)
         Task {
+            defer { busySourceIDs.remove(libreLinkUpID) }
             do {
                 try await libreLinkUp.setCredentials(email: email, password: password)
-                try await libreLinkUp.connect(sink: coordinator)
-                scheduleBackgroundRefresh()
             } catch {
+                setConnectedFlag(false, for: libreLinkUpID)
                 await coordinator.reportState(
                     .failed(
                         reason: "Could not store the credentials (\(error.localizedDescription))",
                         lastSuccessAt: nil),
                     for: libreLinkUpID)
+                return
             }
+            await connectLibreLinkUpNow()
         }
     }
 
@@ -100,8 +130,11 @@ final class GlucoseConnectionsModel {
     // its disconnect(); resets the status counters (Decision 9); flips the
     // launch-reconnect flag. Stored readings remain (Req 6.2).
     func disconnect(_ sourceID: String) {
+        guard !busySourceIDs.contains(sourceID) else { return }
         setConnectedFlag(false, for: sourceID)
+        busySourceIDs.insert(sourceID)
         Task {
+            defer { busySourceIDs.remove(sourceID) }
             await coordinator.resetDiscrepancyTally(for: sourceID)
             if sourceID == healthKitID {
                 await healthKit.disconnect()
@@ -122,8 +155,8 @@ final class GlucoseConnectionsModel {
     // ingest has a reentrancy guard).
     func catchUpConnectedSources() {
         Task {
-            if userHasConnected(healthKitID) { await healthKit.catchUp() }
-            if userHasConnected(libreLinkUpID) { await libreLinkUp.catchUp() }
+            if connectedSourceIDs.contains(healthKitID) { await healthKit.catchUp() }
+            if connectedSourceIDs.contains(libreLinkUpID) { await libreLinkUp.catchUp() }
         }
     }
 
@@ -139,13 +172,16 @@ final class GlucoseConnectionsModel {
 
     // One bool per source under `glucose.source.<id>.connected` (the
     // GlucoseIngestion module's key namespace): set when the user connects in
-    // Settings, cleared on disconnect, read at launch to know which sources
-    // to reconnect. With no flag set, nothing runs at launch (Req 1.4).
-    func userHasConnected(_ sourceID: String) -> Bool {
-        UserDefaults.standard.bool(forKey: Self.connectedKey(sourceID))
-    }
-
+    // Settings, cleared on disconnect, seeded into `connectedSourceIDs` at
+    // init to know which sources to reconnect at launch. With no flag set,
+    // nothing runs at launch (Req 1.4). UserDefaults is persistence only —
+    // all live reads go through the observable mirror.
     private func setConnectedFlag(_ connected: Bool, for sourceID: String) {
+        if connected {
+            connectedSourceIDs.insert(sourceID)
+        } else {
+            connectedSourceIDs.remove(sourceID)
+        }
         UserDefaults.standard.set(connected, forKey: Self.connectedKey(sourceID))
     }
 
@@ -162,6 +198,22 @@ final class GlucoseConnectionsModel {
             await coordinator.reportState(
                 .failed(reason: "Health data is not available on this device", lastSuccessAt: nil),
                 for: healthKitID)
+        }
+    }
+
+    // LibreLinkUp's connect surfaces fetch failures through its own `.failed`
+    // state rather than throws today, but map a throw the same way the
+    // HealthKit branch does — no silent-swallow path.
+    private func connectLibreLinkUpNow() async {
+        do {
+            try await libreLinkUp.connect(sink: coordinator)
+            scheduleBackgroundRefresh()
+        } catch {
+            await coordinator.reportState(
+                .failed(
+                    reason: error.localizedDescription,
+                    lastSuccessAt: LibreLinkUpGlucoseSource.persistedLastSuccessAt()),
+                for: libreLinkUpID)
         }
     }
 
@@ -183,15 +235,21 @@ final class GlucoseConnectionsModel {
                 task.setTaskCompleted(success: false)
                 return
             }
-            let work = Task { await self.handleBackgroundRefresh(refresh) }
-            // Cancellation propagates through the URLSession await; the
-            // fetch surfaces it as a failure and the task still completes.
+            // The expiration handler must be in place BEFORE the work starts,
+            // so the box holds the Task it will cancel. Cancellation
+            // propagates through the URLSession await; the fetch surfaces it
+            // as a failure and the task still completes.
+            let work = CancellableWorkBox()
             refresh.expirationHandler = { @Sendable in work.cancel() }
+            work.task = Task { await self.handleBackgroundRefresh(refresh) }
         }
     }
 
     private func handleBackgroundRefresh(_ task: BGAppRefreshTask) async {
-        guard userHasConnected(libreLinkUpID) else {
+        // A background cold launch races start()'s reconnect — without the
+        // sink attached, performBackgroundFetch() would no-op as a failure.
+        await startTask?.value
+        guard connectedSourceIDs.contains(libreLinkUpID) else {
             task.setTaskCompleted(success: true)
             return
         }
@@ -205,7 +263,7 @@ final class GlucoseConnectionsModel {
     // and best-effort. A denied or duplicate submission is non-fatal — the
     // foreground poll and the on-open catch-up still cover delivery.
     private func scheduleBackgroundRefresh() {
-        guard userHasConnected(libreLinkUpID) else { return }
+        guard connectedSourceIDs.contains(libreLinkUpID) else { return }
         let request = BGAppRefreshTaskRequest(
             identifier: LibreLinkUpGlucoseSource.backgroundTaskIdentifier)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
@@ -216,3 +274,20 @@ final class GlucoseConnectionsModel {
     private func scheduleBackgroundRefresh() {}
     #endif
 }
+
+#if os(iOS)
+// Lets the BGTask expiration handler be assigned before the work Task exists
+// (the handler must be armed first — expiry can fire the moment work starts).
+// NSLock because the expiration handler can arrive off the main queue.
+private final class CancellableWorkBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _task: Task<Void, Never>?
+
+    var task: Task<Void, Never>? {
+        get { lock.lock(); defer { lock.unlock() }; return _task }
+        set { lock.lock(); defer { lock.unlock() }; _task = newValue }
+    }
+
+    func cancel() { task?.cancel() }
+}
+#endif
