@@ -9,17 +9,17 @@ references:
 
 ## Phase 1 — Persistence foundation (macOS-testable)
 
-- [ ] 1. Extract the keep-first merge from GRDBPersistenceStore.ingestBsl into a private mergeBslKeepFirst(_ db:, rows:) -> (stored, agreeing, discrepant) <!-- id:oecpdmn -->
+- [x] 1. Extract the keep-first merge from GRDBPersistenceStore.ingestBsl into a private mergeBslKeepFirst(_ db:, rows:) -> (stored, agreeing, discrepant) <!-- id:oecpdmn -->
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [5.1](requirements.md#5.1)
-  - [ ] 1.1. Confirm existing PersistenceTests (keep-first, discrepancy, accuracy) stay green — behavioural parity of the refactor <!-- id:oecpdmo -->
+  - [x] 1.1. Confirm existing PersistenceTests (keep-first, discrepancy, accuracy) stay green — behavioural parity of the refactor <!-- id:oecpdmo -->
     - Stream: 1
 
-- [ ] 2. Add LiveBslReading and ingestLiveBsl(_ readings:) async throws -> BslIngestSummary to PersistenceStore + GRDBPersistenceStore <!-- id:oecpdmp -->
+- [x] 2. Add LiveBslReading and ingestLiveBsl(_ readings:) async throws -> BslIngestSummary to PersistenceStore + GRDBPersistenceStore <!-- id:oecpdmp -->
   - Blocked-by: oecpdmn (Extract the keep-first merge from GRDBPersistenceStore.ingestBsl into a private mergeBslKeepFirst_ db:, rows: -> stored, agreeing, discrepant)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
-  - [ ] 2.1. Tests: keep-first across a pre-seeded screenshot bsl row at the same grid instant; single notification per batch; two live rows at the same timestampMs in one call store exactly one <!-- id:oecpdmq -->
+  - [x] 2.1. Tests: keep-first across a pre-seeded screenshot bsl row at the same grid instant; single notification per batch; two live rows at the same timestampMs in one call store exactly one <!-- id:oecpdmq -->
     - Stream: 1
     - Requirements: [4.4](requirements.md#4.4), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
 
