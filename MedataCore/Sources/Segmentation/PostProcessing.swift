@@ -18,8 +18,42 @@ public struct PostProcessedOutput: Sendable {
     public let sigmaSeg: Float
 }
 
+// Configuration for the deterministic spatial-regularisation (speckle-removal)
+// pass applied to the argmax label map. The pass is a connected-component area
+// filter: any 4-connected region of one class smaller than `minRegionArea`
+// pixels is reassigned to the class that dominates its immediate border. This
+// removes the "linear stripes of spots" speckle without a model retrain.
+//
+// A no-op configuration (`minRegionArea <= 1`, i.e. `.disabled`) reproduces the
+// pre-cleanup argmax byte-for-byte: no region of one pixel or fewer can ever be
+// smaller than a threshold of one, so nothing is ever reassigned.
+public struct MaskRegularisationConfig: Sendable, Equatable {
+    /// Connected regions strictly smaller than this many pixels are treated as
+    /// speckle and reassigned to their dominant bordering class. A value of 0 or
+    /// 1 disables the pass entirely (passthrough).
+    public let minRegionArea: Int
+
+    public init(minRegionArea: Int) {
+        self.minRegionArea = minRegionArea
+    }
+
+    /// Passthrough: identical output to the pre-cleanup argmax.
+    public static let disabled = MaskRegularisationConfig(minRegionArea: 0)
+
+    /// Default cleanup strength. 12 pixels removes isolated speckle and thin
+    /// stripes while leaving any coherent food silhouette (hundreds+ of pixels)
+    /// untouched.
+    public static let standard = MaskRegularisationConfig(minRegionArea: 12)
+
+    /// True when the pass would reassign nothing regardless of input.
+    public var isPassthrough: Bool { minRegionArea <= 1 }
+}
+
 public enum SegmenterPostProcessor {
     public static let tauSilhouette: Float = 0.5         // §6.6 / §6.7
+
+    /// Default speckle-removal strength for `process(...)`.
+    public static let defaultRegularisation: MaskRegularisationConfig = .standard
 
     public static func process(
         logitsFP32: [Float],
@@ -29,7 +63,8 @@ public enum SegmenterPostProcessor {
         scaledHeight: Int,
         originalWidth: Int,
         originalHeight: Int,
-        palette: ClassPalette
+        palette: ClassPalette,
+        regularisation: MaskRegularisationConfig = defaultRegularisation
     ) throws -> PostProcessedOutput {
         guard logitsFP32.count == targetSize * targetSize * classes else {
             throw SegmentationError.invalidLogitsShape(
@@ -155,6 +190,20 @@ public enum SegmenterPostProcessor {
             perClassMean[name] = perClassSum[c] / Float(perClassCount[c])
         }
 
+        // Deterministic spatial regularisation (speckle removal). Runs AFTER the
+        // σ_seg / silhouette / perClassMeanProb contract above has been computed
+        // from the raw argmax, so those values are byte-identical to the
+        // pre-cleanup pipeline — the cleanup only reshapes the LABEL MAP that
+        // feeds the overlay, MaskArtefactWriter, and the volume stage. The
+        // probability tensor is untouched, so the HeightField width/height
+        // agreement check still holds. A passthrough config returns the input
+        // Data unchanged.
+        let cleanedArgmax = regulariseLabelMap(
+            argmaxData,
+            width: originalWidth, height: originalHeight,
+            config: regularisation
+        )
+
         // Cast probabilities to FP16 LE bytes (portable §3.5 / §6.0 contract).
         let bytes = FP16Bytes.encode(resized)
         let probTensor = ProbabilityTensor(
@@ -162,7 +211,7 @@ public enum SegmenterPostProcessor {
             height: originalHeight, width: originalWidth, classes: classes,
             palette: palette
         )
-        let argMap = ArgmaxMap(pixels: argmaxData, height: originalHeight, width: originalWidth)
+        let argMap = ArgmaxMap(pixels: cleanedArgmax, height: originalHeight, width: originalWidth)
         return PostProcessedOutput(
             probabilities: probTensor,
             argmax: argMap,
@@ -170,6 +219,94 @@ public enum SegmenterPostProcessor {
             sigmaSeg: sigmaSeg
         )
     }
+}
+
+// Deterministic connected-component speckle filter over a UInt8 label map.
+//
+// Every 4-connected region of a single class that is strictly smaller than
+// `config.minRegionArea` is reassigned to the class that occupies the most
+// pixels on its immediate 4-neighbour border. Regions are discovered by a
+// deterministic scan in raster order with an explicit LIFO flood fill, so the
+// same input always produces the same output (no hashing, no float ordering, no
+// concurrency). The reassignment reads the ORIGINAL labels for every region, so
+// the result is independent of the order in which regions are processed.
+//
+// A passthrough config (`minRegionArea <= 1`) returns the input Data unchanged.
+func regulariseLabelMap(
+    _ labels: Data,
+    width: Int,
+    height: Int,
+    config: MaskRegularisationConfig
+) -> Data {
+    guard !config.isPassthrough, width > 0, height > 0 else { return labels }
+    let count = width * height
+    guard labels.count == count else { return labels }
+
+    let original = [UInt8](labels)
+    var output = original
+    var visited = [Bool](repeating: false, count: count)
+    // Reusable scratch buffer for the pixels of the current region.
+    var region = [Int]()
+    var stack = [Int]()
+
+    for start in 0..<count where !visited[start] {
+        let label = original[start]
+        region.removeAll(keepingCapacity: true)
+        stack.removeAll(keepingCapacity: true)
+        visited[start] = true
+        stack.append(start)
+
+        while let p = stack.popLast() {
+            region.append(p)
+            let x = p % width
+            let y = p / width
+            // 4-connected neighbours.
+            if x > 0 {
+                let n = p - 1
+                if !visited[n] && original[n] == label { visited[n] = true; stack.append(n) }
+            }
+            if x < width - 1 {
+                let n = p + 1
+                if !visited[n] && original[n] == label { visited[n] = true; stack.append(n) }
+            }
+            if y > 0 {
+                let n = p - width
+                if !visited[n] && original[n] == label { visited[n] = true; stack.append(n) }
+            }
+            if y < height - 1 {
+                let n = p + width
+                if !visited[n] && original[n] == label { visited[n] = true; stack.append(n) }
+            }
+        }
+
+        if region.count >= config.minRegionArea { continue }
+
+        // Sub-threshold speckle: reassign to the dominant bordering class from
+        // the ORIGINAL labels. Ties resolve to the lowest class id for
+        // determinism.
+        var borderCounts = [Int: Int]()
+        for p in region {
+            let x = p % width
+            let y = p / width
+            if x > 0 { let nl = original[p - 1]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
+            if x < width - 1 { let nl = original[p + 1]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
+            if y > 0 { let nl = original[p - width]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
+            if y < height - 1 { let nl = original[p + width]; if nl != label { borderCounts[Int(nl), default: 0] += 1 } }
+        }
+        // A region touching no differing neighbour (e.g. the whole image is one
+        // class) has no dominant border — leave it as-is.
+        guard !borderCounts.isEmpty else { continue }
+        var bestClass = -1
+        var bestCount = 0
+        for (cls, cnt) in borderCounts where cnt > bestCount || (cnt == bestCount && cls < bestClass) {
+            bestCount = cnt
+            bestClass = cls
+        }
+        let replacement = UInt8(bestClass)
+        for p in region { output[p] = replacement }
+    }
+
+    return Data(output)
 }
 
 func bilinearResizeProbabilities(
