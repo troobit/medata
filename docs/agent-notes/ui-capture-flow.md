@@ -1,17 +1,26 @@
 # UI capture flow (App/)
 
-> **Shell superseded by `specs/ui/design-handoff-00/` (2026-07-04).** The tab shell is gone:
-> **Graph** (`TrendsView`, renamed in UI only — Decision 21) is the launch root, and Capture /
-> Data / Settings present as mutually-exclusive `.fullScreenCover`s from Graph's toolbar
-> (`AppRoot.ActiveSheet`, Decisions 19–20). The AR session runs ONLY while the Capture cover
-> is frontmost: `CaptureFlowModel.capturePresented()` arms (via `.initialising`),
+> **Shell re-rooted by `specs/ui/home-router/` (2026-07-10, superseding design-handoff-00
+> Decision 20's Graph root).** The launch root is **`HomeView`** — a pure router with six
+> controls (Capture primary, then Intake / Dose / Records / Graph / Settings). Capture /
+> Intake / Records / Graph / Settings present as mutually-exclusive `.fullScreenCover`s
+> (`AppRoot.ActiveSheet`); Dose stays the insulin `.sheet`, presented from `AppRoot`
+> (home-router Decision 10). **Graph** (`TrendsView`, renamed in UI only — Decision 21) is
+> visualisation-only: no entry-point toolbar controls, no delete affordance (the day-insulin
+> `.onDelete` is gone; `TrendsModel.deleteDose` is now unreferenced but deliberately left in
+> the perf-sensitive file). `RecordsView`/`RecordsModel`/`RecordRow` replaced the meal-only
+> `DataView` (deleted); the shared `mealRouteDestination`/`CloseCoverButton` live in
+> `App/MealRouting.swift`. `App/IntakeView.swift` is a compile placeholder owned by
+> `manual-carb-intake` (Track C, home-router Decision 12) — replaced wholesale by that spec;
+> do not build on it. The AR session still runs ONLY while the Capture cover is frontmost:
+> `CaptureFlowModel.capturePresented()` arms (via `.initialising`),
 > `captureDismissed()` releases; `evaluatePermissions` is gated on `isCapturePresented`, so
 > launch shows no camera prompt. The old `tabSelectionChanged`/`sheetDidPresent` hooks are
-> these same bodies renamed. Capture chrome: close control (top-leading, returns to Graph),
+> these same bodies renamed. Capture chrome: close control (top-leading, returns home),
 > mode capsule (`1-VIEW · LiDAR` / `2-VIEW · NADIR` / `2-VIEW · OBLIQUE`), 76 pt bubble level
 > (stage-relative, non-gating), telemetry capsule, bottom row = mode + shutter (torch,
 > Trends/Data/Settings buttons all gone). Navigation: route enums only — `CaptureRoute`
-> (review/result/correction) on the capture stack, `MealRoute` on Graph/Data stacks;
+> (review/result/correction) on the capture stack, `MealRoute` on Graph/Records stacks;
 > `navigationDestination(for: MealRecord.self)` no longer exists, and an `.onChange` on
 > `navigationPath` resyncs `.showingResult` if the user pops via back-gesture (soft-lock fix).
 > Developer-phase copy rule (CLAUDE.md / Req 14.5): no reassurance/disclaimer strings.
