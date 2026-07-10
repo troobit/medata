@@ -555,6 +555,8 @@ shipped app is wrong.
 
 ### The loop
 
+> **What to try next:** [`agent-notes/segmenter-improvement-research.md`](agent-notes/segmenter-improvement-research.md) — diagnosis of the ~0.40 held-out mIoU plateau, ranked training-recipe recommendations, and the offline accept/reject threshold for recipe variants.
+
 1. Adjust the class mapping (§3b) and/or training (§4).
 2. Retrain → new `checkpoint.pt`.
 3. Regenerate fixtures and re-bench mIoU (§5). Iterate until ≥ 0.60.
