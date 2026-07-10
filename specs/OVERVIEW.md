@@ -16,6 +16,8 @@
 | [Nutrition5k Calibration](#nutrition5k-calibration) | estimation | 2026-07-01 | Done | full | Bridge the Nutrition5k RGB-D dataset into the harness to fit per-class β bulk-correction factors, bake them into the food DB with lineage, report carb/protein/fat accuracy against a β=1.0 baseline, and add standalone-liquid classes to a redefined palette v1. All 45 tasks done (39 implementation + closeout consolidation); the post-checkpoint single-dominant re-fit stays gated on model-production Bucket C. |
 | [Resumable Segmenter Training](#resumable-segmenter-training) | estimation | 2026-07-02 | Done | smol | Give `train.py` crash-safe per-epoch checkpointing and a `--resume` flag for interruptible local-Mac (MPS) training runs. |
 | [Cross-dataset Calibration](#cross-dataset-calibration) | estimation | 2026-07-04 | Planned | full | Broaden per-class β calibration beyond Nutrition5k by rendering overhead depth from MetaFood3D single-food meshes and feeding them as single-class mixture rows to the existing harness, so carb staples gain samples N5k's mixed plates cannot. 23 tasks planned. |
+| [Estimation Quality](#estimation-quality) | estimation | 2026-07-09 | In Progress | prd | Kill the mask speckle and stabilise carb readings: imbalance-aware `--loss`/`--photometric-augment` training flags (torch-free tested), deterministic connected-component speckle cleanup (default-on), plane-fit consensus polish + fail-closed food-coverage gate, and the segmenter-improvement research doc. 4 contexts landed; the training run, export/swap, and on-device verify remain human-gated STOP points. |
+| [Segmenter Foundation](#segmenter-foundation) | estimation | 2026-07-10 | Planned | full | Re-derive the segmenter accuracy gate (0.60 → mean IoU ≥ 0.48, the FoodSeg103 compact-model ceiling), specify the training-recipe upgrade as the primary lever, and gate a SegFormer-B0 backbone swap on a Core ML conversion spike. Spec complete (16 tasks); GPU runs and on-device measurements human-gated, `tools/segmenter/` sequencing after estimation-quality. |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [Libre Ingestion](#libre-ingestion) | data | 2026-07-04 | Done | full | Extract glucose readings on-device from user-picked LibreLink screenshots into `bsl` events; Swift port of imgdatacollector gated by its 9-image accuracy corpus. |
@@ -24,6 +26,7 @@
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 | [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
 | [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root; Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
+| [Home Router](#home-router) | ui | 2026-07-07 | In Progress | full | Home page becomes the launch root (no tab bar): six routed full-screen covers with Capture primary, unified Records timeline (meals + insulin + glucose, delete for manual entries only), Graph demoted to visualisation-only. 8/9 tasks done; on-device visual verify (task 9) human-gated. |
 | [Regression Suggestion Integration](#regression-suggestion-integration) | data · ui | 2026-07-05 | Done | prd | Insulin dosing as a first-class event stream conforming to medreg's insulin-event convention: dose-entry sheet from the Graph toolbar, Graph dose markers/stats, `medata://` deep links, and lock-/home-screen launcher widgets (`MeDataWidgets`). All 20 tasks across 3 contexts done. |
 | [CGM Connect](#cgm-connect) | data | 2026-07-10 | In Progress | full | Live glucose ingestion behind a source abstraction (HealthKit primary, LibreLinkUp follower complement) writing `bsl` events with cross-source 5-minute-grid dedup, firewalled from estimation by a package-graph test. 13/14 tasks done; on-device verify (task 14) human-gated. |
 | [Manual Carb Intake](#manual-carb-intake) | data · ui | 2026-07-07 | In Progress | full | Manual carb/macro logging without the camera: carb-entry sheet (keypad, 1–999 g, optional macros behind a disclosure), one-tap quick-add presets (`quick_presets` table, seeded defaults), inline edit/delete of manual entries, `EventType.intake` folded into the Graph carb series and Records timeline. All 11 tasks done; on-device verification checklist (design.md) human-gated. |
@@ -102,6 +105,26 @@ Broaden per-class β calibration beyond Nutrition5k by rendering overhead depth 
 - [requirements.md](estimation/cross-dataset-calibration/requirements.md)
 - [tasks.md](estimation/cross-dataset-calibration/tasks.md)
 
+## Estimation Quality
+
+PRD-lane work (engage): kill the visible mask speckle ("linear stripes of spots") and stabilise run-to-run carb readings. Landed across four contexts — the segmenter-improvement research doc attributing the 0.40-mIoU plateau to unweighted cross-entropy over the 35-class imbalance ([docs/agent-notes/segmenter-improvement-research.md](../docs/agent-notes/segmenter-improvement-research.md)); opt-in `--loss {weighted_ce,focal,dice,combined}` + `--photometric-augment` training flags with torch-free tests; deterministic connected-component speckle regularisation default-on in `PostProcessing.swift`; plane-fit consensus polish and a fail-closed food-coverage gate. The training run, model export/swap, and on-device verify are human-gated STOP points — the recommended run command is in [docs/ml-training.md](../docs/ml-training.md) §4.
+
+- [prd.md](estimation/estimation-quality/prd.md)
+- [tasks-estimation-runtime-consistency.md](estimation/estimation-quality/tasks-estimation-runtime-consistency.md)
+- [tasks-mask-post-processing-cleanup.md](estimation/estimation-quality/tasks-mask-post-processing-cleanup.md)
+- [tasks-segmentation-approach-research.md](estimation/estimation-quality/tasks-segmentation-approach-research.md)
+- [tasks-segmenter-training-pipeline.md](estimation/estimation-quality/tasks-segmenter-training-pipeline.md)
+
+## Segmenter Foundation
+
+Decides the model foundation for the on-device segmenter, driven by the Track A deep-research findings ([docs/agent-notes/model-foundation-research.md](../docs/agent-notes/model-foundation-research.md)): the 0.60 heldout-mIoU gate sits above the FoodSeg103 compact-model frontier, so the gate is re-derived to mean IoU ≥ 0.48 (Decision 5); the training-recipe upgrade on the existing DeepLabV3+MobileNetV3-Large is the primary lever; a SegFormer-B0 backbone swap is explored only if a Core ML conversion spike passes size/latency/parity; text-conditioning, SAM-family, and FoodSAM recorded as evaluated-and-rejected. Spec complete — 16 tasks, of which the GPU training runs and on-device ANE measurements are human-gated, and `tools/segmenter/` code tasks sequence after estimation-quality's landed flags.
+
+- [decision_log.md](estimation/segmenter-foundation/decision_log.md)
+- [design.md](estimation/segmenter-foundation/design.md)
+- [prerequisites.md](estimation/segmenter-foundation/prerequisites.md)
+- [requirements.md](estimation/segmenter-foundation/requirements.md)
+- [tasks.md](estimation/segmenter-foundation/tasks.md)
+
 ## Rawframe Rgb Conversion
 
 Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes.
@@ -173,6 +196,15 @@ Adopt the first external design handoff (archived wireframes + scaffold), amende
 - [prerequisites.md](ui/design-handoff-00/prerequisites.md)
 - [requirements.md](ui/design-handoff-00/requirements.md)
 - [tasks.md](ui/design-handoff-00/tasks.md)
+
+## Home Router
+
+Home page becomes the launch root: no tab bar, six routed full-screen covers (Capture primary, plus Intake, Records, Graph, Settings, insulin), the deep-link handoff relocated to `AppRoot`, and `TrendsView` demoted to visualisation-only per the design's removal audit. Adds the unified Records timeline (meals + insulin + glucose most-recent-first; delete for manual entries only, glucose read-only) and the `RecordRow.intake(IntakeRecord)` seam consumed by manual-carb-intake (Decisions 12–14). 8/9 tasks done; on-device visual verify (task 9) is human-gated.
+
+- [decision_log.md](ui/home-router/decision_log.md)
+- [design.md](ui/home-router/design.md)
+- [requirements.md](ui/home-router/requirements.md)
+- [tasks.md](ui/home-router/tasks.md)
 
 ## Regression Suggestion Integration
 
