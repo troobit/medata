@@ -44,6 +44,11 @@ final class TrendsModel {
     private(set) var meals: [MealRecord] = []
     private(set) var glucose: [GlucoseReading] = []
     private(set) var insulin: [InsulinEntry] = []
+    // Manual carb entries for the selected range (manual-carb-intake Req 6.2).
+    // Kept as (date, value) pairs — a bare [Double] cannot feed either Day's
+    // per-entry TrendsChartPoint or Week/Month's dailyBuckets, both of which
+    // need a date per sample.
+    private(set) var intakeCarbs: [DatedValue] = []
 
     // Chart series and axis maxima are shaped ONCE per reload and stored, not
     // recomputed on every access. They were computed properties, and the chart
@@ -102,6 +107,13 @@ final class TrendsModel {
         }
         let doses = (try? await store.events(in: iv.start...iv.end, type: EventType.insulin)) ?? []
         insulin = doses.compactMap(Self.insulinEntry(from:))
+        // `value` is already the validated carb figure written at save time
+        // (manual-carb-intake design: Carb totals and graph series) — no
+        // metadata decode needed for plotting.
+        let intakeEvents = (try? await store.events(in: iv.start...iv.end, type: EventType.intake)) ?? []
+        intakeCarbs = intakeEvents.compactMap { event in
+            event.value.map { DatedValue(date: event.timestamp, value: $0) }
+        }
         recomputeSeries(in: iv)
     }
 
@@ -111,7 +123,10 @@ final class TrendsModel {
     private func recomputeSeries(in iv: DateInterval) {
         switch range {
         case .day:
+            // One bar per entry regardless of source — one carb series, not
+            // two (manual-carb-intake Req 6.2).
             carbBars = meals.map { TrendsChartPoint(date: $0.createdAt, value: carbTotal($0)) }
+                + intakeCarbs.map { TrendsChartPoint(date: $0.date, value: $0.value) }
             glucoseLine = glucose
                 .sorted { $0.timestamp < $1.timestamp }
                 .map { TrendsChartPoint(date: $0.timestamp, value: $0.mmolL) }
@@ -119,7 +134,11 @@ final class TrendsModel {
                 InsulinMarker(date: $0.timestamp, units: $0.units, kind: $0.kind)
             }
         case .week, .month:
+            // Meal and intake samples combine BEFORE bucketing, so a day's
+            // bucket total is one number regardless of how many sources
+            // contributed to it (manual-carb-intake Req 6.2).
             let carbSamples = meals.map { DatedValue(date: $0.createdAt, value: carbTotal($0)) }
+                + intakeCarbs
             carbBars = TrendsMath.dailyBuckets(carbSamples, in: iv, calendar: calendar)
                 .map { TrendsChartPoint(date: $0.start, value: $0.total) }
             let glucoseSamples = glucose.map { DatedValue(date: $0.timestamp, value: $0.mmolL) }

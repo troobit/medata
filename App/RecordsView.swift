@@ -57,6 +57,8 @@ struct RecordsView: View {
         case .glucose(let reading):
             GlucoseRecordRow(reading: reading)
                 .deleteDisabled(true)
+        case .intake(let record):
+            IntakeRecordRow(record: record)
         }
     }
 }
@@ -144,6 +146,35 @@ private struct GlucoseRecordRow: View {
             Spacer()
         }
         .accessibilityIdentifier("records.row.glucose")
+    }
+}
+
+// Intake row: manual/quick-add carbs + type label (manual-carb-intake
+// Req 6.1). No navigation; swipe-to-delete via the list's onDelete.
+private struct IntakeRecordRow: View {
+    let record: IntakeRecord
+
+    var body: some View {
+        HStack {
+            Image(systemName: "carrot")
+                .foregroundStyle(Color.textSecondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(record.displayValue)
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(Color.textPrimary)
+                    Text(record.typeLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.textSecondary)
+                }
+                Text(timeString(record.timestamp))
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            Spacer()
+        }
+        .accessibilityIdentifier("records.row.intake")
     }
 }
 

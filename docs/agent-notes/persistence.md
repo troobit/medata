@@ -50,6 +50,14 @@ BGProcessingTask guard: `#if os(iOS)` (not `canImport(BackgroundTasks)` which wo
 
 Cross-repo check (2026-07-05): a store-written fixture loads in medreg via `medreg.ingest.load_events` with matching units/kind/timestamp/insulin_type/note. medreg is read-only over the export archive; no adapter needed.
 
+## Intake events (manual-carb-intake)
+
+`EventType.intake` rows mirror the insulin convention: `value` = carbs in grams, `timestamp` = the user-set time UTC ms, `metadata` = JSON object with `subtype` (only "carb" for now), `schema_version` (integer 1, `IntakeEntry.metadataSchemaVersion`), `source` ("manual"|"quickadd"), plus `preset_id` (quickadd provenance stamp — not enforced against `source`) and `protein_g`/`fat_g`/`fibre_g` — all optional keys **absent, never null**, when nil.
+
+`saveIntakeEntry`/`updateIntakeEntry` reject carbs outside 1...999 (`PersistenceError.intakeCarbsOutOfRange`). Update and delete are gated on `event_type = intake` so a meal/insulin/bsl row sharing the id survives; intake has no side tables. Each write notifies `eventsDidChange` once (unconditionally, matching insulin).
+
+Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT EXISTS` retrofits it onto v4 DBs — no DDL on legacy tables): `id` TEXT PK, `name`, `carbs_g` NOT NULL, optional `protein_g`/`fat_g`/`fibre_g`, `sort_order`. The three authored defaults ("A pint" 17 g, "Bagel" 45 g, "Chips" 40 g) are seeded **at most once per DB**, gated on the `quick_presets_seeded` meta flag — deleting all presets does NOT reseed on relaunch. `saveQuickPreset` is INSERT OR REPLACE (insert and update in one); preset writes do not notify `eventsDidChange`.
+
 ## Bsl ingestion (libre-ingestion + cgm-connect)
 
 Both `ingestBsl` (screenshot import) and `ingestLiveBsl` (live sources, cgm-connect Phase 1) share one private keep-first merge, `mergeBslKeepFirst`, which takes per-row `(timestampMs, value, metadataJSON)` tuples and adds each freshly inserted `timestampMs` to its covered set as it goes. That covered-set update is a deliberate behavioural change to `ingestBsl` too: two same-timestamp readings in one screenshot batch previously both inserted; now the second is classified `skippedExisting` (cgm-connect design "finding #5").

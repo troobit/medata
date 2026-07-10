@@ -192,7 +192,7 @@ struct IntakeRecord: Identifiable, Equatable {
 
 `RecordsModel.reload()` gets one additive merge line (`loadIntake()` alongside `loadMeals()`/`loadInsulin()`/`loadGlucose()`, same `events(in: Self.allTime, type: EventType.intake)` shape as `loadInsulin`, decoded via `RecordsModel`'s own private `intakeEntry(from:)` — see Decode ownership above), and `RecordsModel.delete(_:)` gets one additive case calling `store.deleteIntakeEntry(id:)`. This makes manually-added entries deletable from Records (satisfying the "delete reachable" half of Req 7.3 through the surface home-router already built) — but Req 7.1–7.2's edit list and inline edit/delete affordance (Req 7.5) are this spec's own surface, not Records; Records' delete-only stance (home-router Decision 4) does not extend edit capability, so the dedicated list below is where editing actually lives.
 
-Both touch points are files this spec already owns changes in (`MealRouting.swift`, `RecordsModel.swift`) per home-router's stated low-collision seam — no home-router file changes.
+Both touch points are files this spec already owns changes in (`MealRouting.swift`, `RecordsModel.swift`) per home-router's stated low-collision seam. One home-router file is necessarily touched after all: `RecordsView.swift`'s row renderer switches exhaustively over `RecordRow`, so adding the `.intake` case forces a rendering arm there (and Req 6.1 needs a visible row anyway) — a small additive arm, not a reworking of the surface. *(Amended at implementation: the original "no home-router file changes" claim was wrong on this point.)*
 
 ### Views (Req 1, 2, 3, 4, 5, 7)
 

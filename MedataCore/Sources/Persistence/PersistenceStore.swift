@@ -8,6 +8,9 @@ public enum PersistenceError: Error, Equatable {
     // Insulin dose rejected at the store layer: units outside 0...60
     // (PRD regression-suggestion-integration Core 4).
     case insulinUnitsOutOfRange(Double)
+    // Manual carb entry rejected at the store layer: carbsG outside 1...999
+    // (specs/data/manual-carb-intake Req 1.4).
+    case intakeCarbsOutOfRange(Double)
 }
 
 // Vocabulary for the `event_type` column on the events table. Centralised here
@@ -23,6 +26,9 @@ public enum EventType {
     // convention (medreg docs/insulin-event-convention.md, metadata schema
     // version 1); medreg reads these rows from the export archive.
     public static let insulin = "insulin"
+    // Manual carb intake (specs/data/manual-carb-intake); `value` carries
+    // carbohydrate grams. Row shape mirrors the insulin convention above.
+    public static let intake = "intake"
 }
 
 // Whether a dose is fast-acting meal/correction insulin or background
@@ -129,6 +135,34 @@ public struct BslIngestSummary: Sendable, Equatable {
         self.skippedExisting = skippedExisting
         self.agreeing = agreeing
         self.discrepant = discrepant
+    }
+}
+
+// One quick-add preset (specs/data/manual-carb-intake, design.md "Quick-add
+// presets — new table"). Presets are a flat, user-editable collection
+// (Decision 6) stored in their own `quick_presets` table — CRUD'd
+// independently of the `events` log, not one of its rows. `macros` fields
+// absent on a given preset round-trip as `nil`, matching Req 2.3's
+// absent-not-zero rule for manual entries.
+public struct QuickPreset: Sendable, Equatable, Identifiable {
+    public let id: UUID
+    public var name: String
+    public var carbsG: Double
+    public var macros: IntakeMacros
+    public var sortOrder: Int
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        carbsG: Double,
+        macros: IntakeMacros = IntakeMacros(),
+        sortOrder: Int
+    ) {
+        self.id = id
+        self.name = name
+        self.carbsG = carbsG
+        self.macros = macros
+        self.sortOrder = sortOrder
     }
 }
 
@@ -248,4 +282,38 @@ public protocol PersistenceStore: Sendable {
     // bsl row sharing the id survives, and no side tables are touched.
     // Notifies `eventsDidChange` once.
     func deleteInsulinEvent(id: UUID) async throws
+
+    // specs/data/manual-carb-intake Req 1.3, 2.3, 6.1, 6.3. Writes ONE
+    // `events` row per entry: `value` = carbsG (REAL), `timestamp` = the
+    // user-set time, `metadata` = JSON object with `subtype`,
+    // `schema_version` (integer 1), `source`, plus `preset_id` (quickadd
+    // only) and macro keys (`protein_g`/`fat_g`/`fibre_g`) — all omitted,
+    // never null, when absent. Throws `intakeCarbsOutOfRange` for carbsG
+    // outside 1...999. Notifies `eventsDidChange` once.
+    func saveIntakeEntry(_ entry: IntakeEntry) async throws
+
+    // Req 7.2. In-place update of the same row id; re-validates the
+    // 1...999 range, throwing `intakeCarbsOutOfRange` outside it. The
+    // UPDATE is gated on `event_type = intake`, so a meal/insulin/bsl row
+    // sharing the id is untouched. Notifies `eventsDidChange` once.
+    func updateIntakeEntry(_ entry: IntakeEntry) async throws
+
+    // Req 7.3. Deletes a single intake event by id. The DELETE is gated on
+    // `event_type = intake`, so a meal/insulin/bsl row sharing the id
+    // survives. Notifies `eventsDidChange` once (delete notifies
+    // unconditionally, matching `deleteMeal`).
+    func deleteIntakeEntry(id: UUID) async throws
+
+    // specs/data/manual-carb-intake, design.md "Quick-add presets — new
+    // table". Returns every preset ordered `sort_order ASC`. Presets are not
+    // `events` rows: none of these three methods touch `eventsDidChange`
+    // (nothing outside the Intake surface reads them).
+    func quickPresets() async throws -> [QuickPreset]
+
+    // Insert or replace by id (`id` is the table's PRIMARY KEY) — a single
+    // method covers both create (Req 4.1) and edit (Req 4.2).
+    func saveQuickPreset(_ preset: QuickPreset) async throws
+
+    // Req 4.2. Deletes a single preset by id.
+    func deleteQuickPreset(id: UUID) async throws
 }

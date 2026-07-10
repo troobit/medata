@@ -46,10 +46,12 @@ final class RecordsModel {
         async let meals = loadMeals()
         async let insulin = loadInsulin()
         async let glucose = loadGlucose()
+        async let intake = loadIntake()
         var merged: [RecordRow] = []
         merged.append(contentsOf: await meals)
         merged.append(contentsOf: await insulin)
         merged.append(contentsOf: await glucose)
+        merged.append(contentsOf: await intake)
         merged.sort { lhs, rhs in
             if lhs.timestamp != rhs.timestamp { return lhs.timestamp > rhs.timestamp }
             return lhs.id < rhs.id
@@ -67,6 +69,8 @@ final class RecordsModel {
             // Read-only: glucose is import-sourced and re-appears on the next
             // import, so no delete affordance exists here (Req 3.5).
             break
+        case .intake(let record):
+            try? await store.deleteIntakeEntry(id: record.id)
         }
     }
 
@@ -114,6 +118,46 @@ final class RecordsModel {
             let kind = InsulinKind(rawValue: kindRaw)
         else { return nil }
         return InsulinEntry(id: event.id, timestamp: event.timestamp, units: units, kind: kind)
+    }
+
+    private func loadIntake() async -> [RecordRow] {
+        let events = (try? await store.events(in: Self.allTime, type: EventType.intake)) ?? []
+        return events.compactMap { Self.intakeEntry(from: $0) }.map { .intake(IntakeRecord(entry: $0)) }
+    }
+
+    // Decodes an `intake` event row: `value` = carbs (g), metadata JSON
+    // carries `subtype`/`source` plus optional macro keys and `preset_id`
+    // (manual-carb-intake design: Event type and storage). Deliberately
+    // duplicated per model, not shared (home-router Decision 13) — same
+    // convention as `insulinEntry(from:)` above. Rows whose metadata does not
+    // decode are dropped rather than crashing the list.
+    private static func intakeEntry(from event: Event) -> IntakeEntry? {
+        guard
+            let carbsG = event.value,
+            let data = event.metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            // `subtype` tolerates an absent key (only .carb ships, so absence is
+            // unambiguous); `source` is strict — with two live values, a missing
+            // key cannot be defaulted without guessing, so the row is dropped.
+            let subtype = IntakeSubtype(rawValue: object["subtype"] as? String ?? "carb"),
+            let sourceRaw = object["source"] as? String,
+            let source = IntakeSource(rawValue: sourceRaw)
+        else { return nil }
+        let macros = IntakeMacros(
+            proteinG: object["protein_g"] as? Double,
+            fatG: object["fat_g"] as? Double,
+            fibreG: object["fibre_g"] as? Double
+        )
+        let presetID = (object["preset_id"] as? String).flatMap(UUID.init(uuidString:))
+        return IntakeEntry(
+            id: event.id,
+            timestamp: event.timestamp,
+            carbsG: carbsG,
+            subtype: subtype,
+            macros: macros,
+            source: source,
+            presetID: presetID
+        )
     }
 
     // Maps `.bsl` Events directly to GlucoseRow, keeping Event.id — does NOT
