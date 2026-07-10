@@ -146,7 +146,7 @@ Fix the re-derived export-eligibility gate at **mean IoU ≥ 0.48** on the fixed
 
 ### Rationale
 
-0.48 sits inside the provisional band, roughly one point above its midpoint, and is derived as: shipped baseline (0.4054) plus the recipe-upgrade uplift floor already required by Req 2.4 (≥ 0.03) plus headroom reflecting Req 2.3's staple-specific uplift (≥ 0.05 on the eight carb-priority classes, which pull the overall mean up faster than a uniform improvement would). It sits well below the 100M+-parameter SOTA frontier (0.50–0.52), consistent with the shipped architecture's much smaller parameter budget — no compact-model FoodSeg103 number exists in the published literature to anchor to more precisely (the research's Q1 table has no FoodSeg103 result for any sub-10M-parameter model), so 0.48 is a considered interpolation rather than a literature-matched value. It is compatible with the existing per-class floors: several carb staples already clear 0.50 in the current run, so a 0.48 mean does not require every class to improve uniformly.
+0.48 sits inside the provisional band, about half a point below its midpoint (0.485) *(corrected 2026-07-11: originally misstated as "above")*, and is derived as: shipped baseline (0.4054) plus the recipe-upgrade uplift floor already required by Req 2.4 (≥ 0.03) plus roughly 0.04 of headroom reflecting Req 2.3's staple-specific uplift (≥ 0.05 on the below-gate staples, which pulls the overall mean up faster than a uniform improvement would). This derivation is the authoritative one; design §3.2 mirrors it. It sits well below the 100M+-parameter SOTA frontier (0.50–0.52), consistent with the shipped architecture's much smaller parameter budget — no compact-model FoodSeg103 number exists in the published literature to anchor to more precisely (the research's Q1 table has no FoodSeg103 result for any sub-10M-parameter model), so 0.48 is a considered interpolation rather than a literature-matched value. It is compatible with the existing per-class floors: several carb staples already clear 0.50 in the current run, so a 0.48 mean does not require every class to improve uniformly.
 
 ### Alternatives Considered
 
@@ -165,7 +165,7 @@ Fix the re-derived export-eligibility gate at **mean IoU ≥ 0.48** on the fixed
 
 ### Impact
 
-Amends `model-production/requirements.md` Req 3.2 (was "≥ 0.60") and marks pipeline Decision 14 as superseded. See Decision 6 for the related size-budget correction surfaced during the same design pass.
+Will amend `model-production/requirements.md` Req 3.2 (currently "≥ 0.60") and mark pipeline Decision 14 as superseded — per Req 1.3 the amendments land once the floors of Decision 11 are also fixed, so the sibling specs are updated in one pass. *(Corrected 2026-07-10: originally written as already done; the sibling specs still carry 0.60 until the Req 1.3 amendment pass.)* See Decision 6 for the related size-budget correction surfaced during the same design pass. Note the derivation above used the 0.50 floors then in force; Decision 11 re-derives them, and Req 1.6 forces a revisit of this decision if the re-derived floors are inconsistent with the 0.48 mean.
 
 ---
 
@@ -198,7 +198,7 @@ Measuring against a number the shipped model already violates would make Require
 - No design or code change is required beyond the text correction.
 
 **Negative:**
-- `requirements.md` still contains the stale "≤ 10 MB" text until it is next revised; design.md is the authoritative correction in the interim (same pattern as Decision 2's gate-value handling).
+- `requirements.md` still contains the stale "≤ 10 MB" text until it is next revised; design.md is the authoritative correction in the interim (same pattern as Decision 2's gate-value handling). *(Update 2026-07-10: requirements.md corrected the same day — Req 2.5 and 3.1(b) now state 24 MiB.)*
 
 ---
 
@@ -246,10 +246,10 @@ Req 4.1 requires the decision log to record text-conditioned segmentation, the S
 
 ### Decision
 
-Record as evaluated-and-rejected, each against the ≤ 24 MiB / ≤ 250 ms ANE budget and/or the single-pass per-pixel multi-class-probability contract (pipeline Decision 11):
+Record as evaluated-and-rejected, each against the ≤ 24 MiB weight budget and/or the single-pass per-pixel multi-class-probability contract (pipeline Decision 11) — ANE latency is recorded as unverified where no measurement exists, not claimed as a violation (Req 4.1):
 
 - **CLIPSeg** (CVPR 2022, Lüddecke & Ecker) — ships a frozen CLIP ViT-B/16 (~150M params, >100 MB FP16), ~4× the 24 MiB budget even before accounting for its own head; emits one binary mask per text prompt, requiring one forward pass per class to cover the 35-channel palette, breaking the single-pass multi-class contract. Reported 43–48% mIoU, below even the re-derived 0.48 gate, and not food-trained.
-- **MobileSAM / SAM3-distilled** — class-agnostic promptable masks, not per-pixel food-class probabilities, breaking the multi-class contract structurally (not just by budget); even distilled, the SAM3 text encoder alone is 42.5M params (~1.75× the 24 MiB budget); no ANE latency claims exist; the family's deployment target is edge GPUs, not an ANE-resident mobile segmenter.
+- **MobileSAM / SAM3-distilled** — class-agnostic promptable masks, not per-pixel food-class probabilities, breaking the multi-class contract structurally (not just by budget); even distilled, the SAM3 text encoder alone is 42.5M params (≈ 85 MB at FP16, ~3.5× the 24 MiB budget); no ANE latency claims exist; the family's deployment target is edge GPUs, not an ANE-resident mobile segmenter.
 - **FoodSAM** (arXiv 2308.05938, 46.42% mIoU on FoodSeg103) — a ViT-H (~636M param) SAM backbone plus a semantic module and detector, far outside budget by an order of magnitude; a post-hoc mask-refinement scheme rather than a foundation architecture; no latency/size/ANE data published.
 
 ### Rationale
@@ -300,5 +300,296 @@ Recording "open" rather than silently dropping the question means a future sessi
 
 **Negative:**
 - None — no commitment is made, so there is no execution risk from this entry.
+
+---
+
+## Decision 10: Stratified heldout re-cut so every carb staple is measurable
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+The design-critic review surfaced that three of the eight carb-priority staples (`brown_rice`, `bread_wholemeal`, `potato_mashed`) have no instances in the current fixed heldout split (model-production `prerequisites.md`, stage-4 validation, 2026-07-06), so per-class targets for them are unmeasurable and "no staple regresses" cannot be evaluated.
+
+### Decision
+
+Re-cut the heldout split stratified so every carb-priority staple has heldout instances, recorded as an amendment to model-production Req 2.2 (a new fixed seed, then frozen again). The pinned baseline `24e0b022241a` is re-measured on the re-cut split before any uplift target is judged; if its re-measured mean differs from 0.4054 by more than 0.02, the 0.48 gate (Decision 5) is revisited. (Req 2.6.)
+
+### Rationale
+
+User call (2026-07-10): a gate over five of eight staples does not protect what the spec claims to protect. Re-measuring the baseline on the new split keeps uplift deltas honest; the revisit trigger keeps Decision 5's derivation tied to the split it is judged on.
+
+### Alternatives Considered
+
+- **Measure present staples only**: Keeps run-to-run comparability with the 2026-07-06 results — rejected because the three absent staples are exactly the ones with zero visibility today.
+- **Backfill heldout instances from external images**: Rejected — introduces a distribution the training set does not share, and FoodSeg103-internal stratification is sufficient.
+
+### Consequences
+
+**Positive:**
+- All eight staples become measurable; floors and deltas apply to the full set.
+
+**Negative:**
+- Direct comparison with pre-re-cut runs is lost; the baseline must be re-measured before any judged run.
+
+---
+
+## Decision 11: Carb-priority floors re-derived alongside the gate
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+model-production Req 3.5's absolute per-class floors (IoU ≥ 0.50 per staple) were set under the same unattainable-frontier assumption as the 0.60 gate. This spec's Requirement 2 adds relative uplift deltas; without a ruling, a checkpoint could satisfy every delta and still be export-ineligible under the old floors, with no spec saying which wins.
+
+### Decision
+
+Design re-derives the per-class floors alongside the 0.48 mean gate using the same derivation inputs, logged before the first judged training run, and amends model-production Req 3.5 with the resulting values (Reqs 1.6, 1.3). The floors stay binding for export-eligibility; the deltas are the recipe track's success measure on top of them.
+
+### Rationale
+
+User call (2026-07-10): one coherent derivation for the mean gate and the floors. Keeping absolute floors preserves the protection deltas alone cannot give (a uniformly poor model could pass on deltas).
+
+### Alternatives Considered
+
+- **Keep the 0.50 floors unchanged**: Simpler — rejected because 0.50 inherits the discredited frontier assumption; `white_rice` at 0.6022 and `bread_white` at 0.4315 plainly do not share one achievable floor.
+- **Subsume floors into deltas**: Rejected — removes the absolute backstop entirely.
+
+### Consequences
+
+**Positive:**
+- Floors and gate come from one logged derivation; the two specs stop conflicting.
+
+**Negative:**
+- One more design deliverable before the first judged run.
+
+---
+
+## Decision 12: Pretraining fallback — imbalance loss carries the recipe if no stronger MobileNetV3 checkpoint exists
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+The MIM evidence in the research is for transformer backbones; Decision 3's consequences already note a MobileNetV3-compatible MIM checkpoint may not exist. Req 2.2 as first drafted was satisfiable by today's ImageNet-supervised weights, which would silently degrade the recipe to the status quo.
+
+### Decision
+
+Req 2.2 now requires a checkpoint embodying stronger pretraining than the current ImageNet-supervised weights, MIM-style where available. If none exists for MobileNetV3-Large, that absence is logged, the supervised initialisation is retained, and the class-imbalance countermeasure carries the recipe alone with expected uplift revised down.
+
+### Rationale
+
+User call (2026-07-10): log-and-degrade beats treating checkpoint absence as track failure — the imbalance loss is independently evidenced (+3.72% overall mIoU on FoodSeg103). The absence finding also raises the weight of the backbone track, where MIM-family pretraining does exist.
+
+### Alternatives Considered
+
+- **Treat absence as recipe failure**: Shifts effort to the backbone track immediately — rejected; it discards the independently evidenced half of the recipe.
+- **Leave Req 2.2 as "any published checkpoint"**: Rejected — satisfiable by the status quo, so it required nothing.
+
+### Consequences
+
+**Positive:**
+- The requirement now encodes the lever's intent and its honest fallback.
+
+**Negative:**
+- "Stronger pretraining" for a conv backbone may have no clean candidate, making the fallback the likely path — the expected-uplift revision must then be recorded, not glossed.
+
+---
+
+## Decision 13: Recipe-track success and gate compliance are allowed to diverge
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Req 2.4's minimum uplift (+0.03 over 0.4054 → ~0.44) sits below the 0.48 gate. The planned path can therefore be "recipe succeeds, model still ships under the developer override" — the state the re-derived gate was meant to end — and the first draft left this unacknowledged.
+
+### Decision
+
+The divergence is acknowledged explicitly (Req 1.5): the recipe track may land below the 0.48 gate while meeting its own uplift criteria; the gate remains the export bar; any residual gap is recorded and assigned to the backbone track or follow-up data work.
+
+### Rationale
+
+User call (2026-07-10): raising the recipe target to the gate would define a likely-achievable +0.03–0.04 uplift as failure. One training lever is not obliged to close the whole gap; what matters is that the remainder is tracked, not silently absorbed by the override.
+
+### Alternatives Considered
+
+- **Raise Req 2.4's target to the gate (≥ 0.48)**: Cleaner story — rejected as risking "success defined as failure" for a genuinely useful uplift.
+- **Lower the gate to baseline + 0.03**: Rejected in Decision 5 (no steering force).
+
+### Consequences
+
+**Positive:**
+- The gate keeps steering without blocking incremental progress; the residual has a named owner.
+
+**Negative:**
+- Shipping under the override remains the expected near-term state, so the override-discipline risk from Decision 4 persists.
+
+---
+
+## Decision 14: Carb-priority per-class floors fixed at 0.45 uniform
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Decision 11 committed to re-deriving the per-class floors alongside the 0.48 gate (Req 1.6). Baseline (pre-re-cut split): `white_rice` 0.6022, `chips_fries` 0.5671, `pasta` 0.5538 clear the old 0.50; `bread_white` 0.4315 and `potato_boiled` 0.4648 fall short; three staples are unmeasured until the Decision 10 re-cut. Req 1.1 also still required a label-space comparability note for the gate derivation.
+
+### Decision
+
+Uniform per-class floor of 0.45 (gate − 0.03) for each of the eight carb-priority staples, replacing model-production Req 3.5's 0.50 via the Req 1.3 amendment pass. Alongside it, the comparability note is recorded (design §3.1): published FoodSeg103 numbers are 103-class mIoU; MeData's 32-food-channel pooled metric is plausibly easier, so the ~0.52 SOTA bounds the harder task and 0.48 stands as an interpolation, not a literature match. Consistency check per Req 1.6: floors below the mean gate, strong staples pull the staple mean above it — no Decision 5 revisit.
+
+### Rationale
+
+User call (2026-07-10). Reachable by the weak staples after Req 2.3's mandatory +0.05 uplift (`bread_white` → ≥ 0.4815); one number to reason about; the strong staples are protected by the no-regression clause rather than the floor.
+
+### Alternatives Considered
+
+- **Keep 0.50**: `bread_white` would need +0.07 — above the required uplift — so the planned path stays export-ineligible on floors alone; inherits the discredited frontier assumption.
+- **Ratchet per class (min(0.50, baseline − 0.02))**: More faithful to per-class reality — rejected as eight different numbers needing re-derivation again after the re-cut.
+
+### Consequences
+
+**Positive:**
+- Floors and gate come from one derivation and pull in the same direction; the planned uplift path can actually clear them.
+
+**Negative:**
+- 0.45 is permissive for the strong staples — their protection is only the ≤ 0.02 no-regression clause.
+
+### Impact
+
+Under the 0.45 floors only `bread_white` (0.4315) is currently below floor; `potato_boiled` (0.4648) clears the floor but not the gate — Decision 18 anchors Req 2.3's uplift set to the gate so both keep the +0.05 obligation. Per-class revisit trigger (design §3.2a): if the re-cut re-measure leaves any staple's baseline below 0.40 (floor unreachable even with the mandatory +0.05), this decision is revisited with a logged outcome.
+
+---
+
+## Decision 18: Req 2.3's uplift set anchors to the gate, not the floors
+
+**Date**: 2026-07-11
+**Status**: accepted
+
+### Context
+
+Req 2.3 as approved required +0.05 uplift for "each staple below its floor", with `bread_white` (0.4315) and `potato_boiled` (0.4648) as the worked examples — computed when the floor was 0.50. Decision 14's re-derived 0.45 floor silently dropped `potato_boiled` from the mandatory set (it clears 0.45), changing the requirement's meaning without anyone deciding that.
+
+### Decision
+
+The uplift set is defined as staples below the **re-derived gate** (Decision 5, currently 0.48) at the re-measured baseline. Both `bread_white` and `potato_boiled` remain in the mandatory +0.05 set; the floors stay the export-eligibility backstop.
+
+### Rationale
+
+Preserves the approved intent (both weak staples get the uplift obligation) under the new floors, and is the more coherent anchor: staples below the gate are exactly the ones dragging the mean under the target.
+
+### Alternatives Considered
+
+- **Keep "below its floor"**: Textually unchanged — rejected because it silently shrank the obligation to one class as a side effect of Decision 14, which nobody chose.
+- **Enumerate the two staples by name**: Rejected — the set should re-derive mechanically from the re-measured baseline, not be frozen to today's numbers.
+
+### Consequences
+
+**Positive:**
+- The requirement means after Decision 14 what it meant when approved.
+
+**Negative:**
+- If the re-measure lands a staple at 0.475, it owes +0.05 (to ~0.53) despite nearly clearing the gate — a slightly demanding edge, accepted for the simpler rule.
+
+---
+
+## Decision 15: Co-occurrence matrix built FoodSeg103-internal
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+The co-occurrence loss (research Q2; +3.72% overall FoodSeg103 mIoU) needs a class co-occurrence matrix. The largest published tail-class gains (+16.54%) used Recipe1M+ priors — an external dataset requiring acquisition and licence vetting.
+
+### Decision
+
+Build the matrix from the remapped FoodSeg103 training masks during dataset preparation (`co_stats.json`: per-class pixel counts per split + image-level joint presence counts, training split only; SHA-256 joins the lineage). Recipe1M+ is recorded as follow-up if tail classes stay collapsed after the first run.
+
+### Rationale
+
+User call (2026-07-10): self-contained and reproducible from existing lineage inputs, no human-gated dataset acquisition on the critical path. The loss mechanism — not the specific prior — is the evidenced lever at overall-mIoU level.
+
+### Alternatives Considered
+
+- **Recipe1M+ priors**: The configuration behind the biggest tail gains — rejected for the first iteration; adds a human-gated acquisition and licence work before training can start.
+- **No matrix (weighted CE only)**: Already the landed fallback — kept as the documented fallback if the co-occurrence term proves impractical (design §4.3), not the plan.
+
+### Consequences
+
+**Positive:**
+- Training can start as soon as the code tasks land; the matrix is reproducible from the dataset already in hand.
+
+**Negative:**
+- FoodSeg103-internal priors are weaker than Recipe1M+ priors for tail classes; if the staples stay collapsed, the follow-up is already queued.
+
+---
+
+## Decision 16: Spike latency measured directly on the iPhone 13 Pro Max
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Req 3.1(c) requires the SegFormer-B0 spike latency on the v1 hardware floor (pipeline Req 8.3). The primary development device is an iPhone 16 Pro; measuring there would need a logged derating argument (A18 Pro vs A15 ANE).
+
+### Decision
+
+Measure on the iPhone 13 Pro Max directly — the device is physically available (user confirmation 2026-07-10). The spike's latency verdict is authoritative; no derating argument is recorded.
+
+### Rationale
+
+Direct measurement on the floor device removes the weakest link in the spike's evidence chain — attention-op ANE behaviour on older Neural Engines is exactly the research's flagged unknown.
+
+### Alternatives Considered
+
+- **16 Pro + derating argument**: Rejected — available only as a fallback; a derating factor for attention ops across ANE generations would itself be an unevidenced number.
+
+### Consequences
+
+**Positive:**
+- The spike verdict needs no caveats; pass/fail on criterion (c) is final.
+
+**Negative:**
+- The human-gated half of the spike needs the 13 Pro Max physically to hand when it runs.
+
+---
+
+## Decision 17: Initialisation selection order — timm in21k adapter, torchvision V2, or retain COCO-seg DEFAULT
+
+**Date**: 2026-07-10
+**Status**: accepted
+
+### Context
+
+Req 2.2 requires initialising from a published checkpoint embodying stronger pretraining than the current weights, with a logged fallback (Decision 12). Candidates for MobileNetV3-Large: timm `mobilenetv3_large_100.miil_in21k_ft_in1k` (ImageNet-21k MIL pretraining, needs a state-dict adapter to the torchvision graph and licence vetting), torchvision `MobileNet_V3_Large_Weights.IMAGENET1K_V2` (improved supervised recipe, zero surgery, BSD-3), and true MIM checkpoints (none published for this backbone — the Decision 12 case). The current init (`DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT`) is COCO-segmentation-pretrained, which already embodies dense-prediction transfer a classification init lacks.
+
+### Decision
+
+Selection order: (1) timm in21k-MIL if the adapter round-trips (identical logits on a probe image vs timm-native) and the licence permits commercial bundling; (2) torchvision `IMAGENET1K_V2` backbone + fresh head; (3) retain the COCO-seg `DEFAULT` if the survey concludes it beats both for this task. Whichever is chosen is logged with source, licence, and SHA-256 in lineage (Req 2.2); outcome (3) triggers Decision 12's "expected uplift revised down" record.
+
+### Rationale
+
+Orders candidates by pretraining strength while making each step falsifiable (adapter round-trip, licence check) rather than aspirational. Explicitly permitting outcome (3) keeps the survey honest — a classification init is not automatically better than a dense-prediction init, and the spec should not force a downgrade to claim novelty.
+
+### Alternatives Considered
+
+- **Mandate the timm checkpoint**: Strongest pretraining — rejected because the adapter or licence may fail, and an unvetted mandate would block the run.
+- **Skip the survey, keep DEFAULT**: Rejected — forgoes the evidence-backed pretraining lever without checking its cost.
+
+### Consequences
+
+**Positive:**
+- Every survey outcome, including "keep what we have", is a logged, lineage-recorded decision rather than a silent default.
+
+**Negative:**
+- The adapter spike is real work that may end in outcome (2) or (3) anyway.
 
 ---
