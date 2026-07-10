@@ -40,6 +40,11 @@ public actor HealthKitGlucoseSource: GlucoseSource {
     private var lastDeliveredAt: Date?
     // True while an anchored ingest is running (see ingestFromAnchor).
     private var isIngesting = false
+    // Bumped by disconnect(). connect captures the value at entry and bails
+    // out of its post-await continuations when it changed, so a disconnect
+    // that interleaves an in-flight connect leaves no armed observer and no
+    // `.connected` state behind.
+    private var connectionGeneration = 0
 
     public init() {}
 
@@ -57,14 +62,20 @@ public actor HealthKitGlucoseSource: GlucoseSource {
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HealthKitGlucoseSourceError.healthDataUnavailable
         }
+        let generation = connectionGeneration
         self.sink = sink
         do {
             try await healthStore.requestAuthorization(toShare: [], read: [glucoseType])
             let backfill = try await queryBackfill()
+            // A disconnect that interleaved the connect must not ingest,
+            // report `.connected`, or arm the observer below.
+            guard generation == connectionGeneration else { return }
             // Keep-first makes a reconnection's re-run idempotent (Req 2.3).
             _ = try await sink.ingest(backfill.map(Self.glucoseSample(from:)), from: id)
+            guard generation == connectionGeneration else { return }
             noteDelivered(backfill)
         } catch {
+            guard generation == connectionGeneration else { return }
             connectionState = .failed(
                 reason: error.localizedDescription, lastSuccessAt: lastDeliveredAt)
             await sink.reportState(connectionState, for: id)
@@ -78,6 +89,7 @@ public actor HealthKitGlucoseSource: GlucoseSource {
     }
 
     public func disconnect() async {
+        connectionGeneration += 1
         if let observerQuery { healthStore.stop(observerQuery) }
         observerQuery = nil
         try? await healthStore.disableBackgroundDelivery(for: glucoseType)

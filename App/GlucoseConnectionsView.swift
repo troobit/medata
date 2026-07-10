@@ -4,9 +4,9 @@ import SwiftUI
 // Glucose-source connections screen (specs/data/cgm-connect Req 6), presented
 // as a sheet from the "Glucose data" section in Settings — same pattern as
 // the screenshot-import sheet. One section per source showing its connection
-// state, last-reading time, and — for LibreLinkUp — the last successful
-// fetch and the in-session discrepancy count (Decision 9). Functional copy
-// only (Req 6.3, Decision 6); mmol/L is the only unit anywhere (Req 6.4).
+// state, last-reading time, the in-session discrepancy count (Req 5.4,
+// Decision 9) and — for LibreLinkUp — the last successful fetch. Functional
+// copy only (Req 6.3, Decision 6); mmol/L is the only unit anywhere (Req 6.4).
 struct GlucoseConnectionsView: View {
     let model: GlucoseConnectionsModel
 
@@ -33,38 +33,36 @@ struct GlucoseConnectionsView: View {
     private var healthKitSection: some View {
         Section("Apple Health") {
             stateRows(for: model.healthKitID)
-            if model.userHasConnected(model.healthKitID) {
+            if model.connectedSourceIDs.contains(model.healthKitID) {
                 Button("Disconnect", role: .destructive) {
                     model.disconnect(model.healthKitID)
                 }
+                .disabled(model.busySourceIDs.contains(model.healthKitID))
                 .accessibilityIdentifier("glucose.healthkit.disconnect")
             } else {
                 // Presents the OS Health-access sheet via the source (Req 2.1).
                 Button("Connect Apple Health") {
                     model.connectHealthKit()
                 }
+                .disabled(model.busySourceIDs.contains(model.healthKitID))
                 .accessibilityIdentifier("glucose.healthkit.connect")
             }
         }
     }
 
+    @ViewBuilder
     private var libreLinkUpSection: some View {
+        let connected = model.connectedSourceIDs.contains(model.libreLinkUpID)
+        let busy = model.busySourceIDs.contains(model.libreLinkUpID)
         Section("LibreLinkUp") {
             stateRows(for: model.libreLinkUpID)
-            if model.userHasConnected(model.libreLinkUpID) {
-                if let fetchedAt = model.libreLinkUpLastSuccessAt {
-                    LabeledContent("Last fetch", value: Self.timeString(fetchedAt))
-                }
-                if let count = model.discrepancyCounts[model.libreLinkUpID], count > 0 {
-                    // Readings that arrived differing by more than
-                    // 0.3 mmol/L from a stored value this session (Req 5.4).
-                    LabeledContent("Discrepancies this session", value: "\(count)")
-                }
-                Button("Disconnect", role: .destructive) {
-                    model.disconnect(model.libreLinkUpID)
-                }
-                .accessibilityIdentifier("glucose.librelinkup.disconnect")
-            } else {
+            if connected, let fetchedAt = model.libreLinkUpLastSuccessAt {
+                LabeledContent("Last fetch", value: Self.timeString(fetchedAt))
+            }
+            // The form also shows while connected-but-failed, so wrong
+            // credentials can be corrected in place (a re-connect stores the
+            // new credentials and retries).
+            if !connected || libreLinkUpFailed {
                 TextField("Email", text: $email)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
@@ -76,10 +74,22 @@ struct GlucoseConnectionsView: View {
                     model.connectLibreLinkUp(email: email, password: password)
                     password = ""
                 }
-                .disabled(email.isEmpty || password.isEmpty)
+                .disabled(email.isEmpty || password.isEmpty || busy)
                 .accessibilityIdentifier("glucose.librelinkup.connect")
             }
+            if connected {
+                Button("Disconnect", role: .destructive) {
+                    model.disconnect(model.libreLinkUpID)
+                }
+                .disabled(busy)
+                .accessibilityIdentifier("glucose.librelinkup.disconnect")
+            }
         }
+    }
+
+    private var libreLinkUpFailed: Bool {
+        if case .failed = model.states[model.libreLinkUpID] { return true }
+        return false
     }
 
     // State per Req 6.1: Not connected / Connected (+ last-reading time) /
@@ -100,6 +110,11 @@ struct GlucoseConnectionsView: View {
             Text(reason)
                 .font(.footnote)
                 .foregroundStyle(.red)
+        }
+        if let count = model.discrepancyCounts[sourceID], count > 0 {
+            // Readings that arrived differing by more than 0.3 mmol/L from a
+            // stored value this session (Req 5.4) — shown for every source.
+            LabeledContent("Discrepancies this session", value: "\(count)")
         }
     }
 

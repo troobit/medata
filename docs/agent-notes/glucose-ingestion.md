@@ -114,11 +114,30 @@ as the screenshot-import row).
 
 - **Launch reconnect flags**: `glucose.source.healthkit.connected` /
   `glucose.source.librelinkup.connected` (UserDefaults bools, set on connect, cleared on
-  disconnect). `start()` — fired as a `Task` from `MedataApp.init` so a background BGTask
-  launch still runs it — registers both sources, subscribes `stateStream()`, then calls
-  `connect(sink:)` for each flagged source. This reconnect is load-bearing: sources hold
-  no cross-launch sink and the observer/anchor and poll lifecycles all hang off
-  `connect`; without it, `catchUp()` no-ops and nothing ingests.
+  disconnect). The flags are mirrored observably in the model as `connectedSourceIDs`
+  (seeded from UserDefaults at init, mutated wherever the flag is persisted) —
+  **UserDefaults is persistence only and is never read in view bodies**: `@Observable`
+  cannot track a defaults read, so the rows would not re-render. `start()` (called from
+  `MedataApp.init` so a background BGTask launch still runs it; the Task is retained as
+  `startTask`) registers both sources, subscribes `stateStream()`, then calls
+  `connect(sink:)` for each flagged source — the LLU branch through the same
+  do/catch → `.failed` mapping as HealthKit's, no silent swallow. This reconnect is
+  load-bearing: sources hold no cross-launch sink and the observer/anchor and poll
+  lifecycles all hang off `connect`; without it, `catchUp()` no-ops and nothing ingests.
+- **Intent guards**: `busySourceIDs` marks sources with a connect/disconnect Task in
+  flight; the view disables the buttons so a slow LibreLinkUp connect cannot be
+  double-tapped into concurrent `setCredentials`/`connect`. A `setCredentials` throw
+  clears the connected flag again in the catch.
+- **`.failed` re-exposes the LLU credential form**: the credential fields show not only
+  when disconnected but also when the source is flagged-connected AND its state is
+  `.failed`, so wrong credentials are correctable in place (re-connect stores the new
+  credentials and retries) without knowing that Disconnect resets them.
+- **Generation-counter guard on connect/disconnect**: both sources hold a
+  `connectionGeneration` that `disconnect()` increments; `connect` (and LLU's
+  `fetchAndIngest`) captures it at entry and bails out of post-await continuations —
+  starting polling, arming the observer, reporting `.connected` — when it changed. A
+  disconnect that interleaves an in-flight connect therefore leaves no poll loop, no
+  armed observer, and no zombie `.connected` state.
 - **Foreground catch-up**: `scenePhase == .active` in App.swift →
   `catchUpConnectedSources()` (guarded by the flags; racing the launch reconnect is
   harmless — nil sink no-ops, HealthKit has the reentrancy guard).
@@ -128,9 +147,11 @@ as the screenshot-import row).
   `BGAppRefreshTaskRequest` (15 min) FIRST, then `performBackgroundFetch()` →
   `setTaskCompleted(success:)`; a not-connected LibreLinkUp completes as a successful
   no-op. Initial request submitted when LibreLinkUp connects (including launch
-  reconnect); pending request cancelled on disconnect. Expiration handler cancels the
-  work Task — cancellation surfaces through the URLSession await as a failed fetch, so
-  the task still completes.
+  reconnect); pending request cancelled on disconnect. The expiration handler is armed
+  BEFORE the work Task starts (via a locked box holding the Task) and cancels it —
+  cancellation surfaces through the URLSession await as a failed fetch, so the task
+  still completes. The handler awaits `startTask` first, so a background cold launch
+  cannot fetch before the reconnect attached the sink.
 - **Counters on disconnect** (Req 6.2): the model calls the coordinator's
   `resetDiscrepancyTally(for:)` (added in Phase 4) before the source's `disconnect()`.
 - **LibreLinkUp last-fetch display**: `LibreLinkUpGlucoseSource.persistedLastSuccessAt()`

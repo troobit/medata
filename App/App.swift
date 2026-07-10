@@ -26,15 +26,12 @@ struct MedataApp: App {
         self.store = store
 
         // Live glucose ingestion (cgm-connect Phase 4): one coordinator plus
-        // both sources for the whole app. BGTask registration must complete
-        // before the application finishes launching; start() then registers
-        // the sources and reconnects any the user has connected — sources
-        // hold no cross-launch sink, so without this connect their
-        // catchUp()/background delivery would no-op forever.
+        // both sources for the whole app. Constructed here (a stored property
+        // must be initialised before the harness early-return), but the side
+        // effects — BGTask registration and the launch reconnect — run below
+        // it so harness launches stay hermetic.
         let glucose = GlucoseConnectionsModel(store: store)
         _glucoseConnections = State(initialValue: glucose)
-        glucose.registerBackgroundRefresh()
-        Task { await glucose.start() }
 
         #if DEBUG
         if UITestSupport.isActive {
@@ -47,6 +44,14 @@ struct MedataApp: App {
         }
         _uiTestHarness = State(initialValue: nil)
         #endif
+
+        // BGTask registration must complete before the application finishes
+        // launching; start() then registers the sources and reconnects any
+        // the user has connected — sources hold no cross-launch sink, so
+        // without this connect their catchUp()/background delivery would
+        // no-op forever.
+        glucose.registerBackgroundRefresh()
+        glucose.start()
 
         // Vision-backed card detector (Req 5.1-5.7). Construct once at app
         // launch so the same instance is wired into Pipeline AND pre-warmed
