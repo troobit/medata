@@ -51,6 +51,9 @@
 		114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B02FE2000000272C1E /* VisionCardDetector.swift */; };
 		114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */; };
 		11ED000E2FF2000000272C1E /* MeDataWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 11ED00012FF2000000272C1E /* MeDataWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		0EAC1E7EAC5832F3CDFC3771 /* MealRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */; };
+		0A738EA6DED7EA8BCCBBAFBF /* RecordsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68641EF200BD7F7B3A7AE95E /* RecordsModel.swift */; };
+		4112908015F7E6A57CB6AC99 /* RecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,6 +100,9 @@
 		112B11D32FCE000000272C1E /* MealHistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealHistoryModel.swift; path = ../App/MealHistoryModel.swift; sourceTree = SOURCE_ROOT; };
 		114CD0B02FE2000000272C1E /* VisionCardDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VisionCardDetector.swift; path = ../App/VisionCardDetector.swift; sourceTree = SOURCE_ROOT; };
 		114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PreShutterSegmenter.swift; path = ../App/PreShutterSegmenter.swift; sourceTree = SOURCE_ROOT; };
+		2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealRouting.swift; path = ../App/MealRouting.swift; sourceTree = SOURCE_ROOT; };
+		68641EF200BD7F7B3A7AE95E /* RecordsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordsModel.swift; path = ../App/RecordsModel.swift; sourceTree = SOURCE_ROOT; };
+		82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordsView.swift; path = ../App/RecordsView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -204,6 +210,9 @@
 				112B11D32FCE000000272C1E /* MealHistoryModel.swift */,
 				114CD0B02FE2000000272C1E /* VisionCardDetector.swift */,
 				114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */,
+				2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */,
+				68641EF200BD7F7B3A7AE95E /* RecordsModel.swift */,
+				82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */,
 				111EC90E2FBD327D00272C1E /* MeData */,
 				111EC90D2FBD327D00272C1E /* Products */,
 			);
@@ -389,6 +398,9 @@
 				112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */,
 				114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */,
 				114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */,
+				0EAC1E7EAC5832F3CDFC3771 /* MealRouting.swift in Sources */,
+				0A738EA6DED7EA8BCCBBAFBF /* RecordsModel.swift in Sources */,
+				4112908015F7E6A57CB6AC99 /* RecordsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

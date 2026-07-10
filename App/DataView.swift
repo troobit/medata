@@ -181,63 +181,7 @@ struct DataRow: View {
     }
 }
 
-// Shared destination builder for the Data and Trends sheet stacks (both key
-// `MealRoute`, design: Navigation routes). Overview pushes the full Result or
-// the correction; Done / Save pop one level; delete removes the meal and unwinds
-// to the list.
-@MainActor
-@ViewBuilder
-func mealRouteDestination(
-    _ route: MealRoute,
-    store: any PersistenceStore,
-    path: Binding<[MealRoute]>
-) -> some View {
-    switch route {
-    case .overview(let record):
-        MealOverviewView(
-            store: store,
-            record: record,
-            onAdjust: { path.wrappedValue.append(.correction(record)) },
-            onFullResult: { path.wrappedValue.append(.result(record)) },
-            onDeleted: { popOne(path) }
-        )
-    case .result(let record):
-        ResultView(
-            record: record,
-            store: store,
-            mode: .historyDetail,
-            onAdjust: { path.wrappedValue.append(.correction(record)) },
-            onDone: { popOne(path) },
-            onDelete: {
-                Task { try? await store.deleteMeal(id: record.id) }
-                path.wrappedValue.removeAll()
-            }
-        )
-    case .correction(let record):
-        ManualCorrectionView(
-            record: record,
-            store: store,
-            onSave: { popOne(path) }
-        )
-    }
-}
-
-@MainActor
-private func popOne(_ path: Binding<[MealRoute]>) {
-    if !path.wrappedValue.isEmpty { path.wrappedValue.removeLast() }
-}
-
-// Shared close control for the full-screen Data / Trends / Settings covers
-// (Decision 19). Covers have no drag-to-dismiss, so each surface's toolbar
-// carries this xmark button. Accessibility label `Close` per the copy inventory.
-struct CloseCoverButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark")
-        }
-        .accessibilityLabel("Close")
-        .accessibilityIdentifier("cover.close")
-    }
-}
+// `mealRouteDestination` and `CloseCoverButton` (used above) moved to
+// App/MealRouting.swift (Decision 13) so removing this file (Phase 2) does not
+// orphan them — RecordsView and TrendsView still resolve both from that file
+// within the same module.
