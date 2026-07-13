@@ -6,7 +6,7 @@ references:
 
 ## Graph corrected totals
 
-- [ ] 1. TrendsModel carb bars use corrected display totals (day + week/month aggregates) — PRD Req 3 <!-- id:z1bc7x1 -->
+- [x] 1. TrendsModel carb bars use corrected display totals (day + week/month aggregates) — PRD Req 3 <!-- id:z1bc7x1 -->
 
 ## Portion adjustment
 

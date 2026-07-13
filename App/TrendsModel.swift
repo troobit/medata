@@ -64,6 +64,10 @@ final class TrendsModel {
     private(set) var insulinMarkers: [InsulinMarker] = []
     private(set) var carbAxisMax: Double = 0
     private(set) var autoGlucoseMax: Double = 0
+    // Corrections overlay (snaqui PRD Req 3): the latest correction's total per
+    // meal, mirroring MealHistoryModel/RecordsModel (Decision 13), so the carb
+    // bars and the day-meal list plot what was eaten, not the raw estimate.
+    private var correctedTotals: [UUID: Double] = [:]
 
     private let store: any PersistenceStore
     private let calendar = Calendar.current
@@ -99,6 +103,14 @@ final class TrendsModel {
         let iv = interval
         let allMeals = (try? await store.allMeals()) ?? []
         meals = allMeals.filter { iv.contains($0.createdAt) }
+        var corrected: [UUID: Double] = [:]
+        for record in meals {
+            let corrections = (try? await store.corrections(for: record.id)) ?? []
+            if let total = corrections.last(where: { $0.correctedTotalCarbsGOneof != nil })?.correctedTotalCarbsG {
+                corrected[record.id] = Double(total)
+            }
+        }
+        correctedTotals = corrected
         // §10.9 / Error handling: a corrupt-record throw yields an empty series
         // and the carb chart still renders — never a crash.
         let events = (try? await store.events(in: iv.start...iv.end, type: EventType.bsl)) ?? []
@@ -210,6 +222,11 @@ final class TrendsModel {
     }
 
     private func carbTotal(_ record: MealRecord) -> Double {
-        Double(record.macros.totalCarbsG)
+        correctedTotals[record.id] ?? Double(record.macros.totalCarbsG)
+    }
+
+    // Corrected-when-present total for a day-list row, rounded for display.
+    func displayCarbs(for record: MealRecord) -> Int {
+        Int(carbTotal(record).rounded())
     }
 }

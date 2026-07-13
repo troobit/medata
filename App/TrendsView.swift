@@ -309,7 +309,7 @@ struct TrendsView: View {
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(Color.textPrimary)
                             Spacer()
-                            Text("\(Int(record.macros.totalCarbsG.rounded())) g")
+                            Text("\(model.displayCarbs(for: record)) g")
                                 .font(.subheadline.monospacedDigit())
                                 .foregroundStyle(Color.textSecondary)
                             Image(systemName: "chevron.right")
