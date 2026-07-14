@@ -766,3 +766,37 @@ Measuring on out-of-scope hardware would gate architectures against a device the
 design.md §5.1.3 and §7 (Decision 16 row), tasks 20/22 text, `tools/segmenter/spike_segformer.py` device strings, repo `CLAUDE.md` floor line, `offline-ledger.md` §3. The two-view + ID-1-card non-LiDAR capture mode's audience is also affected (all in-scope devices have LiDAR) — descoping it is a separate user decision, not made here.
 
 ---
+
+## Decision 23: ImageNet-V2 init empirically rejected mid-run — task 18 relaunched on DEFAULT weights
+
+**Date**: 2026-07-15
+**Status**: accepted (invokes Decision 17 outcome 3; amends Decision 19's practical effect)
+
+### Context
+
+The first task-18 run used the Decision 19 fallback init (torchvision `IMAGENET1K_V2` classifier backbone via `--init-checkpoint`, cold DeepLab head) after the timm in21k adapter probe failed. Twenty epochs of trajectory comparison against the pinned letterbox run (same 60-epoch budget, poly-0.9 LR) showed the configuration losing, not converging: val food-class mIoU 0.2391 at epoch 20 vs the old run's 0.3610, with the gap widening from ~0.10 (epoch 10) to ~0.12 and the old run's own history showing only +0.04 mIoU available from the decaying-LR tail (0.3610 → 0.4005 over epochs 20–60). Reaching the task-19 target (≥ 0.4076 heldout: leak-free baseline 0.3776 + 0.03 uplift) would have required a ~4× late-stage differential over the proven recipe, with no supporting signal in the curve. The 2026-07-15 research survey (UniMatch V2 ablations) independently notes that initialisation quality dominates recipe changes — and torchvision's `DEFAULT` DeepLabV3 weights are COCO-segmentation-trained on top of ImageNet pretraining, strictly containing more segmentation-relevant signal than the plain ImageNet-V2 classifier.
+
+### Decision
+
+The V2-init run was killed at epoch 21 and task 18 relaunched on torchvision `DEFAULT` (COCO-seg) weights — Decision 17 outcome 3 — retaining every other recipe upgrade: co-occurrence loss (`co_stats.v2`, seed 20260715), inverse-frequency weighting, photometric augmentation, and the stratified re-cut. Artifacts of the abandoned run are preserved as `tools/segmenter/build/train_v2init_abandoned_20260715.log` and `checkpoint_v2init_abandoned.resume.pt`.
+
+### Rationale
+
+Twenty epochs (~3.5 h) bought a definitive empirical answer to Decision 19's open question at a third of the full run's cost; spending the remaining ~7 h on a configuration tracking ~0.12 behind the proven baseline would have delayed the training chain a full cycle for a near-certain below-target result. `--init-checkpoint` and the probe tooling remain in the tree for future init candidates (e.g. a food-domain-pretrained backbone).
+
+### Alternatives Considered
+
+- **Ride the full 60 epochs**: The cold-head init might cross over late - Rejected because the old run's own tail shows only +0.04 available under LR decay, quantifying the required differential at ~4× with no signal supporting it.
+- **Resume the V2 run with a raised LR or extended schedule**: Salvages sunk cost - Rejected because the resume path enforces hyperparameter identity by design, and a bespoke schedule would make the run incomparable with both the baseline and the task text.
+
+### Consequences
+
+**Positive:**
+- The relaunched recipe differs from the pinned model by exactly the intended levers (loss + augment + clean split), making task 19's attribution clean.
+- Decision 19's question is settled with measured evidence rather than plausibility arguments.
+
+**Negative:**
+- ~3.5 h of MPS time spent on the abandoned run.
+- The "stronger init" lever is exhausted for this cycle; init-driven uplift now depends on future food-domain pretraining candidates (research survey §4).
+
+---
