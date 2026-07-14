@@ -728,3 +728,41 @@ A baseline anchor exists to measure uplift on unseen data; a table where the mod
 `data/foodseg103_remapped` (regenerated, gitignored: `splits.json` with stratification block, `co_stats.json` schema v2), `tools/segmenter/build/lineage.json` (metrics block now carries the full-heldout re-measure + task 17b release override), task 18's launch flags (`--split-seed 20260715`), and task 19's judging procedure (pinned-model deltas anchor to the leak-free table recorded here).
 
 ---
+
+## Decision 22: Hardware floor raised to iPhone 16 Pro
+
+**Date**: 2026-07-15
+**Status**: accepted (supersedes the device choice in Decision 16)
+
+### Context
+
+The user raised the supported-device floor on 2026-07-15: the iPhone 16 Pro (A18 Pro) is now the v1 hardware floor, and the iPhone 13 Pro Max and anything older are out of scope. Decision 16 had chosen the 13 Pro Max as the SegFormer-B0 spike measurement device precisely because it was the hardware floor — measuring on the floor made the latency verdict authoritative without a derating argument. That rationale now points at a different phone.
+
+### Decision
+
+All latency/residency budgets (design §5.1: ≤ 250 ms ANE-resident per 513×513 inference) are judged on the iPhone 16 Pro. The SegFormer-B0 spike (task 20) measures on the 16 Pro — the same physical device as the rest of the device pass. Prior architecture rejections that leaned on 13 Pro Max latency are flagged for re-examination under the A18 Pro budget (model-improvement research, 2026-07-15).
+
+### Rationale
+
+Measuring on out-of-scope hardware would gate architectures against a device the app no longer supports, rejecting viable candidates for no user-facing benefit. The floor device remains the authoritative measurement target — the floor itself moved.
+
+### Alternatives Considered
+
+- **Keep measuring on the 13 Pro Max**: More conservative gate - Rejected because the device is out of scope; an over-tight gate kills architectures that are viable on every supported phone.
+- **Measure on the 16 Pro but derate to 13 Pro Max equivalents**: Preserves old comparability - Rejected because no in-scope device needs the derated number, and Decision 16 adopted direct floor measurement specifically to avoid derating arguments.
+
+### Consequences
+
+**Positive:**
+- Extra ANE headroom: borderline-larger architectures (SegFormer-B0 and up) get a fair hearing.
+- One physical phone covers the spike and the whole device pass.
+
+**Negative:**
+- Spike results say nothing about older hardware if scope ever widens again.
+- Latency-derived verdicts recorded before this date are potentially stale and must be re-checked before being cited.
+
+### Impact
+
+design.md §5.1.3 and §7 (Decision 16 row), tasks 20/22 text, `tools/segmenter/spike_segformer.py` device strings, repo `CLAUDE.md` floor line, `offline-ledger.md` §3. The two-view + ID-1-card non-LiDAR capture mode's audience is also affected (all in-scope devices have LiDAR) — descoping it is a separate user decision, not made here.
+
+---

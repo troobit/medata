@@ -13,7 +13,7 @@ in order, stopping at the first failure:
   2. FP16 artefact <= 24 MiB?  export.py WEIGHTS_MAX_BYTES — the same budget
                                the shipping model is gated on.
   3. <= 250 ms ANE-resident?   NOT MEASURED HERE. Human-gated: Xcode Core ML
-                               performance report on the iPhone 13 Pro Max
+                               performance report on the iPhone 16 Pro
                                (v1 hardware floor, Decision 16). Recorded as
                                null/pending in the verdict JSON.
   4. Matches PyTorch outputs?  The existing equivalence oracle — export.py
@@ -68,11 +68,11 @@ VERDICT_SCHEMA = "spike_segformer.v1"
 
 # Explanation stamped on criterion 3 while it is pending (design §5.2,
 # Decision 16): needs Xcode's Core ML performance report on the physical
-# iPhone 13 Pro Max — not runnable from this script.
+# iPhone 16 Pro (floor per Decision 22) — not runnable from this script.
 LATENCY_PENDING_NOTE = (
     "criterion 3 (<= 250 ms per 513x513 inference, ANE-resident) is "
     "human-gated: measure with Xcode's Core ML performance report on the "
-    "iPhone 13 Pro Max (v1 hardware floor, Decision 16), then record the "
+    "iPhone 16 Pro (v1 hardware floor, Decision 22), then record the "
     "result in the decision log alongside this JSON"
 )
 

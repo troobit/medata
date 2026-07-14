@@ -11,7 +11,7 @@ metadata:
         gated stage (GPU training run, dataset-dependent re-cut, on-device ANE latency
         measurement) actually ran: Phase 3 and the STOP tasks in Phase 4 are human/compute-
         gated, tracked here as sequenced tasks, and need a human with the dataset, a GPU/MPS
-        box, or the physical iPhone 13 Pro Max. This spec DOES land code (design.md §1 second
+        box, or the physical iPhone 16 Pro (floor re-based by Decision 22). This spec DOES land code (design.md §1 second
         pass): carve stratification, co-occurrence loss, bar constants, SegBench bar, spike
         script. Code tasks in Phase 2 require a branch containing the estimation-quality
         PRD's training-pipeline landing (design.md §2.1 — merged to research, changelog
@@ -81,7 +81,7 @@ metadata:
   - Requirements: [2.2](requirements.md#2.2)
 
 - [x] 13. Specify the SegFormer-B0 conversion-spike procedure <!-- id:2mfkxza -->
-  - Done in design §5.1 (Decisions 7, 16): four ordered stop-on-fail criteria — Core ML conversion; FP16 artefact <= 24 MiB (export.py WEIGHTS_MAX_BYTES); <= 250 ms ANE-resident at 513x513 on the iPhone 13 Pro Max (v1 hardware floor, measured directly); equivalence per model-production Req 4.3 as amended (argmax > 99%, logit < 0.5).
+  - Done in design §5.1 (Decisions 7, 16): four ordered stop-on-fail criteria — Core ML conversion; FP16 artefact <= 24 MiB (export.py WEIGHTS_MAX_BYTES); <= 250 ms ANE-resident at 513x513 on the iPhone 16 Pro (v1 hardware floor per Decision 22, measured directly); equivalence per model-production Req 4.3 as amended (argmax > 99%, logit < 0.5).
   - Requirements: [3.1](requirements.md#3.1)
 
 - [x] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
@@ -118,14 +118,14 @@ metadata:
 
 ## Phase 4: Backbone Swap Spike (gated half + comparison)
 
-- [ ] 20. STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 13 Pro Max <!-- id:2mfkxyy -->
-  - Human-gated: Xcode Core ML performance report on the iPhone 13 Pro Max (v1 hardware floor, physically available — Decision 16; NOT the 16 Pro). Confirm ANE residency (no GPU/CPU fallback) and <= 250 ms per 513x513 inference. Only runs if task 14's conversion succeeds.
+- [ ] 20. STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 16 Pro <!-- id:2mfkxyy -->
+  - Human-gated: Xcode Core ML performance report on the iPhone 16 Pro (v1 hardware floor — Decision 16 as amended by Decision 22). Confirm ANE residency (no GPU/CPU fallback) and <= 250 ms per 513x513 inference. Only runs if task 14's conversion succeeds.
   - Blocked-by: 2mfkxyx (Code + run: spike_segformer.py autonomous half criteria 1, 2, 4)
   - Requirements: [3.1](requirements.md#3.1)
 
 - [ ] 21. Record the spike verdict in the decision log (pass/fail per criterion) <!-- id:2mfkxyz -->
   - Transcribe build/spike_segformer.json plus the task 20 latency verdict into decision_log.md whether the outcome is pass or fail (Req 3.1). A fail on any criterion closes Requirement 3 without a training run (Req 3.2).
-  - Blocked-by: 2mfkxyx (Code + run: spike_segformer.py autonomous half criteria 1, 2, 4), 2mfkxyy (STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 13 Pro Max)
+  - Blocked-by: 2mfkxyx (Code + run: spike_segformer.py autonomous half criteria 1, 2, 4), 2mfkxyy (STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 16 Pro)
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
 - [ ] 22. STOP — IF the spike passes, retrain SegFormer-B0 and compare with the adoption margin <!-- id:2mfkxz0 -->
