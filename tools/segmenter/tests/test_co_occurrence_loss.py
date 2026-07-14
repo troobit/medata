@@ -17,19 +17,28 @@ import loss_config
 import train  # torch-free import: heavy deps are lazy
 
 
-def _co_stats(channel_count=35, split_seed=42, mapping_sha="ab" * 32):
-    """Synthetic but schema-complete co_stats.json content: classes 0 and 3
-    co-occur twice, class 5 appears alone once, everything else absent."""
+def _co_stats(channel_count=35, split_seed=42, mapping_sha="ab" * 32,
+              special_channel_indices=()):
+    """Synthetic but schema-complete co_stats.v2 content: three training
+    images {0, 3}, {0, 3}, {5} — classes 0 and 3 co-occur twice, class 5
+    appears alone once, everything else absent. Special channels are excluded
+    from the counts, mirroring ``prepare_dataset.build_co_stats``
+    (Decision 20)."""
+    specials = set(special_channel_indices)
     presence = [0] * channel_count
     joint = [[0] * channel_count for _ in range(channel_count)]
-    presence[0], presence[3], presence[5] = 2, 2, 1
-    joint[0][0], joint[3][3], joint[5][5] = 2, 2, 1
-    joint[0][3] = joint[3][0] = 2
+    for image in ({0, 3}, {0, 3}, {5}):
+        classes = sorted(c for c in image if c not in specials)
+        for c in classes:
+            presence[c] += 1
+            for k in classes:
+                joint[c][k] += 1
     return {
-        "schema": "co_stats.v1",
+        "schema": "co_stats.v2",
         "split_seed": split_seed,
         "class_mapping_sha256": mapping_sha,
         "channel_count": channel_count,
+        "special_channel_indices": sorted(specials),
         "train_images": 3,
         "pixel_counts": {"train": [0] * channel_count},
         "presence_counts": presence,
@@ -103,6 +112,15 @@ def test_presence_bce_penalises_mismatch_and_respects_weights():
     assert weighted > high  # up-weighting the false presence raises the term
 
 
+# ── Food-channel restriction (Decision 20) ──────────────────────────────────────
+
+def test_food_channel_indices_drop_the_recorded_specials():
+    stats = _co_stats(channel_count=6, special_channel_indices=[4, 5])
+    assert loss_config.food_channel_indices(stats) == [0, 1, 2, 3]
+    # No specials recorded -> every channel is a food channel.
+    assert loss_config.food_channel_indices(_co_stats(channel_count=6)) == list(range(6))
+
+
 # ── Fail-fast contract (design §4.3): missing and stale co_stats ────────────────
 
 def test_missing_co_stats_fails_with_regeneration_command(tmp_path):
@@ -124,6 +142,16 @@ def test_stale_mapping_sha_fails_with_regeneration_command(tmp_path):
     path.write_text(json.dumps(_co_stats(split_seed=42, mapping_sha="ab" * 32)))
     with pytest.raises(SystemExit, match="class mapping SHA-256"):
         loss_config.load_co_stats(path, split_seed=42, class_mapping_sha256="cd" * 32)
+
+
+def test_v1_schema_fails_with_regeneration_command(tmp_path):
+    path = tmp_path / "co_stats.json"
+    stats = _co_stats(split_seed=42, mapping_sha="ab" * 32)
+    stats["schema"] = "co_stats.v1"  # pre-Decision-20 file: background counted
+    del stats["special_channel_indices"]
+    path.write_text(json.dumps(stats))
+    with pytest.raises(SystemExit, match=r"co_stats\.v1.*co_stats\.v2"):
+        loss_config.load_co_stats(path, split_seed=42, class_mapping_sha256="ab" * 32)
 
 
 def test_omitted_split_seed_fails(tmp_path):
@@ -184,3 +212,32 @@ def test_criterion_reduces_to_weighted_ce_when_presence_matches():
     base = nn.CrossEntropyLoss(weight=torch.ones(num_classes))(logits, targets)
     total = criterion(logits, targets)
     assert torch.isclose(total, base, atol=1e-4)
+
+
+def test_presence_term_ignores_special_channels():
+    torch = pytest.importorskip("torch")
+
+    num_classes = 6
+    spec = loss_config.resolve_loss_spec("co_occurrence")
+
+    def _criterion(specials):
+        return train._build_criterion(
+            spec, class_weights=[1.0] * num_classes, device=torch.device("cpu"),
+            co_stats=_co_stats(
+                channel_count=num_classes, special_channel_indices=specials,
+            ),
+        )
+
+    # Saturated correct prediction on classes 0 and 3, plus one pixel where
+    # channel 5 ties the correct class — a false presence (~0.5) of channel 5.
+    targets = torch.zeros(1, 4, 4, dtype=torch.long)
+    targets[0, :, 2:] = 3
+    logits = torch.full((1, num_classes, 4, 4), -40.0)
+    logits[0, 0][targets[0] == 0] = 40.0
+    logits[0, 3][targets[0] == 3] = 40.0
+    logits[0, 5, 0, 0] = 40.0
+
+    # With channel 5 recorded as special it is outside the presence term
+    # entirely (Decision 20); counted as a food channel, the same false
+    # presence is penalised at full pair gain — so the loss must be larger.
+    assert _criterion([5])(logits, targets) < _criterion([])(logits, targets)

@@ -477,19 +477,32 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
         assert co_stats is not None, "co_occurrence requires validated co_stats"
         weighted_ce = nn.CrossEntropyLoss(weight=_weights_tensor())
         lam = float(loss_spec["co_lambda"])
+        # Decision 20: the presence term operates on the FOOD channels only —
+        # "background present" is trivially true of every plate, and the
+        # special channels are already supervised by the CE base — so the
+        # priors, both presence vectors, and the pair weights are all
+        # restricted to these palette indices.
+        food = torch.tensor(
+            loss_config.food_channel_indices(co_stats),
+            dtype=torch.long, device=device,
+        )
         priors = torch.tensor(
             loss_config.co_occurrence_priors(
                 co_stats["joint_presence_counts"], co_stats["presence_counts"]
             ),
             dtype=torch.float32, device=device,
-        )  # [C, C]: priors[c, k] = P(c present | k present)
+        )[food][:, food]  # [F, F]: priors[c, k] = P(c present | k present)
 
         def co_occurrence(logits, targets):
             base = weighted_ce(logits, targets)
             probs = torch.softmax(logits, dim=1)                    # [B, C, H, W]
-            pred_presence = probs.amax(dim=(2, 3))                  # max-pool -> [B, C]
-            gt = torch.zeros_like(pred_presence)                    # [B, C] presence
-            gt.scatter_(1, targets.flatten(1), 1.0)
+            pred_presence = probs.amax(dim=(2, 3))[:, food]         # max-pool -> [B, F]
+            gt_all = torch.zeros(                                   # [B, C] presence
+                logits.shape[0], logits.shape[1],
+                dtype=probs.dtype, device=logits.device,
+            )
+            gt_all.scatter_(1, targets.flatten(1), 1.0)
+            gt = gt_all[:, food]                                    # [B, F]
             # compat[b, c] = max over ground-truth classes k of priors[c, k];
             # pair weight 1 for true presences, 1 + gain*(1 - compat) for
             # false ones (loss_config.false_presence_weights is the pure

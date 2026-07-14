@@ -39,13 +39,15 @@ image and a warning lands in the ``stratification`` block of ``splits.json``.
 The remainder is shuffled and sliced as before (held-out topped up to
 ``heldout_frac``, then val, then train).
 
-CO-OCCURRENCE STATISTICS (segmenter-foundation design §4.3, Decision 15): the
-remap pass also writes ``out/co_stats.json`` — per-class pixel counts per
-split plus image-level presence and joint-presence counts over the TRAINING
-split only, stamped with the split seed and the class-mapping file's SHA-256
-so ``train.py`` can fail fast on stale statistics. The file's own SHA-256 is
-recorded in build lineage by ``train.py`` when the co-occurrence loss consumes
-it.
+CO-OCCURRENCE STATISTICS (segmenter-foundation design §4.3, Decisions 15 and
+20): the remap pass also writes ``out/co_stats.json`` — per-class pixel counts
+per split (all 35 channels, descriptive) plus image-level presence and
+joint-presence counts over the TRAINING split only, restricted to the 32 FOOD
+channels (Decision 20: background is in every image, so counting it would hand
+every false presence a compatibility floor near its marginal frequency). The
+file is stamped with the split seed and the class-mapping file's SHA-256 so
+``train.py`` can fail fast on stale statistics; its own SHA-256 is recorded in
+build lineage by ``train.py`` when the co-occurrence loss consumes it.
 
 Usage::
 
@@ -144,10 +146,21 @@ def staple_channels(mapping: dict) -> List[Tuple[str, int]]:
         raise SystemExit(
             f"class mapping lacks carb-priority channels: {', '.join(missing)}"
         )
-    return sorted(
+    ordered = sorted(
         ((name, by_name[name]) for name in CARB_PRIORITY_CLASSES),
         key=lambda item: item[1],
     )
+    # Ordering belt: carve_splits iterates CARB_PRIORITY_CLASSES directly and
+    # claims palette-index order — if the palette ever reorders, fail loudly
+    # here (staple_channels runs right before the carve) rather than letting
+    # the two orders silently diverge.
+    if tuple(name for name, _ in ordered) != CARB_PRIORITY_CLASSES:
+        raise SystemExit(
+            "CARB_PRIORITY_CLASSES is not in palette-index order for this "
+            "mapping; the stratified carve iterates that constant directly "
+            "(design §3.5) — re-order it to match the palette."
+        )
+    return ordered
 
 
 def compute_staple_presence(
@@ -346,7 +359,9 @@ def carve_splits(
     def _staples_of(pair: Tuple[Path, Path]) -> frozenset:
         return staple_presence.get(pair[1].stem, frozenset())
 
-    for name in CARB_PRIORITY_CLASSES:  # palette-index order (indices 0–7)
+    # Palette-index order (indices 0–7) — asserted by staple_channels() before
+    # the carve runs, so the constant cannot silently diverge from the palette.
+    for name in CARB_PRIORITY_CLASSES:
         members = [p for p in ordered if name in _staples_of(p)]
         n_s = len(members)
         if n_s == 0:
@@ -445,29 +460,39 @@ def build_co_stats(
     channel_count: int,
     split_seed: int,
     class_mapping_sha256: str,
+    special_channel_indices: List[int],
 ) -> dict:
-    """Assemble ``co_stats.json`` (design §4.3, Decision 15).
+    """Assemble ``co_stats.json`` (design §4.3, Decisions 15 and 20).
 
-    Per-class pixel counts per split (feeding the ``weighted_ce`` helpers) plus
-    image-level presence and joint-presence counts over the TRAINING split only
-    — the FoodSeg103-internal co-occurrence matrix for the co-occurrence loss.
-    The split seed and class-mapping SHA-256 are stamped in so ``train.py``
-    can fail fast when the statistics are missing or stale; the file's own
-    SHA-256 joins the build lineage when the loss consumes it.
+    Per-class pixel counts per split are recorded for ALL channels — they are
+    descriptive (``train.py`` derives its class weights from its own mask
+    scan). The image-level presence and joint-presence counts over the
+    TRAINING split — the co-occurrence matrix for the loss — cover the FOOD
+    channels only (Decision 20): background is in every image, so counting it
+    would give any class's false presence a compatibility floor near its
+    marginal frequency and dilute the implausible-pair contrast the loss
+    exists to create. The special channels' rows/columns stay in the matrix as
+    zeros so indices remain palette indices. Schema ``co_stats.v2``; the split
+    seed and class-mapping SHA-256 are stamped in so ``train.py`` can fail
+    fast when the statistics are missing, stale, or in the pre-exclusion v1
+    format; the file's own SHA-256 joins the build lineage when the loss
+    consumes it.
     """
+    specials = {int(c) for c in special_channel_indices}
     presence_counts = [0] * channel_count
     joint = [[0] * channel_count for _ in range(channel_count)]
     for present in train_presence:
-        classes = sorted(present)
+        classes = sorted(c for c in present if c not in specials)
         for c in classes:
             presence_counts[c] += 1
             for k in classes:
                 joint[c][k] += 1
     return {
-        "schema": "co_stats.v1",
+        "schema": "co_stats.v2",
         "split_seed": split_seed,
         "class_mapping_sha256": class_mapping_sha256,
         "channel_count": channel_count,
+        "special_channel_indices": sorted(specials),
         "train_images": len(train_presence),
         "pixel_counts": pixel_counts_by_split,
         "presence_counts": presence_counts,
@@ -558,6 +583,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     co_stats = build_co_stats(
         pixel_counts_by_split, train_presence, channel_count,
         args.seed, file_sha256(mapping_path),
+        special_channel_indices=list(mapping["special_channels"].values()),
     )
     (out / "co_stats.json").write_text(
         json.dumps(co_stats, indent=2) + "\n", encoding="utf-8"
