@@ -32,7 +32,9 @@ struct RecordsView: View {
                     }
                 }
             }
-            .navigationTitle("Records")
+            // Deliberately untitled (snaqui Req 4); inline mode so no
+            // large-title band is reserved.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     CloseCoverButton { dismiss() }
