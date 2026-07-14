@@ -39,7 +39,7 @@ struct MealOverviewView: View {
             .padding(24)
         }
         .background(Color.surfacePrimary)
-        .navigationTitle("Meal")
+        // Deliberately untitled (snaqui Req 4).
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

@@ -39,7 +39,7 @@ struct ManualCorrectionView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
         }
-        .navigationTitle("Adjust")
+        // Deliberately untitled (snaqui Req 4).
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPriorState() }
     }
