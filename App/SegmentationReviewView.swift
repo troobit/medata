@@ -49,7 +49,7 @@ struct SegmentationReviewView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
         }
-        .navigationTitle("Foods")
+        // Deliberately untitled (snaqui Req 4).
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadPhoto() }
     }

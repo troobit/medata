@@ -53,7 +53,8 @@ struct TrendsView: View {
                 .padding(20)
             }
             .background(Color.surfacePrimary)
-            .navigationTitle("Graph")
+            // Deliberately untitled (snaqui Req 4): full-screen pages carry no
+            // navigation title — the band goes to content.
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // Graph is a cover now (Req 1.4): the standard close control
