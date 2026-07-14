@@ -639,3 +639,43 @@ The licence and hash facts are static and were verifiable without downloading an
 `tools/segmenter/adapter_probe.py` (new, probe-only `timm` dependency installed ad hoc); lineage `pretrained_checkpoint` object (task 12) is the recording surface; Decision 17's selection order and its outcome (3) escape hatch are unchanged.
 
 ---
+
+## Decision 20: Co-occurrence statistics restricted to food channels (`co_stats.v2`)
+
+**Date**: 2026-07-14
+**Status**: accepted
+
+### Context
+
+Decision 15's `co_stats.json` counted image-level presence and joint presence over all 35 palette channels. Background (channel 32) is present in effectively every training image, so under the conditional-prior formula `P(c present | k present)` every class's prior against background collapses to roughly its marginal frequency — and because the pair weight takes the MAXIMUM prior over the image's ground-truth classes, background's membership in every ground-truth set hands every false presence a compatibility floor near its marginal frequency. That dilutes exactly the implausible-pair contrast the loss exists to create (design §4.3). The other special channels (`unknown_food`, `unsupported_liquid`) are non-food sentinels already supervised by the weighted-CE base, and "background present" is trivially true of every plate, so its slot in the presence-BCE term carries no signal either.
+
+### Decision
+
+Restrict the presence and joint-presence counts to the FOOD channels: `prepare_dataset.build_co_stats` excludes the mapping's `special_channels` from the counting pass (their rows/columns stay in the matrix as zeros so indices remain palette indices), records the excluded `special_channel_indices`, and stamps schema `co_stats.v2`. `loss_config.load_co_stats` rejects any schema other than `co_stats.v2` with the regeneration command, and the trainer's criterion restricts the priors, both presence vectors, and the pair weights to `loss_config.food_channel_indices(co_stats)`. Per-class pixel counts stay all-channel — they are descriptive, not consumed by the criterion.
+
+### Rationale
+
+Counting background poisons the pair weighting at its core: the max-over-ground-truth compatibility means one universally present class neutralises the up-weighting for every implausible false presence. Excluding the specials at the statistics source (rather than papering over them at training time) keeps the file's semantics honest, and mirrors the special-channel exclusion `validation.special_channel_names` already applies to the IoU gate — the loss and the gate now agree on which channels constitute the food problem. Bumping the schema makes the change enforceable: a pre-exclusion v1 file must not silently feed the criterion, and the fail-fast contract (design §4.3) is keyed on the file's own stamps.
+
+### Alternatives Considered
+
+- **Keep v1 counts and mask the specials at training time only**: Same criterion behaviour — rejected; the file would keep recording misleading priors, and a semantics change without a schema bump is invisible to the fail-fast contract, so stale and fresh files would be indistinguishable.
+- **Zero only background's column in the priors**: Smallest arithmetic change — rejected; the trivially-satisfied background slot would still dilute the presence-BCE mean, and the sentinel channels would get zero-prior maximal up-weighting despite being CE-supervised non-food classes.
+- **Drop the special rows/columns from the arrays entirely (32-wide vectors)**: More compact — rejected; matrix indices would no longer be palette indices, inviting off-by-one remapping errors between the statistics file, the class mapping, and the trainer.
+
+### Consequences
+
+**Positive:**
+- The implausible-pair contrast is restored: a false presence's compatibility is measured against actual food co-occurrence, with no universal-class floor.
+- The presence-BCE term spends its budget on the 32 food channels only; the loss and the IoU gate share one definition of "food channel".
+- A stale v1 file fails fast with the regeneration command instead of silently degrading the recipe.
+
+**Negative:**
+- Any previously generated `co_stats.json` is invalidated and must be regenerated before a co-occurrence training run.
+- The presence term no longer penalises a false image-level `unknown_food`/`unsupported_liquid` presence — that supervision now rests entirely on the weighted-CE base.
+
+### Impact
+
+`tools/segmenter/prepare_dataset.py` (`build_co_stats`, `main`), `tools/segmenter/loss_config.py` (`CO_STATS_SCHEMA`, `load_co_stats`, new `food_channel_indices`), `tools/segmenter/train.py` (`_build_criterion` co_occurrence branch), and the pytest coverage under `tools/segmenter/tests/`. The lineage recording surface (co_stats SHA-256, task 12) is unchanged.
+
+---

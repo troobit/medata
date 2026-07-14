@@ -94,6 +94,12 @@ CO_PAIR_GAIN = 3.0
 # Name of the statistics file prepare_dataset.py writes next to splits.json.
 CO_STATS_FILENAME = "co_stats.json"
 
+# Required co_stats schema. v2 (Decision 20) restricts the presence /
+# joint-presence counts to the FOOD channels and records the excluded
+# ``special_channel_indices``; a v1 file (which counted background into the
+# priors) must not silently feed the criterion, so load_co_stats rejects it.
+CO_STATS_SCHEMA = "co_stats.v2"
+
 # Regeneration command template for the fail-fast messages (design §4.3): a
 # silent fallback to unweighted CE or stats from a different split would
 # falsify the lineage's claim about the recipe.
@@ -254,8 +260,10 @@ def load_co_stats(
 ) -> dict[str, Any]:
     """Load ``co_stats.json`` and enforce the fail-fast contract (design §4.3).
 
-    The file records the split seed and class-mapping SHA-256 it was built
-    from; if the file is missing, or either value mismatches the training
+    The file records its schema plus the split seed and class-mapping SHA-256
+    it was built from; if the file is missing, carries a schema other than
+    ``CO_STATS_SCHEMA`` (a pre-Decision-20 v1 file counted background into
+    the priors), or either stamped value mismatches the training
     invocation's, this raises ``SystemExit`` with the regeneration command —
     a silent fallback to unweighted CE (or stats from a different split)
     would falsify the lineage's claim about the recipe.
@@ -266,6 +274,13 @@ def load_co_stats(
             f"[train] co-occurrence statistics not found: {p} — {_CO_STATS_REGENERATE}"
         )
     stats = json.loads(p.read_text(encoding="utf-8"))
+    if stats.get("schema") != CO_STATS_SCHEMA:
+        raise SystemExit(
+            f"[train] {p} has schema {stats.get('schema')!r} but this trainer "
+            f"requires {CO_STATS_SCHEMA!r} (food-channels-only presence "
+            "statistics, Decision 20) — stale format; "
+            f"{_CO_STATS_REGENERATE}"
+        )
     if split_seed is None:
         raise SystemExit(
             "[train] --loss co_occurrence requires --split-seed (the seed the "
@@ -286,6 +301,21 @@ def load_co_stats(
             f"{_CO_STATS_REGENERATE}"
         )
     return stats
+
+
+def food_channel_indices(co_stats: Mapping[str, Any]) -> list[int]:
+    """The palette indices the co-occurrence loss operates on (Decision 20).
+
+    Every channel minus the ``special_channel_indices`` recorded by
+    ``prepare_dataset.py`` — the same special-channel exclusion
+    ``validation.special_channel_names`` applies to the IoU gate. "Background
+    present" is trivially true of every plate and carries no signal, and
+    special-channel pixels are already supervised by the CE base, so the
+    presence-BCE vectors, the ground-truth compat set, and the priors are all
+    restricted to these food channels.
+    """
+    specials = {int(c) for c in co_stats["special_channel_indices"]}
+    return [c for c in range(int(co_stats["channel_count"])) if c not in specials]
 
 
 def co_occurrence_priors(

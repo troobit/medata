@@ -206,6 +206,19 @@ def _write_corpus(root: Path, images: dict[str, list[int]]) -> None:
         Image.fromarray(rgb, "RGB").save(root / "imgs" / f"{stem}.jpg")
 
 
+def test_staple_channels_reject_a_palette_order_divergence():
+    # carve_splits iterates CARB_PRIORITY_CLASSES claiming palette-index order;
+    # a mapping whose palette reorders the staples must fail loudly.
+    mapping = {
+        "target_channels": [
+            {"name": name, "index": len(STAPLES) - 1 - i}  # reversed indices
+            for i, name in enumerate(STAPLES)
+        ]
+    }
+    with pytest.raises(SystemExit, match="palette-index order"):
+        prepare_dataset.staple_channels(mapping)
+
+
 def test_compute_staple_presence_uses_raw_mask_ids(tmp_path):
     mapping = prepare_dataset.load_mapping(
         Path(prepare_dataset.__file__).with_name("class_mapping_foodseg103_v1.json")
@@ -226,7 +239,7 @@ def test_compute_staple_presence_uses_raw_mask_ids(tmp_path):
 
 # ── co_stats.json (design §4.3, task 9) ─────────────────────────────────────────
 
-def test_build_co_stats_counts_presence_and_joint_presence():
+def test_build_co_stats_counts_food_presence_and_joint_presence():
     train_presence = [
         frozenset({0, 3}),   # rice + bread on one plate
         frozenset({0}),      # rice alone
@@ -236,19 +249,23 @@ def test_build_co_stats_counts_presence_and_joint_presence():
         {"train": [1, 2], "val": [3, 4], "heldout": [5, 6]},
         train_presence, channel_count=35,
         split_seed=42, class_mapping_sha256="ab" * 32,
+        special_channel_indices=[32, 33, 34],
     )
-    assert stats["schema"] == "co_stats.v1"
+    assert stats["schema"] == "co_stats.v2"
     assert stats["split_seed"] == 42
     assert stats["class_mapping_sha256"] == "ab" * 32
+    assert stats["special_channel_indices"] == [32, 33, 34]
     assert stats["train_images"] == 3
     assert stats["presence_counts"][0] == 2
     assert stats["presence_counts"][3] == 2
-    assert stats["presence_counts"][32] == 1
+    # Decision 20: special channels never enter the presence statistics —
+    # background is present on the third plate but is not counted.
+    assert stats["presence_counts"][32] == 0
     joint = stats["joint_presence_counts"]
     assert joint[0][3] == joint[3][0] == 1   # rice+bread co-occur once
     assert joint[0][0] == 2                  # diagonal = presence count
-    assert joint[3][32] == 1
-    assert joint[0][32] == 0
+    assert joint[3][32] == 0                 # special rows/columns stay zero
+    assert all(v == 0 for v in joint[32])
     assert stats["pixel_counts"]["val"] == [3, 4]
 
 
@@ -284,15 +301,21 @@ def test_main_end_to_end_writes_stratification_and_co_stats(tmp_path):
     assert any("potato_boiled" in w for w in strat["warnings"])
 
     co = json.loads((out / "co_stats.json").read_text())
+    assert co["schema"] == "co_stats.v2"
     assert co["split_seed"] == 77
     assert co["class_mapping_sha256"] == prepare_dataset.file_sha256(mapping_path)
     assert co["channel_count"] == 35
+    assert co["special_channel_indices"] == [32, 33, 34]
     assert co["train_images"] == manifest["counts"]["train"]
     assert len(co["pixel_counts"]["train"]) == 35
     assert len(co["joint_presence_counts"]) == 35
     # Statistics come from the TRAIN split only: total presence of any class
     # never exceeds the train image count.
     assert max(co["presence_counts"]) <= co["train_images"]
+    # Decision 20: every mask has background pixels, but the specials are
+    # excluded from the presence statistics.
+    for c in (32, 33, 34):
+        assert co["presence_counts"][c] == 0
 
 
 def test_no_stratify_flag_omits_the_block_and_still_writes_co_stats(tmp_path):
