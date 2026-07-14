@@ -445,6 +445,8 @@ evaluated separately from the carb-error bar. β_c is calibrated by a closed-for
 **log-residual** fit on a disjoint subset, requiring ≥ 30 meals/class (else
 β_c = 1.0, flagged uncalibrated).
 
+*(Gate re-derived to 0.48 / floors 0.45 by segmenter-foundation Decisions 5/14 — per-spec decision log wins.)*
+
 ### Rationale
 
 A separate segmenter bar localises regressions; the log-residual fit aligns β_c with

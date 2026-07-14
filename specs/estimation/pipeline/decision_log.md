@@ -483,7 +483,7 @@ Two distinct algorithms with different cost profiles deserve distinct budgets. 1
 ## Decision 14: Segmenter mIoU floor of 0.60 averaged across food classes
 
 **Date**: 2026-05-06
-**Status**: accepted
+**Status**: superseded by segmenter-foundation Decision 5
 
 ### Context
 

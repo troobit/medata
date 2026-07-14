@@ -94,3 +94,57 @@ def test_preserve_metrics_tolerates_missing_or_corrupt_file(tmp_path):
     corrupt.write_text("{not json")
     lineage.preserve_metrics(fresh, corrupt)
     assert fresh["metrics"] == lineage.empty_metrics()
+
+
+# ── pretrained_checkpoint + co_stats_sha256 (segmenter-foundation task 12) ──────
+
+def test_lineage_round_trips_pretrained_checkpoint_and_co_stats(tmp_path):
+    ckpt = tmp_path / "c.pt"
+    ckpt.write_bytes(b"recipe-upgraded")
+    pretrained = {
+        "source_url": "https://download.pytorch.org/models/mobilenet_v3_large-5c1a4163.pth",
+        "licence": "BSD-3-Clause",
+        "sha256": "5c1a4163" + "0" * 56,
+    }
+    manifest = lineage.build_lineage(
+        ckpt, train_config={},
+        pretrained_checkpoint=pretrained,
+        co_stats_sha256="cd" * 32,
+    )
+    out = lineage.write_lineage(manifest, tmp_path / "build" / "lineage.json")
+    loaded = json.loads(out.read_text())
+    assert loaded["pretrained_checkpoint"] == pretrained
+    assert loaded["co_stats_sha256"] == "cd" * 32
+
+
+def test_lineage_new_fields_default_to_null(tmp_path):
+    ckpt = tmp_path / "c.pt"
+    ckpt.write_bytes(b"plain")
+    manifest = lineage.build_lineage(ckpt, train_config={})
+    assert manifest["pretrained_checkpoint"] is None
+    assert manifest["co_stats_sha256"] is None
+
+
+def test_preserve_metrics_carries_provenance_fields_for_same_checkpoint(tmp_path):
+    ckpt = tmp_path / "c.pt"
+    ckpt.write_bytes(b"same-model")
+    recorded = lineage.build_lineage(
+        ckpt, train_config={},
+        pretrained_checkpoint={"source_url": "u", "licence": "MIT", "sha256": "s"},
+        co_stats_sha256="ef" * 32,
+    )
+    path = tmp_path / "lineage.json"
+    lineage.write_lineage(recorded, path)
+
+    # A re-export (emit_lineage) rebuilds with nulls; the recorded training-run
+    # provenance must survive for the identical checkpoint SHA.
+    fresh = lineage.build_lineage(ckpt, train_config={})
+    lineage.preserve_metrics(fresh, path)
+    assert fresh["pretrained_checkpoint"] == recorded["pretrained_checkpoint"]
+    assert fresh["co_stats_sha256"] == "ef" * 32
+
+
+def test_file_sha256_matches_checkpoint_sha256(tmp_path):
+    f = tmp_path / "co_stats.json"
+    f.write_bytes(b"{}")
+    assert lineage.file_sha256(f) == lineage.checkpoint_sha256(f)

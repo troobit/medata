@@ -580,7 +580,7 @@ func runSegBench(args: Args) throws {
         perClassIoU: perClassIoU
     ), to: args.outputPath)
     if !report.passesBar {
-        fputs("FAIL: mIoU=\(report.meanFoodClassIoU) — below 0.60\n", stderr); exit(1)
+        fputs("FAIL: mIoU=\(report.meanFoodClassIoU) — below 0.48\n", stderr); exit(1)
     }
 }
 

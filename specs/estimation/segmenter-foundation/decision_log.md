@@ -593,3 +593,89 @@ Orders candidates by pretraining strength while making each step falsifiable (ad
 - The adapter spike is real work that may end in outcome (2) or (3) anyway.
 
 ---
+
+## Decision 19: Pretrained checkpoint survey — timm in21k-MIL vetted, adapter probe pending
+
+**Date**: 2026-07-11
+**Status**: proposed
+
+### Context
+
+Decision 17 fixed the initialisation selection order (timm in21k-MIL adapter → torchvision `IMAGENET1K_V2` → retain COCO-seg `DEFAULT`) with two falsifiable conditions on the leading candidate: the state-dict adapter must round-trip (identical logits on a probe input vs timm-native inference) and the licence must permit commercial bundling. Design §4.2 notes the survey itself — existence, licence, and hashes — is static fact-finding this spec can do autonomously, while consuming the checkpoint is gated. This entry records that survey (conducted 2026-07-11, web sources cited inline); the adapter round-trip needs the weights downloaded into a torch/timm environment, which the working session did not have, so the final selection stays with the gated training session.
+
+### Decision
+
+Survey outcome, per Decision 17's order:
+
+1. **Candidate 1 — timm `mobilenetv3_large_100.miil_in21k_ft_in1k`: exists, licence clears, adapter probe written but NOT run.** Hosted at https://huggingface.co/timm/mobilenetv3_large_100.miil_in21k_ft_in1k; model-card licence tag **Apache-2.0** (permits commercial bundling — the timm-weights-vary concern is resolved for this card; the upstream Alibaba-MIIL ImageNet21K release it derives from is MIT). ImageNet-21k-P pretraining fine-tuned to ImageNet-1k; 5.5 M params; weights 22.1 MB. `model.safetensors` SHA-256 (from the Hugging Face blob page, not a local download): `436a40242a4b102d92dd5f0d6fc9e15c23aafc45dfa3a8cf00a0353c4f854eb0`. The state-dict adapter to the torchvision graph is judged structurally feasible (both implementations register the same MobileNetV3-Large 1.0x tensor sequence; one 1×1-conv→linear reshape at the head) and is implemented as `tools/segmenter/adapter_probe.py` — positional, shape-checked, failing loudly on any divergence. It has NOT been executed: that requires downloading the weights and installing torch/timm.
+2. **Candidate 2 — torchvision `MobileNet_V3_Large_Weights.IMAGENET1K_V2`: verified fallback, zero surgery.** BSD-3-Clause (pytorch/vision). Weights URL https://download.pytorch.org/models/mobilenet_v3_large-5c1a4163.pth (the filename embeds the digest's first 8 hex, `5c1a4163`; the full SHA-256 is recorded into lineage at download time). acc@1 75.274 vs the V1 recipe's 74.042 (torchvision model docs).
+3. **Candidate 3 — MIM checkpoints: confirmed absent for MobileNetV3-Large.** The SparK model zoo (https://github.com/keyu-tian/SparK) publishes ResNet-50/101/152/200 and ConvNeXt-S/B/L only; A2MIM (https://github.com/Westlake-AI/A2MIM) publishes ViT-S/B/L, ResNet, and ConvNeXt-S/B only. Neither lineage offers any MobileNet checkpoint, confirming Decision 12's expected-absence record.
+
+The selection order stands: adopt candidate 1 IF `adapter_probe.py` round-trips in the gated session; otherwise candidate 2. Whichever is chosen lands in lineage's `pretrained_checkpoint` object (source URL, licence, SHA-256 — the task 12 schema). This entry stays `proposed` until the probe verdict exists; the gated session flips it to accepted (or records the fallback) with the measured numbers.
+
+### Rationale
+
+The licence and hash facts are static and were verifiable without downloading anything, so they are recorded now and the gated session's work reduces to `pip install timm`, one script run, and a status flip. The one condition that is NOT statically verifiable — the bitwise adapter round-trip — is exactly the condition Decision 17 made adoption hinge on: implementation subtleties (BatchNorm epsilon, SE/activation placement) between timm and torchvision are precisely what a structural argument can miss, so recording this entry as `accepted` before the probe runs would overstate what is known.
+
+### Alternatives Considered
+
+- **Accept candidate 1 now on structural feasibility alone**: The graphs align tensor-for-tensor on inspection — rejected; Decision 17's condition is a measured round-trip, not an inspection, and a silent numeric divergence would poison the training run's provenance.
+- **Pre-select candidate 2 and skip the probe entirely**: Zero risk, BSD-3, no surgery — rejected; it forgoes the strongest documented pretraining for this exact backbone when the remaining vetting cost is a single script run.
+- **Download the weights and run the probe in this session**: Rejected — the working environment has no torch/timm, and installing the heavy training stack outside the gated session contradicts the spec's gating (design §2.1, §5.2 pattern).
+
+### Consequences
+
+**Positive:**
+- Both viable candidates carry commercial-bundling-compatible licences (Apache-2.0 / BSD-3-Clause); no legal blocker exists on any selection path.
+- The MIM absence is now cited to the specific model zoos rather than asserted from memory.
+- The gated session inherits a one-command probe with a saved-adapter option (`--save-adapted`) feeding straight into training.
+
+**Negative:**
+- The final initialisation choice stays open one session longer; the recipe-upgrade training run cannot be configured until the probe verdict is recorded.
+- The recorded SHA-256 covers `model.safetensors`; if timm's hub loader fetches the `pytorch_model.bin` serialisation instead, that file's digest must be captured at download time for the lineage entry.
+
+### Impact
+
+`tools/segmenter/adapter_probe.py` (new, probe-only `timm` dependency installed ad hoc); lineage `pretrained_checkpoint` object (task 12) is the recording surface; Decision 17's selection order and its outcome (3) escape hatch are unchanged.
+
+---
+
+## Decision 20: Co-occurrence statistics restricted to food channels (`co_stats.v2`)
+
+**Date**: 2026-07-14
+**Status**: accepted
+
+### Context
+
+Decision 15's `co_stats.json` counted image-level presence and joint presence over all 35 palette channels. Background (channel 32) is present in effectively every training image, so under the conditional-prior formula `P(c present | k present)` every class's prior against background collapses to roughly its marginal frequency — and because the pair weight takes the MAXIMUM prior over the image's ground-truth classes, background's membership in every ground-truth set hands every false presence a compatibility floor near its marginal frequency. That dilutes exactly the implausible-pair contrast the loss exists to create (design §4.3). The other special channels (`unknown_food`, `unsupported_liquid`) are non-food sentinels already supervised by the weighted-CE base, and "background present" is trivially true of every plate, so its slot in the presence-BCE term carries no signal either.
+
+### Decision
+
+Restrict the presence and joint-presence counts to the FOOD channels: `prepare_dataset.build_co_stats` excludes the mapping's `special_channels` from the counting pass (their rows/columns stay in the matrix as zeros so indices remain palette indices), records the excluded `special_channel_indices`, and stamps schema `co_stats.v2`. `loss_config.load_co_stats` rejects any schema other than `co_stats.v2` with the regeneration command, and the trainer's criterion restricts the priors, both presence vectors, and the pair weights to `loss_config.food_channel_indices(co_stats)`. Per-class pixel counts stay all-channel — they are descriptive, not consumed by the criterion.
+
+### Rationale
+
+Counting background poisons the pair weighting at its core: the max-over-ground-truth compatibility means one universally present class neutralises the up-weighting for every implausible false presence. Excluding the specials at the statistics source (rather than papering over them at training time) keeps the file's semantics honest, and mirrors the special-channel exclusion `validation.special_channel_names` already applies to the IoU gate — the loss and the gate now agree on which channels constitute the food problem. Bumping the schema makes the change enforceable: a pre-exclusion v1 file must not silently feed the criterion, and the fail-fast contract (design §4.3) is keyed on the file's own stamps.
+
+### Alternatives Considered
+
+- **Keep v1 counts and mask the specials at training time only**: Same criterion behaviour — rejected; the file would keep recording misleading priors, and a semantics change without a schema bump is invisible to the fail-fast contract, so stale and fresh files would be indistinguishable.
+- **Zero only background's column in the priors**: Smallest arithmetic change — rejected; the trivially-satisfied background slot would still dilute the presence-BCE mean, and the sentinel channels would get zero-prior maximal up-weighting despite being CE-supervised non-food classes.
+- **Drop the special rows/columns from the arrays entirely (32-wide vectors)**: More compact — rejected; matrix indices would no longer be palette indices, inviting off-by-one remapping errors between the statistics file, the class mapping, and the trainer.
+
+### Consequences
+
+**Positive:**
+- The implausible-pair contrast is restored: a false presence's compatibility is measured against actual food co-occurrence, with no universal-class floor.
+- The presence-BCE term spends its budget on the 32 food channels only; the loss and the IoU gate share one definition of "food channel".
+- A stale v1 file fails fast with the regeneration command instead of silently degrading the recipe.
+
+**Negative:**
+- Any previously generated `co_stats.json` is invalidated and must be regenerated before a co-occurrence training run.
+- The presence term no longer penalises a false image-level `unknown_food`/`unsupported_liquid` presence — that supervision now rests entirely on the weighted-CE base.
+
+### Impact
+
+`tools/segmenter/prepare_dataset.py` (`build_co_stats`, `main`), `tools/segmenter/loss_config.py` (`CO_STATS_SCHEMA`, `load_co_stats`, new `food_channel_indices`), `tools/segmenter/train.py` (`_build_criterion` co_occurrence branch), and the pytest coverage under `tools/segmenter/tests/`. The lineage recording surface (co_stats SHA-256, task 12) is unchanged.
+
+---

@@ -181,7 +181,7 @@ New / relevant failure modes, all fail **before** a bad artefact ships or a bad 
 | Failure | Where | Behavior |
 |---|---|---|
 | Mapping reorders/drops a channel | dataset prep (stage 1–2) | fail before training (Req [2.3](requirements.md#2.3)) |
-| Held-out mIoU < 0.60 or carb-priority IoU < 0.50 | validation (stage 4) | not export-eligible; shortfall recorded in `lineage.metrics` (Req [3.4](requirements.md#3.4)); fallback per [3.6](requirements.md#3.6) (flag low-confidence or map to `unknown_food`) |
+| Held-out mIoU < 0.48 or carb-priority IoU < 0.45 (re-derived bars, segmenter-foundation Decisions 5 and 14; were 0.60/0.50 — see `specs/estimation/segmenter-foundation/`) | validation (stage 4) | not export-eligible; shortfall recorded in `lineage.metrics` (Req [3.4](requirements.md#3.4)); fallback per [3.6](requirements.md#3.6) (flag low-confidence or map to `unknown_food`) |
 | Equivalence oracle fail (argmax ≤ 99% or logit ≥ 0.05) | `export.py` (stage 5) | export fails (Req [4.3](requirements.md#4.3)) |
 | Preprocessing mismatch | `export.py` via oracle (stage 5) | surfaces as oracle fail (Req [4.5](requirements.md#4.5)) |
 | Channel count ≠ 27 | `export.py` + runtime | export fails; runtime `SegmentationError.modelLoadFailed` (Req [4.4](requirements.md#4.4)) |

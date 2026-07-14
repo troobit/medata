@@ -22,7 +22,7 @@ final class SegBenchTests: XCTestCase {
 
         XCTAssertEqual(report.perClassIoU[0]!, 1.0, accuracy: 1e-5)
         XCTAssertEqual(report.meanFoodClassIoU, 1.0, accuracy: 1e-5)
-        XCTAssertTrue(report.passesBar, "Perfect prediction must pass the 0.60 bar")
+        XCTAssertTrue(report.passesBar, "Perfect prediction must pass the 0.48 bar")
     }
 
     // Zero overlap: predicted all class 0 but GT all class 1 → IoU = 0 for both.
@@ -86,10 +86,11 @@ final class SegBenchTests: XCTestCase {
         XCTAssertEqual(report.perClassIoU[0]!, 0.5, accuracy: 1e-5)
     }
 
-    // CI fails (passesBar == false) when meanFoodClassIoU < 0.60.
-    func testCIFailWhenBelowSixtyPercent() {
+    // CI fails (passesBar == false) when meanFoodClassIoU < 0.48
+    // (segmenter-foundation Decision 5).
+    func testCIFailWhenBelowBar() {
         let palette = makeTestPalette()
-        // 50% IoU → fails bar.
+        // Class 0 IoU 0.5, class 1 IoU 0 → mean food-class IoU 0.25, fails bar.
         let predicted: [UInt8] = [0, 0, 1, 1]
         let gt:        [UInt8] = [0, 0, 0, 0]
         let sample = SegBenchSample(
@@ -98,7 +99,7 @@ final class SegBenchTests: XCTestCase {
         )
         let report = SegBench.evaluate(samples: [sample], palette: palette)
         XCTAssertFalse(report.passesBar,
-                       "Expected bar failure when mIoU=\(report.meanFoodClassIoU) < 0.60")
+                       "Expected bar failure when mIoU=\(report.meanFoodClassIoU) < 0.48")
     }
 
     // Confusion matrix has correct shape (C × C) and totals match pixel count.

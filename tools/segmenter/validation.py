@@ -6,9 +6,10 @@ IoU, and the carb-priority-staple IoU subset on the held-out split, then decides
 **export eligibility** and records the result — plus any shortfall — into
 ``build/lineage.json``'s ``metrics`` block (Req 3.2–3.6).
 
-Export-eligibility rule (Req 3.2 / 3.5):
+Export-eligibility rule (Req 3.2 / 3.5, as amended by segmenter-foundation
+Decisions 5 and 14 — the re-derived bars; were 0.60/0.50):
 
-  mean food-class IoU >= 0.60  AND  every carb-priority staple IoU >= 0.50
+  mean food-class IoU >= 0.48  AND  every carb-priority staple IoU >= 0.45
 
 A mean alone can hide a near-zero staple class that dominates the carb number
 (Decision 6), so the carb-priority floor is checked per class. A staple that
@@ -35,9 +36,11 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-# Export-eligibility bars (Req 3.2 mean, Req 3.5 per-class carb-priority floor).
-MEAN_IOU_BAR = 0.60
-CARB_PRIORITY_IOU_BAR = 0.50
+# Export-eligibility bars (Req 3.2 mean, Req 3.5 per-class carb-priority floor),
+# re-derived by segmenter-foundation Decision 5 (gate) and Decision 14 (floors);
+# were 0.60/0.50. Authoritative home: specs/estimation/segmenter-foundation/decision_log.md.
+MEAN_IOU_BAR = 0.48
+CARB_PRIORITY_IOU_BAR = 0.45
 
 # High-carbohydrate staples that dominate the carb number; each must individually
 # clear CARB_PRIORITY_IOU_BAR (Req 3.5). Names/order mirror ClassPalette.v1Standard
@@ -62,7 +65,8 @@ def special_channel_names() -> tuple[str, ...]:
 
 
 def food_class_names() -> tuple[str, ...]:
-    """The 24 food-class names in palette/index order (specials removed)."""
+    """The 32 food-class names in palette/index order (the 35-channel v1 palette
+    minus the 3 special channels)."""
     specials = set(special_channel_names())
     channels = sorted(_mapping()["target_channels"], key=lambda c: c["index"])
     return tuple(c["name"] for c in channels if c["name"] not in specials)
@@ -130,8 +134,9 @@ def shortfall(per_class_iou: Mapping[str, float]) -> list[dict[str, Any]]:
 
 
 def is_export_eligible(per_class_iou: Mapping[str, float]) -> bool:
-    """Req 3.2 + 3.5: mean food-class IoU >= 0.60 AND every carb-priority staple
-    present with IoU >= 0.50. Equivalent to ``shortfall(...) == []``."""
+    """Req 3.2 + 3.5 (as amended by segmenter-foundation Decisions 5/14): mean
+    food-class IoU >= 0.48 AND every carb-priority staple present with IoU >= 0.45.
+    Equivalent to ``shortfall(...) == []``."""
     return not shortfall(per_class_iou)
 
 
