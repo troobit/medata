@@ -63,7 +63,7 @@ struct IntakeView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.surfacePrimary)
-            .navigationTitle("Intake")
+            // Deliberately untitled (snaqui Req 4).
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

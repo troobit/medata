@@ -159,7 +159,9 @@ struct SettingsView: View {
             }
             #endif
         }
-        .navigationTitle("Settings")
+        // Deliberately untitled (snaqui Req 4); inline mode so no large-title
+        // band is reserved.
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 CloseCoverButton { dismiss() }

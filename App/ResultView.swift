@@ -144,6 +144,41 @@ enum ResultPresentation: Equatable {
     case historyDetail
 }
 
+// Portion adjustment (snaqui PRD Req 1–2): the estimate covers the whole
+// plate, but the user may eat a fraction of it (2 of 5 potatoes) or more than
+// one plate (ate 2 of 1). The portion is a pair of counts so any fraction is
+// exact, never approximated; scaling always starts from the ORIGINAL estimate,
+// and an applied portion persists as an appended `PbUserCorrection` whose note
+// records the counts — the record itself is never touched.
+enum PortionFormat {
+    static let countRange = 1...24
+
+    static func factor(eaten: Int, of plate: Int) -> Float {
+        Float(eaten) / Float(max(1, plate))
+    }
+
+    static func scaled(_ carbsG: Float, eaten: Int, of plate: Int) -> Float {
+        carbsG * factor(eaten: eaten, of: plate)
+    }
+
+    // The correction-note stamp, e.g. "portion 2/5". Also the seed source when
+    // a meal is re-opened, so the format is load-bearing — keep it stable.
+    static func note(eaten: Int, of plate: Int) -> String {
+        "portion \(eaten)/\(plate)"
+    }
+
+    static func parse(note: String) -> (eaten: Int, plate: Int)? {
+        guard note.hasPrefix("portion ") else { return nil }
+        let counts = note.dropFirst("portion ".count).split(separator: "/")
+        guard
+            counts.count == 2,
+            let eaten = Int(counts[0]), let plate = Int(counts[1]),
+            countRange.contains(eaten), countRange.contains(plate)
+        else { return nil }
+        return (eaten, plate)
+    }
+}
+
 enum ResultViewLayout {
     // §20.12 Dynamic Type clamp at AX5: maximum display size 88pt to prevent
     // the carb total running off-screen.
@@ -192,6 +227,15 @@ struct ResultView: View {
     // view session only — navigating away and back re-shows it (no persistent
     // dismissed flag). `@State` is per-instance, so this resets on each push.
     @State private var keepAsIsDismissed = false
+    // Portion state (snaqui Req 1–2). The steppers hold the pending choice;
+    // `recordedPortion` mirrors the latest persisted portion correction, and
+    // the log pill shows only while the two differ. Seeding happens once per
+    // push so a store refresh never stomps an adjustment in progress.
+    @State private var portionEaten = 1
+    @State private var portionPlate = 1
+    @State private var recordedPortion: (eaten: Int, plate: Int)?
+    @State private var correctedTotal: Float?
+    @State private var portionSeeded = false
 
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
@@ -213,6 +257,25 @@ struct ResultView: View {
     }
     private var displayPoints: CGFloat { ResultViewLayout.displayPoints(sizeCategory) }
 
+    // A pending portion is one the steppers hold but no correction records yet.
+    private var portionPending: Bool {
+        let recorded = recordedPortion ?? (eaten: 1, plate: 1)
+        return portionEaten != recorded.eaten || portionPlate != recorded.plate
+    }
+    private var pendingScaledTotal: Float {
+        PortionFormat.scaled(record.macros.totalCarbsG, eaten: portionEaten, of: portionPlate)
+    }
+    // The hero total (snaqui Req 1, superseding Decision 19's original-only
+    // hero for this screen): the value that matches what the user is eating —
+    // a live preview while adjusting, else the corrected total when one is
+    // recorded. The original estimate stays visible on the line beneath.
+    private var heroCarbsG: Float {
+        portionPending ? pendingScaledTotal : (correctedTotal ?? record.macros.totalCarbsG)
+    }
+    private var showsEstimatedLine: Bool {
+        ResultFormat.carbsGrams(heroCarbsG) != ResultFormat.carbsGrams(record.macros.totalCarbsG)
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.captureBackground.ignoresSafeArea()
@@ -229,6 +292,7 @@ struct ResultView: View {
                     }
                     if showsLiquidFlag { liquidOverEstimateFlag }
                     if showsVeryLowSurface { veryLowSurface }
+                    portionCard
                     summaryCard
                     breakdown
                     macroPlaceholders
@@ -260,22 +324,90 @@ struct ResultView: View {
             .accessibilityIdentifier("result.correctedMarker")
     }
 
-    // Hero: original estimate (§6.1) — the carb total is the persisted value and
-    // is never replaced by a correction here (corrected totals surface in Data /
-    // Overview). `g carbs` suffix per the copy inventory.
+    // Hero (§6.1, revised by snaqui Req 1): the carb total the user is eating —
+    // portion-scaled live while adjusting, corrected when a correction is
+    // recorded, the original estimate otherwise. When the hero diverges from
+    // the original, the estimate stays visible on the line beneath, so the
+    // full-plate value is never hidden. `g carbs` suffix per the copy inventory.
     private var carbTotal: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 8) {
-            Text("\(ResultFormat.carbsGrams(record.macros.totalCarbsG))")
-                .font(.system(size: displayPoints, weight: .heavy, design: .default).monospacedDigit())
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: record.macros.totalCarbsG)
-            Text("g carbs")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.captureChromeText.opacity(0.7))
+        VStack(spacing: 4) {
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text("\(ResultFormat.carbsGrams(heroCarbsG))")
+                    .font(.system(size: displayPoints, weight: .heavy, design: .default).monospacedDigit())
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(reduceMotion ? nil : .smooth, value: heroCarbsG)
+                Text("g carbs")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.captureChromeText.opacity(0.7))
+            }
+            .foregroundStyle(Color.captureChromeText)
+            if showsEstimatedLine {
+                Text("estimated \(ResultFormat.carbsGrams(record.macros.totalCarbsG)) g")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
+                    .accessibilityIdentifier("result.estimatedLine")
+            }
         }
-        .foregroundStyle(Color.captureChromeText)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("result.carbsTotal")
+    }
+
+    // The portion sentence (snaqui Req 1): "Ate N of M portions". Any fraction
+    // is exact (2 of 5), and eaten may exceed the plate count (2 of 1 = two
+    // plates). The log pill appears only while the pending counts differ from
+    // the recorded portion and names exactly what it writes.
+    private var portionCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("PORTION")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.captureChromeText.opacity(0.6))
+            HStack(spacing: 10) {
+                Text("Ate")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.captureChromeText)
+                PortionStepper(value: $portionEaten, identifier: "result.portion.eaten")
+                Text("of")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.captureChromeText)
+                PortionStepper(value: $portionPlate, identifier: "result.portion.plate")
+                Spacer(minLength: 0)
+            }
+            if portionPending {
+                Button(action: applyPortion) {
+                    Text("Log \(ResultFormat.carbsGrams(pendingScaledTotal)) g")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(Color.captureBackground)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .accessibilityIdentifier("result.portion.apply")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.captureChromeBG, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityIdentifier("result.portionCard")
+    }
+
+    // Persist the portion (snaqui Req 2): one appended correction carrying the
+    // scaled total, the per-class values scaled by the same factor, and the
+    // portion stamp as its note. Always scales from the ORIGINAL estimate, so
+    // repeated adjustments never compound. The store's `eventsDidChange` tick
+    // drives `refreshCorrected`, which folds the new state back in and hides
+    // the log pill.
+    private func applyPortion() {
+        var correction = PbUserCorrection()
+        correction.createdAtMs = Int64(Date().timeIntervalSince1970 * 1000)
+        correction.correctedTotalCarbsG = pendingScaledTotal
+        correction.correctedPerClass = record.macros.perClass.mapValues {
+            PortionFormat.scaled($0.carbsG, eaten: portionEaten, of: portionPlate)
+        }
+        correction.note = PortionFormat.note(eaten: portionEaten, of: portionPlate)
+        Task {
+            try? await store.appendCorrection(mealId: record.id, correction: correction)
+        }
     }
 
     // Summary card (§6.3): thumbnail (with §6.8 fallback), foods count, total
@@ -556,5 +688,55 @@ struct ResultView: View {
     private func refreshCorrected() async {
         let corrections = (try? await store.corrections(for: record.id)) ?? []
         isCorrected = !corrections.isEmpty
+        correctedTotal = corrections
+            .last { $0.correctedTotalCarbsGOneof != nil }?
+            .correctedTotalCarbsG
+        // The latest correction defines the recorded portion iff it carries
+        // the portion stamp — a later manual correction supersedes a portion.
+        recordedPortion = corrections.last.flatMap { PortionFormat.parse(note: $0.note) }
+        // Seed the steppers once per push (snaqui Req 2: history re-entry
+        // resumes from the recorded portion); later refreshes only update the
+        // recorded state so they cannot stomp an adjustment in progress.
+        if !portionSeeded {
+            portionSeeded = true
+            if let recorded = recordedPortion {
+                portionEaten = recorded.eaten
+                portionPlate = recorded.plate
+            }
+        }
+    }
+}
+
+// Compact ± stepper for one portion count. Sizing and `contentShape` live
+// INSIDE each Button label — the dead-surface trap (ui-capture-flow.md).
+private struct PortionStepper: View {
+    @Binding var value: Int
+    let identifier: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            stepButton("minus", enabled: value > PortionFormat.countRange.lowerBound) { value -= 1 }
+            Text("\(value)")
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(Color.captureChromeText)
+                .frame(minWidth: 24)
+                .contentTransition(.numericText())
+                .animation(.smooth, value: value)
+                .accessibilityIdentifier(identifier)
+            stepButton("plus", enabled: value < PortionFormat.countRange.upperBound) { value += 1 }
+        }
+    }
+
+    private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .frame(width: 36, height: 36)
+                .background(Color.captureBackground.opacity(0.6), in: Circle())
+                .foregroundStyle(Color.captureChromeText.opacity(enabled ? 1 : 0.3))
+                .contentShape(Circle())
+        }
+        .disabled(!enabled)
+        .accessibilityIdentifier("\(identifier).\(symbol)")
     }
 }
