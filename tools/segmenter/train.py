@@ -930,6 +930,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
 
+    if args.num_classes <= PALETTE_BACKGROUND:
+        parser.error(
+            f"--num-classes {args.num_classes} does not cover the palette: "
+            f"letterbox padding labels masks with the background channel "
+            f"({PALETTE_BACKGROUND}), so at least {PALETTE_BACKGROUND + 1} "
+            f"classes are required."
+        )
+
     return train(args)
 
 
