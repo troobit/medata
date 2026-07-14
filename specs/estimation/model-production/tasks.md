@@ -13,8 +13,11 @@ metadata:
         bake) — all of which live in `prerequisites.md`, not here.
         Per Decision 3 / Decision 5 completion is milestone-scoped: the stage 1–8 code
         deltas in this file can all be `[x]` while β_c calibration execution remains
-        deferred past the MVP gate. The mIoU ≥ 0.60 (Req 3.2) and per-class ≥ 0.50
+        deferred past the MVP gate. The mIoU gate (Req 3.2) and per-class floors
         (Req 3.5) bars are asserted by code here but only *produced* by a gated GPU run.
+        [Amended: the bars are now mean ≥ 0.48 and per-class ≥ 0.45, re-derived by
+        segmenter-foundation Decisions 5 and 14 (were 0.60/0.50); completed task
+        entries below keep their recorded 0.60/0.50 history.]
         This note lives in front matter because rune rejects prose between the H1 and the
         first task/phase.
 ---

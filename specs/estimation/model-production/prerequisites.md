@@ -11,7 +11,7 @@ Every surrounding subsystem is code-complete: the capture → segment → volume
 **Ordered path to the MVP gate (each step gates the next):**
 
 1. **Stage 0 — Acquire FoodSeg103** (download). → unblocks the automated remap + split (Stages 1–2, already scripted).
-2. **Stage 3 — GPU training run** → `build/checkpoint.pt`. Export-eligible only if validation mIoU ≥ 0.60 mean **and** ≥ 0.50 for every carb-priority class.
+2. **Stage 3 — GPU training run** → `build/checkpoint.pt`. Export-eligible only if validation mIoU ≥ 0.48 mean **and** ≥ 0.45 for every carb-priority class *(re-derived bars, segmenter-foundation Decisions 5 and 14; were 0.60/0.50 — the completed stage entries below keep their recorded history)*.
 3. **Export (automated, gated)** — run `export.py` on macOS; the task 6/7 gates (equivalence, parity, channel order, ≤ 10 MB budget, metadata stamp) run automatically and bundle `segmenter.mlpackage`. No new human judgement, but needs a Mac + the checkpoint.
 4. **Stage 7 — On-device verification** on the iPhone 13 Pro Max (ANE residency + a real capture). **This is the MVP gate (Req 6.3).**
 

@@ -16,6 +16,7 @@ Two real models have shipped, both under Decision 11 developer-phase overrides
 
 The strict export gate is mean ≥ 0.60 AND every carb-priority staple ≥ 0.50
 (`tools/segmenter/validation.py`, `MEAN_IOU_BAR` / `CARB_PRIORITY_IOU_BAR`).
+(Bars since re-derived to 0.48/0.45 — segmenter-foundation D5/D14.)
 The earlier fixed-lr, no-augmentation baseline plateaued at ~0.34 by epoch 22/60;
 the recipe improvements since have moved the number to 0.40–0.43 and stalled.
 
@@ -323,6 +324,7 @@ robustness may still justify a deploy — record that reasoning in the Decision
 The strict gate is unchanged: `export_eligible` remains mean ≥ 0.60 AND every
 staple ≥ 0.50; the threshold above only governs which developer-phase
 iterations are worth the export/deploy cycle under a Decision 11 override.
+(Bars since re-derived to 0.48/0.45 — segmenter-foundation D5/D14.)
 Optional future refinement (not landed here): a speckle proxy in
 `run_validation.py` — mean count of sub-threshold connected components per
 predicted mask — would track §3 directly alongside IoU.

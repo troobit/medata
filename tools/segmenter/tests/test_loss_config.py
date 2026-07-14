@@ -16,7 +16,10 @@ import train  # torch-free import: heavy deps are lazy, loss_config is pure
 # ── Loss-name normalisation / selection ─────────────────────────────────────────
 
 def test_choices_and_default():
-    assert loss_config.LOSS_CHOICES == ("ce", "weighted_ce", "focal", "dice", "combined")
+    # "co_occurrence" added by segmenter-foundation design §4.3 (task 10).
+    assert loss_config.LOSS_CHOICES == (
+        "ce", "weighted_ce", "focal", "dice", "combined", "co_occurrence",
+    )
     assert loss_config.DEFAULT_LOSS == "ce"
 
 
@@ -35,6 +38,7 @@ def test_unknown_name_is_rejected():
     ("focal", False),
     ("dice", False),
     ("combined", True),
+    ("co_occurrence", True),  # weighted_ce base (design §4.3)
 ])
 def test_which_losses_consume_class_weights(name, expected):
     assert loss_config.loss_uses_class_weights(name) is expected
