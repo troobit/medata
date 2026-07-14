@@ -177,6 +177,27 @@ SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
   is done — the bundled `segmenter.mlpackage` carries `24e0b022241a`. Details
   in [model-production.md](model-production.md).
 
+- **Stratified re-cut executed (2026-07-15, segmenter-foundation task 17 /
+  Decision 21).** `data/foodseg103_remapped/` was DELETED and regenerated at
+  frozen seed **20260715** (same 5,553/711/854 counts; `splits.json` gains the
+  stratification block, `co_stats.json` is `co_stats.v2`). Always `rm -rf` the
+  out dir before re-cutting with a new seed — `write_split` only adds files, so
+  a re-cut into a populated dir leaks images across splits. Three gotchas
+  learned here: (1) **brown_rice, bread_wholemeal, potato_mashed have zero
+  FoodSeg103 images** — the class mapping routes no source category to those
+  channels, so no seed makes them measurable and `validation.shortfall` will
+  always report them absent (strict gate unattainable on FoodSeg103 alone);
+  (2) **re-measuring an OLD checkpoint on a re-cut heldout is
+  train-contaminated** — `checkpoint_letterbox.pt` scored 0.7403 there because
+  78.7% of the new heldout was in its seed-1234 train split; the honest anchor
+  is the leak-free 182-image subset (mean 0.3776), reconstructable via
+  `carve_splits(pairs, 0.12, 0.1, 1234, None)`; (3) the old carve is
+  reproducible with `--no-stratify --seed 1234` since the plain-shuffle path
+  is unchanged. Init for the next run: torchvision `IMAGENET1K_V2` via
+  `train.py --init-checkpoint tools/segmenter/build/mnv3_imagenet1k_v2.pth`
+  (adapter probe FAILED — Decision 19; the timm in21k graphs diverge
+  numerically despite matching shapes).
+
 ## 6. Public-data posture (confirmed)
 
 The stated preference — freely available public data, no repeated work — holds across
