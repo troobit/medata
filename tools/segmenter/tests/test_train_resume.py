@@ -167,6 +167,91 @@ def test_missing_resume_file_exits_with_train_message(dataset_root, tmp_path):
     assert str(excinfo.value.code).startswith("[train]")
 
 
+def _classifier_state_dict(marker: float):
+    """A torchvision MobileNetV3-Large CLASSIFIER state dict with the stem
+    conv filled with ``marker`` — the file format --init-checkpoint consumes
+    (adapter_probe.py --save-adapted / an IMAGENET1K_V2 download)."""
+    from torchvision.models import mobilenet_v3_large
+
+    state = mobilenet_v3_large(weights=None).state_dict()
+    state["features.0.0.weight"] = torch.full_like(state["features.0.0.weight"], marker)
+    return state
+
+
+def test_build_model_consumes_init_checkpoint(tmp_path):
+    import train as train_mod
+
+    # Plain torchvision serialisation.
+    plain = tmp_path / "plain.pt"
+    torch.save(_classifier_state_dict(0.123), plain)
+    model = train_mod.build_model(NUM_CLASSES, pretrained=True,
+                                  init_checkpoint=str(plain))
+    stem = model.backbone.state_dict()["0.0.weight"]
+    assert torch.all(stem == 0.123), "backbone stem not taken from --init-checkpoint"
+
+    # adapter_probe.py --save-adapted wrapper ({"model": ...}).
+    wrapped = tmp_path / "wrapped.pt"
+    torch.save({"model": _classifier_state_dict(0.456), "source": "probe"}, wrapped)
+    model = train_mod.build_model(NUM_CLASSES, pretrained=True,
+                                  init_checkpoint=str(wrapped))
+    stem = model.backbone.state_dict()["0.0.weight"]
+    assert torch.all(stem == 0.456)
+
+
+def test_init_checkpoint_rejects_non_backbone_file(tmp_path):
+    import train as train_mod
+
+    bogus = tmp_path / "bogus.pt"
+    torch.save({"not_features": torch.zeros(1)}, bogus)
+    with pytest.raises(SystemExit) as excinfo:
+        train_mod.build_model(NUM_CLASSES, pretrained=True,
+                              init_checkpoint=str(bogus))
+    assert "features" in str(excinfo.value.code)
+
+
+def test_init_checkpoint_conflicts_with_no_pretrained(dataset_root, tmp_path):
+    out = tmp_path / "checkpoint.pt"
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(_argv(dataset_root, out, epochs=1,
+                         **{"--init-checkpoint": str(tmp_path / "init.pt")}))
+    assert excinfo.value.code == 2  # argparse error: mutually exclusive
+
+
+def test_resume_rejects_init_checkpoint_drift(dataset_root, tmp_path, monkeypatch):
+    """A sidecar without an init (legacy default None) must refuse an
+    invocation that adds --init-checkpoint mid-run."""
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+    torch.save(
+        {
+            "model": {},
+            "optimizer": {},
+            "epoch": 1,
+            "num_classes": NUM_CLASSES,
+            "target_size": TARGET_SIZE,
+            "palette_version": train.PALETTE_VERSION,
+            "lr": 1e-3,
+            "batch_size": 2,
+            "augment": True,
+            "pretrained": False,
+            "last_food_class_miou": float("nan"),
+        },
+        sidecar,
+    )
+    monkeypatch.setattr(
+        train, "build_model",
+        lambda *a, **k: pytest.fail("build_model called before sidecar validation"),
+    )
+    init = tmp_path / "init.pt"
+    argv = [a for a in _argv(dataset_root, out, epochs=2,
+                             **{"--resume": str(sidecar),
+                                "--init-checkpoint": str(init)})
+            if a != "--no-pretrained"]
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(argv)
+    assert "init_checkpoint" in str(excinfo.value.code)
+
+
 def test_refuses_to_start_over_existing_sidecar(dataset_root, tmp_path):
     out = tmp_path / "checkpoint.pt"
     sidecar = _sidecar_for(out)

@@ -169,32 +169,90 @@ def _load_lineage_module():
     return module
 
 
-def build_model(num_classes: int, pretrained: bool):
+def build_model(num_classes: int, pretrained: bool,
+                init_checkpoint: str | None = None):
     """Build the training model via export.load_checkpoint for architectural parity.
 
     ``export.load_checkpoint(num_classes, None)`` returns the torchvision
     pretrained-backbone model with the head replaced for ``num_classes`` (and set
     to eval); we switch it back to train mode. When ``pretrained`` is False we
     rebuild with weights=None so a smoke run needs no network download.
+
+    ``init_checkpoint`` (segmenter-foundation Req 2.2 / Decisions 17 and 19)
+    names a LOCAL MobileNetV3-Large classifier state dict — the
+    ``adapter_probe.py --save-adapted`` output or a downloaded torchvision
+    ``IMAGENET1K_V2`` file — whose ``features.*`` tensors initialise the
+    backbone instead of the COCO-seg ``DEFAULT`` weights; the DeepLab head
+    starts fresh. Pair it with the ``--pretrained-*`` flags so lineage records
+    the source (URL, licence, SHA-256).
     """
     torch = _import_torch()
     export = _load_export_module()
 
-    if pretrained:
+    if init_checkpoint is not None:
+        model = _build_uninitialised(num_classes)
+        _load_backbone_init(model, Path(init_checkpoint))
+    elif pretrained:
         model = export.load_checkpoint(num_classes, None)
     else:
-        # Mirror export.load_checkpoint's construction but skip the weight
-        # download. This stays consistent with the exporter's architecture:
-        # same model family, same head replacement.
-        from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
-        from torchvision.models.segmentation.deeplabv3 import DeepLabHead
-
-        model = deeplabv3_mobilenet_v3_large(weights=None, aux_loss=False)
-        in_ch = model.classifier[0].convs[0][0].in_channels
-        model.classifier = DeepLabHead(in_ch, num_classes)
+        model = _build_uninitialised(num_classes)
 
     model.train()
     return model
+
+
+def _build_uninitialised(num_classes: int):
+    """Mirror export.load_checkpoint's construction but with weights=None (no
+    network download). Stays consistent with the exporter's architecture: same
+    model family, same head replacement."""
+    from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
+    from torchvision.models.segmentation.deeplabv3 import DeepLabHead
+
+    model = deeplabv3_mobilenet_v3_large(weights=None, aux_loss=False)
+    in_ch = model.classifier[0].convs[0][0].in_channels
+    model.classifier = DeepLabHead(in_ch, num_classes)
+    return model
+
+
+def _load_backbone_init(model, path: Path) -> None:
+    """Initialise ``model.backbone`` from a MobileNetV3-Large CLASSIFIER state
+    dict (the ``--init-checkpoint`` wiring).
+
+    The DeepLabV3 backbone is the classifier's ``features`` module behind
+    torchvision's IntermediateLayerGetter, so the ``features.``-prefixed
+    tensors map key-for-key once the prefix is stripped; classifier-head
+    tensors are discarded (the DeepLab head stays fresh). Accepts either a
+    plain torchvision state dict or the ``{"model": ...}`` wrapper that
+    ``adapter_probe.py --save-adapted`` writes. Loads strict so a partial or
+    misshapen init fails loudly instead of silently training from a
+    half-random backbone.
+    """
+    torch = _import_torch()
+    if not path.is_file():
+        raise SystemExit(f"[train] --init-checkpoint not found: {path}")
+    state = torch.load(str(path), map_location="cpu")
+    if isinstance(state, dict) and isinstance(state.get("model"), dict):
+        state = state["model"]  # adapter_probe.py --save-adapted wrapper
+    prefix = "features."
+    backbone_state = {
+        key[len(prefix):]: tensor
+        for key, tensor in state.items()
+        if key.startswith(prefix)
+    }
+    if not backbone_state:
+        raise SystemExit(
+            f"[train] {path} contains no 'features.*' tensors — expected a "
+            "MobileNetV3-Large classifier state dict (adapter_probe.py "
+            "--save-adapted output or a torchvision IMAGENET1K_V2 download)"
+        )
+    try:
+        model.backbone.load_state_dict(backbone_state)
+    except RuntimeError as exc:
+        raise SystemExit(
+            f"[train] --init-checkpoint {path} does not match the "
+            f"MobileNetV3-Large backbone: {exc}"
+        ) from exc
+    print(f"[train] backbone initialised from {path}")
 
 
 class FoodSegDataset:
@@ -607,10 +665,12 @@ def _load_resume_state(args) -> dict:
         "augment": not args.no_augment,
         "loss": loss_config.normalise_loss_name(args.loss),
         "photometric_augment": args.photometric_augment,
+        "init_checkpoint": args.init_checkpoint,
     }
-    # Sidecars written before the opt-in loss/photometric flags existed lack
-    # these keys; absence means the historical defaults, not drift.
-    legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False}
+    # Sidecars written before the opt-in loss/photometric/init flags existed
+    # lack these keys; absence means the historical defaults, not drift.
+    legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False,
+                       "init_checkpoint": None}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -642,6 +702,7 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "augment": not args.no_augment,
         "loss": loss_config.normalise_loss_name(args.loss),
         "photometric_augment": args.photometric_augment,
+        "init_checkpoint": args.init_checkpoint,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -721,7 +782,8 @@ def train(args) -> int:
         start_epoch = resumed_from_epoch + 1
         print(f"[train] resuming from {args.resume} (epoch {resumed_from_epoch} completed)")
     else:
-        model = build_model(args.num_classes, pretrained=not args.no_pretrained)
+        model = build_model(args.num_classes, pretrained=not args.no_pretrained,
+                            init_checkpoint=args.init_checkpoint)
         pretrained = not args.no_pretrained
         resumed_from_epoch = None
         start_epoch = 1
@@ -822,6 +884,10 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     recipe_extras = loss_config.loss_train_config(_loss_spec(args))
     if args.photometric_augment:
         recipe_extras["photometric_augment"] = True
+    if args.init_checkpoint:
+        # Local path of the consumed init (Decision 19 wiring); the
+        # pretrained_checkpoint object carries its source URL/licence/SHA-256.
+        recipe_extras["init_checkpoint"] = args.init_checkpoint
 
     checkpoint = {
         "model": model.state_dict(),
@@ -897,6 +963,15 @@ def main(argv: list[str] | None = None) -> int:
                         help="Cap samples per split for smoke runs.")
     parser.add_argument("--no-pretrained", action="store_true",
                         help="Build with weights=None (no network download) for smoke runs.")
+    parser.add_argument("--init-checkpoint", default=None, metavar="PATH",
+                        help="Initialise the MobileNetV3 backbone from a LOCAL "
+                             "classifier state dict (adapter_probe.py "
+                             "--save-adapted output or a torchvision "
+                             "IMAGENET1K_V2 download) instead of the COCO-seg "
+                             "DEFAULT weights; the DeepLab head starts fresh. "
+                             "Recorded in the checkpoint/lineage train_config; "
+                             "pair with the --pretrained-* flags so lineage "
+                             "records the source (Req 2.2 / Decision 19).")
     parser.add_argument("--no-augment", action="store_true",
                         help="Disable train-split augmentation (hflip + random "
                              "scale-up crop) — e.g. for deterministic smoke runs.")
@@ -929,6 +1004,12 @@ def main(argv: list[str] | None = None) -> int:
                              "TRAIN images only (never the mask); off by default.")
     parser.add_argument("--num-workers", type=int, default=4)
     args = parser.parse_args(argv)
+
+    if args.init_checkpoint and args.no_pretrained:
+        parser.error(
+            "--init-checkpoint and --no-pretrained are mutually exclusive: "
+            "the init checkpoint IS the pretrained initialisation."
+        )
 
     if args.num_classes <= PALETTE_BACKGROUND:
         parser.error(
