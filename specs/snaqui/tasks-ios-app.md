@@ -22,7 +22,7 @@ references:
 
 - [x] 5. Remove navigation titles from TrendsView, RecordsView, IntakeView, SettingsView, MealOverviewView, ManualCorrectionView, SegmentationReviewView; content reclaims the band — PRD Req 4 <!-- id:z1bc7x2 -->
 
-- [ ] 6. Graph metric-chip row and result-screen surfaces render without ellipsis truncation in portrait; frontend-design uplift pass — PRD Req 5/6 <!-- id:z1bc7x3 -->
+- [x] 6. Graph metric-chip row and result-screen surfaces render without ellipsis truncation in portrait; frontend-design uplift pass — PRD Req 5/6 <!-- id:z1bc7x3 -->
 
 ## Gates
 

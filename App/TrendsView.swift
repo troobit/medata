@@ -216,25 +216,33 @@ struct TrendsView: View {
         }
     }
 
-    // MARK: - Metric chips (§10.4)
+    // MARK: - Metric chips (§10.4, reshaped by snaqui Req 5)
 
+    // The chips are the chart's legend as much as its switches: an active chip
+    // fills with the colour of the series it toggles (carbs green, glucose
+    // orange, insulin bolus-teal — the week/month aggregate colour), so the
+    // chip↔series mapping reads at a glance. `ChipFlow` wraps the row onto a
+    // second line rather than letting a fixed HStack compress the labels to
+    // ellipsis in portrait.
     private var metricChips: some View {
-        HStack(spacing: 10) {
-            metricChip("Carbs", isOn: showCarbs) { showCarbs.toggle() }
-            metricChip("Glucose", isOn: showGlucose) { showGlucose.toggle() }
-            metricChip("Insulin", isOn: showInsulin) { showInsulin.toggle() }
+        ChipFlow(spacing: 10, lineSpacing: 8) {
+            metricChip("Carbs", series: .medataAccent, isOn: showCarbs) { showCarbs.toggle() }
+            metricChip("Glucose", series: .seriesGlucose, isOn: showGlucose) { showGlucose.toggle() }
+            metricChip("Insulin", series: .seriesInsulinBolus, isOn: showInsulin) { showInsulin.toggle() }
             disabledChip("Protein · Fat")
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func metricChip(_ title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+    private func metricChip(
+        _ title: String, series: Color, isOn: Bool, action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isOn ? Color.medataAccent : Color.surfaceElevated, in: Capsule())
+                .background(isOn ? series : Color.surfaceElevated, in: Capsule())
                 .foregroundStyle(isOn ? Color.captureBackground : Color.textSecondary)
         }
         .accessibilityIdentifier("trends.chip.\(title.lowercased())")
@@ -386,5 +394,63 @@ struct TrendsView: View {
                 .foregroundStyle(Color.textSecondary)
         }
         .accessibilityIdentifier("graph.dose.\(dose.id.uuidString)")
+    }
+}
+
+// Leading-aligned wrapping row for the metric chips (snaqui Req 5): each chip
+// keeps its natural size and overflow starts a new line, so nothing ever
+// compresses to an ellipsis. Chips are measured with an unspecified proposal
+// (their ideal size) both when building lines and when placing them.
+private struct ChipFlow: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let lines = lines(fitting: proposal.width ?? .infinity, subviews: subviews)
+        let height = lines.map(\.height).reduce(0, +)
+            + lineSpacing * CGFloat(max(0, lines.count - 1))
+        let width = proposal.width ?? lines.map(\.width).max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
+        var y = bounds.minY
+        for line in lines(fitting: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in line.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified
+                )
+                x += size.width + spacing
+            }
+            y += line.height + lineSpacing
+        }
+    }
+
+    private struct Line {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func lines(fitting maxWidth: CGFloat, subviews: Subviews) -> [Line] {
+        var lines: [Line] = []
+        var current = Line()
+        for (index, subview) in subviews.enumerated() {
+            let size = subview.sizeThatFits(.unspecified)
+            let gap = current.indices.isEmpty ? 0 : spacing
+            if !current.indices.isEmpty, current.width + gap + size.width > maxWidth {
+                lines.append(current)
+                current = Line()
+            }
+            current.width += (current.indices.isEmpty ? 0 : spacing) + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { lines.append(current) }
+        return lines
     }
 }
