@@ -26,7 +26,10 @@ import train  # noqa: E402
 # Small enough for seconds-scale CPU epochs; ASPP tolerates 64 (bump to 128 if
 # a torchvision upgrade ever rejects it — smolspec risk note).
 TARGET_SIZE = 64
-NUM_CLASSES = 8
+# Letterbox padding labels masks with the palette background channel (32), so
+# train.py refuses anything that doesn't cover the full 35-class palette; only
+# the classifier head widens, epochs stay seconds-scale.
+NUM_CLASSES = 35
 
 
 @pytest.fixture
