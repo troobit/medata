@@ -597,7 +597,7 @@ Orders candidates by pretraining strength while making each step falsifiable (ad
 ## Decision 19: Pretrained checkpoint survey — timm in21k-MIL vetted, adapter probe pending
 
 **Date**: 2026-07-11
-**Status**: proposed
+**Status**: accepted (probe run 2026-07-15: round-trip FAILED — candidate 2, torchvision `IMAGENET1K_V2`, selected)
 
 ### Context
 
@@ -612,6 +612,8 @@ Survey outcome, per Decision 17's order:
 3. **Candidate 3 — MIM checkpoints: confirmed absent for MobileNetV3-Large.** The SparK model zoo (https://github.com/keyu-tian/SparK) publishes ResNet-50/101/152/200 and ConvNeXt-S/B/L only; A2MIM (https://github.com/Westlake-AI/A2MIM) publishes ViT-S/B/L, ResNet, and ConvNeXt-S/B only. Neither lineage offers any MobileNet checkpoint, confirming Decision 12's expected-absence record.
 
 The selection order stands: adopt candidate 1 IF `adapter_probe.py` round-trips in the gated session; otherwise candidate 2. Whichever is chosen lands in lineage's `pretrained_checkpoint` object (source URL, licence, SHA-256 — the task 12 schema). This entry stays `proposed` until the probe verdict exists; the gated session flips it to accepted (or records the fallback) with the measured numbers.
+
+**Probe verdict (2026-07-15)**: the round-trip FAILED. The positional adaptation itself loaded cleanly (every tensor shape matched, including the conv→linear head reshape), but the logits diverge: max abs logit error **24.97** against the 1e-4 tolerance, argmax disagrees on the probe input. The graphs are therefore not numerically equivalent despite registering the same tensor sequence — exactly the implementation-subtlety failure mode (SE/activation placement, BN details) this entry declined to rule out by inspection. Per Decision 17's order, **candidate 2 is selected**: torchvision `MobileNet_V3_Large_Weights.IMAGENET1K_V2`, BSD-3-Clause, https://download.pytorch.org/models/mobilenet_v3_large-5c1a4163.pth, SHA-256 `5c1a416349c4cf298f2a6a5e2600ed0ee55e604713578f5e74e6bc8bcaef7997` (verified against the local download, staged at `tools/segmenter/build/mnv3_imagenet1k_v2.pth`). Consumption wiring landed with this verdict: `train.py --init-checkpoint PATH` initialises the MobileNetV3 backbone from a local classifier state dict (fresh DeepLab head), is drift-checked in the resume sidecar, and is recorded in the checkpoint/lineage `train_config` alongside the `--pretrained-*` provenance flags; a 2-epoch smoke run verified the init loads end-to-end and lands in lineage.
 
 ### Rationale
 
@@ -677,5 +679,52 @@ Counting background poisons the pair weighting at its core: the max-over-ground-
 ### Impact
 
 `tools/segmenter/prepare_dataset.py` (`build_co_stats`, `main`), `tools/segmenter/loss_config.py` (`CO_STATS_SCHEMA`, `load_co_stats`, new `food_channel_indices`), `tools/segmenter/train.py` (`_build_criterion` co_occurrence branch), and the pytest coverage under `tools/segmenter/tests/`. The lineage recording surface (co_stats SHA-256, task 12) is unchanged.
+
+---
+
+## Decision 21: Re-cut executed at seed 20260715; baseline re-measured — full-heldout table is train-contaminated, leak-free anchor recorded
+
+**Date**: 2026-07-15
+**Status**: accepted
+
+### Context
+
+Task 17 (Req 2.6, design §3.2a) required the stratified held-out re-cut with a new frozen seed, then a re-measurement of the pinned baseline (`checkpoint_letterbox.pt`, model `24e0b022241a`) whose per-class table anchors every later uplift delta. The re-cut ran on 2026-07-15: `prepare_dataset.py --heldout-frac 0.12 --seed 20260715` over the 7118 FoodSeg103 pairs → train 5553 / val 711 / heldout 854, `splits.json` stratification block and `co_stats.json` (`schema: co_stats.v2`, Decision 20) written. Two findings frame this entry. First, three staples (`brown_rice`, `bread_wholemeal`, `potato_mashed`) have **zero images in the dataset**: `class_mapping_foodseg103_v1.json` routes no FoodSeg103 source category to those channels, so their absence from the old held-out split was never a carving artefact and no seed can make them measurable — the design §3.5 zero-image warning path fired for all three. Second, the pinned baseline was trained on the seed-1234 train split, and the re-shuffle moved 672 of the new 854 held-out images (78.7%) out of that old training set's complement — i.e. the pinned model has TRAINED ON 78.7% of the new held-out split, so its re-measured score there is leakage-inflated.
+
+### Decision
+
+The split seed is **20260715**, now frozen (Req 2.6); `--split-seed 20260715` is mandatory for every training run against `data/foodseg103_remapped`. Both baseline tables are recorded below. The full-heldout table (mean **0.7403**) is recorded for completeness but is **not usable as the uplift anchor** for the pinned model — it measures memorisation, not generalisation. The honest baseline estimate is the leak-free diagnostic: the 182 new-heldout images that were in the old val/heldout splits (never trained on), giving mean **0.3776**. Task 19's per-staple uplift judgements for the pinned model anchor to the leak-free table; the new recipe run's own heldout numbers are clean by construction (it trains on the new train split) and are judged on the full 854-image heldout.
+
+Full-heldout re-measure (854 images, contaminated for the pinned model) — mean food-class IoU 0.7403; staples: bread_white 0.8199, chips_fries 0.8161, pasta 0.8476, potato_boiled 0.8066, white_rice 0.8411; per-class: apple 0.6194, background 0.9640, banana 0.9040, beef 0.7615, bread_white 0.8199, broccoli 0.9009, carrot 0.8594, cheese 0.6106, chicken 0.7655, chips_fries 0.8161, coffee 0.7656, egg 0.7873, fish_white 0.7406, fruit_juice 0.8481, lentils 0.1860, milk 0.9171, mixed_vegetables 0.7786, pasta 0.8476, peas 0.8173, pork 0.7226, potato_boiled 0.8066, salad_leaves 0.7531, soup 0.7291, tea 0.1036, tomato 0.8469, unknown_food 0.7926, unsupported_liquid 0.9357, white_rice 0.8411, wine 0.6992 (brown_rice, bread_wholemeal, potato_mashed absent).
+
+Leak-free diagnostic (182 images, never in the pinned model's training set) — mean food-class IoU 0.3776; staples: bread_white 0.4017, chips_fries 0.6432, pasta 0.5002, potato_boiled 0.5041, white_rice 0.6715; per-class: apple 0.0453, background 0.9311, banana 0.7223, beef 0.4085, bread_white 0.4017, broccoli 0.8450, carrot 0.7188, cheese 0.0239, chicken 0.3463, chips_fries 0.6432, coffee 0.3110, egg 0.4862, fish_white 0.0364, fruit_juice 0.6775, lentils 0.0000, milk 0.0000, mixed_vegetables 0.4821, pasta 0.5002, peas 0.5800, pork 0.1537, potato_boiled 0.5041, salad_leaves 0.3706, soup 0.0112, tea 0.0000, tomato 0.7127, unknown_food 0.4669, unsupported_liquid 0.8265, white_rice 0.6715, wine 0.1649 (brown_rice, bread_wholemeal, potato_mashed absent).
+
+Revisit triggers (design §3.2a), FLAGGED here without amending any bar: the Decision 5 trigger (|re-measured mean − 0.4054| > 0.02) fires on both tables — trivially on the contaminated one (Δ +0.335, cause: leakage, not model or split quality) and marginally on the leak-free one (0.3776, Δ −0.028), where 182 images leave the delta inside plausible sampling noise. The Decision 14 trigger (any staple baseline < 0.40) does not fire on any measured staple — bread_white at 0.4017 is the closest call — but the three dataset-absent staples can never be measured on FoodSeg103, which leaves their 0.45 floors unprovable (`validation.shortfall` correctly reports them as absent) and the strict gate permanently unattainable on FoodSeg103 alone. Whether Decisions 5/14 are actually revisited is left to the human gate before task 19 judging.
+
+### Rationale
+
+A baseline anchor exists to measure uplift on unseen data; a table where the model trained on 78.7% of the evaluation images cannot serve that purpose, and treating it as the anchor would make any honestly-trained successor look like a catastrophic regression. The leak-free subset is small but deterministic and reproducible (old carve reconstructed with `carve_splits(pairs, 0.12, 0.1, 1234, None)`), and its mean (0.3776) sits close to the frozen-split measurement (0.4054), which corroborates rather than contradicts the gate derivation. Recording both tables keeps the provenance honest and leaves the bar-revision question where Decision 2 put it — with a logged decision, not a silent renumbering.
+
+### Alternatives Considered
+
+- **Anchor to the full-heldout 0.7403 table as task 17 literally reads**: Rejected — it is a memorisation score; every uplift delta computed against it would be meaningless and Req 2.4's ≥ 0.03 uplift would be unreachable by construction.
+- **Keep the old seed-1234 heldout for baseline judging and use the new split only for training**: Rejected — Req 2.6 froze ONE new stratified split for both training and judging; maintaining two evaluation splits invites exactly the comparability confusion the label-space note (design §3.1) exists to prevent.
+- **Retrain the pinned recipe on the new train split to manufacture a clean 854-image baseline**: Rejected — a full multi-hour run whose only product is an anchor; the recipe-upgraded run (task 18) provides the forward comparison anyway, and the leak-free subset already gives an unbiased estimate of the pinned model's true generalisation.
+
+### Consequences
+
+**Positive:**
+- The split is frozen and fully stratified for the five staples that exist; `co_stats.v2` statistics match seed 20260715, so the task 18 fail-fast contract is satisfiable.
+- The contamination is caught and documented BEFORE any judging run, with an unbiased (if small) baseline table recorded alongside the inflated one.
+- The dataset-level absence of brown_rice/bread_wholemeal/potato_mashed is now established fact with a mapping-level cause, not a split-level suspicion.
+
+**Negative:**
+- The leak-free anchor rests on 182 images; per-class deltas judged against it carry meaningful sampling noise (several thin classes — lentils, milk, tea — measure 0.0000 there).
+- Three staple floors (0.45) remain unprovable on FoodSeg103, so `export_eligible` stays false for any model validated on this dataset alone; the Decision 4 developer override remains the shipping path until a dataset supplying those classes exists.
+- Req 2.3's "staples first measurable after the re-cut" clause is void — no staple becomes measurable, because none was ever present.
+
+### Impact
+
+`data/foodseg103_remapped` (regenerated, gitignored: `splits.json` with stratification block, `co_stats.json` schema v2), `tools/segmenter/build/lineage.json` (metrics block now carries the full-heldout re-measure + task 17b release override), task 18's launch flags (`--split-seed 20260715`), and task 19's judging procedure (pinned-model deltas anchor to the leak-free table recorded here).
 
 ---

@@ -100,8 +100,9 @@ metadata:
 
 ## Phase 3: Gated Dataset and Training Stages (human/compute-gated)
 
-- [ ] 17. STOP — execute the stratified re-cut and re-measure the pinned baseline <!-- id:2mfkxz7 -->
+- [x] 17. STOP — execute the stratified re-cut and re-measure the pinned baseline <!-- id:2mfkxz7 -->
   - Needs the FoodSeg103 dataset on disk. Run prepare_dataset.py with the new stratified carve and a new seed; then run_validation.py for checkpoint_letterbox.pt (model 24e0b022241a) against the re-cut heldout split. Record mean and the FULL per-class table in the decision log. Check both revisit triggers: |re-measured mean - 0.4054| > 0.02 -> revisit Decision 5 (Req 2.6); any staple baseline < 0.40 -> revisit Decision 14 (design §3.2a). All later uplift deltas anchor to this table.
+  - 2026-07-15: done (Decision 21). Seed 20260715, frozen; heldout 854 with all five EXISTING staples stratified in. brown_rice/bread_wholemeal/potato_mashed have ZERO images dataset-wide (mapping routes no source class to them) — no seed can make them measurable. Full-heldout re-measure 0.7403 is train-contaminated (pinned model trained on 78.7% of the re-cut heldout); the uplift anchor is the leak-free 182-image table (mean 0.3776). Decision 5 revisit trigger fired (leak-free delta -0.028); Decision 14 trigger did not fire on any measured staple.
   - Blocked-by: 2mfkxz4 (Code: stratified heldout carve in prepare_dataset.py)
   - Requirements: [2.6](requirements.md#2.6)
 
