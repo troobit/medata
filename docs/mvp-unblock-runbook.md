@@ -38,7 +38,7 @@ the pipeline produces a real number — **nothing else is on the critical path.*
 | 3 | **Train** — the long pole | CUDA GPU **or** Mac MPS | see timing note | checkpoint written |
 | 4 | Validate (seg-bench) | any | 10 min | **mean food mIoU ≥ 0.48, each carb class ≥ 0.45** (were 0.60/0.50 — re-derived by segmenter-foundation Decisions 5/14) |
 | 5 | Export to Core ML | **macOS** | 10 min | export gates pass, `.mlpackage` bundled |
-| 6 | **On-device verify = MVP gate** | iPhone 13 Pro Max | 45–60 min | `estimate.end success=true`, `segmenterSource=coreml_…`, carb > 0 |
+| 6 | **On-device verify = MVP gate** | iPhone 16 Pro (hardware floor — Decision 22) | 45–60 min | `estimate.end success=true`, `segmenterSource=coreml_…`, carb > 0 |
 
 **Timing and the 36-hour window — read before step 3.** Training is the only step that can blow the
 budget. On a CUDA box (RTX 3060 12 GB or better) 60 epochs is a few hours; on a Mac (MPS) it is
@@ -170,7 +170,8 @@ metadata. **Do not rename the output path** — the loader resolves that exact n
 ## Step 6 — On-device verify — THE MVP GATE
 
 Build **Release** (so `DEV_STUB_SEGMENTER` is undefined and the real model loads) and side-load to an
-iPhone 13 Pro Max. Sign/side-load steps: [`ios-device-setup.md`](ios-device-setup.md); build/test loop:
+iPhone 16 Pro (hardware floor — segmenter-foundation Decision 22). Sign/side-load steps:
+[`ios-device-setup.md`](ios-device-setup.md); build/test loop:
 [`agent-notes/device-build-and-test.md`](agent-notes/device-build-and-test.md).
 
 **Confirm all of:**

@@ -191,12 +191,19 @@ SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
   train-contaminated** — `checkpoint_letterbox.pt` scored 0.7403 there because
   78.7% of the new heldout was in its seed-1234 train split; the honest anchor
   is the leak-free 182-image subset (mean 0.3776), reconstructable via
-  `carve_splits(pairs, 0.12, 0.1, 1234, None)`; (3) the old carve is
-  reproducible with `--no-stratify --seed 1234` since the plain-shuffle path
-  is unchanged. Init for the next run: torchvision `IMAGENET1K_V2` via
-  `train.py --init-checkpoint tools/segmenter/build/mnv3_imagenet1k_v2.pth`
-  (adapter probe FAILED — Decision 19; the timm in21k graphs diverge
-  numerically despite matching shapes).
+  `carve_splits(pairs, 0.12, 0.1, 1234, None)` and now materialised as
+  `data/foodseg103_remapped/heldout_leakfree/` (gitignored symlinks); (3) the
+  old carve is reproducible with `--no-stratify --seed 1234` since the
+  plain-shuffle path is unchanged. Init history: the timm in21k adapter probe
+  FAILED (Decision 19; the graphs diverge numerically despite matching
+  shapes); the torchvision `IMAGENET1K_V2` fallback init was then empirically
+  REJECTED at epoch 20 of the task-18 run (Decision 23) and the run relaunched
+  on `DEFAULT` (COCO-seg) weights. That co-occurrence-recipe run completed and
+  was REJECTED too (Decision 24: same-set leak-free 0.3253 vs the pinned
+  model's 0.3776; four staples regressed beyond tolerance while dead tail
+  classes recovered from ~0). The bundled model remains `24e0b022241a`; a
+  combined-loss fallback run (weighting-vs-co-term attribution) is in flight —
+  see [model-production.md](model-production.md).
 
 ## 6. Public-data posture (confirmed)
 

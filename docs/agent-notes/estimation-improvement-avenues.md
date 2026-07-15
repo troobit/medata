@@ -90,11 +90,20 @@ both the absent-staple gap and the small-set ceiling at once.
   on FoodSeg103 itself, up to +3.72% mIoU (U-Net, matrix from FoodSeg103), rising to
   up to **16.54% mIoU improvement when the matrix is derived from Recipe1M+** instead,
   and a 755% relative gain on the least-frequent 10% of classes (near-zero baseline).
-  Directly relevant: the in-flight co_occurrence loss builds its matrix from
+  Directly relevant: the co_occurrence loss builds its matrix from
   FoodSeg103 (`co_stats.v2`) — **deriving it from Recipe1M+ is a cheap, verified
   upgrade path**. Caveats: single unreplicated study, mid-tier journal, ambiguous
   relative-vs-absolute reporting; transfer from U-Net/EfficientNet-b7 to a compact
   mobile model is unproven.
+  **Outcome (2026-07-16, Decision 24):** the FoodSeg103-internal run completed
+  and was REJECTED — same-set leak-free 0.3253 vs the pinned model's 0.3776,
+  with four staples regressing beyond tolerance while dead tail classes
+  recovered from ~0 (milk/tea/soup/fish_white/apple). The mechanism works on
+  the tail; its cost model on the staples is the problem — consistent with
+  this paper's finding that the statistics source matters, so the Recipe1M+
+  question stands. Nothing was exported (bundled model remains
+  `24e0b022241a`); a combined-loss fallback run (weighting-vs-co-term
+  attribution) is in flight.
 - **Initialisation beats SSL machinery** (UniMatch V2, TPAMI 2025; [arXiv:2410.10777](https://arxiv.org/html/2410.10777v2), votes 3-0/3-0, high confidence):
   SSL delivers big gains under label scarcity (+5.7 mIoU on ADE20K at 1/32 labels),
   but the paper's own ablations attribute most of the headline improvement to the

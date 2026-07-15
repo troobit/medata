@@ -12,6 +12,9 @@
 > shipped (`0295ea61edd9`, 2026-07-05; letterbox-trained `24e0b022241a`,
 > 2026-07-06), both trained locally on Apple-silicon MPS. See the §5
 > developer-phase gate note for how they were validated.
+> **Update 2026-07-16:** the co-occurrence retrain (segmenter-foundation
+> tasks 18/19) was rejected — same-set regression vs the pinned model
+> (Decision 24); the bundled model remains `24e0b022241a`.
 
 This document is the end-to-end recipe for producing the two model artefacts that
 the iOS app depends on at runtime:
@@ -76,7 +79,7 @@ detail not duplicated there.
 | --- | --- |
 | Segmenter training | Local Apple-silicon Mac (M5 Pro-class, MPS) is a supported route: expect roughly 5–10× a mid-range CUDA card per epoch; run iteratively with `train.py --resume` (see §4 run hygiene). A Linux/Windows CUDA box (RTX 3060 12 GB or better) remains the faster alternative; smaller cards work with a smaller batch size. |
 | Export to Core ML + TFLite | macOS 14+. `coremltools` requires Apple OS; cross-OS export is not supported. |
-| On-device validation | iPhone 13 Pro Max (Req 1.2 spec floor; iOS 26.5+). Needed for the Apple Neural Engine residency check (Req 16.5) and per-stage latency bar (Req 16.2). |
+| On-device validation | iPhone 16 Pro (hardware floor — segmenter-foundation Decision 22, supersedes the Req 1.2 13 Pro Max floor; iOS 26.5+). Needed for the Apple Neural Engine residency check (Req 16.5) and per-stage latency bar (Req 16.2). |
 | β_c gravimetric capture | Calibrated kitchen scale, 1 g resolution or finer; ID-1 reference card (any expired credit / library card); the same iPhone used for on-device validation. |
 
 ### Python environment
@@ -145,7 +148,7 @@ fixture directory.
 | --- | --- | --- |
 | Segmenter mean food-class mIoU ≥ 0.48 (segmenter-foundation Decision 5; was 0.60) | Req 8.9 as amended | `HarnessCLI seg-bench` |
 | Segmenter weights ≤ 24 MiB (FP16, Decision 13) | Req 8.2 | `SegmenterWeightsBudget.validate(at:)` |
-| Segmenter inference ≤ 250 ms / view on iPhone 13 Pro Max (v1 hardware floor) | Req 8.3 | XCTest with `XCTClockMetric` |
+| Segmenter inference ≤ 250 ms / view on iPhone 16 Pro (v1 hardware floor — segmenter-foundation Decision 22) | Req 8.3 | XCTest with `XCTClockMetric` |
 | Segmenter resident on the Apple Neural Engine | Req 16.5 | Xcode → Core ML performance report (manual, post-bundle) |
 | End-to-end MAPE < 20% AND MAE ≤ 25 g | Req 21.3 | `HarnessCLI accuracy` |
 | ≥ 30 calibration meals per class for `calibrated` β_c status | Req 11.7 | `HarnessCLI calibrate` |
@@ -364,6 +367,31 @@ For long runs on the local Mac:
   expected range (roughly 5–10× a mid-range CUDA card per epoch, §1).
 - Watch **food-class** mIoU, not overall accuracy (see "Why" above).
 
+### Detached runs — launch, find, watch, resume
+
+`caffeinate` survives a closed terminal via `nohup`, but not a lid close or a
+reboot (2026-07-15: a reboot killed a run at epoch 30; the sidecar resumed it
+losing nothing). Keep the lid open and the Mac on power.
+
+```sh
+# Launch detached (log name: train_<variant>_<date>.log)
+nohup caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
+    <flags> >> tools/segmenter/build/train_<name>.log 2>&1 &
+
+# Find a running train later (shows PID + full flags)
+pgrep -fl "train.py|caffeinate"
+
+# Watch progress (one epoch line every ~20 min on M5 Pro MPS)
+tail -f tools/segmenter/build/train_<name>.log
+
+# Recover the exact flags from a sidecar (they must match on --resume)
+tools/segmenter/.venv/bin/python -c "import torch; s = torch.load(
+    'tools/segmenter/build/<out>.resume.pt', map_location='cpu');
+print({k: v for k, v in s.items() if k not in ('model', 'optimizer')})"
+
+# Resume: SAME flags + --resume <out>.resume.pt, appending to the same log
+```
+
 ## 5. Validating the segmenter
 
 ### Why
@@ -384,6 +412,10 @@ segmenter-foundation Decision 5; was 0.60 — see
 > models were gated and overridden that way (`0295ea61edd9` mean 0.4259;
 > letterbox-trained `24e0b022241a` mean 0.4054 — the letterbox recipe closes the
 > train↔runtime square-resize skew, which this offline bench cannot see).
+> For judging uplifts, the 0.4054 full-heldout figure is superseded: the pinned
+> model trained on most of the re-cut held-out split, so that table is
+> leakage-inflated; the leak-free anchor is mean 0.3776 on the 182-image clean
+> subset (segmenter-foundation Decision 21, 2026-07-15).
 > seg-bench remains the mechanism described below for when fixture generation is
 > worth the disk.
 It reads fixtures containing the model's FP16 probability tensors plus
@@ -485,7 +517,7 @@ here — and ANE residency in particular is a manual check that is easy to miss.
 ### Runbook
 
 1. Build a **Release** config (so `DEV_STUB_SEGMENTER` is undefined) and
-   side-load to an iPhone 13 Pro Max — see
+   side-load to an iPhone 16 Pro (hardware floor — segmenter-foundation Decision 22) — see
    [`ios-device-setup.md`](ios-device-setup.md) and
    [`agent-notes/device-build-and-test.md`](agent-notes/device-build-and-test.md).
 2. Confirm the bars:
@@ -647,7 +679,7 @@ shipped app is wrong.
 
 ### On-device build/validate
 - [`ios-device-setup.md`](ios-device-setup.md) — sign and side-load to an
-  iPhone 13 Pro Max (needed for the ANE residency check).
+  iPhone 16 Pro (needed for the ANE residency check).
 - [`agent-notes/device-build-and-test.md`](agent-notes/device-build-and-test.md)
   — the device build/test loop.
 - [`README.md`](README.md) — documentation index and Phase 1/2/3 plan.

@@ -25,15 +25,15 @@ Build, sign, and side-load the MeData iOS shell to a developer-owned iPhone for 
 
 The full pipeline relies on [ARKit `sceneDepth`](https://developer.apple.com/documentation/arkit/arconfiguration/framesemantics/scenedepth), which is available **only on iPhones / iPads with a rear-facing LiDAR scanner**. Non-LiDAR devices are supported in **all builds** (Debug and Release): the iOS-shell engine in `MedataCore/Sources/CaptureKit/ARKitCaptureEngine.swift` starts the AR session without `.sceneDepth` when LiDAR is absent and the pipeline falls through to the two-view + ID-1 card path (Req 4.3, §7.4). Confidence is degraded (`noLidarConfidence` flag set on every meal). The spec's hardware floor (Req 1.2 / 1.3) remains the recommendation but is **not** enforced at the engine boundary, so older non-LiDAR devices can run the app provided the ID-1 reference card is present in every shot.
 
-**Spec floor (Req 1.2):** iPhone 13 Pro Max + iOS 26.5. This is the canonical tethered-test device for this codebase and the target for the §16 performance bars. Older LiDAR devices (iPhone 12 Pro / Pro Max, iPhone 13 Pro non-Max) still run but are below spec floor and not part of the active test matrix; iPhone 13 mini is **not supported**.
+**Hardware floor:** iPhone 16 Pro + iOS 26.5 (raised from the Req 1.2 iPhone 13 Pro Max by segmenter-foundation Decision 22, 2026-07-15). The 16 Pro is the canonical tethered-test device for this codebase and the target for the §16 performance bars. Older LiDAR devices (iPhone 12 Pro through 15 Pro Max) still run but are below the floor and not part of the active test matrix; iPhone 13 mini is **not supported**.
 
 | Device | LiDAR | Debug | Release | Notes |
 |---|---|---|---|---|
-| **iPhone 13 Pro Max** | Yes | Yes | Yes | **Spec floor (Req 1.2)** — tethered perf tests target this device (Req 16.7) |
-| iPhone 13 Pro | Yes | Yes | Yes | Below spec floor (Req 1.2 raised to Pro Max for Phase 1) but runs fine |
-| iPhone 14 Pro / Pro Max | Yes | Yes | Yes | Recommended |
-| iPhone 15 Pro / Pro Max | Yes | Yes | Yes | Recommended |
-| iPhone 16 Pro / Pro Max | Yes | Yes | Yes | Recommended |
+| **iPhone 16 Pro / Pro Max** | Yes | Yes | Yes | **Hardware floor (Decision 22)** — tethered perf tests target the 16 Pro |
+| iPhone 13 Pro Max | Yes | Yes | Yes | Former spec floor (Req 1.2); out of scope since Decision 22 but runs |
+| iPhone 13 Pro | Yes | Yes | Yes | Below hardware floor but runs fine |
+| iPhone 14 Pro / Pro Max | Yes | Yes | Yes | Below hardware floor (Decision 22) but runs |
+| iPhone 15 Pro / Pro Max | Yes | Yes | Yes | Below hardware floor (Decision 22) but runs |
 | iPhone 17 Pro / Pro Max | Yes | Yes | Yes | Recommended |
 | iPhone 12 Pro / Pro Max | Yes | Yes | Yes | Below spec floor (Req 1.2) but runs |
 | iPad Pro (3rd gen, 2018) onwards | Yes | Yes | Yes | Supported |
@@ -50,7 +50,7 @@ LiDAR availability is the canonical Apple matrix at [Tech Specs — iPhone](http
 | Xcode 26.0+ (26.5 verified) | iOS 18 / iOS 26 SDK, Swift 6, supports `Package.swift` `swift-tools-version: 5.9` and the project's MainActor-by-default isolation | [Apple Developer downloads](https://developer.apple.com/xcode/) |
 | Apple ID (free or paid) | Code signing for personal device install | [developer.apple.com/account](https://developer.apple.com/account) |
 | USB-C cable (Lightning for iPhone 13/14 non-Pro) | Wired install — faster and more reliable than wireless debugging | — |
-| iPhone with iOS 26.5+ (iPhone 13 Pro Max for spec floor) | Runtime target — Req 1.2 OS + hardware floor | [Compatible iPhone models](https://support.apple.com/en-gb/guide/iphone/iphe3fa5df43/ios) |
+| iPhone with iOS 26.5+ (iPhone 16 Pro for the hardware floor — Decision 22) | Runtime target — OS + hardware floor | [Compatible iPhone models](https://support.apple.com/en-gb/guide/iphone/iphe3fa5df43/ios) |
 
 A paid Apple Developer Program membership ($99/yr) is **not required** for installing on your own devices. A free Apple ID gives a 7-day developer cert that re-signs on the next Xcode build.
 

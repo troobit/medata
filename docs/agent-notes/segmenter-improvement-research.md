@@ -4,6 +4,22 @@
 **Scope:** written analysis only (estimation-quality PRD, "Segmentation approach research" context). No runtime or training code changes here; the training-recipe implementation is the sibling "Segmenter training pipeline" context, and the runtime speckle cleanup is the "Mask post-processing cleanup" context.
 **Prior conclusion honoured:** the YCbCr→RGB / stride / pixel-format path was audited clean 2026-07-06 — the artefact is model quality plus missing spatial regularisation, **not** a format bug. Nothing below re-opens that.
 
+> **Outcome update (2026-07-16, segmenter-foundation Decisions 21–24).** The
+> baselines and thresholds below are superseded: the split was re-cut at
+> frozen seed **20260715**, the old full-heldout numbers (0.4259 / 0.4054,
+> seed 1234) are historical, and the honest anchor for the shipped model is
+> the **leak-free 182-image table, mean 0.3776** (Decision 21 — re-measuring
+> the old checkpoint on the re-cut heldout is train-contaminated).
+> brown_rice/bread_wholemeal/potato_mashed have ZERO FoodSeg103 images
+> dataset-wide, so no split makes them measurable. §4's levers were run: the
+> co-occurrence recipe (weighted CE + co-term + photometric, DEFAULT init) was
+> REJECTED on a same-set comparison (0.3253 vs 0.3776; four staples regressed
+> beyond tolerance, though the collapsed tail classes genuinely recovered —
+> Decision 24). The bundled model remains `24e0b022241a`; a combined-loss
+> (weighted CE + dice) attribution run is in flight. §6's incumbent/split
+> figures (seed 1234, ≥ 0.4254 bar) no longer apply. Hardware floor is now the
+> iPhone 16 Pro (Decision 22).
+
 ## 1. Where the model stands (evidence)
 
 Two real models have shipped, both under Decision 11 developer-phase overrides

@@ -76,6 +76,12 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   food-class IoU 0.4054 — staples white_rice 0.6022 / chips_fries 0.5671 /
   pasta 0.5538 pass, bread_white 0.4315 / potato_boiled 0.4648 short,
   brown_rice / bread_wholemeal / potato_mashed absent from heldout.
+  **Caveat (2026-07-15, segmenter-foundation Decision 21):** that 0.4054 was
+  measured on the old seed-1234 split; the split has since been re-cut at
+  frozen seed 20260715, and re-measuring this checkpoint on the new heldout is
+  TRAIN-CONTAMINATED (it scores 0.7403 there — memorisation, not
+  generalisation). The honest anchor for this model is the leak-free
+  182-image table, mean food-class IoU **0.3776**.
   `export_eligible=false`; Decision 11 developer-phase override recorded in
   `build/lineage.json` (deployed for on-device efficacy testing while the
   model improves). The heldout mean is slightly *below* the previous model's
@@ -159,10 +165,31 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   Lineage gained `pretrained_checkpoint` `{source_url, licence, sha256}` (via
   `--pretrained-source-url/-licence/-sha256`) and `co_stats_sha256`;
   `preserve_metrics` now carries both across re-exports. `spike_segformer.py`
-  (SegFormer-B0 Core ML spike, criteria 1/2/4) and `adapter_probe.py` (timm
-  in21k-MIL → torchvision state-dict round-trip, Decision 19) are CODE-ONLY so
-  far — neither has been run; both need the heavy deps (`transformers` is in
-  requirements.txt as spike-only; `timm` is installed ad hoc).
+  (SegFormer-B0 Core ML spike, criteria 1/2/4 — measured on the iPhone 16 Pro,
+  the hardware floor since Decision 22) needs the heavy deps (`transformers`
+  is in requirements.txt as spike-only). `adapter_probe.py` (timm in21k-MIL →
+  torchvision state-dict round-trip) was RUN and FAILED — Decision 19; the
+  timm graphs diverge numerically despite matching shapes.
+- **Segmenter-foundation training cycle (2026-07-15/16, Decisions 21–24)** —
+  the stratified re-cut is frozen at seed **20260715**; `--split-seed 20260715`
+  is mandatory for every run against `data/foodseg103_remapped`. The pinned
+  model's uplift anchor is the **leak-free 182-image table, mean 0.3776**
+  (Decision 21; the full-heldout re-measure of the pinned model is
+  train-contaminated — see the caveat on the second-real-model bullet). The
+  leak-free diagnostic split is materialised at
+  `data/foodseg103_remapped/heldout_leakfree/` (gitignored symlinks). Task-18
+  outcomes: torchvision `IMAGENET1K_V2` init was empirically REJECTED at epoch
+  20 (val mIoU 0.2391 vs 0.3610 at the same point; Decision 23) and the run
+  relaunched on `DEFAULT` (COCO-seg) weights; that co-occurrence-recipe run
+  then completed and was REJECTED at task 19 (Decision 24: same-set leak-free
+  0.3253 vs the pinned model's 0.3776, four of five measurable staples
+  regressing beyond the 0.02 tolerance, although dead tail classes genuinely
+  recovered — milk/tea/soup/fish_white/apple up from ~0). `checkpoint_recipe.pt`
+  was NOT exported; **the bundled model remains `24e0b022241a`**. A
+  combined-loss fallback run (weighted CE + dice, same seed/augment/init —
+  isolates weighting vs the co-occurrence term) is in flight:
+  `tools/segmenter/build/checkpoint_combined.pt`, log
+  `train_combined_20260716.log`, resumed from epoch 30 after a reboot.
 
 ## Gotchas
 
