@@ -106,12 +106,12 @@ metadata:
   - Blocked-by: 2mfkxz4 (Code: stratified heldout carve in prepare_dataset.py)
   - Requirements: [2.6](requirements.md#2.6)
 
-- [ ] 18. STOP — run the recipe-upgraded GPU training job <!-- id:2mfkxys -->
+- [x] 18. STOP — run the recipe-upgraded GPU training job <!-- id:2mfkxys -->
   - Human/compute-gated multi-hour MPS/GPU run of tools/segmenter/train.py: chosen init (task 11), co-occurrence loss (task 10), re-cut splits (task 17), lineage additions (task 12).
   - Blocked-by: 2mfkxz6 (Code: co-occurrence loss option on the landed loss plumbing), 2mfkxyw (Code: lineage schema additions pretrained_checkpoint, co_stats reference), 2mfkxz7 (STOP — execute the stratified re-cut and re-measure the pinned baseline)
   - Requirements: [2.4](requirements.md#2.4)
 
-- [ ] 19. STOP — validate the recipe-upgraded checkpoint against Reqs 2.3/2.4/2.5 as written <!-- id:2mfkxyt -->
+- [x] 19. STOP — validate the recipe-upgraded checkpoint against Reqs 2.3/2.4/2.5 as written <!-- id:2mfkxyt -->
   - run_validation.py against the re-cut heldout split, judged against the task 17 baseline table: mean food-class IoU uplift >= 0.03 (Req 2.4 — the track's success measure, NOT the gate); each staple below the 0.48 gate at baseline gains >= 0.05, staples first measurable after the re-cut are judged against the 0.45 floors, no staple regresses > 0.02 (Req 2.3/Decision 18). Report the 0.48 gate outcome separately as export-eligibility: below-gate + criteria-met triggers Req 1.5's logged residual-gap entry (owner: backbone track or follow-up data work), and the Decision 4 override applies if shipping. Export budgets: <= 24 MiB FP16, <= 250 ms on the v1 hardware floor (Req 2.5).
   - Blocked-by: 2mfkxys (STOP — run the recipe-upgraded GPU training job)
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [1.5](requirements.md#1.5)
