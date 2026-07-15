@@ -5,7 +5,8 @@ two photographs using on-device computer vision (no LLM, no network in the estim
 path). Start with the project [`README.md`](../README.md) for structure, build commands,
 and the **Phase 1 / 2 / 3 delivery plan**.
 
-**Current state:** Phase 1 — full pipeline runs on iPhone 13 Pro Max with a development
+**Current state:** Phase 1 — full pipeline runs on the iPhone 16 Pro (hardware floor since
+segmenter-foundation Decision 22) with a development
 stub in the segmenter slot (`specs/estimation/pipeline/requirements.md` §23). Carb numbers are
 placeholders; capture flow, gating, persistence and refusal paths are real.
 
@@ -14,7 +15,7 @@ placeholders; capture flow, gating, persistence and refusal paths are real.
 | Document | Purpose |
 |---|---|
 | [`architecture.md`](architecture.md) | **Start here.** Layers, modules, abstractions, and Swift/SwiftUI conventions — written for developers joining the project. Links to the specs for detail. |
-| [`ios-device-setup.md`](ios-device-setup.md) | Build, sign, and side-load the iOS app to iPhone 13 Pro Max (or any LiDAR-equipped iPhone). |
+| [`ios-device-setup.md`](ios-device-setup.md) | Build, sign, and side-load the iOS app to the iPhone 16 Pro (or any LiDAR-equipped iPhone). |
 | [`mvp-unblock-runbook.md`](mvp-unblock-runbook.md) | **Do this now to unblock the MVP.** Ordered, time-boxed operational steps and go/no-go gates for producing the on-device segmenter — the one human/GPU/device-gated task left. Links into `ml-training.md` for detail. |
 | [`ml-training.md`](ml-training.md) | End-to-end training recipe for the Phase 3 segmenter + β_c calibration. |
 | [`agent-notes/`](agent-notes/) | Implementation-progress notes: what was built, gotchas found, and module-level details captured during tasks. |

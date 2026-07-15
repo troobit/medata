@@ -30,10 +30,11 @@ photo(s) → silhouettes → visual hull H → V_c (volume per class)
 See `specs/estimation/pipeline/requirements.md` for the full mathematical pipeline, modelling
 assumptions, and academic provenance.
 
-**Hardware floor:** iPhone 13 Pro Max and later (rear LiDAR). **OS floor:** iOS 26.5.
-(`specs/estimation/pipeline/requirements.md` Req 1.2. The capture engine relaxes this at runtime
-for non-LiDAR devices — see [`docs/ios-device-setup.md`](ios-device-setup.md) device
-matrix — but calibration and performance bars are measured on iPhone 13 Pro Max.)
+**Hardware floor:** iPhone 16 Pro and later (rear LiDAR; raised from iPhone 13 Pro Max by
+segmenter-foundation Decision 22, 2026-07-15). **OS floor:** iOS 26.5.
+(`specs/estimation/pipeline/requirements.md` Req 1.2 as amended. The capture engine relaxes this at
+runtime for non-LiDAR devices — see [`docs/ios-device-setup.md`](ios-device-setup.md) device
+matrix — but calibration and performance bars are measured on iPhone 16 Pro.)
 
 ### 1.1 Delivery phases — what works today
 
@@ -42,7 +43,7 @@ ship with a development stub in the segmenter slot; numeric accuracy targets gat
 **Phase 3 only**.
 
 - **Phase 1 — running on device (current).** Full capture → segmentation (dev-stub) →
-  volume → macros → result on iPhone 13 Pro Max. Capture flow, gating, persistence,
+  volume → macros → result on the iPhone 16 Pro. Capture flow, gating, persistence,
   refusal paths and confidence combination are real; the segmenter emits a centred
   ellipse food mask (`specs/estimation/pipeline/requirements.md` §23.2) so carb numbers are
   placeholders. `DEV_STUB_SEGMENTER` is the swift-build flag that selects this engine.
@@ -367,7 +368,7 @@ The two foundational specs this architecture sits on top of:
 
 | Spec | What it covers |
 |---|---|
-| [`specs/estimation/pipeline/requirements.md`](../specs/estimation/pipeline/requirements.md) | Numbered requirements, §0 phase plan, §1.2 hardware floor (iPhone 13 Pro Max + iOS 26.5), §23 dev-stub phasing, mathematical pipeline, modelling assumptions, academic sources |
+| [`specs/estimation/pipeline/requirements.md`](../specs/estimation/pipeline/requirements.md) | Numbered requirements, §0 phase plan, §1.2 hardware floor (iPhone 13 Pro Max + iOS 26.5 as written; hardware floor since raised to iPhone 16 Pro — segmenter-foundation Decision 22), §23 dev-stub phasing, mathematical pipeline, modelling assumptions, academic sources |
 | [`specs/estimation/pipeline/design.md`](../specs/estimation/pipeline/design.md) | Module map, interfaces (§3), data models (§4), portable algorithm pseudocode (§6), testing strategy (§7) |
 | [`specs/estimation/pipeline/decision_log.md`](../specs/estimation/pipeline/decision_log.md) | Architectural decisions D1–D47 (LLM→CV, platform-neutral core, protobuf contracts, …) |
 | [`specs/estimation/pipeline/tasks.md`](../specs/estimation/pipeline/tasks.md) | Implementation task breakdown |

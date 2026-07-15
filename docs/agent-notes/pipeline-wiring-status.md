@@ -1,10 +1,14 @@
 # Pipeline factory wiring — status and next steps
 
-**Status:** Largely landed. The 2026-05-23 investigation below is **superseded** —
+**Status:** Landed. The 2026-05-23 investigation below is **superseded** —
 the real factory, the RGB conversion, and `VisionCardDetector` have all since
-shipped. The only remaining blocker is **Blocker 1 (no trained segmenter
-checkpoint)**. The rest of this note is kept as historical context; see the
-"Update (current state)" section directly below for what's actually true now.
+shipped, and **Blocker 1 closed too**: real checkpoints were trained and
+exported 2026-07-05/06; the bundled model is `24e0b022241a` under a
+developer-phase override (see `model-production.md`). Historical references
+below to the iPhone 13 Pro Max as the hardware floor are also stale — the
+floor is the iPhone 16 Pro since 2026-07-15 (segmenter-foundation Decision 22).
+The rest of this note is kept as historical context; see the
+"Update (current state)" section directly below.
 
 ## Update (current state)
 
@@ -31,8 +35,9 @@ What changed since the original 2026-05-23 investigation:
   The loader resolves it via `Bundle.module` and the resource is declared in
   `Package.swift` (`.copy("Resources")`); see `docs/architecture.md` §9.
 
-**Bottom line:** only **Blocker 1** (train + export the checkpoint) remains.
-Everything else in the original note is history.
+**Bottom line:** nothing remains — Blocker 1 closed with the 2026-07-05/06
+trained models (bundled `24e0b022241a`). Everything in the original note is
+history.
 
 ---
 

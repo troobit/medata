@@ -383,8 +383,10 @@ Tasks 65–70 are done. Test count: 239 (was 207 after Harness and Calibration).
 - `HarnessCLITests/PipelinePerformanceTests.swift` — XCTest performance tests using
   `XCTClockMetric` + `measure` over 10 iterations. Single-view P95 ≤ 1000 ms and
   two-view P95 ≤ 1800 ms assertions. Both tests skip on macOS via `XCTSkip` (2 skipped
-  tests in the test suite) — they only assert on a tethered iPhone 13 Pro Max per
-  Req 16.7 (spec floor was raised from iPhone 12 Pro to 13 Pro Max).
+  tests in the test suite) — they only assert on a tethered iPhone per
+  Req 16.7 (spec floor at the time was the iPhone 13 Pro Max, raised from the
+  iPhone 12 Pro; since 2026-07-15 the floor is the iPhone 16 Pro —
+  segmenter-foundation Decision 22).
 - P95 with 10 samples equals the maximum value (sorted[9]); so the assertion effectively
   requires all 10 runs to complete within budget.
 - Transitive imports via `HarnessCore` dependency are sufficient — no `Package.swift`

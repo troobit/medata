@@ -15,6 +15,17 @@ artifact (empty), so this report is hand-synthesised from the verified claim set
 refutation votes — the corrections below are the harness's, not added after the fact. This
 is research input for `/starwave:creating-spec`, framed so findings can become requirements.
 
+> **Outcome note (2026-07-16).** This document seeded segmenter-foundation, which has
+> since acted on it: the gate was re-derived to 0.48 mean / 0.45 staple floors
+> (Decisions 5/14); the honest baseline is the leak-free 182-image anchor, mean
+> food-class IoU **0.3776** at frozen split seed 20260715 (Decision 21 — the old
+> 0.40–0.43 heldout figures were seed-1234, and three staples have zero FoodSeg103
+> images dataset-wide); the hardware floor is now the **iPhone 16 Pro** (Decision 22,
+> 13 Pro Max out of scope); and the ranked-1 recipe lever below was tried and
+> REJECTED as configured — FoodSeg103-internal co-occurrence matrix, same-set 0.3253
+> vs 0.3776, staples regressed while tail classes recovered (Decision 24). The
+> bundled model remains `24e0b022241a`. The Recipe1M+-matrix variant is untried.
+
 ---
 
 ## Headline finding — the 0.60 gate is a dataset ceiling, not just a model choice
