@@ -800,3 +800,43 @@ Twenty epochs (~3.5 h) bought a definitive empirical answer to Decision 19's ope
 - The "stronger init" lever is exhausted for this cycle; init-driven uplift now depends on future food-domain pretraining candidates (research survey §4).
 
 ---
+
+## Decision 24: Task-19 verdict — co-occurrence recipe rejected (same-set regression); combined-loss fallback launched
+
+**Date**: 2026-07-16
+**Status**: accepted
+
+### Context
+
+The task-18 recipe run (DEFAULT init per Decision 23, co-occurrence loss with `co_stats.v2` seed 20260715, inverse-frequency weighting, photometric augment) completed 60 epochs (final val food-class mIoU 0.3280) and was judged per task 19 and Decision 21's procedure. On the full 854-image heldout (clean for this model by construction): mean food-class IoU **0.3459** vs the ≥ 0.4076 uplift target — a miss. Because Decision 21's anchor (0.3776) was measured on a different image set (the 182-image leak-free subset), a same-set diagnostic was added: the subset was reconstructed exactly (new heldout ∩ old val∪heldout via `carve_splits(pairs, 0.12, 0.1, 1234, None)`, materialised as `data/foodseg103_remapped/heldout_leakfree/` symlinks) and the new checkpoint measured on it.
+
+### Decision
+
+The co-occurrence recipe, as configured, is **rejected**: on the identical 182 images it scores mean **0.3253 vs the pinned model's 0.3776 (−0.052)**, with four of five measurable staples regressing beyond the 0.02 tolerance (bread_white −0.102, chips_fries −0.112, potato_boiled −0.077, white_rice −0.169; pasta +0.006). `checkpoint_recipe.pt` is NOT exported; the bundled model remains `24e0b022241a`. The ledger's documented fallback run (`--loss combined`, same seed/augment/init, → `checkpoint_combined.pt`) was launched 2026-07-16 as a controlled experiment: `combined` shares the inverse-frequency weighted-CE base but replaces the co-occurrence term with dice at 0.5 mixing, so its result isolates whether the weighting or the co-occurrence term drove the regression.
+
+### Rationale
+
+The per-class table shows the recipe did what it was designed to do — resurrect dead tail classes (milk 0.00→0.31, tea 0.00→0.21, soup 0.01→0.28, fish_white 0.04→0.26, apple 0.05→0.24 on the 854 set) — but at a cost to head/staple classes that the 32-class mean does not repay. This is the signature of over-aggressive class weighting rather than a defective mechanism; the 2026-07-15 research survey independently found that co-occurrence gains concentrate on rare classes and that the statistics source (in-dataset vs Recipe1M+-scale corpora) materially changes the outcome. The fallback run costs idle overnight MPS time and produces diagnostic signal either way. It deviates from the ledger's letter (fallback "only if the recipe run cannot proceed" — it proceeded and failed) under the session's standing autonomy mandate.
+
+### Alternatives Considered
+
+- **Stop training and take the survey levers to a new spec immediately**: Cleanest hand-off - Rejected because the hardware is otherwise idle overnight, the fallback is already documented and commands-ready, and its result (weighting vs co-term attribution) directly informs that next spec.
+- **Tune the failed recipe (lower `--co-lambda`, cap/soften the inverse-frequency weights) and rerun**: Direct fix attempt - Rejected as hyperparameter fishing: no local evidence isolates the culprit yet; the combined run provides that isolation on the same budget.
+- **Export the new checkpoint anyway under the Decision 4 override**: Ships the tail-class gains - Rejected: a −0.052 same-set mean regression with four staple regressions makes the current bundled model strictly better for the carb-priority use case.
+
+### Consequences
+
+**Positive:**
+- The verdict rests on a same-set comparison, immune to split-composition objections.
+- Tail-class recovery is now demonstrated in this codebase — the mechanism works; its cost model is the problem.
+- The fallback result will attribute the regression to weighting or the co-term with one run.
+
+**Negative:**
+- The training chain ends this cycle without a shippable uplift; the step-change now rests on the survey's levers (Recipe1M+ matrix, architecture bake-off, MyFoodRepo-273 bridge).
+- A further ~10 h of MPS time committed to the fallback experiment.
+
+### Impact
+
+Tasks 18/19 recorded as executed with a negative verdict; `tools/segmenter/build/lineage.json` carries the 854-heldout metrics + override; the leak-free diagnostic split persists at `data/foodseg103_remapped/heldout_leakfree/` (gitignored, symlinks); fallback run artifacts are `checkpoint_combined.pt` + `train_combined_20260716.log`.
+
+---
