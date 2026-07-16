@@ -840,3 +840,43 @@ The per-class table shows the recipe did what it was designed to do — resurrec
 Tasks 18/19 recorded as executed with a negative verdict; `tools/segmenter/build/lineage.json` carries the 854-heldout metrics + override; the leak-free diagnostic split persists at `data/foodseg103_remapped/heldout_leakfree/` (gitignored, symlinks); fallback run artifacts are `checkpoint_combined.pt` + `train_combined_20260716.log`.
 
 ---
+
+## Decision 25: Combined-loss attribution verdict — inverse-frequency weighting is the culprit; nothing exported
+
+**Date**: 2026-07-16
+**Status**: accepted
+
+### Context
+
+Decision 24 repurposed the ledger's combined-loss fallback run as a controlled attribution experiment: `--loss combined` shares the co-occurrence recipe's inverse-frequency weighted-CE base (and seed 20260715, photometric augment, DEFAULT COCO-seg init) but replaces the co-occurrence term with dice at 0.5 mixing. If it regressed on the staples the way the co-occurrence run did, the shared weighting — not the co-occurrence mechanism — would be attributed as the cause of the staple collapse. The run completed 60 epochs on 2026-07-16 (interrupted once by the 2026-07-15 machine reboot, resumed from the epoch-30 sidecar with drift-check passing; final val food-class mIoU 0.3399, lineage `69dcfde3567a`) and was judged by the same Decision 21 procedure as task 19, including the `heldout_leakfree` same-set pass.
+
+### Decision
+
+The combined-loss checkpoint is **not exported**; the bundled model remains `24e0b022241a`. On the identical 182 leak-free images it scores mean **0.3408 vs the pinned anchor 0.3776 (−0.037)**, with **all five measurable staples regressing beyond the 0.02 tolerance**: white_rice 0.5096 (−0.162), pasta 0.4114 (−0.089), chips_fries 0.5746 (−0.069), bread_white 0.3424 (−0.059), potato_boiled 0.4556 (−0.049). Full-heldout mean 0.3507 (854 images; vs the co-occurrence run's 0.3459 and the ≥ 0.4076 uplift target). Since both runs share only the inverse-frequency weighting and both regress the staples broadly, **the weighting is the attributed culprit**; the co-occurrence term is exonerated of the bulk of the damage (its run scored −0.052 mean vs combined's −0.037 with the co-term removed — the co-term's own marginal cost is real but secondary).
+
+### Rationale
+
+This is exactly the branch the ledger's judging step anticipated ("regresses like the co-occurrence run → the weighting is the attributed culprit"). The two runs differ in one lever and share the staple-regression signature; the common factor is the inverse-frequency weighted CE. The magnitude ordering corroborates it: removing the co-term recovered only ~0.015 of the −0.052 regression, so most of the damage tracks the weighting. The next cycle therefore keeps class rebalancing OFF or MILD (e.g. square-root or log frequency caps) and pursues the survey's structural levers instead (Recipe1M+-scale co-occurrence statistics, architecture bake-off, MyFoodRepo-273 data bridge), per `docs/agent-notes/estimation-improvement-avenues.md`. The SNAQ mandate (2026-07-16) reframes the success measure toward end-to-end carb MAE (`docs/agent-notes/snaq-benchmark.md`), which staple accuracy dominates — another reason not to pay staples for tail classes.
+
+### Alternatives Considered
+
+- **Export under the Decision 4 override to bank the tail-class gains**: Rejected — a same-set mean regression with five staple regressions makes the bundled model strictly better for the carb-priority use case; same reasoning as Decision 24.
+- **Rerun combined with milder weighting now (e.g. sqrt-frequency cap)**: Rejected for this cycle — it is the obvious first experiment of the NEXT cycle, but it belongs inside a spec that also carries the survey levers and the SNAQ-anchored evaluation lane, not as ad-hoc hyperparameter fishing at the tail of a concluded chain.
+- **Attribute the regression to dice instead of the weighting**: Rejected — dice was not present in the co-occurrence run, which regressed harder; the only shared lever is the weighting.
+
+### Consequences
+
+**Positive:**
+- The attribution question is answered with one run, on a same-set comparison immune to split-composition objections.
+- The next cycle starts with a concrete, evidence-backed constraint: no aggressive inverse-frequency weighting.
+- Tail-class recovery remains demonstrated (both runs), so the mechanism is available once its cost model is fixed.
+
+**Negative:**
+- The §2 training chain closes with zero shipped uplift; the bundled model is still the 2026-07-05 `24e0b022241a`.
+- The 0.48 gate remains unattained and unattainable on FoodSeg103 alone (three staples have zero images — Decision 21).
+
+### Impact
+
+Ledger §2 is fully closed. `tools/segmenter/build/lineage.json` carries both validation records with the Decision 24/25 override reasons. Artifacts kept: `checkpoint_combined.pt`, `train_combined_20260716.log`, the `heldout_leakfree/` split. The improvement work moves to the next spec, seeded from `estimation-improvement-avenues.md` + `snaq-benchmark.md` under the user's 2026-07-16 SNAQ-comparable mandate.
+
+---
