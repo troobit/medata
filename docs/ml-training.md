@@ -1,5 +1,7 @@
 # ML training pipeline
 
+
+Note, MIoU is "mean intersection over union".
 > **To unblock the MVP now,** follow the ordered, time-boxed critical path in
 > [`mvp-unblock-runbook.md`](mvp-unblock-runbook.md); it links back into the sections here for detail.
 > Audience: anyone training or refining the on-device estimation models.
