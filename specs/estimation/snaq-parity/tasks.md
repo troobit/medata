@@ -87,7 +87,7 @@ references:
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [1.3](requirements.md#1.3)
 
-- [ ] 11. Write failing BenchmarkReport tests including property-based invariants <!-- id:isuh2q2 -->
+- [x] 11. Write failing BenchmarkReport tests including property-based invariants <!-- id:isuh2q2 -->
   - Report fields: MAE g, per-meal MAPE, ±10 g share of completed meals, completion rate, N, attempts-per-meal, anchor block (SNAQ 13.1 g / 44.3%, GoCARB 37.0%, dietitians 35.2%) with verdict
   - Headline-validity boundaries: N 19 vs 20; staple-floor coverage per validation.py staple set; refused attempts counted, never excluded (Req 1.5)
   - Latest-completed-attempt selection with (timestamp, id) tie-break
@@ -95,7 +95,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6)
 
-- [ ] 12. Implement Benchmark target and BenchmarkReport.compute <!-- id:isuh2q3 -->
+- [x] 12. Implement Benchmark target and BenchmarkReport.compute <!-- id:isuh2q3 -->
   - New Benchmark SwiftPM target depending on Persistence; compute is pure and deterministic
   - Anchor constants with source citations from docs/agent-notes/snaq-benchmark.md
   - Blocked-by: isuh2q1 (Implement benchmark_meals table and store methods), isuh2q2 (Write failing BenchmarkReport tests including property-based invariants)
