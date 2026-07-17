@@ -62,6 +62,8 @@
 		0EAC1E7EAC5832F3CDFC3771 /* MealRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */; };
 		0A738EA6DED7EA8BCCBBAFBF /* RecordsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68641EF200BD7F7B3A7AE95E /* RecordsModel.swift */; };
 		4112908015F7E6A57CB6AC99 /* RecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */; };
+		7A31C0DE5E10A4B29F44E102 /* EstimationLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A31C0DE5E10A4B29F44E101 /* EstimationLogView.swift */; };
+		7A31C0DE5E10A4B29F44E104 /* BenchmarkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A31C0DE5E10A4B29F44E103 /* BenchmarkView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -118,6 +120,8 @@
 		2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealRouting.swift; path = ../App/MealRouting.swift; sourceTree = SOURCE_ROOT; };
 		68641EF200BD7F7B3A7AE95E /* RecordsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordsModel.swift; path = ../App/RecordsModel.swift; sourceTree = SOURCE_ROOT; };
 		82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RecordsView.swift; path = ../App/RecordsView.swift; sourceTree = SOURCE_ROOT; };
+		7A31C0DE5E10A4B29F44E101 /* EstimationLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EstimationLogView.swift; path = ../App/EstimationLogView.swift; sourceTree = SOURCE_ROOT; };
+		7A31C0DE5E10A4B29F44E103 /* BenchmarkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BenchmarkView.swift; path = ../App/BenchmarkView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -230,6 +234,8 @@
 				2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */,
 				68641EF200BD7F7B3A7AE95E /* RecordsModel.swift */,
 				82F6A4CFDEE7703E11D0B655 /* RecordsView.swift */,
+				7A31C0DE5E10A4B29F44E101 /* EstimationLogView.swift */,
+				7A31C0DE5E10A4B29F44E103 /* BenchmarkView.swift */,
 				39FA70734182528B1ECAEDD1 /* HomeView.swift */,
 				0851614006E459D54779E1B6 /* IntakeView.swift */,
 				85695F786A184CFFA741C58F /* CarbEntryModel.swift */,
@@ -426,6 +432,8 @@
 				0EAC1E7EAC5832F3CDFC3771 /* MealRouting.swift in Sources */,
 				0A738EA6DED7EA8BCCBBAFBF /* RecordsModel.swift in Sources */,
 				4112908015F7E6A57CB6AC99 /* RecordsView.swift in Sources */,
+				7A31C0DE5E10A4B29F44E102 /* EstimationLogView.swift in Sources */,
+				7A31C0DE5E10A4B29F44E104 /* BenchmarkView.swift in Sources */,
 				B66AE5539A5F478E793B981F /* HomeView.swift in Sources */,
 				877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */,
 				180BF780028C4E409B5B127F /* CarbEntryModel.swift in Sources */,

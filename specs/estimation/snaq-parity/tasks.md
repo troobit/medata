@@ -116,7 +116,7 @@ references:
 
 ## App surfaces
 
-- [ ] 15. Build EstimationLogView with JSON export <!-- id:isuh2q6 -->
+- [x] 15. Build EstimationLogView with JSON export <!-- id:isuh2q6 -->
   - Settings NavigationLink beside About (SettingsView.swift:130) — NOT inside #if DEBUG (Req 2.3 requires Release operation)
   - RecordsView list pattern, reload on appear, no change-stream subscription
   - JSON export of outcome rows + benchmark meals via the existing ShareSheet seam (SettingsView.swift:170-202); export contains record contents only (Req 2.6)
@@ -125,7 +125,7 @@ references:
   - Stream: 1
   - Requirements: [2.2](requirements.md#2.2), [2.3](requirements.md#2.3)
 
-- [ ] 16. Build BenchmarkView with capture launch and report rendering <!-- id:isuh2q7 -->
+- [x] 16. Build BenchmarkView with capture launch and report rendering <!-- id:isuh2q7 -->
   - Meal creation: palette class picker, grams keypad, fidelity toggle; edit-after-attempts creates a new meal (immutability)
   - Capture launch sets CaptureFlowModel.benchmarkMealID before presenting the capture route
   - Report rendering includes the anchor block and the not-headline-valid marker
