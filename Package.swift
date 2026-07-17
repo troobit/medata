@@ -129,6 +129,15 @@ let package = Package(
             dependencies: ["Persistence", "PortableContracts"],
             path: "MedataCore/Sources/GlucoseIngestion"
         ),
+        // Benchmark report maths (specs/estimation/snaq-parity lane B):
+        // BenchmarkReport.compute + the promotion-gate bootstrap. Depends on
+        // Persistence only — placement keeps the report maths in the executed
+        // `make test` surface, out of the app target.
+        .target(
+            name: "Benchmark",
+            dependencies: ["Persistence"],
+            path: "MedataCore/Sources/Benchmark"
+        ),
         .target(
             name: "Pipeline",
             dependencies: [
@@ -240,6 +249,11 @@ let package = Package(
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
             path: "MedataCore/Tests/PersistenceTests"
+        ),
+        .testTarget(
+            name: "BenchmarkTests",
+            dependencies: ["Benchmark", "Persistence"],
+            path: "MedataCore/Tests/BenchmarkTests"
         ),
         .testTarget(
             name: "GlucoseGraphTests",
