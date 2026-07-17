@@ -39,18 +39,42 @@ public struct ArgmaxMap: Sendable, Equatable {
     }
 }
 
+// Sub-stage wall clocks for one `CoreMLSegmenter.segment` invocation, measured
+// in Release too (snaq-parity Req 4.1 — the segmenter tail profile is read
+// from these values on real captures via the outcome records).
+public struct SegmentationTimings: Sendable, Equatable, Codable {
+    public let preprocessMs: Int
+    public let predictionMs: Int
+    public let argmaxMs: Int
+
+    public init(preprocessMs: Int, predictionMs: Int, argmaxMs: Int) {
+        self.preprocessMs = preprocessMs
+        self.predictionMs = predictionMs
+        self.argmaxMs = argmaxMs
+    }
+}
+
 public struct SegmentationResult: Sendable {
     public let probabilities: ProbabilityTensor
     public let argmax: ArgmaxMap
     public let perClassMeanProb: [String: Float]
     public let sigmaSeg: Float
+    // nil when the result was built outside `CoreMLSegmenter.segment`
+    // (harness fixtures, hand-built test results).
+    public let timings: SegmentationTimings?
+    // Argmax food-pixel share (0–100), from the segment-time coverage scan.
+    public let foodCoveragePercent: Float?
 
     public init(probabilities: ProbabilityTensor, argmax: ArgmaxMap,
-                perClassMeanProb: [String: Float], sigmaSeg: Float) {
+                perClassMeanProb: [String: Float], sigmaSeg: Float,
+                timings: SegmentationTimings? = nil,
+                foodCoveragePercent: Float? = nil) {
         self.probabilities = probabilities
         self.argmax = argmax
         self.perClassMeanProb = perClassMeanProb
         self.sigmaSeg = sigmaSeg
+        self.timings = timings
+        self.foodCoveragePercent = foodCoveragePercent
     }
 }
 

@@ -74,6 +74,64 @@ public enum VolumeError: Error, Equatable {
     case mismatchedViewDimensions(String)
 }
 
+// Stage measurements accumulated by the volume estimators (snaq-parity
+// Req 3.1/3.2). Populated on every run — success or refusal — so a "no volume"
+// refusal carries the causal detail (what was recovered, what was discarded,
+// what was silently skipped) instead of dying with a throw.
+public struct VolumeStats: Sendable, Equatable {
+    // Per-class recovered volumes before β-correction and before any
+    // threshold (voxel-count or minimum-volume) is applied.
+    public let perClassVolumesPreBetaCm3: [String: Float]
+    // Same classes after β-correction, still before thresholding.
+    public let perClassVolumesPostBetaCm3: [String: Float]
+    // β factor applied per class present in the pre-threshold maps.
+    public let betaApplied: [String: Float]
+    // Classes dropped by a threshold (carve: < minVoxelCountForClass voxels or
+    // a fallback extrusion under 1 cm³; height-field: post-β volume under
+    // minVolumeCm3). Sorted for deterministic output.
+    public let thresholdDiscardedClasses: [String]
+    // Carve: voxels that passed the silhouette test in both views but resolved
+    // to no owning class (empty candidate list or all-zero scores).
+    public let degenerateVoxelSkipCount: Int
+    // Rays skipped on degenerate geometry: support plane parallel to the ray,
+    // or the plane intersection behind the camera (single-view extrusion).
+    public let degenerateRaySkipCount: Int
+    // Height-field only: per-class LiDAR coverage fraction (empty for carve).
+    public let lidarCoverageFraction: [String: Float]
+
+    public init(perClassVolumesPreBetaCm3: [String: Float] = [:],
+                perClassVolumesPostBetaCm3: [String: Float] = [:],
+                betaApplied: [String: Float] = [:],
+                thresholdDiscardedClasses: [String] = [],
+                degenerateVoxelSkipCount: Int = 0,
+                degenerateRaySkipCount: Int = 0,
+                lidarCoverageFraction: [String: Float] = [:]) {
+        self.perClassVolumesPreBetaCm3 = perClassVolumesPreBetaCm3
+        self.perClassVolumesPostBetaCm3 = perClassVolumesPostBetaCm3
+        self.betaApplied = betaApplied
+        self.thresholdDiscardedClasses = thresholdDiscardedClasses
+        self.degenerateVoxelSkipCount = degenerateVoxelSkipCount
+        self.degenerateRaySkipCount = degenerateRaySkipCount
+        self.lidarCoverageFraction = lidarCoverageFraction
+    }
+}
+
+// Non-throwing estimator result (snaq-parity design lane A / Decision 14):
+// `estimate` is non-nil exactly when `refusal` is nil; `stats` is populated on
+// both exits. The Pipeline stamps `stats` into its diagnostics accumulator
+// first, then maps a non-nil `refusal` to the `EstimationFailure` throw.
+public struct VolumeOutcome<Estimate: Sendable>: Sendable {
+    public let estimate: Estimate?
+    public let stats: VolumeStats
+    public let refusal: VolumeError?
+
+    public init(estimate: Estimate?, stats: VolumeStats, refusal: VolumeError?) {
+        self.estimate = estimate
+        self.stats = stats
+        self.refusal = refusal
+    }
+}
+
 // Helper: read FP16 probability at (y, x, c) from the portable HWC byte tensor.
 @inline(__always)
 internal func readProbabilityFP16(

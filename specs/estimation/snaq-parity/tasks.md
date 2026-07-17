@@ -8,14 +8,14 @@ references:
 
 ## Diagnostics foundation
 
-- [ ] 1. Write failing tests for non-throwing VolumeOutcome estimators <!-- id:isuh2ps -->
+- [x] 1. Write failing tests for non-throwing VolumeOutcome estimators <!-- id:isuh2ps -->
   - Extend the existing volume maths suites (MVP gate: executed MedataCore tests only)
   - Assert skip counters and per-class pre-beta volumes survive a noFoodVolumeRecovered refusal — the stats currently die with the throw at VoxelCarveEstimator.swift:206-208
   - Cover the silent drops at VoxelCarveEstimator.swift:200-207,276 and HeightFieldEstimator.swift:126-135
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
-- [ ] 2. Convert VoxelCarveEstimator and HeightFieldEstimator to return VolumeOutcome <!-- id:isuh2pt -->
+- [x] 2. Convert VoxelCarveEstimator and HeightFieldEstimator to return VolumeOutcome <!-- id:isuh2pt -->
   - Return VolumeOutcome {perClassVolumesCm3 (pre-beta), stats: VolumeStats, refusal: VolumeError?} — no throws
   - Pipeline stamps stats into the accumulator, then maps a non-nil refusal to the EstimationFailure throw itself
   - Existing callers and tests updated mechanically; behaviour under make test unchanged for the success path
@@ -23,21 +23,21 @@ references:
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
-- [ ] 3. Write failing tests for EstimationAttemptRecord JSON round-trip <!-- id:isuh2pu -->
+- [x] 3. Write failing tests for EstimationAttemptRecord JSON round-trip <!-- id:isuh2pu -->
   - Codable + Sendable value type; schema-versioned v field so the browser tolerates older rows
   - Failure encoding: {domain: estimation|capture, case, payload} — EstimationFailure has associated values (lidarCoverageTooLow, internalError)
   - Per-view segmentation timings (nadir/oblique), per-class decomposition snapshot fields, no raw imagery (Req 2.6)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.6](requirements.md#2.6), [3.3](requirements.md#3.3)
 
-- [ ] 4. Implement EstimationAttemptRecord and PipelineDiagnostics accumulator <!-- id:isuh2pv -->
+- [x] 4. Implement EstimationAttemptRecord and PipelineDiagnostics accumulator <!-- id:isuh2pv -->
   - PipelineDiagnostics is a reference type stages append to; snapshot() builds the immutable EstimationAttemptRecord
   - Success snapshot embeds the compact per-class decomposition (class → volume/mass/carbs/beta, sigma terms) so deleteMeal cannot hollow out Req 3.4
   - Blocked-by: isuh2pu (Write failing tests for EstimationAttemptRecord JSON round-trip)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.6](requirements.md#2.6), [3.4](requirements.md#3.4)
 
-- [ ] 5. Wire Pipeline outcome stamping, snapshot handoff, and stage measurement collection <!-- id:isuh2pw -->
+- [x] 5. Wire Pipeline outcome stamping, snapshot handoff, and stage measurement collection <!-- id:isuh2pw -->
   - estimate body wrapped in do/catch stamping outcome (incl. underlying description of non-typed errors); CancellationError discarded, no record; defer hands snapshot to CaptureFlowDelegate.didCompleteAttempt (CaptureFlowDelegate.swift:7)
   - SegmentationResult gains timings (preprocess/prediction/argmax) populated in CoreMLSegmenter.segment; Pipeline records per invocation — two-view path calls segment twice (Pipeline.swift:239,333)
   - Card-fallback flag promoted from the DEBUG-only branch (Pipeline.swift:116-131); LiDARPlaneFitter.debugLast* statics become returned values; scale source and tilt recorded

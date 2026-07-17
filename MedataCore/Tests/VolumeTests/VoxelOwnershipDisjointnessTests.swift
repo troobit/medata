@@ -92,7 +92,7 @@ final class VoxelOwnershipDisjointnessTests: XCTestCase {
             )
 
             // Ignore noFoodVolumeRecovered — some random inputs may produce zero-count classes.
-            guard let result = try? VoxelCarveEstimator.carve(inputs) else { continue }
+            guard let result = VoxelCarveEstimator.carve(inputs).estimate else { continue }
 
             // Each voxel is assigned to exactly one class OR counted as ambiguous.
             // Total of all per-class counts + ambiguous must not exceed total silhouette voxels.
@@ -138,7 +138,7 @@ final class VoxelOwnershipDisjointnessTests: XCTestCase {
             beta: BetaCorrection(),
             palette: palette
         )
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         let c0 = result.perClassVoxelCount["food_0"] ?? 0
         let c1 = result.perClassVoxelCount["food_1"] ?? 0
         let c2 = result.perClassVoxelCount["food_2"] ?? 0
@@ -173,7 +173,7 @@ final class VoxelOwnershipDisjointnessTests: XCTestCase {
             beta: BetaCorrection(),
             palette: palette
         )
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         let voxelVolume: Float = 5 * 5 * 5 / 1000   // cm³ per voxel
         let v0 = result.perClassVolumesCm3["food_0"] ?? 0
         let v1 = result.perClassVolumesCm3["food_1"] ?? 0
