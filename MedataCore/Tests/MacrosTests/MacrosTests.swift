@@ -297,4 +297,6 @@ private final class StubFoodDatabase: FoodDatabase, @unchecked Sendable {
     func entry(for classId: String, edition: String) -> FoodEntry? { entries[classId] }
 
     func availableEditions() -> [String] { ["CoFID 2024"] }
+
+    func solidServing(for classId: String) -> SolidServing? { nil }
 }
