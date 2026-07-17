@@ -51,6 +51,13 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // While set, every persisted outcome row carries the meal id so attempts
     // group under (benchmark meal, model lineage) in the store's split bounds.
     var benchmarkMealID: UUID?
+    // Benchmark tag frozen at the shutter tap that began the in-flight attempt
+    // (review fix). The persist runs on a detached write-behind task, so
+    // reading the live `benchmarkMealID` there could pick up a value the
+    // benchmark UI cleared or set after the attempt — mistagging the row and
+    // placing it in the wrong eviction population. Written only by
+    // `beginCapture`; the benchmark surface never touches it.
+    private var inFlightBenchmarkMealID: UUID?
 
     private let session: CaptureSession
     // `var` (not `let`): `Pipeline` is a value type, so the attempt-record
@@ -80,7 +87,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // attempt's errors to the current one. The attempt's window is "since the
     // last persisted attempt, or Capture presentation, whichever came later":
     // reset in `capturePresented()`, advanced to the counter's current value
-    // by each persist.
+    // by each successful persist (a failed store write leaves the baseline so
+    // the window's errors roll into the next attempt instead of vanishing).
     private var preShutterErrorBaseline = 0
 
     private(set) var flowTask: Task<Void, Never>?
@@ -127,7 +135,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         supportsLiDAR: Bool,
         databaseEdition: String,
         paletteVersion: String,
-        segmenterSource: String = "",
+        segmenterSource: String,
         store: (any PersistenceStore)? = nil,
         photoSaver: (any PhotoLibrarySaver)? = nil,
         preShutterSegmenter: (any PreShutterMaskSource)? = nil,
@@ -561,19 +569,25 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     private func persistAttemptRecord(_ record: EstimationAttemptRecord) async {
         guard let store else { return }
         var merged = record
+        var counterAtMerge: Int?
         if let segmenter = preShutterSegmenter {
             // Per-attempt delta (Req 3.2): the producer's counter is lifetime-
-            // cumulative, so persist only its growth since the baseline, then
-            // advance the baseline for the next attempt's window.
+            // cumulative, so persist only its growth since the baseline.
             let count = segmenter.segmentationErrorCount
             merged = record.withPreShutterSegmentationErrorCount(
                 max(0, count - preShutterErrorBaseline)
             )
-            preShutterErrorBaseline = count
+            counterAtMerge = count
         }
         do {
-            let outcome = try EstimationOutcome(record: merged, benchmarkMealID: benchmarkMealID)
+            let outcome = try EstimationOutcome(
+                record: merged, benchmarkMealID: inFlightBenchmarkMealID
+            )
             try await store.saveEstimationOutcome(outcome)
+            // Advance the baseline only once the row is durably saved: a
+            // failed write must leave the window open so its errors roll into
+            // the next attempt's delta instead of vanishing with the lost row.
+            if let counterAtMerge { preShutterErrorBaseline = counterAtMerge }
         } catch {
             log.error("event=outcome.persist.failed error=\(String(describing: error), privacy: .public)")
         }
@@ -642,6 +656,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     }
 
     private func beginCapture(stage: CaptureStage, frozen: GatingSnapshot, mode: CaptureMode) {
+        // Freeze the benchmark tag for every record this attempt persists —
+        // see `inFlightBenchmarkMealID`.
+        inFlightBenchmarkMealID = benchmarkMealID
         state = .capturing(stage: stage, frozen: frozen)
         let task = Task { [weak self] in
             guard let self else { return }
@@ -761,6 +778,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=worldTrackingDegraded")
             persistCaptureRefusal(caseName: "worldTrackingDegraded", payload: nil, mode: mode)
             state = .trackingLost
+        } catch let captureError as CaptureError {
+            let caseName = captureError.failureCaseName
+            log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=\(caseName, privacy: .public)")
+            // Typed capture error (Req 2.1): record the real case name rather
+            // than collapsing to "internalError"; `captureFailed`'s associated
+            // message flattens into the payload (FailureInfo(estimation:)
+            // precedent).
+            persistCaptureRefusal(
+                caseName: caseName, payload: captureError.failurePayload, mode: mode
+            )
+            state = .refused(.internalError(caseName), retryStage: stage)
         } catch let failure as EstimationFailure {
             log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=\(String(describing: failure), privacy: .public)")
             // Thrown before the pipeline ran, so no didCompleteAttempt fired:
@@ -957,5 +985,25 @@ private extension CaptureStage {
         case .nadir: return "nadir"
         case .oblique: return "oblique"
         }
+    }
+}
+
+// Record encoding for typed capture errors (snaq-parity Req 2.1): every case
+// persists its real name, so a `sessionNotStarted` is distinguishable from a
+// genuine internal error in the outcome log.
+private extension CaptureError {
+    var failureCaseName: String {
+        switch self {
+        case .lidarUnavailable: return "lidarUnavailable"
+        case .sessionNotStarted: return "sessionNotStarted"
+        case .captureFailed: return "captureFailed"
+        case .worldTrackingDegraded: return "worldTrackingDegraded"
+        case .releaseTimedOut: return "releaseTimedOut"
+        }
+    }
+
+    var failurePayload: String? {
+        if case .captureFailed(let message) = self { return message }
+        return nil
     }
 }

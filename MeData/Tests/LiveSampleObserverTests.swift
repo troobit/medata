@@ -119,6 +119,7 @@ private func makeReadyModel() -> CaptureFlowModel {
         supportsLiDAR: true,
         databaseEdition: "test",
         paletteVersion: "test",
+        segmenterSource: "test",
         cameraAuthorisation: { .authorized },
         motionAvailable: { true }
     )
