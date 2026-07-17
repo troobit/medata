@@ -111,6 +111,12 @@ CO_PAIR_GAIN = 3.0
 # Name of the statistics file prepare_dataset.py writes next to splits.json.
 CO_STATS_FILENAME = "co_stats.json"
 
+# Recognised EXTERNAL co-stats sources (snaq-parity Req 6.1, Decision 13):
+# corpus-derived statistics carry a ``source`` field and a null ``split_seed``
+# (they are split-independent). A file with no ``source`` is the internal,
+# split-derived kind and keeps the full seed fail-fast contract.
+EXTERNAL_CO_STATS_SOURCES = ("recipe1m",)
+
 # Required co_stats schema. v2 (Decision 20) restricts the presence /
 # joint-presence counts to the FOOD channels and records the excluded
 # ``special_channel_indices``; a v1 file (which counted background into the
@@ -322,6 +328,14 @@ def load_co_stats(
     invocation's, this raises ``SystemExit`` with the regeneration command —
     a silent fallback to unweighted CE (or stats from a different split)
     would falsify the lineage's claim about the recipe.
+
+    EXTERNAL statistics (snaq-parity Req 6.1, Decision 13): a file whose
+    ``source`` is in ``EXTERNAL_CO_STATS_SOURCES`` is corpus-derived and
+    split-independent — it must stamp ``split_seed: null`` and the seed checks
+    are skipped (the invocation's ``--split-seed`` still describes the
+    DATASET and lands in lineage). ``class_mapping_sha256`` pins palette
+    identity and stays enforced for both kinds; an unknown ``source`` is
+    rejected outright.
     """
     p = Path(path)
     if not p.is_file():
@@ -336,18 +350,35 @@ def load_co_stats(
             "statistics, Decision 20) — stale format; "
             f"{_CO_STATS_REGENERATE}"
         )
-    if split_seed is None:
+    source = stats.get("source")
+    if source is not None and source not in EXTERNAL_CO_STATS_SOURCES:
         raise SystemExit(
-            "[train] --loss co_occurrence requires --split-seed (the seed the "
-            f"dataset was prepared with) so {p.name} can be verified against "
-            f"the invocation — {_CO_STATS_REGENERATE}"
+            f"[train] {p} names co-stats source {source!r}, which is not a "
+            f"recognised external source ({', '.join(EXTERNAL_CO_STATS_SOURCES)}) "
+            "— refusing to train against statistics of unknown provenance"
         )
-    if stats.get("split_seed") != split_seed:
-        raise SystemExit(
-            f"[train] {p} was built for split seed {stats.get('split_seed')!r} "
-            f"but this invocation uses --split-seed {split_seed} — stale "
-            f"statistics; {_CO_STATS_REGENERATE}"
-        )
+    if source is not None:
+        # External, corpus-derived: split-independent by construction.
+        if stats.get("split_seed") is not None:
+            raise SystemExit(
+                f"[train] {p} claims external source {source!r} but stamps "
+                f"split_seed {stats.get('split_seed')!r} — external statistics "
+                "must carry split_seed null (regenerate with "
+                "build_external_co_stats.py)"
+            )
+    else:
+        if split_seed is None:
+            raise SystemExit(
+                "[train] --loss co_occurrence requires --split-seed (the seed "
+                f"the dataset was prepared with) so {p.name} can be verified "
+                f"against the invocation — {_CO_STATS_REGENERATE}"
+            )
+        if stats.get("split_seed") != split_seed:
+            raise SystemExit(
+                f"[train] {p} was built for split seed {stats.get('split_seed')!r} "
+                f"but this invocation uses --split-seed {split_seed} — stale "
+                f"statistics; {_CO_STATS_REGENERATE}"
+            )
     if stats.get("class_mapping_sha256") != class_mapping_sha256:
         raise SystemExit(
             f"[train] {p} was built from class mapping SHA-256 "

@@ -163,14 +163,14 @@ references:
   - Stream: 2
   - Requirements: [6.3](requirements.md#6.3), [6.5](requirements.md#6.5)
 
-- [ ] 21. Write failing pytest for the external co-occurrence stats builder <!-- id:isuh2qc -->
+- [x] 21. Write failing pytest for the external co-occurrence stats builder <!-- id:isuh2qc -->
   - Output: co_stats.v2 shape + source field, split_seed null, palette coverage list, ingredient-mapping SHA-256
   - loss_config acceptance matrix: null split_seed only when source is external; class_mapping_sha256 (palette identity), channel_count 35, food-channels-only (Decision 20) still enforced
   - Fixture corpus committed under tools/segmenter/tests
   - Stream: 2
   - Requirements: [6.1](requirements.md#6.1)
 
-- [ ] 22. Implement build_external_co_stats.py and the loss_config acceptance amendment <!-- id:isuh2qd -->
+- [x] 22. Implement build_external_co_stats.py and the loss_config acceptance amendment <!-- id:isuh2qd -->
   - Committed ingredient_mapping_recipe1m_v1.json (reviewable, like class_mapping_foodseg103_v1.json)
   - Tool fails on unmapped-ingredient rate above threshold or zero-coverage classes; train.py fail-fast contract at launch unchanged (train.py:741-754)
   - Lineage records source and mapping SHA
