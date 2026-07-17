@@ -9,8 +9,9 @@ the remapped FoodSeg103 train split, and saving a single PyTorch checkpoint.
 
 That ``.pt`` is the single source of truth (Decision 28): ``export.py`` and
 ``make_fixtures.py`` both consume it directly. The architecture here is NOT
-redefined locally -- it is built via ``export.load_checkpoint(num_classes, None)``
-so the saved ``state_dict`` is byte-compatible with what the exporter loads back.
+redefined locally -- it is built via the shared registry (``archs.py``,
+``--arch``, default ``deeplab_mnv3``; snaq-parity Decision 14) so the saved
+``state_dict`` is byte-compatible with what the exporter loads back.
 
 Long local runs (e.g. Apple-silicon MPS) are interruptible: a resume sidecar
 (``<--out>.resume.pt``) is written atomically after every completed epoch and
@@ -68,6 +69,7 @@ from pathlib import Path
 _TOOLS_DIR = str(Path(__file__).resolve().parent)
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
+import archs  # noqa: E402  (torch-free at import, same family as loss_config)
 import loss_config  # noqa: E402
 
 # ImageNet normalization -- MUST match export.reference_input (train/serve match).
@@ -142,22 +144,6 @@ def _import_pillow():
         ) from exc
 
 
-def _load_export_module():
-    """Import the sibling export.py by path so we reuse its model construction.
-
-    Keeping a single source of architecture truth (Decision 28) means train and
-    export must build the identical DeepLabV3+MobileNetV3-Large with the head
-    swapped for num_classes; importing export.load_checkpoint guarantees that.
-    """
-    export_path = Path(__file__).resolve().with_name("export.py")
-    spec = importlib.util.spec_from_file_location("segmenter_export", export_path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"Could not load sibling export module at {export_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _load_lineage_module():
     """Import the sibling lineage.py by path (pure stdlib; no torch needed)."""
     lineage_path = Path(__file__).resolve().with_name("lineage.py")
@@ -170,47 +156,39 @@ def _load_lineage_module():
 
 
 def build_model(num_classes: int, pretrained: bool,
-                init_checkpoint: str | None = None):
-    """Build the training model via export.load_checkpoint for architectural parity.
+                init_checkpoint: str | None = None,
+                arch: str = archs.DEFAULT_ARCH):
+    """Build the training model via the architecture registry (archs.py).
 
-    ``export.load_checkpoint(num_classes, None)`` returns the torchvision
-    pretrained-backbone model with the head replaced for ``num_classes`` (and set
-    to eval); we switch it back to train mode. When ``pretrained`` is False we
-    rebuild with weights=None so a smoke run needs no network download.
+    The registry is the single source of architecture truth shared with
+    ``export.load_checkpoint`` and ``run_validation.py`` (Decision 28 as
+    extended by snaq-parity Decision 14), so the saved ``state_dict`` stays
+    byte-compatible with what the exporter loads back. ``pretrained`` False
+    builds weights-free so a smoke run needs no network download.
 
     ``init_checkpoint`` (segmenter-foundation Req 2.2 / Decisions 17 and 19)
     names a LOCAL MobileNetV3-Large classifier state dict — the
     ``adapter_probe.py --save-adapted`` output or a downloaded torchvision
     ``IMAGENET1K_V2`` file — whose ``features.*`` tensors initialise the
     backbone instead of the COCO-seg ``DEFAULT`` weights; the DeepLab head
-    starts fresh. Pair it with the ``--pretrained-*`` flags so lineage records
-    the source (URL, licence, SHA-256).
+    starts fresh. It is deeplab_mnv3-specific (the backbone-key surgery below)
+    and rejected for any other architecture.
     """
-    torch = _import_torch()
-    export = _load_export_module()
+    _import_torch()
+    spec = archs.get(arch)
 
     if init_checkpoint is not None:
-        model = _build_uninitialised(num_classes)
+        if arch != archs.DEFAULT_ARCH:
+            raise SystemExit(
+                f"[train] --init-checkpoint is {archs.DEFAULT_ARCH}-specific "
+                f"(MobileNetV3 backbone surgery) and cannot initialise {arch!r}"
+            )
+        model = spec.build(num_classes, pretrained=False)
         _load_backbone_init(model, Path(init_checkpoint))
-    elif pretrained:
-        model = export.load_checkpoint(num_classes, None)
     else:
-        model = _build_uninitialised(num_classes)
+        model = spec.build(num_classes, pretrained=pretrained)
 
     model.train()
-    return model
-
-
-def _build_uninitialised(num_classes: int):
-    """Mirror export.load_checkpoint's construction but with weights=None (no
-    network download). Stays consistent with the exporter's architecture: same
-    model family, same head replacement."""
-    from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
-    from torchvision.models.segmentation.deeplabv3 import DeepLabHead
-
-    model = deeplabv3_mobilenet_v3_large(weights=None, aux_loss=False)
-    in_ch = model.classifier[0].convs[0][0].in_channels
-    model.classifier = DeepLabHead(in_ch, num_classes)
     return model
 
 
@@ -581,14 +559,18 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
     raise SystemExit(f"[train] unhandled loss {name!r}")  # unreachable: spec validated
 
 
-def food_class_miou(model, loader, device, num_classes: int) -> float:
+def food_class_miou(model, loader, device, num_classes: int,
+                    forward_logits=None) -> float:
     """Mean IoU over FOOD classes only (excludes 24/25/26 per §4/§5).
 
     Background dominates pixels; food-class mIoU is the §5 gate (>= 0.48,
     segmenter-foundation Decision 5). Classes
     absent from the val split (no GT and no prediction) are skipped from the mean.
+    ``forward_logits`` is the arch registry's output normaliser (default: the
+    torchvision ``["out"]`` dict convention).
     """
     torch = _import_torch()
+    forward_logits = forward_logits or archs.dict_out_logits
 
     model.eval()
     inter = torch.zeros(num_classes, dtype=torch.float64)
@@ -598,7 +580,7 @@ def food_class_miou(model, loader, device, num_classes: int) -> float:
         for images, masks in loader:
             images = images.to(device)
             masks = masks.to(device)
-            logits = model(images)["out"]
+            logits = forward_logits(model, images)
             preds = logits.argmax(dim=1)
             for cls in range(num_classes):
                 pred_c = preds == cls
@@ -666,11 +648,12 @@ def _load_resume_state(args) -> dict:
         "loss": loss_config.normalise_loss_name(args.loss),
         "photometric_augment": args.photometric_augment,
         "init_checkpoint": args.init_checkpoint,
+        "arch": args.arch,
     }
-    # Sidecars written before the opt-in loss/photometric/init flags existed
-    # lack these keys; absence means the historical defaults, not drift.
+    # Sidecars written before the opt-in loss/photometric/init/arch flags
+    # existed lack these keys; absence means the historical defaults, not drift.
     legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False,
-                       "init_checkpoint": None}
+                       "init_checkpoint": None, "arch": archs.DEFAULT_ARCH}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -703,6 +686,7 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "loss": loss_config.normalise_loss_name(args.loss),
         "photometric_augment": args.photometric_augment,
         "init_checkpoint": args.init_checkpoint,
+        "arch": args.arch,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -772,10 +756,11 @@ def train(args) -> int:
     train_loader = _make_loader(train_ds, args.batch_size, True, args.num_workers,
                                 drop_last=True)
 
+    arch_spec = archs.get(args.arch)
     if resume_state is not None:
         # Weights come from the sidecar — build with weights=None (no download);
         # pretrained provenance carries the ORIGINAL run's value, not this flag.
-        model = build_model(args.num_classes, pretrained=False)
+        model = build_model(args.num_classes, pretrained=False, arch=args.arch)
         model.load_state_dict(resume_state["model"])
         pretrained = bool(resume_state["pretrained"])
         resumed_from_epoch = int(resume_state["epoch"])
@@ -783,7 +768,7 @@ def train(args) -> int:
         print(f"[train] resuming from {args.resume} (epoch {resumed_from_epoch} completed)")
     else:
         model = build_model(args.num_classes, pretrained=not args.no_pretrained,
-                            init_checkpoint=args.init_checkpoint)
+                            init_checkpoint=args.init_checkpoint, arch=args.arch)
         pretrained = not args.no_pretrained
         resumed_from_epoch = None
         start_epoch = 1
@@ -820,7 +805,7 @@ def train(args) -> int:
             images = images.to(device)
             masks = masks.to(device)
             optimizer.zero_grad()
-            logits = model(images)["out"]
+            logits = arch_spec.forward_logits(model, images)
             loss = criterion(logits, masks)
             loss.backward()
             optimizer.step()
@@ -830,7 +815,8 @@ def train(args) -> int:
         msg = f"[train] epoch {epoch}/{args.epochs} loss = {avg_loss:.4f}"
 
         if val_loader is not None and (epoch % args.val_every == 0 or epoch == args.epochs):
-            miou = food_class_miou(model, val_loader, device, args.num_classes)
+            miou = food_class_miou(model, val_loader, device, args.num_classes,
+                                   forward_logits=arch_spec.forward_logits)
             last_miou = miou
             msg += f" | food-class mIoU = {miou:.4f}"
         print(msg)
@@ -884,6 +870,11 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     recipe_extras = loss_config.loss_train_config(_loss_spec(args))
     if args.photometric_augment:
         recipe_extras["photometric_augment"] = True
+    if args.arch != archs.DEFAULT_ARCH:
+        # Non-default architecture (snaq-parity Req 5.4): recorded in checkpoint
+        # + lineage train_config so run_validation.py and export.py resolve the
+        # arch back from provenance; absence means the historical deeplab_mnv3.
+        recipe_extras["arch"] = args.arch
     if args.init_checkpoint:
         # Local path of the consumed init (Decision 19 wiring); the
         # pretrained_checkpoint object carries its source URL/licence/SHA-256.
@@ -947,6 +938,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--out", default="tools/segmenter/build/checkpoint.pt")
+    parser.add_argument("--arch", default=archs.DEFAULT_ARCH,
+                        choices=archs.ARCH_CHOICES,
+                        help="Model architecture from the shared registry "
+                             "(archs.py; snaq-parity Req 5.4). Default is the "
+                             "shipping deeplab_mnv3; recorded in checkpoint/"
+                             "lineage train_config for non-default runs and "
+                             "checked by the resume drift-check.")
     parser.add_argument("--resume", default=None, metavar="PATH",
                         help="Resume an interrupted run from its sidecar "
                              "(<--out>.resume.pt, written after every completed epoch). "

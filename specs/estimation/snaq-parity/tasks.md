@@ -135,14 +135,14 @@ references:
 
 ## Python levers
 
-- [ ] 17. Write failing pytest for the archs.py architecture registry <!-- id:isuh2q8 -->
+- [x] 17. Write failing pytest for the archs.py architecture registry <!-- id:isuh2q8 -->
   - Contract per arch: model constructor, checkpoint loader, forward-output normaliser to the [out]-at-input-resolution convention
   - deeplab_mnv3 parity: registry output equals current deeplabv3_mobilenet_v3_large path (export.py:124, train.py:208-213)
   - Plain-tensor architectures (SegFormer-class) wrapped and upsampled; fixture-level, no torch-optional paths broken
   - Stream: 2
   - Requirements: [5.4](requirements.md#5.4), [6.4](requirements.md#6.4)
 
-- [ ] 18. Implement archs.py and refactor train, export, and validation to consume it <!-- id:isuh2q9 -->
+- [x] 18. Implement archs.py and refactor train, export, and validation to consume it <!-- id:isuh2q9 -->
   - tools/segmenter/archs.py consumed by train.py (--arch flag, default deeplab_mnv3), export.load_checkpoint, and run_validation.py (arch resolved from lineage)
   - Sidecar resume drift-check and lineage gain the arch field
   - NEVER edit train.py while a run is live (docs/ml-training.md §4; train.py:42-44)
