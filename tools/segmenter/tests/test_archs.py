@@ -255,7 +255,7 @@ def test_legacy_sidecar_without_arch_means_deeplab(tmp_path):
         resume=str(sidecar), num_classes=NUM_CLASSES, target_size=TARGET_SIZE,
         lr=1e-3, batch_size=2, no_augment=False, loss=None,
         photometric_augment=False, init_checkpoint=None,
-        arch=archs.DEFAULT_ARCH,
+        arch=archs.DEFAULT_ARCH, class_weighting="none",
     )
     state = train._load_resume_state(args)
     assert state["epoch"] == 1  # drift check passed; legacy default applied

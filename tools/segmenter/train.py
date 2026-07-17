@@ -445,11 +445,12 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
     """Build the torch loss for a loss_config spec (torch side of the recipe).
 
     ``loss_spec`` comes from ``loss_config.resolve_loss_spec`` (already
-    validated); ``class_weights`` is required exactly when
-    ``loss_config.loss_uses_class_weights`` says so, and ``co_stats`` (the
-    validated co_stats.json dict) exactly for ``co_occurrence``. The default
-    ``ce`` returns a plain ``nn.CrossEntropyLoss()`` — the historical recipe,
-    untouched.
+    validated); ``class_weights`` is the ``loss_config.class_weights`` vector —
+    None under ``--class-weighting none``, in which case the CE base of
+    combined/co_occurrence runs unweighted (weighted_ce itself rejects the
+    combination at launch). ``co_stats`` (the validated co_stats.json dict) is
+    required exactly for ``co_occurrence``. The default ``ce`` returns a plain
+    ``nn.CrossEntropyLoss()`` — the historical recipe, untouched.
     """
     torch = _import_torch()
     import torch.nn as nn
@@ -459,10 +460,16 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
         return nn.CrossEntropyLoss()
 
     def _weights_tensor():
-        assert class_weights is not None, f"{name} requires class weights"
+        # None under --class-weighting none: the CE base runs unweighted while
+        # the loss keeps its other terms (snaq-parity Req 6.3).
+        if class_weights is None:
+            return None
         return torch.tensor(class_weights, dtype=torch.float32, device=device)
 
     if name == "weighted_ce":
+        # weighted_ce + scheme none is rejected at spec resolution; a None here
+        # would be plain ce in disguise.
+        assert class_weights is not None, "weighted_ce requires class weights"
         return nn.CrossEntropyLoss(weight=_weights_tensor())
 
     if name == "focal":
@@ -649,11 +656,16 @@ def _load_resume_state(args) -> dict:
         "photometric_augment": args.photometric_augment,
         "init_checkpoint": args.init_checkpoint,
         "arch": args.arch,
+        "class_weighting": args.class_weighting,
     }
-    # Sidecars written before the opt-in loss/photometric/init/arch flags
-    # existed lack these keys; absence means the historical defaults, not drift.
+    # Sidecars written before the opt-in loss/photometric/init/arch/weighting
+    # flags existed lack these keys; absence means the historical defaults, not
+    # drift. (A legacy weighted-loss sidecar predates the inverse-frequency
+    # removal and cannot be resumed — its weighted_ce+none combination is
+    # rejected at launch, which is the Decision 25 ban working as intended.)
     legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False,
-                       "init_checkpoint": None, "arch": archs.DEFAULT_ARCH}
+                       "init_checkpoint": None, "arch": archs.DEFAULT_ARCH,
+                       "class_weighting": loss_config.DEFAULT_WEIGHTING}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -687,6 +699,7 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "photometric_augment": args.photometric_augment,
         "init_checkpoint": args.init_checkpoint,
         "arch": args.arch,
+        "class_weighting": args.class_weighting,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -697,8 +710,10 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
 
 def _loss_spec(args) -> dict:
     """The loss spec for this invocation (single construction point so the
-    criterion and the recorded provenance can never disagree on co_lambda)."""
-    return loss_config.resolve_loss_spec(args.loss, co_lambda=args.co_lambda)
+    criterion and the recorded provenance can never disagree on co_lambda or
+    the class-weighting scheme)."""
+    return loss_config.resolve_loss_spec(args.loss, co_lambda=args.co_lambda,
+                                         class_weighting=args.class_weighting)
 
 
 def train(args) -> int:
@@ -782,10 +797,11 @@ def train(args) -> int:
         optimizer.load_state_dict(resume_state["optimizer"])
 
     class_weights = None
-    if loss_config.loss_uses_class_weights(loss_spec["loss"]):
-        print("[train] deriving inverse-frequency class weights from train masks…")
+    if loss_config.loss_uses_class_weights(loss_spec["loss"], args.class_weighting):
+        print(f"[train] deriving {args.class_weighting} class weights from train masks…")
         counts = _train_pixel_counts(train_ds, args.num_classes)
-        class_weights = loss_config.inverse_frequency_weights(counts, args.num_classes)
+        class_weights = loss_config.class_weights(args.class_weighting, counts,
+                                                  args.num_classes)
     criterion = _build_criterion(loss_spec, class_weights, device, co_stats)
     print(f"[train] loss = {loss_spec}"
           + (" | photometric augment ON" if args.photometric_augment else ""))
@@ -975,13 +991,21 @@ def main(argv: list[str] | None = None) -> int:
                              "scale-up crop) — e.g. for deterministic smoke runs.")
     parser.add_argument("--loss", default=None, choices=loss_config.LOSS_CHOICES,
                         help="Training loss (see loss_config.py). Omit for the "
-                             "historical unweighted cross-entropy; weighted_ce/"
-                             "combined/co_occurrence derive inverse-frequency "
-                             "class weights from the train masks. co_occurrence "
-                             "(design §4.3) adds an image-level presence BCE "
-                             "term weighted by the co_stats.json priors and "
-                             "requires --split-seed to match the prepared "
-                             "dataset's co_stats.json.")
+                             "historical unweighted cross-entropy. weighted_ce/"
+                             "combined/co_occurrence derive class weights from "
+                             "the train masks per --class-weighting. "
+                             "co_occurrence (design §4.3) adds an image-level "
+                             "presence BCE term weighted by the co_stats.json "
+                             "priors and requires --split-seed to match the "
+                             "prepared dataset's co_stats.json.")
+    parser.add_argument("--class-weighting", default=loss_config.DEFAULT_WEIGHTING,
+                        choices=loss_config.WEIGHTING_CHOICES,
+                        help="Class-weighting scheme for the weighted losses "
+                             "(snaq-parity Req 6.3). Default none; sqrt_inverse "
+                             "is the deliberately milder re-test scheme — "
+                             "inverse frequency is removed (segmenter-"
+                             "foundation Decision 25). weighted_ce requires an "
+                             "active scheme.")
     parser.add_argument("--co-lambda", type=float,
                         default=loss_config.DEFAULT_CO_LAMBDA,
                         help="Mixing weight for the co-occurrence presence "
@@ -1007,6 +1031,14 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "--init-checkpoint and --no-pretrained are mutually exclusive: "
             "the init checkpoint IS the pretrained initialisation."
+        )
+
+    if (loss_config.normalise_loss_name(args.loss) == "weighted_ce"
+            and args.class_weighting == "none"):
+        parser.error(
+            "--loss weighted_ce needs an active --class-weighting scheme "
+            "(sqrt_inverse): under 'none' it is plain ce in disguise and would "
+            "corrupt a loss-sweep verdict (snaq-parity Req 6.3)."
         )
 
     if args.num_classes <= PALETTE_BACKGROUND:
