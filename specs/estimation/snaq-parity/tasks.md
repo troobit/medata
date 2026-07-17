@@ -102,13 +102,13 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6)
 
-- [ ] 13. Write failing promotionVerdict tests <!-- id:isuh2q4 -->
+- [x] 13. Write failing promotionVerdict tests <!-- id:isuh2q4 -->
   - Seeded SplitMix64 determinism (system RNG is not seedable)
   - Two-tier boundaries: point regression > 2 g reverts regardless of significance; any CI-confident regression reverts; completed-count drop ≥ 2 reverts; drop of exactly 1 marks manual-call
   - Stream: 1
   - Requirements: [7.2](requirements.md#7.2)
 
-- [ ] 14. Implement promotionVerdict paired bootstrap <!-- id:isuh2q5 -->
+- [x] 14. Implement promotionVerdict paired bootstrap <!-- id:isuh2q5 -->
   - Paired per-meal deltas over meals completed under both lineages; 10 000 resamples, one-sided 95% CI
   - Blocked-by: isuh2q3 (Implement Benchmark target and BenchmarkReport.compute), isuh2q4 (Write failing promotionVerdict tests)
   - Stream: 1
