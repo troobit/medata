@@ -81,6 +81,34 @@ eviction deterministic when attempts share a millisecond. Only the population
 the insert belongs to is evicted. `estimationOutcomes(limit:)` returns newest
 first. Outcome writes never touch `eventsDidChange` (quick_presets convention).
 
+## Benchmark meals (snaq-parity)
+
+`benchmark_meals` (also schema v6 — Decision 7 defines v6 as BOTH snaq-parity
+tables; `CREATE IF NOT EXISTS` retrofits it onto dev DBs stamped '6' before it
+landed): `id` TEXT PK, `name`, `created_at` (UTC ms), `items` (JSON
+`[{class_id, grams}]` — snake_case pinned by `BenchmarkMealItem` CodingKeys),
+`truth_carbs_g`, `db_edition`, `fidelity` ('weighed'|'package').
+
+`saveBenchmarkMeal(_:carbsPer100g:)` takes an **injected lookup**
+`(String) -> Double?` because Persistence sits below Foods and cannot call
+`FoodDatabase.entry(for:)` itself — the caller backs it with the same lookup
+`Macros.compute` uses. Truth is derived AT SAVE (`grams × carbs/100` summed;
+no volume, no β) and the caller-supplied `truthCarbsG` is **ignored**. Grams
+outside 1...5000 → `benchmarkGramsOutOfRange`; a nil lookup →
+`benchmarkClassUnresolvable` (never a silent 0 g truth). Insert-or-update by
+id, but the upsert is rejected with `benchmarkMealImmutable` once any
+`estimation_outcomes` row references the meal (checked inside the write
+transaction) — corrections create a new meal. No `eventsDidChange`.
+
+The report maths lives in the separate `Benchmark` SwiftPM target (depends on
+Persistence only): `BenchmarkReport.compute(meals:outcomes:lineage:)` (pure;
+latest-completed-attempt scoring with (timestamp, id) tie-break; SNAQ anchor
+block; N ≥ 20 + staple-floor headline validity) and
+`BenchmarkReport.promotionVerdict(old:new:seed:)` (paired bootstrap, seeded
+`SplitMix64`, two-tier revert per design lane B). The estimate for a completed
+meal is decoded from the outcome row's `measurements` JSON — the sum of
+`decomposition[].carbsG` — so Benchmark never imports Pipeline.
+
 ## Bsl ingestion (libre-ingestion + cgm-connect)
 
 Both `ingestBsl` (screenshot import) and `ingestLiveBsl` (live sources, cgm-connect Phase 1) share one private keep-first merge, `mergeBslKeepFirst`, which takes per-row `(timestampMs, value, metadataJSON)` tuples and adds each freshly inserted `timestampMs` to its covered set as it goes. That covered-set update is a deliberate behavioural change to `ingestBsl` too: two same-timestamp readings in one screenshot batch previously both inserted; now the second is classified `skippedExisting` (cgm-connect design "finding #5").
