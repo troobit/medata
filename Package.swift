@@ -22,7 +22,11 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "MedataCore", targets: ["Pipeline"]),
+        // Benchmark rides in the app-facing product so BenchmarkView /
+        // EstimationLogView can render Report and the anchor block
+        // (snaq-parity lane B); the target itself still depends on
+        // Persistence only, keeping the report maths in `make test`.
+        .library(name: "MedataCore", targets: ["Pipeline", "Benchmark"]),
         // Separate product: glucose ingestion is a data stream beside the
         // estimation pipeline, not part of it (specs/data/libre-ingestion
         // Decision 2). The app links both.

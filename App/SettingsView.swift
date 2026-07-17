@@ -23,6 +23,15 @@ struct SettingsView: View {
     // Live glucose-source connections (cgm-connect Req 6), owned by MedataApp
     // and threaded through AppRoot.
     let glucoseConnections: GlucoseConnectionsModel
+    // Current segmenter lineage tag (snaq-parity): scopes the benchmark
+    // report and labels the log. AppRoot passes `captureModel.segmenterSource`.
+    let captureLineage: String
+    // Benchmark capture launch (snaq-parity lane B). Settings cannot present
+    // the Capture cover itself — Capture and Settings are mutually-exclusive
+    // covers on AppRoot — so this closure hands the meal id up to AppRoot,
+    // which tags `CaptureFlowModel.benchmarkMealID` and sequences
+    // dismiss-Settings → present-Capture through its deep-link machinery.
+    let onBenchmarkCapture: (UUID) -> Void
 
     @Environment(\.dismiss) private var dismiss
     // Empty string means the capture-mode key is unset — `captureModeBinding`
@@ -127,6 +136,21 @@ struct SettingsView: View {
             }
 
             Section {
+                // Outside #if DEBUG deliberately: Req 2.3 requires the
+                // estimation log (and the benchmark that reads it) to
+                // operate in Release builds.
+                NavigationLink("Estimation log") {
+                    EstimationLogView(store: store, lineage: captureLineage)
+                }
+                .accessibilityIdentifier("settings.estimationLog")
+                NavigationLink("Benchmark") {
+                    BenchmarkView(
+                        store: store,
+                        lineage: captureLineage,
+                        onCapture: onBenchmarkCapture
+                    )
+                }
+                .accessibilityIdentifier("settings.benchmark")
                 NavigationLink("About") { AboutView() }
                     .accessibilityIdentifier("settings.about")
             }

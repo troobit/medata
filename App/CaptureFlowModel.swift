@@ -80,7 +80,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // modelVersion onto the slim capture-stage refusal records this model
     // writes itself (snaq-parity lane A); pipeline-produced records carry the
     // pipeline's own stamp. App.swift passes `Pipeline.segmenterSource`.
-    private let segmenterSource: String
+    // Non-private so AppRoot can scope the benchmark report and log to the
+    // current lineage (snaq-parity lane B).
+    let segmenterSource: String
     // Baseline for the per-attempt pre-shutter error delta (snaq-parity Req
     // 3.2). `PreShutterSegmenter.segmentationErrorCount` is lifetime-cumulative
     // with no reset, so persisting it raw would misattribute every earlier

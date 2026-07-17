@@ -1,7 +1,7 @@
 # Estimation diagnostics (snaq-parity lane A)
 
-State as of tasks 1–8 (diagnostics foundation + outcome store + write-behind).
-The log browser and benchmark phases build on these seams.
+State as of tasks 1–8 (diagnostics foundation + outcome store + write-behind)
+plus the app surfaces (tasks 15–16, below).
 
 ## The pattern: outcome structs, not throws
 
@@ -96,3 +96,36 @@ refusals (Req 3.1/3.2):
   names them.
 - The `noLidarDevice` copy now states the iPhone 16 Pro floor (Decision 22,
   Req 3.5).
+
+## App surfaces (tasks 15–16)
+
+- `App/EstimationLogView.swift` + `App/BenchmarkView.swift` — Settings
+  NavigationLinks beside About, deliberately OUTSIDE `#if DEBUG` (Req 2.3
+  Release operation). Both are pushed inside Settings' NavigationStack, so
+  neither owns a stack; both reload via `.task` only — no change stream
+  exists for these tables by design (quick_presets convention).
+- Export (log view toolbar) writes one JSON file (outcomes + benchmark meals
+  + the computed report for the current lineage) to `temporaryDirectory` and
+  presents `ShareSheet`, same seam as Settings' archive export. Stored
+  `measurements`/`failure` JSON strings are embedded structurally via
+  `JSONSerialization` so the file is a single well-formed document.
+- **Benchmark capture launch route**: BenchmarkView's Capture button →
+  `onBenchmarkCapture(mealID)` closure threaded AppRoot → SettingsView →
+  BenchmarkView. AppRoot sets `captureModel.benchmarkMealID = mealID`, then
+  `pendingDeepLink = .captureCover; activeSheet = nil` — the existing
+  deep-link sequencing dismisses Settings fully before presenting Capture
+  (covers are mutually exclusive; presenting mid-dismissal is dropped by
+  SwiftUI). The tag is cleared in AppRoot's `.onChange(of: activeSheet)`
+  ONLY on an `old == .capture` transition — clearing on any non-capture
+  value would wipe the tag during the settings → nil handoff.
+- The current lineage shown/scoped in both views is
+  `captureModel.segmenterSource` (made non-private for this).
+- Editing a benchmark meal that has attempts saves under a NEW id in
+  `BenchmarkModel.save` — the store's `benchmarkMealImmutable` gate is
+  routed around, not tripped. Truth lookups build a second
+  `GRDBFoodDatabase.bundled()` lazily (PreShutterSegmenter second-instance
+  precedent); the lookup closure is built in a `nonisolated` static so it
+  is not MainActor-bound when the store calls it.
+- The app links `Benchmark` via the `MedataCore` product
+  (Package.swift products list) — the target still depends on Persistence
+  only, keeping report maths under `make test`.

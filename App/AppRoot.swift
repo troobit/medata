@@ -113,7 +113,18 @@ struct AppRoot: View {
                     SettingsView(
                         store: store,
                         hasLiDAR: captureModel.supportsLiDAR,
-                        glucoseConnections: glucoseConnections
+                        glucoseConnections: glucoseConnections,
+                        captureLineage: captureModel.segmenterSource,
+                        onBenchmarkCapture: { mealID in
+                            // Benchmark capture launch (snaq-parity lane B):
+                            // tag the model BEFORE the capture route presents,
+                            // then reuse the deep-link sequencing — Settings
+                            // must finish dismissing before Capture can
+                            // present (the covers are mutually exclusive).
+                            captureModel.benchmarkMealID = mealID
+                            pendingDeepLink = .captureCover
+                            activeSheet = nil
+                        }
                     )
                 }
             }
@@ -130,12 +141,18 @@ struct AppRoot: View {
         }) {
             InsulinDoseSheet(store: store)
         }
-        .onChange(of: activeSheet) { _, new in
+        .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.
             if new == .capture {
                 captureModel.capturePresented()
             } else {
                 captureModel.captureDismissed()
+                // The benchmark flow ends when the Capture cover closes.
+                // Cleared only on a capture → elsewhere transition so the tag
+                // survives the Settings-dismiss → Capture-present handoff the
+                // benchmark launch above sequences (that transition is
+                // settings → nil, which must not clear it).
+                if old == .capture { captureModel.benchmarkMealID = nil }
             }
         }
         .onOpenURL { url in
