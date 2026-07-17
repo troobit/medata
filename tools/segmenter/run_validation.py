@@ -119,6 +119,17 @@ def main(argv: list[str] | None = None) -> int:
     lineage_path = Path(args.lineage)
     if lineage_path.is_file():
         arch = archs.arch_from_lineage(json.loads(lineage_path.read_text()))
+    # export.py resolves the arch from the checkpoint's own stamp; a stale
+    # lineage beside a non-default-arch checkpoint would build the wrong model
+    # and (strict=False) silently load NOTHING — fail fast when they disagree.
+    stamped = archs.checkpoint_arch_stamp(args.checkpoint)
+    if stamped is not None and stamped != arch:
+        raise SystemExit(
+            f"[validate] arch mismatch: lineage resolves {arch!r} but the "
+            f"checkpoint stamps {stamped!r} — stale {args.lineage}; re-export "
+            "the checkpoint (export.py emit_lineage) or pass the matching "
+            "--lineage"
+        )
     arch_spec = archs.get(arch)
     print(f"[validate] arch = {arch}")
 

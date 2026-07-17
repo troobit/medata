@@ -178,6 +178,22 @@ def test_run_spike_short_circuits_blocked_toolchain_without_heavy_deps(tmp_path)
     assert on_disk == verdict
 
 
+def test_grafted_head_channel_mismatch_aborts_without_a_verdict():
+    # A wrong channel count off the grafted head is a HARNESS graft bug, not
+    # model evidence: the spike must abort with no verdict, never record a
+    # false reject/pending.
+    with pytest.raises(SystemExit) as exc:
+        spike_convert.check_grafted_channels("segformer_b0", 34)
+    message = str(exc.value.code)
+    assert "34" in message
+    assert "35" in message
+    assert "no verdict" in message
+
+
+def test_grafted_head_channel_match_passes():
+    spike_convert.check_grafted_channels("segformer_b0", spike_convert.NUM_CLASSES)
+
+
 def test_write_verdict_round_trips(tmp_path):
     v = _passing_verdict()
     out = spike_convert.write_verdict(v, tmp_path / "build" / "v.json")

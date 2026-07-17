@@ -660,9 +660,18 @@ def _load_resume_state(args) -> dict:
     }
     # Sidecars written before the opt-in loss/photometric/init/arch/weighting
     # flags existed lack these keys; absence means the historical defaults, not
-    # drift. (A legacy weighted-loss sidecar predates the inverse-frequency
-    # removal and cannot be resumed — its weighted_ce+none combination is
-    # rejected at launch, which is the Decision 25 ban working as intended.)
+    # drift. EXCEPT a weighted-loss sidecar with no class_weighting key: that
+    # run used the removed inverse-frequency weighting (Decision 25), so
+    # defaulting the missing key to "none" would silently change the training
+    # criterion mid-run — reject it as unresumable instead.
+    sidecar_loss = state.get("loss", loss_config.DEFAULT_LOSS)
+    if "class_weighting" not in state and sidecar_loss in loss_config.WEIGHTED_LOSSES:
+        raise SystemExit(
+            f"[train] {path} is a legacy weighted-loss sidecar (loss "
+            f"{sidecar_loss!r} with no class_weighting key): its run used the "
+            "removed inverse-frequency weighting (Decision 25) and cannot be "
+            "resumed without silently changing the criterion — start a fresh run"
+        )
     legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False,
                        "init_checkpoint": None, "arch": archs.DEFAULT_ARCH,
                        "class_weighting": loss_config.DEFAULT_WEIGHTING}

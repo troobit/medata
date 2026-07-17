@@ -215,6 +215,11 @@ def _stats(source=None, split_seed=42, mapping_sha="ab" * 32):
     }
     if source is not None:
         stats["source"] = source
+        # External files must carry their derivation provenance; the rejection
+        # tests below strip these to prove they are required.
+        stats["ingredient_mapping_sha256"] = "ef" * 32
+        stats["palette_coverage"] = {"with_statistics": [],
+                                     "without_statistics": []}
     return stats
 
 
@@ -270,6 +275,25 @@ def test_external_source_still_enforces_palette_identity(tmp_path):
     with pytest.raises(SystemExit, match="class mapping SHA-256"):
         loss_config.load_co_stats(path, split_seed=None,
                                   class_mapping_sha256="cd" * 32)
+
+
+def test_external_source_missing_ingredient_mapping_sha_is_rejected(tmp_path):
+    stats = _stats(source="recipe1m", split_seed=None)
+    del stats["ingredient_mapping_sha256"]
+    path = _write(tmp_path, stats)
+    with pytest.raises(SystemExit, match="ingredient_mapping_sha256"):
+        loss_config.load_co_stats(path, split_seed=None,
+                                  class_mapping_sha256="ab" * 32)
+
+
+def test_external_source_null_palette_coverage_is_rejected(tmp_path):
+    # An explicit null is as untraceable as an absent key.
+    stats = _stats(source="recipe1m", split_seed=None)
+    stats["palette_coverage"] = None
+    path = _write(tmp_path, stats)
+    with pytest.raises(SystemExit, match="palette_coverage"):
+        loss_config.load_co_stats(path, split_seed=None,
+                                  class_mapping_sha256="ab" * 32)
 
 
 def test_external_source_still_rejects_the_v1_schema(tmp_path):

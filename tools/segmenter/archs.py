@@ -100,23 +100,32 @@ def normalise_arch_name(name: str | None) -> str:
 
 def arch_from_lineage(manifest: dict[str, Any]) -> str:
     """The architecture a lineage manifest's run used. Absence of the
-    ``train_config.arch`` key means the historical default — every
-    pre-registry lineage was a deeplab_mnv3 run."""
-    return manifest.get("train_config", {}).get("arch", DEFAULT_ARCH)
+    ``train_config.arch`` key means the historical deeplab_mnv3 — the literal,
+    not ``DEFAULT_ARCH``: every pre-registry lineage was a deeplab_mnv3 run,
+    regardless of what the default becomes later."""
+    return manifest.get("train_config", {}).get("arch", "deeplab_mnv3")
+
+
+def checkpoint_arch_stamp(checkpoint_path: str | Path | None) -> str | None:
+    """The ``arch`` value a checkpoint file itself stamps, or ``None`` when
+    the file (or the key) is absent. Torch-gated: peeks the dict."""
+    if checkpoint_path is None or not Path(checkpoint_path).is_file():
+        return None
+    import torch
+
+    raw = torch.load(str(checkpoint_path), map_location="cpu")
+    if isinstance(raw, dict) and "arch" in raw:
+        return str(raw["arch"])
+    return None
 
 
 def arch_from_checkpoint(checkpoint_path: str | Path | None) -> str:
     """The architecture recorded inside a checkpoint file's provenance keys
     (``train.py`` stamps ``arch`` only for non-default runs; absence — or no
-    checkpoint at all — means deeplab_mnv3). Torch-gated: peeks the dict."""
-    if checkpoint_path is None or not Path(checkpoint_path).is_file():
-        return DEFAULT_ARCH
-    import torch
-
-    raw = torch.load(str(checkpoint_path), map_location="cpu")
-    if isinstance(raw, dict):
-        return str(raw.get("arch", DEFAULT_ARCH))
-    return DEFAULT_ARCH
+    checkpoint at all — means the historical deeplab_mnv3, the literal rather
+    than ``DEFAULT_ARCH``, regardless of what the default becomes later)."""
+    stamped = checkpoint_arch_stamp(checkpoint_path)
+    return "deeplab_mnv3" if stamped is None else stamped
 
 
 # ── Forward-output normalisers ──────────────────────────────────────────────────

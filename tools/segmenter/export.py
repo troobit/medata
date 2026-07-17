@@ -77,10 +77,16 @@ def emit_lineage(checkpoint_path: str, out_path: str | None = None) -> str:
     raw = torch.load(checkpoint_path, map_location="cpu")
     train_config: dict = {}
     if isinstance(raw, dict):
+        # The recipe keys (loss spec + photometric/init/arch) are the opt-in
+        # provenance train.py spreads top-level into the checkpoint dict
+        # (_save_checkpoint recipe_extras); a re-export must carry them all or
+        # the rebuilt lineage would silently drop the weighting scheme.
         train_config = {
             k: raw[k] for k in (
                 "num_classes", "target_size", "epochs", "lr", "lr_schedule",
-                "augment", "pretrained", "arch"
+                "augment", "pretrained", "arch", "loss", "weighting",
+                "focal_gamma", "dice_weight", "co_lambda", "co_pooling",
+                "photometric_augment", "init_checkpoint"
             ) if k in raw
         }
     manifest = lineage.build_lineage(
