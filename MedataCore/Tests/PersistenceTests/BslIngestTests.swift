@@ -42,7 +42,7 @@ final class BslIngestTests: XCTestCase {
     // Schema is now v5 (specs/data/manual-carb-intake adds quick_presets);
     // processed_images (v4) must still exist per the no-DDL-on-legacy-tables
     // convention (Decision 10) — only the version stamp advances.
-    func testProcessedImagesTableAndSchemaVersionFive() throws {
+    func testProcessedImagesTableAndSchemaVersion() throws {
         let q = try DatabaseQueue(path: dbURL.path)
         try q.read { db in
             let tables = try String.fetchAll(
@@ -50,7 +50,7 @@ final class BslIngestTests: XCTestCase {
             XCTAssertTrue(tables.contains("processed_images"))
             let version = try String.fetchOne(
                 db, sql: "SELECT v FROM meta WHERE k = 'schema_version'")
-            XCTAssertEqual(version, "5")
+            XCTAssertEqual(version, "6")
         }
     }
 

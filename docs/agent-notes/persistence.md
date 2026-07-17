@@ -58,6 +58,29 @@ Cross-repo check (2026-07-05): a store-written fixture loads in medreg via `medr
 
 Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT EXISTS` retrofits it onto v4 DBs — no DDL on legacy tables): `id` TEXT PK, `name`, `carbs_g` NOT NULL, optional `protein_g`/`fat_g`/`fibre_g`, `sort_order`. The three authored defaults ("A pint" 17 g, "Bagel" 45 g, "Chips" 40 g) are seeded **at most once per DB**, gated on the `quick_presets_seeded` meta flag — deleting all presets does NOT reseed on relaunch. `saveQuickPreset` is INSERT OR REPLACE (insert and update in one); preset writes do not notify `eventsDidChange`.
 
+## Estimation outcomes (snaq-parity)
+
+`estimation_outcomes` (schema v6; `CREATE IF NOT EXISTS` retrofits it onto v5
+DBs like quick_presets onto v4): one row per estimation attempt — success or
+refusal. Columns: `id` TEXT PK, `timestamp` (UTC **ms**, last_sweep_at_ms
+precedent), `outcome` ('success'|'refused'), `failure` (JSON
+{domain, case, payload}, NULL on success), `measurements` (JSON
+`EstimationAttemptRecord` snapshot, schema-versioned via its `v` field),
+`meal_id` (success only), `model_version` (segmenter lineage tag),
+`benchmark_meal_id` (set when launched from a benchmark meal). Indexes
+`outcomes_timestamp` and `outcomes_benchmark(benchmark_meal_id, model_version)`.
+
+Persistence stores `failure`/`measurements` **opaquely** — it sits below
+Pipeline in the dependency graph and cannot see the typed record; the
+`EstimationOutcome(record:benchmarkMealID:)` bridge lives in Pipeline
+(PipelineDiagnostics.swift). `saveEstimationOutcome` applies split eviction
+bounds INSIDE the insert's write transaction: non-benchmark rows keep the
+newest 500; benchmark rows keep the newest 10 per (benchmark_meal_id,
+model_version). "Newest" orders by (timestamp, id) — the id tie-break keeps
+eviction deterministic when attempts share a millisecond. Only the population
+the insert belongs to is evicted. `estimationOutcomes(limit:)` returns newest
+first. Outcome writes never touch `eventsDidChange` (quick_presets convention).
+
 ## Bsl ingestion (libre-ingestion + cgm-connect)
 
 Both `ingestBsl` (screenshot import) and `ingestLiveBsl` (live sources, cgm-connect Phase 1) share one private keep-first merge, `mergeBslKeepFirst`, which takes per-row `(timestampMs, value, metadataJSON)` tuples and adds each freshly inserted `timestampMs` to its covered set as it goes. That covered-set update is a deliberate behavioural change to `ingestBsl` too: two same-timestamp readings in one screenshot batch previously both inserted; now the second is classified `skippedExisting` (cgm-connect design "finding #5").

@@ -166,6 +166,51 @@ public struct QuickPreset: Sendable, Equatable, Identifiable {
     }
 }
 
+// One estimation attempt — success or refusal — persisted on-device
+// (specs/estimation/snaq-parity Req 2, design "Persistence" + Data Models).
+// Outcome rows live in their own `estimation_outcomes` table following the
+// quick_presets convention: CRUD'd independently of the `events` log, no
+// `eventsDidChange` interaction. `measurementsJSON` is the serialised
+// `EstimationAttemptRecord` snapshot (schema-versioned via its `v` field) and
+// `failureJSON` its {domain, case, payload} failure encoding — both built by
+// the App/Pipeline layer and stored opaquely here, because Persistence sits
+// below Pipeline in the dependency graph and cannot see the typed record.
+public struct EstimationOutcome: Sendable, Equatable, Identifiable {
+    // Split eviction bounds (snaq-parity Decision 7 / design lane A): the two
+    // populations are bounded separately so neither starves the other.
+    public static let nonBenchmarkRowBound = 500
+    public static let benchmarkAttemptsPerMealPerLineageBound = 10
+
+    public let id: UUID
+    public let timestampMs: Int64  // UTC ms since epoch (last_sweep_at_ms precedent)
+    public let outcome: String  // "success" | "refused"
+    public let failureJSON: String?  // nil on success
+    public let measurementsJSON: String
+    public let mealID: UUID?  // saved MealRecord reference (success only)
+    public let modelVersion: String  // segmenter lineage tag
+    public let benchmarkMealID: UUID?  // set when launched from a benchmark meal
+
+    public init(
+        id: UUID = UUID(),
+        timestampMs: Int64,
+        outcome: String,
+        failureJSON: String?,
+        measurementsJSON: String,
+        mealID: UUID?,
+        modelVersion: String,
+        benchmarkMealID: UUID?
+    ) {
+        self.id = id
+        self.timestampMs = timestampMs
+        self.outcome = outcome
+        self.failureJSON = failureJSON
+        self.measurementsJSON = measurementsJSON
+        self.mealID = mealID
+        self.modelVersion = modelVersion
+        self.benchmarkMealID = benchmarkMealID
+    }
+}
+
 // Generic surface for a row in the events table (Decision 8). `value` is
 // `Double?` so future event types without a canonical scalar fit without a
 // schema change. `metadata` is the raw JSON string — consumers decide how to
@@ -316,4 +361,19 @@ public protocol PersistenceStore: Sendable {
 
     // Req 4.2. Deletes a single preset by id.
     func deleteQuickPreset(id: UUID) async throws
+
+    // specs/estimation/snaq-parity Req 2.1, 2.3, 2.5. Persists one estimation
+    // attempt and applies the split eviction bounds INSIDE the same write
+    // transaction as the insert (atomic): non-benchmark rows keep the newest
+    // `EstimationOutcome.nonBenchmarkRowBound`; benchmark-tagged rows keep the
+    // newest `benchmarkAttemptsPerMealPerLineageBound` per (benchmark_meal_id,
+    // model_version) group. "Newest" orders by (timestamp, id) so eviction and
+    // latest-attempt scoring stay deterministic under equal timestamps.
+    // Outcome rows are not `events` rows: no `eventsDidChange` interaction
+    // (quick_presets convention above).
+    func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws
+
+    // Req 2.2 read path (log browser / export). Returns at most `limit` rows
+    // ordered newest first ((timestamp, id) descending).
+    func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome]
 }

@@ -46,9 +46,17 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // guidance during two-view capture; card detection itself stays automatic in
     // the pipeline.
     var includeCardThisCapture: Bool = false
+    // Benchmark-capture tag (snaq-parity design lane B): set by the benchmark
+    // surface before launching a capture, cleared when the benchmark flow ends.
+    // While set, every persisted outcome row carries the meal id so attempts
+    // group under (benchmark meal, model lineage) in the store's split bounds.
+    var benchmarkMealID: UUID?
 
     private let session: CaptureSession
-    private let pipeline: any PipelineEstimator
+    // `var` (not `let`): `Pipeline` is a value type, so the attempt-record
+    // delegate must be stamped onto the copy THIS model holds — see the end
+    // of `init`. Never reassigned elsewhere.
+    private var pipeline: any PipelineEstimator
     private let store: (any PersistenceStore)?
     private let photoSaver: (any PhotoLibrarySaver)?
     private let databaseEdition: String
@@ -61,6 +69,19 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // constructed before task 13 continue to compile; production callers
     // (App.swift) pass a non-nil instance so the freeze-at-nadir flow runs.
     private let preShutterSegmenter: (any PreShutterMaskSource)?
+    // Segmenter lineage tag ("dev_stub" / "coreml_<modelVersion>") stamped as
+    // modelVersion onto the slim capture-stage refusal records this model
+    // writes itself (snaq-parity lane A); pipeline-produced records carry the
+    // pipeline's own stamp. App.swift passes `Pipeline.segmenterSource`.
+    private let segmenterSource: String
+    // Baseline for the per-attempt pre-shutter error delta (snaq-parity Req
+    // 3.2). `PreShutterSegmenter.segmentationErrorCount` is lifetime-cumulative
+    // with no reset, so persisting it raw would misattribute every earlier
+    // attempt's errors to the current one. The attempt's window is "since the
+    // last persisted attempt, or Capture presentation, whichever came later":
+    // reset in `capturePresented()`, advanced to the counter's current value
+    // by each persist.
+    private var preShutterErrorBaseline = 0
 
     private(set) var flowTask: Task<Void, Never>?
     private var interruptionTask: Task<Void, Never>?
@@ -106,6 +127,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         supportsLiDAR: Bool,
         databaseEdition: String,
         paletteVersion: String,
+        segmenterSource: String = "",
         store: (any PersistenceStore)? = nil,
         photoSaver: (any PhotoLibrarySaver)? = nil,
         preShutterSegmenter: (any PreShutterMaskSource)? = nil,
@@ -125,6 +147,7 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         self.supportsLiDAR = supportsLiDAR
         self.databaseEdition = databaseEdition
         self.paletteVersion = paletteVersion
+        self.segmenterSource = segmenterSource
         self.preShutterSegmenter = preShutterSegmenter
         self.cameraAuthorisation = cameraAuthorisation
         self.motionAvailable = motionAvailable
@@ -136,6 +159,16 @@ final class CaptureFlowModel: CaptureFlowDelegate {
 
         evaluatePermissions()
         observeInterruptions(stream: interruptions)
+
+        // Wire the attempt-record handoff (snaq-parity lane A). `Pipeline` is
+        // a struct, so the weak delegate reference must be set on the copy
+        // this model retains — a post-construction `pipeline.delegate = model`
+        // in App.swift would mutate a dead copy. Mock estimators injected by
+        // tests are not `Pipeline` and take their own delivery path (none).
+        if var concrete = pipeline as? Pipeline {
+            concrete.delegate = self
+            self.pipeline = concrete
+        }
     }
 
     // MARK: - Derived view state
@@ -393,6 +426,10 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     // sequential, so the AR session never double-toggles.
     func capturePresented() {
         isCapturePresented = true
+        // Fresh aiming window for the pre-shutter error delta: whatever the
+        // lifetime counter accumulated before this presentation belongs to
+        // earlier sessions, not to this session's first attempt.
+        preShutterErrorBaseline = preShutterSegmenter?.segmentationErrorCount ?? 0
         evaluatePermissions()
     }
 
@@ -505,9 +542,64 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     nonisolated func didUpdateLiDARCoverage(percent: Float) {}
     nonisolated func didDetectInterClassOcclusion() {}
     nonisolated func didProduceEstimate(_ record: MealRecord) {}
-    // Write-behind persistence of the attempt record lands with the
-    // snaq-parity outcome store (tasks 6–8); no-op until then.
-    nonisolated func didCompleteAttempt(_ record: EstimationAttemptRecord) {}
+
+    // Write-behind persistence of the attempt record (snaq-parity Req 2.1,
+    // 2.4). Fired by the pipeline exactly once per non-cancelled attempt.
+    // Detached so the store write is decoupled from the estimation task: a
+    // cancelled flow can never cancel the persist, and the estimation result
+    // is never delayed or blocked by it.
+    nonisolated func didCompleteAttempt(_ record: EstimationAttemptRecord) {
+        Task.detached { [weak self] in
+            await self?.persistAttemptRecord(record)
+        }
+    }
+
+    // Merges the App-owned measurements into the snapshot and writes the
+    // outcome row. Store errors are logged to the Shutter category and
+    // swallowed (MaskArtefactWriter.persistMask precedent): a recording
+    // failure must neither alter nor block the estimation result (Req 2.4).
+    private func persistAttemptRecord(_ record: EstimationAttemptRecord) async {
+        guard let store else { return }
+        var merged = record
+        if let segmenter = preShutterSegmenter {
+            // Per-attempt delta (Req 3.2): the producer's counter is lifetime-
+            // cumulative, so persist only its growth since the baseline, then
+            // advance the baseline for the next attempt's window.
+            let count = segmenter.segmentationErrorCount
+            merged = record.withPreShutterSegmentationErrorCount(
+                max(0, count - preShutterErrorBaseline)
+            )
+            preShutterErrorBaseline = count
+        }
+        do {
+            let outcome = try EstimationOutcome(record: merged, benchmarkMealID: benchmarkMealID)
+            try await store.saveEstimationOutcome(outcome)
+        } catch {
+            log.error("event=outcome.persist.failed error=\(String(describing: error), privacy: .public)")
+        }
+    }
+
+    // Slim outcome record for a capture-stage refusal that never reached
+    // `Pipeline.estimate` (snaq-parity design lane A): outcome refused,
+    // failure domain "capture", no stage measurements — the log covers every
+    // attempt the user experienced, not only those that reached the pipeline.
+    // Cancellation never routes here (not an outcome).
+    private func persistCaptureRefusal(caseName: String, payload: String?, mode: CaptureMode) {
+        let record = EstimationAttemptRecord(
+            v: EstimationAttemptRecord.currentSchemaVersion,
+            timestampMs: Int64(Date().timeIntervalSince1970 * 1000),
+            outcome: .refused,
+            failure: EstimationAttemptRecord.FailureInfo(
+                domain: "capture", caseName: caseName, payload: payload
+            ),
+            modelVersion: segmenterSource,
+            mealID: nil,
+            capturePath: mode.capturePath.rawValue
+        )
+        Task.detached { [weak self] in
+            await self?.persistAttemptRecord(record)
+        }
+    }
 
     // MARK: - Internals
 
@@ -662,16 +754,29 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             )
             await runEstimation(captureResult: captureResult, mode: mode, retryStage: stage)
         } catch is CancellationError {
+            // Cancellation is not an outcome (snaq-parity design): a user-
+            // abandoned capture writes no record.
             return
         } catch CaptureError.worldTrackingDegraded {
             log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=worldTrackingDegraded")
+            persistCaptureRefusal(caseName: "worldTrackingDegraded", payload: nil, mode: mode)
             state = .trackingLost
         } catch let failure as EstimationFailure {
             log.info("event=capture.end stage=\(stage.name, privacy: .public) success=false error=\(String(describing: failure), privacy: .public)")
+            // Thrown before the pipeline ran, so no didCompleteAttempt fired:
+            // record it here, under the capture domain, keeping the typed
+            // case name and payload.
+            let info = EstimationAttemptRecord.FailureInfo(estimation: failure)
+            persistCaptureRefusal(caseName: info.caseName, payload: info.payload, mode: mode)
             state = .refused(failure, retryStage: stage)
         } catch {
             let typeName = String(describing: type(of: error))
             log.info("event=estimate.end stage=\(stage.name, privacy: .public) success=false error=\(typeName, privacy: .public)")
+            // Non-typed capture error: preserve the underlying description in
+            // the record, Release builds included (Req 3.3).
+            persistCaptureRefusal(
+                caseName: "internalError", payload: String(reflecting: error), mode: mode
+            )
             state = .refused(.internalError(typeName), retryStage: stage)
         }
     }

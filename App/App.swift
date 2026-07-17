@@ -83,14 +83,18 @@ struct MedataApp: App {
         // until Phase 3 bundles `segmenter.mlpackage`; `try!` is correct
         // because a missing model at launch is a development error, not a
         // recoverable runtime condition.
+        let pipeline = try! Pipeline.makeForDevice(store: store, cardDetector: cardDetector)
         _model = State(initialValue: CaptureFlowModel(
             session: CaptureSession(engine: engine),
-            pipeline: try! Pipeline.makeForDevice(store: store, cardDetector: cardDetector),
+            pipeline: pipeline,
             indicators: LiveIndicatorModel(),
             interruptions: engine.interruptions,
             supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
             databaseEdition: "CoFID 2024 + AFCD 2024",
             paletteVersion: "v1",
+            // Slim capture-stage refusal records carry the same lineage tag
+            // the pipeline stamps on its own outcome records (snaq-parity).
+            segmenterSource: pipeline.segmenterSource,
             store: store,
             photoSaver: PhotoKitSaver(),
             preShutterSegmenter: preShutter
