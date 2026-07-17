@@ -57,6 +57,19 @@ final class FoodDatabaseTests: XCTestCase {
                      1.0, 'uncalibrated_pooled', 'FAO_DENS', 'CoFID 2024',
                      'none', 0)
             """)
+            // Liquid class with NO solid_servings row — the serving lookup
+            // must return nil so the app falls back (serving-adjust PRD).
+            try db.execute(sql: """
+                INSERT INTO foods VALUES
+                    ('water', 'Water (still)', 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                     1.0, 'uncalibrated_unity', 'CoFID 2024', 'CoFID 2024',
+                     'none', 0)
+            """)
+            try db.execute(sql: """
+                INSERT INTO solid_servings VALUES
+                    ('potato_boiled', 'potato', 'potatoes', 58.0, 0.5,
+                     'BDA Food Fact Sheet: Portion sizes')
+            """)
         }
     }
 
@@ -101,6 +114,14 @@ final class FoodDatabaseTests: XCTestCase {
             device_verified INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+        CREATE TABLE solid_servings (
+            class_id TEXT PRIMARY KEY,
+            unit_singular TEXT NOT NULL,
+            unit_plural TEXT NOT NULL,
+            grams_per_unit REAL NOT NULL,
+            step REAL NOT NULL,
+            source TEXT NOT NULL
+        );
         """
 
     private func makePair() throws -> GRDBFoodDatabase {
@@ -193,6 +214,30 @@ final class FoodDatabaseTests: XCTestCase {
         let kumara = try XCTUnwrap(db.entry(for: "kumara"))
         XCTAssertEqual(kumara.betaProvenance, "gravimetric")
         XCTAssertTrue(kumara.deviceVerified)
+    }
+
+    // MARK: - Solid serving lookup (serving-adjust PRD, Food database Req 2)
+
+    func testSolidServingResolvesForServedClass() throws {
+        let db = try makePair()
+        let serving = try XCTUnwrap(db.solidServing(for: "potato_boiled"))
+        XCTAssertEqual(serving.unitSingular, "potato")
+        XCTAssertEqual(serving.unitPlural, "potatoes")
+        XCTAssertEqual(serving.gramsPerUnit, 58.0, accuracy: 1e-9)
+        XCTAssertEqual(serving.step, 0.5, accuracy: 1e-9)
+    }
+
+    func testSolidServingIsNilForLiquidClass() throws {
+        // water exists in foods but has no solid_servings row — the app
+        // falls back to grams, never a dead row.
+        let db = try makePair()
+        XCTAssertNotNil(db.entry(for: "water"))
+        XCTAssertNil(db.solidServing(for: "water"))
+    }
+
+    func testSolidServingIsNilForUnknownClass() throws {
+        let db = try makePair()
+        XCTAssertNil(db.solidServing(for: "does_not_exist"))
     }
 
     // MARK: - entry(for:edition:) returns current pair (v1 has one bundled pair)
