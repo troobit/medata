@@ -163,6 +163,19 @@ def test_liquid_class_id_fails_generation(tmp_path, monkeypatch):
         bake_to(tmp_path, monkeypatch)
 
 
+def test_grams_per_unit_of_100_or_more_fails_generation(tmp_path, monkeypatch):
+    # Precision coupling: ServingNote trims serving counts to 2 dp and the
+    # result screen treats parse-derived grams within 0.5 g (gramEpsilon) of
+    # the pending amount as unchanged — that round-trip only holds while
+    # every grams_per_unit stays below 100 g.
+    inflated = [row if row[0] != "potato_boiled"
+                else row[:3] + (100.0,) + row[4:]
+                for row in generate.SOLID_SERVINGS]
+    monkeypatch.setattr(generate, "SOLID_SERVINGS", inflated)
+    with pytest.raises(SystemExit, match="potato_boiled"):
+        bake_to(tmp_path, monkeypatch)
+
+
 def test_unlisted_coverage_gap_fails_generation(tmp_path, monkeypatch):
     # Dropping a class's row WITHOUT listing it deliberately absent must fail —
     # absence has to be a decision, never an accident.
