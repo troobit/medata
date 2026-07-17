@@ -150,6 +150,17 @@ CREATE TABLE IF NOT EXISTS liquid_servings (
     source     TEXT NOT NULL,
     PRIMARY KEY (class_id, region, vessel)
 );
+-- Household serving definitions for solid classes (serving-adjust PRD Req 1),
+-- mirroring the liquid_servings precedent. step is the stepper increment in
+-- serving units (0.5 or 1.0) so granularity is data, not code.
+CREATE TABLE IF NOT EXISTS solid_servings (
+    class_id       TEXT PRIMARY KEY,
+    unit_singular  TEXT NOT NULL,
+    unit_plural    TEXT NOT NULL,
+    grams_per_unit REAL NOT NULL CHECK (grams_per_unit > 0),
+    step           REAL NOT NULL CHECK (step > 0),
+    source         TEXT NOT NULL
+);
 -- Best-effort sub-class densities (Req 7.5, Decision 24): sub-classes are DB
 -- rows, never palette channels; LiquidResolver falls back to the coarse foods
 -- row when the sub-class is uncertain.
@@ -272,6 +283,79 @@ LIQUID_SERVINGS = [
     ("wine",        "UK", "glass",     175.0, "UK licensing standard medium pour"),
     ("wine",        "US", "glass",     148.0, "US standard 5 fl oz pour"),
 ]
+
+# Household serving definitions for the solid classes (serving-adjust PRD
+# Req 1). Serving-first display is an experiment, so these are data, not code:
+# tune weights/units/steps here and rebake — no Swift change needed.
+# step = stepper increment in serving units: 0.5 for countable whole items
+# (half a potato is a natural correction), 1.0 for spoon/handful measures.
+_BDA_PORTION_SHEET = (
+    "BDA Food Fact Sheet: Portion sizes, "
+    "https://www.bda.uk.com/resource/food-facts-portion-sizes.html"
+)
+_CRAWLEY_UNVERIFIED = "Crawley Food Portion Sizes (unverified figure)"
+
+SOLID_SERVINGS = [
+    # (class_id, unit_singular, unit_plural, grams_per_unit, step, source)
+    ("white_rice",       "spoon",            "spoons",             50.0, 1.0, _BDA_PORTION_SHEET),
+    ("brown_rice",       "spoon",            "spoons",             50.0, 1.0, _BDA_PORTION_SHEET),
+    ("pasta",            "spoon",            "spoons",             50.0, 1.0, _BDA_PORTION_SHEET),
+    ("bread_white",      "slice",            "slices",             36.0, 0.5, _BDA_PORTION_SHEET),
+    ("bread_wholemeal",  "slice",            "slices",             36.0, 0.5, _BDA_PORTION_SHEET),
+    ("potato_boiled",    "potato",           "potatoes",           58.0, 0.5, _BDA_PORTION_SHEET),
+    ("potato_mashed",    "scoop",            "scoops",             60.0, 1.0, _CRAWLEY_UNVERIFIED),
+    ("chips_fries",      "handful",          "handfuls",           55.0, 1.0, _CRAWLEY_UNVERIFIED),
+    ("chicken",          "palm-sized piece", "palm-sized pieces",  90.0, 0.5, _BDA_PORTION_SHEET),
+    ("beef",             "palm-sized piece", "palm-sized pieces",  90.0, 0.5, _BDA_PORTION_SHEET),
+    ("pork",             "palm-sized piece", "palm-sized pieces",  90.0, 0.5, _BDA_PORTION_SHEET),
+    ("fish_white",       "palm-sized piece", "palm-sized pieces",  90.0, 0.5, _BDA_PORTION_SHEET),
+    ("egg",              "egg",              "eggs",               50.0, 0.5, _BDA_PORTION_SHEET),
+    ("cheese",           "matchbox piece",   "matchbox pieces",    30.0, 0.5, _BDA_PORTION_SHEET),
+    ("salad_leaves",     "handful",          "handfuls",           20.0, 1.0, _CRAWLEY_UNVERIFIED),
+    ("broccoli",         "heaped tablespoon", "heaped tablespoons", 27.0, 1.0, _BDA_PORTION_SHEET),
+    ("carrot",           "heaped tablespoon", "heaped tablespoons", 27.0, 1.0, _BDA_PORTION_SHEET),
+    ("peas",             "heaped tablespoon", "heaped tablespoons", 27.0, 1.0, _BDA_PORTION_SHEET),
+    ("beans_baked",      "tablespoon",       "tablespoons",        37.0, 1.0, _BDA_PORTION_SHEET),
+    ("lentils",          "tablespoon",       "tablespoons",        37.0, 1.0, _CRAWLEY_UNVERIFIED),
+    ("apple",            "apple",            "apples",             80.0, 0.5, _BDA_PORTION_SHEET),
+    ("banana",           "banana",           "bananas",            80.0, 0.5, _BDA_PORTION_SHEET),
+    ("tomato",           "tomato",           "tomatoes",           80.0, 0.5, _BDA_PORTION_SHEET),
+    ("mixed_vegetables", "heaped tablespoon", "heaped tablespoons", 27.0, 1.0, _BDA_PORTION_SHEET),
+]
+
+# Solid classes deliberately WITHOUT a serving definition (the app falls back
+# to grams). Empty at v1 — every solid class has a citable household unit.
+# Absence must be a decision, never an accident: verify_solid_servings fails
+# the bake on any class in neither list.
+SOLID_SERVINGS_ABSENT: frozenset = frozenset()
+
+
+def verify_solid_servings() -> None:
+    """Coverage lock for solid_servings (serving-adjust PRD Req 1): a class id
+    not among the solid palette classes (an orphan or a liquid) aborts, and so
+    does a solid class in neither SOLID_SERVINGS nor SOLID_SERVINGS_ABSENT.
+    Runs before anything is written."""
+    solids = {row[0] for row in FOOD_DATA[:SOLID_CLASS_COUNT]}
+    served = {row[0] for row in SOLID_SERVINGS}
+    stray = sorted((served | set(SOLID_SERVINGS_ABSENT)) - solids)
+    if stray:
+        raise SystemExit(
+            f"solid_servings names class(es) {stray} that are not solid "
+            "palette classes in foods — orphans and liquids must not bake"
+        )
+    uncovered = sorted(solids - served - set(SOLID_SERVINGS_ABSENT))
+    if uncovered:
+        raise SystemExit(
+            f"solid class(es) {uncovered} have no solid_servings row and are "
+            "not listed in SOLID_SERVINGS_ABSENT — absence must be deliberate"
+        )
+    overlap = sorted(served & set(SOLID_SERVINGS_ABSENT))
+    if overlap:
+        raise SystemExit(
+            f"class(es) {overlap} are both served and deliberately absent — "
+            "pick one"
+        )
+
 
 # Best-effort sub-class rows (Req 7.5, Decision 24). Deliberately no assumed
 # lager<stout carb ordering — sweet/milk stouts run higher than lager.
@@ -466,6 +550,8 @@ def bake(calibration_json: str | None = None) -> None:
     # Palette <-> DB lock (Req 8.4 label + Req 5.7/7.2 content): abort before
     # writing anything if the bake has drifted from ClassPalette.
     verify_palette_lock(PALETTE_VERSION)
+    # Serving coverage lock (serving-adjust PRD Req 1): same abort-first rule.
+    verify_solid_servings()
 
     # Load + validate the calibration BEFORE touching any output: unknown
     # classes and the Req 5.3 density spot-check abort with nothing written.
@@ -504,6 +590,10 @@ def bake(calibration_json: str | None = None) -> None:
     conn.executemany(
         "INSERT INTO liquid_servings VALUES (?,?,?,?,?)",
         LIQUID_SERVINGS
+    )
+    conn.executemany(
+        "INSERT INTO solid_servings VALUES (?,?,?,?,?,?)",
+        SOLID_SERVINGS
     )
     conn.executemany(
         "INSERT INTO liquid_subclasses VALUES (?,?,?,?,?)",
