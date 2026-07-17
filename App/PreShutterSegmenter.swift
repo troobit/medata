@@ -45,6 +45,7 @@ import os
 @MainActor
 protocol PreShutterMaskSource: AnyObject {
     var latest: PreShutterSegmenter.TimestampedMask? { get }
+    var segmentationErrorCount: Int { get }
     func pause()
     func awaitPaused() async
 }
@@ -78,6 +79,12 @@ final class PreShutterSegmenter: PreShutterMaskSource {
     /// line so unit tests can observe the cadence-violation contract without
     /// an OSLog harness (Decision 3 / design Logging section).
     private(set) var cadenceMissCount: Int = 0
+
+    /// Pre-shutter cycles dropped on an error — a failed frame conversion or a
+    /// thrown `segment(_:)`. Previously each site was a silent bare `try?`;
+    /// counted per snaq-parity Req 3.2 and merged into the outcome record by
+    /// `CaptureFlowModel` at persist time.
+    private(set) var segmentationErrorCount: Int = 0
 
     private var inflight: Task<Void, Never>?
     private var lastPublishedAt: ContinuousClock.Instant?
@@ -138,7 +145,12 @@ final class PreShutterSegmenter: PreShutterMaskSource {
                 guard !Task.isCancelled else { return }
                 let shouldProcess = await MainActor.run { self?.isPaused == false }
                 guard shouldProcess else { continue }
-                guard let raw = await Self.makeRawFrame(from: frame) else { continue }
+                guard let raw = await Self.makeRawFrame(from: frame) else {
+                    // Count-and-continue (Req 3.2): a failed conversion is a
+                    // dropped cycle, not a silent one.
+                    await MainActor.run { self?.segmentationErrorCount += 1 }
+                    continue
+                }
                 guard !Task.isCancelled else { return }
                 await MainActor.run { self?.inflightSegmentCycles += 1 }
                 let startedAt = ContinuousClock.now
@@ -238,6 +250,10 @@ final class PreShutterSegmenter: PreShutterMaskSource {
     private func finishSegmentCycle(result: SegmentationResult?, latencyMs: Int) {
         if let result = result {
             publishInternal(argmax: result.argmax, latencyMs: latencyMs)
+        } else {
+            // Count-and-continue (Req 3.2): the `try?` around `segment(_:)`
+            // used to drop the error silently on both frame paths.
+            segmentationErrorCount += 1
         }
         inflightSegmentCycles -= 1
         if inflightSegmentCycles == 0, let cont = drainContinuation {

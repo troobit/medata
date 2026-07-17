@@ -309,9 +309,11 @@ public final class PipelineDiagnostics {
         obliqueTiltDeg = obliqueDeg
     }
 
+    // `cardFallback` is sticky: a fallback recorded at card-detection time is
+    // never cleared by the later scale-stage record.
     public func recordScale(source: String, cardFallback: Bool) {
         scaleSource = source
-        self.cardFallback = cardFallback
+        self.cardFallback = (self.cardFallback ?? false) || cardFallback
     }
 
     public func recordCardFallback() {

@@ -250,34 +250,40 @@ final class LiDARPlaneFitterTests: XCTestCase {
         XCTAssertEqual(plane.distanceMm, trueDist, accuracy: 2.0)
     }
 
-    // Diagnostic counter `debugLastResidualMm` feeds the on-device
-    // `supportplane.end` trace so a residual-too-high refusal (real-but-noisy
-    // plane) is distinguishable from point-starvation/degeneracy. It carries the
-    // RMS residual on a fit that reaches step 4, and the -1 sentinel when the fit
-    // refuses BEFORE residual is computed. Bug `capture-log-flood-…` round.
-    func testResidualCounterReflectsFitOutcome() throws {
+    // The fit-outcome residual stat feeds the on-device `supportplane.end`
+    // trace so a residual-too-high refusal (real-but-noisy plane) is
+    // distinguishable from point-starvation/degeneracy. It carries the RMS
+    // residual on a fit that reaches step 4, and the -1 sentinel when the fit
+    // refuses BEFORE residual is computed. Bug `capture-log-flood-…` round;
+    // returned values replaced the `debugLast*` statics (snaq-parity Req 3.1).
+    func testResidualStatReflectsFitOutcome() throws {
         let trueNormal = Vec3(0, 1, 0)
         // Clean fit → residual is computed and near zero.
         let clean = syntheticPlaneDepthMap(normal: trueNormal, distanceMm: 100)
         let foodMask = centredFoodMask(foodRectX: 250..<390, foodRectY: 200..<320)
-        _ = try LiDARPlaneFitter.fit(.init(
+        let cleanOutcome = LiDARPlaneFitter.fitOutcome(.init(
             depth: clean, colourIntrinsics: intrinsics,
             foodRegionMask: foodMask, gravityCamera: trueNormal
         ))
-        XCTAssertGreaterThanOrEqual(LiDARPlaneFitter.debugLastResidualMm, 0,
+        XCTAssertNotNil(cleanOutcome.plane)
+        XCTAssertGreaterThanOrEqual(cleanOutcome.stats.residualMm, 0,
                                     "a completed fit must record its residual")
-        XCTAssertLessThan(LiDARPlaneFitter.debugLastResidualMm, 5,
+        XCTAssertLessThan(cleanOutcome.stats.residualMm, 5,
                           "clean synthetic plane residual should be small")
+        XCTAssertGreaterThan(cleanOutcome.stats.candidatePointCount, 0)
+        XCTAssertGreaterThan(cleanOutcome.stats.inlierCount, 0)
 
         // Point-starvation refusal (all-low confidence) → residual never reached,
         // sentinel stays -1.
         let starved = syntheticPlaneDepthMap(normal: trueNormal, distanceMm: 100,
                                              uniformConfidence: 0)
-        XCTAssertThrowsError(try LiDARPlaneFitter.fit(.init(
+        let starvedOutcome = LiDARPlaneFitter.fitOutcome(.init(
             depth: starved, colourIntrinsics: intrinsics,
             foodRegionMask: foodMask, gravityCamera: trueNormal
-        )))
-        XCTAssertEqual(LiDARPlaneFitter.debugLastResidualMm, -1,
+        ))
+        XCTAssertNil(starvedOutcome.plane)
+        XCTAssertEqual(starvedOutcome.refusal, .noLidarPoints)
+        XCTAssertEqual(starvedOutcome.stats.residualMm, -1,
                        "a pre-residual refusal must leave the -1 sentinel")
     }
 

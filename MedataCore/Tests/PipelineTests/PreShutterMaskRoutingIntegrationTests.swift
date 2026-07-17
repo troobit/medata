@@ -61,18 +61,21 @@ struct PreShutterMaskRoutingIntegrationTests {
 private final class ProbeFitter: SupportPlaneFitter, @unchecked Sendable {
     var lastFoodMask: BinaryMask?
 
-    func fit(
+    func fitOutcome(
         nadir: RawFrame,
         cardPose: CardPose?,
         corners: [PixelCorner]?,
         preShutterFoodMask: BinaryMask?
-    ) throws -> SupportPlane {
+    ) -> SupportPlaneFitOutcome {
         lastFoodMask = preShutterFoodMask
-        return SupportPlane(
+        let plane = SupportPlane(
             normal: Vec3(0, -1, 0),
             distanceMm: 300,
             residualMm: 1,
             convergedIterations: nil
+        )
+        return SupportPlaneFitOutcome(
+            plane: plane, stats: SupportPlaneFitStats(), refusal: nil
         )
     }
 }
