@@ -88,7 +88,8 @@ struct CaptureFlowView: View {
     }
 
     // Capture-stack routes (design: Navigation routes). runEstimation pushes
-    // `.review`; its Carbs action pushes `.result`; `Adjust` pushes `.correction`.
+    // `.review`; its Carbs action pushes `.result`, whose per-food rows carry
+    // the adjustment surface (serving-adjust PRD — no separate Adjust screen).
     @ViewBuilder
     private func captureDestination(_ route: CaptureRoute) -> some View {
         switch route {
@@ -101,15 +102,12 @@ struct CaptureFlowView: View {
                 record: record,
                 store: store,
                 mode: .justCaptured,
-                onAdjust: { model.navigationPath.append(CaptureRoute.correction(record)) },
                 onDone: { model.dismissResult() },
                 // Retake and Delete both discard the just-captured meal (it is
                 // already persisted) and return to Capture (Decision 17).
                 onRetake: { model.deleteAndDismiss(record) },
                 onDelete: { model.deleteAndDismiss(record) }
             )
-        case .correction(let record):
-            ManualCorrectionView(record: record, store: store, onSave: { model.popRoute() })
         }
     }
 

@@ -10,9 +10,10 @@ import SwiftUI
 // CaptureFlowView).
 
 // Shared destination builder for the Records and Trends sheet stacks (both key
-// `MealRoute`, design: Navigation routes). Overview pushes the full Result or
-// the correction; Done / Save pop one level; delete removes the meal and unwinds
-// to the list.
+// `MealRoute`, design: Navigation routes). Overview pushes the full Result —
+// whose per-food rows carry the adjustment surface (serving-adjust PRD, no
+// separate correction screen); Done pops one level; delete removes the meal
+// and unwinds to the list.
 @MainActor
 @ViewBuilder
 func mealRouteDestination(
@@ -25,7 +26,6 @@ func mealRouteDestination(
         MealOverviewView(
             store: store,
             record: record,
-            onAdjust: { path.wrappedValue.append(.correction(record)) },
             onFullResult: { path.wrappedValue.append(.result(record)) },
             onDeleted: { popOne(path) }
         )
@@ -34,18 +34,11 @@ func mealRouteDestination(
             record: record,
             store: store,
             mode: .historyDetail,
-            onAdjust: { path.wrappedValue.append(.correction(record)) },
             onDone: { popOne(path) },
             onDelete: {
                 Task { try? await store.deleteMeal(id: record.id) }
                 path.wrappedValue.removeAll()
             }
-        )
-    case .correction(let record):
-        ManualCorrectionView(
-            record: record,
-            store: store,
-            onSave: { popOne(path) }
         )
     }
 }

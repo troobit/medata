@@ -42,7 +42,6 @@
 		115DA0A32FD1000000272C1E /* LidarForkSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B32FD1000000272C1E /* LidarForkSheetView.swift */; };
 		115DA0A42FD1000000272C1E /* SegmentationReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B42FD1000000272C1E /* SegmentationReviewView.swift */; };
 		115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */; };
-		115DA0A62FD1000000272C1E /* ManualCorrectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */; };
 		B66AE5539A5F478E793B981F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FA70734182528B1ECAEDD1 /* HomeView.swift */; };
 		877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851614006E459D54779E1B6 /* IntakeView.swift */; };
 		180BF780028C4E409B5B127F /* CarbEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85695F786A184CFFA741C58F /* CarbEntryModel.swift */; };
@@ -101,7 +100,6 @@
 		115DA0B32FD1000000272C1E /* LidarForkSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LidarForkSheetView.swift; path = ../App/LidarForkSheetView.swift; sourceTree = SOURCE_ROOT; };
 		115DA0B42FD1000000272C1E /* SegmentationReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SegmentationReviewView.swift; path = ../App/SegmentationReviewView.swift; sourceTree = SOURCE_ROOT; };
 		115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MaskOverlayLoader.swift; path = ../App/MaskOverlayLoader.swift; sourceTree = SOURCE_ROOT; };
-		115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ManualCorrectionView.swift; path = ../App/ManualCorrectionView.swift; sourceTree = SOURCE_ROOT; };
 		39FA70734182528B1ECAEDD1 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomeView.swift; path = ../App/HomeView.swift; sourceTree = SOURCE_ROOT; };
 		0851614006E459D54779E1B6 /* IntakeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IntakeView.swift; path = ../App/IntakeView.swift; sourceTree = SOURCE_ROOT; };
 		85695F786A184CFFA741C58F /* CarbEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CarbEntryModel.swift; path = ../App/CarbEntryModel.swift; sourceTree = SOURCE_ROOT; };
@@ -221,7 +219,6 @@
 				115DA0B32FD1000000272C1E /* LidarForkSheetView.swift */,
 				115DA0B42FD1000000272C1E /* SegmentationReviewView.swift */,
 				115DA0B52FD1000000272C1E /* MaskOverlayLoader.swift */,
-				115DA0B62FD1000000272C1E /* ManualCorrectionView.swift */,
 				115DA0B82FD1000000272C1E /* MealOverviewView.swift */,
 				115DA0B92FD1000000272C1E /* TrendsView.swift */,
 				115DA0BA2FD1000000272C1E /* TrendsModel.swift */,
@@ -419,7 +416,6 @@
 				115DA0A32FD1000000272C1E /* LidarForkSheetView.swift in Sources */,
 				115DA0A42FD1000000272C1E /* SegmentationReviewView.swift in Sources */,
 				115DA0A52FD1000000272C1E /* MaskOverlayLoader.swift in Sources */,
-				115DA0A62FD1000000272C1E /* ManualCorrectionView.swift in Sources */,
 				115DA0A82FD1000000272C1E /* MealOverviewView.swift in Sources */,
 				115DA0A92FD1000000272C1E /* TrendsView.swift in Sources */,
 				115DA0AA2FD1000000272C1E /* TrendsModel.swift in Sources */,

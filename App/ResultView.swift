@@ -235,9 +235,6 @@ struct ResultView: View {
     // Done → dismiss (capture) / pop (history); Retake and Delete live in the
     // ⋯ menu (Decision 17). All defaulted so the capture stack and the
     // Records / Trends history stacks both compile.
-    // TODO(serving-adjust task 5): onAdjust and the Adjust button are retired
-    // with ManualCorrectionView; kept this phase so the route wiring builds.
-    var onAdjust: () -> Void = {}
     var onDone: () -> Void = {}
     var onRetake: () -> Void = {}
     var onDelete: () -> Void = {}
@@ -925,22 +922,12 @@ struct ResultView: View {
         .accessibilityIdentifier("result.veryLowSurface")
     }
 
-    // §6.6/6.7: Adjust (until task 5 retires it) + Done (prominent) + ⋯ menu
+    // §6.6/6.7 revised by the serving-adjust PRD: Done (prominent) + ⋯ menu
     // (Retake + Delete on a fresh capture, Delete only from history —
-    // Decision 17). The per-food rows above are the adjustment surface.
+    // Decision 17). The Adjust button is retired — the per-food rows above
+    // are the adjustment surface.
     private var actionRow: some View {
         HStack(spacing: 12) {
-            Button(action: onAdjust) {
-                Text("Adjust")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
-                    .foregroundStyle(Color.captureChromeText)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .accessibilityIdentifier("result.adjust")
-
             Button(action: onDone) {
                 Text("Done")
                     .font(.body.weight(.semibold))

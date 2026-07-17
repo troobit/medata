@@ -20,7 +20,13 @@
 > mode capsule (`1-VIEW · LiDAR` / `2-VIEW · NADIR` / `2-VIEW · OBLIQUE`), 76 pt bubble level
 > (stage-relative, non-gating), telemetry capsule, bottom row = mode + shutter (torch,
 > Trends/Data/Settings buttons all gone). Navigation: route enums only — `CaptureRoute`
-> (review/result/correction) on the capture stack, `MealRoute` on Graph/Records stacks;
+> (review/result) on the capture stack, `MealRoute` (overview/result) on Graph/Records
+> stacks — the `.correction` routes and `ManualCorrectionView` were retired by
+> `specs/serving-adjust/` (2026-07-18): the Result screen's per-food serving rows are the
+> adjustment surface (steppers per household unit, plate-fraction control, per-row gram
+> reveal; corrections persist via one appended `PbUserCorrection` whose note carries the
+> machine-readable `servings …` stamp from `ServingNote` in MedataCore Foods, with legacy
+> `portion N/M` notes still parsed for seeding);
 > `navigationDestination(for: MealRecord.self)` no longer exists, and an `.onChange` on
 > `navigationPath` resyncs `.showingResult` if the user pops via back-gesture (soft-lock fix).
 > Developer-phase copy rule (CLAUDE.md / Req 14.5): no reassurance/disclaimer strings.

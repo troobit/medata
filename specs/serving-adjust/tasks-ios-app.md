@@ -27,19 +27,19 @@ references:
 
 ## Persistence and retirement
 
-- [ ] 4. Persist adjustments via appendCorrection, edit-by-exception <!-- id:p00c98k -->
+- [x] 4. Persist adjustments via appendCorrection, edit-by-exception <!-- id:p00c98k -->
   - Untouched result writes nothing; Done unchanged (zero extra taps)
   - Single confirm pill (existing Log N g pattern) appends one PbUserCorrection: scaled total, per-class carbs scaled per row, machine-readable serving-count note extending PortionFormat; legacy 'portion N/M' notes still parse
   - Scaling always derives from the ORIGINAL estimate (never compounds); history reopen seeds from latest correction; re-adjusting appends
   - Graph/Records/Meal overview corrected wiring stays green
   - Blocked-by: p00c98h (Replace the portion card with per-food serving stepper rows), p00c98i (Add the plate-fraction quick control), p00c98j (Add the per-row gram reveal)
 
-- [ ] 5. Retire ManualCorrectionView and the Adjust action <!-- id:p00c98l -->
+- [x] 5. Retire ManualCorrectionView and the Adjust action <!-- id:p00c98l -->
   - Delete ManualCorrectionView.swift, remove the Adjust button (Done remains) and route references; free-text note entry dropped
   - pbxproj references removed per the four-section checklist in docs/agent-notes/ui-capture-flow.md
   - Blocked-by: p00c98k (Persist adjustments via appendCorrection, edit-by-exception)
 
-- [ ] 6. Design-system, copy, and truncation pass with full gates <!-- id:p00c98m -->
+- [x] 6. Design-system, copy, and truncation pass with full gates <!-- id:p00c98m -->
   - Capture palette, contentShape inside Button labels, monospaced digits, no disclaimer copy, make spell clean
   - No ellipsis truncation in portrait at default Dynamic Type; longest unit strings survive
   - make build, make test (both totals), simulator app compile check with CODE_SIGNING_ALLOWED=NO

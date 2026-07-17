@@ -12,7 +12,6 @@ import UIKit
 struct MealOverviewView: View {
     let store: any PersistenceStore
     let record: MealRecord
-    var onAdjust: () -> Void = {}
     var onFullResult: () -> Void = {}
     var onDeleted: () -> Void = {}
 
@@ -137,33 +136,22 @@ struct MealOverviewView: View {
         .accessibilityIdentifier("overview.foods")
     }
 
-    // Pill sizing/background/contentShape live INSIDE each Button label so the
+    // Pill sizing/background/contentShape live INSIDE the Button label so the
     // whole pill is tappable, not just the centred text (the dead-surface trap
     // fixed for CaptureErrorOverlay in 09aab63 and SegmentationReview here).
+    // The Adjust button is retired with ManualCorrectionView (serving-adjust
+    // PRD Req 5): Full result opens the screen whose per-food rows adjust.
     private var actionRow: some View {
-        HStack(spacing: 12) {
-            Button(action: onAdjust) {
-                Text("Adjust")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.textPrimary, lineWidth: 1.5))
-                    .foregroundStyle(Color.textPrimary)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .accessibilityIdentifier("overview.adjust")
-
-            Button(action: onFullResult) {
-                Text("Full result")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(Color.captureBackground)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .accessibilityIdentifier("overview.fullResult")
+        Button(action: onFullResult) {
+            Text("Full result")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                .foregroundStyle(Color.captureBackground)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
         }
+        .accessibilityIdentifier("overview.fullResult")
     }
 
     private var metadataLine: String {
