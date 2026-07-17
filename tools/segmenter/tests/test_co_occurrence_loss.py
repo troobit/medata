@@ -54,7 +54,7 @@ def test_co_occurrence_spec_carries_lambda_and_pooling():
         "loss": "co_occurrence",
         "co_lambda": loss_config.DEFAULT_CO_LAMBDA,
         "co_pooling": "max",
-        "weighting": "inverse_frequency",
+        "weighting": "none",  # default scheme (snaq-parity Req 6.3)
     }
     assert loss_config.resolve_loss_spec("co_occurrence", co_lambda=0.25)["co_lambda"] == 0.25
     # loss_train_config records the full spec — this is what train.py writes

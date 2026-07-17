@@ -150,14 +150,14 @@ references:
   - Stream: 2
   - Requirements: [5.4](requirements.md#5.4), [6.2](requirements.md#6.2), [6.4](requirements.md#6.4)
 
-- [ ] 19. Write failing pytest for class-weighting schemes <!-- id:isuh2qa -->
+- [x] 19. Write failing pytest for class-weighting schemes <!-- id:isuh2qa -->
   - Scheme builder none|sqrt_inverse replaces inverse_frequency_weights (train.py:516-523, loss_config.py:128-130,181) — inverse-frequency removed entirely (Decision 25 enforced in code)
   - --loss weighted_ce --class-weighting none is a launch error (ce in disguise corrupts sweep verdicts)
   - combined and co_occurrence wiring covered, not just the co-term criterion
   - Stream: 2
   - Requirements: [6.3](requirements.md#6.3)
 
-- [ ] 20. Implement --class-weighting across the weighted-loss surface <!-- id:isuh2qb -->
+- [x] 20. Implement --class-weighting across the weighted-loss surface <!-- id:isuh2qb -->
   - Default none; applies to every weighted loss in loss_config.LOSS_CHOICES
   - Blocked-by: isuh2qa (Write failing pytest for class-weighting schemes)
   - Stream: 2
