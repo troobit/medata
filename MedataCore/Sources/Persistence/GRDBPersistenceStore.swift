@@ -761,6 +761,15 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 ON estimation_outcomes(timestamp);
             CREATE INDEX IF NOT EXISTS outcomes_benchmark
                 ON estimation_outcomes(benchmark_meal_id, model_version);
+            CREATE TABLE IF NOT EXISTS benchmark_meals (
+                id            TEXT    PRIMARY KEY,
+                name          TEXT    NOT NULL,
+                created_at    INTEGER NOT NULL,
+                items         TEXT    NOT NULL,
+                truth_carbs_g REAL    NOT NULL,
+                db_edition    TEXT    NOT NULL,
+                fidelity      TEXT    NOT NULL
+            );
             """)
         try db.execute(
             sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '6')"
@@ -769,11 +778,12 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
 
     // Idempotent: re-stamps schema_version to '6' so a dev DB carried over
     // from an earlier code path is correctly labelled. Version 6 adds
-    // estimation_outcomes (specs/estimation/snaq-parity, design "Data
-    // Models"); version 5 added quick_presets (specs/data/manual-carb-intake).
-    // The CREATE IF NOT EXISTS above retrofits both onto older DBs, matching
-    // the processed_images/v4 precedent exactly. No DDL on legacy tables
-    // (Decision 10).
+    // estimation_outcomes AND benchmark_meals (specs/estimation/snaq-parity
+    // Decision 7, design "Data Models"); version 5 added quick_presets
+    // (specs/data/manual-carb-intake). The CREATE IF NOT EXISTS above
+    // retrofits all of them onto older DBs — including a dev DB stamped '6'
+    // before benchmark_meals landed — matching the processed_images/v4
+    // precedent exactly. No DDL on legacy tables (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
             sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '6')"
@@ -929,6 +939,102 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 arguments: [limit]
             ).map(Self.estimationOutcome(from:))
         }
+    }
+
+    // MARK: - Benchmark meals (specs/estimation/snaq-parity lane B)
+
+    public func saveBenchmarkMeal(
+        _ meal: BenchmarkMeal, carbsPer100g: (String) -> Double?
+    ) async throws {
+        // Validate and derive truth BEFORE the write: grams × carbs/100 g
+        // summed over items — no volume, no β (Req 1.2). An unresolvable
+        // class throws instead of contributing a silent 0 g (the
+        // Macros.compute skip must not leak into ground truth).
+        var truthCarbsG = 0.0
+        for item in meal.items {
+            guard BenchmarkMeal.itemGramsRange.contains(item.grams) else {
+                throw PersistenceError.benchmarkGramsOutOfRange(item.grams)
+            }
+            guard let carbs = carbsPer100g(item.classID) else {
+                throw PersistenceError.benchmarkClassUnresolvable(item.classID)
+            }
+            truthCarbsG += item.grams * carbs / 100.0
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let itemsJSON = String(decoding: try encoder.encode(meal.items), as: UTF8.self)
+
+        try await queue.write { db in
+            // Immutability (Req 1.3 comparability): once attempts reference
+            // the meal, an update would silently re-score history — reject
+            // it; corrections create a new meal. Checked in the same write
+            // transaction as the upsert so a concurrent attempt cannot race
+            // past the gate.
+            let exists = try Bool.fetchOne(
+                db,
+                sql: "SELECT EXISTS(SELECT 1 FROM benchmark_meals WHERE id = ?)",
+                arguments: [meal.id.uuidString]
+            ) ?? false
+            if exists {
+                let attempts = try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(*) FROM estimation_outcomes WHERE benchmark_meal_id = ?",
+                    arguments: [meal.id.uuidString]
+                ) ?? 0
+                if attempts > 0 {
+                    throw PersistenceError.benchmarkMealImmutable(meal.id)
+                }
+            }
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO benchmark_meals
+                        (id, name, created_at, items, truth_carbs_g, db_edition, fidelity)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    meal.id.uuidString, meal.name, meal.createdAtMs,
+                    itemsJSON, truthCarbsG, meal.dbEdition, meal.fidelity.rawValue
+                ]
+            )
+        }
+        // No eventsDidChange: benchmark meals are not `events` rows
+        // (quick_presets convention).
+    }
+
+    public func benchmarkMeals() async throws -> [BenchmarkMeal] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM benchmark_meals ORDER BY created_at DESC, id DESC"
+            ).map(Self.benchmarkMeal(from:))
+        }
+    }
+
+    private static func benchmarkMeal(from row: Row) throws -> BenchmarkMeal {
+        let idString: String = row["id"]
+        guard let id = UUID(uuidString: idString) else {
+            throw PersistenceError.corruptRecord("invalid benchmark_meals UUID: \(idString)")
+        }
+        let fidelityString: String = row["fidelity"]
+        guard let fidelity = BenchmarkFidelity(rawValue: fidelityString) else {
+            throw PersistenceError.corruptRecord("invalid benchmark fidelity: \(fidelityString)")
+        }
+        let itemsJSON: String = row["items"]
+        let items: [BenchmarkMealItem]
+        do {
+            items = try JSONDecoder().decode([BenchmarkMealItem].self, from: Data(itemsJSON.utf8))
+        } catch {
+            throw PersistenceError.corruptRecord("corrupt benchmark items JSON: \(error)")
+        }
+        return BenchmarkMeal(
+            id: id,
+            name: row["name"],
+            createdAtMs: row["created_at"],
+            items: items,
+            truthCarbsG: row["truth_carbs_g"],
+            dbEdition: row["db_edition"],
+            fidelity: fidelity
+        )
     }
 
     private static func estimationOutcome(from row: Row) throws -> EstimationOutcome {
