@@ -14,10 +14,13 @@ plain-tensor upsampling normaliser are torch-gated per test.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 import archs
 import export
+import run_validation
 import train  # torch-free import: heavy deps are lazy
 
 
@@ -88,6 +91,45 @@ def test_absent_arch_in_lineage_means_the_default():
     # Every pre-registry lineage was a deeplab_mnv3 run; absence is not unknown.
     assert archs.arch_from_lineage({"train_config": {"epochs": 60}}) == "deeplab_mnv3"
     assert archs.arch_from_lineage({}) == "deeplab_mnv3"
+
+
+def test_checkpoint_arch_stamp_reads_presence_and_absence(tmp_path):
+    torch = pytest.importorskip("torch")
+
+    stamped = tmp_path / "stamped.pt"
+    torch.save({"model": {}, "arch": "fixture_arch"}, stamped)
+    assert archs.checkpoint_arch_stamp(stamped) == "fixture_arch"
+    assert archs.arch_from_checkpoint(stamped) == "fixture_arch"
+
+    # Absence of the key — or of the file — is a None stamp; arch_from_checkpoint
+    # maps that to the historical deeplab_mnv3.
+    legacy = tmp_path / "legacy.pt"
+    torch.save({"model": {}}, legacy)
+    assert archs.checkpoint_arch_stamp(legacy) is None
+    assert archs.arch_from_checkpoint(legacy) == "deeplab_mnv3"
+    assert archs.checkpoint_arch_stamp(None) is None
+    assert archs.checkpoint_arch_stamp(tmp_path / "missing.pt") is None
+
+
+def test_run_validation_rejects_stale_lineage_arch_mismatch(tmp_path):
+    """export.py resolves the arch from the checkpoint's own stamp while
+    run_validation resolves from lineage — a stale lineage beside a
+    non-default-arch checkpoint would build the wrong model and strict=False
+    would silently load nothing, so the disagreement must fail fast."""
+    torch = pytest.importorskip("torch")
+
+    checkpoint = tmp_path / "checkpoint.pt"
+    torch.save({"model": {}, "arch": "fixture_arch"}, checkpoint)
+    lineage_path = tmp_path / "lineage.json"
+    lineage_path.write_text(json.dumps({"train_config": {}}))  # → deeplab_mnv3
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_validation.main(["--checkpoint", str(checkpoint),
+                             "--lineage", str(lineage_path)])
+    message = str(excinfo.value.code)
+    assert message.startswith("[validate]")
+    assert "fixture_arch" in message
+    assert "deeplab_mnv3" in message
 
 
 # ── Consumer delegation (torch-free, via a registered fixture arch) ─────────────

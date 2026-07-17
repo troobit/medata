@@ -2,6 +2,9 @@
 
 import json
 
+import pytest
+
+import export  # torch-free import: heavy deps are lazy
 import lineage
 
 
@@ -148,3 +151,45 @@ def test_file_sha256_matches_checkpoint_sha256(tmp_path):
     f = tmp_path / "co_stats.json"
     f.write_bytes(b"{}")
     assert lineage.file_sha256(f) == lineage.checkpoint_sha256(f)
+
+
+# ── emit_lineage recipe reconstruction (torch-gated) ────────────────────────────
+
+def test_emit_lineage_preserves_recipe_keys_from_the_checkpoint(tmp_path):
+    """A re-export must reconstruct the FULL recipe train_config from the
+    checkpoint's top-level provenance keys (train.py _save_checkpoint
+    recipe_extras) — notably the weighting scheme — not just the historical
+    subset, or a re-exported lineage would silently drop the recipe."""
+    torch = pytest.importorskip("torch")
+
+    ckpt = tmp_path / "checkpoint.pt"
+    torch.save(
+        {
+            "model": {},
+            "num_classes": 35,
+            "target_size": 513,
+            "palette_version": "v1",
+            "epochs": 60,
+            "lr": 1e-3,
+            "lr_schedule": "poly",
+            "augment": True,
+            "pretrained": True,
+            "loss": "combined",
+            "dice_weight": 0.5,
+            "weighting": "sqrt_inverse",
+            "photometric_augment": True,
+            "init_checkpoint": "build/init.pt",
+        },
+        ckpt,
+    )
+    out = tmp_path / "lineage.json"
+    export.emit_lineage(str(ckpt), str(out))
+    config = json.loads(out.read_text())["train_config"]
+    assert config["loss"] == "combined"
+    assert config["weighting"] == "sqrt_inverse"
+    assert config["dice_weight"] == 0.5
+    assert config["photometric_augment"] is True
+    assert config["init_checkpoint"] == "build/init.pt"
+    # The historical keys still come through alongside the recipe.
+    assert config["epochs"] == 60
+    assert config["augment"] is True

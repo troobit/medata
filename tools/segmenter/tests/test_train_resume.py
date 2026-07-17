@@ -157,6 +157,46 @@ def test_resume_rejects_hyperparameter_mismatch(dataset_root, tmp_path, monkeypa
     assert str(NUM_CLASSES + 1) in message  # invocation value
 
 
+def test_resume_rejects_legacy_weighted_loss_sidecar(dataset_root, tmp_path, monkeypatch):
+    """A weighted-loss sidecar with no class_weighting key predates the
+    inverse-frequency removal (Decision 25): defaulting the missing key to
+    "none" would silently change the training criterion mid-run, so the resume
+    must be rejected outright — not accepted under the legacy default."""
+    out = tmp_path / "checkpoint.pt"
+    sidecar = _sidecar_for(out)
+    torch.save(
+        {
+            "model": {},
+            "optimizer": {},
+            "epoch": 1,
+            "num_classes": NUM_CLASSES,
+            "target_size": TARGET_SIZE,
+            "palette_version": train.PALETTE_VERSION,
+            "lr": 1e-3,
+            "batch_size": 2,
+            "augment": True,
+            "loss": "combined",  # weighted loss; class_weighting key absent
+            "pretrained": False,
+            "last_food_class_miou": float("nan"),
+        },
+        sidecar,
+    )
+    monkeypatch.setattr(
+        train, "build_model",
+        lambda *a, **k: pytest.fail("build_model called before sidecar validation"),
+    )
+    # --class-weighting defaults to "none": under the old legacy-default
+    # mapping this invocation would have resumed with a silently changed
+    # criterion; it must be rejected instead.
+    with pytest.raises(SystemExit) as excinfo:
+        train.main(_argv(dataset_root, out, epochs=2,
+                         **{"--resume": str(sidecar), "--loss": "combined"}))
+    message = str(excinfo.value.code)
+    assert message.startswith("[train]")
+    assert "class_weighting" in message
+    assert "combined" in message
+
+
 def test_missing_resume_file_exits_with_train_message(dataset_root, tmp_path):
     out = tmp_path / "checkpoint.pt"
     with pytest.raises(SystemExit) as excinfo:

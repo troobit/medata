@@ -67,6 +67,7 @@ references:
   - Detached fire-and-forget task on didCompleteAttempt; store errors logged to Shutter and swallowed (MaskArtefactWriter.swift:75-86 precedent)
   - Slim records for capture-stage refusals from performFlow catch (CaptureFlowModel.swift:661-673): outcome refused, domain capture, no stage measurements
   - Merge the pre-shutter error counter snapshot at persist time; tag rows with CaptureFlowModel.benchmarkMealID when set
+  - PreShutterSegmenter's segmentationErrorCount is lifetime-cumulative with no reset: the persist-time merge MUST record a per-attempt delta (snapshot a baseline at attempt start) or the field is wrong from its first persisted row
   - Blocked-by: isuh2pw (Wire Pipeline outcome stamping, snapshot handoff, and stage measurement collection), isuh2py (Implement estimation_outcomes table and store methods)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4), [3.2](requirements.md#3.2)

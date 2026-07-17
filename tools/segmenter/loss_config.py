@@ -366,6 +366,17 @@ def load_co_stats(
                 "must carry split_seed null (regenerate with "
                 "build_external_co_stats.py)"
             )
+        # External provenance is not optional: the ingredient-mapping hash and
+        # the palette-coverage lists are what lineage records about the corpus
+        # derivation (Decision 13); a file missing either is untraceable.
+        for field in ("ingredient_mapping_sha256", "palette_coverage"):
+            if stats.get(field) is None:
+                raise SystemExit(
+                    f"[train] {p} claims external source {source!r} but "
+                    f"carries no {field} — external statistics must record "
+                    "their derivation provenance (regenerate with "
+                    "build_external_co_stats.py)"
+                )
     else:
         if split_seed is None:
             raise SystemExit(

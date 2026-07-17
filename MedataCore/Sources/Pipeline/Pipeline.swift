@@ -688,9 +688,9 @@ public struct Pipeline: Sendable {
     ) -> EstimationAttemptRecord.SegmentationMeasurements {
         EstimationAttemptRecord.SegmentationMeasurements(
             foodCoveragePercent: seg.foodCoveragePercent,
-            preprocessMs: seg.timings?.preprocessMs ?? 0,
-            predictionMs: seg.timings?.predictionMs ?? 0,
-            argmaxMs: seg.timings?.argmaxMs ?? 0
+            preprocessMs: seg.timings?.preprocessMs,
+            predictionMs: seg.timings?.predictionMs,
+            argmaxMs: seg.timings?.argmaxMs
         )
     }
 

@@ -242,6 +242,48 @@ final class EstimationAttemptRecordTests: XCTestCase {
         XCTAssertEqual(record.failure?.payload, "mask buffer stride mismatch (rows=7)")
     }
 
+    // A payload-less enum error must keep its type in the record: plain
+    // String(describing:) would yield only the bare case name (Req 3.3).
+    func testDiagnosticsSnapshotPreservesTypeForPlainEnumErrors() {
+        enum BareEnumError: Error { case maskUnavailable }
+        let diagnostics = PipelineDiagnostics(
+            capturePath: "single_view_lidar",
+            modelVersion: "dev_stub",
+            timestampMs: 0
+        )
+        diagnostics.stampError(BareEnumError.maskUnavailable)
+        let payload = diagnostics.snapshot().failure?.payload ?? ""
+        XCTAssertTrue(payload.contains("BareEnumError"),
+            "payload '\(payload)' lost the error type")
+        XCTAssertTrue(payload.contains("maskUnavailable"),
+            "payload '\(payload)' lost the error case")
+    }
+
+    // Stub-segmenter rows carry no timings: the fields must stay nil, never a
+    // fake zero indistinguishable from a sub-millisecond stage.
+    func testAbsentSegmentationTimingsRoundTripAsNilNotZero() throws {
+        let record = EstimationAttemptRecord(
+            v: EstimationAttemptRecord.currentSchemaVersion,
+            timestampMs: 1,
+            outcome: .refused,
+            failure: .init(estimation: .noFoodPixels),
+            modelVersion: "dev_stub",
+            mealID: nil,
+            capturePath: "single_view_lidar",
+            segmentationNadir: .init(
+                foodCoveragePercent: 41,
+                preprocessMs: nil, predictionMs: nil, argmaxMs: nil
+            )
+        )
+        let data = try JSONEncoder().encode(record)
+        let decoded = try JSONDecoder().decode(EstimationAttemptRecord.self, from: data)
+        XCTAssertEqual(decoded, record)
+        XCTAssertNil(decoded.segmentationNadir?.preprocessMs)
+        XCTAssertNil(decoded.segmentationNadir?.predictionMs)
+        XCTAssertNil(decoded.segmentationNadir?.argmaxMs)
+        XCTAssertEqual(decoded.segmentationNadir?.foodCoveragePercent, 41)
+    }
+
     func testDiagnosticsSnapshotSuccessEmbedsDecomposition() {
         let diagnostics = PipelineDiagnostics(
             capturePath: "single_view_lidar",

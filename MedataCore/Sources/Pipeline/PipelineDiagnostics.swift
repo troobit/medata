@@ -76,15 +76,17 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
 
     // Per-view segmenter measurements: food coverage plus the sub-stage
     // latency clocks from CoreMLSegmenter (Req 4.1 — the tail profile is read
-    // from these fields on real captures).
+    // from these fields on real captures). The timing fields are optional so
+    // a segmenter without timings (the dev stub) records nil, never a fake
+    // zero indistinguishable from a sub-millisecond stage.
     public struct SegmentationMeasurements: Codable, Sendable, Equatable {
         public let foodCoveragePercent: Float?
-        public let preprocessMs: Int
-        public let predictionMs: Int
-        public let argmaxMs: Int
+        public let preprocessMs: Int?
+        public let predictionMs: Int?
+        public let argmaxMs: Int?
 
         public init(foodCoveragePercent: Float?,
-                    preprocessMs: Int, predictionMs: Int, argmaxMs: Int) {
+                    preprocessMs: Int?, predictionMs: Int?, argmaxMs: Int?) {
             self.foodCoveragePercent = foodCoveragePercent
             self.preprocessMs = preprocessMs
             self.predictionMs = predictionMs
@@ -364,13 +366,15 @@ public final class PipelineDiagnostics {
     }
 
     // Non-typed errors preserve the underlying description in Release builds,
-    // not only the Swift type name (Req 3.3).
+    // not only the Swift type name (Req 3.3). `String(reflecting:)` rather
+    // than `String(describing:)`: for a payload-less enum the latter yields
+    // only the bare case name, losing the error type.
     public func stampError(_ error: any Error) {
         outcome = .refused
         failure = EstimationAttemptRecord.FailureInfo(
             domain: "estimation",
             caseName: "internalError",
-            payload: String(describing: error)
+            payload: String(reflecting: error)
         )
     }
 

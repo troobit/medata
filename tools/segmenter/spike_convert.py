@@ -336,6 +336,19 @@ def assemble_verdict(
     }
 
 
+def check_grafted_channels(candidate_name: str, channels: int) -> None:
+    """The grafted head must honour the 35-channel contract before the oracle
+    numbers mean anything — a wrong channel count is a HARNESS graft bug, not
+    model evidence, so abort with NO verdict rather than record a false one
+    (the environment-gap convention)."""
+    if channels != NUM_CLASSES:
+        raise SystemExit(
+            f"[spike] {candidate_name}: grafted head emits {channels} "
+            f"channels, expected {NUM_CLASSES} — head graft bug (harness "
+            "limit, not model evidence); no verdict written"
+        )
+
+
 def write_verdict(verdict: dict[str, Any], path: str | Path) -> Path:
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -423,6 +436,7 @@ def run_spike(candidate_name: str, out_mlpackage: Optional[str] = None,
     # ── Criterion 4: equivalence oracle (Decision 7 reuse) ───────────────────
     x = export.reference_input(TARGET_SIZE, reference_image)
     oracle_out = export.run_pytorch(wrapped, x)
+    check_grafted_channels(candidate.name, oracle_out.shape[1])
     coreml_out = export.run_coreml(out_mlpackage, x)
     err, agree, oracle_ok = export.oracle_agreement(oracle_out, coreml_out)
     print(f"[spike] {candidate.name}: criterion 4 "
