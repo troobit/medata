@@ -70,9 +70,13 @@ public final class CoreMLSegmenter: @unchecked Sendable {
     }
 
     public func segment(_ frame: RawFrame) async throws -> SegmentationResult {
+        // Sub-stage clocks run in Release too (snaq-parity Decision 11): three
+        // ContinuousClock reads per segment call feed the Req 4.1 tail profile
+        // through SegmentationResult.timings into every outcome record.
         #if DEBUG
         segmenterLog.info("event=segmenter.substage.start name=preprocess width=\(frame.imageWidth, privacy: .public) height=\(frame.imageHeight, privacy: .public)")
         #endif
+        let preprocessStartedAt = ContinuousClock.now
         let pre = try SegmenterPreProcessor.process(
             imageBytes: frame.imageBytes,
             pixelFormat: frame.pixelFormat,
@@ -82,18 +86,26 @@ public final class CoreMLSegmenter: @unchecked Sendable {
         #if DEBUG
         segmenterLog.info("event=segmenter.substage.start name=inference targetSize=\(pre.targetSize, privacy: .public)")
         #endif
+        let predictionStartedAt = ContinuousClock.now
         let (logits, classes) = try await engine.runInference(
             inputFP16Bytes: pre.bytes, targetSize: pre.targetSize
         )
         #if DEBUG
         segmenterLog.info("event=segmenter.substage.start name=postprocess scaledWidth=\(pre.scaledWidth, privacy: .public) scaledHeight=\(pre.scaledHeight, privacy: .public) originalWidth=\(pre.originalWidth, privacy: .public) originalHeight=\(pre.originalHeight, privacy: .public) classes=\(classes, privacy: .public)")
         #endif
+        let argmaxStartedAt = ContinuousClock.now
         let post = try SegmenterPostProcessor.process(
             logitsFP32: logits,
             targetSize: pre.targetSize, classes: classes,
             scaledWidth: pre.scaledWidth, scaledHeight: pre.scaledHeight,
             originalWidth: pre.originalWidth, originalHeight: pre.originalHeight,
             palette: palette
+        )
+        let argmaxEndedAt = ContinuousClock.now
+        let timings = SegmentationTimings(
+            preprocessMs: Int((predictionStartedAt - preprocessStartedAt) / .milliseconds(1)),
+            predictionMs: Int((argmaxStartedAt - predictionStartedAt) / .milliseconds(1)),
+            argmaxMs: Int((argmaxEndedAt - argmaxStartedAt) / .milliseconds(1))
         )
         // Release diagnostic: mask coverage + the dominant argmax class. A
         // full-frame food mask (coverage≈100) means the model is over-segmenting
@@ -117,7 +129,9 @@ public final class CoreMLSegmenter: @unchecked Sendable {
             probabilities: post.probabilities,
             argmax: post.argmax,
             perClassMeanProb: post.perClassMeanProb,
-            sigmaSeg: post.sigmaSeg
+            sigmaSeg: post.sigmaSeg,
+            timings: timings,
+            foodCoveragePercent: Float(cov.foodPercent)
         )
     }
 

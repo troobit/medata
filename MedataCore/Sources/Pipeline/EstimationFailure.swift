@@ -49,9 +49,10 @@ public enum EstimationFailure: Error, Equatable {
     public var localisedMessage: String {
         switch self {
         case .noLidarDevice:
-            // V1 hardware floor: iPhone 13 Pro Max, iOS 26.5 (Decision 40, Req §1.2).
-            // Earlier LiDAR iPhones (12 Pro, 13 Pro) are no longer supported.
-            return "MeData requires an iPhone 13 Pro Max running iOS 26.5 or later."
+            // Hardware floor: iPhone 16 Pro (segmenter-foundation Decision 22,
+            // 2026-07-15; snaq-parity Req 3.5). Older devices — the 13 Pro Max
+            // included — are out of scope.
+            return "MeData requires an iPhone 16 Pro or later."
         case .arWorldTrackingLost:
             return "World tracking was lost during capture. Please retake the photo."
         case .lidarUnavailableMidCapture:

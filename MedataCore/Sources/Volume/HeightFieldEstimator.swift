@@ -57,14 +57,18 @@ public enum HeightFieldEstimator {
         }
     }
 
-    public static func integrate(_ inputs: Inputs) throws -> HeightFieldEstimate {
+    public static func integrate(_ inputs: Inputs) -> VolumeOutcome<HeightFieldEstimate> {
         let probs = inputs.probabilities
         let argmax = inputs.argmax
         let palette = inputs.palette
 
         guard probs.width == argmax.width && probs.height == argmax.height else {
-            throw VolumeError.mismatchedViewDimensions(
-                "argmax \(argmax.width)×\(argmax.height) ≠ probabilities \(probs.width)×\(probs.height)"
+            return VolumeOutcome(
+                estimate: nil,
+                stats: VolumeStats(),
+                refusal: .mismatchedViewDimensions(
+                    "argmax \(argmax.width)×\(argmax.height) ≠ probabilities \(probs.width)×\(probs.height)"
+                )
             )
         }
 
@@ -80,6 +84,8 @@ public enum HeightFieldEstimator {
         var coveredPixels: [Int: Int] = [:]
         var totalPixels: [Int: Int] = [:]
         var depthTopMm = [Float](repeating: 0, count: w * h)
+        // Rays skipped on degenerate geometry — previously silent (Req 3.2).
+        var raySkipCount = 0
 
         // Walk pixels. Use a flat byte iteration into the FP16 tensor.
         probs.bytes.withUnsafeBytes { raw -> Void in
@@ -123,11 +129,17 @@ public enum HeightFieldEstimator {
                         // p_top along the ray at depth z_t (positive forward). With
                         // §6.0 −Z forward: |dir.z| ≈ cosθ, so p_top = (zt / |dir.z|) · dir.
                         let absDz = abs(dir.z)
-                        if absDz < 1e-9 { continue }
+                        if absDz < 1e-9 {
+                            raySkipCount += 1
+                            continue
+                        }
                         let pTop = dir * (zt / absDz)
 
                         let denom = plane.normal.dot(dir)
-                        if abs(denom) < 1e-9 { continue }
+                        if abs(denom) < 1e-9 {
+                            raySkipCount += 1
+                            continue
+                        }
                         let alphaSup = plane.distanceMm / denom
                         let pSup = dir * alphaSup
                         let zS = abs(pSup.z)
@@ -166,32 +178,53 @@ public enum HeightFieldEstimator {
                 lowCoverageClasses.append(name)
             }
         }
-        if !lowCoverageClasses.isEmpty {
-            throw VolumeError.lidarCoverageTooLow(classes: lowCoverageClasses.sorted())
-        }
-
-        // Convert mm³ → cm³ and apply β.
+        // Convert mm³ → cm³ and apply β. Pre/post-β maps are retained in
+        // VolumeStats so a refusal keeps its causal measurements (Req 3.1).
         var perClass: [String: Float] = [:]
+        var preBeta: [String: Float] = [:]
+        var betaApplied: [String: Float] = [:]
         for (cId, rawMm3) in vRawMm3 {
             guard let name = palette.className(at: cId) else { continue }
-            let cm3 = Float(rawMm3 / 1000.0)
-            perClass[name] = cm3 * inputs.beta.beta(for: name)
+            let preCm3 = Float(rawMm3 / 1000.0)
+            let beta = inputs.beta.beta(for: name)
+            preBeta[name] = preCm3
+            betaApplied[name] = beta
+            perClass[name] = preCm3 * beta
         }
 
         let present = perClass.filter { $0.value >= minVolumeCm3 }
+        let stats = VolumeStats(
+            perClassVolumesPreBetaCm3: preBeta,
+            perClassVolumesPostBetaCm3: perClass,
+            betaApplied: betaApplied,
+            thresholdDiscardedClasses: perClass
+                .filter { $0.value < minVolumeCm3 }
+                .keys.sorted(),
+            degenerateRaySkipCount: raySkipCount,
+            lidarCoverageFraction: coverage
+        )
+
+        if !lowCoverageClasses.isEmpty {
+            return VolumeOutcome(
+                estimate: nil, stats: stats,
+                refusal: .lidarCoverageTooLow(classes: lowCoverageClasses.sorted())
+            )
+        }
+
         if present.isEmpty {
-            throw VolumeError.noFoodVolumeRecovered
+            return VolumeOutcome(estimate: nil, stats: stats, refusal: .noFoodVolumeRecovered)
         }
 
         let occlusion = InterClassOcclusionDetector.detect(
             argmax: argmax, depthTopMm: depthTopMm, palette: palette
         )
 
-        return HeightFieldEstimate(
+        let estimate = HeightFieldEstimate(
             perClassVolumesCm3: perClass,
             lidarCoverageFraction: coverage,
             interClassOcclusionDetected: occlusion,
             perClassFoodPixelCount: perClassPixelCount
         )
+        return VolumeOutcome(estimate: estimate, stats: stats, refusal: nil)
     }
 }

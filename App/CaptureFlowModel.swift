@@ -505,6 +505,9 @@ final class CaptureFlowModel: CaptureFlowDelegate {
     nonisolated func didUpdateLiDARCoverage(percent: Float) {}
     nonisolated func didDetectInterClassOcclusion() {}
     nonisolated func didProduceEstimate(_ record: MealRecord) {}
+    // Write-behind persistence of the attempt record lands with the
+    // snaq-parity outcome store (tasks 6–8); no-op until then.
+    nonisolated func didCompleteAttempt(_ record: EstimationAttemptRecord) {}
 
     // MARK: - Internals
 

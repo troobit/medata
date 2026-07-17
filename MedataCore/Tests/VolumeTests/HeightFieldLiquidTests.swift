@@ -87,9 +87,9 @@ struct HeightFieldLiquidTests {
     @Test("flat liquid surface integrates to its analytic volume")
     func flatSurface() throws {
         let depth: (Int, Int) -> Float = { _, _ in 520 }
-        let result = try HeightFieldEstimator.integrate(
+        let result = try #require(HeightFieldEstimator.integrate(
             inputs(argmaxLabel: { _, _ in self.waterId },
-                   probLabel: waterId, depthMm: depth))
+                   probLabel: waterId, depthMm: depth)).estimate)
         let expected = analyticCm3(depthMm: depth)
         let vol = try #require(result.perClassVolumesCm3["water"])
         #expect(abs(vol - expected) / expected <= 0.03,
@@ -101,9 +101,9 @@ struct HeightFieldLiquidTests {
     func tiltedSurface(slopeMmPerPx: Float) throws {
         // Depth increases linearly across x: a plane tilted about the y-axis.
         let depth: (Int, Int) -> Float = { _, x in 450 + slopeMmPerPx * Float(x) }
-        let result = try HeightFieldEstimator.integrate(
+        let result = try #require(HeightFieldEstimator.integrate(
             inputs(argmaxLabel: { _, _ in self.waterId },
-                   probLabel: waterId, depthMm: depth))
+                   probLabel: waterId, depthMm: depth)).estimate)
         let expected = analyticCm3(depthMm: depth)
         let vol = try #require(result.perClassVolumesCm3["water"])
         #expect(abs(vol - expected) / expected <= 0.03,
@@ -115,18 +115,18 @@ struct HeightFieldLiquidTests {
         // Left half solid food, right half unsupported_liquid: only the food
         // integrates and no unsupported key appears.
         let unsupported = palette.unsupportedLiquid
-        let result = try HeightFieldEstimator.integrate(
+        let result = try #require(HeightFieldEstimator.integrate(
             inputs(argmaxLabel: { _, x in x < 50 ? 0 : unsupported },
-                   probLabel: 0, depthMm: { _, _ in 520 }))
+                   probLabel: 0, depthMm: { _, _ in 520 })).estimate)
         #expect(result.perClassVolumesCm3["food_0"] != nil)
         #expect(result.perClassVolumesCm3.count == 1)
     }
 
     @Test("a recognised liquid alongside food integrates both")
     func mixedScene() throws {
-        let result = try HeightFieldEstimator.integrate(
+        let result = try #require(HeightFieldEstimator.integrate(
             inputs(argmaxLabel: { _, x in x < 50 ? 0 : self.waterId },
-                   probLabel: 0, depthMm: { _, _ in 520 }))
+                   probLabel: 0, depthMm: { _, _ in 520 })).estimate)
         let food = try #require(result.perClassVolumesCm3["food_0"])
         let water = try #require(result.perClassVolumesCm3["water"])
         #expect(food > 0)
@@ -139,11 +139,11 @@ struct HeightFieldLiquidTests {
         // solid-food rule — the liquid's low coverage is reported so
         // LiquidResolver can apply the Req 7.6 usable-surface-depth precedence,
         // not thrown as a whole-estimate error.
-        let result = try HeightFieldEstimator.integrate(
+        let result = try #require(HeightFieldEstimator.integrate(
             inputs(argmaxLabel: { _, x in x < 50 ? 0 : self.waterId },
                    probLabel: 0,
                    depthMm: { _, _ in 520 },
-                   conf: { _, x in x < 55 ? 255 : 0 }))  // liquid ~10% covered
+                   conf: { _, x in x < 55 ? 255 : 0 })).estimate)  // liquid ~10% covered
         let liquidCoverage = try #require(result.lidarCoverageFraction["water"])
         #expect(liquidCoverage < 0.3)
         #expect(result.perClassVolumesCm3["food_0"] != nil)

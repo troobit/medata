@@ -76,7 +76,7 @@ final class VoxelCarveEstimatorTests: XCTestCase {
 
     func testSyntheticCubeVolumeWithin5Percent() throws {
         let inputs = makeBaseInputs()
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         // Analytical: 10×10×10 voxels × (5 mm)³ / 1000 = 125 cm³.
         let expected: Float = 125
         let vol = result.perClassVolumesCm3["food_0"] ?? 0
@@ -98,7 +98,7 @@ final class VoxelCarveEstimatorTests: XCTestCase {
             return c == 0 ? 0.90 : (c == bgId ? 0.05 : 0.025)
         }
         let inputs = makeBaseInputs(probs1: p, probs2: p)
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         let count = result.perClassVoxelCount["food_0"] ?? 0
         XCTAssertGreaterThan(count, 0, "Some voxels must project to the non-masked region")
         XCTAssertLessThan(count, 1000, "Masked half must exclude a fraction of voxels")
@@ -120,7 +120,7 @@ final class VoxelCarveEstimatorTests: XCTestCase {
             }
         }
         let inputs = makeBaseInputs(probs1: p, probs2: p, matched: [0, 1])
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         let c0 = result.perClassVoxelCount["food_0"] ?? 0
         let c1 = result.perClassVoxelCount["food_1"] ?? 0
         XCTAssertGreaterThan(c0, 0, "food_0 should win the argmax")
@@ -142,7 +142,7 @@ final class VoxelCarveEstimatorTests: XCTestCase {
             }
         }
         let inputs = makeBaseInputs(probs1: p, probs2: p, matched: [0, 1])
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         let c0 = result.perClassVoxelCount["food_0"] ?? 0
         let c1 = result.perClassVoxelCount["food_1"] ?? 0
         XCTAssertGreaterThan(c0, 0, "food_0 should win in the left-image half")
@@ -173,7 +173,7 @@ final class VoxelCarveEstimatorTests: XCTestCase {
             beta: BetaCorrection(),
             palette: palette
         )
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         XCTAssertTrue(result.degradedClasses.contains("food_1"),
             "food_1 must appear in degradedClasses when single-view fallback is used")
         XCTAssertNotNil(result.perClassVolumesCm3["food_1"],
@@ -194,7 +194,7 @@ final class VoxelCarveEstimatorTests: XCTestCase {
             }
         }
         let inputs = makeBaseInputs(probs1: p, probs2: p, matched: [0])
-        let result = try VoxelCarveEstimator.carve(inputs)
+        let result = try XCTUnwrap(VoxelCarveEstimator.carve(inputs).estimate)
         XCTAssertGreaterThan(result.ambiguousVoxelFraction, 0,
             "Some voxels (left-half projections) should be ambiguous (product < τ_v=0.04)")
         XCTAssertLessThan(result.ambiguousVoxelFraction, 1,
@@ -222,8 +222,8 @@ final class VoxelCarveEstimatorTests: XCTestCase {
             beta: BetaCorrection(),
             palette: palette
         )
-        XCTAssertThrowsError(try VoxelCarveEstimator.carve(inputs)) { error in
-            XCTAssertEqual(error as? VolumeError, VolumeError.noFoodVolumeRecovered)
-        }
+        let outcome = VoxelCarveEstimator.carve(inputs)
+        XCTAssertNil(outcome.estimate)
+        XCTAssertEqual(outcome.refusal, VolumeError.noFoodVolumeRecovered)
     }
 }

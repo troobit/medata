@@ -80,7 +80,7 @@ final class HeightFieldEstimatorTests: XCTestCase {
 
     func testFlatFoodVolumeWithin3Percent() throws {
         let inputs = makeInputs(k: k500)
-        let result = try HeightFieldEstimator.integrate(inputs)
+        let result = try XCTUnwrap(HeightFieldEstimator.integrate(inputs).estimate)
 
         // Expected: sum over all pixels of a_p × H, where
         // a_p = z_t² / (fx·fy·cos³θ) and cos θ = fMean/sqrt(fMean²+du²+dv²).
@@ -110,7 +110,7 @@ final class HeightFieldEstimatorTests: XCTestCase {
         //   du=dv=−50, cosθ = 100/√(100²+50²+50²) = 100/√15000 ≈ 0.816 → 1/cos³θ ≈ 1.84.
         // The off-axis correction must inflate total volume above the flat (θ=0) baseline.
         let inputs = makeInputs(k: kWide, depth: makeDepth(w: 100, h: 100, k: kWide))
-        let result = try HeightFieldEstimator.integrate(inputs)
+        let result = try XCTUnwrap(HeightFieldEstimator.integrate(inputs).estimate)
 
         // Flat baseline: every pixel treated as on-axis, a_p = z_t² / (fx·fy).
         let flatAreaPerPixel = ztMm * ztMm / (kWide.fx * kWide.fy)
@@ -140,7 +140,7 @@ final class HeightFieldEstimatorTests: XCTestCase {
             intrinsics: k500, supportPlane: plane,
             beta: BetaCorrection(), palette: palette
         )
-        let result = try HeightFieldEstimator.integrate(inputs)
+        let result = try XCTUnwrap(HeightFieldEstimator.integrate(inputs).estimate)
         let frac = result.lidarCoverageFraction["food_0"] ?? 0
         XCTAssertEqual(frac, 0.80, accuracy: 0.02,
             "Coverage fraction should be ~0.80 (80 of 100 columns have good confidence)")
@@ -166,12 +166,12 @@ final class HeightFieldEstimatorTests: XCTestCase {
             intrinsics: k500, supportPlane: plane,
             beta: BetaCorrection(), palette: palette
         )
-        XCTAssertThrowsError(try HeightFieldEstimator.integrate(inputs)) { error in
-            if case .lidarCoverageTooLow(let classes) = error as? VolumeError {
-                XCTAssertTrue(classes.contains("food_0"))
-            } else {
-                XCTFail("Expected lidarCoverageTooLow, got \(error)")
-            }
+        let outcome = HeightFieldEstimator.integrate(inputs)
+        XCTAssertNil(outcome.estimate)
+        if case .lidarCoverageTooLow(let classes) = outcome.refusal {
+            XCTAssertTrue(classes.contains("food_0"))
+        } else {
+            XCTFail("Expected lidarCoverageTooLow, got \(String(describing: outcome.refusal))")
         }
     }
 
@@ -192,7 +192,7 @@ final class HeightFieldEstimatorTests: XCTestCase {
             intrinsics: k500, supportPlane: plane,
             beta: BetaCorrection(), palette: palette
         )
-        let result = try HeightFieldEstimator.integrate(inputs)
+        let result = try XCTUnwrap(HeightFieldEstimator.integrate(inputs).estimate)
         let frac = result.lidarCoverageFraction["food_0"] ?? 0
         XCTAssertEqual(frac, 0.30, accuracy: 0.02)
     }
@@ -203,7 +203,7 @@ final class HeightFieldEstimatorTests: XCTestCase {
         // 100×100 pixels × area ≈ 1 mm²/pixel × 100 mm height = 10⁶ mm³ = 1000 cm³.
         // Result must be in cm³ range (~ hundreds), not mm³ range (~ millions).
         let inputs = makeInputs(k: k500)
-        let result = try HeightFieldEstimator.integrate(inputs)
+        let result = try XCTUnwrap(HeightFieldEstimator.integrate(inputs).estimate)
         let vol = result.perClassVolumesCm3["food_0"] ?? 0
         XCTAssertGreaterThan(vol, 500,
             "Volume should be > 500 cm³ for 100×100 food pixels (not in mm³)")
@@ -232,9 +232,9 @@ final class HeightFieldEstimatorTests: XCTestCase {
             beta: BetaCorrection(), palette: palette
         )
         // Zero depth means zt == 0 → skipped → zero coveredPixels → coverage = 0 < 0.5.
-        XCTAssertThrowsError(try HeightFieldEstimator.integrate(inputs)) { error in
-            if case .lidarCoverageTooLow = error as? VolumeError { return }
-            XCTFail("Expected lidarCoverageTooLow, got \(error)")
-        }
+        let outcome = HeightFieldEstimator.integrate(inputs)
+        XCTAssertNil(outcome.estimate)
+        if case .lidarCoverageTooLow = outcome.refusal { return }
+        XCTFail("Expected lidarCoverageTooLow, got \(String(describing: outcome.refusal))")
     }
 }
