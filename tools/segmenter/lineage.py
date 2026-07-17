@@ -108,6 +108,7 @@ def build_lineage(
     metrics: dict[str, Any] | None = None,
     pretrained_checkpoint: dict[str, Any] | None = None,
     co_stats_sha256: str | None = None,
+    co_stats_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the lineage manifest for a saved checkpoint.
 
@@ -116,7 +117,10 @@ def build_lineage(
     ``pretrained_checkpoint`` is a ``{source_url, licence, sha256}`` object for
     the published initialisation (segmenter-foundation Req 2.2, model-production
     Req 1.3); ``co_stats_sha256`` anchors the co-occurrence statistics the loss
-    consumed (design §4.3). Both are null when the run did not record them.
+    consumed (design §4.3); ``co_stats_provenance`` is the ``{source,
+    ingredient_mapping_sha256, palette_coverage}`` object for EXTERNAL
+    (corpus-derived) statistics (snaq-parity Req 6.1). All are null when the
+    run did not record them.
     """
     sha = checkpoint_sha256(checkpoint_path)
     meta = _class_mapping_meta()
@@ -133,6 +137,7 @@ def build_lineage(
         "metrics": metrics or empty_metrics(),
         "pretrained_checkpoint": pretrained_checkpoint,
         "co_stats_sha256": co_stats_sha256,
+        "co_stats_provenance": co_stats_provenance,
     }
 
 
@@ -160,7 +165,8 @@ def preserve_metrics(
         recorded = existing.get("metrics")
         if isinstance(recorded, dict):
             manifest["metrics"] = recorded
-        for key in ("pretrained_checkpoint", "co_stats_sha256"):
+        for key in ("pretrained_checkpoint", "co_stats_sha256",
+                    "co_stats_provenance"):
             if manifest.get(key) is None and existing.get(key) is not None:
                 manifest[key] = existing[key]
     return manifest

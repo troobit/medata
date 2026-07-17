@@ -737,6 +737,8 @@ def train(args) -> int:
     # Co-occurrence statistics: fail fast BEFORE any data/model work when the
     # stats are missing or stale (seed / class-mapping SHA mismatch) — a silent
     # fallback would falsify the lineage's claim about the recipe (design §4.3).
+    # --co-stats points at an EXTERNAL (corpus-derived) file when one is used
+    # (snaq-parity Req 6.1); load_co_stats arbitrates the seed rules by source.
     co_stats = None
     co_stats_sha256 = None
     if loss_spec["loss"] == "co_occurrence":
@@ -744,7 +746,8 @@ def train(args) -> int:
         mapping_path = Path(__file__).resolve().with_name(
             "class_mapping_foodseg103_v1.json"
         )
-        co_stats_path = data_root / loss_config.CO_STATS_FILENAME
+        co_stats_path = (Path(args.co_stats) if args.co_stats
+                         else data_root / loss_config.CO_STATS_FILENAME)
         co_stats = loss_config.load_co_stats(
             co_stats_path,
             split_seed=args.split_seed,
@@ -839,11 +842,27 @@ def train(args) -> int:
         _save_resume_state(sidecar, model, optimizer, args, pretrained, epoch, last_miou)
 
     _save_checkpoint(model, args, last_miou, pretrained, resumed_from_epoch,
-                     co_stats_sha256=co_stats_sha256)
+                     co_stats_sha256=co_stats_sha256,
+                     co_stats_provenance=_co_stats_provenance(co_stats))
     if sidecar.is_file():
         sidecar.unlink()
         print(f"[train] removed resume sidecar {sidecar}")
     return 0
+
+
+def _co_stats_provenance(co_stats: dict | None) -> dict | None:
+    """The lineage ``co_stats_provenance`` object for EXTERNAL co-occurrence
+    statistics (snaq-parity Req 6.1): source, ingredient-mapping SHA-256, and
+    the palette-coverage lists the builder recorded. None for internal
+    (split-derived) stats — the historical lineage shape is unchanged — and
+    for runs without the co-occurrence loss."""
+    if co_stats is None or "source" not in co_stats:
+        return None
+    return {
+        "source": co_stats["source"],
+        "ingredient_mapping_sha256": co_stats.get("ingredient_mapping_sha256"),
+        "palette_coverage": co_stats.get("palette_coverage"),
+    }
 
 
 def _pretrained_checkpoint_record(args) -> dict | None:
@@ -864,7 +883,8 @@ def _pretrained_checkpoint_record(args) -> dict | None:
 
 def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
                      resumed_from_epoch: int | None = None,
-                     co_stats_sha256: str | None = None) -> None:
+                     co_stats_sha256: str | None = None,
+                     co_stats_provenance: dict | None = None) -> None:
     """Save a dict consumed directly by export.load_checkpoint and make_fixtures.
 
     export.load_checkpoint does ``if isinstance(state, dict) and "model" in state:
@@ -938,6 +958,7 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         palette_version=PALETTE_VERSION,
         pretrained_checkpoint=_pretrained_checkpoint_record(args),
         co_stats_sha256=co_stats_sha256,
+        co_stats_provenance=co_stats_provenance,
     )
     lineage_path = lineage.write_lineage(manifest, out.parent / "lineage.json")
     print(f"[train] lineage -> {lineage_path} (model_version={manifest['model_version']})")
@@ -1006,6 +1027,13 @@ def main(argv: list[str] | None = None) -> int:
                              "inverse frequency is removed (segmenter-"
                              "foundation Decision 25). weighted_ce requires an "
                              "active scheme.")
+    parser.add_argument("--co-stats", default=None, metavar="PATH",
+                        help="Override the co-occurrence statistics file "
+                             "(default: <--data>/co_stats.json). Point at a "
+                             "build_external_co_stats.py output to train "
+                             "against corpus-derived priors (snaq-parity "
+                             "Req 6.1); source, mapping SHA, and palette "
+                             "coverage land in lineage.")
     parser.add_argument("--co-lambda", type=float,
                         default=loss_config.DEFAULT_CO_LAMBDA,
                         help="Mixing weight for the co-occurrence presence "
