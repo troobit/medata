@@ -6,7 +6,7 @@ references:
 
 ## Serving rows
 
-- [ ] 1. Replace the portion card with per-food serving stepper rows <!-- id:p00c98h -->
+- [x] 1. Replace the portion card with per-food serving stepper rows <!-- id:p00c98h -->
   - Remove the PORTION card and PortionStepper pair from ResultView; the Per food rows become the adjustment surface
   - Row: food name, serving-first amount (unit_singular/plural, nearest displayable half-unit), gram mass secondary, per-row carbs; inline minus/plus stepping by the class step, floored at 0
   - Hero carb total updates live (.numericText()); 'estimated N g' line shows the untouched estimate whenever pending state diverges
@@ -14,13 +14,13 @@ references:
   - Serving-to-gram conversion arithmetic lives in MedataCore (Foods or a small pure helper) with executed-suite coverage
   - Load the frontend-design skill before reshaping the screen
 
-- [ ] 2. Add the plate-fraction quick control <!-- id:p00c98i -->
+- [x] 2. Add the plate-fraction quick control <!-- id:p00c98i -->
   - Compact control (e.g. segmented All/three-quarters/half/quarter) scales every row's pending amount from the original estimate in one tap
   - Fraction first, per-row refinement second: nudging one row keeps others at the fraction
   - Default All writes nothing
   - Blocked-by: p00c98h (Replace the portion card with per-food serving stepper rows)
 
-- [ ] 3. Add the per-row gram reveal <!-- id:p00c98j -->
+- [x] 3. Add the per-row gram reveal <!-- id:p00c98j -->
   - Tapping a row's amount (not the steppers) reveals an editable gram value, two-way bound with the serving display
   - Digits-only clamp convention from the existing carb-entry surfaces
   - Blocked-by: p00c98h (Replace the portion card with per-food serving stepper rows)

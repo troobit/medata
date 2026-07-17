@@ -1,3 +1,4 @@
+import Foods
 import Pipeline
 import SwiftUI
 
@@ -135,36 +136,23 @@ enum ResultFormat {
     }
 }
 
-// Controls how `ResultView` is presented. Both paths now show the Adjust/Done
-// action row (Req 6.7 v0.4 — historyDetail showing the row is a deliberate
-// change from the tab-era design); the only difference is the ⋯ menu contents
-// (Retake+Delete on a fresh capture, Delete only from history — Decision 17).
+// Controls how `ResultView` is presented. Both paths show the pinned Done
+// action row; the only difference is the ⋯ menu contents (Retake+Delete on a
+// fresh capture, Delete only from history — Decision 17).
 enum ResultPresentation: Equatable {
     case justCaptured
     case historyDetail
 }
 
-// Portion adjustment (snaqui PRD Req 1–2): the estimate covers the whole
-// plate, but the user may eat a fraction of it (2 of 5 potatoes) or more than
-// one plate (ate 2 of 1). The portion is a pair of counts so any fraction is
-// exact, never approximated; scaling always starts from the ORIGINAL estimate,
-// and an applied portion persists as an appended `PbUserCorrection` whose note
-// records the counts — the record itself is never touched.
+// Legacy portion-note convention (snaqui portion control, superseded by the
+// serving rows — serving-adjust PRD). Read-only now: `parse` keeps existing
+// `portion N/M` correction notes seeding the rows on history reopen; new
+// adjustments write the `ServingNote` stamp instead.
 enum PortionFormat {
     static let countRange = 1...24
 
     static func factor(eaten: Int, of plate: Int) -> Float {
         Float(eaten) / Float(max(1, plate))
-    }
-
-    static func scaled(_ carbsG: Float, eaten: Int, of plate: Int) -> Float {
-        carbsG * factor(eaten: eaten, of: plate)
-    }
-
-    // The correction-note stamp, e.g. "portion 2/5". Also the seed source when
-    // a meal is re-opened, so the format is load-bearing — keep it stable.
-    static func note(eaten: Int, of plate: Int) -> String {
-        "portion \(eaten)/\(plate)"
     }
 
     static func parse(note: String) -> (eaten: Int, plate: Int)? {
@@ -198,19 +186,57 @@ enum ResultViewLayout {
     }
 }
 
-// Result screen (§6, design-system/pages/result.md). Hero carb total (original
-// estimate) + four-tier confidence pill, a summary card (thumbnail, foods count,
-// total mass, `CoFID + AFCD`), a per-food breakdown (name/mass/volume/carbs — no
-// σ, Decision 16), dashed macro placeholders, and an Adjust/Done action row with
-// a ⋯ menu (Retake+Delete fresh, Delete from history — Decision 17). Keeps the
-// calibration banner, liquid flag, very-low surface, and placeholder chip.
+// The plate-fraction quick control's stops (serving-adjust PRD, iOS Req 2):
+// the leftovers case is one tap. All is the untouched default and writes
+// nothing; the highlighted stop is DERIVED from the rows, so nudging one row
+// off a fraction clears the highlight while the other rows stay put.
+enum PlateFraction: CaseIterable {
+    case all, threeQuarters, half, quarter
+
+    var factor: Double {
+        switch self {
+        case .all: return 1
+        case .threeQuarters: return 0.75
+        case .half: return 0.5
+        case .quarter: return 0.25
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .all: return "All"
+        case .threeQuarters: return "¾"
+        case .half: return "½"
+        case .quarter: return "¼"
+        }
+    }
+
+    var identifier: String {
+        switch self {
+        case .all: return "all"
+        case .threeQuarters: return "threeQuarters"
+        case .half: return "half"
+        case .quarter: return "quarter"
+        }
+    }
+}
+
+// Result screen (§6, design-system/pages/result.md, reshaped by the
+// serving-adjust PRD). Hero carb total + four-tier confidence pill, a plate
+// card where each per-food row is its own adjustment surface — serving-first
+// amounts ("≈ 1½ potatoes") with −/+ steppers in the class's household unit,
+// grams one tap away — a plate-fraction quick control for the leftovers case,
+// a summary card, and dashed macro placeholders. Keeps the calibration
+// banner, liquid flag, very-low surface, and placeholder chip.
 struct ResultView: View {
     let record: MealRecord
     let store: any PersistenceStore
     var mode: ResultPresentation = .justCaptured
-    // Adjust → Manual correction; Done → dismiss (capture) / pop (history);
-    // Retake and Delete live in the ⋯ menu (Decision 17). All defaulted so the
-    // capture stack and the Data / Trends history stacks both compile.
+    // Done → dismiss (capture) / pop (history); Retake and Delete live in the
+    // ⋯ menu (Decision 17). All defaulted so the capture stack and the
+    // Records / Trends history stacks both compile.
+    // TODO(serving-adjust task 5): onAdjust and the Adjust button are retired
+    // with ManualCorrectionView; kept this phase so the route wiring builds.
     var onAdjust: () -> Void = {}
     var onDone: () -> Void = {}
     var onRetake: () -> Void = {}
@@ -219,23 +245,41 @@ struct ResultView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.sizeCategory) private var sizeCategory
     @State private var photo: UIImage?
-    // Decision 19 / Req 7.3: the hero keeps the ORIGINAL estimate; a correction
-    // only adds the `corrected` marker. Re-read on `eventsDidChange` while
+    // Decision 19 / Req 7.3: a correction only adds the `corrected` marker;
+    // the record itself is never touched. Re-read on `eventsDidChange` while
     // visible, mirroring MealOverviewView (Decision 18).
     @State private var isCorrected = false
+    @State private var correctedTotal: Float?
     // Decision 17: "Keep as-is" hides the Very-Low surface for the current
     // view session only — navigating away and back re-shows it (no persistent
     // dismissed flag). `@State` is per-instance, so this resets on each push.
     @State private var keepAsIsDismissed = false
-    // Portion state (snaqui Req 1–2). The steppers hold the pending choice;
-    // `recordedPortion` mirrors the latest persisted portion correction, and
-    // the log pill shows only while the two differ. Seeding happens once per
-    // push so a store refresh never stomps an adjustment in progress.
-    @State private var portionEaten = 1
-    @State private var portionPlate = 1
-    @State private var recordedPortion: (eaten: Int, plate: Int)?
-    @State private var correctedTotal: Float?
-    @State private var portionSeeded = false
+    // Serving-row state (serving-adjust PRD). `pendingGrams` holds the rows'
+    // pending amounts (absent key = the original estimate); `recordedGrams`
+    // mirrors the state the latest persisted correction implies. The log pill
+    // shows only while the two diverge. Seeding happens once per push so a
+    // store refresh never stomps an adjustment in progress.
+    @State private var servings: [String: SolidServing] = [:]
+    @State private var pendingGrams: [String: Double] = [:]
+    @State private var recordedGrams: [String: Double] = [:]
+    @State private var rowsSeeded = false
+    // Per-row gram reveal (iOS Req 3): the row whose amount is an editable
+    // gram field right now, plus its text (digits-only clamp convention).
+    @State private var editingClassId: String?
+    @State private var gramEditText = ""
+    @FocusState private var gramFieldFocused: Bool
+
+    // Bundled food database, resolved once per process — the result rows only
+    // need read-only `solid_servings` lookups (BenchmarkView precedent).
+    private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
+
+    // Sub-half-gram differences are invisible at whole-gram display rounding,
+    // so they neither show the log pill nor count as a divergence.
+    private static let gramEpsilon = 0.5
+    // Gram-stepper fallback increment for rows without a serving unit.
+    private static let fallbackStepGrams = 10.0
+    // Ceiling shared with the carb-entry clamp convention (3 digits).
+    private static let maxRowGrams = 999.0
 
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
@@ -257,23 +301,92 @@ struct ResultView: View {
     }
     private var displayPoints: CGFloat { ResultViewLayout.displayPoints(sizeCategory) }
 
-    // A pending portion is one the steppers hold but no correction records yet.
-    private var portionPending: Bool {
-        let recorded = recordedPortion ?? (eaten: 1, plate: 1)
-        return portionEaten != recorded.eaten || portionPlate != recorded.plate
+    // MARK: - Row model
+
+    // One adjustable per-food row. Scaling ALWAYS derives from the original
+    // estimate held here, so repeated adjustments never compound (iOS Req 4).
+    private struct FoodRow: Identifiable {
+        let id: String          // class id, e.g. "potato_boiled"
+        let displayName: String
+        let originalGrams: Double
+        let originalCarbsG: Double
+        let isLiquid: Bool
     }
-    private var pendingScaledTotal: Float {
-        PortionFormat.scaled(record.macros.totalCarbsG, eaten: portionEaten, of: portionPlate)
+
+    // Sorted by carbs descending (name tie-break) for a stable, meaningful order.
+    private var foodRows: [FoodRow] {
+        record.macros.perClass
+            .map { name, macro in
+                FoodRow(
+                    id: name,
+                    displayName: Self.prettify(name),
+                    originalGrams: Double(macro.massG),
+                    originalCarbsG: Double(macro.carbsG),
+                    isLiquid: macro.isLiquid
+                )
+            }
+            .sorted {
+                ($0.originalCarbsG, $1.id) > ($1.originalCarbsG, $0.id)
+            }
     }
+
+    // A liquid class or one without a solid_servings row falls back to a gram
+    // stepper on the same row — never a dead row (iOS Req 1).
+    private func serving(for row: FoodRow) -> SolidServing? {
+        row.isLiquid ? nil : servings[row.id]
+    }
+
+    private func pendingGramsFor(_ row: FoodRow) -> Double {
+        pendingGrams[row.id] ?? row.originalGrams
+    }
+
+    private func recordedGramsFor(_ row: FoodRow) -> Double {
+        recordedGrams[row.id] ?? row.originalGrams
+    }
+
+    // Per-row carbs scale linearly with mass off the ORIGINAL estimate. A
+    // zero-mass row cannot scale (nothing to derive a ratio from), so its
+    // carbs hold still.
+    private func pendingCarbs(_ row: FoodRow) -> Double {
+        guard row.originalGrams > 0 else { return row.originalCarbsG }
+        return row.originalCarbsG * pendingGramsFor(row) / row.originalGrams
+    }
+
+    // Any row diverging from the recorded state arms the log pill (iOS Req 4:
+    // edit-by-exception — untouched writes nothing).
+    private var adjustmentPending: Bool {
+        foodRows.contains { abs(pendingGramsFor($0) - recordedGramsFor($0)) > Self.gramEpsilon }
+    }
+
+    // Pending total = original total with the per-class delta folded in, so a
+    // record whose stored total differs from its per-class sum (rounding, old
+    // records) never jumps just by opening the screen.
+    private var pendingTotalCarbsG: Float {
+        let originalSum = foodRows.reduce(0.0) { $0 + $1.originalCarbsG }
+        let pendingSum = foodRows.reduce(0.0) { $0 + pendingCarbs($1) }
+        return Float(Double(record.macros.totalCarbsG) - originalSum + pendingSum)
+    }
+
     // The hero total (snaqui Req 1, superseding Decision 19's original-only
     // hero for this screen): the value that matches what the user is eating —
     // a live preview while adjusting, else the corrected total when one is
     // recorded. The original estimate stays visible on the line beneath.
     private var heroCarbsG: Float {
-        portionPending ? pendingScaledTotal : (correctedTotal ?? record.macros.totalCarbsG)
+        adjustmentPending ? pendingTotalCarbsG : (correctedTotal ?? record.macros.totalCarbsG)
     }
     private var showsEstimatedLine: Bool {
         ResultFormat.carbsGrams(heroCarbsG) != ResultFormat.carbsGrams(record.macros.totalCarbsG)
+    }
+
+    // The highlighted fraction stop is derived, not stored: highlighted iff
+    // every row sits exactly at that fraction of the original estimate, so a
+    // per-row nudge clears it while the other rows keep the fraction.
+    private var activeFraction: PlateFraction? {
+        PlateFraction.allCases.first { fraction in
+            foodRows.allSatisfy {
+                abs(pendingGramsFor($0) - $0.originalGrams * fraction.factor) <= Self.gramEpsilon
+            }
+        }
     }
 
     var body: some View {
@@ -292,9 +405,8 @@ struct ResultView: View {
                     }
                     if showsLiquidFlag { liquidOverEstimateFlag }
                     if showsVeryLowSurface { veryLowSurface }
-                    portionCard
+                    plateCard
                     summaryCard
-                    breakdown
                     macroPlaceholders
                 }
                 .padding(.horizontal, 24)
@@ -307,13 +419,27 @@ struct ResultView: View {
                 .padding(.bottom, 24)
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // The number pad has no return key; give the gram reveal a way to
+            // put the keyboard away.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { gramFieldFocused = false }
+            }
+        }
+        .onChange(of: gramFieldFocused) { _, focused in
+            if !focused { editingClassId = nil }
+        }
         .task { await loadPhoto() }
-        .task { await observeCorrections() }
+        .task {
+            loadServings()
+            await observeCorrections()
+        }
     }
 
     // `corrected` marker (Req 7.3). Same string and capsule treatment as
     // MealOverviewView's marker, adapted to the Result screen's dark capture
-    // palette. The hero total above it stays the original estimate.
+    // palette.
     private var correctedMarker: some View {
         Text("corrected")
             .font(.caption2.weight(.semibold))
@@ -325,9 +451,9 @@ struct ResultView: View {
     }
 
     // Hero (§6.1, revised by snaqui Req 1): the carb total the user is eating —
-    // portion-scaled live while adjusting, corrected when a correction is
-    // recorded, the original estimate otherwise. When the hero diverges from
-    // the original, the estimate stays visible on the line beneath, so the
+    // scaled live while adjusting, corrected when a correction is recorded,
+    // the original estimate otherwise. When the hero diverges from the
+    // original, the estimate stays visible on the line beneath, so the
     // full-plate value is never hidden. `g carbs` suffix per the copy inventory.
     private var carbTotal: some View {
         VStack(spacing: 4) {
@@ -352,59 +478,277 @@ struct ResultView: View {
         .accessibilityIdentifier("result.carbsTotal")
     }
 
-    // The portion sentence (snaqui Req 1): "Ate N of M portions". Any fraction
-    // is exact (2 of 5), and eaten may exceed the plate count (2 of 1 = two
-    // plates). The log pill appears only while the pending counts differ from
-    // the recorded portion and names exactly what it writes.
-    private var portionCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("PORTION")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.captureChromeText.opacity(0.6))
-            HStack(spacing: 10) {
-                Text("Ate")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.captureChromeText)
-                PortionStepper(value: $portionEaten, identifier: "result.portion.eaten")
-                Text("of")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.captureChromeText)
-                PortionStepper(value: $portionPlate, identifier: "result.portion.plate")
-                Spacer(minLength: 0)
+    // MARK: - Plate card (serving-adjust PRD, iOS Req 1–4)
+
+    // The per-food rows ARE the adjustment surface: each row steps in its own
+    // household serving unit, the plate-fraction control covers the leftovers
+    // case in one tap, and the log pill appears only when the pending state
+    // diverges from what is recorded.
+    private var plateCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("PER FOOD")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
+                Spacer()
+                fractionControl
             }
-            if portionPending {
-                Button(action: applyPortion) {
-                    Text("Log \(ResultFormat.carbsGrams(pendingScaledTotal)) g")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(Color.captureBackground)
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.bottom, 6)
+            ForEach(foodRows) { row in
+                if row.id != foodRows.first?.id {
+                    Rectangle()
+                        .fill(Color.captureChromeText.opacity(0.08))
+                        .frame(height: 1)
                 }
-                .accessibilityIdentifier("result.portion.apply")
+                foodRowView(row)
+            }
+            if adjustmentPending {
+                logPill
+                    .padding(.top, 10)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.captureChromeBG, in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityIdentifier("result.portionCard")
+        .animation(reduceMotion ? nil : .smooth, value: pendingGrams)
+        .animation(reduceMotion ? nil : .smooth, value: adjustmentPending)
+        .accessibilityIdentifier("result.breakdown")
     }
 
-    // Persist the portion (snaqui Req 2): one appended correction carrying the
-    // scaled total, the per-class values scaled by the same factor, and the
-    // portion stamp as its note. Always scales from the ORIGINAL estimate, so
-    // repeated adjustments never compound. The store's `eventsDidChange` tick
-    // drives `refreshCorrected`, which folds the new state back in and hides
-    // the log pill.
-    private func applyPortion() {
+    // Plate-fraction quick control (iOS Req 2): one tap scales every row from
+    // the ORIGINAL estimate. Monochrome selection — the accent stays reserved
+    // for the log pill. Each stop is a Button with its shape inside the label
+    // (the dead-pill trap, ui-capture-flow.md).
+    private var fractionControl: some View {
+        HStack(spacing: 2) {
+            ForEach(PlateFraction.allCases, id: \.self) { fraction in
+                let isActive = activeFraction == fraction
+                Button {
+                    applyFraction(fraction)
+                } label: {
+                    Text(fraction.label)
+                        .font(.footnote.weight(.semibold))
+                        .monospacedDigit()
+                        .frame(minWidth: 30)
+                        .frame(height: 26)
+                        .padding(.horizontal, 4)
+                        .background(
+                            isActive ? Color.captureChromeText : .clear,
+                            in: Capsule()
+                        )
+                        .foregroundStyle(
+                            isActive ? Color.captureBackground : Color.captureChromeText.opacity(0.7)
+                        )
+                        .contentShape(Capsule())
+                }
+                .accessibilityIdentifier("result.fraction.\(fraction.identifier)")
+            }
+        }
+        .padding(2)
+        .background(Color.captureBackground.opacity(0.6), in: Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("result.fractionControl")
+    }
+
+    // One adjustable row: name and live carbs on the first line; the tappable
+    // amount (serving-first, grams secondary) with its −/+ steppers on the
+    // second. Tapping the amount reveals the editable gram field (iOS Req 3).
+    private func foodRowView(_ row: FoodRow) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(row.displayName)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.captureChromeText)
+                Spacer(minLength: 8)
+                Text("\(Int(pendingCarbs(row).rounded())) g carbs")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+            }
+            HStack(spacing: 8) {
+                if editingClassId == row.id {
+                    gramEditor(row)
+                } else {
+                    amountButton(row)
+                }
+                Spacer(minLength: 8)
+                stepButton("minus", row: row, enabled: pendingGramsFor(row) > 0) {
+                    step(row, direction: -1)
+                }
+                stepButton("plus", row: row, enabled: pendingGramsFor(row) < Self.maxRowGrams) {
+                    step(row, direction: 1)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .accessibilityIdentifier("result.row.\(row.id)")
+    }
+
+    // The amount, serving-first: "≈ 1½ potatoes · 87 g" for a class with a
+    // serving unit, plain "120 g" for the gram fallback. A Button (not the
+    // steppers) so tapping it opens the gram reveal; shape inside the label.
+    private func amountButton(_ row: FoodRow) -> some View {
+        Button {
+            beginGramEdit(row)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let serving = serving(for: row) {
+                    let count = ServingMath.displayHalfUnits(
+                        ServingMath.servings(grams: pendingGramsFor(row), gramsPerUnit: serving.gramsPerUnit)
+                    )
+                    Text("≈ \(ServingMath.halfUnitText(count)) \(unitLabel(serving, count: count))")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.captureChromeText)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                    Text("\(Int(pendingGramsFor(row).rounded())) g")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(Color.captureChromeText.opacity(0.6))
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                } else {
+                    Text("\(Int(pendingGramsFor(row).rounded())) g")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.captureChromeText)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("result.row.\(row.id).amount")
+    }
+
+    // The gram reveal (iOS Req 3): an editable gram value, two-way bound with
+    // the serving readout — typing grams re-renders the serving equivalence
+    // live, and stepping while editing rewrites the field. Digits-only clamp
+    // shared with the carb-entry surfaces.
+    private func gramEditor(_ row: FoodRow) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            TextField("0", text: $gramEditText)
+                .keyboardType(.numberPad)
+                .focused($gramFieldFocused)
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .foregroundStyle(Color.captureChromeText)
+                .frame(width: 52)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                .onChange(of: gramEditText) { _, newValue in
+                    let clamped = CarbEntryModel.clampedDigits(newValue)
+                    if clamped != newValue { gramEditText = clamped }
+                    // Empty is a transient typing state — keep the last value.
+                    if let grams = Int(clamped) {
+                        pendingGrams[row.id] = Double(grams)
+                    }
+                }
+                .accessibilityIdentifier("result.row.\(row.id).gramField")
+            Text("g")
+                .font(.caption)
+                .foregroundStyle(Color.captureChromeText.opacity(0.6))
+            if let serving = serving(for: row) {
+                let count = ServingMath.displayHalfUnits(
+                    ServingMath.servings(grams: pendingGramsFor(row), gramsPerUnit: serving.gramsPerUnit)
+                )
+                Text("≈ \(ServingMath.halfUnitText(count)) \(unitLabel(serving, count: count))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+            }
+        }
+    }
+
+    private func unitLabel(_ serving: SolidServing, count: Double) -> String {
+        ServingMath.unitLabel(count: count, singular: serving.unitSingular, plural: serving.unitPlural)
+    }
+
+    // Compact ± step control. Sizing and `contentShape` live INSIDE each
+    // Button label — the dead-surface trap (ui-capture-flow.md).
+    private func stepButton(
+        _ symbol: String, row: FoodRow, enabled: Bool, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .frame(width: 36, height: 36)
+                .background(Color.captureBackground.opacity(0.6), in: Circle())
+                .foregroundStyle(Color.captureChromeText.opacity(enabled ? 1 : 0.3))
+                .contentShape(Circle())
+        }
+        .disabled(!enabled)
+        .accessibilityIdentifier("result.row.\(row.id).\(symbol)")
+    }
+
+    // The single confirm action (iOS Req 4): appears only while the pending
+    // state diverges from the recorded one and names exactly what it writes.
+    private var logPill: some View {
+        Button(action: applyAdjustment) {
+            Text("Log \(ResultFormat.carbsGrams(pendingTotalCarbsG)) g")
+                .font(.body.weight(.semibold))
+                .monospacedDigit()
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
+                .foregroundStyle(Color.captureBackground)
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .accessibilityIdentifier("result.adjust.apply")
+    }
+
+    // MARK: - Adjustment behaviour
+
+    private func step(_ row: FoodRow, direction: Double) {
+        let stepGrams: Double
+        if let serving = serving(for: row) {
+            stepGrams = serving.step * serving.gramsPerUnit
+        } else {
+            stepGrams = Self.fallbackStepGrams
+        }
+        let next = min(Self.maxRowGrams, max(0, pendingGramsFor(row) + direction * stepGrams))
+        pendingGrams[row.id] = next
+        if editingClassId == row.id {
+            gramEditText = String(Int(next.rounded()))
+        }
+    }
+
+    private func applyFraction(_ fraction: PlateFraction) {
+        for row in foodRows {
+            pendingGrams[row.id] = row.originalGrams * fraction.factor
+        }
+        if let editingClassId, let row = foodRows.first(where: { $0.id == editingClassId }) {
+            gramEditText = String(Int(pendingGramsFor(row).rounded()))
+        }
+    }
+
+    private func beginGramEdit(_ row: FoodRow) {
+        editingClassId = row.id
+        gramEditText = String(Int(pendingGramsFor(row).rounded()))
+        gramFieldFocused = true
+    }
+
+    // Persist the adjustment (iOS Req 4): ONE appended correction carrying the
+    // scaled total, the per-class carbs scaled per row, and the machine-
+    // readable serving-count note. Always scales from the ORIGINAL estimate,
+    // so repeated adjustments never compound. The store's `eventsDidChange`
+    // tick drives `refreshCorrected`, which folds the new recorded state back
+    // in and hides the log pill.
+    private func applyAdjustment() {
+        gramFieldFocused = false
         var correction = PbUserCorrection()
         correction.createdAtMs = Int64(Date().timeIntervalSince1970 * 1000)
-        correction.correctedTotalCarbsG = pendingScaledTotal
-        correction.correctedPerClass = record.macros.perClass.mapValues {
-            PortionFormat.scaled($0.carbsG, eaten: portionEaten, of: portionPlate)
-        }
-        correction.note = PortionFormat.note(eaten: portionEaten, of: portionPlate)
+        correction.correctedTotalCarbsG = pendingTotalCarbsG
+        correction.correctedPerClass = Dictionary(
+            uniqueKeysWithValues: foodRows.map { ($0.id, Float(pendingCarbs($0))) }
+        )
+        correction.note = ServingNote.note(foodRows.map { row -> (classId: String, amount: ServingNote.Amount) in
+            if let serving = serving(for: row) {
+                return (classId: row.id, amount: .servings(
+                    ServingMath.servings(grams: pendingGramsFor(row), gramsPerUnit: serving.gramsPerUnit)
+                ))
+            }
+            return (classId: row.id, amount: .grams(pendingGramsFor(row)))
+        })
         Task {
             try? await store.appendCorrection(mealId: record.id, correction: correction)
         }
@@ -454,29 +798,6 @@ struct ResultView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    // Per-food breakdown (§6.4): name, mass, volume, carbs — no σ (Decision 16).
-    private var breakdown: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Per food")
-                .font(.headline)
-                .foregroundStyle(Color.captureChromeText)
-            ForEach(perClassRows, id: \.name) { row in
-                HStack {
-                    Text(row.displayName)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color.captureChromeText)
-                    Spacer()
-                    Text("\(row.massG) g · \(row.volumeCm3) cm³ · \(row.carbsG) g carbs")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(Color.captureChromeText.opacity(0.75))
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("result.breakdown")
-    }
-
     // Dashed, disabled macro placeholders that hold layout space (§6.5).
     private var macroPlaceholders: some View {
         HStack(spacing: 12) {
@@ -503,29 +824,6 @@ struct ResultView: View {
     private var foodCount: Int { record.macros.perClass.count }
     private var totalMassGrams: Int {
         Int(record.macros.perClass.values.reduce(Float(0)) { $0 + $1.massG }.rounded())
-    }
-
-    private struct PerClassRow {
-        let name: String
-        let displayName: String
-        let massG: Int
-        let volumeCm3: Int
-        let carbsG: Int
-    }
-
-    // Sorted by carbs descending for a stable, meaningful order.
-    private var perClassRows: [PerClassRow] {
-        record.macros.perClass
-            .map { name, macro in
-                PerClassRow(
-                    name: name,
-                    displayName: Self.prettify(name),
-                    massG: Int(macro.massG.rounded()),
-                    volumeCm3: Int(macro.volumeCm3.rounded()),
-                    carbsG: Int(macro.carbsG.rounded())
-                )
-            }
-            .sorted { $0.carbsG > $1.carbsG }
     }
 
     // "white_rice" → "White rice".
@@ -627,9 +925,9 @@ struct ResultView: View {
         .accessibilityIdentifier("result.veryLowSurface")
     }
 
-    // §6.6/6.7 (Decision 17): Adjust (bordered) + Done (prominent), shown in both
-    // presentations (historyDetail now shows the action row — deliberate). The ⋯
-    // menu carries Retake + Delete on a fresh capture, Delete only from history.
+    // §6.6/6.7: Adjust (until task 5 retires it) + Done (prominent) + ⋯ menu
+    // (Retake + Delete on a fresh capture, Delete only from history —
+    // Decision 17). The per-food rows above are the adjustment surface.
     private var actionRow: some View {
         HStack(spacing: 12) {
             Button(action: onAdjust) {
@@ -671,9 +969,24 @@ struct ResultView: View {
         }
     }
 
+    // MARK: - Loading
+
     private func loadPhoto() async {
-        // Shared with Data / Meal overview via the extracted loader (§6.8).
+        // Shared with Records / Meal overview via the extracted loader (§6.8).
         self.photo = await MealPhotoLoader.loadImage(assetID: record.photoAssetID)
+    }
+
+    // Serving definitions for this record's solid classes, one lookup each —
+    // synchronous reads on the shared bundled handle.
+    private func loadServings() {
+        guard servings.isEmpty, let database = Self.foodDatabase else { return }
+        var resolved: [String: SolidServing] = [:]
+        for row in foodRows where !row.isLiquid {
+            if let serving = database.solidServing(for: row.id) {
+                resolved[row.id] = serving
+            }
+        }
+        servings = resolved
     }
 
     // Mirror of MealOverviewView.observeCorrections (Decision 18): refresh once
@@ -691,52 +1004,57 @@ struct ResultView: View {
         correctedTotal = corrections
             .last { $0.correctedTotalCarbsGOneof != nil }?
             .correctedTotalCarbsG
-        // The latest correction defines the recorded portion iff it carries
-        // the portion stamp — a later manual correction supersedes a portion.
-        recordedPortion = corrections.last.flatMap { PortionFormat.parse(note: $0.note) }
-        // Seed the steppers once per push (snaqui Req 2: history re-entry
-        // resumes from the recorded portion); later refreshes only update the
+        recordedGrams = recordedGramsState(from: corrections.last)
+        // Seed the rows once per push (iOS Req 4: history re-entry resumes
+        // from the latest correction); later refreshes only update the
         // recorded state so they cannot stomp an adjustment in progress.
-        if !portionSeeded {
-            portionSeeded = true
-            if let recorded = recordedPortion {
-                portionEaten = recorded.eaten
-                portionPlate = recorded.plate
-            }
-        }
-    }
-}
-
-// Compact ± stepper for one portion count. Sizing and `contentShape` live
-// INSIDE each Button label — the dead-surface trap (ui-capture-flow.md).
-private struct PortionStepper: View {
-    @Binding var value: Int
-    let identifier: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            stepButton("minus", enabled: value > PortionFormat.countRange.lowerBound) { value -= 1 }
-            Text("\(value)")
-                .font(.title3.weight(.bold).monospacedDigit())
-                .foregroundStyle(Color.captureChromeText)
-                .frame(minWidth: 24)
-                .contentTransition(.numericText())
-                .animation(.smooth, value: value)
-                .accessibilityIdentifier(identifier)
-            stepButton("plus", enabled: value < PortionFormat.countRange.upperBound) { value += 1 }
+        if !rowsSeeded {
+            rowsSeeded = true
+            pendingGrams = recordedGrams
         }
     }
 
-    private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .frame(width: 36, height: 36)
-                .background(Color.captureBackground.opacity(0.6), in: Circle())
-                .foregroundStyle(Color.captureChromeText.opacity(enabled ? 1 : 0.3))
-                .contentShape(Circle())
+    // The per-row grams the latest correction implies (empty = the original
+    // estimate). Scaling always re-derives from the ORIGINAL, never from a
+    // previous correction, so adjustments cannot compound:
+    //   1. a `servings` stamp restores the recorded amounts directly;
+    //   2. a legacy `portion N/M` stamp still parses and seeds (PRD Req 4);
+    //   3. otherwise per-class carb ratios recover row grams (old manual
+    //      corrections), with a uniform total ratio as the last resort.
+    private func recordedGramsState(from correction: PbUserCorrection?) -> [String: Double] {
+        guard let correction else { return [:] }
+        if let amounts = ServingNote.parse(correction.note) {
+            return Dictionary(uniqueKeysWithValues: foodRows.map { row in
+                switch amounts[row.id] {
+                case .servings(let count)?:
+                    if let serving = servings[row.id] {
+                        return (row.id, ServingMath.grams(servings: count, gramsPerUnit: serving.gramsPerUnit))
+                    }
+                    return (row.id, row.originalGrams)
+                case .grams(let grams)?:
+                    return (row.id, grams)
+                case nil:
+                    return (row.id, row.originalGrams)
+                }
+            })
         }
-        .disabled(!enabled)
-        .accessibilityIdentifier("\(identifier).\(symbol)")
+        if let portion = PortionFormat.parse(note: correction.note) {
+            let factor = Double(PortionFormat.factor(eaten: portion.eaten, of: portion.plate))
+            return Dictionary(uniqueKeysWithValues: foodRows.map { ($0.id, $0.originalGrams * factor) })
+        }
+        if !correction.correctedPerClass.isEmpty {
+            return Dictionary(uniqueKeysWithValues: foodRows.map { row in
+                guard row.originalCarbsG > 0, let corrected = correction.correctedPerClass[row.id] else {
+                    return (row.id, row.originalGrams)
+                }
+                return (row.id, row.originalGrams * Double(corrected) / row.originalCarbsG)
+            })
+        }
+        if case .correctedTotalCarbsG(let total)? = correction.correctedTotalCarbsGOneof,
+           record.macros.totalCarbsG > 0 {
+            let factor = Double(total / record.macros.totalCarbsG)
+            return Dictionary(uniqueKeysWithValues: foodRows.map { ($0.id, $0.originalGrams * factor) })
+        }
+        return [:]
     }
 }
