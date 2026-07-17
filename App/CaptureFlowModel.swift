@@ -379,13 +379,8 @@ final class CaptureFlowModel: CaptureFlowDelegate {
         state = .ready(freshSnapshot())
     }
 
-    // Pops one level off the capture stack, back to whichever screen pushed the
-    // current one (correction Save, history-detail Done — design: Navigation
-    // routes). Guards against an empty path.
-    func popRoute() {
-        guard !navigationPath.isEmpty else { return }
-        navigationPath.removeLast()
-    }
+    // popRoute() was retired with the `.correction` route (serving-adjust PRD
+    // Req 5): the capture stack no longer pushes a screen that pops itself.
 
     // Sheet swipe-down on the RefusalSheet (Req §20.7 / Decision 16). Clears
     // the captured nadir and any in-flight mode so the user lands back at the
