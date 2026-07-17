@@ -275,8 +275,10 @@ struct ResultView: View {
     private static let gramEpsilon = 0.5
     // Gram-stepper fallback increment for rows without a serving unit.
     private static let fallbackStepGrams = 10.0
-    // Ceiling shared with the carb-entry clamp convention (3 digits).
-    private static let maxRowGrams = 999.0
+    // Per-row MASS ceiling, matching the benchmark grams bound
+    // (`BenchmarkMeal.itemGramsRange`). Deliberately not the 999 g carb-entry
+    // convention — a 1 L drink already weighs ~1000 g.
+    private static let maxRowGrams = 5000.0
 
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
@@ -619,7 +621,7 @@ struct ResultView: View {
     // The gram reveal (iOS Req 3): an editable gram value, two-way bound with
     // the serving readout — typing grams re-renders the serving equivalence
     // live, and stepping while editing rewrites the field. Digits-only clamp
-    // shared with the carb-entry surfaces.
+    // via the mass sanitiser below (NOT the 3-digit carb-entry one).
     private func gramEditor(_ row: FoodRow) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             TextField("0", text: $gramEditText)
@@ -632,7 +634,7 @@ struct ResultView: View {
                 .padding(.horizontal, 8)
                 .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
                 .onChange(of: gramEditText) { _, newValue in
-                    let clamped = CarbEntryModel.clampedDigits(newValue)
+                    let clamped = Self.clampedRowGrams(newValue)
                     if clamped != newValue { gramEditText = clamped }
                     // Empty is a transient typing state — keep the last value.
                     if let grams = Int(clamped) {
@@ -694,6 +696,17 @@ struct ResultView: View {
     }
 
     // MARK: - Adjustment behaviour
+
+    // Mass keypad sanitiser (BenchmarkMealEditorSheet.clampedGrams precedent):
+    // strips non-digits, caps at 4 digits, clamps at `maxRowGrams`. Idempotent
+    // for any whole-gram value within the cap, so the programmatic
+    // `gramEditText` writes in `step()` / `applyFraction` survive the
+    // onChange round-trip without corrupting `pendingGrams`.
+    private static func clampedRowGrams(_ text: String) -> String {
+        let digits = String(text.filter(\.isNumber).prefix(4))
+        guard let value = Int(digits) else { return "" }
+        return String(min(value, Int(maxRowGrams)))
+    }
 
     private func step(_ row: FoodRow, direction: Double) {
         let stepGrams: Double
@@ -988,10 +1001,16 @@ struct ResultView: View {
     private func refreshCorrected() async {
         let corrections = (try? await store.corrections(for: record.id)) ?? []
         isCorrected = !corrections.isEmpty
-        correctedTotal = corrections
-            .last { $0.correctedTotalCarbsGOneof != nil }?
-            .correctedTotalCarbsG
-        recordedGrams = recordedGramsState(from: corrections.last)
+        // The corrected total and the row seeds derive from the SAME
+        // correction — the latest — so a degenerate history (trailing
+        // correction without a total) cannot mix two corrections. When the
+        // latest lacks a total, the hero falls back to the original estimate,
+        // consistent with `recordedGramsState`'s own fallbacks.
+        let latest = corrections.last
+        correctedTotal = latest?.correctedTotalCarbsGOneof != nil
+            ? latest?.correctedTotalCarbsG
+            : nil
+        recordedGrams = recordedGramsState(from: latest)
         // Seed the rows once per push (iOS Req 4: history re-entry resumes
         // from the latest correction); later refreshes only update the
         // recorded state so they cannot stomp an adjustment in progress.

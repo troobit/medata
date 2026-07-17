@@ -355,6 +355,19 @@ def verify_solid_servings() -> None:
             f"class(es) {overlap} are both served and deliberately absent — "
             "pick one"
         )
+    # Precision coupling: ServingNote trims serving counts to 2 dp, and the
+    # result screen hides its log pill when the parse-derived grams sit within
+    # gramEpsilon (0.5 g) of the pending amount (App/ResultView.swift). The
+    # note round-trip error is at most 0.005 * grams_per_unit, so every
+    # grams_per_unit must stay below 100 g or a logged row could reopen with
+    # a phantom pending adjustment.
+    oversized = sorted(row[0] for row in SOLID_SERVINGS if row[3] >= 100)
+    if oversized:
+        raise SystemExit(
+            f"class(es) {oversized} have grams_per_unit >= 100 — the "
+            "ServingNote 2-dp count precision only round-trips within the "
+            "result screen's 0.5 g epsilon while grams_per_unit < 100"
+        )
 
 
 # Best-effort sub-class rows (Req 7.5, Decision 24). Deliberately no assumed
