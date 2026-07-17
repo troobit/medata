@@ -36,6 +36,8 @@ final class BenchmarkMealTests: XCTestCase {
 
     // Fixture lookup standing in for FoodDatabase.entry(for:)?.carbsMonoG —
     // carbs per 100 g by palette class; nil = class absent at this edition.
+    // The store invokes it with the meal's dbEdition (the second parameter),
+    // tying the lookup to the edition the row records.
     private static let carbsPer100g: [String: Double] = [
         "white_rice": 30.9,
         "bread_white": 46.1,
@@ -43,7 +45,7 @@ final class BenchmarkMealTests: XCTestCase {
         "lemon": 3.2
     ]
 
-    private func lookup(_ classID: String) -> Double? {
+    private func lookup(_ classID: String, _ edition: String) -> Double? {
         Self.carbsPer100g[classID]
     }
 
@@ -81,6 +83,19 @@ final class BenchmarkMealTests: XCTestCase {
         let fetched = try await store.benchmarkMeals()
         XCTAssertEqual(fetched.count, 1)
         XCTAssertEqual(fetched[0].truthCarbsG, 80.24, accuracy: 1e-9)
+    }
+
+    func testLookupIsInvokedWithTheMealsDbEdition() async throws {
+        // The closure's edition must be the meal's dbEdition — nothing else
+        // ties the resolved carbs to the `db_edition` the row records.
+        let meal = makeMeal(dbEdition: "edition_y")
+        var editions: [String] = []
+        try await store.saveBenchmarkMeal(meal) { classID, edition in
+            editions.append(edition)
+            return Self.carbsPer100g[classID]
+        }
+        XCTAssertEqual(editions, ["edition_y", "edition_y"],
+                       "one lookup per item, each at the meal's edition")
     }
 
     func testSaveIgnoresCallerSuppliedTruth() async throws {

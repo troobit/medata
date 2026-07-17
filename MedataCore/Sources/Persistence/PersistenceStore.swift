@@ -178,6 +178,15 @@ public struct QuickPreset: Sendable, Equatable, Identifiable {
     }
 }
 
+// Vocabulary for the `outcome` column on `estimation_outcomes` rows,
+// shared by the producer (EstimationAttemptRecord.Outcome is this type) and
+// the benchmark-report filters so the stored strings cannot drift apart
+// (EventType precedent). Raw values are the exact column strings.
+public enum EstimationOutcomeKind: String, Codable, Sendable, Equatable, CaseIterable {
+    case success
+    case refused
+}
+
 // One estimation attempt — success or refusal — persisted on-device
 // (specs/estimation/snaq-parity Req 2, design "Persistence" + Data Models).
 // Outcome rows live in their own `estimation_outcomes` table following the
@@ -195,7 +204,7 @@ public struct EstimationOutcome: Sendable, Equatable, Identifiable {
 
     public let id: UUID
     public let timestampMs: Int64  // UTC ms since epoch (last_sweep_at_ms precedent)
-    public let outcome: String  // "success" | "refused"
+    public let outcome: String  // EstimationOutcomeKind raw value
     public let failureJSON: String?  // nil on success
     public let measurementsJSON: String
     public let mealID: UUID?  // saved MealRecord reference (success only)
@@ -442,8 +451,11 @@ public protocol PersistenceStore: Sendable {
     // transaction as the insert (atomic): non-benchmark rows keep the newest
     // `EstimationOutcome.nonBenchmarkRowBound`; benchmark-tagged rows keep the
     // newest `benchmarkAttemptsPerMealPerLineageBound` per (benchmark_meal_id,
-    // model_version) group. "Newest" orders by (timestamp, id) so eviction and
-    // latest-attempt scoring stay deterministic under equal timestamps.
+    // model_version) group, with the group's latest completed attempt exempt
+    // from eviction (it occupies one of the bound's slots) so a run of
+    // refusals can never evict the meal's scoring attempt. "Newest" orders by
+    // (timestamp, id) so eviction and latest-attempt scoring stay
+    // deterministic under equal timestamps.
     // Outcome rows are not `events` rows: no `eventsDidChange` interaction
     // (quick_presets convention above).
     func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws
@@ -454,7 +466,9 @@ public protocol PersistenceStore: Sendable {
 
     // specs/estimation/snaq-parity Req 1.2, 1.3. Insert-or-update by id.
     // `carbsPer100g` resolves a palette class to carbohydrate grams per 100 g
-    // at the meal's DB edition — the caller backs it with the same
+    // at the given food-DB edition; the store invokes it with the meal's
+    // `dbEdition`, so the lookup's edition is tied to the `db_edition` the
+    // row records. The caller backs it with the same
     // `FoodDatabase.entry(for:)` lookup `Macros.compute` uses; it is injected
     // because Persistence sits below Foods in the dependency graph and stores
     // food data opaquely (EstimationOutcome precedent). The store derives
@@ -465,7 +479,7 @@ public protocol PersistenceStore: Sendable {
     // id already has estimation attempts recorded against it. Benchmark meals
     // are not `events` rows: no `eventsDidChange` interaction.
     func saveBenchmarkMeal(
-        _ meal: BenchmarkMeal, carbsPer100g: (String) -> Double?
+        _ meal: BenchmarkMeal, carbsPer100g: (_ classID: String, _ edition: String) -> Double?
     ) async throws
 
     // Req 1.3 read path (benchmark report / export). Returns every meal

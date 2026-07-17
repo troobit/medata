@@ -460,3 +460,37 @@ The two criticals each severed a load-bearing requirement at the exact point the
 - The design now specifies more invariants for tasks to honour — longer task list, same cycle.
 
 ---
+
+## Decision 15: Anchor verdict bands at 1.96 SE with an n ≥ 2 gate
+
+**Date**: 2026-07-17
+**Status**: accepted
+
+### Context
+
+The report's anchor verdict (Req 1.4) compared our MAE to the published SNAQ figure using a band of ±1 standard error (~68% confidence), and a single completed meal — whose standard error is zero — could produce a hard `betterThanAnchor`/`worseThanAnchor` verdict. Both are inconsistent with the project's promotion standard, which is a one-sided 95% test (Decision 10): the same report could call a result "better than SNAQ" on evidence the promotion gate would call noise.
+
+### Decision
+
+The anchor verdict bands at MAE ± 1.96 standard errors, and a hard `betterThanAnchor`/`worseThanAnchor` verdict additionally requires at least two completed meals; below that the verdict is the within-noise/indeterminate one. The anchor's own sampling noise is consciously ignored — the published 13.1 g figure is treated as a fixed constant.
+
+### Rationale
+
+1.96 SE aligns the anchor comparison with the same 95% evidentiary bar the promotion verdict already uses, so the two headline signals cannot disagree about what counts as confident. The n ≥ 2 gate exists because a single observation has no measurable dispersion: SE = 0 collapses the band to a point and any error would read as a hard verdict. Treating the anchor as a constant is deliberate — its sampling distribution is not published in a usable form, and the benchmark is a developer-phase signal, not a publishable comparison.
+
+### Alternatives Considered
+
+- **Keep the ±1 SE band**: simpler and already implemented - Rejected; a ~68% band is inconsistent with the one-sided 95% promotion standard, so the report could claim confidence the promotion gate would refuse.
+- **Full two-sample test against the published anchor**: statistically complete - Rejected as overkill for a developer-phase signal; the anchor's sample-level data is not available, and the added machinery would imply a rigour the single published figure cannot support.
+
+### Consequences
+
+**Positive:**
+- One evidentiary standard (95%) across the anchor verdict and the promotion verdict.
+- A single lucky (or unlucky) meal can no longer produce a hard verdict.
+
+**Negative:**
+- The wider band makes `withinNoiseOfAnchor` the most common verdict at small n — honest, but less satisfying during early data collection.
+- Ignoring the anchor's own noise slightly overstates how sharp the comparison boundary is.
+
+---
