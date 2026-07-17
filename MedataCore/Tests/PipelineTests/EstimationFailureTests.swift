@@ -404,6 +404,12 @@ private struct NoOpPersistenceStore: PersistenceStore {
     func deleteQuickPreset(id: UUID) async throws {
         fatalError("unused")
     }
+    func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws {
+        fatalError("unused")
+    }
+    func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome] {
+        fatalError("unused")
+    }
     var eventsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
 }
 

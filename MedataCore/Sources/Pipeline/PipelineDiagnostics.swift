@@ -1,4 +1,5 @@
 import Foundation
+import Persistence
 import Volume
 
 // Estimation-attempt diagnostics (snaq-parity lane A, Req 2.1/2.6/3.1–3.4).
@@ -403,6 +404,31 @@ public final class PipelineDiagnostics {
             preShutterSegmentationErrorCount: nil,
             decomposition: decomposition,
             sigma: sigma
+        )
+    }
+}
+
+// Bridge to the persisted row (specs/estimation/snaq-parity design Data
+// Models). The snapshot itself becomes the `measurements` JSON and its
+// failure the `failure` JSON — Persistence stores both opaquely because it
+// sits below Pipeline in the dependency graph. Defined here (not in the App
+// layer) so the encoding is exercised by the compiled MedataCore surface.
+extension EstimationOutcome {
+    public init(record: EstimationAttemptRecord, benchmarkMealID: UUID?) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let measurementsJSON = String(decoding: try encoder.encode(record), as: UTF8.self)
+        let failureJSON = try record.failure.map {
+            String(decoding: try encoder.encode($0), as: UTF8.self)
+        }
+        self.init(
+            timestampMs: record.timestampMs,
+            outcome: record.outcome.rawValue,
+            failureJSON: failureJSON,
+            measurementsJSON: measurementsJSON,
+            mealID: record.mealID.flatMap(UUID.init(uuidString:)),
+            modelVersion: record.modelVersion,
+            benchmarkMealID: benchmarkMealID
         )
     }
 }

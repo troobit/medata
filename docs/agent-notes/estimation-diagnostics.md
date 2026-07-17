@@ -1,7 +1,7 @@
 # Estimation diagnostics (snaq-parity lane A)
 
-State as of tasks 1–5 (diagnostics foundation). Later phases (outcome store,
-CaptureFlowModel write-behind, log browser) build on these seams.
+State as of tasks 1–8 (diagnostics foundation + outcome store + write-behind).
+The log browser and benchmark phases build on these seams.
 
 ## The pattern: outcome structs, not throws
 
@@ -34,8 +34,7 @@ refusals (Req 3.1/3.2):
   in the catch ladder. `CancellationError` produces NO record (user-abandoned
   capture must not depress benchmark completion rates).
 - `delegate?.didCompleteAttempt(diagnostics.snapshot())` fires exactly once per
-  non-cancelled attempt, after stamping. `CaptureFlowModel.didCompleteAttempt`
-  is a no-op until the write-behind task (task 8) lands.
+  non-cancelled attempt, after stamping.
 - `EstimationAttemptRecord` is Codable + Sendable + Equatable. Founding
   required fields: `v`, `timestampMs`, `outcome`, `modelVersion`,
   `capturePath`; everything else optional so the browser tolerates older rows.
@@ -45,6 +44,34 @@ refusals (Req 3.1/3.2):
 - `withPreShutterSegmentationErrorCount(_:)` returns a copy — CaptureFlowModel
   merges the `PreShutterSegmenter.segmentationErrorCount` snapshot at persist
   time; the counter never crosses `CaptureResult`.
+
+## Outcome store + write-behind (tasks 6–8)
+
+- Store surface: `saveEstimationOutcome` / `estimationOutcomes(limit:)` on
+  `PersistenceStore`; row shape, split eviction bounds, and the (timestamp, id)
+  tie-break are in `docs/agent-notes/persistence.md`. The
+  `EstimationOutcome(record:benchmarkMealID:)` bridge lives in Pipeline
+  (PipelineDiagnostics.swift) because Persistence cannot see the typed record.
+- **The pipeline's `delegate` is stamped inside `CaptureFlowModel.init`** —
+  `Pipeline` is a struct, so `pipeline.delegate = model` after construction in
+  App.swift would mutate a dead copy. The init downcasts
+  `any PipelineEstimator` to `Pipeline`, sets the weak delegate on its own
+  copy, and reassigns `self.pipeline`. Mock estimators skip the cast.
+- `didCompleteAttempt` persists via `Task.detached` (write-behind, Req 2.4):
+  cancelling the flow can never cancel the persist. Store errors are logged to
+  the Shutter category and swallowed (MaskArtefactWriter precedent).
+- Pre-shutter error merge is a **per-attempt delta**: the producer's counter is
+  lifetime-cumulative with no reset, so `preShutterErrorBaseline` is reset in
+  `capturePresented()` and advanced to the counter's value at each persist;
+  the persisted field is `max(0, count − baseline)`. Persisting the raw counter
+  would misattribute every earlier attempt's errors to the current one.
+- Capture-stage refusals in `performFlow`'s catch ladder (worldTrackingDegraded,
+  pre-pipeline `EstimationFailure`, non-typed errors) write slim records:
+  outcome refused, failure domain `"capture"`, no stage measurements,
+  `modelVersion` = the `segmenterSource` init parameter (App.swift passes
+  `Pipeline.segmenterSource`, now public). `CancellationError` writes nothing.
+- `CaptureFlowModel.benchmarkMealID: UUID?` tags rows while set (lane B sets
+  and clears it; nothing writes it yet as of task 8).
 
 ## Gotchas
 

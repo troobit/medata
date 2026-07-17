@@ -747,21 +747,36 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 fibre_g     REAL,
                 sort_order  INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS estimation_outcomes (
+                id                TEXT    PRIMARY KEY,
+                timestamp         INTEGER NOT NULL,
+                outcome           TEXT    NOT NULL,
+                failure           TEXT,
+                measurements      TEXT    NOT NULL,
+                meal_id           TEXT,
+                model_version     TEXT    NOT NULL,
+                benchmark_meal_id TEXT
+            );
+            CREATE INDEX IF NOT EXISTS outcomes_timestamp
+                ON estimation_outcomes(timestamp);
+            CREATE INDEX IF NOT EXISTS outcomes_benchmark
+                ON estimation_outcomes(benchmark_meal_id, model_version);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '5')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '6')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '5' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 5 adds
-    // quick_presets (specs/data/manual-carb-intake, design.md "Quick-add
-    // presets — new table"); the CREATE IF NOT EXISTS above retrofits it onto
-    // v4 DBs, matching the processed_images/v4 precedent exactly. No DDL on
-    // legacy tables (Decision 10).
+    // Idempotent: re-stamps schema_version to '6' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 6 adds
+    // estimation_outcomes (specs/estimation/snaq-parity, design "Data
+    // Models"); version 5 added quick_presets (specs/data/manual-carb-intake).
+    // The CREATE IF NOT EXISTS above retrofits both onto older DBs, matching
+    // the processed_images/v4 precedent exactly. No DDL on legacy tables
+    // (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '5')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '6')"
         )
     }
 
@@ -833,6 +848,106 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 arguments: [id.uuidString]
             )
         }
+    }
+
+    // MARK: - Estimation outcomes (specs/estimation/snaq-parity)
+
+    public func saveEstimationOutcome(_ outcome: EstimationOutcome) async throws {
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO estimation_outcomes
+                        (id, timestamp, outcome, failure, measurements,
+                         meal_id, model_version, benchmark_meal_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    outcome.id.uuidString,
+                    outcome.timestampMs,
+                    outcome.outcome,
+                    outcome.failureJSON,
+                    outcome.measurementsJSON,
+                    outcome.mealID?.uuidString,
+                    outcome.modelVersion,
+                    outcome.benchmarkMealID?.uuidString
+                ]
+            )
+            // Split eviction bounds (Req 2.5, Decision 7), applied in the same
+            // write transaction so the insert-plus-eviction is atomic. Only the
+            // population the insert belongs to can have grown, so only that
+            // bound is enforced. "Newest" is (timestamp, id) descending —
+            // the id tie-break keeps eviction deterministic when attempts
+            // share a millisecond.
+            if let benchmarkMealID = outcome.benchmarkMealID {
+                try db.execute(
+                    sql: """
+                        DELETE FROM estimation_outcomes
+                        WHERE benchmark_meal_id = ? AND model_version = ?
+                          AND id NOT IN (
+                            SELECT id FROM estimation_outcomes
+                            WHERE benchmark_meal_id = ? AND model_version = ?
+                            ORDER BY timestamp DESC, id DESC
+                            LIMIT ?
+                          )
+                        """,
+                    arguments: [
+                        benchmarkMealID.uuidString, outcome.modelVersion,
+                        benchmarkMealID.uuidString, outcome.modelVersion,
+                        EstimationOutcome.benchmarkAttemptsPerMealPerLineageBound
+                    ]
+                )
+            } else {
+                try db.execute(
+                    sql: """
+                        DELETE FROM estimation_outcomes
+                        WHERE benchmark_meal_id IS NULL
+                          AND id NOT IN (
+                            SELECT id FROM estimation_outcomes
+                            WHERE benchmark_meal_id IS NULL
+                            ORDER BY timestamp DESC, id DESC
+                            LIMIT ?
+                          )
+                        """,
+                    arguments: [EstimationOutcome.nonBenchmarkRowBound]
+                )
+            }
+        }
+        // No eventsDidChange: outcome rows are not `events` rows (quick_presets
+        // convention) and a recording write must never ripple into UI refresh
+        // of the event surfaces (Req 2.4).
+    }
+
+    public func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM estimation_outcomes
+                    ORDER BY timestamp DESC, id DESC
+                    LIMIT ?
+                    """,
+                arguments: [limit]
+            ).map(Self.estimationOutcome(from:))
+        }
+    }
+
+    private static func estimationOutcome(from row: Row) throws -> EstimationOutcome {
+        let idString: String = row["id"]
+        guard let id = UUID(uuidString: idString) else {
+            throw PersistenceError.corruptRecord("invalid estimation_outcomes UUID: \(idString)")
+        }
+        let mealIDString: String? = row["meal_id"]
+        let benchmarkMealIDString: String? = row["benchmark_meal_id"]
+        return EstimationOutcome(
+            id: id,
+            timestampMs: row["timestamp"],
+            outcome: row["outcome"],
+            failureJSON: row["failure"],
+            measurementsJSON: row["measurements"],
+            mealID: mealIDString.flatMap(UUID.init(uuidString:)),
+            modelVersion: row["model_version"],
+            benchmarkMealID: benchmarkMealIDString.flatMap(UUID.init(uuidString:))
+        )
     }
 
     private static func quickPreset(from row: Row) throws -> QuickPreset {

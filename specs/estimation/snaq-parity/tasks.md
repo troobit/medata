@@ -49,21 +49,21 @@ references:
 
 ## Outcome store
 
-- [ ] 6. Write failing store tests for estimation_outcomes <!-- id:isuh2px -->
+- [x] 6. Write failing store tests for estimation_outcomes <!-- id:isuh2px -->
   - Split eviction bounds: 500 non-benchmark rows; benchmark-tagged rows capped at 10 attempts per meal per lineage
   - Millisecond timestamps (store precedent last_sweep_at_ms); latest-attempt ties broken by (timestamp, id)
   - Indexes: outcomes_timestamp, outcomes_benchmark(benchmark_meal_id, model_version)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.5](requirements.md#2.5)
 
-- [ ] 7. Implement estimation_outcomes table and store methods <!-- id:isuh2py -->
+- [x] 7. Implement estimation_outcomes table and store methods <!-- id:isuh2py -->
   - Append CREATE TABLE IF NOT EXISTS per the quick_presets precedent (GRDBPersistenceStore.swift:711-754), schema_version → 6, no destructive DDL
   - saveEstimationOutcome: atomic insert + eviction in one write; no eventsDidChange interaction (PersistenceStore.swift:141-146 convention)
   - Blocked-by: isuh2px (Write failing store tests for estimation_outcomes)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.3](requirements.md#2.3), [2.5](requirements.md#2.5)
 
-- [ ] 8. Wire CaptureFlowModel write-behind persistence <!-- id:isuh2pz -->
+- [x] 8. Wire CaptureFlowModel write-behind persistence <!-- id:isuh2pz -->
   - Detached fire-and-forget task on didCompleteAttempt; store errors logged to Shutter and swallowed (MaskArtefactWriter.swift:75-86 precedent)
   - Slim records for capture-stage refusals from performFlow catch (CaptureFlowModel.swift:661-673): outcome refused, domain capture, no stage measurements
   - Merge the pre-shutter error counter snapshot at persist time; tag rows with CaptureFlowModel.benchmarkMealID when set

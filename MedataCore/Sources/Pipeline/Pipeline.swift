@@ -48,10 +48,10 @@ public struct Pipeline: Sendable {
     private let supportPlaneFitter: any SupportPlaneFitter
     // Stamped onto every MealRecord this pipeline produces (Decision 42, Req §23.6):
     // "dev_stub" for Phase 1 device-MVP builds, "coreml_<modelVersion>" for Phase 3.
-    // Internal (not private) so tests can verify the factory stamps the correct
-    // value without running the full pipeline; production reads happen inside
-    // Pipeline.estimate.
-    let segmenterSource: String
+    // Public so the App layer can stamp the same lineage tag onto the slim
+    // capture-stage refusal records that never reach the pipeline (snaq-parity
+    // lane A) and tests can verify the factory stamps the correct value.
+    public let segmenterSource: String
     public weak var delegate: (any CaptureFlowDelegate)?
 
     public init(
