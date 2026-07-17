@@ -125,6 +125,7 @@ private struct EmptyFoodDB: FoodDatabase {
     func entry(for classId: String) -> FoodEntry? { nil }
     func entry(for classId: String, edition: String) -> FoodEntry? { nil }
     func availableEditions() -> [String] { [] }
+    func solidServing(for classId: String) -> SolidServing? { nil }
 }
 
 private struct NoOpStore: PersistenceStore {

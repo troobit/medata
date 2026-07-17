@@ -66,6 +66,28 @@ public final class GRDBFoodDatabase: FoodDatabase, @unchecked Sendable {
         entry(for: classId)
     }
 
+    // Servings live in the CoFID DB only (lookup table, not composition
+    // data — the same one-home rule as liquid_servings), so no AFCD join.
+    public func solidServing(for classId: String) -> SolidServing? {
+        try? queue.read { db in
+            try Row.fetchOne(
+                db,
+                sql: """
+                    SELECT unit_singular, unit_plural, grams_per_unit, step
+                    FROM solid_servings WHERE class_id = ?
+                    """,
+                arguments: [classId]
+            ).map { row in
+                SolidServing(
+                    unitSingular: row["unit_singular"],
+                    unitPlural:   row["unit_plural"],
+                    gramsPerUnit: row["grams_per_unit"],
+                    step:         row["step"]
+                )
+            }
+        }
+    }
+
     // MARK: - private
 
     // Canonical CoFID-wins COALESCE join (design §4.1 / Decision 39). Any class
