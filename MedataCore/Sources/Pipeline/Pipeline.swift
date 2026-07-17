@@ -279,45 +279,38 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.lidarUnavailableMidCapture
             }
-            do {
-                let est = try HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
-                    probabilities: nadirSeg.probabilities,
-                    argmax: nadirSeg.argmax,
-                    depth: depth,
-                    intrinsics: nadir.intrinsics,
-                    supportPlane: plane,
-                    beta: beta,
-                    palette: palette
-                ))
-                pbVolumes = PipelineBridges.pbVolumeResult(singleView: est)
-                interClassOcclusion = est.interClassOcclusionDetected
-                if interClassOcclusion {
-                    delegate?.didDetectInterClassOcclusion()
-                }
-                let minCov = est.lidarCoverageFraction.values.min() ?? 1
-                // Three-tier σ_view lookup for single-view per Decision 47.
-                // ≥0.80 → singleViewFull (0.90), 0.50–0.80 → singleViewPartial (0.60),
-                // 0.30–0.50 → singleViewMinimal (0.30). Below 0.30 the height-field
-                // integrator refuses (see HeightFieldEstimator.coverageRefuseFraction).
-                if minCov >= 0.80 {
-                    viewCoverage = .singleViewFull
-                } else if minCov >= 0.50 {
-                    viewCoverage = .singleViewPartial
-                } else {
-                    viewCoverage = .singleViewMinimal
-                }
-            } catch VolumeError.lidarCoverageTooLow(let classes) {
+            let outcome = HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
+                probabilities: nadirSeg.probabilities,
+                argmax: nadirSeg.argmax,
+                depth: depth,
+                intrinsics: nadir.intrinsics,
+                supportPlane: plane,
+                beta: beta,
+                palette: palette
+            ))
+            guard let est = outcome.estimate else {
                 #if DEBUG
                 logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
-                throw EstimationFailure.lidarCoverageTooLow(classes)
-            } catch VolumeError.noFoodVolumeRecovered {
-                #if DEBUG
-                logStageEnd(name: "Volume", startedAt: volumeStartedAt)
-                pipelineSignposter.endInterval("Volume", volumeInterval)
-                #endif
-                throw EstimationFailure.noFoodVolumeRecovered
+                throw Self.estimationFailure(fromVolumeRefusal: outcome.refusal)
+            }
+            pbVolumes = PipelineBridges.pbVolumeResult(singleView: est)
+            interClassOcclusion = est.interClassOcclusionDetected
+            if interClassOcclusion {
+                delegate?.didDetectInterClassOcclusion()
+            }
+            let minCov = est.lidarCoverageFraction.values.min() ?? 1
+            // Three-tier σ_view lookup for single-view per Decision 47.
+            // ≥0.80 → singleViewFull (0.90), 0.50–0.80 → singleViewPartial (0.60),
+            // 0.30–0.50 → singleViewMinimal (0.30). Below 0.30 the height-field
+            // integrator refuses (see HeightFieldEstimator.coverageRefuseFraction).
+            if minCov >= 0.80 {
+                viewCoverage = .singleViewFull
+            } else if minCov >= 0.50 {
+                viewCoverage = .singleViewPartial
+            } else {
+                viewCoverage = .singleViewMinimal
             }
 
         case .twoViewSfS:
@@ -360,31 +353,30 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.noFoodVolumeRecovered
             }
-            do {
-                let est = try VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
-                    grid: grid,
-                    view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
-                                         intrinsics: nadir.intrinsics),
-                    view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
-                                         intrinsics: oblique.intrinsics),
-                    transform1To2: t1to2,
-                    supportPlane: plane,
-                    matchedClasses: matching.matchedClasses,
-                    singleViewOnlyClassesView1: matching.singleViewOnly(view: 1),
-                    singleViewOnlyClassesView2: matching.singleViewOnly(view: 2),
-                    beta: beta,
-                    palette: palette
-                ))
-                pbVolumes = PipelineBridges.pbVolumeResult(twoView: est)
-                interClassOcclusion = false
-                viewCoverage = matching.singleViewOnlyClasses.isEmpty ? .twoViewFull : .twoViewPartial
-            } catch VolumeError.noFoodVolumeRecovered {
+            let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
+                grid: grid,
+                view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
+                                     intrinsics: nadir.intrinsics),
+                view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
+                                     intrinsics: oblique.intrinsics),
+                transform1To2: t1to2,
+                supportPlane: plane,
+                matchedClasses: matching.matchedClasses,
+                singleViewOnlyClassesView1: matching.singleViewOnly(view: 1),
+                singleViewOnlyClassesView2: matching.singleViewOnly(view: 2),
+                beta: beta,
+                palette: palette
+            ))
+            guard let est = outcome.estimate else {
                 #if DEBUG
                 logStageEnd(name: "Volume", startedAt: volumeStartedAt)
                 pipelineSignposter.endInterval("Volume", volumeInterval)
                 #endif
-                throw EstimationFailure.noFoodVolumeRecovered
+                throw Self.estimationFailure(fromVolumeRefusal: outcome.refusal)
             }
+            pbVolumes = PipelineBridges.pbVolumeResult(twoView: est)
+            interClassOcclusion = false
+            viewCoverage = matching.singleViewOnlyClasses.isEmpty ? .twoViewFull : .twoViewPartial
         }
         #if DEBUG
         logStageEnd(name: "Volume", startedAt: volumeStartedAt)
@@ -580,6 +572,23 @@ public struct Pipeline: Sendable {
             case .iterationDiverged:
                 throw EstimationFailure.iterationDiverged
             }
+        }
+    }
+
+    // Maps a volume-stage refusal to the pipeline-level failure. The two typed
+    // refusals keep their pre-existing EstimationFailure mapping; any other
+    // VolumeError propagates unchanged (matching the previous uncaught-throw
+    // behaviour). `nil` cannot occur when `estimate` is nil per the
+    // VolumeOutcome contract; noFoodVolumeRecovered is the conservative
+    // fallback if it ever does.
+    private static func estimationFailure(fromVolumeRefusal refusal: VolumeError?) -> any Error {
+        switch refusal {
+        case .lidarCoverageTooLow(let classes):
+            return EstimationFailure.lidarCoverageTooLow(classes)
+        case .noFoodVolumeRecovered, nil:
+            return EstimationFailure.noFoodVolumeRecovered
+        case .some(let other):
+            return other
         }
     }
 

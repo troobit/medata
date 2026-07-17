@@ -79,7 +79,7 @@ final class TwoViewObliqueCarveDiagnosticTests: XCTestCase {
             supportPlane: plane,
             gravityCamera: Vec3(0, 0, -1)
         ))
-        return try VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
+        let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
             grid: grid,
             view1: VoxelCarveView(probabilities: probs, intrinsics: intrinsics),
             view2: VoxelCarveView(probabilities: probs, intrinsics: intrinsics),
@@ -91,6 +91,8 @@ final class TwoViewObliqueCarveDiagnosticTests: XCTestCase {
             beta: BetaCorrection(),
             palette: palette
         ))
+        if let refusal = outcome.refusal { throw refusal }
+        return try XCTUnwrap(outcome.estimate)
     }
 
     // Coincident cameras → world-consistent silhouettes → healthy volume.
