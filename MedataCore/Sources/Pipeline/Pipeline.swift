@@ -73,9 +73,53 @@ public struct Pipeline: Sendable {
     // Main entry point per design §2.4.
     // `mode` is the user-selected CaptureMode from §2.3 / Decision 35; it drives
     // volume-estimator dispatch and is copied to MealRecord.capturePath.
+    //
+    // Outcome recording (snaq-parity lane A): every non-cancelled attempt —
+    // success, typed refusal, or non-typed error — stamps its outcome into the
+    // diagnostics accumulator and hands exactly one immutable snapshot to
+    // `CaptureFlowDelegate.didCompleteAttempt`. Cancellation is not an outcome:
+    // a user-abandoned capture produces no record so benchmark completion
+    // rates are not depressed by abandonment.
     public func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
+        let diagnostics = PipelineDiagnostics(
+            capturePath: mode.capturePath.rawValue,
+            modelVersion: segmenterSource,
+            timestampMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        do {
+            let record = try await runEstimation(
+                captureResult: captureResult, mode: mode, diagnostics: diagnostics
+            )
+            delegate?.didCompleteAttempt(diagnostics.snapshot())
+            return record
+        } catch let error where error is CancellationError {
+            throw error
+        } catch let failure as EstimationFailure {
+            diagnostics.stampFailure(failure)
+            delegate?.didCompleteAttempt(diagnostics.snapshot())
+            throw failure
+        } catch {
+            // Non-typed error: the underlying description is preserved in the
+            // record, in Release builds too (Req 3.3).
+            diagnostics.stampError(error)
+            delegate?.didCompleteAttempt(diagnostics.snapshot())
+            throw error
+        }
+    }
+
+    // The pipeline body proper: stages C–L. Stage helpers append measurements
+    // to `diagnostics` as they run; the success outcome is stamped here (the
+    // per-class decomposition needs the macros/confidence values), failures are
+    // stamped by `estimate`'s catch ladder.
+    private func runEstimation(
+        captureResult: CaptureResult, mode: CaptureMode, diagnostics: PipelineDiagnostics
+    ) async throws -> MealRecord {
         let nadir = captureResult.nadirFrame
         let capturePath = mode.capturePath
+        diagnostics.recordTilt(
+            nadirDeg: captureResult.nadirAngleAtCaptureDeg,
+            obliqueDeg: captureResult.obliqueAngleAtCaptureDeg
+        )
         #if DEBUG
         // estimate.start augmented with maskAgeMs (Req 4.5 erratum / Decision 15).
         let maskAgeMs = captureResult.preShutterMaskAgeMs ?? -1
@@ -118,6 +162,8 @@ public struct Pipeline: Sendable {
                 // not abort the estimate when LiDAR depth is present — LiDAR
                 // supplies both scale and support plane. Continue with cardPose
                 // absent; the post-block logStageEnd fires the single stage-end.
+                // The fallback flag is recorded in Release too (Req 3.2).
+                diagnostics.recordCardFallback()
                 #if DEBUG
                 supportPlaneLog.info("event=scale.card_fallback reason=degenerateCardPose")
                 #endif
@@ -125,6 +171,7 @@ public struct Pipeline: Sendable {
             } catch CardPoseError.cardTooOblique where nadir.depth != nil {
                 // LiDAR-first fallback (Decision 1): same as above for an oblique
                 // card. Continue on the LiDAR-only path.
+                diagnostics.recordCardFallback()
                 #if DEBUG
                 supportPlaneLog.info("event=scale.card_fallback reason=cardTooOblique")
                 #endif
@@ -171,7 +218,8 @@ public struct Pipeline: Sendable {
                 nadir: nadir,
                 cardPose: cardPose,
                 corners: corners,
-                preShutterFoodMask: captureResult.preShutterFoodMask
+                preShutterFoodMask: captureResult.preShutterFoodMask,
+                diagnostics: diagnostics
             )
         } catch {
             #if DEBUG
@@ -196,6 +244,7 @@ public struct Pipeline: Sendable {
             colourWidth: nadir.imageWidth,
             colourHeight: nadir.imageHeight
         )
+        diagnostics.recordFoodRegionCoverage(percent: foodRegionCoveragePercent)
 
         // ── Stage E: MetricScale ─────────────────────────────────────────────────
         #if DEBUG
@@ -223,6 +272,7 @@ public struct Pipeline: Sendable {
             #endif
             throw EstimationFailure.noScaleAvailable
         }
+        diagnostics.recordScale(source: Self.scaleSourceLabel(scale), cardFallback: false)
         #if DEBUG
         logStageEnd(name: "MetricScale", startedAt: scaleStartedAt)
         pipelineSignposter.endInterval("MetricScale", scaleInterval)
@@ -248,6 +298,7 @@ public struct Pipeline: Sendable {
         logStageEnd(name: "Segmentation", startedAt: segStartedAt)
         pipelineSignposter.endInterval("Segmentation", segInterval)
         #endif
+        diagnostics.recordSegmentation(view: .nadir, measurements: Self.segmentationMeasurements(nadirSeg))
         let palette = nadirSeg.probabilities.palette
 
         // Fail-closed near-empty-mask gate (estimation-runtime-consistency):
@@ -288,6 +339,9 @@ public struct Pipeline: Sendable {
                 beta: beta,
                 palette: palette
             ))
+            // Stats stamped BEFORE the refusal is mapped to a throw, so the
+            // "no volume" record carries its causal measurements (Req 3.1).
+            diagnostics.recordVolume(stats: outcome.stats)
             guard let est = outcome.estimate else {
                 #if DEBUG
                 logStageEnd(name: "Volume", startedAt: volumeStartedAt)
@@ -331,6 +385,7 @@ public struct Pipeline: Sendable {
                 #endif
                 throw EstimationFailure.noFoodPixels
             }
+            diagnostics.recordSegmentation(view: .oblique, measurements: Self.segmentationMeasurements(obliqueSeg))
             let matching = MaskMatcher.match(
                 view1: nadirSeg.argmax,
                 view2: obliqueSeg.argmax,
@@ -367,6 +422,8 @@ public struct Pipeline: Sendable {
                 beta: beta,
                 palette: palette
             ))
+            // Stats stamped BEFORE the refusal is mapped to a throw (Req 3.1).
+            diagnostics.recordVolume(stats: outcome.stats)
             guard let est = outcome.estimate else {
                 #if DEBUG
                 logStageEnd(name: "Volume", startedAt: volumeStartedAt)
@@ -468,6 +525,34 @@ public struct Pipeline: Sendable {
         pipelineSignposter.endInterval("Persistence", persistenceInterval)
         #endif
 
+        // Success outcome: per-class decomposition (Req 3.4) + σ terms, copied
+        // into the record so a later deleteMeal cannot hollow the attribution.
+        let decomposition = macros.perClass
+            .map { name, perClass in
+                EstimationAttemptRecord.ClassDecomposition(
+                    className: name,
+                    volumeCm3: perClass.volumeCm3,
+                    massG: perClass.massG,
+                    carbsG: perClass.carbsG,
+                    beta: perClass.betaUsed,
+                    densitySource: perClass.densitySource,
+                    coefficientSource: perClass.coefficientSource
+                )
+            }
+            .sorted { $0.className < $1.className }
+        diagnostics.stampSuccess(
+            mealID: record.id.uuidString,
+            decomposition: decomposition,
+            sigma: EstimationAttemptRecord.SigmaTerms(
+                sigmaMeal: confidence.sigmaMeal,
+                sigmaScale: confidence.sigmaScale,
+                sigmaSeg: confidence.sigmaSeg,
+                sigmaPlane: confidence.sigmaGeom.sigmaPlane,
+                sigmaView: confidence.sigmaGeom.sigmaView,
+                sigmaTilt: confidence.sigmaGeom.sigmaTilt
+            )
+        )
+
         delegate?.didProduceEstimate(record)
 
         #if DEBUG
@@ -503,11 +588,15 @@ public struct Pipeline: Sendable {
     // `EstimationFailure` cases used by the rest of `estimate(_:)`. The empty-
     // mask gate (Decision 2) lives inside the fitter so the card-only path
     // also refuses with `noFoodPixels` when the pre-shutter mask is absent.
+    // Fit stats arrive as returned values on both exits (snaq-parity Req 3.1;
+    // previously the `LiDARPlaneFitter.debugLast*` statics) and are recorded
+    // into the diagnostics accumulator before any throw.
     private func fitSupportPlane(
         nadir: RawFrame,
         cardPose: CardPose?,
         corners: [PixelCorner]?,
-        preShutterFoodMask: BinaryMask?
+        preShutterFoodMask: BinaryMask?,
+        diagnostics: PipelineDiagnostics
     ) throws -> SupportPlane {
         #if DEBUG
         supportPlaneLog.info(
@@ -517,13 +606,19 @@ public struct Pipeline: Sendable {
             """
         )
         #endif
-        do {
-            let plane = try supportPlaneFitter.fit(
-                nadir: nadir,
-                cardPose: cardPose,
-                corners: corners,
-                preShutterFoodMask: preShutterFoodMask
-            )
+        let outcome = supportPlaneFitter.fitOutcome(
+            nadir: nadir,
+            cardPose: cardPose,
+            corners: corners,
+            preShutterFoodMask: preShutterFoodMask
+        )
+        let stats = outcome.stats
+        diagnostics.recordSupportPlane(
+            candidateCount: stats.candidatePointCount,
+            inlierCount: stats.inlierCount,
+            residualMm: stats.residualMm
+        )
+        if let plane = outcome.plane {
             #if DEBUG
             supportPlaneLog.info(
                 """
@@ -533,46 +628,70 @@ public struct Pipeline: Sendable {
             )
             #endif
             return plane
-        } catch let error as SupportPlaneError {
-            // Failure-path trace. `failure=` carries the EXACT SupportPlaneError
-            // case so `noLidarPoints` (scan starved → remapped below to
-            // lidarFitDegenerate) is distinguishable from a genuine
-            // collinear-inlier `lidarFitDegenerate`. The candidate/inlier counts
-            // and food bbox come from the LiDAR fitter's counters. Emitted in
-            // Release too — this is the only on-device window into a
-            // `lidarFitDegenerate` failure without a Debug/stub build.
-            // Bug `lidar-plane-fit-degenerate-on-clean-capture`.
-            supportPlaneLog.info(
-                """
-                event=supportplane.end success=false \
-                failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
-                candidates=\(LiDARPlaneFitter.debugLastCandidatePointCount, privacy: .public) \
-                inliers=\(LiDARPlaneFitter.debugLastInlierCount, privacy: .public) \
-                residual_mm=\(LiDARPlaneFitter.debugLastResidualMm, privacy: .public) \
-                bboxX=\(LiDARPlaneFitter.debugLastFoodBBoxX, privacy: .public) \
-                bboxY=\(LiDARPlaneFitter.debugLastFoodBBoxY, privacy: .public) \
-                bboxW=\(LiDARPlaneFitter.debugLastFoodBBoxW, privacy: .public) \
-                bboxH=\(LiDARPlaneFitter.debugLastFoodBBoxH, privacy: .public)
-                """
-            )
-            switch error {
-            case .emptyFoodMask:
-                throw EstimationFailure.noFoodPixels
-            case .lidarFitDegenerate:
-                throw EstimationFailure.lidarFitDegenerate
-            case .lidarFitResidualTooHigh:
-                throw EstimationFailure.lidarFitResidualTooHigh
-            case .noLidarPoints:
-                // Pre-existing card-only fallback when LiDAR cannot produce a fit
-                // and a card pose is unavailable; otherwise the fitter raises
-                // `noLowerSilhouetteEdges` which we map to `noScaleAvailable`.
-                throw EstimationFailure.lidarFitDegenerate
-            case .noLowerSilhouetteEdges:
-                throw EstimationFailure.noScaleAvailable
-            case .iterationDiverged:
-                throw EstimationFailure.iterationDiverged
-            }
         }
+        let error = outcome.refusal ?? .noLidarPoints
+        // Failure-path trace. `failure=` carries the EXACT SupportPlaneError
+        // case so `noLidarPoints` (scan starved → remapped below to
+        // lidarFitDegenerate) is distinguishable from a genuine
+        // collinear-inlier `lidarFitDegenerate`. The candidate/inlier counts
+        // and food bbox come from the fit outcome's stats. Emitted in
+        // Release too — this is the only on-device window into a
+        // `lidarFitDegenerate` failure without a Debug/stub build.
+        // Bug `lidar-plane-fit-degenerate-on-clean-capture`.
+        supportPlaneLog.info(
+            """
+            event=supportplane.end success=false \
+            failure=\(Self.supportPlaneFailureLabel(error), privacy: .public) \
+            candidates=\(stats.candidatePointCount, privacy: .public) \
+            inliers=\(stats.inlierCount, privacy: .public) \
+            residual_mm=\(stats.residualMm, privacy: .public) \
+            bboxX=\(stats.foodBBoxX, privacy: .public) \
+            bboxY=\(stats.foodBBoxY, privacy: .public) \
+            bboxW=\(stats.foodBBoxW, privacy: .public) \
+            bboxH=\(stats.foodBBoxH, privacy: .public)
+            """
+        )
+        switch error {
+        case .emptyFoodMask:
+            throw EstimationFailure.noFoodPixels
+        case .lidarFitDegenerate:
+            throw EstimationFailure.lidarFitDegenerate
+        case .lidarFitResidualTooHigh:
+            throw EstimationFailure.lidarFitResidualTooHigh
+        case .noLidarPoints:
+            // Pre-existing card-only fallback when LiDAR cannot produce a fit
+            // and a card pose is unavailable; otherwise the fitter raises
+            // `noLowerSilhouetteEdges` which we map to `noScaleAvailable`.
+            throw EstimationFailure.lidarFitDegenerate
+        case .noLowerSilhouetteEdges:
+            throw EstimationFailure.noScaleAvailable
+        case .iterationDiverged:
+            throw EstimationFailure.iterationDiverged
+        }
+    }
+
+    // Resolved-scale label for the outcome record (Req 3.1: "the resolved
+    // scale source").
+    private static func scaleSourceLabel(_ scale: MetricScale) -> String {
+        switch (scale.cardScaleAvailable, scale.lidarScaleAvailable) {
+        case (true, true): return "card+lidar"
+        case (false, true): return "lidar"
+        case (true, false): return "card"
+        case (false, false): return "none"
+        }
+    }
+
+    // Per-view segmentation measurements for the outcome record: coverage plus
+    // the sub-stage clocks from CoreMLSegmenter (Req 4.1).
+    private static func segmentationMeasurements(
+        _ seg: SegmentationResult
+    ) -> EstimationAttemptRecord.SegmentationMeasurements {
+        EstimationAttemptRecord.SegmentationMeasurements(
+            foodCoveragePercent: seg.foodCoveragePercent,
+            preprocessMs: seg.timings?.preprocessMs ?? 0,
+            predictionMs: seg.timings?.predictionMs ?? 0,
+            argmaxMs: seg.timings?.argmaxMs ?? 0
+        )
     }
 
     // Maps a volume-stage refusal to the pipeline-level failure. The two typed

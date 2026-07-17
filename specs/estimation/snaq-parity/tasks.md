@@ -37,7 +37,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.6](requirements.md#2.6), [3.4](requirements.md#3.4)
 
-- [ ] 5. Wire Pipeline outcome stamping, snapshot handoff, and stage measurement collection <!-- id:isuh2pw -->
+- [x] 5. Wire Pipeline outcome stamping, snapshot handoff, and stage measurement collection <!-- id:isuh2pw -->
   - estimate body wrapped in do/catch stamping outcome (incl. underlying description of non-typed errors); CancellationError discarded, no record; defer hands snapshot to CaptureFlowDelegate.didCompleteAttempt (CaptureFlowDelegate.swift:7)
   - SegmentationResult gains timings (preprocess/prediction/argmax) populated in CoreMLSegmenter.segment; Pipeline records per invocation — two-view path calls segment twice (Pipeline.swift:239,333)
   - Card-fallback flag promoted from the DEBUG-only branch (Pipeline.swift:116-131); LiDARPlaneFitter.debugLast* statics become returned values; scale source and tilt recorded

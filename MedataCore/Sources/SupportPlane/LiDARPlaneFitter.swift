@@ -8,29 +8,6 @@ import PortableContracts
 // gravity. RNG is seeded by hashing the depth bytes (per §6.0) so two runs on the
 // same fixture produce identical inliers.
 public enum LiDARPlaneFitter {
-    // Lightweight counters exposed for the Shutter-channel structured-log
-    // instrumentation at `Pipeline.fitSupportPlane`. Populated by `fit(_:)`
-    // before any throw or return. Emitted in Release too (a handful of integer
-    // writes) so on-device `lidarFitDegenerate` failures can be diagnosed
-    // without a Debug/stub build.
-    public nonisolated(unsafe) static var debugLastCandidatePointCount: Int = 0
-    public nonisolated(unsafe) static var debugLastInlierCount: Int = 0
-    // Food-region bbox in colour/mask pixel coords (min corner + size). Populated
-    // by `collectCandidatePoints`; -1 sentinel means no bbox was resolved (empty
-    // mask). Lets the Pipeline-side `supportplane.end success=false` log report
-    // whether a degenerate bbox starved the four-edge scan vs. a genuinely
-    // collinear inlier set. Bug `lidar-plane-fit-degenerate-on-clean-capture`.
-    public nonisolated(unsafe) static var debugLastFoodBBoxX: Int = -1
-    public nonisolated(unsafe) static var debugLastFoodBBoxY: Int = -1
-    public nonisolated(unsafe) static var debugLastFoodBBoxW: Int = -1
-    public nonisolated(unsafe) static var debugLastFoodBBoxH: Int = -1
-    // Inlier RMS residual (mm) of the last fit, populated at step 4 before the
-    // residual gate. `-1` sentinel means the fit refused BEFORE residual was
-    // computed (e.g. `noLidarPoints`/`lidarFitDegenerate`) — so the
-    // `supportplane.end` trace distinguishes a residual-too-high refusal (a
-    // real-but-noisy plane) from a point-starvation or degeneracy refusal.
-    public nonisolated(unsafe) static var debugLastResidualMm: Float = -1
-
     // Tunable parameters per design §6.2 ("Parameter justification").
     static let lowerEdgeBandMm: Float = 30
     // τ_conf: minimum normalised LiDAR confidence for a table pixel to seed the
@@ -91,16 +68,23 @@ public enum LiDARPlaneFitter {
         }
     }
 
+    // Throwing convenience preserving the pre-outcome call shape for callers
+    // that do not need the fit stats (harness, tests).
     public static func fit(_ inputs: Inputs) throws -> SupportPlane {
+        let outcome = fitOutcome(inputs)
+        if let plane = outcome.plane { return plane }
+        throw outcome.refusal ?? SupportPlaneError.noLidarPoints
+    }
+
+    public static func fitOutcome(_ inputs: Inputs) -> SupportPlaneFitOutcome {
         // Step 1: collect candidate 3-D points in the colour-image lower-edge band.
-        debugLastFoodBBoxX = -1; debugLastFoodBBoxY = -1
-        debugLastFoodBBoxW = -1; debugLastFoodBBoxH = -1
-        debugLastResidualMm = -1
-        let points = try collectCandidatePoints(inputs)
-        debugLastCandidatePointCount = points.count
-        debugLastInlierCount = 0
+        // Counters accumulate into `stats`, returned on both exits (snaq-parity
+        // Req 3.1 — previously the `debugLast*` statics).
+        var stats = SupportPlaneFitStats()
+        let points = collectCandidatePoints(inputs, stats: &stats)
+        stats.candidatePointCount = points.count
         guard points.count >= minPoints else {
-            throw SupportPlaneError.noLidarPoints
+            return SupportPlaneFitOutcome(plane: nil, stats: stats, refusal: .noLidarPoints)
         }
 
         // Step 2: RANSAC. Deterministic seed from the depth bytes (§6.0).
@@ -112,17 +96,26 @@ public enum LiDARPlaneFitter {
             gravity: gravity,
             rng: &rng
         )
-        debugLastInlierCount = bestInliers.count
+        stats.inlierCount = bestInliers.count
 
         guard bestInliers.count >= minPoints else {
-            throw SupportPlaneError.noLidarPoints
+            return SupportPlaneFitOutcome(plane: nil, stats: stats, refusal: .noLidarPoints)
         }
 
         // Step 3 + 5: least-squares refinement on inliers; stability gate σ_min/σ_max.
-        let (refinedNormal, refinedD) = try refine(
-            inliers: bestInliers.map { points[$0] },
-            seedNormal: bestNormal
-        )
+        let refinedNormal: Vec3
+        let refinedD: Float
+        do {
+            (refinedNormal, refinedD) = try refine(
+                inliers: bestInliers.map { points[$0] },
+                seedNormal: bestNormal
+            )
+        } catch {
+            return SupportPlaneFitOutcome(
+                plane: nil, stats: stats,
+                refusal: (error as? SupportPlaneError) ?? .lidarFitDegenerate
+            )
+        }
 
         // Step 3b (additive robustness, estimation-runtime-consistency): consensus
         // polish. The RANSAC winner's ±5 mm inlier band is anchored to a 3-point
@@ -158,27 +151,32 @@ public enum LiDARPlaneFitter {
             polishedNormal = nextNormal
             polishedD = nextD
         }
-        debugLastInlierCount = polishedInliers.count
+        stats.inlierCount = polishedInliers.count
 
         // Step 4: residual_mm = sqrt(mean(squared inlier signed-distances)).
         let residual = computeResidual(points: polishedInliers.map { points[$0] },
                                        normal: polishedNormal, d: polishedD)
-        debugLastResidualMm = residual
+        stats.residualMm = residual
         if residual > inputs.residualMaxMm {
-            throw SupportPlaneError.lidarFitResidualTooHigh
+            return SupportPlaneFitOutcome(
+                plane: nil, stats: stats, refusal: .lidarFitResidualTooHigh
+            )
         }
 
-        return SupportPlane(
+        let plane = SupportPlane(
             normal: polishedNormal,
             distanceMm: polishedD,
             residualMm: residual,
             convergedIterations: nil   // LiDAR fit per §3.3 sentinel
         )
+        return SupportPlaneFitOutcome(plane: plane, stats: stats, refusal: nil)
     }
 
     // MARK: – internals
 
-    static func collectCandidatePoints(_ inputs: Inputs) throws -> [Vec3] {
+    static func collectCandidatePoints(
+        _ inputs: Inputs, stats: inout SupportPlaneFitStats
+    ) -> [Vec3] {
         // Resample depth + confidence onto the colour-image grid (bilinear depth, NN
         // confidence). For each colour-image pixel in an edge band around the food
         // bbox where the pixel is OUTSIDE the food mask AND confidence/255 ≥ τ_conf,
@@ -224,10 +222,10 @@ public enum LiDARPlaneFitter {
         }
 
         guard let bbox = foodBBox(mask: mask) else { return [] }
-        debugLastFoodBBoxX = bbox.minX
-        debugLastFoodBBoxY = bbox.minY
-        debugLastFoodBBoxW = bbox.widthPx
-        debugLastFoodBBoxH = bbox.heightPx
+        stats.foodBBoxX = bbox.minX
+        stats.foodBBoxY = bbox.minY
+        stats.foodBBoxW = bbox.widthPx
+        stats.foodBBoxH = bbox.heightPx
 
         var points: [Vec3] = []
         let kc = inputs.colourIntrinsics
