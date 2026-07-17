@@ -233,7 +233,9 @@ final class EstimationLogModel {
 
     private static func fileStamp() -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_IE_POSIX")
+        // en_US_POSIX is the only canonical fixed-format locale (stable HH);
+        // this is a machine-format filename, not user copy.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return formatter.string(from: Date())
     }
@@ -335,10 +337,17 @@ enum LogExport {
     }
 }
 
+// Shared formatter — allocating a DateFormatter per row render is expensive.
+private enum RowTime {
+    static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_IE")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
+
 private func timeString(_ timestampMs: Int64) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_IE")
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .short
-    return formatter.string(from: Date(timeIntervalSince1970: Double(timestampMs) / 1000))
+    RowTime.formatter.string(from: Date(timeIntervalSince1970: Double(timestampMs) / 1000))
 }
