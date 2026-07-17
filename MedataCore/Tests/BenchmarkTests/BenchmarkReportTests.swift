@@ -188,6 +188,61 @@ struct BenchmarkReportComputeTests {
             && abs(report.rows[0].estimateCarbsG! - 30) < 1e-6)
     }
 
+    // MARK: - Undecodable estimates (excluded from scoring, never 0 g)
+
+    private func undecodableSuccess(
+        on meal: BenchmarkMeal, t: Int64, measurementsJSON: String
+    ) -> EstimationOutcome {
+        EstimationOutcome(
+            timestampMs: t,
+            outcome: "success",
+            failureJSON: nil,
+            measurementsJSON: measurementsJSON,
+            mealID: UUID(),
+            modelVersion: lineage,
+            benchmarkMealID: meal.id
+        )
+    }
+
+    @Test(
+        "a completed attempt whose estimate cannot decode is excluded, not scored as 0 g",
+        arguments: [
+            "not json at all",                  // malformed JSON
+            #"{"v":1}"#,                        // missing decomposition key
+            #"{"v":1,"decomposition":[]}"#      // empty decomposition
+        ]
+    )
+    func undecodableEstimateExcluded(measurementsJSON: String) {
+        let m = makeMeal(truth: 50)
+        let report = BenchmarkReport.compute(
+            meals: [m],
+            outcomes: [undecodableSuccess(on: m, t: 1, measurementsJSON: measurementsJSON)],
+            lineage: lineage
+        )
+        #expect(report.rows.count == 1)
+        #expect(report.rows[0].estimateCarbsG == nil)
+        #expect(!report.rows[0].completed)
+        #expect(report.completedMealCount == 0)
+        #expect(report.maeGrams == nil, "|0 − truth| must never leak into MAE")
+        #expect(report.undecodableAttemptCount == 1)
+    }
+
+    @Test("an undecodable latest attempt falls back to the next-latest decodable one")
+    func undecodableFallsBackToEarlierAttempt() {
+        let m = makeMeal(truth: 50)
+        let outcomes = [
+            success(on: m, t: 1, estimate: 40),
+            undecodableSuccess(on: m, t: 2, measurementsJSON: #"{"v":1,"decomposition":[]}"#)
+        ]
+        let report = BenchmarkReport.compute(meals: [m], outcomes: outcomes, lineage: lineage)
+        #expect(report.rows[0].completed)
+        #expect(report.rows[0].estimateCarbsG != nil
+            && abs(report.rows[0].estimateCarbsG! - 40) < 1e-6)
+        #expect(report.completedMealCount == 1)
+        #expect(report.maeGrams != nil && abs(report.maeGrams! - 10) < 1e-9)
+        #expect(report.undecodableAttemptCount == 1)
+    }
+
     // MARK: - Anchor block (Req 1.4)
 
     @Test("anchor constants carry the published SNAQ and reference figures")
@@ -218,10 +273,10 @@ struct BenchmarkReportComputeTests {
         #expect(report.anchorVerdict == .worseThanAnchor)
     }
 
-    @Test("verdict: within noise when the anchor sits inside MAE ± SE")
+    @Test("verdict: within noise when the anchor sits inside MAE ± 1.96 SE")
     func verdictWithinNoise() {
-        // Errors 3 and 23: MAE 13, sample SD √200 ≈ 14.14, SE = 10 —
-        // the 13.1 g anchor lies well inside the band.
+        // Errors 3 and 23: MAE 13, sample SD √200 ≈ 14.14, SE = 10, band
+        // 19.6 — the 13.1 g anchor lies well inside it.
         let a = makeMeal(name: "a", truth: 50)
         let b = makeMeal(name: "b", truth: 50)
         let outcomes = [
@@ -229,6 +284,34 @@ struct BenchmarkReportComputeTests {
             success(on: b, t: 2, estimate: 73)
         ]
         let report = BenchmarkReport.compute(meals: [a, b], outcomes: outcomes, lineage: lineage)
+        #expect(report.anchorVerdict == .withinNoiseOfAnchor)
+    }
+
+    @Test("the band is 1.96 standard errors, matching the 95% promotion standard")
+    func bandIsNinetyFivePercent() {
+        // Errors 5 and 11: MAE 8, SE = 3. At ±1 SE the anchor would read
+        // better (8 + 3 < 13.1); at 1.96 SE it does not (8 + 5.88 > 13.1).
+        let a = makeMeal(name: "a", truth: 50)
+        let b = makeMeal(name: "b", truth: 50)
+        let outcomes = [
+            success(on: a, t: 1, estimate: 55),
+            success(on: b, t: 2, estimate: 61)
+        ]
+        let report = BenchmarkReport.compute(meals: [a, b], outcomes: outcomes, lineage: lineage)
+        #expect(report.anchorVerdict == .withinNoiseOfAnchor)
+    }
+
+    @Test("a single completed meal never yields a hard verdict")
+    func singleMealIsIndeterminate() {
+        // One completed meal has SE = 0; even a 2 g error must not read as
+        // a confident better-than-anchor (Decision 15's n ≥ 2 gate).
+        let m = makeMeal(truth: 50)
+        let report = BenchmarkReport.compute(
+            meals: [m],
+            outcomes: [success(on: m, t: 1, estimate: 52)],
+            lineage: lineage
+        )
+        #expect(report.completedMealCount == 1)
         #expect(report.anchorVerdict == .withinNoiseOfAnchor)
     }
 

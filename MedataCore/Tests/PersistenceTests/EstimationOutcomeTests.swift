@@ -9,7 +9,9 @@ import XCTest
 // eviction bounds applied inside the insert's write transaction — 500
 // non-benchmark rows, 10 attempts per (benchmark_meal_id, model_version) —
 // with "newest" ordered by (timestamp, id) so eviction and latest-attempt
-// scoring stay deterministic under equal timestamps.
+// scoring stay deterministic under equal timestamps, and the group's latest
+// completed attempt exempt from eviction so a refusal run can never drop a
+// meal's scoring attempt.
 
 final class EstimationOutcomeTests: XCTestCase {
 
@@ -227,6 +229,36 @@ final class EstimationOutcomeTests: XCTestCase {
         XCTAssertEqual(outcomes.filter { $0.benchmarkMealID == mealB }.count, 1)
         XCTAssertTrue(outcomes.contains { $0.id == diagnostic.id },
                       "benchmark eviction never touches non-benchmark rows")
+    }
+
+    func testBenchmarkEvictionNeverEvictsTheLatestCompletedAttempt() async throws {
+        // One early success followed by a run of refusals long enough to push
+        // it out under plain oldest-first eviction: the group's latest
+        // completed attempt is exempt — it survives as the meal's scoring
+        // attempt while the group stays at the bound.
+        let meal = UUID()
+        let success = makeOutcome(
+            id: orderedUUID(0), timestampMs: 0,
+            outcome: "success", failureJSON: nil, mealID: UUID(),
+            modelVersion: "L1", benchmarkMealID: meal
+        )
+        try await store.saveEstimationOutcome(success)
+        for ordinal in 1...12 {
+            try await store.saveEstimationOutcome(makeOutcome(
+                id: orderedUUID(ordinal), timestampMs: Int64(ordinal),
+                modelVersion: "L1", benchmarkMealID: meal
+            ))
+        }
+
+        let outcomes = try await store.estimationOutcomes(limit: 100)
+        let group = outcomes.filter { $0.benchmarkMealID == meal }
+        XCTAssertEqual(group.count, 10, "the exempt row occupies a bound slot; still ≤ 10")
+        XCTAssertTrue(group.contains { $0.id == success.id },
+                      "the meal's only completed attempt survives the refusal run")
+        XCTAssertEqual(
+            group.filter { $0.outcome == "refused" }.map(\.timestampMs).min(), 4,
+            "the oldest non-exempt rows are the ones evicted"
+        )
     }
 
     func testBenchmarkEvictionBreaksTimestampTiesById() async throws {

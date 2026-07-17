@@ -19,10 +19,10 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     // decoder accepts rows written by any earlier schema.
     public static let currentSchemaVersion = 1
 
-    public enum Outcome: String, Codable, Sendable {
-        case success
-        case refused
-    }
+    // Shared vocabulary with the `estimation_outcomes.outcome` column and
+    // the benchmark-report filters — one definition, so the producer and its
+    // consumers cannot drift apart on the stored strings.
+    public typealias Outcome = EstimationOutcomeKind
 
     // Failure encoding {domain, case, payload}. `domain` distinguishes
     // pipeline refusals ("estimation") from capture-stage refusals ("capture",

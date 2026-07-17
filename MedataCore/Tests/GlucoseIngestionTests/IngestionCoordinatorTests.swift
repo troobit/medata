@@ -267,7 +267,7 @@ private struct ThrowingPersistenceStore: PersistenceStore {
         fatalError("unused")
     }
     func saveBenchmarkMeal(
-        _ meal: BenchmarkMeal, carbsPer100g: (String) -> Double?
+        _ meal: BenchmarkMeal, carbsPer100g: (String, String) -> Double?
     ) async throws {
         fatalError("unused")
     }

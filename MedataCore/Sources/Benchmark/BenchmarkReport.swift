@@ -5,14 +5,17 @@ import Persistence
 // design lane B). `compute` is a pure, deterministic function of
 // (meals, outcomes, lineage): attempt-vs-meal semantics per Decision 9 —
 // a meal counts completed under a lineage when at least one attempt under it
-// completed; the meal's error uses the LATEST completed attempt with ties on
-// timestamp broken by id (matching store eviction order); refused attempts
-// are counted, never excluded (Req 1.5).
+// completed AND its estimate decodes; the meal's error uses the LATEST such
+// attempt with ties on timestamp broken by id (matching store eviction
+// order). A completed attempt whose measurements JSON yields no estimate is
+// excluded from scoring — never a silent 0 g — and surfaced via
+// `undecodableAttemptCount`; refused attempts are counted, never excluded
+// (Req 1.5).
 
 public struct Report: Sendable, Equatable {
     // One attempted meal under the lineage. `estimateCarbsG` sums the
     // per-class decomposition of the scoring attempt; nil while the meal has
-    // never completed.
+    // no decodable completed attempt.
     public struct MealRow: Sendable, Equatable {
         public let mealID: UUID
         public let name: String
@@ -38,9 +41,12 @@ public struct Report: Sendable, Equatable {
     }
 
     // Comparison against the SNAQ anchor (Req 1.4). "Within noise" means the
-    // anchor lies inside MAE ± one standard error of our own per-meal
-    // absolute errors — the band is derived from observed dispersion, not a
-    // fixed tolerance, honouring the note's order-of-magnitude caveat.
+    // anchor lies inside MAE ± 1.96 standard errors (~95%, matching the
+    // one-sided 95% promotion standard — Decision 15) of our own per-meal
+    // absolute errors, OR fewer than two meals completed (SE is meaningless
+    // at n = 1, so no hard verdict is honest). The band is derived from
+    // observed dispersion, not a fixed tolerance, honouring the note's
+    // order-of-magnitude caveat.
     public enum AnchorVerdict: String, Sendable {
         case betterThanAnchor
         case withinNoiseOfAnchor
@@ -61,6 +67,10 @@ public struct Report: Sendable, Equatable {
     public let meanAttemptsPerMeal: Double?
     public let totalAttemptCount: Int
     public let refusedAttemptCount: Int  // Req 1.5: refusals stay visible
+    // Completed attempts whose measurements JSON yields no estimate
+    // (malformed, missing decomposition, or an empty one) — excluded from
+    // scoring rather than contributing |0 − truth| to MAE.
+    public let undecodableAttemptCount: Int
     public let rows: [MealRow]
     // Req 1.6: N ≥ 20 AND every staple-floor class present in the attempted
     // meal set. Absent staples are named so a below-floor report states why.
@@ -72,7 +82,8 @@ public struct Report: Sendable, Equatable {
         lineage: String, mealCount: Int, completedMealCount: Int,
         completionRate: Double, maeGrams: Double?, mapePercent: Double?,
         within10gShare: Double?, meanAttemptsPerMeal: Double?,
-        totalAttemptCount: Int, refusedAttemptCount: Int, rows: [MealRow],
+        totalAttemptCount: Int, refusedAttemptCount: Int,
+        undecodableAttemptCount: Int = 0, rows: [MealRow],
         headlineValid: Bool, missingStaples: [String], anchorVerdict: AnchorVerdict
     ) {
         self.lineage = lineage
@@ -85,6 +96,7 @@ public struct Report: Sendable, Equatable {
         self.meanAttemptsPerMeal = meanAttemptsPerMeal
         self.totalAttemptCount = totalAttemptCount
         self.refusedAttemptCount = refusedAttemptCount
+        self.undecodableAttemptCount = undecodableAttemptCount
         self.rows = rows
         self.headlineValid = headlineValid
         self.missingStaples = missingStaples
@@ -114,14 +126,21 @@ public enum BenchmarkReport {
         // a created-but-never-attempted meal is not part of the lineage's
         // denominator (Decision 9).
         var rows: [Report.MealRow] = []
+        var undecodableAttempts = 0
         for meal in meals {
             guard let attempts = attemptsByMeal[meal.id] else { continue }
-            let scoring = attempts
-                .filter { $0.outcome == "success" }
-                .max { lhs, rhs in
-                    (lhs.timestampMs, lhs.id.uuidString) < (rhs.timestampMs, rhs.id.uuidString)
+            // Completed attempts latest-first; the scoring attempt is the
+            // first whose estimate decodes, so an undecodable latest attempt
+            // falls back to the next-latest decodable one instead of scoring
+            // a silent 0 g.
+            let estimates = attempts
+                .filter { $0.outcome == EstimationOutcomeKind.success.rawValue }
+                .sorted { lhs, rhs in
+                    (lhs.timestampMs, lhs.id.uuidString) > (rhs.timestampMs, rhs.id.uuidString)
                 }
-            let estimate = scoring.map(estimateCarbsG(of:))
+                .map(estimateCarbsG(of:))
+            undecodableAttempts += estimates.filter { $0 == nil }.count
+            let estimate = estimates.compactMap { $0 }.first
             rows.append(Report.MealRow(
                 mealID: meal.id,
                 name: meal.name,
@@ -129,7 +148,7 @@ public enum BenchmarkReport {
                 estimateCarbsG: estimate,
                 absoluteErrorG: estimate.map { abs($0 - meal.truthCarbsG) },
                 attemptCount: attempts.count,
-                completed: scoring != nil
+                completed: estimate != nil
             ))
         }
 
@@ -139,7 +158,7 @@ public enum BenchmarkReport {
         let totalAttempts = rows.reduce(0) { $0 + $1.attemptCount }
         let refusedAttempts = attemptsByMeal.values
             .joined()
-            .filter { $0.outcome == "refused" }
+            .filter { $0.outcome == EstimationOutcomeKind.refused.rawValue }
             .count
 
         let mae = errors.isEmpty ? nil : errors.reduce(0, +) / Double(errors.count)
@@ -173,6 +192,7 @@ public enum BenchmarkReport {
                 ? nil : Double(totalAttempts) / Double(mealCount),
             totalAttemptCount: totalAttempts,
             refusedAttemptCount: refusedAttempts,
+            undecodableAttemptCount: undecodableAttempts,
             rows: rows,
             headlineValid: mealCount >= headlineMealFloor && missingStaples.isEmpty,
             missingStaples: missingStaples,
@@ -192,28 +212,35 @@ public enum BenchmarkReport {
         let decomposition: [DecompositionEntry]?
     }
 
-    private static func estimateCarbsG(of outcome: EstimationOutcome) -> Double {
-        let envelope = try? JSONDecoder().decode(
-            MeasurementsEnvelope.self, from: Data(outcome.measurementsJSON.utf8)
-        )
-        return (envelope?.decomposition ?? []).reduce(0) { $0 + $1.carbsG }
+    // Nil when the JSON is malformed or the decomposition is missing/empty —
+    // such an attempt must never score as a 0 g estimate.
+    private static func estimateCarbsG(of outcome: EstimationOutcome) -> Double? {
+        guard
+            let envelope = try? JSONDecoder().decode(
+                MeasurementsEnvelope.self, from: Data(outcome.measurementsJSON.utf8)
+            ),
+            let decomposition = envelope.decomposition,
+            !decomposition.isEmpty
+        else { return nil }
+        return decomposition.reduce(0) { $0 + $1.carbsG }
     }
 
+    // Band: MAE ± 1.96 standard errors (~95%), consistent with the one-sided
+    // 95% promotion standard; the anchor's own sampling noise is consciously
+    // ignored (Decision 15). Hard better/worse verdicts additionally require
+    // n ≥ 2 — a single completed meal has SE = 0 and must not read as a
+    // confident comparison.
     private static func anchorVerdict(errors: [Double]) -> Report.AnchorVerdict {
         guard !errors.isEmpty else { return .insufficientData }
+        guard errors.count >= 2 else { return .withinNoiseOfAnchor }
         let n = Double(errors.count)
         let mae = errors.reduce(0, +) / n
-        let standardError: Double
-        if errors.count >= 2 {
-            let variance = errors.reduce(0) { $0 + ($1 - mae) * ($1 - mae) } / (n - 1)
-            standardError = (variance / n).squareRoot()
-        } else {
-            standardError = 0
-        }
-        if mae + standardError < BenchmarkAnchors.snaqMAEGrams {
+        let variance = errors.reduce(0) { $0 + ($1 - mae) * ($1 - mae) } / (n - 1)
+        let band = 1.96 * (variance / n).squareRoot()
+        if mae + band < BenchmarkAnchors.snaqMAEGrams {
             return .betterThanAnchor
         }
-        if mae - standardError > BenchmarkAnchors.snaqMAEGrams {
+        if mae - band > BenchmarkAnchors.snaqMAEGrams {
             return .worseThanAnchor
         }
         return .withinNoiseOfAnchor

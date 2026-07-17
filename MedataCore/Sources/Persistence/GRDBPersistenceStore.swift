@@ -889,23 +889,66 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             // the id tie-break keeps eviction deterministic when attempts
             // share a millisecond.
             if let benchmarkMealID = outcome.benchmarkMealID {
-                try db.execute(
+                // The group's latest completed attempt is exempt: oldest-first
+                // eviction alone could drop a meal's ONLY success under a run
+                // of refusals, silently flipping the meal to refused-only in
+                // the report. The exempt row occupies one of the bound's
+                // slots, so the group never exceeds the bound.
+                let latestSuccessID = try String.fetchOne(
+                    db,
                     sql: """
-                        DELETE FROM estimation_outcomes
+                        SELECT id FROM estimation_outcomes
                         WHERE benchmark_meal_id = ? AND model_version = ?
-                          AND id NOT IN (
-                            SELECT id FROM estimation_outcomes
-                            WHERE benchmark_meal_id = ? AND model_version = ?
-                            ORDER BY timestamp DESC, id DESC
-                            LIMIT ?
-                          )
+                          AND outcome = ?
+                        ORDER BY timestamp DESC, id DESC
+                        LIMIT 1
                         """,
                     arguments: [
                         benchmarkMealID.uuidString, outcome.modelVersion,
-                        benchmarkMealID.uuidString, outcome.modelVersion,
-                        EstimationOutcome.benchmarkAttemptsPerMealPerLineageBound
+                        EstimationOutcomeKind.success.rawValue
                     ]
                 )
+                if let latestSuccessID {
+                    try db.execute(
+                        sql: """
+                            DELETE FROM estimation_outcomes
+                            WHERE benchmark_meal_id = ? AND model_version = ?
+                              AND id <> ?
+                              AND id NOT IN (
+                                SELECT id FROM estimation_outcomes
+                                WHERE benchmark_meal_id = ? AND model_version = ?
+                                  AND id <> ?
+                                ORDER BY timestamp DESC, id DESC
+                                LIMIT ?
+                              )
+                            """,
+                        arguments: [
+                            benchmarkMealID.uuidString, outcome.modelVersion,
+                            latestSuccessID,
+                            benchmarkMealID.uuidString, outcome.modelVersion,
+                            latestSuccessID,
+                            EstimationOutcome.benchmarkAttemptsPerMealPerLineageBound - 1
+                        ]
+                    )
+                } else {
+                    try db.execute(
+                        sql: """
+                            DELETE FROM estimation_outcomes
+                            WHERE benchmark_meal_id = ? AND model_version = ?
+                              AND id NOT IN (
+                                SELECT id FROM estimation_outcomes
+                                WHERE benchmark_meal_id = ? AND model_version = ?
+                                ORDER BY timestamp DESC, id DESC
+                                LIMIT ?
+                              )
+                            """,
+                        arguments: [
+                            benchmarkMealID.uuidString, outcome.modelVersion,
+                            benchmarkMealID.uuidString, outcome.modelVersion,
+                            EstimationOutcome.benchmarkAttemptsPerMealPerLineageBound
+                        ]
+                    )
+                }
             } else {
                 try db.execute(
                     sql: """
@@ -944,7 +987,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     // MARK: - Benchmark meals (specs/estimation/snaq-parity lane B)
 
     public func saveBenchmarkMeal(
-        _ meal: BenchmarkMeal, carbsPer100g: (String) -> Double?
+        _ meal: BenchmarkMeal, carbsPer100g: (_ classID: String, _ edition: String) -> Double?
     ) async throws {
         // Validate and derive truth BEFORE the write: grams × carbs/100 g
         // summed over items — no volume, no β (Req 1.2). An unresolvable
@@ -955,7 +998,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             guard BenchmarkMeal.itemGramsRange.contains(item.grams) else {
                 throw PersistenceError.benchmarkGramsOutOfRange(item.grams)
             }
-            guard let carbs = carbsPer100g(item.classID) else {
+            guard let carbs = carbsPer100g(item.classID, meal.dbEdition) else {
                 throw PersistenceError.benchmarkClassUnresolvable(item.classID)
             }
             truthCarbsG += item.grams * carbs / 100.0
