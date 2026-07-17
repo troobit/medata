@@ -72,7 +72,13 @@ struct AppRoot: View {
 
     var body: some View {
         HomeView(
-            onCapture: { activeSheet = .capture },
+            onCapture: {
+                // The benchmark tag must not survive into a non-benchmark
+                // capture — clear it here in case a deferred benchmark
+                // present was dropped and left it set.
+                captureModel.benchmarkMealID = nil
+                activeSheet = .capture
+            },
             onIntake: { activeSheet = .intake },
             onDose: { showInsulinSheet = true },
             onRecords: { activeSheet = .records },
