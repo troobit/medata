@@ -50,12 +50,16 @@ def _channel_names() -> list[str]:
     return [c["name"] for c in channels]
 
 
-def per_class_iou_by_name(model, loader, device, names: list[str]) -> dict[str, float]:
+def per_class_iou_by_name(model, loader, device, names: list[str],
+                          forward_logits=None) -> dict[str, float]:
     """IoU per palette class over a split, keyed by name. Classes with no GT and
     no prediction are OMITTED (validation.shortfall treats an absent staple as
-    unprovable, which is the intended semantics)."""
+    unprovable, which is the intended semantics). ``forward_logits`` is the arch
+    registry's output normaliser (default: torchvision ``["out"]``)."""
     import torch
 
+    if forward_logits is None:
+        forward_logits = _load_sibling("archs").dict_out_logits
     num_classes = len(names)
     inter = torch.zeros(num_classes, dtype=torch.float64)
     union = torch.zeros(num_classes, dtype=torch.float64)
@@ -65,7 +69,7 @@ def per_class_iou_by_name(model, loader, device, names: list[str]) -> dict[str, 
         for images, masks in loader:
             images = images.to(device)
             masks = masks.to(device)
-            preds = model(images)["out"].argmax(dim=1)
+            preds = forward_logits(model, images).argmax(dim=1)
             for cls in range(num_classes):
                 pred_c = preds == cls
                 gt_c = masks == cls
@@ -106,9 +110,20 @@ def main(argv: list[str] | None = None) -> int:
     train = _load_sibling("train")
     export = _load_sibling("export")
     validation = _load_sibling("validation")
+    archs = _load_sibling("archs")
+
+    # Arch resolved from lineage (snaq-parity Decision 14) so a bake-off winner
+    # is judged under the same registry entry it trained with; a pre-registry
+    # lineage (or none yet) means the historical deeplab_mnv3.
+    arch = archs.DEFAULT_ARCH
+    lineage_path = Path(args.lineage)
+    if lineage_path.is_file():
+        arch = archs.arch_from_lineage(json.loads(lineage_path.read_text()))
+    arch_spec = archs.get(arch)
+    print(f"[validate] arch = {arch}")
 
     names = _channel_names()
-    model = export.load_checkpoint(len(names), args.checkpoint)
+    model = export.load_checkpoint(len(names), args.checkpoint, arch=arch)
     device = train._resolve_device(args.device)
     model.to(device)
     print(f"[validate] device = {device}")
@@ -118,7 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     loader = train._make_loader(dataset, args.batch_size, False, args.num_workers)
     print(f"[validate] {args.split} samples = {len(dataset)}")
 
-    iou = per_class_iou_by_name(model, loader, device, names)
+    iou = per_class_iou_by_name(model, loader, device, names,
+                                forward_logits=arch_spec.forward_logits)
     lineage = validation.update_lineage_file(iou, args.lineage)
     metrics = lineage["metrics"]
 
