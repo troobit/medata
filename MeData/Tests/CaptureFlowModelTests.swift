@@ -414,6 +414,7 @@ struct CaptureFlowModelTests {
             supportsLiDAR: true,
             databaseEdition: "test",
             paletteVersion: "test",
+            segmenterSource: "test",
             cameraAuthorisation: { .authorized },
             motionAvailable: { true }
         )
@@ -466,6 +467,7 @@ private func makeFixture(
         supportsLiDAR: supportsLiDAR,
         databaseEdition: "test",
         paletteVersion: "test",
+        segmenterSource: "test",
         cameraAuthorisation: auth,
         motionAvailable: { motionAvailable }
     )

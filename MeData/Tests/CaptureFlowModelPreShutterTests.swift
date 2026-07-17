@@ -400,6 +400,7 @@ private func makeFixture(
         supportsLiDAR: supportsLiDAR,
         databaseEdition: "test",
         paletteVersion: "test",
+        segmenterSource: "test",
         preShutterSegmenter: spy,
         cameraAuthorisation: { .authorized },
         motionAvailable: { true },

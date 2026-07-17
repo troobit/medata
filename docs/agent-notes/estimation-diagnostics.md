@@ -62,16 +62,24 @@ refusals (Req 3.1/3.2):
   the Shutter category and swallowed (MaskArtefactWriter precedent).
 - Pre-shutter error merge is a **per-attempt delta**: the producer's counter is
   lifetime-cumulative with no reset, so `preShutterErrorBaseline` is reset in
-  `capturePresented()` and advanced to the counter's value at each persist;
-  the persisted field is `max(0, count − baseline)`. Persisting the raw counter
+  `capturePresented()` and advanced to the counter's value at each *successful*
+  persist (a failed store write leaves the baseline so the window's errors roll
+  into the next attempt's delta instead of vanishing with the lost row); the
+  persisted field is `max(0, count − baseline)`. Persisting the raw counter
   would misattribute every earlier attempt's errors to the current one.
-- Capture-stage refusals in `performFlow`'s catch ladder (worldTrackingDegraded,
-  pre-pipeline `EstimationFailure`, non-typed errors) write slim records:
-  outcome refused, failure domain `"capture"`, no stage measurements,
-  `modelVersion` = the `segmenterSource` init parameter (App.swift passes
-  `Pipeline.segmenterSource`, now public). `CancellationError` writes nothing.
+- Capture-stage refusals in `performFlow`'s catch ladder (typed `CaptureError`
+  cases, pre-pipeline `EstimationFailure`, non-typed errors) write slim
+  records: outcome refused, failure domain `"capture"`, no stage measurements,
+  `modelVersion` = the `segmenterSource` init parameter — required, no default
+  (App.swift passes `Pipeline.segmenterSource`, now public). Every
+  `CaptureError` case records its real case name (`sessionNotStarted`,
+  `captureFailed` with its message as payload, …); only genuinely non-typed
+  errors record `internalError`. `CancellationError` writes nothing.
 - `CaptureFlowModel.benchmarkMealID: UUID?` tags rows while set (lane B sets
-  and clears it; nothing writes it yet as of task 8).
+  and clears it; nothing writes it yet as of task 8). The tag is frozen into
+  `inFlightBenchmarkMealID` at `beginCapture` and the persist path reads only
+  the frozen copy — the write-behind task must not pick up a value the
+  benchmark UI cleared/set after the attempt (wrong eviction population).
 
 ## Gotchas
 

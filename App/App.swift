@@ -272,6 +272,7 @@ final class UITestHarness {
             supportsLiDAR: true,
             databaseEdition: "uitest",
             paletteVersion: "uitest",
+            segmenterSource: "uitest",
             cameraAuthorisation: { .authorized },
             motionAvailable: { true }
         )

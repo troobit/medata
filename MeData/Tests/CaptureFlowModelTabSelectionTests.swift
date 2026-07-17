@@ -146,6 +146,7 @@ private func makeFixture(
         supportsLiDAR: true,
         databaseEdition: "test",
         paletteVersion: "test",
+        segmenterSource: "test",
         cameraAuthorisation: { cameraAuthorisation },
         motionAvailable: { true }
     )
@@ -165,6 +166,7 @@ private func makeModel(pipeline: any PipelineEstimator) -> CaptureFlowModel {
         supportsLiDAR: true,
         databaseEdition: "test",
         paletteVersion: "test",
+        segmenterSource: "test",
         cameraAuthorisation: { .authorized },
         motionAvailable: { true }
     )
