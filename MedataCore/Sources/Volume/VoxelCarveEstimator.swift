@@ -74,7 +74,7 @@ public enum VoxelCarveEstimator {
         }
     }
 
-    public static func carve(_ inputs: Inputs) throws -> VoxelCarveEstimate {
+    public static func carve(_ inputs: Inputs) -> VolumeOutcome<VoxelCarveEstimate> {
         let grid = inputs.grid
         let palette = inputs.palette
         let bgId = palette.background
@@ -84,8 +84,12 @@ public enum VoxelCarveEstimator {
         let probs2 = inputs.view2.probabilities
         guard probs1.classes == palette.totalClasses,
               probs2.classes == palette.totalClasses else {
-            throw VolumeError.mismatchedViewDimensions(
-                "probability tensors must match palette.totalClasses=\(palette.totalClasses)"
+            return VolumeOutcome(
+                estimate: nil,
+                stats: VolumeStats(),
+                refusal: .mismatchedViewDimensions(
+                    "probability tensors must match palette.totalClasses=\(palette.totalClasses)"
+                )
             )
         }
 
@@ -93,6 +97,9 @@ public enum VoxelCarveEstimator {
         var counts: [Int: Int] = [:]
         var passedSilhouettePlaneTest = 0
         var ambiguousCount = 0
+        // Voxels that pass the silhouette test in both views but resolve to no
+        // owning class — previously silently skipped (Req 3.2).
+        var ownerlessVoxelCount = 0
 
         // Walk every voxel. The 8×8×8 threadgroup constraint on the Metal kernel is
         // satisfied by §6.10 (dims are multiples of 8); the CPU reference walks the
@@ -148,7 +155,10 @@ public enum VoxelCarveEstimator {
                                     bestClass = c
                                 }
                             }
-                            if bestClass < 0 { continue }
+                            if bestClass < 0 {
+                                ownerlessVoxelCount += 1
+                                continue
+                            }
                             if bestClass == liquidId { continue }      // safety
                             if bestScore < tauOwnership {
                                 ambiguousCount += 1
@@ -164,47 +174,83 @@ public enum VoxelCarveEstimator {
         // Single-view-only fallback per §6.6: extrude silhouette to π_sup at a 30 mm
         // prior height for any class that appears only in one view.
         var fallbackVolumesMm3: [Int: Double] = [:]
+        var raySkipCount = 0
         let fallbackClasses1 = inputs.singleViewOnlyClassesView1.filter { palette.isFoodClass($0) }
         let fallbackClasses2 = inputs.singleViewOnlyClassesView2.filter { palette.isFoodClass($0) }
         for c in fallbackClasses1 {
-            fallbackVolumesMm3[c] = singleViewExtrudedVolumeMm3(
+            let extruded = singleViewExtrudedVolumeMm3(
                 classId: c, view: inputs.view1,
                 supportPlane: inputs.supportPlane, palette: palette
             )
+            fallbackVolumesMm3[c] = extruded.volumeMm3
+            raySkipCount += extruded.degenerateRaySkips
         }
         for c in fallbackClasses2 {
-            fallbackVolumesMm3[c] = singleViewExtrudedVolumeMm3(
+            let extruded = singleViewExtrudedVolumeMm3(
                 classId: c, view: inputs.view2,
                 supportPlane: inputs.supportPlane, palette: palette
             )
+            fallbackVolumesMm3[c] = extruded.volumeMm3
+            raySkipCount += extruded.degenerateRaySkips
         }
 
-        // Volumes: mm³ → cm³ → β-correct.
+        // Volumes: mm³ → cm³ → β-correct. Pre/post-β and threshold-discard
+        // detail is retained in VolumeStats on both exits (Req 3.1/3.2).
         let voxelVolumeMm3 = Double(grid.edgeMm) * Double(grid.edgeMm) * Double(grid.edgeMm)
         var perClassVolumes: [String: Float] = [:]
         var perClassVoxelCount: [String: Int] = [:]
         var degraded: Set<String> = []
         var foodClassesPresent: [String] = []
+        var preBeta: [String: Float] = [:]
+        var postBeta: [String: Float] = [:]
+        var betaApplied: [String: Float] = [:]
+        var thresholdDiscarded: Set<String> = []
 
-        for (classId, count) in counts where count >= minVoxelCountForClass {
+        for (classId, count) in counts {
             guard let name = palette.foodClassName(at: classId) else { continue }
             let mm3 = Double(count) * voxelVolumeMm3
-            let cm3 = Float(mm3 / 1000.0) * inputs.beta.beta(for: name)
+            let preCm3 = Float(mm3 / 1000.0)
+            let beta = inputs.beta.beta(for: name)
+            let cm3 = preCm3 * beta
+            preBeta[name] = preCm3
+            postBeta[name] = cm3
+            betaApplied[name] = beta
+            guard count >= minVoxelCountForClass else {
+                thresholdDiscarded.insert(name)
+                continue
+            }
             perClassVolumes[name] = cm3
             perClassVoxelCount[name] = count
             foodClassesPresent.append(name)
         }
         for (classId, mm3) in fallbackVolumesMm3 {
             guard let name = palette.foodClassName(at: classId) else { continue }
-            let cm3 = Float(mm3 / 1000.0) * inputs.beta.beta(for: name)
-            if cm3 < 1 { continue }                     // tiny-class refusal
+            let preCm3 = Float(mm3 / 1000.0)
+            let beta = inputs.beta.beta(for: name)
+            let cm3 = preCm3 * beta
+            preBeta[name] = preCm3
+            postBeta[name] = cm3
+            betaApplied[name] = beta
+            if cm3 < 1 {                                // tiny-class refusal
+                thresholdDiscarded.insert(name)
+                continue
+            }
             perClassVolumes[name] = cm3
             degraded.insert(name)
             foodClassesPresent.append(name)
         }
 
+        let stats = VolumeStats(
+            perClassVolumesPreBetaCm3: preBeta,
+            perClassVolumesPostBetaCm3: postBeta,
+            betaApplied: betaApplied,
+            thresholdDiscardedClasses: thresholdDiscarded.sorted(),
+            degenerateVoxelSkipCount: ownerlessVoxelCount,
+            degenerateRaySkipCount: raySkipCount
+        )
+
         if foodClassesPresent.isEmpty {
-            throw VolumeError.noFoodVolumeRecovered
+            return VolumeOutcome(estimate: nil, stats: stats, refusal: .noFoodVolumeRecovered)
         }
 
         let ambiguous: Float = passedSilhouettePlaneTest > 0
@@ -213,13 +259,14 @@ public enum VoxelCarveEstimator {
 
         let summary = VoxelGridSizer.summary(grid, perClassVoxelCount: perClassVoxelCount)
 
-        return VoxelCarveEstimate(
+        let estimate = VoxelCarveEstimate(
             perClassVolumesCm3: perClassVolumes,
             ambiguousVoxelFraction: ambiguous,
             voxelGridSummary: summary,
             perClassVoxelCount: perClassVoxelCount,
             degradedClasses: degraded
         )
+        return VolumeOutcome(estimate: estimate, stats: stats, refusal: nil)
     }
 
     // MARK: - helpers
@@ -237,17 +284,20 @@ public enum VoxelCarveEstimator {
     // Single-view extrusion: silhouette pixels in the given view, extruded a fixed
     // 30 mm down to π_sup. Each silhouette pixel contributes its metric area at the
     // food-plane depth multiplied by the prior height. Per §6.6, this is the
-    // degraded fallback used when a class is missing from one view.
+    // degraded fallback used when a class is missing from one view. Degenerate
+    // rays (plane parallel to the ray, or intersection behind the camera) are
+    // counted rather than silently skipped (Req 3.2).
     static func singleViewExtrudedVolumeMm3(
         classId: Int, view: VoxelCarveView,
         supportPlane: SupportPlane, palette: ClassPalette
-    ) -> Double {
+    ) -> (volumeMm3: Double, degenerateRaySkips: Int) {
         let probs = view.probabilities
         let k = view.intrinsics
         let bgId = palette.background
         let liquidId = palette.unsupportedLiquid
         let fMean = (k.fx + k.fy) / 2
         var totalMm3: Double = 0
+        var raySkips = 0
         probs.bytes.withUnsafeBytes { raw in
             let buf = raw.bindMemory(to: Float16.self).baseAddress!
             for y in 0..<probs.height {
@@ -273,9 +323,15 @@ public enum VoxelCarveEstimator {
                         -1
                     ).normalised()
                     let denom = supportPlane.normal.dot(dir)
-                    if abs(denom) < 1e-9 { continue }
+                    if abs(denom) < 1e-9 {
+                        raySkips += 1
+                        continue
+                    }
                     let alpha = supportPlane.distanceMm / denom
-                    if alpha <= 0 { continue }
+                    if alpha <= 0 {
+                        raySkips += 1
+                        continue
+                    }
                     let pFood = dir * alpha
                     let zT = abs(pFood.z)
 
@@ -289,6 +345,6 @@ public enum VoxelCarveEstimator {
                 }
             }
         }
-        return totalMm3
+        return (totalMm3, raySkips)
     }
 }

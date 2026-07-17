@@ -8,14 +8,14 @@ references:
 
 ## Diagnostics foundation
 
-- [ ] 1. Write failing tests for non-throwing VolumeOutcome estimators <!-- id:isuh2ps -->
+- [x] 1. Write failing tests for non-throwing VolumeOutcome estimators <!-- id:isuh2ps -->
   - Extend the existing volume maths suites (MVP gate: executed MedataCore tests only)
   - Assert skip counters and per-class pre-beta volumes survive a noFoodVolumeRecovered refusal — the stats currently die with the throw at VoxelCarveEstimator.swift:206-208
   - Cover the silent drops at VoxelCarveEstimator.swift:200-207,276 and HeightFieldEstimator.swift:126-135
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
-- [ ] 2. Convert VoxelCarveEstimator and HeightFieldEstimator to return VolumeOutcome <!-- id:isuh2pt -->
+- [x] 2. Convert VoxelCarveEstimator and HeightFieldEstimator to return VolumeOutcome <!-- id:isuh2pt -->
   - Return VolumeOutcome {perClassVolumesCm3 (pre-beta), stats: VolumeStats, refusal: VolumeError?} — no throws
   - Pipeline stamps stats into the accumulator, then maps a non-nil refusal to the EstimationFailure throw itself
   - Existing callers and tests updated mechanically; behaviour under make test unchanged for the success path

@@ -304,19 +304,21 @@ public enum FixtureRunner {
         palette: ClassPalette,
         fixtureID: String
     ) throws -> HeightFieldEstimate {
-        do {
-            return try HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
-                probabilities: seg.probabilities,
-                argmax: seg.argmax,
-                depth: depth,
-                intrinsics: intrinsics,
-                supportPlane: plane,
-                beta: beta,
-                palette: palette
-            ))
-        } catch {
-            throw Error.volumeEstimationFailed(fixtureID, error)
+        let outcome = HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
+            probabilities: seg.probabilities,
+            argmax: seg.argmax,
+            depth: depth,
+            intrinsics: intrinsics,
+            supportPlane: plane,
+            beta: beta,
+            palette: palette
+        ))
+        guard let est = outcome.estimate else {
+            throw Error.volumeEstimationFailed(
+                fixtureID, outcome.refusal ?? VolumeError.noFoodVolumeRecovered
+            )
         }
+        return est
     }
 
     private static func runVoxelCarve(
@@ -344,31 +346,38 @@ public enum FixtureRunner {
             width: nadirSeg.argmax.width,
             height: nadirSeg.argmax.height
         )
+        let grid: VoxelGrid
         do {
-            let grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
+            grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(
                 foodMask: foodMask,
                 nadirIntrinsics: nadirIntrinsics,
                 supportPlane: plane,
                 gravityCamera: gravity,
                 edgeMm: voxelEdgeMm
             ))
-            return try VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
-                grid: grid,
-                view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
-                                     intrinsics: nadirIntrinsics),
-                view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
-                                     intrinsics: obliqueIntrinsics),
-                transform1To2: t1to2,
-                supportPlane: plane,
-                matchedClasses: matching.matchedClasses,
-                singleViewOnlyClassesView1: matching.singleViewOnly(view: 1),
-                singleViewOnlyClassesView2: matching.singleViewOnly(view: 2),
-                beta: beta,
-                palette: palette
-            ))
         } catch {
             throw Error.volumeEstimationFailed(fixtureID, error)
         }
+        let outcome = VoxelCarveEstimator.carve(VoxelCarveEstimator.Inputs(
+            grid: grid,
+            view1: VoxelCarveView(probabilities: nadirSeg.probabilities,
+                                 intrinsics: nadirIntrinsics),
+            view2: VoxelCarveView(probabilities: obliqueSeg.probabilities,
+                                 intrinsics: obliqueIntrinsics),
+            transform1To2: t1to2,
+            supportPlane: plane,
+            matchedClasses: matching.matchedClasses,
+            singleViewOnlyClassesView1: matching.singleViewOnly(view: 1),
+            singleViewOnlyClassesView2: matching.singleViewOnly(view: 2),
+            beta: beta,
+            palette: palette
+        ))
+        guard let est = outcome.estimate else {
+            throw Error.volumeEstimationFailed(
+                fixtureID, outcome.refusal ?? VolumeError.noFoodVolumeRecovered
+            )
+        }
+        return est
     }
 }
 #endif
