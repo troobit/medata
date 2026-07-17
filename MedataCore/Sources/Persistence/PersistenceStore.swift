@@ -11,6 +11,18 @@ public enum PersistenceError: Error, Equatable {
     // Manual carb entry rejected at the store layer: carbsG outside 1...999
     // (specs/data/manual-carb-intake Req 1.4).
     case intakeCarbsOutOfRange(Double)
+    // Benchmark-meal item rejected at the store layer: grams outside 1...5000
+    // (specs/estimation/snaq-parity design "Error Handling").
+    case benchmarkGramsOutOfRange(Double)
+    // Benchmark-meal item names a palette class with no food-DB entry at the
+    // current edition. Thrown instead of skipping the item — a silent 0 g
+    // truth contribution would poison MAE (snaq-parity Req 1.2; the
+    // Macros.compute skip must not leak into ground truth).
+    case benchmarkClassUnresolvable(String)
+    // Benchmark-meal update rejected: the meal already has estimation
+    // attempts recorded against it. Editing items/grams would silently
+    // re-score history — corrections create a new meal (snaq-parity lane B).
+    case benchmarkMealImmutable(UUID)
 }
 
 // Vocabulary for the `event_type` column on the events table. Centralised here
@@ -211,6 +223,69 @@ public struct EstimationOutcome: Sendable, Equatable, Identifiable {
     }
 }
 
+// Weighing fidelity of a benchmark meal's ground truth (snaq-parity design
+// lane B): `weighed` = items weighed to ±1 g before plating; `package` =
+// pack-label weights, the marked lower-fidelity fallback. Raw values are the
+// exact `fidelity` column strings.
+public enum BenchmarkFidelity: String, Sendable, Equatable, CaseIterable {
+    case weighed
+    case package
+}
+
+// One weighed item of a benchmark meal. Persisted inside the `items` JSON
+// column as [{class_id, grams}] (design Data Models) — the CodingKeys pin the
+// export-facing snake_case shape.
+public struct BenchmarkMealItem: Sendable, Codable, Equatable {
+    public let classID: String  // 35-class palette id, e.g. "white_rice"
+    public let grams: Double
+
+    enum CodingKeys: String, CodingKey {
+        case classID = "class_id"
+        case grams
+    }
+
+    public init(classID: String, grams: Double) {
+        self.classID = classID
+        self.grams = grams
+    }
+}
+
+// One weighed benchmark meal (specs/estimation/snaq-parity Req 1.2/1.3,
+// design lane B + Data Models). `truthCarbsG` is DERIVED BY THE STORE at save
+// (grams × carbs_per_100g / 100 summed over items — no volume, no β, so
+// truth isolates the estimation pipeline); the value carried by a meal passed
+// to `saveBenchmarkMeal` is ignored, and the stored figure is authoritative.
+public struct BenchmarkMeal: Sendable, Equatable, Identifiable {
+    // Bounds accepted at the store layer for each item's weighed grams.
+    public static let itemGramsRange = 1.0...5000.0
+
+    public let id: UUID
+    public let name: String
+    public let createdAtMs: Int64  // UTC ms since epoch (last_sweep_at_ms precedent)
+    public let items: [BenchmarkMealItem]
+    public let truthCarbsG: Double  // derived at save; see above
+    public let dbEdition: String  // food-DB edition the truth was resolved against
+    public let fidelity: BenchmarkFidelity
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        createdAtMs: Int64,
+        items: [BenchmarkMealItem],
+        truthCarbsG: Double = 0,
+        dbEdition: String,
+        fidelity: BenchmarkFidelity
+    ) {
+        self.id = id
+        self.name = name
+        self.createdAtMs = createdAtMs
+        self.items = items
+        self.truthCarbsG = truthCarbsG
+        self.dbEdition = dbEdition
+        self.fidelity = fidelity
+    }
+}
+
 // Generic surface for a row in the events table (Decision 8). `value` is
 // `Double?` so future event types without a canonical scalar fit without a
 // schema change. `metadata` is the raw JSON string — consumers decide how to
@@ -376,4 +451,24 @@ public protocol PersistenceStore: Sendable {
     // Req 2.2 read path (log browser / export). Returns at most `limit` rows
     // ordered newest first ((timestamp, id) descending).
     func estimationOutcomes(limit: Int) async throws -> [EstimationOutcome]
+
+    // specs/estimation/snaq-parity Req 1.2, 1.3. Insert-or-update by id.
+    // `carbsPer100g` resolves a palette class to carbohydrate grams per 100 g
+    // at the meal's DB edition — the caller backs it with the same
+    // `FoodDatabase.entry(for:)` lookup `Macros.compute` uses; it is injected
+    // because Persistence sits below Foods in the dependency graph and stores
+    // food data opaquely (EstimationOutcome precedent). The store derives
+    // `truthCarbsG` from it at save, ignoring the caller-supplied value.
+    // Throws `benchmarkGramsOutOfRange` for any item outside 1...5000,
+    // `benchmarkClassUnresolvable` when the lookup returns nil for an item
+    // (never a silent 0 g truth), and `benchmarkMealImmutable` when the meal
+    // id already has estimation attempts recorded against it. Benchmark meals
+    // are not `events` rows: no `eventsDidChange` interaction.
+    func saveBenchmarkMeal(
+        _ meal: BenchmarkMeal, carbsPer100g: (String) -> Double?
+    ) async throws
+
+    // Req 1.3 read path (benchmark report / export). Returns every meal
+    // ordered newest first ((created_at, id) descending).
+    func benchmarkMeals() async throws -> [BenchmarkMeal]
 }

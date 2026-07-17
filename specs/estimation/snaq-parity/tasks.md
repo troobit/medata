@@ -74,14 +74,14 @@ references:
 
 ## Benchmark
 
-- [ ] 9. Write failing store tests for benchmark_meals <!-- id:isuh2q0 -->
+- [x] 9. Write failing store tests for benchmark_meals <!-- id:isuh2q0 -->
   - Truth = grams × carbs_per_100g / 100 via the same FoodDatabase.entry(for:) lookups Macros.compute uses — no volume, no beta (Req 1.2)
   - PersistenceError.benchmarkGramsOutOfRange (1...5000) and benchmarkClassUnresolvable (no silent 0 g truth — Macros.swift:110-113 skip must not leak)
   - Updates rejected once attempts exist (immutability); db_edition and fidelity (weighed|package) persisted
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [1.3](requirements.md#1.3)
 
-- [ ] 10. Implement benchmark_meals table and store methods <!-- id:isuh2q1 -->
+- [x] 10. Implement benchmark_meals table and store methods <!-- id:isuh2q1 -->
   - Items JSON [{class_id, grams}]; truth derived at save; references design Data Models DDL
   - Blocked-by: isuh2py (Implement estimation_outcomes table and store methods), isuh2q0 (Write failing store tests for benchmark_meals)
   - Stream: 1
