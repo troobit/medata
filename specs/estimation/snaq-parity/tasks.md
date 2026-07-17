@@ -178,14 +178,14 @@ references:
   - Stream: 2
   - Requirements: [6.1](requirements.md#6.1)
 
-- [ ] 23. Write failing pytest for the spike_convert candidate registry <!-- id:isuh2qe -->
+- [x] 23. Write failing pytest for the spike_convert candidate registry <!-- id:isuh2qe -->
   - Candidate table: segformer_b0, efficientvit_b0/b1, seaformer_base, ppmobileseg_base with weights source, conversion toolchain, head graft
   - blocked-toolchain verdict distinct from reject (PP-MobileSeg is PaddlePaddle-native; harness limits must not masquerade as model evidence, Req 5.2)
   - build/spike_<candidate>.json output shape incl. size/latency margins (Req 5.3)
   - Stream: 2
   - Requirements: [4.2](requirements.md#4.2), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3)
 
-- [ ] 24. Implement spike_convert.py generalising the SegFormer spike <!-- id:isuh2qf -->
+- [x] 24. Implement spike_convert.py generalising the SegFormer spike <!-- id:isuh2qf -->
   - Four ordered stop-on-fail criteria per segmenter-foundation design §5.1; reuses export.oracle_agreement and reference_input
   - Latency criterion emitted as pending — the 16 Pro measurement is human-gated (prerequisites.md)
   - Conversion runs need the torch/transformers venv — code testable without them via registry fixtures

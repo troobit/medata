@@ -232,6 +232,50 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   when identity matters.** `spec_from_file_location` creates a distinct module
   object, so `except export.ExportGateError` (or any isinstance check) fails
   against the conftest-imported `export`. `spike_segformer._load_export_module`
-  hit this; the `train.py` loss_config sys.path pattern is the fix. `train.py`'s
-  own `_load_export_module` still uses spec-loading deliberately (no shared
-  exception classes cross that seam).
+  hit this; the `train.py` loss_config sys.path pattern is the fix. (`train.py`'s
+  old spec-loaded `_load_export_module` is gone — model construction now goes
+  through `archs.py`, imported by name.)
+
+## snaq-parity stream 2 (2026-07-17): archs registry, class weighting, external co-stats, spike_convert
+
+- **`archs.py` is the single architecture seam** (snaq-parity Decisions 12/14).
+  `ArchSpec` = build / load_checkpoint / forward_logits (normalises to the
+  `["out"]`-at-input-resolution convention; `plain_tensor_logits` upsamples
+  SegFormer-class stride-4 outputs). Consumers: `train.py --arch` (default
+  `deeplab_mnv3`; arch in the sidecar drift-check; recorded in checkpoint +
+  lineage `train_config` ONLY when non-default — absence means deeplab),
+  `export.load_checkpoint(…, arch=None)` (resolves from the checkpoint's own
+  `arch` key), `run_validation.py` (resolves via `archs.arch_from_lineage`).
+  Torch-free at import; `register()`/`unregister()` exist for fixtures and the
+  future bake-off winner. `--init-checkpoint` is deeplab-only (backbone surgery).
+- **Inverse-frequency weighting is deleted, not deprecated** (Req 6.3 /
+  Decision 13, enforcing segmenter-foundation Decision 25).
+  `loss_config.class_weights(scheme, …)` builds `none` (returns None) or
+  `sqrt_inverse` (square root of the inverse-frequency ratio, same pin/
+  normalise/clamp rules). `--loss weighted_ce --class-weighting none` is a
+  launch error (ce in disguise); combined/co_occurrence run their CE base
+  unweighted under `none`. The scheme lands in the loss spec (`weighting` key)
+  and the resume drift-check.
+- **`build_external_co_stats.py`** (Req 6.1) maps a Recipe1M-style corpus onto
+  the palette via the committed `ingredient_mapping_recipe1m_v1.json`
+  (longest word-boundary term wins) and emits co_stats.v2 with
+  `source: recipe1m`, `split_seed: null`, the ingredient-mapping SHA, coverage
+  lists, and `pixel_counts`/`train_images` null. Fails (SystemExit, no file
+  written) on unmapped rate > `--max-unmapped-rate` or any zero-coverage food
+  class. `loss_config.load_co_stats` accepts a null seed ONLY for a recognised
+  external source; `train.py --co-stats` points at the file; lineage gains
+  `co_stats_provenance` (carried across re-export by `preserve_metrics`).
+- **`spike_convert.py --candidate {segformer_b0, efficientvit_b0/b1,
+  seaformer_base, ppmobileseg_base}`** generalises the SegFormer spike.
+  Verdicts: `reject` (a measured criterion failed — model evidence),
+  `blocked-toolchain` (ppmobileseg_base: PaddlePaddle-native; short-circuits
+  BEFORE any heavy import — harness limit, never reject), `pending` (all
+  measured criteria pass; criterion 3 is the string `"pending"` — the 16 Pro
+  latency half is human-gated and judged against the Req 4.2-derived budget).
+  `build/spike_<candidate>.json` records size/latency margins (Req 5.3).
+  The efficientvit/seaformer loaders need their zoos installed; a missing
+  package aborts with NO verdict (environment gap, not evidence). The generic
+  `_graft_last_conv_head` (last Conv2d → 35-channel 1x1) is a heuristic —
+  verify per candidate in the gated conversion session.
+- `spike_segformer.py` is unchanged (historical task-20 evidence); its stale
+  test expectation was updated to the Decision 22 iPhone 16 Pro floor.
