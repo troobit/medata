@@ -53,6 +53,17 @@ def _load_lineage_module():
     return module
 
 
+def _load_archs_module():
+    """Import the sibling archs.py by NAME via sys.path (the loss_config
+    pattern) so export, train, and validation all dispatch through the SAME
+    registry instance (snaq-parity Decision 14). Torch-free import."""
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import archs
+    return archs
+
+
 def emit_lineage(checkpoint_path: str, out_path: str | None = None) -> str:
     """Write build/lineage.json for the checkpoint being exported (Req 1.3, task 3).
 
@@ -69,7 +80,7 @@ def emit_lineage(checkpoint_path: str, out_path: str | None = None) -> str:
         train_config = {
             k: raw[k] for k in (
                 "num_classes", "target_size", "epochs", "lr", "lr_schedule",
-                "augment", "pretrained"
+                "augment", "pretrained", "arch"
             ) if k in raw
         }
     manifest = lineage.build_lineage(
@@ -121,30 +132,20 @@ def _import_ai_edge_torch():
         ) from exc
 
 
-def load_checkpoint(num_classes: int, checkpoint_path: str | None):
-    """Load DeepLabV3 + MobileNetV3-Large; replace head for num_classes (decision 25)."""
-    torch, torchvision = _import_torch()
-    from torchvision.models.segmentation import (
-        deeplabv3_mobilenet_v3_large, DeepLabV3_MobileNet_V3_Large_Weights,
-    )
-    from torchvision.models.segmentation.deeplabv3 import DeepLabHead
+def load_checkpoint(num_classes: int, checkpoint_path: str | None,
+                    arch: str | None = None):
+    """Load a checkpoint through the architecture registry (archs.py).
 
-    weights = DeepLabV3_MobileNet_V3_Large_Weights.DEFAULT
-    # torchvision (>= 0.13) refuses aux_loss=False alongside these weights, so
-    # build with the aux head and drop it afterwards. The resulting architecture
-    # (and state_dict key set) is identical to an aux_loss=False construction,
-    # which is what train.py's weights=None path builds.
-    model = deeplabv3_mobilenet_v3_large(weights=weights, aux_loss=True)
-    model.aux_classifier = None
-    in_ch = model.classifier[0].convs[0][0].in_channels
-    model.classifier = DeepLabHead(in_ch, num_classes)
-    if checkpoint_path is not None and Path(checkpoint_path).is_file():
-        state = torch.load(checkpoint_path, map_location="cpu")
-        if isinstance(state, dict) and "model" in state:
-            state = state["model"]
-        model.load_state_dict(state, strict=False)
-    model.eval()
-    return model
+    ``arch`` None resolves the architecture from the checkpoint file's own
+    provenance keys (absence — or no checkpoint — means the historical
+    ``deeplab_mnv3``), so exporting a trained bake-off winner needs no extra
+    flag. The deeplab path is byte-identical to the pre-registry construction
+    (decision 25 head swap; snaq-parity Decision 14 moved it into archs.py).
+    """
+    archs = _load_archs_module()
+    if arch is None:
+        arch = archs.arch_from_checkpoint(checkpoint_path)
+    return archs.get(arch).load_checkpoint(num_classes, checkpoint_path)
 
 
 def reference_input(target_size: int, image_path: str | None) -> "np.ndarray":
@@ -167,8 +168,27 @@ def reference_input(target_size: int, image_path: str | None) -> "np.ndarray":
     return arr.astype(np.float32)
 
 
+def _logits_wrapper(model, forward_logits=None):
+    """Wrap a model so the exporters see a plain logits tensor at input
+    resolution — the arch registry's forward normaliser (default: torchvision's
+    ``["out"]`` dict convention). Traceable for torch.jit / coremltools."""
+    torch, _ = _import_torch()
+    archs = _load_archs_module()
+    normalise = forward_logits or archs.dict_out_logits
+
+    class Wrapper(torch.nn.Module):
+        def __init__(self, m):
+            super().__init__()
+            self.m = m
+
+        def forward(self, x):
+            return normalise(self.m, x)
+
+    return Wrapper(model).eval()
+
+
 def export_coreml(model, target_size: int, num_classes: int, out_path: str,
-                  model_version: str | None = None) -> None:
+                  model_version: str | None = None, forward_logits=None) -> None:
     """torch.export → coremltools.convert(...) → .mlpackage (decision 28, FP16 per
     decision 25). Forces FP16 precision for both compute and weights to fit the
     ≤10 MB budget (Req 8.2). Stamps ``model_version`` (the 12-hex checkpoint id)
@@ -179,16 +199,7 @@ def export_coreml(model, target_size: int, num_classes: int, out_path: str,
     ct = _import_coremltools()
 
     example = torch.randn(1, 3, target_size, target_size, dtype=torch.float32)
-    # torchvision's segmentation model returns a dict with "out". Wrap so the
-    # exporter sees a tensor output.
-    class Wrapper(torch.nn.Module):
-        def __init__(self, m):
-            super().__init__()
-            self.m = m
-        def forward(self, x):
-            return self.m(x)["out"]
-
-    wrapped = Wrapper(model).eval()
+    wrapped = _logits_wrapper(model, forward_logits)
     with torch.no_grad():
         traced = torch.jit.trace(wrapped, example, strict=False)
 
@@ -212,19 +223,14 @@ def export_coreml(model, target_size: int, num_classes: int, out_path: str,
     mlmodel.save(str(out))
 
 
-def export_tflite(model, target_size: int, out_path: str) -> None:
+def export_tflite(model, target_size: int, out_path: str,
+                  forward_logits=None) -> None:
     """torch.export → ai-edge-torch → .tflite (decision 28)."""
     torch, _ = _import_torch()
     aet = _import_ai_edge_torch()
 
     example = (torch.randn(1, 3, target_size, target_size, dtype=torch.float32),)
-    class Wrapper(torch.nn.Module):
-        def __init__(self, m):
-            super().__init__()
-            self.m = m
-        def forward(self, x):
-            return self.m(x)["out"]
-    wrapped = Wrapper(model).eval()
+    wrapped = _logits_wrapper(model, forward_logits)
     edge = aet.convert(wrapped, example)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -254,15 +260,20 @@ def run_tflite(out_path: str, x_chw: "np.ndarray") -> "np.ndarray":
     return interpreter.get_tensor(out_det["index"]).astype(np.float32)
 
 
-def run_pytorch(model, x_chw: "np.ndarray") -> "np.ndarray":
+def run_pytorch(model, x_chw: "np.ndarray", forward_logits=None) -> "np.ndarray":
     """The equivalence ORACLE (Req 4.3): the PyTorch checkpoint's logits for a
     CHW [1, 3, H, W] input. Core ML and TFLite are validated against THIS, not
-    against each other."""
+    against each other. ``forward_logits`` (the arch registry normaliser) keeps
+    the oracle on the same output convention as the exported artefact; the
+    default handles the historical dict-or-tensor forms."""
     torch, _ = _import_torch()
     with torch.no_grad():
         t = torch.from_numpy(np.ascontiguousarray(x_chw)).float()
-        out = model(t)
-        out = out["out"] if isinstance(out, dict) else out
+        if forward_logits is not None:
+            out = forward_logits(model, t)
+        else:
+            out = model(t)
+            out = out["out"] if isinstance(out, dict) else out
     return out.cpu().numpy().astype(np.float32)
 
 
@@ -454,7 +465,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="Skip the numerical equivalence check.")
     args = parser.parse_args(argv)
 
-    model = load_checkpoint(args.num_classes, args.checkpoint)
+    # Arch resolved from the checkpoint's own provenance (absence means the
+    # historical deeplab_mnv3) so a trained bake-off winner exports without a
+    # flag — snaq-parity Decision 14: train, judge, and export share archs.py.
+    archs = _load_archs_module()
+    arch = archs.arch_from_checkpoint(args.checkpoint)
+    arch_spec = archs.get(arch)
+    print(f"[export] arch = {arch}")
+    model = load_checkpoint(args.num_classes, args.checkpoint, arch=arch)
 
     # Build-lineage manifest (Req 1.3, task 3) + the 12-hex model_version to stamp
     # into the Core ML metadata (Req 5.4, task 7). Only when exporting a real
@@ -467,11 +485,13 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"[export] Core ML → {args.out_coreml}")
     export_coreml(model, args.target_size, args.num_classes, args.out_coreml,
-                  model_version=model_version)
+                  model_version=model_version,
+                  forward_logits=arch_spec.forward_logits)
 
     if not args.skip_tflite:
         print(f"[export] TFLite → {args.out_tflite}")
-        export_tflite(model, args.target_size, args.out_tflite)
+        export_tflite(model, args.target_size, args.out_tflite,
+                      forward_logits=arch_spec.forward_logits)
 
     # ── Export gates (Req 4.2, 4.4) ──────────────────────────────────────────
     try:
@@ -491,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_validation:
         print("[validate] oracle = PyTorch checkpoint; feeding runtime-preprocessed input")
         x = build_reference_chw(args.target_size, args.reference_image)
-        oracle_out = run_pytorch(model, x)
+        oracle_out = run_pytorch(model, x, forward_logits=arch_spec.forward_logits)
 
         coreml_out = run_coreml(args.out_coreml, x)
         err, agree, ok = oracle_agreement(oracle_out, coreml_out)

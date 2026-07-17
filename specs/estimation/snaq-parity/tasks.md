@@ -135,14 +135,14 @@ references:
 
 ## Python levers
 
-- [ ] 17. Write failing pytest for the archs.py architecture registry <!-- id:isuh2q8 -->
+- [x] 17. Write failing pytest for the archs.py architecture registry <!-- id:isuh2q8 -->
   - Contract per arch: model constructor, checkpoint loader, forward-output normaliser to the [out]-at-input-resolution convention
   - deeplab_mnv3 parity: registry output equals current deeplabv3_mobilenet_v3_large path (export.py:124, train.py:208-213)
   - Plain-tensor architectures (SegFormer-class) wrapped and upsampled; fixture-level, no torch-optional paths broken
   - Stream: 2
   - Requirements: [5.4](requirements.md#5.4), [6.4](requirements.md#6.4)
 
-- [ ] 18. Implement archs.py and refactor train, export, and validation to consume it <!-- id:isuh2q9 -->
+- [x] 18. Implement archs.py and refactor train, export, and validation to consume it <!-- id:isuh2q9 -->
   - tools/segmenter/archs.py consumed by train.py (--arch flag, default deeplab_mnv3), export.load_checkpoint, and run_validation.py (arch resolved from lineage)
   - Sidecar resume drift-check and lineage gain the arch field
   - NEVER edit train.py while a run is live (docs/ml-training.md §4; train.py:42-44)
@@ -150,27 +150,27 @@ references:
   - Stream: 2
   - Requirements: [5.4](requirements.md#5.4), [6.2](requirements.md#6.2), [6.4](requirements.md#6.4)
 
-- [ ] 19. Write failing pytest for class-weighting schemes <!-- id:isuh2qa -->
+- [x] 19. Write failing pytest for class-weighting schemes <!-- id:isuh2qa -->
   - Scheme builder none|sqrt_inverse replaces inverse_frequency_weights (train.py:516-523, loss_config.py:128-130,181) — inverse-frequency removed entirely (Decision 25 enforced in code)
   - --loss weighted_ce --class-weighting none is a launch error (ce in disguise corrupts sweep verdicts)
   - combined and co_occurrence wiring covered, not just the co-term criterion
   - Stream: 2
   - Requirements: [6.3](requirements.md#6.3)
 
-- [ ] 20. Implement --class-weighting across the weighted-loss surface <!-- id:isuh2qb -->
+- [x] 20. Implement --class-weighting across the weighted-loss surface <!-- id:isuh2qb -->
   - Default none; applies to every weighted loss in loss_config.LOSS_CHOICES
   - Blocked-by: isuh2qa (Write failing pytest for class-weighting schemes)
   - Stream: 2
   - Requirements: [6.3](requirements.md#6.3), [6.5](requirements.md#6.5)
 
-- [ ] 21. Write failing pytest for the external co-occurrence stats builder <!-- id:isuh2qc -->
+- [x] 21. Write failing pytest for the external co-occurrence stats builder <!-- id:isuh2qc -->
   - Output: co_stats.v2 shape + source field, split_seed null, palette coverage list, ingredient-mapping SHA-256
   - loss_config acceptance matrix: null split_seed only when source is external; class_mapping_sha256 (palette identity), channel_count 35, food-channels-only (Decision 20) still enforced
   - Fixture corpus committed under tools/segmenter/tests
   - Stream: 2
   - Requirements: [6.1](requirements.md#6.1)
 
-- [ ] 22. Implement build_external_co_stats.py and the loss_config acceptance amendment <!-- id:isuh2qd -->
+- [x] 22. Implement build_external_co_stats.py and the loss_config acceptance amendment <!-- id:isuh2qd -->
   - Committed ingredient_mapping_recipe1m_v1.json (reviewable, like class_mapping_foodseg103_v1.json)
   - Tool fails on unmapped-ingredient rate above threshold or zero-coverage classes; train.py fail-fast contract at launch unchanged (train.py:741-754)
   - Lineage records source and mapping SHA
@@ -178,14 +178,14 @@ references:
   - Stream: 2
   - Requirements: [6.1](requirements.md#6.1)
 
-- [ ] 23. Write failing pytest for the spike_convert candidate registry <!-- id:isuh2qe -->
+- [x] 23. Write failing pytest for the spike_convert candidate registry <!-- id:isuh2qe -->
   - Candidate table: segformer_b0, efficientvit_b0/b1, seaformer_base, ppmobileseg_base with weights source, conversion toolchain, head graft
   - blocked-toolchain verdict distinct from reject (PP-MobileSeg is PaddlePaddle-native; harness limits must not masquerade as model evidence, Req 5.2)
   - build/spike_<candidate>.json output shape incl. size/latency margins (Req 5.3)
   - Stream: 2
   - Requirements: [4.2](requirements.md#4.2), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3)
 
-- [ ] 24. Implement spike_convert.py generalising the SegFormer spike <!-- id:isuh2qf -->
+- [x] 24. Implement spike_convert.py generalising the SegFormer spike <!-- id:isuh2qf -->
   - Four ordered stop-on-fail criteria per segmenter-foundation design §5.1; reuses export.oracle_agreement and reference_input
   - Latency criterion emitted as pending — the 16 Pro measurement is human-gated (prerequisites.md)
   - Conversion runs need the torch/transformers venv — code testable without them via registry fixtures

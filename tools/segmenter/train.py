@@ -9,8 +9,9 @@ the remapped FoodSeg103 train split, and saving a single PyTorch checkpoint.
 
 That ``.pt`` is the single source of truth (Decision 28): ``export.py`` and
 ``make_fixtures.py`` both consume it directly. The architecture here is NOT
-redefined locally -- it is built via ``export.load_checkpoint(num_classes, None)``
-so the saved ``state_dict`` is byte-compatible with what the exporter loads back.
+redefined locally -- it is built via the shared registry (``archs.py``,
+``--arch``, default ``deeplab_mnv3``; snaq-parity Decision 14) so the saved
+``state_dict`` is byte-compatible with what the exporter loads back.
 
 Long local runs (e.g. Apple-silicon MPS) are interruptible: a resume sidecar
 (``<--out>.resume.pt``) is written atomically after every completed epoch and
@@ -68,6 +69,7 @@ from pathlib import Path
 _TOOLS_DIR = str(Path(__file__).resolve().parent)
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
+import archs  # noqa: E402  (torch-free at import, same family as loss_config)
 import loss_config  # noqa: E402
 
 # ImageNet normalization -- MUST match export.reference_input (train/serve match).
@@ -142,22 +144,6 @@ def _import_pillow():
         ) from exc
 
 
-def _load_export_module():
-    """Import the sibling export.py by path so we reuse its model construction.
-
-    Keeping a single source of architecture truth (Decision 28) means train and
-    export must build the identical DeepLabV3+MobileNetV3-Large with the head
-    swapped for num_classes; importing export.load_checkpoint guarantees that.
-    """
-    export_path = Path(__file__).resolve().with_name("export.py")
-    spec = importlib.util.spec_from_file_location("segmenter_export", export_path)
-    if spec is None or spec.loader is None:
-        raise SystemExit(f"Could not load sibling export module at {export_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def _load_lineage_module():
     """Import the sibling lineage.py by path (pure stdlib; no torch needed)."""
     lineage_path = Path(__file__).resolve().with_name("lineage.py")
@@ -170,47 +156,39 @@ def _load_lineage_module():
 
 
 def build_model(num_classes: int, pretrained: bool,
-                init_checkpoint: str | None = None):
-    """Build the training model via export.load_checkpoint for architectural parity.
+                init_checkpoint: str | None = None,
+                arch: str = archs.DEFAULT_ARCH):
+    """Build the training model via the architecture registry (archs.py).
 
-    ``export.load_checkpoint(num_classes, None)`` returns the torchvision
-    pretrained-backbone model with the head replaced for ``num_classes`` (and set
-    to eval); we switch it back to train mode. When ``pretrained`` is False we
-    rebuild with weights=None so a smoke run needs no network download.
+    The registry is the single source of architecture truth shared with
+    ``export.load_checkpoint`` and ``run_validation.py`` (Decision 28 as
+    extended by snaq-parity Decision 14), so the saved ``state_dict`` stays
+    byte-compatible with what the exporter loads back. ``pretrained`` False
+    builds weights-free so a smoke run needs no network download.
 
     ``init_checkpoint`` (segmenter-foundation Req 2.2 / Decisions 17 and 19)
     names a LOCAL MobileNetV3-Large classifier state dict — the
     ``adapter_probe.py --save-adapted`` output or a downloaded torchvision
     ``IMAGENET1K_V2`` file — whose ``features.*`` tensors initialise the
     backbone instead of the COCO-seg ``DEFAULT`` weights; the DeepLab head
-    starts fresh. Pair it with the ``--pretrained-*`` flags so lineage records
-    the source (URL, licence, SHA-256).
+    starts fresh. It is deeplab_mnv3-specific (the backbone-key surgery below)
+    and rejected for any other architecture.
     """
-    torch = _import_torch()
-    export = _load_export_module()
+    _import_torch()
+    spec = archs.get(arch)
 
     if init_checkpoint is not None:
-        model = _build_uninitialised(num_classes)
+        if arch != archs.DEFAULT_ARCH:
+            raise SystemExit(
+                f"[train] --init-checkpoint is {archs.DEFAULT_ARCH}-specific "
+                f"(MobileNetV3 backbone surgery) and cannot initialise {arch!r}"
+            )
+        model = spec.build(num_classes, pretrained=False)
         _load_backbone_init(model, Path(init_checkpoint))
-    elif pretrained:
-        model = export.load_checkpoint(num_classes, None)
     else:
-        model = _build_uninitialised(num_classes)
+        model = spec.build(num_classes, pretrained=pretrained)
 
     model.train()
-    return model
-
-
-def _build_uninitialised(num_classes: int):
-    """Mirror export.load_checkpoint's construction but with weights=None (no
-    network download). Stays consistent with the exporter's architecture: same
-    model family, same head replacement."""
-    from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
-    from torchvision.models.segmentation.deeplabv3 import DeepLabHead
-
-    model = deeplabv3_mobilenet_v3_large(weights=None, aux_loss=False)
-    in_ch = model.classifier[0].convs[0][0].in_channels
-    model.classifier = DeepLabHead(in_ch, num_classes)
     return model
 
 
@@ -467,11 +445,12 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
     """Build the torch loss for a loss_config spec (torch side of the recipe).
 
     ``loss_spec`` comes from ``loss_config.resolve_loss_spec`` (already
-    validated); ``class_weights`` is required exactly when
-    ``loss_config.loss_uses_class_weights`` says so, and ``co_stats`` (the
-    validated co_stats.json dict) exactly for ``co_occurrence``. The default
-    ``ce`` returns a plain ``nn.CrossEntropyLoss()`` — the historical recipe,
-    untouched.
+    validated); ``class_weights`` is the ``loss_config.class_weights`` vector —
+    None under ``--class-weighting none``, in which case the CE base of
+    combined/co_occurrence runs unweighted (weighted_ce itself rejects the
+    combination at launch). ``co_stats`` (the validated co_stats.json dict) is
+    required exactly for ``co_occurrence``. The default ``ce`` returns a plain
+    ``nn.CrossEntropyLoss()`` — the historical recipe, untouched.
     """
     torch = _import_torch()
     import torch.nn as nn
@@ -481,10 +460,16 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
         return nn.CrossEntropyLoss()
 
     def _weights_tensor():
-        assert class_weights is not None, f"{name} requires class weights"
+        # None under --class-weighting none: the CE base runs unweighted while
+        # the loss keeps its other terms (snaq-parity Req 6.3).
+        if class_weights is None:
+            return None
         return torch.tensor(class_weights, dtype=torch.float32, device=device)
 
     if name == "weighted_ce":
+        # weighted_ce + scheme none is rejected at spec resolution; a None here
+        # would be plain ce in disguise.
+        assert class_weights is not None, "weighted_ce requires class weights"
         return nn.CrossEntropyLoss(weight=_weights_tensor())
 
     if name == "focal":
@@ -581,14 +566,18 @@ def _build_criterion(loss_spec: dict, class_weights: list[float] | None, device,
     raise SystemExit(f"[train] unhandled loss {name!r}")  # unreachable: spec validated
 
 
-def food_class_miou(model, loader, device, num_classes: int) -> float:
+def food_class_miou(model, loader, device, num_classes: int,
+                    forward_logits=None) -> float:
     """Mean IoU over FOOD classes only (excludes 24/25/26 per §4/§5).
 
     Background dominates pixels; food-class mIoU is the §5 gate (>= 0.48,
     segmenter-foundation Decision 5). Classes
     absent from the val split (no GT and no prediction) are skipped from the mean.
+    ``forward_logits`` is the arch registry's output normaliser (default: the
+    torchvision ``["out"]`` dict convention).
     """
     torch = _import_torch()
+    forward_logits = forward_logits or archs.dict_out_logits
 
     model.eval()
     inter = torch.zeros(num_classes, dtype=torch.float64)
@@ -598,7 +587,7 @@ def food_class_miou(model, loader, device, num_classes: int) -> float:
         for images, masks in loader:
             images = images.to(device)
             masks = masks.to(device)
-            logits = model(images)["out"]
+            logits = forward_logits(model, images)
             preds = logits.argmax(dim=1)
             for cls in range(num_classes):
                 pred_c = preds == cls
@@ -666,11 +655,17 @@ def _load_resume_state(args) -> dict:
         "loss": loss_config.normalise_loss_name(args.loss),
         "photometric_augment": args.photometric_augment,
         "init_checkpoint": args.init_checkpoint,
+        "arch": args.arch,
+        "class_weighting": args.class_weighting,
     }
-    # Sidecars written before the opt-in loss/photometric/init flags existed
-    # lack these keys; absence means the historical defaults, not drift.
+    # Sidecars written before the opt-in loss/photometric/init/arch/weighting
+    # flags existed lack these keys; absence means the historical defaults, not
+    # drift. (A legacy weighted-loss sidecar predates the inverse-frequency
+    # removal and cannot be resumed — its weighted_ce+none combination is
+    # rejected at launch, which is the Decision 25 ban working as intended.)
     legacy_defaults = {"loss": loss_config.DEFAULT_LOSS, "photometric_augment": False,
-                       "init_checkpoint": None}
+                       "init_checkpoint": None, "arch": archs.DEFAULT_ARCH,
+                       "class_weighting": loss_config.DEFAULT_WEIGHTING}
     for key, want in expected.items():
         got = state.get(key, legacy_defaults.get(key))
         if got != want:
@@ -703,6 +698,8 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
         "loss": loss_config.normalise_loss_name(args.loss),
         "photometric_augment": args.photometric_augment,
         "init_checkpoint": args.init_checkpoint,
+        "arch": args.arch,
+        "class_weighting": args.class_weighting,
         "pretrained": pretrained,
         "last_food_class_miou": last_miou,
     }
@@ -713,8 +710,10 @@ def _save_resume_state(sidecar: Path, model, optimizer, args,
 
 def _loss_spec(args) -> dict:
     """The loss spec for this invocation (single construction point so the
-    criterion and the recorded provenance can never disagree on co_lambda)."""
-    return loss_config.resolve_loss_spec(args.loss, co_lambda=args.co_lambda)
+    criterion and the recorded provenance can never disagree on co_lambda or
+    the class-weighting scheme)."""
+    return loss_config.resolve_loss_spec(args.loss, co_lambda=args.co_lambda,
+                                         class_weighting=args.class_weighting)
 
 
 def train(args) -> int:
@@ -738,6 +737,8 @@ def train(args) -> int:
     # Co-occurrence statistics: fail fast BEFORE any data/model work when the
     # stats are missing or stale (seed / class-mapping SHA mismatch) — a silent
     # fallback would falsify the lineage's claim about the recipe (design §4.3).
+    # --co-stats points at an EXTERNAL (corpus-derived) file when one is used
+    # (snaq-parity Req 6.1); load_co_stats arbitrates the seed rules by source.
     co_stats = None
     co_stats_sha256 = None
     if loss_spec["loss"] == "co_occurrence":
@@ -745,7 +746,8 @@ def train(args) -> int:
         mapping_path = Path(__file__).resolve().with_name(
             "class_mapping_foodseg103_v1.json"
         )
-        co_stats_path = data_root / loss_config.CO_STATS_FILENAME
+        co_stats_path = (Path(args.co_stats) if args.co_stats
+                         else data_root / loss_config.CO_STATS_FILENAME)
         co_stats = loss_config.load_co_stats(
             co_stats_path,
             split_seed=args.split_seed,
@@ -772,10 +774,11 @@ def train(args) -> int:
     train_loader = _make_loader(train_ds, args.batch_size, True, args.num_workers,
                                 drop_last=True)
 
+    arch_spec = archs.get(args.arch)
     if resume_state is not None:
         # Weights come from the sidecar — build with weights=None (no download);
         # pretrained provenance carries the ORIGINAL run's value, not this flag.
-        model = build_model(args.num_classes, pretrained=False)
+        model = build_model(args.num_classes, pretrained=False, arch=args.arch)
         model.load_state_dict(resume_state["model"])
         pretrained = bool(resume_state["pretrained"])
         resumed_from_epoch = int(resume_state["epoch"])
@@ -783,7 +786,7 @@ def train(args) -> int:
         print(f"[train] resuming from {args.resume} (epoch {resumed_from_epoch} completed)")
     else:
         model = build_model(args.num_classes, pretrained=not args.no_pretrained,
-                            init_checkpoint=args.init_checkpoint)
+                            init_checkpoint=args.init_checkpoint, arch=args.arch)
         pretrained = not args.no_pretrained
         resumed_from_epoch = None
         start_epoch = 1
@@ -797,10 +800,11 @@ def train(args) -> int:
         optimizer.load_state_dict(resume_state["optimizer"])
 
     class_weights = None
-    if loss_config.loss_uses_class_weights(loss_spec["loss"]):
-        print("[train] deriving inverse-frequency class weights from train masks…")
+    if loss_config.loss_uses_class_weights(loss_spec["loss"], args.class_weighting):
+        print(f"[train] deriving {args.class_weighting} class weights from train masks…")
         counts = _train_pixel_counts(train_ds, args.num_classes)
-        class_weights = loss_config.inverse_frequency_weights(counts, args.num_classes)
+        class_weights = loss_config.class_weights(args.class_weighting, counts,
+                                                  args.num_classes)
     criterion = _build_criterion(loss_spec, class_weights, device, co_stats)
     print(f"[train] loss = {loss_spec}"
           + (" | photometric augment ON" if args.photometric_augment else ""))
@@ -820,7 +824,7 @@ def train(args) -> int:
             images = images.to(device)
             masks = masks.to(device)
             optimizer.zero_grad()
-            logits = model(images)["out"]
+            logits = arch_spec.forward_logits(model, images)
             loss = criterion(logits, masks)
             loss.backward()
             optimizer.step()
@@ -830,18 +834,35 @@ def train(args) -> int:
         msg = f"[train] epoch {epoch}/{args.epochs} loss = {avg_loss:.4f}"
 
         if val_loader is not None and (epoch % args.val_every == 0 or epoch == args.epochs):
-            miou = food_class_miou(model, val_loader, device, args.num_classes)
+            miou = food_class_miou(model, val_loader, device, args.num_classes,
+                                   forward_logits=arch_spec.forward_logits)
             last_miou = miou
             msg += f" | food-class mIoU = {miou:.4f}"
         print(msg)
         _save_resume_state(sidecar, model, optimizer, args, pretrained, epoch, last_miou)
 
     _save_checkpoint(model, args, last_miou, pretrained, resumed_from_epoch,
-                     co_stats_sha256=co_stats_sha256)
+                     co_stats_sha256=co_stats_sha256,
+                     co_stats_provenance=_co_stats_provenance(co_stats))
     if sidecar.is_file():
         sidecar.unlink()
         print(f"[train] removed resume sidecar {sidecar}")
     return 0
+
+
+def _co_stats_provenance(co_stats: dict | None) -> dict | None:
+    """The lineage ``co_stats_provenance`` object for EXTERNAL co-occurrence
+    statistics (snaq-parity Req 6.1): source, ingredient-mapping SHA-256, and
+    the palette-coverage lists the builder recorded. None for internal
+    (split-derived) stats — the historical lineage shape is unchanged — and
+    for runs without the co-occurrence loss."""
+    if co_stats is None or "source" not in co_stats:
+        return None
+    return {
+        "source": co_stats["source"],
+        "ingredient_mapping_sha256": co_stats.get("ingredient_mapping_sha256"),
+        "palette_coverage": co_stats.get("palette_coverage"),
+    }
 
 
 def _pretrained_checkpoint_record(args) -> dict | None:
@@ -862,7 +883,8 @@ def _pretrained_checkpoint_record(args) -> dict | None:
 
 def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
                      resumed_from_epoch: int | None = None,
-                     co_stats_sha256: str | None = None) -> None:
+                     co_stats_sha256: str | None = None,
+                     co_stats_provenance: dict | None = None) -> None:
     """Save a dict consumed directly by export.load_checkpoint and make_fixtures.
 
     export.load_checkpoint does ``if isinstance(state, dict) and "model" in state:
@@ -884,6 +906,11 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
     recipe_extras = loss_config.loss_train_config(_loss_spec(args))
     if args.photometric_augment:
         recipe_extras["photometric_augment"] = True
+    if args.arch != archs.DEFAULT_ARCH:
+        # Non-default architecture (snaq-parity Req 5.4): recorded in checkpoint
+        # + lineage train_config so run_validation.py and export.py resolve the
+        # arch back from provenance; absence means the historical deeplab_mnv3.
+        recipe_extras["arch"] = args.arch
     if args.init_checkpoint:
         # Local path of the consumed init (Decision 19 wiring); the
         # pretrained_checkpoint object carries its source URL/licence/SHA-256.
@@ -931,6 +958,7 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
         palette_version=PALETTE_VERSION,
         pretrained_checkpoint=_pretrained_checkpoint_record(args),
         co_stats_sha256=co_stats_sha256,
+        co_stats_provenance=co_stats_provenance,
     )
     lineage_path = lineage.write_lineage(manifest, out.parent / "lineage.json")
     print(f"[train] lineage -> {lineage_path} (model_version={manifest['model_version']})")
@@ -947,6 +975,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--out", default="tools/segmenter/build/checkpoint.pt")
+    parser.add_argument("--arch", default=archs.DEFAULT_ARCH,
+                        choices=archs.ARCH_CHOICES,
+                        help="Model architecture from the shared registry "
+                             "(archs.py; snaq-parity Req 5.4). Default is the "
+                             "shipping deeplab_mnv3; recorded in checkpoint/"
+                             "lineage train_config for non-default runs and "
+                             "checked by the resume drift-check.")
     parser.add_argument("--resume", default=None, metavar="PATH",
                         help="Resume an interrupted run from its sidecar "
                              "(<--out>.resume.pt, written after every completed epoch). "
@@ -977,13 +1012,28 @@ def main(argv: list[str] | None = None) -> int:
                              "scale-up crop) — e.g. for deterministic smoke runs.")
     parser.add_argument("--loss", default=None, choices=loss_config.LOSS_CHOICES,
                         help="Training loss (see loss_config.py). Omit for the "
-                             "historical unweighted cross-entropy; weighted_ce/"
-                             "combined/co_occurrence derive inverse-frequency "
-                             "class weights from the train masks. co_occurrence "
-                             "(design §4.3) adds an image-level presence BCE "
-                             "term weighted by the co_stats.json priors and "
-                             "requires --split-seed to match the prepared "
-                             "dataset's co_stats.json.")
+                             "historical unweighted cross-entropy. weighted_ce/"
+                             "combined/co_occurrence derive class weights from "
+                             "the train masks per --class-weighting. "
+                             "co_occurrence (design §4.3) adds an image-level "
+                             "presence BCE term weighted by the co_stats.json "
+                             "priors and requires --split-seed to match the "
+                             "prepared dataset's co_stats.json.")
+    parser.add_argument("--class-weighting", default=loss_config.DEFAULT_WEIGHTING,
+                        choices=loss_config.WEIGHTING_CHOICES,
+                        help="Class-weighting scheme for the weighted losses "
+                             "(snaq-parity Req 6.3). Default none; sqrt_inverse "
+                             "is the deliberately milder re-test scheme — "
+                             "inverse frequency is removed (segmenter-"
+                             "foundation Decision 25). weighted_ce requires an "
+                             "active scheme.")
+    parser.add_argument("--co-stats", default=None, metavar="PATH",
+                        help="Override the co-occurrence statistics file "
+                             "(default: <--data>/co_stats.json). Point at a "
+                             "build_external_co_stats.py output to train "
+                             "against corpus-derived priors (snaq-parity "
+                             "Req 6.1); source, mapping SHA, and palette "
+                             "coverage land in lineage.")
     parser.add_argument("--co-lambda", type=float,
                         default=loss_config.DEFAULT_CO_LAMBDA,
                         help="Mixing weight for the co-occurrence presence "
@@ -1009,6 +1059,14 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "--init-checkpoint and --no-pretrained are mutually exclusive: "
             "the init checkpoint IS the pretrained initialisation."
+        )
+
+    if (loss_config.normalise_loss_name(args.loss) == "weighted_ce"
+            and args.class_weighting == "none"):
+        parser.error(
+            "--loss weighted_ce needs an active --class-weighting scheme "
+            "(sqrt_inverse): under 'none' it is plain ce in disguise and would "
+            "corrupt a loss-sweep verdict (snaq-parity Req 6.3)."
         )
 
     if args.num_classes <= PALETTE_BACKGROUND:
