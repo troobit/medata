@@ -23,14 +23,14 @@ references:
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
-- [ ] 3. Write failing tests for EstimationAttemptRecord JSON round-trip <!-- id:isuh2pu -->
+- [x] 3. Write failing tests for EstimationAttemptRecord JSON round-trip <!-- id:isuh2pu -->
   - Codable + Sendable value type; schema-versioned v field so the browser tolerates older rows
   - Failure encoding: {domain: estimation|capture, case, payload} — EstimationFailure has associated values (lidarCoverageTooLow, internalError)
   - Per-view segmentation timings (nadir/oblique), per-class decomposition snapshot fields, no raw imagery (Req 2.6)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.6](requirements.md#2.6), [3.3](requirements.md#3.3)
 
-- [ ] 4. Implement EstimationAttemptRecord and PipelineDiagnostics accumulator <!-- id:isuh2pv -->
+- [x] 4. Implement EstimationAttemptRecord and PipelineDiagnostics accumulator <!-- id:isuh2pv -->
   - PipelineDiagnostics is a reference type stages append to; snapshot() builds the immutable EstimationAttemptRecord
   - Success snapshot embeds the compact per-class decomposition (class → volume/mass/carbs/beta, sigma terms) so deleteMeal cannot hollow out Req 3.4
   - Blocked-by: isuh2pu (Write failing tests for EstimationAttemptRecord JSON round-trip)
