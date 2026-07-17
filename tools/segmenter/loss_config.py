@@ -18,10 +18,20 @@ torch-free pattern of ``lineage.py`` / ``validation.py``). Everything here is:
     ``train.py`` records this verbatim in the checkpoint and ``build/lineage.json``
     ``train_config`` (Req: reproducible from lineage), and dispatches on it to
     build the actual torch ``nn`` loss behind its lazy-import boundary.
-  - ``inverse_frequency_weights(pixel_counts, num_classes, ...)`` — normalised
-    inverse-frequency class weights from per-class pixel counts. Pure arithmetic;
-    no torch tensor is constructed here — ``train.py`` wraps the returned list in a
+  - ``class_weights(scheme, pixel_counts, num_classes, ...)`` — per-class weight
+    derivation for the ``--class-weighting`` scheme. Pure arithmetic; no torch
+    tensor is constructed here — ``train.py`` wraps the returned list in a
     ``torch.tensor`` on the training device.
+
+CLASS-WEIGHTING SCHEMES (snaq-parity Req 6.3, Decision 13): inverse-frequency
+weighting was attributed as the staple-regression cause (segmenter-foundation
+Decision 25) and is REMOVED from this module entirely — not defaulted away —
+so it cannot be re-selected by accident. ``--class-weighting {none,
+sqrt_inverse}`` (default ``none``) parameterises every weighted loss;
+``sqrt_inverse`` is the deliberately milder re-test scheme (the class-weight
+spread is the square root of what inverse frequency produced). ``--loss
+weighted_ce --class-weighting none`` is rejected: it would be plain ``ce`` in
+disguise and corrupt an opportunistic loss-sweep verdict (Req 6.5).
 
 The DEFAULT (``ce``) reproduces today's ``nn.CrossEntropyLoss()`` byte-for-byte in
 the recorded ``train_config``: for the default spec ``loss_train_config`` returns
@@ -46,10 +56,17 @@ from typing import Any, Mapping, Sequence
 LOSS_CHOICES = ("ce", "weighted_ce", "focal", "dice", "combined", "co_occurrence")
 DEFAULT_LOSS = "ce"
 
-# Losses that consume per-class inverse-frequency weights. "ce", "focal" (which
+# Losses whose CE base accepts per-class weights. "ce", "focal" (which
 # down-weights easy pixels via gamma instead) and "dice" (region-overlap, already
-# imbalance-robust) do not. "co_occurrence" uses them for its weighted_ce base.
+# imbalance-robust) do not. "co_occurrence" uses them for its CE base.
 WEIGHTED_LOSSES = ("weighted_ce", "combined", "co_occurrence")
+
+# Class-weighting schemes for the weighted losses (snaq-parity Req 6.3,
+# Decision 13). "none" (the default) applies no weight vector; "sqrt_inverse"
+# is the deliberately milder re-test of class weighting — inverse frequency
+# itself is banned (Decision 25) and deliberately absent from this tuple.
+WEIGHTING_CHOICES = ("none", "sqrt_inverse")
+DEFAULT_WEIGHTING = "none"
 
 # Default focal-loss focusing parameter (Lin et al. 2017); down-weights
 # well-classified pixels so the dominant background stops swamping the gradient.
@@ -94,6 +111,12 @@ CO_PAIR_GAIN = 3.0
 # Name of the statistics file prepare_dataset.py writes next to splits.json.
 CO_STATS_FILENAME = "co_stats.json"
 
+# Recognised EXTERNAL co-stats sources (snaq-parity Req 6.1, Decision 13):
+# corpus-derived statistics carry a ``source`` field and a null ``split_seed``
+# (they are split-independent). A file with no ``source`` is the internal,
+# split-derived kind and keeps the full seed fail-fast contract.
+EXTERNAL_CO_STATS_SOURCES = ("recipe1m",)
+
 # Required co_stats schema. v2 (Decision 20) restricts the presence /
 # joint-presence counts to the FOOD channels and records the excluded
 # ``special_channel_indices``; a v1 file (which counted background into the
@@ -125,9 +148,25 @@ def normalise_loss_name(name: str | None) -> str:
     return resolved
 
 
-def loss_uses_class_weights(name: str) -> bool:
-    """Whether the named loss consumes per-class inverse-frequency weights."""
-    return normalise_loss_name(name) in WEIGHTED_LOSSES
+def normalise_weighting_name(scheme: str | None) -> str:
+    """Return a validated class-weighting scheme, defaulting ``None`` to
+    ``DEFAULT_WEIGHTING``. Unknown schemes — including the removed
+    ``inverse_frequency`` (Decision 25) — raise ``ValueError``."""
+    resolved = DEFAULT_WEIGHTING if scheme is None else scheme
+    if resolved not in WEIGHTING_CHOICES:
+        raise ValueError(
+            f"unknown class-weighting scheme {resolved!r}; choose one of "
+            f"{', '.join(WEIGHTING_CHOICES)}"
+        )
+    return resolved
+
+
+def loss_uses_class_weights(name: str, class_weighting: str | None = None) -> bool:
+    """Whether this loss + scheme combination consumes a per-class weight
+    vector: a weighted loss under an ACTIVE scheme. Under ``none`` no vector is
+    derived — the CE base runs unweighted (snaq-parity Req 6.3)."""
+    return (normalise_loss_name(name) in WEIGHTED_LOSSES
+            and normalise_weighting_name(class_weighting) != "none")
 
 
 def resolve_loss_spec(
@@ -136,6 +175,7 @@ def resolve_loss_spec(
     focal_gamma: float = DEFAULT_FOCAL_GAMMA,
     dice_weight: float = DEFAULT_DICE_WEIGHT,
     co_lambda: float = DEFAULT_CO_LAMBDA,
+    class_weighting: str | None = None,
 ) -> dict[str, Any]:
     """Pure dispatch: map a ``--loss`` name to a JSON-serialisable loss spec.
 
@@ -145,22 +185,35 @@ def resolve_loss_spec(
     (``{"loss": "ce"}``) is what makes an omitted flag byte-identical to a
     pre-existing run's ``train_config``. For ``co_occurrence`` the spec carries
     lambda and the pooling choice — both land in lineage (design §4.3).
+
+    Weighted losses record the ``class_weighting`` scheme under ``weighting``.
+    ``weighted_ce`` under scheme ``none`` is rejected (snaq-parity Req 6.3): it
+    is plain ``ce`` in disguise and would corrupt a sweep verdict; ``combined``
+    and ``co_occurrence`` keep their dice / presence terms under ``none`` and
+    stay valid.
     """
     resolved = normalise_loss_name(name)
+    scheme = normalise_weighting_name(class_weighting)
     spec: dict[str, Any] = {"loss": resolved}
     if resolved == "focal":
         spec["focal_gamma"] = float(focal_gamma)
     elif resolved == "combined":
-        # combined = dice_weight * dice + (1 - dice_weight) * weighted_ce
+        # combined = dice_weight * dice + (1 - dice_weight) * [weighted] ce
         spec["dice_weight"] = float(dice_weight)
-        spec["weighting"] = "inverse_frequency"
+        spec["weighting"] = scheme
     elif resolved == "weighted_ce":
-        spec["weighting"] = "inverse_frequency"
+        if scheme == "none":
+            raise ValueError(
+                "--loss weighted_ce needs an active --class-weighting scheme "
+                "(sqrt_inverse): under 'none' it is plain ce in disguise and "
+                "would corrupt a loss-sweep verdict (snaq-parity Req 6.3)"
+            )
+        spec["weighting"] = scheme
     elif resolved == "co_occurrence":
-        # co_occurrence = weighted_ce + co_lambda * L_co (design §4.3)
+        # co_occurrence = [weighted] ce + co_lambda * L_co (design §4.3)
         spec["co_lambda"] = float(co_lambda)
         spec["co_pooling"] = DEFAULT_CO_POOLING
-        spec["weighting"] = "inverse_frequency"
+        spec["weighting"] = scheme
     return spec
 
 
@@ -178,39 +231,46 @@ def loss_train_config(spec: dict[str, Any]) -> dict[str, Any]:
     return dict(spec)
 
 
-def inverse_frequency_weights(
+def class_weights(
+    scheme: str,
     pixel_counts: Sequence[float],
     num_classes: int,
     *,
     ignore_classes: Sequence[int] = (),
     eps: float = 1.0,
     max_weight: float | None = MAX_CLASS_WEIGHT,
-) -> list[float]:
-    """Normalised inverse-frequency class weights from per-class pixel counts.
+) -> list[float] | None:
+    """Per-class weights for a ``--class-weighting`` scheme (snaq-parity
+    Req 6.3, Decision 13). ``None`` for scheme ``none`` — no vector at all, the
+    CE base runs unweighted.
 
-    Rare classes get a larger weight, the dominant background a smaller one, so
-    the cross-entropy gradient stops collapsing toward the majority class. The
-    scheme:
+    ``sqrt_inverse`` — the deliberately milder replacement for the banned
+    inverse-frequency scheme (segmenter-foundation Decision 25) — takes the
+    SQUARE ROOT of the raw inverse frequency:
 
-      weight_c = total_pixels / (num_classes * (count_c + eps))
+      weight_c = sqrt(total_pixels / (num_classes * (count_c + eps)))
 
-    then normalise so the mean weight over the KEPT classes is 1.0 (leaving the
-    overall loss scale — and hence the effective learning rate — comparable to
-    plain CE), then clamp each kept weight to ``max_weight``. ``ignore_classes``
-    (e.g. the non-food sentinels) are pinned to weight 1.0 and excluded from the
-    normalisation mean, so they neither dominate nor rescale the food-class
-    weights.
+    so the spread between any two classes is the square root of what inverse
+    frequency produced. Then normalise so the mean weight over the KEPT classes
+    is 1.0 (leaving the overall loss scale — and hence the effective learning
+    rate — comparable to plain CE), and clamp each kept weight to
+    ``max_weight``. ``ignore_classes`` (e.g. the non-food sentinels) are pinned
+    to weight 1.0 and excluded from the normalisation mean, so they neither
+    dominate nor rescale the food-class weights.
 
     Classes with a ZERO pixel count are pinned the same way automatically: a CE
     class weight only applies where the class appears as a target, so an
-    absent-from-train class's weight is never used — but its near-infinite raw
-    inverse frequency would otherwise inflate the normalisation mean and squash
-    every real weight towards zero. ``eps`` (Laplace add-one by default) keeps
-    the arithmetic finite regardless.
+    absent-from-train class's weight is never used — but its huge raw value
+    would otherwise inflate the normalisation mean and squash every real weight
+    towards zero. ``eps`` (Laplace add-one by default) keeps the arithmetic
+    finite regardless.
 
     Pure arithmetic on plain floats — ``train.py`` wraps the result in a
     ``torch.tensor`` on the training device.
     """
+    if normalise_weighting_name(scheme) == "none":
+        return None
+
     counts = [float(c) for c in pixel_counts]
     if len(counts) != num_classes:
         raise ValueError(
@@ -232,7 +292,8 @@ def inverse_frequency_weights(
     pinned = set(ignore_classes) | {c for c in range(num_classes) if counts[c] == 0}
 
     raw = [
-        1.0 if c in pinned else total / (num_classes * (counts[c] + eps))
+        1.0 if c in pinned
+        else math.sqrt(total / (num_classes * (counts[c] + eps)))
         for c in range(num_classes)
     ]
 
@@ -267,6 +328,14 @@ def load_co_stats(
     invocation's, this raises ``SystemExit`` with the regeneration command —
     a silent fallback to unweighted CE (or stats from a different split)
     would falsify the lineage's claim about the recipe.
+
+    EXTERNAL statistics (snaq-parity Req 6.1, Decision 13): a file whose
+    ``source`` is in ``EXTERNAL_CO_STATS_SOURCES`` is corpus-derived and
+    split-independent — it must stamp ``split_seed: null`` and the seed checks
+    are skipped (the invocation's ``--split-seed`` still describes the
+    DATASET and lands in lineage). ``class_mapping_sha256`` pins palette
+    identity and stays enforced for both kinds; an unknown ``source`` is
+    rejected outright.
     """
     p = Path(path)
     if not p.is_file():
@@ -281,18 +350,35 @@ def load_co_stats(
             "statistics, Decision 20) — stale format; "
             f"{_CO_STATS_REGENERATE}"
         )
-    if split_seed is None:
+    source = stats.get("source")
+    if source is not None and source not in EXTERNAL_CO_STATS_SOURCES:
         raise SystemExit(
-            "[train] --loss co_occurrence requires --split-seed (the seed the "
-            f"dataset was prepared with) so {p.name} can be verified against "
-            f"the invocation — {_CO_STATS_REGENERATE}"
+            f"[train] {p} names co-stats source {source!r}, which is not a "
+            f"recognised external source ({', '.join(EXTERNAL_CO_STATS_SOURCES)}) "
+            "— refusing to train against statistics of unknown provenance"
         )
-    if stats.get("split_seed") != split_seed:
-        raise SystemExit(
-            f"[train] {p} was built for split seed {stats.get('split_seed')!r} "
-            f"but this invocation uses --split-seed {split_seed} — stale "
-            f"statistics; {_CO_STATS_REGENERATE}"
-        )
+    if source is not None:
+        # External, corpus-derived: split-independent by construction.
+        if stats.get("split_seed") is not None:
+            raise SystemExit(
+                f"[train] {p} claims external source {source!r} but stamps "
+                f"split_seed {stats.get('split_seed')!r} — external statistics "
+                "must carry split_seed null (regenerate with "
+                "build_external_co_stats.py)"
+            )
+    else:
+        if split_seed is None:
+            raise SystemExit(
+                "[train] --loss co_occurrence requires --split-seed (the seed "
+                f"the dataset was prepared with) so {p.name} can be verified "
+                f"against the invocation — {_CO_STATS_REGENERATE}"
+            )
+        if stats.get("split_seed") != split_seed:
+            raise SystemExit(
+                f"[train] {p} was built for split seed {stats.get('split_seed')!r} "
+                f"but this invocation uses --split-seed {split_seed} — stale "
+                f"statistics; {_CO_STATS_REGENERATE}"
+            )
     if stats.get("class_mapping_sha256") != class_mapping_sha256:
         raise SystemExit(
             f"[train] {p} was built from class mapping SHA-256 "

@@ -36,7 +36,8 @@ def test_verdict_has_four_criteria_with_latency_always_pending():
     }
     assert v["measurements"]["artefact_bytes"] == 8_000_000
     assert v["measurements"]["weights_max_bytes"] == export.WEIGHTS_MAX_BYTES
-    assert any("iPhone 13 Pro Max" in n for n in v["notes"])
+    # Decision 22 hardware floor: the pending note names the iPhone 16 Pro.
+    assert any("iPhone 16 Pro" in n for n in v["notes"])
 
 
 def test_failed_conversion_leaves_later_criteria_null_not_false():
