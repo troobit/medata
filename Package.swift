@@ -146,7 +146,8 @@ let package = Package(
             name: "Pipeline",
             dependencies: [
                 "CaptureKit", "CardDetection", "SupportPlane", "MetricScale",
-                "Segmentation", "Volume", "Foods", "Macros", "Confidence", "Persistence"
+                "Segmentation", "Volume", "Foods", "Macros", "Confidence", "Persistence",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf")
             ],
             path: "MedataCore/Sources/Pipeline",
             // Bundled Core ML segmenter (model-production Req 5.1/5.2, Decision 7).

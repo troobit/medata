@@ -32,7 +32,8 @@ extension Pipeline {
         store: any PersistenceStore,
         cardDetector: any CardDetector,
         palette: ClassPalette = .v1Standard,
-        supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter()
+        supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
+        bundleRecorder: CaptureBundleRecorder? = nil
     ) throws -> Pipeline {
         let foods = try GRDBFoodDatabase.bundled()
         let segmenter = try makeSegmenter(palette: palette)
@@ -42,7 +43,8 @@ extension Pipeline {
             database: foods,
             store: store,
             supportPlaneFitter: supportPlaneFitter,
-            segmenterSource: segmenterSourceTag(for: segmenter)
+            segmenterSource: segmenterSourceTag(for: segmenter),
+            bundleRecorder: bundleRecorder
         )
     }
 

@@ -1,7 +1,8 @@
 # Estimation diagnostics (snaq-parity lane A)
 
 State as of tasks 1–8 (diagnostics foundation + outcome store + write-behind)
-plus the app surfaces (tasks 15–16, below).
+plus the app surfaces (tasks 15–16, below) and the capture-bundle recorder
+(specs/capture/capture-bundle-recorder, bottom section).
 
 ## The pattern: outcome structs, not throws
 
@@ -129,3 +130,42 @@ refusals (Req 3.1/3.2):
 - The app links `Benchmark` via the `MedataCore` product
   (Package.swift products list) — the target still depends on Persistence
   only, keeping report maths under `make test`.
+
+## Capture-bundle recorder (specs/capture/capture-bundle-recorder)
+
+`MedataCore/Sources/Pipeline/CaptureBundleRecorder.swift` — an actor that
+writes one `PbMealFixture` per attempt reaching `Pipeline.estimate` (success
+AND refusal; cancellation and pre-pipeline capture refusals write nothing)
+into `Documents/captures/`, exposed via the Files app (Info.plist
+`UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`). Bundles replay
+through `FixtureLoader` + `FixtureRunner` with no harness changes.
+
+- **NOT gated by DEBUG or HARNESS_ENABLED** — field Release builds must
+  record (decision log Decision 2). Pre-release checklist: remove the
+  recorder wiring and the two Info.plist keys before any non-developer build.
+- **~200 MB per bundle** — probs are recorded at camera resolution
+  (1920×1440×C×FP16) because FixtureRunner sizes from intrinsics and the
+  height-field silhouette test reads the background channel per pixel
+  (Decision 1). Clear `Documents/captures/` nightly via Finder/Files.
+- **Join key**: filename `<13-digit zero-padded timestampMs>-<outcome>.fixture`
+  equals `EstimationAttemptRecord.timestampMs`. Same-ms collision appends
+  `-2`, never overwrites. Writes are atomic (`.atomic` temp+rename).
+- **Replay**: `--checkpoint-sha256` must equal the stamp — the loaded model's
+  `modelVersion` (12-hex checkpoint prefix), or `segmenterSource`
+  (`"dev_stub"`) on stub builds. `estimatorPath` is `single_dominant`.
+  Zero ground truth loads fine; accuracy metrics are meaningless until
+  weighed truth is back-filled.
+- **Hand-off shape**: stage bodies stash `SegmentationResult`s on
+  `PipelineDiagnostics.debugNadir/ObliqueSegmentation` (carrier only — never
+  encoded into the record; Req 2.6 applies to the record, not bundles).
+  `Pipeline.estimate` extracts the Sendable payload BEFORE the unstructured
+  `Task` — the diagnostics object is non-Sendable and must not cross.
+  The recorder is injected at `Pipeline.init` (no delegate-style stamping
+  dance needed).
+- **Gotcha**: `rgb8Bytes` throws on an image byte-count mismatch and the
+  whole bundle is then skipped (logged to the `CaptureBundle` category).
+  `RawFrame.fixture`'s 16-byte image triggers exactly this — tests must
+  build dimensionally consistent frames.
+- The simulator destination fails at codesigning `MedataCore_Pipeline.bundle`
+  ("bundle format unrecognized") — pre-existing and unrelated; build for
+  device (`generic/platform=iOS` compiles, `make build-app` needs the phone).
