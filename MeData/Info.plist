@@ -38,5 +38,13 @@
 	<array>
 		<string>fetch</string>
 	</array>
+	<!-- capture-bundle-recorder smolspec: expose Documents (captures/ fixture
+	     bundles) in the Files app and Finder — the recorder's sole management
+	     surface. Developer-phase only; remove alongside the recorder before
+	     any non-developer release (decision log, Decision 2). -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

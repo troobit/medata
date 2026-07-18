@@ -1,5 +1,6 @@
 import Foundation
 import Persistence
+import Segmentation
 import Volume
 
 // Estimation-attempt diagnostics (snaq-parity lane A, Req 2.1/2.6/3.1–3.4).
@@ -298,6 +299,14 @@ public final class PipelineDiagnostics {
     private var mealID: String?
     private var decomposition: [EstimationAttemptRecord.ClassDecomposition]?
     private var sigma: EstimationAttemptRecord.SigmaTerms?
+
+    // Capture-bundle carriers (capture-bundle-recorder smolspec): the stage
+    // body stashes its segmentation results here so `estimate`'s outcome arms
+    // can hand them to CaptureBundleRecorder even when a later stage throws.
+    // Carrier only — never encoded into the snapshot record; the Req 2.6
+    // no-imagery rule applies to the record, not to bundles.
+    public var debugNadirSegmentation: SegmentationResult?
+    public var debugObliqueSegmentation: SegmentationResult?
 
     public init(capturePath: String, modelVersion: String, timestampMs: Int64) {
         self.capturePath = capturePath

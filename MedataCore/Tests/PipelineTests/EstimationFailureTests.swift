@@ -93,6 +93,68 @@ final class EstimationFailureTests: XCTestCase {
         }
     }
 
+    // MARK: - Capture-bundle recording on refusal (capture-bundle-recorder smolspec)
+
+    // A refused attempt with a recorder injected must still write a bundle —
+    // the write is behind an unstructured task, so the test polls briefly.
+    func testRefusedAttemptRecordsCaptureBundle() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let pipeline = Pipeline(
+            cardDetector: NilCardDetector(),
+            segmenter: makeStubSegmenter(),
+            database: EmptyFoodDatabase(),
+            store: NoOpPersistenceStore(),
+            bundleRecorder: CaptureBundleRecorder(directoryURL: dir)
+        )
+        // Well-formed 8×6 BGRA frame (RawFrame.fixture's 16-byte image would
+        // fail the recorder's byte-count guard) with no depth, driving the
+        // noScaleAvailable refusal.
+        let width = 8, height = 6
+        let nadir = RawFrame(
+            imageBytes: Data(count: width * height * 4),
+            pixelFormat: .bgra8,
+            colourSpace: .sRGB,
+            orientation: 1,
+            imageWidth: width, imageHeight: height,
+            timestampMonotonicNs: 0,
+            intrinsics: CameraIntrinsics(
+                fx: 100, fy: 100, cx: 4, cy: 3,
+                imageWidth: width, imageHeight: height
+            ),
+            gravity: Vec3(0, -1, 0),
+            worldFromCamera: .identity,
+            depth: nil
+        )
+        let captureResult = CaptureResult(
+            capturePath: .twoViewSfS,
+            lidar: .unavailable,
+            nadirFrame: nadir,
+            obliqueFrame: nil,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: "v1",
+            preShutterFoodMask: makeNonEmptyMask(width: width, height: height)
+        )
+        do {
+            _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
+            XCTFail("Expected a refusal")
+        } catch is EstimationFailure {
+            // expected
+        }
+
+        var bundles: [String] = []
+        for _ in 0..<40 {
+            bundles = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+            if !bundles.isEmpty { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(bundles.count, 1)
+        XCTAssertTrue(bundles[0].hasSuffix("-refused.fixture"),
+                      "unexpected bundle name \(bundles)")
+    }
+
     // MARK: - arWorldTrackingLost: two-view path with no oblique frame
 
     func testTwoViewPathMissingOblique_throwsArWorldTrackingLost() async throws {

@@ -83,7 +83,18 @@ struct MedataApp: App {
         // until Phase 3 bundles `segmenter.mlpackage`; `try!` is correct
         // because a missing model at launch is a development error, not a
         // recoverable runtime condition.
-        let pipeline = try! Pipeline.makeForDevice(store: store, cardDetector: cardDetector)
+        //
+        // Capture-bundle recorder (capture-bundle-recorder smolspec): every
+        // attempt writes a replayable fixture into Documents/captures, which
+        // Info.plist exposes via the Files app — the sole management surface.
+        let capturesDir = URL.documentsDirectory.appendingPathComponent(
+            "captures", isDirectory: true
+        )
+        let pipeline = try! Pipeline.makeForDevice(
+            store: store,
+            cardDetector: cardDetector,
+            bundleRecorder: CaptureBundleRecorder(directoryURL: capturesDir)
+        )
         _model = State(initialValue: CaptureFlowModel(
             session: CaptureSession(engine: engine),
             pipeline: pipeline,

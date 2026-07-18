@@ -53,6 +53,10 @@ public struct Pipeline: Sendable {
     // lane A) and tests can verify the factory stamps the correct value.
     public let segmenterSource: String
     public weak var delegate: (any CaptureFlowDelegate)?
+    // Developer-phase capture recorder (capture-bundle-recorder smolspec).
+    // Injected at construction — unlike `delegate` it needs no post-init
+    // stamping dance in CaptureFlowModel. nil (harness, tests) records nothing.
+    private let bundleRecorder: CaptureBundleRecorder?
 
     public init(
         cardDetector: any CardDetector,
@@ -60,7 +64,8 @@ public struct Pipeline: Sendable {
         database: any FoodDatabase,
         store: any PersistenceStore,
         supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
-        segmenterSource: String = ""
+        segmenterSource: String = "",
+        bundleRecorder: CaptureBundleRecorder? = nil
     ) {
         self.cardDetector = cardDetector
         self.segmenter = segmenter
@@ -68,6 +73,7 @@ public struct Pipeline: Sendable {
         self.store = store
         self.supportPlaneFitter = supportPlaneFitter
         self.segmenterSource = segmenterSource
+        self.bundleRecorder = bundleRecorder
     }
 
     // Main entry point per design §2.4.
@@ -81,30 +87,62 @@ public struct Pipeline: Sendable {
     // a user-abandoned capture produces no record so benchmark completion
     // rates are not depressed by abandonment.
     public func estimate(captureResult: CaptureResult, mode: CaptureMode) async throws -> MealRecord {
+        let timestampMs = Int64(Date().timeIntervalSince1970 * 1000)
         let diagnostics = PipelineDiagnostics(
             capturePath: mode.capturePath.rawValue,
             modelVersion: segmenterSource,
-            timestampMs: Int64(Date().timeIntervalSince1970 * 1000)
+            timestampMs: timestampMs
         )
         do {
             let record = try await runEstimation(
                 captureResult: captureResult, mode: mode, diagnostics: diagnostics
             )
             delegate?.didCompleteAttempt(diagnostics.snapshot())
+            recordBundle(captureResult: captureResult, diagnostics: diagnostics,
+                         timestampMs: timestampMs, outcome: .success)
             return record
         } catch let error where error is CancellationError {
+            // No attempt record and no bundle: user abandonment is not an outcome.
             throw error
         } catch let failure as EstimationFailure {
             diagnostics.stampFailure(failure)
             delegate?.didCompleteAttempt(diagnostics.snapshot())
+            recordBundle(captureResult: captureResult, diagnostics: diagnostics,
+                         timestampMs: timestampMs, outcome: .refused)
             throw failure
         } catch {
             // Non-typed error: the underlying description is preserved in the
             // record, in Release builds too (Req 3.3).
             diagnostics.stampError(error)
             delegate?.didCompleteAttempt(diagnostics.snapshot())
+            recordBundle(captureResult: captureResult, diagnostics: diagnostics,
+                         timestampMs: timestampMs, outcome: .refused)
             throw error
         }
+    }
+
+    // Write-behind hand-off to the capture-bundle recorder. The Sendable
+    // payload is extracted HERE — the non-Sendable diagnostics accumulator
+    // must not cross into the task. The unstructured Task decouples the
+    // bundle encode (~200 MB at camera resolution) from the estimation task,
+    // so a flow cancelled after the result returns cannot abandon the write;
+    // the actor serialises concurrent recordings.
+    private func recordBundle(
+        captureResult: CaptureResult,
+        diagnostics: PipelineDiagnostics,
+        timestampMs: Int64,
+        outcome: EstimationAttemptRecord.Outcome
+    ) {
+        guard let bundleRecorder else { return }
+        let payload = CaptureBundleRecorder.Payload(
+            captureResult: captureResult,
+            nadirSegmentation: diagnostics.debugNadirSegmentation,
+            obliqueSegmentation: diagnostics.debugObliqueSegmentation,
+            segmenterVersion: segmenter.modelVersion ?? segmenterSource,
+            timestampMs: timestampMs,
+            outcome: outcome.rawValue
+        )
+        Task { await bundleRecorder.record(payload) }
     }
 
     // The pipeline body proper: stages C–L. Stage helpers append measurements
@@ -299,6 +337,7 @@ public struct Pipeline: Sendable {
         pipelineSignposter.endInterval("Segmentation", segInterval)
         #endif
         diagnostics.recordSegmentation(view: .nadir, measurements: Self.segmentationMeasurements(nadirSeg))
+        diagnostics.debugNadirSegmentation = nadirSeg
         let palette = nadirSeg.probabilities.palette
 
         // Fail-closed near-empty-mask gate (estimation-runtime-consistency):
@@ -386,6 +425,7 @@ public struct Pipeline: Sendable {
                 throw EstimationFailure.noFoodPixels
             }
             diagnostics.recordSegmentation(view: .oblique, measurements: Self.segmentationMeasurements(obliqueSeg))
+            diagnostics.debugObliqueSegmentation = obliqueSeg
             let matching = MaskMatcher.match(
                 view1: nadirSeg.argmax,
                 view2: obliqueSeg.argmax,
