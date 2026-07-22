@@ -168,3 +168,93 @@ final class CoreMLSegmenterTests: XCTestCase {
         XCTAssertNoThrow(try SegmenterWeightsBudget.validate(at: dir.path))
     }
 }
+
+#if canImport(CoreML) && (os(iOS) || os(macOS))
+import CoreML
+
+// Regression: specs/bugfixes/segmenter-output-stride-ignored.
+//
+// Core ML returns output MLMultiArrays whose rows can be padded for alignment —
+// the 513-wide segmenter output comes back with a row stride of 544 elements on
+// every compute-unit configuration measured. `unpackLogits` must honour
+// `MLMultiArray.strides` rather than assume a densely packed buffer; the dense
+// read shifts every row by the padding, shearing the whole logit plane and
+// flooding field-capture masks with `unsupported_liquid`.
+final class CoreMLLogitsUnpackStrideTests: XCTestCase {
+
+    private func expectedValue(_ c: Int, _ y: Int, _ x: Int) -> Float {
+        Float(c * 100 + y * 10 + x)
+    }
+
+    private func assertDenseHWC(_ logits: [Float], h: Int, w: Int, classes: Int,
+                                file: StaticString = #filePath, line: UInt = #line) {
+        for y in 0..<h {
+            for x in 0..<w {
+                for c in 0..<classes {
+                    XCTAssertEqual(
+                        logits[(y * w + x) * classes + c], expectedValue(c, y, x),
+                        "mismatch at y=\(y) x=\(x) c=\(c) — MLMultiArray strides ignored?",
+                        file: file, line: line
+                    )
+                }
+            }
+        }
+    }
+
+    func testUnpackLogitsHonoursPaddedRowStride_CHW() throws {
+        let classes = 3, side = 4, paddedW = 8
+        // Row-padded CHW backing buffer; NaN sentinels in the padding so a
+        // dense read cannot accidentally produce the right answer.
+        var backing = [Float](repeating: .nan, count: classes * side * paddedW)
+        for c in 0..<classes {
+            for y in 0..<side {
+                for x in 0..<side {
+                    backing[c * side * paddedW + y * paddedW + x] = expectedValue(c, y, x)
+                }
+            }
+        }
+        let logits: [Float] = try backing.withUnsafeMutableBufferPointer { buf in
+            let arr = try MLMultiArray(
+                dataPointer: UnsafeMutableRawPointer(buf.baseAddress!),
+                shape: [1, NSNumber(value: classes), NSNumber(value: side), NSNumber(value: side)],
+                dataType: .float32,
+                strides: [NSNumber(value: classes * side * paddedW),
+                          NSNumber(value: side * paddedW),
+                          NSNumber(value: paddedW),
+                          1]
+            )
+            return try CoreMLInferenceEngine.unpackLogits(
+                arr, targetSize: side, classes: classes, chw: true
+            )
+        }
+        assertDenseHWC(logits, h: side, w: side, classes: classes)
+    }
+
+    func testUnpackLogitsHonoursPaddedRowStride_HWC() throws {
+        let classes = 3, side = 4, paddedW = 8
+        var backing = [Float](repeating: .nan, count: side * paddedW * classes)
+        for y in 0..<side {
+            for x in 0..<side {
+                for c in 0..<classes {
+                    backing[(y * paddedW + x) * classes + c] = expectedValue(c, y, x)
+                }
+            }
+        }
+        let logits: [Float] = try backing.withUnsafeMutableBufferPointer { buf in
+            let arr = try MLMultiArray(
+                dataPointer: UnsafeMutableRawPointer(buf.baseAddress!),
+                shape: [1, NSNumber(value: side), NSNumber(value: side), NSNumber(value: classes)],
+                dataType: .float32,
+                strides: [NSNumber(value: side * paddedW * classes),
+                          NSNumber(value: paddedW * classes),
+                          NSNumber(value: classes),
+                          1]
+            )
+            return try CoreMLInferenceEngine.unpackLogits(
+                arr, targetSize: side, classes: classes, chw: false
+            )
+        }
+        assertDenseHWC(logits, h: side, w: side, classes: classes)
+    }
+}
+#endif
