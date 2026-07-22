@@ -193,6 +193,21 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 
 ## Gotchas
 
+- **Core ML output `MLMultiArray`s are strided, not dense.** The 513-wide
+  segmenter output comes back with a 544-element row stride (measured on both
+  `.cpuOnly` and `.all`); any Swift code reading the raw buffer must index via
+  `MLMultiArray.strides`. A dense linear read shears every logit plane — on
+  device this flooded field captures with 87–99 % `unsupported_liquid` and
+  near-zero background while the same photo replayed sanely through PyTorch
+  and coremltools on the Mac (both honour strides, so the export-time
+  equivalence oracle can never catch this class of bug). Fixed in
+  `CoreMLInferenceEngine.unpackLogits` 2026-07-23
+  (`specs/bugfixes/segmenter-output-stride-ignored/`); regression tests build
+  row-padded arrays via `MLMultiArray(dataPointer:shape:dataType:strides:)`.
+  Diagnosis recipe: pull a capture bundle from `Documents/captures/`,
+  histogram/rendering of `nadir_argmax` (diagonal streaks = stride bug), then
+  Mac replay through `tools/segmenter/build/checkpoint_*.pt` to isolate
+  device-runtime vs model.
 - **NEVER edit `train.py` (or anything it imports) while a training run is
   live.** DataLoader workers are respawned each epoch via `spawn` and re-import
   the script from disk, so new code runs against the old pickled dataset object

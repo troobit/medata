@@ -1,7 +1,7 @@
 # Bugfix Report: segmenter-output-stride-ignored
 
 **Date:** 2026-07-23
-**Status:** In progress
+**Status:** Fixed
 
 ## Description of the Issue
 
@@ -75,7 +75,34 @@ least-observed configuration until the capture-bundle recorder landed.
 
 ## Resolution for the Issue
 
-_To be completed after the fix._
+**Changes made:**
+- `MedataCore/Sources/Segmentation/CoreMLSegmenter.swift` — `unpackLogits` now
+  reads `MLMultiArray.shape`/`.strides` and derives the (class, row, column)
+  element strides for both CHW and HWC layouts; `writeLogits` became a single
+  strided gather (`y*sH + x*sW + c*sC`) → dense `[H, W, C]`, replacing the
+  dense dual-branch copy. A shape/strides count mismatch throws
+  `modelInferenceFailed` instead of reading garbage.
+
+**Approach rationale:** Indexing through the array's own strides is the
+minimal, layout-agnostic correction — dense arrays are the special case where
+the strides happen to be dense, so no behaviour changes for contiguous
+outputs (the full suite stays green).
+
+**Alternatives considered:**
+- Convert via `MLShapedArray(_:)`, which densifies internally — rejected: an
+  extra full-tensor copy per inference on the hot path, and it hides rather
+  than documents the stride contract.
+- Reformat with vImage/BNNS — rejected: heavier dependency for what is a
+  three-line indexing change.
+
+## Verification (end-to-end, Mac)
+
+The captured Weetabix photo, preprocessed with the runtime letterbox contract
+and run through the bundled `segmenter.mlpackage` with the stride-aware unpack
+(`computeUnits = .all`), reproduces the coremltools reference within FP16
+noise: background 90.65 %, unknown_food 9.21 %, coffee 0.14 % (reference:
+90.65 % / 9.21 % / 0.14 %). The pre-fix device output for the same scene was
+93.2 % unsupported_liquid with 0.19 % background.
 
 ## Regression Test
 
@@ -94,20 +121,26 @@ output layouts.
 
 | File | Change |
 |------|--------|
-| `MedataCore/Sources/Segmentation/CoreMLSegmenter.swift` | `unpackLogits` made static internal (test seam); stride-aware fix to follow |
-| `MedataCore/Tests/SegmentationTests/CoreMLSegmenterTests.swift` | Added failing stride regression tests |
+| `MedataCore/Sources/Segmentation/CoreMLSegmenter.swift` | `unpackLogits` made static internal (test seam) and stride-aware; stale "under investigation" comment resolved |
+| `MedataCore/Tests/SegmentationTests/CoreMLSegmenterTests.swift` | Added stride regression tests (red before fix, green after) |
 
 ## Verification
 
 **Automated:**
-- [ ] Regression test passes
-- [ ] Full test suite passes
-- [ ] Linters/validators pass
+- [x] Regression test passes (`swift test --filter CoreMLLogitsUnpackStrideTests`)
+- [x] Full test suite passes (XCTest 502, 3 skipped, 0 failures; swift-testing 151 in 21 suites)
+- [x] Linters/validators pass (`make spell` clean)
 
 **Manual verification:**
-- Pending: re-deploy Release to the `you` iPhone and re-capture the Weetabix
-  bowl; expect the mask overlay to trace the food and the argmax histogram of
-  the new capture bundle to be predominantly background.
+- Mac end-to-end replay of the field capture through the bundled model with
+  the fixed unpack matches the coremltools reference (see above).
+- On-device re-capture (2026-07-23, `you`, bundle `1784736336616-success`):
+  2 Weetabix on a plate segmented as one coherent `bread_white` region —
+  argmax histogram 75.37 % background / 24.63 % bread_white, no liquid flood,
+  no shear. The result row read "bread white, ~100 g carbs": the class is the
+  palette's closest match (no cereal class exists — a separate palette gap),
+  and the carb overestimate is the known uncalibrated β = 1.0 behaviour, not
+  this bug.
 
 ## Prevention
 
