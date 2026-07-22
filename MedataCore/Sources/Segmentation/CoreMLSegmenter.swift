@@ -308,7 +308,7 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         guard let multi = result.featureValue(for: outputName)?.multiArrayValue else {
             throw SegmentationError.modelInferenceFailed("missing output \(outputName)")
         }
-        let logits = try unpackLogits(multi, targetSize: targetSize, classes: classes, chw: outputIsCHW)
+        let logits = try Self.unpackLogits(multi, targetSize: targetSize, classes: classes, chw: outputIsCHW)
         return (logits, classes)
     }
 
@@ -340,7 +340,9 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         return arr
     }
 
-    private func unpackLogits(
+    // Static and internal so tests can drive it with hand-built MLMultiArrays
+    // (including non-contiguous ones) without loading a real model.
+    static func unpackLogits(
         _ arr: MLMultiArray, targetSize: Int, classes: Int, chw: Bool
     ) throws -> [Float] {
         let h = targetSize, w = targetSize
@@ -374,7 +376,7 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         return logits
     }
 
-    private func writeLogits(
+    private static func writeLogits(
         src: (Int) -> Float,
         into logits: inout [Float],
         chw: Bool, h: Int, w: Int, classes: Int
