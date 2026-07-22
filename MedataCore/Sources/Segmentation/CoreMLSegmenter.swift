@@ -109,10 +109,12 @@ public final class CoreMLSegmenter: @unchecked Sendable {
         )
         // Release diagnostic: mask coverage + the dominant argmax class. A
         // full-frame food mask (coverage≈100) means the model is over-segmenting
-        // — the support-plane fit then starves (bug under investigation). If the
-        // dominant class is 0 at ~100% coverage, the model's channel semantics
-        // are shifted vs the palette (e.g. background trained at channel 0 but
-        // read as food class 0). One integer scan; cheap enough for Release.
+        // — the historical cause was the dense read of the strided Core ML
+        // output (bug segmenter-output-stride-ignored, fixed in unpackLogits).
+        // If the dominant class is 0 at ~100% coverage, the model's channel
+        // semantics are shifted vs the palette (e.g. background trained at
+        // channel 0 but read as food class 0). One integer scan; cheap enough
+        // for Release.
         let cov = Self.maskCoverage(argmax: post.argmax, palette: palette)
         let maskLogType: OSLogType = maskLog == .livePreview ? .debug : .info
         segmenterLog.log(
@@ -342,10 +344,31 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
 
     // Static and internal so tests can drive it with hand-built MLMultiArrays
     // (including non-contiguous ones) without loading a real model.
+    //
+    // Core ML output arrays are NOT guaranteed densely packed: rows are padded
+    // for alignment (the 513-wide segmenter output comes back with a
+    // 544-element row stride), so every element must be addressed through
+    // `MLMultiArray.strides`. A dense linear read shears the logit planes —
+    // bug `segmenter-output-stride-ignored`.
     static func unpackLogits(
         _ arr: MLMultiArray, targetSize: Int, classes: Int, chw: Bool
     ) throws -> [Float] {
         let h = targetSize, w = targetSize
+        let shape = arr.shape.map(\.intValue)
+        let strides = arr.strides.map(\.intValue)
+        guard shape.count >= 3, strides.count == shape.count else {
+            throw SegmentationError.modelInferenceFailed(
+                "unexpected output shape \(shape) strides \(strides)")
+        }
+        // The last three dims are [C, H, W] (chw) or [H, W, C]; leading dims
+        // are batch/unit (index 0 in each).
+        let d = shape.count - 3
+        let sC: Int, sH: Int, sW: Int
+        if chw {
+            sC = strides[d]; sH = strides[d + 1]; sW = strides[d + 2]
+        } else {
+            sH = strides[d]; sW = strides[d + 1]; sC = strides[d + 2]
+        }
         var logits = [Float](repeating: 0, count: h * w * classes)
         let dt = arr.dataType
         switch dt {
@@ -354,21 +377,21 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
                 let src = raw.bindMemory(to: Float.self).baseAddress!
                 writeLogits(src: { i in src[i] },
                             into: &logits,
-                            chw: chw, h: h, w: w, classes: classes)
+                            h: h, w: w, classes: classes, sC: sC, sH: sH, sW: sW)
             }
         case .float16:
             arr.withUnsafeBytes { raw in
                 let src = raw.bindMemory(to: Float16.self).baseAddress!
                 writeLogits(src: { i in Float(src[i]) },
                             into: &logits,
-                            chw: chw, h: h, w: w, classes: classes)
+                            h: h, w: w, classes: classes, sC: sC, sH: sH, sW: sW)
             }
         case .double:
             arr.withUnsafeBytes { raw in
                 let src = raw.bindMemory(to: Double.self).baseAddress!
                 writeLogits(src: { i in Float(src[i]) },
                             into: &logits,
-                            chw: chw, h: h, w: w, classes: classes)
+                            h: h, w: w, classes: classes, sC: sC, sH: sH, sW: sW)
             }
         default:
             throw SegmentationError.modelInferenceFailed("unsupported output dtype \(dt)")
@@ -376,25 +399,21 @@ public final class CoreMLInferenceEngine: SegmenterInferenceEngine, @unchecked S
         return logits
     }
 
+    // Strided gather → [H, W, C] row-major dense. The stride triple already
+    // encodes the source layout, so one loop covers CHW and HWC alike.
     private static func writeLogits(
         src: (Int) -> Float,
         into logits: inout [Float],
-        chw: Bool, h: Int, w: Int, classes: Int
+        h: Int, w: Int, classes: Int, sC: Int, sH: Int, sW: Int
     ) {
-        if chw {
-            // [1, C, H, W] → [H, W, C] row-major.
-            for c in 0..<classes {
-                let cBase = c * h * w
-                for y in 0..<h {
-                    let srcRow = cBase + y * w
-                    for x in 0..<w {
-                        logits[(y * w + x) * classes + c] = src(srcRow + x)
-                    }
+        for y in 0..<h {
+            for x in 0..<w {
+                let base = y * sH + x * sW
+                let dst = (y * w + x) * classes
+                for c in 0..<classes {
+                    logits[dst + c] = src(base + c * sC)
                 }
             }
-        } else {
-            // [1, H, W, C] → [H, W, C].
-            for i in 0..<(h * w * classes) { logits[i] = src(i) }
         }
     }
 
