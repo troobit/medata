@@ -45,10 +45,16 @@ within ±10 g; adolescents 42% within ±10 g / 86% within ±20 g (review,
 ## Strategic notes
 
 - The 5.5 g figure is lab conditions; **13.1 g is the honest shipping-app number**.
-- Whether the current SNAQ app runs inference on-device is **unconfirmed** (only the 2020
-  prototype is documented on-device, 22.9 s on an iPhone X). MeData's hard
-  no-network/no-LLM estimation path may therefore be a genuine differentiator, not a
-  handicap.
+- The shipping SNAQ app is **almost certainly cloud-based** (researched 2026-07-18): its
+  privacy policy has users "upload photos" retained for 10 years and names AWS as a
+  processing/storage provider; snaq.ai states an internet connection is often required and
+  offline functionality is limited; an Android version exists (io.snaq.app) with no
+  LiDAR/ANE stack; and on non-LiDAR phones SNAQ falls back to **default portion sizes**
+  (no volumetry). Only the 2020 Herzig prototype is documented on-device (22.9 s, iPhone X).
+  MeData's no-network/no-LLM estimation path is therefore a genuine differentiator, and
+  SNAQ's recognition breadth likely rests on a server-side model plus a user-photo data
+  flywheel (250k+ users) that an offline 35-class model cannot copy — parity means carb-MAE
+  parity on the staple palette, not open-world recognition parity.
 - The 19.2% suggestion-acceptance figure in the RCT says UX trust matters as much as
   accuracy — the estimate must be inspectable/adjustable (snaqui portion adjustment is
   the right instinct).
