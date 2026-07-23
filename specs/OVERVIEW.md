@@ -20,6 +20,7 @@
 | [Segmenter Foundation](#segmenter-foundation) | estimation | 2026-07-10 | In Progress | full | Re-derive the segmenter bars (gate 0.60 → mean IoU ≥ 0.48, staple floors 0.50 → 0.45), upgrade the training recipe (stronger init + co-occurrence loss, stratified heldout re-cut) as the primary lever, and gate a SegFormer-B0 backbone swap on a Core ML conversion spike measured on the hardware floor. 19 of 22 tasks done — training chain executed with a NEGATIVE verdict (Decision 24): the co-occurrence recipe regressed the leak-free same-set mean 0.3776 → 0.3253 with four staple regressions, so `24e0b022241a` stays bundled; V2 init was separately rejected mid-run (Decision 23) and the floor re-based to the iPhone 16 Pro (Decision 22). Combined-loss fallback run in flight as a weighting-vs-co-term experiment; spike measurements (20–22, on the 16 Pro) remain human-gated. |
 | [SNAQ Parity](#snaq-parity) | estimation | 2026-07-17 | Done | full | Make estimation quality measurable against SNAQ's real-world figure (per-meal carb MAE ≤ ~13 g, completion rate always reported): an in-app weighed-meal benchmark with a paired-bootstrap promotion gate, a persistent on-device outcome/diagnostics store so "no volume" refusals carry causal measurements (pre/post-β volumes, skip counters, plane/scale/tilt), and the ranked model levers — segmenter tail profiling, a 4-candidate conversion bake-off via a shared `archs.py` registry, Recipe1M+-derived co-occurrence statistics, inverse-frequency weighting removed (Decision 25 enforced in code). Bounded cycle: complete on evidence-backed verdicts, not on hitting the target; seeds the MyFoodRepo-273 bridge if unmet. All 24 tasks done — diagnostics foundation, the persistent outcome store, the `Benchmark` target (SNAQ-anchored `BenchmarkReport.compute` + seeded paired-bootstrap `promotionVerdict`), the `EstimationLogView`/`BenchmarkView` Settings surfaces, and all Python levers; the cycle's exit condition (Req 8: benchmark campaign, tail profile, bake-off and retrain verdicts) is human-gated per prerequisites.md. |
 | [Rawframe Rgb Conversion](#rawframe-rgb-conversion) | capture | 2026-05-06 | Done | full | Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consumers read correct bytes. |
+| [Capture Bundle Recorder](#capture-bundle-recorder) | capture | 2026-07-18 | In Progress | smol | Record a harness-replayable `PbMealFixture` bundle per estimation attempt to `Documents/captures/` (Files-app visible), so any field capture replays offline through the existing Mac harness with no harness changes. Always on incl. Release; no UI. Tasks 1–3 done; the on-device field-day pass (task 4) is human-gated on a tethered phone. |
 | [Event Log Schema](#event-log-schema) | data | 2026-06-10 | Done | full | Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata. |
 | [Libre Ingestion](#libre-ingestion) | data | 2026-07-04 | Done | full | Extract glucose readings on-device from user-picked LibreLink screenshots into `bsl` events; Swift port of imgdatacollector gated by its 9-image accuracy corpus. |
 | [iPhone Experience](#iphone-experience) | ui | 2026-05-22 | Done | full ·iterative | v1 iPhone experience: three-tab shell, live AR preview, result view, meal history, and settings. Visual design (Req 20) is iterative against [`design-system/`](../design-system/MASTER.md). |
@@ -32,6 +33,7 @@
 | [CGM Connect](#cgm-connect) | data | 2026-07-10 | In Progress | full | Live glucose ingestion behind a source abstraction (HealthKit primary, LibreLinkUp follower complement) writing `bsl` events with cross-source 5-minute-grid dedup, firewalled from estimation by a package-graph test. 13/14 tasks done; on-device verify (task 14) human-gated. |
 | [Manual Carb Intake](#manual-carb-intake) | data · ui | 2026-07-07 | In Progress | full | Manual carb/macro logging without the camera: carb-entry sheet (keypad, 1–999 g, optional macros behind a disclosure), one-tap quick-add presets (`quick_presets` table, seeded defaults), inline edit/delete of manual entries, `EventType.intake` folded into the Graph carb series and Records timeline. All 11 tasks done; on-device verification checklist (design.md) human-gated. |
 | [Snaqui](#snaqui) | ui · data | 2026-07-13 | In Progress | prd | SNAQ-inspired uplift: portion-adjustment control on the result screen (N-of-M fractions + multiples, persisted as append-only `PbUserCorrection`), Graph carb bars honour corrected totals, full-screen pages lose their redundant navigation titles, metric-chip row wraps instead of truncating. 7/8 tasks done; on-device looks-right pass (task 8) human-gated. |
+| [Serving Adjust](#serving-adjust) | data · ui | 2026-07-17 | In Progress | prd | Move the portion control onto the per-ingredient rows counting in household servings (spoons, potatoes) with grams secondary: a data-driven solid-food servings table in the DB generator (mirroring `liquid_servings`) and a reshaped result screen with per-row steppers + one-tap plate-fraction, persisted through the existing append-only `PbUserCorrection`. 10/11 tasks done; on-device looks-right pass human-gated. |
 
 ---
 
@@ -146,6 +148,14 @@ Convert ARKit YCbCr frames to BGRA8 at the capture boundary so downstream consum
 - [requirements.md](capture/rawframe-rgb-conversion/requirements.md)
 - [tasks.md](capture/rawframe-rgb-conversion/tasks.md)
 
+## Capture Bundle Recorder
+
+Record a harness-replayable `PbMealFixture` bundle per estimation attempt to `Documents/captures/` (Files-app visible, deletable), so any field capture — success, typed refusal, or non-typed error — replays offline through the existing Mac harness (`FixtureLoader.load` + `FixtureRunner.run`) with no harness changes. Developer-phase tooling: always on including Release (the research branch is pre-release), write-behind and failure-swallowing so recording never alters the estimation result, no in-app UI. Tasks 1–3 landed (recorder, per-attempt capture, Files-app reachability); task 4 — the on-device field-day-readiness pass (bundle → Files → Mac → HarnessCLI replay) — is human-gated on a tethered iPhone 16 Pro.
+
+- [decision_log.md](capture/capture-bundle-recorder/decision_log.md)
+- [smolspec.md](capture/capture-bundle-recorder/smolspec.md)
+- [tasks.md](capture/capture-bundle-recorder/tasks.md)
+
 ## Event Log Schema
 
 Uplift persistence to a long-form event log with fixed timestamp/event_type/value columns and JSON metadata.
@@ -253,3 +263,11 @@ SNAQ-inspired UI uplift, PRD-lane spec (top-level folder, no domain directory). 
 
 - [prd.md](snaqui/prd.md)
 - [tasks-ios-app.md](snaqui/tasks-ios-app.md)
+
+## Serving Adjust
+
+PRD-lane spec (top-level folder, no domain directory). Reshape the snaqui portion control: move the less/more controls off the global "Ate 1 of 1" card and onto the per-ingredient rows, counting in each food's household serving unit ("spoons of peas", "number of potatoes") with grams as the secondary precise path, the hero carb total updating live and a one-tap plate-fraction control for the leftovers case. Serving units + gram weights are bundled data with per-row source citations (BDA Food Fact Sheet; Crawley, *Food Portion Sizes*) in a new solid-food servings table mirroring the existing `liquid_servings` precedent — tuneable without code. Two contexts: the food-database generator and the `App/` result surface; the estimation pipeline, segmenter, and volume/mass/β maths are untouched, and adjustments persist through the existing append-only `PbUserCorrection`. 10/11 tasks done; the on-device looks-right pass is human-gated.
+
+- [prd.md](serving-adjust/prd.md)
+- [tasks-food-database-servings.md](serving-adjust/tasks-food-database-servings.md)
+- [tasks-ios-app.md](serving-adjust/tasks-ios-app.md)
