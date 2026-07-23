@@ -12,7 +12,7 @@ These tasks must be completed by the user before or during implementation. The c
 
 ## During Implementation
 
-- [ ] **Confirm `Vision` framework availability** on the iPhone 13 Pro Max iOS 26.5 deployment target. The Vision rectangle-detection API surface used by the new `CardDetector` conformance must be present on the documented iOS floor (currently iOS 17 per `specs/estimation/pipeline/`). If a higher floor is required for a specific API, that's a design-phase decision.
+- [ ] **Confirm `Vision` framework availability** on the iPhone 13 Pro Max iOS 26.5 deployment target. The Vision rectangle-detection API surface used by the new `CardDetector` conformance must be present on the documented iOS floor (iOS 26.5 per `specs/estimation/pipeline/` Req 1.2). If a higher floor is required for a specific API, that's a design-phase decision.
 - [ ] **Capture a fruit-plate fixture** on iPhone 13 Pro Max with the ID-1 card visible in the nadir frame. The fixture serves the regression tests under [Requirement 8.5](requirements.md#8.5) (Vision detector) and the on-device verification of the full flow.
 - [ ] **Re-run `event=supportplane.end success=true` capture** after the centre-rectangle mask is deleted, to confirm the real food-region mask produces a finite, gravity-aligned plane fit with bounded inlier count per [Requirement 2.3](requirements.md#2.3).
 
