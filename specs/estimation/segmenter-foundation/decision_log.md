@@ -880,3 +880,40 @@ This is exactly the branch the ledger's judging step anticipated ("regresses lik
 Ledger §2 is fully closed. `tools/segmenter/build/lineage.json` carries both validation records with the Decision 24/25 override reasons. Artifacts kept: `checkpoint_combined.pt`, `train_combined_20260716.log`, the `heldout_leakfree/` split. The improvement work moves to the next spec, seeded from `estimation-improvement-avenues.md` + `snaq-benchmark.md` under the user's 2026-07-16 SNAQ-comparable mandate.
 
 ---
+
+## Decision 26: Non-LiDAR two-view + ID-1-card path retained, not descoped
+
+**Date**: 2026-07-24
+**Status**: accepted (resolves the open question flagged in Decision 22's Impact)
+
+### Context
+
+Decision 22 raised the hardware floor to the iPhone 16 Pro and noted that the two-view + ID-1-card non-LiDAR capture path's audience was affected — every in-scope *floor* device carries LiDAR — but explicitly left descoping that path as "a separate user decision, not made here." The `CLAUDE.md` floor line and `CLOUT.md` open-decisions list have carried the descope question as pending since.
+
+### Decision
+
+The non-LiDAR two-view + ID-1-card capture path is kept. It is not descoped. The iPhone 16 Pro remains the floor for calibration and performance *targets*, but the app continues to run on non-LiDAR iOS 26.5 devices, degrading to the two-view + ID-1-card scale path with `noLidarConfidence` set on every meal.
+
+### Rationale
+
+The user's priority is availability: the tool should reach as many devices as possible, and only prefer LiDAR when it is present. The runtime already supports this — `ARKitCaptureEngine` starts the AR session without `.sceneDepth` when LiDAR is absent and the pipeline falls through to the card path (Req 4.3, §7.4; `docs/ios-device-setup.md`), so retention costs nothing to remove a gate that was never enforced. Descoping would shrink the addressable audience for a purely notional simplification, since the non-LiDAR code path already exists and is exercised.
+
+### Alternatives Considered
+
+- **Descope the non-LiDAR path**: Remove the two-view + ID-1-card fallback and refuse on LiDAR-less devices - Rejected because it narrows availability with no offsetting benefit; the path is already built and runtime-gated by capability.
+- **Leave the decision pending**: Keep carrying it as an open question - Rejected because the ambiguity has propagated stale "descope pending" notes across `CLAUDE.md`/`CLOUT.md`; the user has now decided.
+
+### Consequences
+
+**Positive:**
+- Wider device reach: any iOS 26.5 iPhone can run the app, LiDAR or not.
+- Removes a standing open decision from the MVP tracker and the docs.
+
+**Negative:**
+- The non-LiDAR path stays a maintenance and test surface even though the floor/primary device never exercises it; its accuracy is not measured against the calibration targets.
+
+### Impact
+
+`CLAUDE.md` floor line, `CLOUT.md` open-decisions list. MD-23 in `specs/DECISIONS.md` already states the non-LiDAR confidence path "still exists at runtime," which this decision confirms rather than changes.
+
+---
