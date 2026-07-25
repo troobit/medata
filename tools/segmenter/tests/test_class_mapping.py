@@ -1,11 +1,11 @@
-"""FoodSeg103 remap over the redefined v1 palette (Req 7.2, Decisions 23/24).
+"""FoodSeg103 remap over the v2 palette (Req 7.2, Decisions 23/24, MD-29).
 
-The palette gains 8 coarse liquid channels (24-31), shifting the sentinels to
-background=32 / unknown_food=33 / unsupported_liquid=34. parse_palette's
-24-class assert moves to the new total, and the wine/coffee/tea/milk/juice/
-soup FoodSeg103 categories route to the coarse liquid classes instead of
-collapsing to unsupported_liquid. (FoodSeg103 has no beer category; milkshake
-has no palette home and stays unsupported_liquid.)
+Palette v2 adds cereal as solid index 24, shifting the liquids to 25-32 and
+the sentinels to background=33 / unknown_food=34 / unsupported_liquid=35.
+parse_palette's assert moves to the new total, and the wine/coffee/tea/milk/
+juice/soup FoodSeg103 categories route to the coarse liquid classes instead
+of collapsing to unsupported_liquid. (FoodSeg103 has no beer category and no
+cereal category; milkshake has no palette home and stays unsupported_liquid.)
 
 The committed class_mapping_foodseg103_v1.json is palette-locked and must be
 regenerated in the same change (Decision 23 consequence).
@@ -24,10 +24,10 @@ COMMITTED_MAPPING = REPO_ROOT / "tools" / "segmenter" / "class_mapping_foodseg10
 
 LIQUID_CLASSES = ["water", "coffee", "tea", "milk",
                   "fruit_juice", "soup", "beer", "wine"]
-SOLID_COUNT = 24
+SOLID_COUNT = 25
 TOTAL_CLASSES = SOLID_COUNT + len(LIQUID_CLASSES)
 
-# FoodSeg103 category -> expected coarse liquid channel (liquids start at 24).
+# FoodSeg103 category -> expected coarse liquid channel (liquids start at 25).
 LIQUID_ROUTES = {
     "wine": SOLID_COUNT + LIQUID_CLASSES.index("wine"),
     "coffee": SOLID_COUNT + LIQUID_CLASSES.index("coffee"),
@@ -76,7 +76,7 @@ def test_unhomed_liquid_stays_unsupported(palette):
 
 def test_committed_mapping_artifact_regenerated():
     # Decision 23 consequence: every palette-locked artifact regenerates in
-    # the same change. The committed remap must reflect the 35-channel layout.
+    # the same change. The committed remap must reflect the 36-channel layout.
     mapping = json.loads(COMMITTED_MAPPING.read_text())
     assert mapping["channel_count"] == TOTAL_CLASSES + 3
     assert mapping["special_channels"] == {

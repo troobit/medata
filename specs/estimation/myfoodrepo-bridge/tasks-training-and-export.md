@@ -28,7 +28,7 @@ references:
   - Expect roughly 20 min/epoch on M5 Pro MPS; ~10+ hours for 60 epochs
   - Blocked-by: 8id22y4 (Preflight the merged corpus and measure one epoch)
 
-- [ ] 4. Integration follow-up: align make_fixtures.py and test_lineage.py with the v2 mapping
+- [x] 4. Integration follow-up: align make_fixtures.py and test_lineage.py with the v2 mapping
   - Do this together with the dataset-bridge resume: when class_mapping_foodseg103 regenerates to v2, tools/segmenter/make_fixtures.py DEFAULT_NUM_CLASSES moves 35 -> 36 and tools/segmenter/tests/test_lineage.py:31 palette_version assertion moves v1 -> v2
   - Spike files NUM_CLASSES = 35 are pinned historical evidence — leave them
   - Flagged unowned at integration 2026-07-25 by the training context

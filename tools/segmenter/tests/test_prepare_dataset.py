@@ -304,11 +304,11 @@ def test_main_end_to_end_writes_stratification_and_co_stats(tmp_path):
     assert co["schema"] == "co_stats.v2"
     assert co["split_seed"] == 77
     assert co["class_mapping_sha256"] == prepare_dataset.file_sha256(mapping_path)
-    assert co["channel_count"] == 35
-    assert co["special_channel_indices"] == [32, 33, 34]
+    assert co["channel_count"] == 36
+    assert co["special_channel_indices"] == [33, 34, 35]
     assert co["train_images"] == manifest["counts"]["train"]
-    assert len(co["pixel_counts"]["train"]) == 35
-    assert len(co["joint_presence_counts"]) == 35
+    assert len(co["pixel_counts"]["train"]) == 36
+    assert len(co["joint_presence_counts"]) == 36
     # Statistics come from the TRAIN split only: total presence of any class
     # never exceeds the train image count.
     assert max(co["presence_counts"]) <= co["train_images"]

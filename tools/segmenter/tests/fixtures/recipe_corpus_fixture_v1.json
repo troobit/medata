@@ -1,22 +1,295 @@
 [
-  {"id": "r01", "ingredients": [{"text": "2 cups white rice"}, {"text": "1 chicken breast"}, {"text": "1 head broccoli"}, {"text": "salt"}]},
-  {"id": "r02", "ingredients": [{"text": "basmati rice"}, {"text": "500 g chicken"}, {"text": "black pepper"}]},
-  {"id": "r03", "ingredients": [{"text": "400 g spaghetti"}, {"text": "4 ripe tomatoes"}, {"text": "grated parmesan"}, {"text": "olive oil"}]},
-  {"id": "r04", "ingredients": [{"text": "brown rice"}, {"text": "300 g beef"}, {"text": "2 carrots"}]},
-  {"id": "r05", "ingredients": [{"text": "4 slices white bread"}, {"text": "mature cheddar"}, {"text": "butter"}]},
-  {"id": "r06", "ingredients": [{"text": "wholemeal bread"}, {"text": "2 eggs"}]},
-  {"id": "r07", "ingredients": [{"text": "boiled potatoes"}, {"text": "cod fillet"}, {"text": "garden peas"}]},
-  {"id": "r08", "ingredients": [{"text": "mashed potatoes"}, {"text": "1 pork chop"}, {"text": "gravy granules"}]},
-  {"id": "r09", "ingredients": [{"text": "french fries"}, {"text": "minced beef"}, {"text": "1 tin baked beans"}]},
-  {"id": "r10", "ingredients": [{"text": "red lentils"}, {"text": "2 carrots"}, {"text": "vegetable soup"}]},
-  {"id": "r11", "ingredients": [{"text": "1 lettuce"}, {"text": "cherry tomatoes"}, {"text": "rocket"}]},
-  {"id": "r12", "ingredients": [{"text": "1 apple"}, {"text": "2 bananas"}, {"text": "whole milk"}]},
-  {"id": "r13", "ingredients": [{"text": "green tea"}, {"text": "splash of milk"}]},
-  {"id": "r14", "ingredients": [{"text": "freshly brewed coffee"}, {"text": "milk"}]},
-  {"id": "r15", "ingredients": [{"text": "orange juice"}, {"text": "sparkling water"}]},
-  {"id": "r16", "ingredients": [{"text": "red wine"}, {"text": "braising beef"}, {"text": "mixed vegetables"}]},
-  {"id": "r17", "ingredients": [{"text": "cold lager"}, {"text": "oven chips"}]},
-  {"id": "r18", "ingredients": [{"text": "chicken soup"}, {"text": "white bread"}]},
-  {"id": "r19", "ingredients": [{"text": "haddock"}, {"text": "mushy peas"}]},
-  {"id": "r20", "ingredients": [{"text": "spinach leaves"}, {"text": "1 egg"}, {"text": "mozzarella"}]}
+  {
+    "id": "r01",
+    "ingredients": [
+      {
+        "text": "2 cups white rice"
+      },
+      {
+        "text": "1 chicken breast"
+      },
+      {
+        "text": "1 head broccoli"
+      },
+      {
+        "text": "salt"
+      }
+    ]
+  },
+  {
+    "id": "r02",
+    "ingredients": [
+      {
+        "text": "basmati rice"
+      },
+      {
+        "text": "500 g chicken"
+      },
+      {
+        "text": "black pepper"
+      }
+    ]
+  },
+  {
+    "id": "r03",
+    "ingredients": [
+      {
+        "text": "400 g spaghetti"
+      },
+      {
+        "text": "4 ripe tomatoes"
+      },
+      {
+        "text": "grated parmesan"
+      },
+      {
+        "text": "olive oil"
+      }
+    ]
+  },
+  {
+    "id": "r04",
+    "ingredients": [
+      {
+        "text": "brown rice"
+      },
+      {
+        "text": "300 g beef"
+      },
+      {
+        "text": "2 carrots"
+      }
+    ]
+  },
+  {
+    "id": "r05",
+    "ingredients": [
+      {
+        "text": "4 slices white bread"
+      },
+      {
+        "text": "mature cheddar"
+      },
+      {
+        "text": "butter"
+      }
+    ]
+  },
+  {
+    "id": "r06",
+    "ingredients": [
+      {
+        "text": "wholemeal bread"
+      },
+      {
+        "text": "2 eggs"
+      }
+    ]
+  },
+  {
+    "id": "r07",
+    "ingredients": [
+      {
+        "text": "boiled potatoes"
+      },
+      {
+        "text": "cod fillet"
+      },
+      {
+        "text": "garden peas"
+      }
+    ]
+  },
+  {
+    "id": "r08",
+    "ingredients": [
+      {
+        "text": "mashed potatoes"
+      },
+      {
+        "text": "1 pork chop"
+      },
+      {
+        "text": "gravy granules"
+      }
+    ]
+  },
+  {
+    "id": "r09",
+    "ingredients": [
+      {
+        "text": "french fries"
+      },
+      {
+        "text": "minced beef"
+      },
+      {
+        "text": "1 tin baked beans"
+      }
+    ]
+  },
+  {
+    "id": "r10",
+    "ingredients": [
+      {
+        "text": "red lentils"
+      },
+      {
+        "text": "2 carrots"
+      },
+      {
+        "text": "vegetable soup"
+      }
+    ]
+  },
+  {
+    "id": "r11",
+    "ingredients": [
+      {
+        "text": "1 lettuce"
+      },
+      {
+        "text": "cherry tomatoes"
+      },
+      {
+        "text": "rocket"
+      }
+    ]
+  },
+  {
+    "id": "r12",
+    "ingredients": [
+      {
+        "text": "1 apple"
+      },
+      {
+        "text": "2 bananas"
+      },
+      {
+        "text": "whole milk"
+      }
+    ]
+  },
+  {
+    "id": "r13",
+    "ingredients": [
+      {
+        "text": "green tea"
+      },
+      {
+        "text": "splash of milk"
+      }
+    ]
+  },
+  {
+    "id": "r14",
+    "ingredients": [
+      {
+        "text": "freshly brewed coffee"
+      },
+      {
+        "text": "milk"
+      }
+    ]
+  },
+  {
+    "id": "r15",
+    "ingredients": [
+      {
+        "text": "orange juice"
+      },
+      {
+        "text": "sparkling water"
+      }
+    ]
+  },
+  {
+    "id": "r16",
+    "ingredients": [
+      {
+        "text": "red wine"
+      },
+      {
+        "text": "braising beef"
+      },
+      {
+        "text": "mixed vegetables"
+      }
+    ]
+  },
+  {
+    "id": "r17",
+    "ingredients": [
+      {
+        "text": "cold lager"
+      },
+      {
+        "text": "oven chips"
+      }
+    ]
+  },
+  {
+    "id": "r18",
+    "ingredients": [
+      {
+        "text": "chicken soup"
+      },
+      {
+        "text": "white bread"
+      }
+    ]
+  },
+  {
+    "id": "r19",
+    "ingredients": [
+      {
+        "text": "haddock"
+      },
+      {
+        "text": "mushy peas"
+      }
+    ]
+  },
+  {
+    "id": "r20",
+    "ingredients": [
+      {
+        "text": "spinach leaves"
+      },
+      {
+        "text": "1 egg"
+      },
+      {
+        "text": "mozzarella"
+      }
+    ]
+  },
+  {
+    "id": "r21",
+    "ingredients": [
+      {
+        "text": "porridge oats"
+      },
+      {
+        "text": "whole milk"
+      },
+      {
+        "text": "honey"
+      }
+    ]
+  },
+  {
+    "id": "r22",
+    "ingredients": [
+      {
+        "text": "granola"
+      },
+      {
+        "text": "natural yogurt"
+      },
+      {
+        "text": "blueberries"
+      }
+    ]
+  }
 ]

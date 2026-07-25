@@ -28,7 +28,7 @@ def test_build_lineage_fields_and_class_mapping_defaults(tmp_path):
     assert manifest["split_seed"] == 42
     assert manifest["train_config"] == {"epochs": 60, "lr": 1e-3}
     # Defaults sourced from the committed class-mapping file.
-    assert manifest["palette_version"] == "v1"
+    assert manifest["palette_version"] == "v2"
     assert manifest["class_mapping_version"] == "foodseg103_to_palette_v1"
     assert manifest["foodseg103_source"] == "FoodSeg103"
     # Metrics are placeholders until the validation step (task 9) fills them.
