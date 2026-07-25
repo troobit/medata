@@ -112,6 +112,7 @@ training set is a multi-month effort and is deliberately out of scope.
 | Dataset | Licence | Use here | Source |
 | --- | --- | --- | --- |
 | FoodSeg103 | Apache 2.0 | Primary segmenter training + held-out test set | <https://xiongweiwu.github.io/foodseg103.html> |
+| Food Recognition Benchmark 2022 | CC BY 4.0 | Merged-corpus supplement (myfoodrepo-bridge, MD-30): supervision for cereal + the three zero-image staples; 39,962 train / 1,000 val images, 498 categories | Kaggle mirror `sainikhileshreddy/food-recognition-2022` (AIcrowd upstream broken — `dataset-strategy.md` §6.1); provenance in `data/foodrec2022/SOURCE.md` |
 | UECFOOD-256 | Permissive (per-image, see source) | Optional supplement for classes thin in FoodSeg103 | <http://foodcam.mobi/dataset256.html> |
 | UNIMIB2016 | CC-BY-4.0 | Optional; Anthimopoulos / GoCARB lineage. Bounding boxes mainly — kept here for cross-paper comparison | <http://www.ivl.disco.unimib.it/activities/food-recognition/> |
 | Project gravimetric set | Internal | β_c calibration + end-to-end accuracy bar | Captured during step 8 (see caveat below) |
@@ -326,7 +327,34 @@ Output: a PyTorch checkpoint at `tools/segmenter/build/checkpoint.pt`. This `.pt
 is the **single source of truth** (Decision 28) that both export paths (§6)
 consume — there is no separate iOS vs Android training run.
 
-### Recommended next run (estimation-quality PRD)
+### Current run (myfoodrepo-bridge, 2026-07-26): merged corpus at 36 classes
+
+Palette v2 (MD-29) and the Food Recognition 2022 bridge (MD-30) move training
+to the merged corpus — `data/merged_foodseg_foodrec2022` (train 45,515 /
+val 1,711 / heldout 854; built by `merge_corpus_foodrec2022.py`, leak-free
+anchor preserved verbatim). The corpus is ~8× FoodSeg103, so epoch counts are
+chosen by total-optimisation-step parity with the incumbent (60 × 5,553 ≈
+333k images seen ≈ 7.3 merged epochs), not copied from the 60-epoch runbook.
+Staple-safe recipe per the PRD: plain CE (`--class-weighting none` — matching
+the incumbent `24e0b022241a` for an attributable comparison), geometric
+augmentation on, no photometric augmentation, `--num-classes 36`:
+
+```sh
+nohup caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
+    --data /Users/r/repos/medata/data/merged_foodseg_foodrec2022 \
+    --num-classes 36 --target-size 513 \
+    --epochs 10 --batch-size 16 --lr 1e-3 \
+    --out tools/segmenter/build/checkpoint_merged_v2.pt \
+    >> tools/segmenter/build/train_merged_v2.log 2>&1 &
+```
+
+### Superseded: recommended next run (estimation-quality PRD)
+
+> **Superseded 2026-07-16/26:** this recipe's inverse-frequency class
+> weighting was deleted as the attributed staple-killer (snaq-parity
+> Decision 13, segmenter-foundation Decision 25); `--loss combined` now pairs
+> with `--class-weighting {none, sqrt_inverse}` only, and the current run is
+> the merged-corpus block above. Kept for the historical record.
 
 The plain unweighted cross-entropy above collapses toward the dominant
 background class on the imbalanced 35-class palette — the speckled masks the
