@@ -1,8 +1,8 @@
 {
   "schema": "ingredient_mapping_recipe1m_v1",
   "source": "recipe1m",
-  "palette_version": "v1",
-  "channel_count": 35,
+  "palette_version": "v2",
+  "channel_count": 36,
   "notes": [
     "Recipe1M+-style ingredient terms mapped onto the 35-class v1 palette (snaq-parity Req 6.1, Decision 13).",
     "Matching: ingredient text is normalised (lowercase, punctuation stripped) and the LONGEST term appearing as a word-boundary phrase wins, so 'wholemeal bread' beats the generic 'bread' and 'chicken soup' is soup, not chicken.",
@@ -111,6 +111,16 @@
     "ale": "beer",
     "wine": "wine",
     "red wine": "wine",
-    "white wine": "wine"
+    "white wine": "wine",
+    "porridge oats": "cereal",
+    "rolled oats": "cereal",
+    "oats": "cereal",
+    "oatmeal": "cereal",
+    "porridge": "cereal",
+    "muesli": "cereal",
+    "granola": "cereal",
+    "cornflakes": "cereal",
+    "breakfast cereal": "cereal",
+    "bran flakes": "cereal"
   }
 }

@@ -31,9 +31,9 @@ FIXTURE_CORPUS = Path(__file__).resolve().parent / "fixtures" / "recipe_corpus_f
 INGREDIENT_MAPPING = _TOOLS / "ingredient_mapping_recipe1m_v1.json"
 CLASS_MAPPING = _TOOLS / "class_mapping_foodseg103_v1.json"
 
-# Palette facts (class_mapping_foodseg103_v1.json).
-CHANNEL_COUNT = 35
-SPECIALS = [32, 33, 34]
+# Palette facts (class_mapping_foodseg103_v1.json, palette v2 — MD-29).
+CHANNEL_COUNT = 36
+SPECIALS = [33, 34, 35]
 WHITE_RICE, CHICKEN, CARROT = 0, 8, 16
 
 
@@ -54,7 +54,7 @@ def test_ingredient_mapping_is_committed_and_names_its_source():
     d = json.loads(INGREDIENT_MAPPING.read_text())
     assert d["schema"] == "ingredient_mapping_recipe1m_v1"
     assert d["source"] == "recipe1m"
-    assert d["palette_version"] == "v1"
+    assert d["palette_version"] == "v2"
     assert d["channel_count"] == CHANNEL_COUNT
 
 
@@ -133,7 +133,7 @@ def test_output_is_co_stats_v2_with_the_external_amendments(fixture_stats):
     assert s["special_channel_indices"] == SPECIALS
     assert s["class_mapping_sha256"] == lineage.file_sha256(CLASS_MAPPING)
     assert s["ingredient_mapping_sha256"] == lineage.file_sha256(INGREDIENT_MAPPING)
-    assert s["corpus_recipes"] == 20
+    assert s["corpus_recipes"] == 22  # 20 + the two cereal recipes (r21, r22)
     # No pixels and no split behind a recipe corpus — explicit nulls.
     assert s["pixel_counts"] is None
     assert s["train_images"] is None

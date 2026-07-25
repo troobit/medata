@@ -60,11 +60,12 @@ from pathlib import Path
 
 import numpy as np
 
-# Special-class layout of the redefined v1 palette: 24 solid + 8 liquid
-# classes + background + unknown_food + unsupported_liquid = 35 (mirrors
-# ClassPalette.v1Standard, totalClasses = foodClasses.count +
-# liquidClasses.count + 3; Decisions 23/24).
-DEFAULT_NUM_CLASSES = 35
+# Special-class layout of the v2 palette: 25 solid (incl. cereal at 24) +
+# 8 liquid classes + background + unknown_food + unsupported_liquid = 36
+# (mirrors ClassPalette.v2Standard, totalClasses = foodClasses.count +
+# liquidClasses.count + 3; Decisions 23/24, MD-29). Pass --num-classes 35
+# when running a v1-era checkpoint.
+DEFAULT_NUM_CLASSES = 36
 DEFAULT_TARGET_SIZE = 513
 
 # ImageNet normalisation — MUST match export.reference_input so the probs we

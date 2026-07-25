@@ -26,8 +26,8 @@ references:
 - [ ] 3. Build class_mapping_myfoodrepo273_v1.json and update FoodSeg103 mapping to v2 <!-- id:vbs7lh6 -->
   - Curated-rules script in the build_class_mapping.py style; unmapped categories route to unknown_food
   - v2 channel order is pinned by the PRD: cereal index 24, liquids 25-32, sentinels background 33 / unknown_food 34 / unsupported_liquid 35, channel_count 36
-  - Update build_class_mapping.py count constants (SOLID_CLASS_COUNT 25, TOTAL_CLASS_COUNT 33) and regenerate class_mapping_foodseg103 for the v2 order
-  - Update tools/segmenter/tests/test_class_mapping.py and add tests for the new curated rules + sentinel routing; torch-free pytest green
+  - PARTIALLY DONE at integration 2026-07-25 (main-checkout commit after context merges): build_class_mapping.py constants moved to v2 (SOLID 25, TOTAL 33, PALETTE_VERSION v2), class_mapping_foodseg103_v1.json regenerated at 36 channels, test_class_mapping.py updated, ingredient_mapping_recipe1m_v1.json gained cereal terms + v2 metadata, fixture corpus gained two cereal recipes
+  - REMAINING for this task: the MyFoodRepo-273 mapping itself (class_mapping_myfoodrepo273_v1.json + curated rules + its tests) once the dataset is on disk
   - Blocked-by: vbs7lh5 (Publish the 273-category to 36-channel coverage audit)
 
 - [ ] 4. Rasterise COCO polygons to PNG semantic masks in v2 palette space <!-- id:vbs7lh7 -->
