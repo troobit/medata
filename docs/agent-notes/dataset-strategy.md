@@ -205,7 +205,68 @@ SHA-256 hashes are in `data/foodseg103/SOURCE.md`.
   combined-loss fallback run (weighting-vs-co-term attribution) is in flight —
   see [model-production.md](model-production.md).
 
-## 6. Public-data posture (confirmed)
+## 6. MyFoodRepo-273 acquisition attempt — BLOCKED at auth wall (2026-07-25)
+
+The myfoodrepo-bridge PRD (dataset-bridge context, task 1) attempted a
+non-interactive acquisition of MyFoodRepo-273 (AIcrowd Food Recognition
+Benchmark; 24,119 images / 39,325 polygons / 273 classes, licence CC BY 4.0
+per the Frontiers paper 10.3389/fnut.2022.875143). **Every viable route to the
+exact release requires an interactive login and terms acceptance**, so the
+PRD's conditional STOP fired. Nothing was scraped, guessed, or substituted.
+
+Findings, all verified 2026-07-25:
+
+- **Release identity.** MyFoodRepo-273 is the `v0.4` release of the AIcrowd
+  *Food Recognition Challenge* (round 3/4, 2020-21): `train-v0.4.tar.gz`
+  (1.16 GB, 24,119 images / 39,325 annotations), `val-v0.4.tar.gz`
+  (1,269 images / 2,053 annotations), `test_images-v0.4.tar.gz`. The
+  2022 benchmark's `public_training_set_release_2.0/2.1` files are the
+  **different, larger successor** (39,962 images / 498 classes, then
+  54,392 / 323) — not what the PRD pins.
+- **Canonical host is OAuth-gated.** Direct file URL
+  `https://datasets.aicrowd.com/default/aicrowd-public-datasets/food-recognition-challenge/v0.4/train-v0.4.tar.gz`
+  answers HTTP 302 → `datasets.aicrowd.com/login` → `www.aicrowd.com/oauth/authorize`.
+  The listing page
+  `https://www.aicrowd.com/challenges/food-recognition-challenge/dataset_files`
+  is a login wall. Third-party confirmation (epfl-dlab/biased-bytes README):
+  "It is necessary to log in, accept the Terms and conditions, and download
+  the train-v0.4.tar.gz (1.16G) file."
+- **Kaggle mirror is credential-gated.** `rohitmidha23/food-recognition-challenge`
+  (announced on the AIcrowd forum) — anonymous Kaggle API access returns
+  403 (`kagglehub` 1.0.2 confirmed); no Kaggle credentials exist on this
+  machine (`~/.kaggle/` absent).
+- **The old public Wasabi bucket predates the 273 release.**
+  `s3.eu-central-1.wasabisys.com/aicrowd-public-datasets` lists only
+  `myfoodrepo/round-1/` and `myfoodrepo/round-2/` (2019-20, top-40/top-61
+  class phases) — no `v0.4` keys anywhere in the bucket.
+- **No open mirror found.** HuggingFace (dataset search: no MyFoodRepo /
+  273-class entry), Zenodo, archive.org, Academic Torrents: nothing.
+  Dataset Ninja hosts only the 498-class *Food Recognition 2022* successor
+  (Supervisely repack, licence metadata there says CC0 which conflicts with
+  AIcrowd's CC BY 4.0 — treat as unreliable provenance); substituting the
+  successor would change the PRD's 273-category audit/mapping contract and
+  was not done.
+
+**Steps a human must take** (either route, ~10 minutes + 1.2 GB download);
+afterwards the bridge context can resume at task 1's verification step:
+
+1. Create/log in to an AIcrowd account at <https://www.aicrowd.com>
+   (Google/GitHub OAuth offered), open
+   <https://www.aicrowd.com/challenges/food-recognition-challenge>,
+   click Participate and accept the challenge terms.
+2. Download from
+   <https://www.aicrowd.com/challenges/food-recognition-challenge/dataset_files>:
+   `train-v0.4.tar.gz` and `val-v0.4.tar.gz` (test images optional — no
+   public annotations).
+   CLI alternative once the account exists: `pip install aicrowd-cli`,
+   `aicrowd login` (browser handshake or API key from
+   <https://www.aicrowd.com/participants/me>), then
+   `aicrowd dataset download --challenge food-recognition-challenge`.
+3. Place the archives in `/Users/r/repos/medata/data/myfoodrepo273/raw/`
+   (see `data/myfoodrepo273/ACQUISITION.md` in the main checkout). Keep the
+   `.tar.gz` files — SOURCE.md will hash them as the release identifier.
+
+## 7. Public-data posture (confirmed)
 
 The stated preference — freely available public data, no repeated work — holds across
 the plan with no gaps: FoodSeg103 (Apache 2.0) for training, Nutrition5k (CC BY 4.0)
