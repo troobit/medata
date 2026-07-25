@@ -1,0 +1,3645 @@
+{
+  "schema": "foodrec2022_to_palette_v1",
+  "palette_version": "v2",
+  "source_dataset": "Food Recognition Benchmark 2022 (release 2.0)",
+  "channel_count": 36,
+  "special_channels": {
+    "background": 33,
+    "unknown_food": 34,
+    "unsupported_liquid": 35
+  },
+  "target_channels": [
+    {
+      "index": 0,
+      "name": "white_rice"
+    },
+    {
+      "index": 1,
+      "name": "brown_rice"
+    },
+    {
+      "index": 2,
+      "name": "pasta"
+    },
+    {
+      "index": 3,
+      "name": "bread_white"
+    },
+    {
+      "index": 4,
+      "name": "bread_wholemeal"
+    },
+    {
+      "index": 5,
+      "name": "potato_boiled"
+    },
+    {
+      "index": 6,
+      "name": "potato_mashed"
+    },
+    {
+      "index": 7,
+      "name": "chips_fries"
+    },
+    {
+      "index": 8,
+      "name": "chicken"
+    },
+    {
+      "index": 9,
+      "name": "beef"
+    },
+    {
+      "index": 10,
+      "name": "pork"
+    },
+    {
+      "index": 11,
+      "name": "fish_white"
+    },
+    {
+      "index": 12,
+      "name": "egg"
+    },
+    {
+      "index": 13,
+      "name": "cheese"
+    },
+    {
+      "index": 14,
+      "name": "salad_leaves"
+    },
+    {
+      "index": 15,
+      "name": "broccoli"
+    },
+    {
+      "index": 16,
+      "name": "carrot"
+    },
+    {
+      "index": 17,
+      "name": "peas"
+    },
+    {
+      "index": 18,
+      "name": "beans_baked"
+    },
+    {
+      "index": 19,
+      "name": "lentils"
+    },
+    {
+      "index": 20,
+      "name": "apple"
+    },
+    {
+      "index": 21,
+      "name": "banana"
+    },
+    {
+      "index": 22,
+      "name": "tomato"
+    },
+    {
+      "index": 23,
+      "name": "mixed_vegetables"
+    },
+    {
+      "index": 24,
+      "name": "cereal"
+    },
+    {
+      "index": 25,
+      "name": "water"
+    },
+    {
+      "index": 26,
+      "name": "coffee"
+    },
+    {
+      "index": 27,
+      "name": "tea"
+    },
+    {
+      "index": 28,
+      "name": "milk"
+    },
+    {
+      "index": 29,
+      "name": "fruit_juice"
+    },
+    {
+      "index": 30,
+      "name": "soup"
+    },
+    {
+      "index": 31,
+      "name": "beer"
+    },
+    {
+      "index": 32,
+      "name": "wine"
+    },
+    {
+      "index": 33,
+      "name": "background"
+    },
+    {
+      "index": 34,
+      "name": "unknown_food"
+    },
+    {
+      "index": 35,
+      "name": "unsupported_liquid"
+    }
+  ],
+  "mappings": [
+    {
+      "source_id": 50,
+      "source_name": "beetroot-steamed-without-addition-of-salt",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 143,
+      "source_name": "carrot-steamed-without-addition-of-salt",
+      "target_index": 16,
+      "target_name": "carrot",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 158,
+      "source_name": "mushroom-average-stewed-without-addition-of-fat-without-addition-of-salt",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 198,
+      "source_name": "savoy-cabbage-steamed-without-addition-of-salt",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 232,
+      "source_name": "zucchini-stewed-without-addition-of-fat-without-addition-of-salt",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 236,
+      "source_name": "vanille-cream-cooked-custard-creme-dessert",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 259,
+      "source_name": "shrimp-boiled",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 281,
+      "source_name": "spinach-steamed-without-addition-of-salt",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 282,
+      "source_name": "spinach-raw",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 387,
+      "source_name": "green-bean-steamed-without-addition-of-salt",
+      "target_index": 17,
+      "target_name": "peas",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 483,
+      "source_name": "sweet-corn-canned",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 578,
+      "source_name": "watermelon-fresh",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 629,
+      "source_name": "pizza-with-ham-with-mushrooms-baked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 630,
+      "source_name": "pizza-with-ham-baked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 633,
+      "source_name": "pizza-with-vegetables-baked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 656,
+      "source_name": "bell-pepper-red-stewed-without-addition-of-fat-without-addition-of-salt",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 727,
+      "source_name": "applesauce-unsweetened-canned",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 732,
+      "source_name": "quiche-with-cheese-baked-with-puff-pastry",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 733,
+      "source_name": "quiche-with-spinach-baked-with-cake-dough",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 752,
+      "source_name": "risotto-with-mushrooms-cooked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 780,
+      "source_name": "potato-salad-with-mayonnaise-yogurt-dressing",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 843,
+      "source_name": "wienerli-swiss-sausage",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 870,
+      "source_name": "curds-natural-with-at-most-10-fidm",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 922,
+      "source_name": "tuna-in-oil-drained",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 929,
+      "source_name": "tomato-stewed-without-addition-of-fat-without-addition-of-salt",
+      "target_index": 22,
+      "target_name": "tomato",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1004,
+      "source_name": "sweet-potato",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1007,
+      "source_name": "country-fries",
+      "target_index": 7,
+      "target_name": "chips_fries",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1009,
+      "source_name": "potato-gnocchi",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1010,
+      "source_name": "potatoes-steamed",
+      "target_index": 5,
+      "target_name": "potato_boiled",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1013,
+      "source_name": "chips-french-fries",
+      "target_index": 7,
+      "target_name": "chips_fries",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1014,
+      "source_name": "rosti",
+      "target_index": 7,
+      "target_name": "chips_fries",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1019,
+      "source_name": "vegetable-mix-peas-and-carrots",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1020,
+      "source_name": "coleslaw-chopped-without-sauce",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1021,
+      "source_name": "vegetables",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1022,
+      "source_name": "mixed-vegetables",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1024,
+      "source_name": "ratatouille",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1026,
+      "source_name": "mixed-salad-chopped-without-sauce",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1032,
+      "source_name": "leaf-spinach",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1033,
+      "source_name": "witloof-chicory",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1038,
+      "source_name": "salad-rocket",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1040,
+      "source_name": "salad-leaf-salad-green",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1050,
+      "source_name": "salad-lambs-ear",
+      "target_index": 14,
+      "target_name": "salad_leaves",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1054,
+      "source_name": "artichoke",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1055,
+      "source_name": "eggplant",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1056,
+      "source_name": "avocado",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1058,
+      "source_name": "french-beans",
+      "target_index": 17,
+      "target_name": "peas",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1060,
+      "source_name": "cucumber-pickled",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1061,
+      "source_name": "cucumber",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1062,
+      "source_name": "capers",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 1065,
+      "source_name": "pumpkin",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1068,
+      "source_name": "bell-pepper-red-raw",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1069,
+      "source_name": "tomato-raw",
+      "target_index": 22,
+      "target_name": "tomato",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1070,
+      "source_name": "zucchini",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1074,
+      "source_name": "red-radish",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1075,
+      "source_name": "beetroot-raw",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1076,
+      "source_name": "white-radish",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1078,
+      "source_name": "carrot-raw",
+      "target_index": 16,
+      "target_name": "carrot",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1082,
+      "source_name": "celeriac",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1084,
+      "source_name": "cauliflower",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1085,
+      "source_name": "broccoli",
+      "target_index": 15,
+      "target_name": "broccoli",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1086,
+      "source_name": "chinese-cabbage",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1089,
+      "source_name": "kolhrabi",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1090,
+      "source_name": "romanesco",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1091,
+      "source_name": "brussel-sprouts",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1092,
+      "source_name": "red-cabbage",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1093,
+      "source_name": "sauerkraut",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1094,
+      "source_name": "white-cabbage",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1098,
+      "source_name": "mushroom",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1102,
+      "source_name": "mushrooms",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1107,
+      "source_name": "peas",
+      "target_index": 17,
+      "target_name": "peas",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1108,
+      "source_name": "corn",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1111,
+      "source_name": "spring-onion-scallion",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1112,
+      "source_name": "garlic",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1113,
+      "source_name": "leek",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1115,
+      "source_name": "pearl-onions",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1116,
+      "source_name": "onion",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1119,
+      "source_name": "fennel",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1120,
+      "source_name": "swiss-chard",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1121,
+      "source_name": "mungbean-sprouts",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1123,
+      "source_name": "green-asparagus",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1124,
+      "source_name": "white-asparagus",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1125,
+      "source_name": "shoots",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1126,
+      "source_name": "alfa-sprouts",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1130,
+      "source_name": "celery",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1134,
+      "source_name": "bean-seeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1138,
+      "source_name": "beans-kidney",
+      "target_index": 19,
+      "target_name": "lentils",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1141,
+      "source_name": "beans-white",
+      "target_index": 19,
+      "target_name": "lentils",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1143,
+      "source_name": "chickpeas",
+      "target_index": 19,
+      "target_name": "lentils",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1144,
+      "source_name": "lentils",
+      "target_index": 19,
+      "target_name": "lentils",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1150,
+      "source_name": "pineapple",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1151,
+      "source_name": "apple",
+      "target_index": 20,
+      "target_name": "apple",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1152,
+      "source_name": "pomegranate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1153,
+      "source_name": "apricots",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1154,
+      "source_name": "banana",
+      "target_index": 21,
+      "target_name": "banana",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1156,
+      "source_name": "berries",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1157,
+      "source_name": "pear",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1158,
+      "source_name": "blackberry",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1162,
+      "source_name": "dates",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1163,
+      "source_name": "strawberries",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1164,
+      "source_name": "figs",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1166,
+      "source_name": "fruit-salad",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1167,
+      "source_name": "grapefruit-pomelo",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1169,
+      "source_name": "blueberries",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1170,
+      "source_name": "raspberries",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1174,
+      "source_name": "kaki",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1175,
+      "source_name": "cherries",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1176,
+      "source_name": "kiwi",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1180,
+      "source_name": "mandarine",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1181,
+      "source_name": "mango",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1184,
+      "source_name": "sugar-melon",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1186,
+      "source_name": "nectarine",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1187,
+      "source_name": "orange",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1190,
+      "source_name": "peach",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1191,
+      "source_name": "plums",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1198,
+      "source_name": "grapes",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1199,
+      "source_name": "dried-raisins",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1200,
+      "source_name": "lemon",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1201,
+      "source_name": "damson-plum",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1203,
+      "source_name": "peanut-butter",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 1204,
+      "source_name": "chestnuts",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1205,
+      "source_name": "seeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1206,
+      "source_name": "pumpkin-seeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1207,
+      "source_name": "pine-nuts",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1208,
+      "source_name": "sunflower-seeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1209,
+      "source_name": "mixed-seeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1210,
+      "source_name": "almonds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1211,
+      "source_name": "nuts",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1212,
+      "source_name": "walnut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1213,
+      "source_name": "cashew-nut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1214,
+      "source_name": "peanut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1215,
+      "source_name": "hazelnut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1216,
+      "source_name": "coconut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1218,
+      "source_name": "brazil-nut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1219,
+      "source_name": "pecan-nut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1220,
+      "source_name": "mixed-nuts",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1221,
+      "source_name": "pistachio",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1222,
+      "source_name": "linseeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1223,
+      "source_name": "sesame-seeds",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1228,
+      "source_name": "green-olives",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1229,
+      "source_name": "black-olives",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1237,
+      "source_name": "milk",
+      "target_index": 28,
+      "target_name": "milk",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1249,
+      "source_name": "kefir-drink",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 1253,
+      "source_name": "coconut-milk",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 1256,
+      "source_name": "soya-drink-soy-milk",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 1257,
+      "source_name": "soya-yaourt-yahourt-yogourt-ou-yoghourt",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1264,
+      "source_name": "cottage-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1266,
+      "source_name": "curd",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1280,
+      "source_name": "blue-mould-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1282,
+      "source_name": "brie",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1290,
+      "source_name": "cheddar",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1293,
+      "source_name": "emmental-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1294,
+      "source_name": "feta",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1295,
+      "source_name": "fondue",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1300,
+      "source_name": "fresh-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1307,
+      "source_name": "gruyere",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1308,
+      "source_name": "semi-hard-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1309,
+      "source_name": "halloumi",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1310,
+      "source_name": "hard-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1311,
+      "source_name": "cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1321,
+      "source_name": "mozzarella",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1323,
+      "source_name": "parmesan",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1325,
+      "source_name": "philadelphia",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1327,
+      "source_name": "cheese-for-raclette",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1328,
+      "source_name": "cream-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1337,
+      "source_name": "processed-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1346,
+      "source_name": "tete-de-moine",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1348,
+      "source_name": "tomme",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1352,
+      "source_name": "soft-cheese",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1366,
+      "source_name": "mousse",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1367,
+      "source_name": "panna-cotta",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1371,
+      "source_name": "tiramisu",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1376,
+      "source_name": "cream",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 1383,
+      "source_name": "sour-cream",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 1384,
+      "source_name": "thickened-cream-35",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 1402,
+      "source_name": "dairy-ice-cream",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1411,
+      "source_name": "sorbet",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1422,
+      "source_name": "flakes-oat",
+      "target_index": 24,
+      "target_name": "cereal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1453,
+      "source_name": "rice-noodles-vermicelli",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1454,
+      "source_name": "bulgur",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1455,
+      "source_name": "couscous",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1456,
+      "source_name": "ebly",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1463,
+      "source_name": "grits-polenta-maize-flour",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1467,
+      "source_name": "quinoa",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1468,
+      "source_name": "rice",
+      "target_index": 0,
+      "target_name": "white_rice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1469,
+      "source_name": "rice-basmati",
+      "target_index": 0,
+      "target_name": "white_rice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1471,
+      "source_name": "rice-jasmin",
+      "target_index": 0,
+      "target_name": "white_rice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1478,
+      "source_name": "rice-whole-grain",
+      "target_index": 1,
+      "target_name": "brown_rice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1479,
+      "source_name": "rice-wild",
+      "target_index": 1,
+      "target_name": "brown_rice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1482,
+      "source_name": "spaetzle",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1483,
+      "source_name": "pasta",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1487,
+      "source_name": "pasta-hornli",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1488,
+      "source_name": "pasta-in-butterfly-form-farfalle",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1490,
+      "source_name": "pasta-linguini-parpadelle-tagliatelle",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1492,
+      "source_name": "pasta-in-conch-form",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1494,
+      "source_name": "pasta-noodles",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1496,
+      "source_name": "pasta-penne",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1500,
+      "source_name": "pasta-ravioli-stuffing",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1505,
+      "source_name": "pasta-spaghetti",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1506,
+      "source_name": "pasta-twist",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1509,
+      "source_name": "pasta-tortelloni-stuffing",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1513,
+      "source_name": "pasta-wholemeal",
+      "target_index": 2,
+      "target_name": "pasta",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1517,
+      "source_name": "bagel-without-filling",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1520,
+      "source_name": "bread-french-white-flour",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1522,
+      "source_name": "bread",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1523,
+      "source_name": "bread-5-grain",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1528,
+      "source_name": "bread-spelt",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1533,
+      "source_name": "bread-fruit",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1536,
+      "source_name": "bread-half-white",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1538,
+      "source_name": "bread-grain",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1545,
+      "source_name": "bread-nut",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1546,
+      "source_name": "bread-olive",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1547,
+      "source_name": "bread-pita",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1551,
+      "source_name": "bread-rye",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1554,
+      "source_name": "bread-whole-wheat",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1556,
+      "source_name": "bread-sourdough",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1557,
+      "source_name": "bread-black",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1559,
+      "source_name": "bread-ticino",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1560,
+      "source_name": "bread-toast",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1561,
+      "source_name": "bread-wholemeal-toast",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1565,
+      "source_name": "bread-wholemeal",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1566,
+      "source_name": "bread-white",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1568,
+      "source_name": "brioche",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1569,
+      "source_name": "roll-of-half-white-or-white-flour-with-large-void",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1572,
+      "source_name": "hamburger-bun",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1580,
+      "source_name": "roll-with-pieces-of-chocolate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1584,
+      "source_name": "white-bread-with-butter-eggs-and-milk",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1587,
+      "source_name": "focaccia",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1588,
+      "source_name": "croissant",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1592,
+      "source_name": "croissant-wholegrain",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1595,
+      "source_name": "lye-pretzel-soft",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1607,
+      "source_name": "braided-white-loaf",
+      "target_index": 3,
+      "target_name": "bread_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1612,
+      "source_name": "crisp-bread-wasa",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1614,
+      "source_name": "breadcrumbs-unspiced",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 1615,
+      "source_name": "rice-waffels",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1616,
+      "source_name": "grissini",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1620,
+      "source_name": "rusk-wholemeal",
+      "target_index": 4,
+      "target_name": "bread_wholemeal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1626,
+      "source_name": "corn-flakes",
+      "target_index": 24,
+      "target_name": "cereal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1627,
+      "source_name": "crunch-muesli",
+      "target_index": 24,
+      "target_name": "cereal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1670,
+      "source_name": "muesli",
+      "target_index": 24,
+      "target_name": "cereal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1695,
+      "source_name": "dough-puff-pastry-shortcrust-bread-pizza-dough",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1696,
+      "source_name": "pastry-flaky",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1707,
+      "source_name": "meat",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1711,
+      "source_name": "minced-meat",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1724,
+      "source_name": "beef",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1725,
+      "source_name": "beef-roast",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1727,
+      "source_name": "beef-sirloin-steak",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1728,
+      "source_name": "beef-filet",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1730,
+      "source_name": "beef-minced-only-meat",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1731,
+      "source_name": "beef-cut-into-stripes-only-meat",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1748,
+      "source_name": "pork",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1749,
+      "source_name": "pork-roast",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1757,
+      "source_name": "pork-chop",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1760,
+      "source_name": "pork-escalope",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1765,
+      "source_name": "lamb",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1770,
+      "source_name": "lamb-chop",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1788,
+      "source_name": "chicken",
+      "target_index": 8,
+      "target_name": "chicken",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1789,
+      "source_name": "chicken-breast",
+      "target_index": 8,
+      "target_name": "chicken",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1791,
+      "source_name": "chicken-wing",
+      "target_index": 8,
+      "target_name": "chicken",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1793,
+      "source_name": "chicken-cut-into-stripes-only-meat",
+      "target_index": 8,
+      "target_name": "chicken",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1794,
+      "source_name": "chicken-leg",
+      "target_index": 8,
+      "target_name": "chicken",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1831,
+      "source_name": "frying-sausage",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1835,
+      "source_name": "cervelat",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1837,
+      "source_name": "chicken-nuggets",
+      "target_index": 8,
+      "target_name": "chicken",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1838,
+      "source_name": "chorizo",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1845,
+      "source_name": "meatloaf",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1849,
+      "source_name": "hamburger",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1853,
+      "source_name": "dried-meat",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1856,
+      "source_name": "veal-sausage",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1857,
+      "source_name": "processed-meat-charcuterie",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1879,
+      "source_name": "salami",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1883,
+      "source_name": "cooked-sausage",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1886,
+      "source_name": "ham",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1889,
+      "source_name": "ham-cooked",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1893,
+      "source_name": "ham-raw",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1895,
+      "source_name": "ham-turkey",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1908,
+      "source_name": "smoked-cooked-sausage-of-pork-and-beef-meat-sausag",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1914,
+      "source_name": "bacon",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1915,
+      "source_name": "bacon-frying",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1916,
+      "source_name": "bacon-cooking",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1917,
+      "source_name": "bacon-raw",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1919,
+      "source_name": "meat-terrine-pate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1924,
+      "source_name": "sausage",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1942,
+      "source_name": "veggie-burger",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1948,
+      "source_name": "tofu",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1956,
+      "source_name": "fish",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1958,
+      "source_name": "cod",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1967,
+      "source_name": "salmon",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1975,
+      "source_name": "anchovies",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1980,
+      "source_name": "tuna",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 1985,
+      "source_name": "shrimp-prawn-small",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 1986,
+      "source_name": "shrimp-prawn-large",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2002,
+      "source_name": "fish-crunchies-battered",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2003,
+      "source_name": "fish-fingers-breaded",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2022,
+      "source_name": "egg",
+      "target_index": 12,
+      "target_name": "egg",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2031,
+      "source_name": "oil",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2053,
+      "source_name": "butter",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2056,
+      "source_name": "butter-herb",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2062,
+      "source_name": "margarine",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2073,
+      "source_name": "praline",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2099,
+      "source_name": "jam",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2103,
+      "source_name": "honey",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2113,
+      "source_name": "sugar-glazing",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2115,
+      "source_name": "maple-syrup-concentrate",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2131,
+      "source_name": "dark-chocolate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2132,
+      "source_name": "milk-chocolate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2133,
+      "source_name": "white-chocolate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2134,
+      "source_name": "chocolate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2135,
+      "source_name": "chocolate-filled",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2171,
+      "source_name": "cocoa-powder",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2172,
+      "source_name": "hazelnut-chocolate-spread-nutella-ovomaltine-caotina",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2184,
+      "source_name": "m-m-s",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2194,
+      "source_name": "chocolate-egg-small",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2203,
+      "source_name": "sweets-candies",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2211,
+      "source_name": "gummi-bears-fruit-jellies-jelly-babies-with-fruit-essence",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2237,
+      "source_name": "apple-pie",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2254,
+      "source_name": "brownie",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2259,
+      "source_name": "cake-oblong",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2262,
+      "source_name": "lemon-cake",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2269,
+      "source_name": "crepe-plain",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2278,
+      "source_name": "fruit-tart",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2300,
+      "source_name": "cake-marble",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2303,
+      "source_name": "cake-chocolate",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2312,
+      "source_name": "muffin",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2320,
+      "source_name": "omelette-plain",
+      "target_index": 12,
+      "target_name": "egg",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2333,
+      "source_name": "carrot-cake",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2340,
+      "source_name": "black-forest-tart",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2350,
+      "source_name": "tart",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2355,
+      "source_name": "waffle",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2362,
+      "source_name": "croissant-with-chocolate-filling",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2376,
+      "source_name": "cookies",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2388,
+      "source_name": "biscuits",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2395,
+      "source_name": "macaroon",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2400,
+      "source_name": "meringue",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2408,
+      "source_name": "biscuit-with-butter",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2413,
+      "source_name": "chocolate-cookies",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2446,
+      "source_name": "juice-apple",
+      "target_index": 29,
+      "target_name": "fruit_juice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2452,
+      "source_name": "juice-multifruit",
+      "target_index": 29,
+      "target_name": "fruit_juice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2454,
+      "source_name": "juice-orange",
+      "target_index": 29,
+      "target_name": "fruit_juice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2461,
+      "source_name": "smoothie",
+      "target_index": 29,
+      "target_name": "fruit_juice",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2467,
+      "source_name": "coca-cola",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 2468,
+      "source_name": "coca-cola-zero",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 2470,
+      "source_name": "ice-tea",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 2495,
+      "source_name": "syrup-diluted-ready-to-drink",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 2498,
+      "source_name": "tea",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2501,
+      "source_name": "cappuccino",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2504,
+      "source_name": "espresso-with-caffeine",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2512,
+      "source_name": "coffee-with-caffeine",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2513,
+      "source_name": "coffee-decaffeinated",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2518,
+      "source_name": "latte-macchiato-with-caffeine",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2521,
+      "source_name": "white-coffee-with-caffeine",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2524,
+      "source_name": "ristretto-with-caffeine",
+      "target_index": 26,
+      "target_name": "coffee",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2530,
+      "source_name": "tea-green",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2534,
+      "source_name": "tea-black",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2543,
+      "source_name": "tea-verveine",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2546,
+      "source_name": "tea-fruit",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2548,
+      "source_name": "tea-spice",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2553,
+      "source_name": "tea-ginger",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2555,
+      "source_name": "herbal-tea",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2562,
+      "source_name": "tea-peppermint",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2563,
+      "source_name": "tea-rooibos",
+      "target_index": 27,
+      "target_name": "tea",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2577,
+      "source_name": "ice-cubes",
+      "target_index": 25,
+      "target_name": "water",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2578,
+      "source_name": "water",
+      "target_index": 25,
+      "target_name": "water",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2580,
+      "source_name": "water-mineral",
+      "target_index": 25,
+      "target_name": "water",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2585,
+      "source_name": "aperitif-with-alcohol-aperol-spritz",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 2588,
+      "source_name": "cocktail",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 2605,
+      "source_name": "champagne",
+      "target_index": 32,
+      "target_name": "wine",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2607,
+      "source_name": "prosecco",
+      "target_index": 32,
+      "target_name": "wine",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2610,
+      "source_name": "sekt",
+      "target_index": 32,
+      "target_name": "wine",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2616,
+      "source_name": "wine-rose",
+      "target_index": 32,
+      "target_name": "wine",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2618,
+      "source_name": "wine-red",
+      "target_index": 32,
+      "target_name": "wine",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2620,
+      "source_name": "wine-white",
+      "target_index": 32,
+      "target_name": "wine",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2634,
+      "source_name": "beer",
+      "target_index": 31,
+      "target_name": "beer",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2636,
+      "source_name": "light-beer",
+      "target_index": 31,
+      "target_name": "beer",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2711,
+      "source_name": "sauce-savoury",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2714,
+      "source_name": "sauce-roast",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2716,
+      "source_name": "sauce-carbonara",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2718,
+      "source_name": "sauce-cocktail",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2719,
+      "source_name": "sauce-curry",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2728,
+      "source_name": "sauce-pesto",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2729,
+      "source_name": "sauce-mushroom",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2730,
+      "source_name": "sauce-cream",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2731,
+      "source_name": "sauce-sweet-sour",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2734,
+      "source_name": "ketchup",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2736,
+      "source_name": "bolognaise-sauce",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2738,
+      "source_name": "tomato-sauce",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2740,
+      "source_name": "dips",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2741,
+      "source_name": "salad-dressing",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2742,
+      "source_name": "balsamic-salad-dressing",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2743,
+      "source_name": "french-salad-dressing",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2744,
+      "source_name": "italian-salad-dressing",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2747,
+      "source_name": "oil-vinegar-salad-dressing",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2749,
+      "source_name": "guacamole",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2750,
+      "source_name": "mayonnaise",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2751,
+      "source_name": "tartar-sauce",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2752,
+      "source_name": "tzatziki",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2760,
+      "source_name": "basil",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2767,
+      "source_name": "coriander",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2768,
+      "source_name": "bouquet-garni",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2773,
+      "source_name": "parsley",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2778,
+      "source_name": "chives",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2791,
+      "source_name": "cenovis-yeast-spread",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2807,
+      "source_name": "sauce-soya",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2810,
+      "source_name": "mustard",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2811,
+      "source_name": "mustard-dijon",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2815,
+      "source_name": "balsamic-vinegar",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 2836,
+      "source_name": "soup-vegetable",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2837,
+      "source_name": "soup-cream-of-vegetables",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2840,
+      "source_name": "soup-potato",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2841,
+      "source_name": "soup-pumpkin",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2846,
+      "source_name": "soup-miso",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2852,
+      "source_name": "soup-tomato",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2855,
+      "source_name": "bouillon",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2859,
+      "source_name": "bouillon-vegetable",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2873,
+      "source_name": "falafel-balls",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2895,
+      "source_name": "savoury-puff-pastry",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2896,
+      "source_name": "savoury-puff-pastry-stick",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2898,
+      "source_name": "corn-crisps",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2899,
+      "source_name": "crackers",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2900,
+      "source_name": "croutons",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2905,
+      "source_name": "crisps",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2906,
+      "source_name": "popcorn-salted",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2913,
+      "source_name": "croque-monsieur",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2918,
+      "source_name": "spring-roll-fried",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2920,
+      "source_name": "ham-croissant",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2923,
+      "source_name": "salt-cake-vegetables-filled",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2930,
+      "source_name": "hamburger-bread-meat-ketchup",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2932,
+      "source_name": "cordon-bleu-from-pork-schnitzel-fried",
+      "target_index": 10,
+      "target_name": "pork",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2934,
+      "source_name": "lasagne-meat-prepared",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2935,
+      "source_name": "mashed-potatoes-prepared-with-full-fat-milk-with-butter",
+      "target_index": 6,
+      "target_name": "potato_mashed",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2939,
+      "source_name": "pizza-margherita-baked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2941,
+      "source_name": "sandwich-ham-cheese-and-butter",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2944,
+      "source_name": "sushi",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2947,
+      "source_name": "kebab-in-pita-bread",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2949,
+      "source_name": "pancakes",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2952,
+      "source_name": "hummus",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2954,
+      "source_name": "greek-salad",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2959,
+      "source_name": "dumplings",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2960,
+      "source_name": "apricot-dried",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2961,
+      "source_name": "chocolate-mousse",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2962,
+      "source_name": "cheesecake",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2964,
+      "source_name": "caprese-salad-tomato-mozzarella",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2966,
+      "source_name": "chili-con-carne-prepared",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2967,
+      "source_name": "taboule-prepared-with-couscous",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2968,
+      "source_name": "perch-fillets-lake",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2970,
+      "source_name": "risotto-without-cheese-cooked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2973,
+      "source_name": "salmon-smoked",
+      "target_index": 11,
+      "target_name": "fish_white",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 2990,
+      "source_name": "pie-apricot-baked-with-cake-dough",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2991,
+      "source_name": "eggplant-caviar",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 2994,
+      "source_name": "apple-crumble",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3042,
+      "source_name": "egg-scrambled-prepared",
+      "target_index": 12,
+      "target_name": "egg",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3046,
+      "source_name": "oat-milk",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 3055,
+      "source_name": "lemon-pie",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3080,
+      "source_name": "glucose-drink-50g",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 3082,
+      "source_name": "goat-average-raw",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3085,
+      "source_name": "pie-rhubarb-baked-with-cake-dough",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3100,
+      "source_name": "chicken-curry-cream-coconut-milk-curry-spices-paste",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3101,
+      "source_name": "pie-plum-baked-with-cake-dough",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3115,
+      "source_name": "potatoes-au-gratin-dauphinois-prepared",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3181,
+      "source_name": "buckwheat-grain-peeled",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3220,
+      "source_name": "birchermuesli-prepared-no-sugar-added",
+      "target_index": 24,
+      "target_name": "cereal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3221,
+      "source_name": "fajita-bread-only",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3228,
+      "source_name": "mango-dried",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3230,
+      "source_name": "lentils-green-du-puy-du-berry",
+      "target_index": 19,
+      "target_name": "lentils",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3248,
+      "source_name": "naan-indien-bread",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3249,
+      "source_name": "butter-spread-puree-almond",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 3258,
+      "source_name": "chocolate-milk-chocolate-drink",
+      "target_index": 35,
+      "target_name": "unsupported_liquid",
+      "rule": "curated_liquid"
+    },
+    {
+      "source_id": 3262,
+      "source_name": "water-with-lemon-juice",
+      "target_index": 25,
+      "target_name": "water",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3293,
+      "source_name": "sun-dried-tomatoe",
+      "target_index": 22,
+      "target_name": "tomato",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3306,
+      "source_name": "gluten-free-bread",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3308,
+      "source_name": "fruit-coulis",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3332,
+      "source_name": "greek-yaourt-yahourt-yogourt-ou-yoghourt",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3337,
+      "source_name": "cake-salted",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3358,
+      "source_name": "soup-of-lentils-dahl-dhal",
+      "target_index": 30,
+      "target_name": "soup",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3392,
+      "source_name": "fig-dried",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3399,
+      "source_name": "turnover-with-meat-small-meat-pie-empanadas",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3415,
+      "source_name": "lasagne-vegetable-prepared",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3416,
+      "source_name": "sauce-sweet-salted-asian",
+      "target_index": null,
+      "target_name": "dropped",
+      "rule": "curated_drop"
+    },
+    {
+      "source_id": 3417,
+      "source_name": "french-pizza-from-alsace-baked",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3474,
+      "source_name": "fruit-compotes",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3532,
+      "source_name": "vegetable-au-gratin-baked",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3615,
+      "source_name": "porridge-prepared-with-partially-skimmed-milk",
+      "target_index": 24,
+      "target_name": "cereal",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 3630,
+      "source_name": "curry-vegetarian",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 3739,
+      "source_name": "bread-meat-substitute-lettuce-sauce",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 4335,
+      "source_name": "tartar-meat",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 4338,
+      "source_name": "chia-grains",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 5247,
+      "source_name": "faux-mage-cashew-vegan-chers",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 5618,
+      "source_name": "milk-chocolate-with-hazelnuts",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 5641,
+      "source_name": "yaourt-yahourt-yogourt-ou-yoghourt-natural",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 5689,
+      "source_name": "paprika-chips",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 5748,
+      "source_name": "banana-cake",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 5792,
+      "source_name": "cream-spinach",
+      "target_index": 23,
+      "target_name": "mixed_vegetables",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 5812,
+      "source_name": "cantonese-fried-rice",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 6404,
+      "source_name": "goat-cheese-soft",
+      "target_index": 13,
+      "target_name": "cheese",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 7504,
+      "source_name": "buckwheat-pancake",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 8025,
+      "source_name": "meat-balls",
+      "target_index": 9,
+      "target_name": "beef",
+      "rule": "curated_food"
+    },
+    {
+      "source_id": 8730,
+      "source_name": "high-protein-pasta-made-of-lentils-peas",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 9594,
+      "source_name": "mix-of-dried-fruits-and-nuts",
+      "target_index": 34,
+      "target_name": "unknown_food",
+      "rule": "default_unknown_food"
+    },
+    {
+      "source_id": 10626,
+      "source_name": "baked-potato",
+      "target_index": 5,
+      "target_name": "potato_boiled",
+      "rule": "curated_food"
+    }
+  ]
+}
