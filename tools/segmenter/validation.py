@@ -43,9 +43,11 @@ MEAN_IOU_BAR = 0.48
 CARB_PRIORITY_IOU_BAR = 0.45
 
 # High-carbohydrate staples that dominate the carb number; each must individually
-# clear CARB_PRIORITY_IOU_BAR (Req 3.5). Names/order mirror ClassPalette.v1Standard
-# indices 0–7 and the requirements list. Design may refine the set/floor against
-# the first real training run.
+# clear CARB_PRIORITY_IOU_BAR (Req 3.5). Names/order mirror palette indices 0–7
+# (unchanged v1 → v2 — the cereal solid appends at index 24, myfoodrepo-bridge
+# PRD) and the requirements list. Whether cereal joins this set is the palette
+# context's decision-log call once its training coverage is known; until then it
+# is a plain food class.
 CARB_PRIORITY_CLASSES: tuple[str, ...] = (
     "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
     "potato_boiled", "potato_mashed", "chips_fries",
@@ -65,7 +67,7 @@ def special_channel_names() -> tuple[str, ...]:
 
 
 def food_class_names() -> tuple[str, ...]:
-    """The 32 food-class names in palette/index order (the 35-channel v1 palette
+    """The 33 food-class names in palette/index order (the 36-channel v2 palette
     minus the 3 special channels)."""
     specials = set(special_channel_names())
     channels = sorted(_mapping()["target_channels"], key=lambda c: c["index"])

@@ -2,8 +2,9 @@
 """Segmenter export pipeline (task 23, decision 28).
 
 Trains-from / fine-tunes DeepLabV3 + MobileNetV3-Large (torchvision) on the
-35-class palette (24 solid + 8 coarse liquid + background + unknown_food +
-unsupported_liquid — the redefined v1, Decisions 23/24),
+36-class palette (25 solid + 8 coarse liquid + background + unknown_food +
+unsupported_liquid — palette v2: the redefined v1 of Decisions 23/24 plus the
+cereal solid at index 24, myfoodrepo-bridge PRD),
 then exports the **same** PyTorch checkpoint to:
 
   - Core ML (.mlpackage) for iOS via ``coremltools.convert``.
@@ -18,7 +19,7 @@ Usage::
 
     python tools/segmenter/export.py \\
         --checkpoint path/to/deeplabv3_mbv3_large.pt \\
-        --num-classes 35 \\
+        --num-classes 36 \\
         --target-size 513 \\
         --reference-image tests/fixtures/segmenter/reference.png \\
         --out-coreml MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage \\
@@ -311,9 +312,10 @@ def read_coreml_output_channels(out_path: str) -> int:
 # architecture. 24 MiB fits FP16 with headroom and still catches an accidental
 # FP32 export (~44 MB).
 WEIGHTS_MAX_BYTES = 24 * 1024 * 1024
-# v1 palette channel count (24 solid + 8 liquid + background + unknown_food +
-# unsupported_liquid — redefined v1, Decisions 23/24).
-EXPECTED_CHANNEL_COUNT = 35
+# v2 palette channel count (25 solid incl. cereal at index 24 + 8 liquid at
+# 25–32 + background/unknown_food/unsupported_liquid sentinels at 33/34/35 —
+# myfoodrepo-bridge PRD; was 35 under the redefined v1, Decisions 23/24).
+EXPECTED_CHANNEL_COUNT = 36
 # Equivalence oracle thresholds (Req 4.3 as amended by Decision 14). Argmax
 # agreement is the functional bar; the abs-logit bar was recalibrated from 0.05
 # after the first real FP16 export measured drift of 0.13 (synthetic input) /
@@ -332,8 +334,9 @@ class ExportGateError(RuntimeError):
 
 
 def palette_channel_names() -> list[str]:
-    """The 35 v1 channel names in palette/index order, read from the committed
-    class-mapping file (the single source of truth shared with ClassPalette.v1Standard)."""
+    """The 36 v2 channel names in palette/index order, read from the committed
+    class-mapping file (the single source of truth shared with the ClassPalette
+    standard palette)."""
     import json
     d = json.loads(_MAPPING_PATH.read_text())
     channels = sorted(d["target_channels"], key=lambda c: c["index"])
@@ -341,7 +344,7 @@ def palette_channel_names() -> list[str]:
 
 
 def validate_channel_count(num_channels: int) -> None:
-    """Req 4.4: the exported model must declare exactly 35 output channels."""
+    """Req 4.4: the exported model must declare exactly 36 output channels."""
     if num_channels != EXPECTED_CHANNEL_COUNT:
         raise ExportGateError(
             f"channel count {num_channels} != expected {EXPECTED_CHANNEL_COUNT} "
@@ -458,7 +461,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--checkpoint", default=None,
                         help="Optional path to a fine-tuned state dict; otherwise the "
                              "torchvision ImageNet+VOC checkpoint is used.")
-    parser.add_argument("--num-classes", type=int, default=35)
+    parser.add_argument("--num-classes", type=int, default=36)
     parser.add_argument("--target-size", type=int, default=513)
     parser.add_argument("--reference-image", default=None,
                         help="Optional PNG for the equivalence check.")

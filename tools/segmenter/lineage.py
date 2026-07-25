@@ -13,7 +13,7 @@ Records the provenance needed to reproduce a bundled segmenter to *metric* level
   - foodseg103_source      dataset source/version (FoodSeg103, Apache 2.0).
   - split_seed             dataset split seed (from ``prepare_dataset.py``).
   - class_mapping_version  schema id of ``class_mapping_foodseg103_v1.json``.
-  - palette_version        v1 palette edition (must match ``ClassPalette.version``).
+  - palette_version        palette edition (must match ``ClassPalette.version``).
   - train_config           epochs / lr / batch / target_size / num_classes / etc.
   - code_commit            git HEAD at build time.
   - metrics                {mean_iou, per_class_iou, carb_priority_iou} — the
