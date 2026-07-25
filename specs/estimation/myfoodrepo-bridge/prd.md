@@ -1,5 +1,13 @@
 # PRD: MyFoodRepo-273 bridge, cereal class, and the ungated retrain
 
+> **Amendment 2026-07-26 (MD-30):** the bridge dataset is now the **Food
+> Recognition Benchmark 2022** release (same MyFoodRepo source, CC BY 4.0,
+> finer ontology, ~40k images) — MyFoodRepo-273 v0.4 is unobtainable (AIcrowd
+> storage backend down, no mirror exists; sweep recorded in MD-30). Where this
+> PRD says "MyFoodRepo-273", read the 2022 release; the landing zone is
+> `data/foodrec2022/` and the mapping artefact is
+> `class_mapping_foodrec2022_v1.json`. The spec folder name is unchanged.
+
 ## Product summary
 
 MeData estimates carbohydrate content from 1–2 iPhone photos using a fully offline, deterministic pipeline: Core ML semantic segmentation, LiDAR/visual-hull volume geometry, and per-class factors against bundled food-composition databases. Target repository: `medata` (this repo; work lands on the `research` line via the PRD/engage lane).
@@ -44,14 +52,14 @@ Covers `MedataCore/Sources/Segmentation/ClassPalette.swift`, `MedataCore/Sources
 
 Covers `tools/segmenter/` dataset plumbing (`build_class_mapping.py`, `prepare_dataset.py`, new bridge scripts) and the gitignored `data/` tree in the main checkout.
 
-1. The bridge MUST acquire the MyFoodRepo-273 dataset (AIcrowd Food Recognition Benchmark) into `data/myfoodrepo273/` with provenance recorded in a `SOURCE.md` following the `data/foodseg103/SOURCE.md` pattern.
+1. The bridge MUST acquire the Food Recognition Benchmark 2022 dataset (MD-30 substitution) into `data/foodrec2022/` with provenance recorded in a `SOURCE.md` following the `data/foodseg103/SOURCE.md` pattern; the release choice (2.0, 498 categories / 2.1, 323 categories) is settled by the coverage audit and recorded in `SOURCE.md`.
    - Acceptance: dataset on disk with images and COCO-format polygon annotations; `SOURCE.md` records source URLs, SHA-256 checksums, licence (expected CC BY 4.0 — record what is actually attached), and image/annotation counts.
-   - Acceptance: if the download turns out to require interactive AIcrowd credentials or a browser step, the attempt and the exact blocker are documented and the STOP in Execution notes fires instead of guessing.
-2. The bridge MUST publish a coverage audit before any training: which of the 273 source categories map to each of the 36 palette channels, with per-channel image counts, explicitly settling the survey's unverified caveats.
+   - Acceptance: if the download turns out to require interactive credentials or a browser step, the attempt and the exact blocker are documented and the STOP in Execution notes fires instead of guessing.
+2. The bridge MUST publish a coverage audit before any training: which source categories map to each of the 36 palette channels, with per-channel image counts, explicitly settling the survey's unverified caveats.
    - Acceptance: a committed audit artefact (markdown or JSON under `tools/segmenter/` or `docs/agent-notes/`) states the counts for `cereal`, `brown_rice`, `bread_wholemeal`, and `potato_mashed`; where coverage is absent (e.g. brown rice was never confirmed — `estimation-improvement-avenues.md:80-81`), the audit says so plainly and the class simply stays unsupervised rather than being faked.
-3. The bridge MUST produce a committed label-space mapping (`class_mapping_myfoodrepo273_v1.json`) into the v2 36-channel palette via a `build_class_mapping.py`-style curated-rules script, with unmapped categories routed to `unknown_food`.
+3. The bridge MUST produce a committed label-space mapping (`class_mapping_foodrec2022_v1.json`) into the v2 36-channel palette via a `build_class_mapping.py`-style curated-rules script, with unmapped categories routed to `unknown_food`.
    - Acceptance: mapping JSON has `channel_count: 36` and sentinels 33/34/35; torch-free unit tests in `tools/segmenter/tests/` cover the curated rules and sentinel routing, green under pytest.
-4. The bridge MUST rasterise the polygon instance annotations to PNG semantic masks in palette channel space and produce a merged FoodSeg103 + MyFoodRepo-273 corpus with frozen-seed stratified splits that preserve the existing leak-free anchor.
+4. The bridge MUST rasterise the polygon instance annotations to PNG semantic masks in palette channel space and produce a merged FoodSeg103 + Food-Recognition-2022 corpus with frozen-seed stratified splits that preserve the existing leak-free anchor.
    - Acceptance: a preparation script emits merged `train/val/heldout` under `data/` with the seed recorded in `splits.json`; the 182-image FoodSeg103 leak-free anchor (`data/foodseg103_remapped/heldout_leakfree/`) is byte-identical afterwards and none of its images appear in the merged train/val split.
    - Acceptance: `co_stats.json` is regenerated food-channels-only (schema `co_stats.v2`) for the merged corpus.
 
@@ -89,6 +97,6 @@ Covers decision logs, agent notes, and the stale floor references. Doc-only cont
 - Worktree caveat: `data/` is gitignored and exists only in the main checkout — bridge and training code must reference it by absolute path (`/Users/r/repos/medata/data/…`). The long training run itself must be launched from the main checkout after the palette and bridge work has merged, not from a temporary worktree that will be cleaned up mid-run.
 - The training run is ~10+ hours of local MPS wall-clock for 60 epochs (~20 min/epoch on M5 Pro). Measure one epoch before committing to the full run; rely on the resume sidecar for interruptions.
 - iOS 26.5 floor and non-LiDAR retention are already done and verified on device (commits `4ee8199`, `8f18a8d`; user confirmation 2026-07-25) — verify, don't redo. Only the three stale references in Specs and docs remain.
-- STOP — MyFoodRepo-273 acquisition: if the AIcrowd download requires interactive login, CAPTCHA, or terms acceptance that cannot be completed non-interactively, stop and ask the user to fetch the archive (document the exact URL and steps needed); do not scrape around an auth wall.
+- STOP — dataset acquisition: if the download requires interactive login, CAPTCHA, or terms acceptance that cannot be completed non-interactively, stop and ask the user for the credential or the archive (document the exact URL and steps needed); do not scrape around an auth wall. (Fired 2026-07-25 for v0.4; resolved by the MD-30 substitution — the 2022 Kaggle mirror needs a user-supplied API key.)
 - STOP — on-device capture verification: after a promoted model is deployed, a human must point the phone at real meals (including a cereal bowl) to confirm the overlay and readings; the agent verifies only the launch log and build stamp.
 - STOP — ANE residency: the Core ML performance-report check is manual in Xcode; record it as pending rather than claiming it.

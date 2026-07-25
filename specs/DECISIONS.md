@@ -552,6 +552,78 @@ or invite faking coverage.
 
 ---
 
+## MD-30: Bridge dataset substituted — Food Recognition Benchmark 2022 replaces MyFoodRepo-273 v0.4
+
+**Date**: 2026-07-26
+**Status**: accepted
+**Sources**: myfoodrepo-bridge PRD (Dataset bridge, amended); user decision 2026-07-26
+
+### Context
+
+The myfoodrepo-bridge PRD pinned the MyFoodRepo-273 release (v0.4: 24,119
+images, 39,325 COCO polygons, 273 categories) as the training-corpus bridge.
+Acquisition failed hard: AIcrowd's file backend (`datasets.aicrowd.com`)
+returns HTTP 500 on every v0.4 archive — confirmed in-browser by the user and
+via `aicrowd-cli` with accepted terms — and an exhaustive mirror sweep
+(Wasabi bucket enumeration, Kaggle, HuggingFace, Academic Torrents, Wayback,
+Dataset Ninja, Superb AI, GitHub code search, the benchmark paper's data
+statement) found no copy of v0.4 anywhere. The successor release from the same
+MyFoodRepo source (Food Recognition Benchmark 2022, CC BY 4.0, 498 finer
+categories, ~40k training images) is obtainable today via a public Kaggle
+mirror, and its ontology covers every class this bridge exists to fix:
+cereal (`porridge-…`, `muesli`, `crunch-muesli`, `birchermuesli-…`,
+`flakes-oat`), `rice-whole-grain`, `bread-wholemeal`(+ toast/whole-wheat
+variants), and `mashed-potatoes-prepared-with-full-fat-milk-with-butter`.
+
+### Decision
+
+Substitute the Food Recognition Benchmark 2022 release for MyFoodRepo-273
+v0.4 as the bridge dataset. The landing zone becomes `data/foodrec2022/`, the
+mapping artefact becomes `class_mapping_foodrec2022_v1.json`, and the coverage
+audit runs over the 2022 ontology (choosing release 2.0 vs 2.1 on audit
+evidence, recorded in `SOURCE.md`). The v0.4 retry watch continues as a
+zero-cost background loop; if v0.4 ever resurfaces it may be considered as an
+additional source, not a replacement.
+
+### Rationale
+
+The bridge's purpose is supervision for four absent classes, not the 273
+ontology itself. The 2022 release provides that supervision with finer source
+categories (which map onto the 36-channel palette more cleanly, not less), more
+images, the same licence, and — decisively — an actually reachable download.
+Waiting pinned to v0.4 leaves the MVP's only verified staple fix blocked on a
+third party's broken storage with no ETA.
+
+### Alternatives Considered
+
+- **Wait for v0.4 (retry + AIcrowd support escalation)**: rejected as the
+  primary path — no ETA, single point of failure, and the outage already
+  survived 12+ hours of monitored retries; kept as a free background watch.
+- **Substitute the Superb AI 8,367-image subset**: rejected — a fraction of
+  the data, unclear release provenance, and no confirmed polygon annotations
+  for the target classes.
+- **HuggingFace `food_recognition_2022_processed`**: rejected — inspection
+  shows bbox + category only (no segmentation polygons); unusable for a
+  semantic segmenter.
+
+### Consequences
+
+**Positive:**
+- The bridge unblocks immediately (Kaggle mirror, 5.27 GB, free account).
+- All four target classes have named source categories with training images.
+- Finer categories give the curated mapping cleaner routing decisions.
+
+**Negative:**
+- The 273-specific route audit in `dataset-strategy.md` §6 must be redone for
+  the 2022 ontology (498 or 323 categories — larger curation table).
+- The published per-release counts (24,119/39,325) quoted in the PRD and
+  earlier notes no longer describe the corpus actually bridged; `SOURCE.md`
+  becomes the authoritative count record.
+- Kaggle requires an authenticated download (user-supplied API key) — one more
+  human step before acquisition.
+
+---
+
 # Persistence & Data
 
 ## MD-13: Single bundled SQLite food database (CoFID + AFCD)
