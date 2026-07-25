@@ -7,12 +7,24 @@ and 14; were 0.60/0.50). Independent of the gated GPU run that produces the
 real IoUs — these tests feed fixed synthetic IoUs.
 """
 
+import json
+
+import pytest
+
 import validation
 
 
 def _food_iou(value: float) -> dict[str, float]:
     """Every food class at ``value`` (special channels are excluded by the reporter)."""
     return {name: value for name in validation.food_class_names()}
+
+
+# The committed mapping file is regenerated to the 36-channel v2 order by the
+# dataset-bridge context (myfoodrepo-bridge tasks); the v2 expectations below are
+# integration-gated and activate automatically once channel_count reads 36.
+_COMMITTED_MAPPING_IS_V2 = (
+    json.loads(validation._MAPPING_PATH.read_text()).get("channel_count") == 36
+)
 
 
 # ── Bars / set contract ─────────────────────────────────────────────────────────
@@ -27,6 +39,21 @@ def test_bars_and_carb_priority_set_match_spec():
     )
     # Carb-priority staples are a subset of the food classes.
     assert set(validation.CARB_PRIORITY_CLASSES) <= set(validation.food_class_names())
+
+
+@pytest.mark.skipif(
+    not _COMMITTED_MAPPING_IS_V2,
+    reason="class_mapping_foodseg103_v1.json still v1/35-channel — the "
+           "dataset-bridge context regenerates it to v2; lock activates on "
+           "integration",
+)
+def test_v2_palette_has_cereal_and_three_sentinels():
+    foods = validation.food_class_names()
+    assert "cereal" in foods
+    assert len(foods) == 33  # 36-channel v2 minus the 3 special channels
+    assert set(validation.special_channel_names()) == {
+        "background", "unknown_food", "unsupported_liquid",
+    }
 
 
 # ── Export-eligibility decision (Req 3.2 / 3.5) ─────────────────────────────────
@@ -124,8 +151,6 @@ def test_release_override_is_attributable_and_keeps_gate_truthful():
 
 
 def test_release_override_requires_a_reason():
-    import pytest
-
     with pytest.raises(ValueError):
         validation.record_release_override({"metrics": {}}, "   ")
 

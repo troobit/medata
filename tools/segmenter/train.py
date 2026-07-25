@@ -2,10 +2,11 @@
 """Segmenter training pipeline (step 4 of docs/ml-training.md §4, decisions 25/28).
 
 Transfer-learns DeepLabV3 + MobileNetV3-Large (torchvision) at 513x513 for the
-35-class palette (24 solid + 8 coarse liquid + background + unknown_food +
-unsupported_liquid — the redefined v1, Decisions 23/24),
+36-class palette (25 solid + 8 coarse liquid + background + unknown_food +
+unsupported_liquid — palette v2: the redefined v1 of Decisions 23/24 plus the
+cereal solid at index 24, myfoodrepo-bridge PRD),
 starting from the torchvision pretrained backbone, fine-tuning head + backbone on
-the remapped FoodSeg103 train split, and saving a single PyTorch checkpoint.
+the remapped train split, and saving a single PyTorch checkpoint.
 
 That ``.pt`` is the single source of truth (Decision 28): ``export.py`` and
 ``make_fixtures.py`` both consume it directly. The architecture here is NOT
@@ -22,7 +23,7 @@ Usage (docs/ml-training.md §4)::
 
     python tools/segmenter/train.py \\
         --data data/foodseg103_remapped \\
-        --num-classes 35 --target-size 513 \\
+        --num-classes 36 --target-size 513 \\
         --epochs 60 --batch-size 16 --lr 1e-3 \\
         --out tools/segmenter/build/checkpoint.pt
 
@@ -76,19 +77,20 @@ import loss_config  # noqa: E402
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
-# Palette background channel (ClassPalette.v1Standard / prepare_dataset.py:
-# 24 solid + 8 liquid, then background at 32). Letterbox padding is labelled
-# background so the model learns padded regions are not food.
-PALETTE_BACKGROUND = 32
+# Palette background channel (ClassPalette standard palette / prepare_dataset.py:
+# 25 solid incl. cereal at 24 + 8 liquid at 25–32, then background at 33 —
+# palette v2). Letterbox padding is labelled background so the model learns
+# padded regions are not food.
+PALETTE_BACKGROUND = 33
 
 # Special (non-food) channels excluded from food-class mIoU. These mirror
 # class_mapping_foodseg103_v1.json:special_channels and §11 channel ordering.
-BACKGROUND_CLASS = 32
-UNKNOWN_FOOD_CLASS = 33
-UNSUPPORTED_LIQUID_CLASS = 34
+BACKGROUND_CLASS = 33
+UNKNOWN_FOOD_CLASS = 34
+UNSUPPORTED_LIQUID_CLASS = 35
 NON_FOOD_CLASSES = (BACKGROUND_CLASS, UNKNOWN_FOOD_CLASS, UNSUPPORTED_LIQUID_CLASS)
 
-PALETTE_VERSION = "v1"
+PALETTE_VERSION = "v2"
 
 # Per-epoch poly learning-rate decay (standard DeepLab recipe); recorded in
 # checkpoint/lineage provenance. lr_e = base_lr * (1 - (e-1)/epochs) ** 0.9.
@@ -978,7 +980,7 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", default="data/foodseg103_remapped",
                         help="Remapped dataset root with train/val[/heldout] splits.")
-    parser.add_argument("--num-classes", type=int, default=35)
+    parser.add_argument("--num-classes", type=int, default=36)
     parser.add_argument("--target-size", type=int, default=513)
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=16)
