@@ -14,34 +14,61 @@ import pytest
 import export
 
 
-# The authoritative v1 palette order (mirrors ClassPalette.v1Standard). The gate
-# reads this from class_mapping_foodseg103_v1.json; locking it here guards against
-# a silent reorder of the mapping file (Req 4.4 "in palette order").
+# The authoritative v2 palette order (mirrors the ClassPalette standard palette:
+# 25 solids with cereal appended at index 24, liquids at 25–32, sentinels at
+# 33/34/35 — myfoodrepo-bridge PRD). The gate reads this from
+# class_mapping_foodseg103_v1.json; locking it here guards against a silent
+# reorder of the mapping file (Req 4.4 "in palette order").
 EXPECTED_PALETTE = [
     "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
     "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
     "pork", "fish_white", "egg", "cheese", "salad_leaves",
     "broccoli", "carrot", "peas", "beans_baked", "lentils",
     "apple", "banana", "tomato", "mixed_vegetables",
+    "cereal",
     "water", "coffee", "tea", "milk",
     "fruit_juice", "soup", "beer", "wine",
     "background", "unknown_food", "unsupported_liquid",
 ]
 
+# The committed mapping file is regenerated to the v2 order by the dataset-bridge
+# context (myfoodrepo-bridge tasks); until that lands this worktree still carries
+# the 35-channel v1 file, so the committed-file lock below is integration-gated
+# and activates automatically once channel_count reads 36.
+_COMMITTED_MAPPING_IS_V2 = (
+    json.loads(export._MAPPING_PATH.read_text()).get("channel_count") == 36
+)
+
 
 # ── Channel count / palette order (Req 4.4) ─────────────────────────────────────
 
-def test_palette_channel_names_match_v1_order():
+def test_expected_palette_is_36_channel_v2():
+    assert len(EXPECTED_PALETTE) == export.EXPECTED_CHANNEL_COUNT == 36
+    assert EXPECTED_PALETTE[24] == "cereal"
+    assert EXPECTED_PALETTE[25:33] == [
+        "water", "coffee", "tea", "milk", "fruit_juice", "soup", "beer", "wine",
+    ]
+    assert EXPECTED_PALETTE[33:] == [
+        "background", "unknown_food", "unsupported_liquid",
+    ]
+
+
+@pytest.mark.skipif(
+    not _COMMITTED_MAPPING_IS_V2,
+    reason="class_mapping_foodseg103_v1.json still v1/35-channel — the "
+           "dataset-bridge context regenerates it to v2; lock activates on "
+           "integration",
+)
+def test_palette_channel_names_match_v2_order():
     assert export.palette_channel_names() == EXPECTED_PALETTE
-    assert len(EXPECTED_PALETTE) == export.EXPECTED_CHANNEL_COUNT == 35
 
 
-def test_validate_channel_count_accepts_35():
-    export.validate_channel_count(35)  # no raise
+def test_validate_channel_count_accepts_36():
+    export.validate_channel_count(36)  # no raise
 
 
-@pytest.mark.parametrize("n", [0, 27, 34, 36, 103])
-def test_validate_channel_count_rejects_non_35(n):
+@pytest.mark.parametrize("n", [0, 27, 35, 37, 103])
+def test_validate_channel_count_rejects_non_36(n):
     with pytest.raises(export.ExportGateError):
         export.validate_channel_count(n)
 
@@ -122,7 +149,7 @@ def test_resize_bilinear_changes_dims():
 
 # ── Equivalence oracle (Req 4.3) ────────────────────────────────────────────────
 
-def _logits(seed=0, shape=(35, 8, 8)):
+def _logits(seed=0, shape=(36, 8, 8)):
     return np.random.default_rng(seed).standard_normal(shape).astype(np.float32)
 
 
@@ -150,8 +177,8 @@ def test_oracle_argmax_disagreement_fails():
 
 
 def test_oracle_shape_mismatch_fails():
-    err, agree, ok = export.oracle_agreement(_logits(shape=(35, 8, 8)),
-                                             _logits(shape=(35, 4, 4)))
+    err, agree, ok = export.oracle_agreement(_logits(shape=(36, 8, 8)),
+                                             _logits(shape=(36, 4, 4)))
     assert err == float("inf") and agree == 0.0 and not ok
 
 

@@ -6,7 +6,7 @@ references:
 
 ## 36-channel tooling
 
-- [ ] 1. Move export and validation tooling to 36 channels <!-- id:8id22y3 -->
+- [x] 1. Move export and validation tooling to 36 channels <!-- id:8id22y3 -->
   - export.py EXPECTED_CHANNEL_COUNT 35 -> 36 (line ~316) and --num-classes default; validation.py sentinel/channel expectations
   - Update tools/segmenter/tests/test_export_gates.py EXPECTED_PALETTE (36 names in v2 order: cereal at 24, liquids 25-32, sentinels 33/34/35) and any other 35-channel assertions this context owns
   - Do NOT touch build_class_mapping.py, prepare_dataset.py, test_class_mapping.py (dataset-bridge context owns them) or tools/food_db/ (palette context owns it)
