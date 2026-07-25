@@ -15,13 +15,14 @@ references:
 
 ## Training run
 
-- [ ] 2. Preflight the merged corpus and measure one epoch <!-- id:8id22y4 -->
-  - PREREQUISITE from another context: the dataset-bridge merged corpus must exist under /Users/r/repos/medata/data/ — if absent, HALT this context and report blocked (the orchestrator resumes it after the bridge lands); do not build the corpus yourself
+- [x] 2. Preflight the merged corpus and measure one epoch <!-- id:8id22y4 -->
+  - DONE 2026-07-26: merged corpus verified by merge_corpus_foodrec2022.py asserts (anchor 182 stems heldout-only, digest recorded, mask scan hard-errors on pixels >= 36); measurement via --limit 4000 one-epoch run (3.3 min) cross-checked against the FoodSeg103-only smoke run (5,553 imgs in 3.8 min) — both ~24 img/s, so the documented 20 min/epoch figure is stale; projected full epoch ~33 min
   - Verify splits.json seed, leak-free anchor untouched, 36-channel masks
   - Launch a one-epoch measurement run per docs/ml-training.md section 4 before committing to the full run; record epoch wall-clock
   - Blocked-by: 8id22y3 (Move export and validation tooling to 36 channels)
 
-- [ ] 3. Run the full detached training job on the merged corpus at 36 classes <!-- id:8id22y5 -->
+- [-] 3. Run the full detached training job on the merged corpus at 36 classes <!-- id:8id22y5 -->
+  - LAUNCHED 2026-07-26 from the main checkout: 12 epochs (total-step parity ~1.6x the incumbent's 60x5,553; ~6.5 h projected), batch 16, lr 1e-3, plain CE with class-weighting none (matches incumbent recipe for attributable comparison), geometric augment on, photometric OFF (recorded choice), out build/checkpoint_merged_v2.pt, log build/train_merged_v2.log, resume sidecar active
   - Launch from the MAIN checkout (/Users/r/repos/medata) after palette + bridge merges — never from a temporary worktree; nohup caffeinate -is with the tools/segmenter/.venv python, log file retained, resume sidecar active
   - Staple-safe recipe: class rebalancing none or at most sqrt_inverse; NO inverse-frequency weighting; geometric augmentation on; photometric augmentation at your discretion with the choice recorded
   - NEVER edit train.py or its imports while the run is live (DataLoader spawn workers re-import from disk)

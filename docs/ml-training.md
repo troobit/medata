@@ -343,7 +343,7 @@ augmentation on, no photometric augmentation, `--num-classes 36`:
 nohup caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
     --data /Users/r/repos/medata/data/merged_foodseg_foodrec2022 \
     --num-classes 36 --target-size 513 \
-    --epochs 10 --batch-size 16 --lr 1e-3 \
+    --epochs 12 --batch-size 16 --lr 1e-3 \
     --out tools/segmenter/build/checkpoint_merged_v2.pt \
     >> tools/segmenter/build/train_merged_v2.log 2>&1 &
 ```
