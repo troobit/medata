@@ -33,7 +33,7 @@ metadata:
 
 - [x] 1. Create Swift Package + Xcode project skeleton <!-- id:0f06zz7 -->
   - Create `MedataCore` Swift Package with module folders for CaptureKit, CardDetection, SupportPlane, MetricScale, Segmentation, Volume, Foods, Macros, Confidence, Persistence, PortableContracts, Pipeline (per design §2.1).
-  - Create iOS app target referencing MedataCore; Swift 5.9+, deployment target iOS 17.
+  - Create iOS app target referencing MedataCore; Swift 5.9+, deployment target iOS 17. *(Superseded 2026-07-25: the app target now requires iOS 26.5 with an iPhone 16 Pro hardware floor — segmenter-foundation Decisions 22/26; the MedataCore package still targets iOS 17.)*
   - Create `HarnessCLI` SPM executable target for macOS.
   - Add Package.swift, .xcodeproj, .swiftformat, .gitattributes (Git LFS for fixtures dir convention).
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [18.1](requirements.md#18.1), [18.2](requirements.md#18.2)
