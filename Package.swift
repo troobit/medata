@@ -250,6 +250,10 @@ let package = Package(
             dependencies: [
                 "Persistence",
                 "PortableContracts",
+                // Test-only: PaletteMigratorTests exercises the real
+                // v1 → v2 ClassPalettes (myfoodrepo-bridge PRD). The
+                // Persistence TARGET stays palette-agnostic.
+                "Segmentation",
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],

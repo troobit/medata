@@ -1,5 +1,6 @@
 import Foundation
 import PortableContracts
+import Segmentation
 import XCTest
 @testable import Persistence
 
@@ -142,6 +143,82 @@ final class PaletteMigratorTests: XCTestCase {
         } catch PaletteMigratorError.mappingFileMissing {
             // expected
         }
+    }
+
+    // MARK: - Real v1 → v2 palettes (myfoodrepo-bridge PRD)
+
+    // The real v1 → v2 mapping is the identity on every v1 class: cereal is the
+    // only addition and nothing before it moves, so no v1 class remaps and none
+    // is unmappable.
+    private func realV1toV2Mapping() -> [String: String] {
+        let v1 = ClassPalette.v1Standard
+        let ids = v1.foodClasses + v1.liquidClasses
+        return Dictionary(uniqueKeysWithValues: ids.map { ($0, $0) })
+    }
+
+    func testRealPalettesV1ClassesAllMapIntoV2() {
+        let v1 = ClassPalette.v1Standard
+        let v2 = ClassPalette.v2Standard
+        let v2Ids = Set(v2.foodClasses + v2.liquidClasses)
+        for (from, to) in realV1toV2Mapping() {
+            XCTAssertEqual(from, to, "v1 → v2 is identity per class")
+            XCTAssertTrue(v2Ids.contains(to), "\(to) must exist in v2")
+        }
+        // Cereal is new in v2: unreachable from any v1 class by design
+        // (unmappable-from-v1 is acceptable; nothing maps to it).
+        XCTAssertFalse(v1.foodClasses.contains("cereal"))
+        XCTAssertFalse(realV1toV2Mapping().values.contains("cereal"))
+    }
+
+    func testRealV1MealMigratesToV2AcrossSolidAndLiquid() async throws {
+        // A real v1 meal: a carb-priority solid plus a liquid, migrated with
+        // the real identity mapping. Volumes carry over; the shadow record is
+        // stamped v2; no cereal entry appears from nowhere.
+        var volumes = PbVolumeResult()
+        volumes.perClassVolumesCm3 = ["white_rice": 180, "milk": 200]
+        var rice = PbPerClassMacros(); rice.volumeCm3 = 180; rice.massG = 131.4; rice.carbsG = 42.0; rice.betaUsed = 1.0
+        var milk = PbPerClassMacros(); milk.volumeCm3 = 200; milk.massG = 206.0; milk.carbsG = 9.6; milk.betaUsed = 1.0
+        var macros = PbMacroResult(); macros.totalCarbsG = 51.6
+        macros.perClass = ["white_rice": rice, "milk": milk]
+        var confidence = PbConfidenceResult(); confidence.sigmaMeal = 0.8
+        let original = MealRecord(
+            capturePath: .singleViewLidar,
+            databaseEdition: "CoFID 2024",
+            paletteVersion: ClassPalette.v1Standard.version,
+            calibration: PbCameraIntrinsics(), supportPlane: PbSupportPlane(), scale: PbMetricScale(),
+            volumes: volumes, macros: macros, confidence: confidence,
+            perClassCalibration: ["white_rice": .uncalibratedUnity, "milk": .uncalibratedUnity]
+        )
+
+        let url = try writeMappingFile(from: ClassPalette.v1Standard.version,
+                                       to: ClassPalette.v2Standard.version,
+                                       mappings: realV1toV2Mapping())
+        // ρ/β/κ constant across editions: the identity migration must preserve
+        // mass and carbs exactly (m' = V·ρβ/ρβ · … with old == new).
+        let allIds = ClassPalette.v1Standard.foodClasses + ClassPalette.v1Standard.liquidClasses
+        let migrator = BundlePaletteMigrator(
+            mappingURLs: ["v1→v2": url],
+            foodDB: StubFoodDB(
+                densities: Dictionary(uniqueKeysWithValues: allIds.map { ($0, Float(1.0)) }),
+                betas: Dictionary(uniqueKeysWithValues: allIds.map { ($0, Float(1.0)) }),
+                carbsMonos: ["white_rice": 32.0, "milk": 4.8]
+            )
+        )
+        let shadow = try await migrator.reDerive(meal: original, to: "v2")
+
+        XCTAssertEqual(shadow.paletteVersion, "v2")
+        XCTAssertEqual(shadow.volumes.perClassVolumesCm3["white_rice"], 180)
+        XCTAssertEqual(shadow.volumes.perClassVolumesCm3["milk"], 200)
+        XCTAssertNil(shadow.volumes.perClassVolumesCm3["cereal"])
+        XCTAssertNil(shadow.macros.perClass["cereal"])
+        let riceOut = try XCTUnwrap(shadow.macros.perClass["white_rice"])
+        let milkOut = try XCTUnwrap(shadow.macros.perClass["milk"])
+        // Identity mapping with unchanged ρ/β: mass = V·ρ·β, carbs = mass·κ/100.
+        XCTAssertEqual(riceOut.massG, 180.0, accuracy: 0.01)
+        XCTAssertEqual(riceOut.carbsG, 180.0 * 32.0 / 100.0, accuracy: 0.01)
+        XCTAssertEqual(milkOut.massG, 200.0, accuracy: 0.01)
+        XCTAssertEqual(milkOut.carbsG, 200.0 * 4.8 / 100.0, accuracy: 0.01)
+        XCTAssertEqual(shadow.macros.totalCarbsG, riceOut.carbsG + milkOut.carbsG, accuracy: 0.01)
     }
 }
 

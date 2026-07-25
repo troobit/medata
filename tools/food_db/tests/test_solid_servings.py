@@ -26,11 +26,14 @@ import pytest
 
 import generate
 
-SOLID_COUNT = 24
+SOLID_COUNT = 25
 
 BDA_URL = "bda.uk.com/resource/food-facts-portion-sizes"
 CRAWLEY_SOURCE = "Crawley Food Portion Sizes (unverified figure)"
-CRAWLEY_CLASSES = {"potato_mashed", "lentils", "chips_fries", "salad_leaves"}
+# cereal: BDA quotes dry oats only; the as-served spoon figure is unverified
+# (myfoodrepo-bridge PRD, palette v2).
+CRAWLEY_CLASSES = {"potato_mashed", "lentils", "chips_fries", "salad_leaves",
+                   "cereal"}
 
 # Seed gram weights per PRD Req 1's acceptance list.
 EXPECTED_GRAMS = {
@@ -44,6 +47,8 @@ EXPECTED_GRAMS = {
     "cheese": 30.0, "egg": 50.0,
     "beef": 90.0, "chicken": 90.0, "pork": 90.0, "fish_white": 90.0,
     "salad_leaves": 20.0,
+    # Palette v2 addition (myfoodrepo-bridge PRD): as-served porridge spoon.
+    "cereal": 50.0,
 }
 
 
