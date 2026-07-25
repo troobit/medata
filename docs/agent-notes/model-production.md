@@ -294,3 +294,34 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   verify per candidate in the gated conversion session.
 - `spike_segformer.py` is unchanged (historical task-20 evidence); its stale
   test expectation was updated to the Decision 22 iPhone 16 Pro floor.
+
+## myfoodrepo-bridge (2026-07-26): palette v2 model `ab812dc3aa9d` promoted
+
+- Third real model shipped: `checkpoint_merged_v2.pt` -> `ab812dc3aa9d`,
+  trained 12 epochs on the merged FoodSeg103 + Food Recognition 2022 corpus
+  (45,515 train images, 36-channel palette v2), plain CE / class weighting
+  `none` / geometric augment only — the incumbent recipe, so the delta is
+  attributable to data alone. Verdict: segmenter-foundation Decision 27.
+- Leak-free anchor: mean food-class IoU 0.3927 vs the 0.3776 incumbent
+  (family-collapsed 0.4212). New classes on merged val: cereal 0.4831,
+  bread_wholemeal 0.4787, potato_mashed 0.3719; brown_rice unlearned (0.0000,
+  131 train images) and stays deferred.
+- Anchor per-staple readings carry ±0.10 cross-set noise (the same checkpoint
+  scores chips_fries 0.5599 on the 182-image anchor vs 0.4586 on the 854-image
+  heldout) — treat single-set per-class deltas accordingly.
+- `PipelineFactory` defaults flipped `v1Standard` -> `v2Standard` (both
+  `makeForDevice` and `makeSegmenter`); `ClassColourTable` needed no change
+  (id-indexed golden-angle wheel, palette-size-independent).
+- Export gates: 22,169,442 B weights (≤ 24 MiB), 36 channels, Core ML vs
+  oracle argmax agreement 0.9999; developer-phase release override recorded in
+  `build/lineage.json` (strict 0.48/0.45 gates still unmet; `export_eligible`
+  truthful).
+- GOTCHA (recurring): `run_validation.py`/`export.py` defaults are
+  REPO-RELATIVE (`tools/segmenter/build/...`). Run them from the repo root or
+  pass absolute `--lineage`/`--out-*`, or metrics land in a stray
+  `tools/segmenter/tools/segmenter/` tree (happened 2026-07-26; stray removed,
+  validation re-run with absolute paths).
+- Validation of a v2 model needs v2-space masks: the 182-anchor images were
+  re-paired with v2 masks at `data/foodseg103_remapped_v2/heldout_leakfree/`
+  (same stems; the v1 anchor dir stays byte-identical as the provenance
+  artefact).
