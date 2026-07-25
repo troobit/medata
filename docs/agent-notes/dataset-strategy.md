@@ -266,6 +266,36 @@ afterwards the bridge context can resume at task 1's verification step:
    (see `data/myfoodrepo273/ACQUISITION.md` in the main checkout). Keep the
    `.tar.gz` files — SOURCE.md will hash them as the release identifier.
 
+### 6.1 Outcome — v0.4 unobtainable; substituted with the 2022 release (2026-07-26, MD-30)
+
+The human steps above were completed 2026-07-25 (login, participation terms
+v2, challenge rules v9 accepted on the user's account) and STILL failed:
+`datasets.aicrowd.com` answers **HTTP 500 on every file path** — in-browser
+(user-confirmed), via the redirect chain with an authenticated session, and
+via `aicrowd-cli` — while `gitlab.aicrowd.com` (the paper's data-availability
+pointer) answers 503. The auth handoff itself works (a `datasets.aicrowd.com`
+session cookie is granted); the storage backend behind their proxy is broken.
+The small `round-*-datasets.txt` entries download fine because they live on a
+different store (`aicrowd-production` S3 presigned URLs).
+
+A mirror sweep found **no copy of v0.4 anywhere**: the public Wasabi bucket
+(`aicrowd-public-datasets`, all top-level prefixes enumerated) holds only
+rounds 1–2; the one historical Kaggle mirror (`rohitmidha23/…`) is deleted;
+Kaggle/HuggingFace/Dataset Ninja hold only 2022-successor releases; Superb AI
+hosts an 8,367-image subset; the Wayback Machine never archived the tarballs;
+GitHub code search for the literal filename yields only repos linking the dead
+URLs; the HuggingFace `food_recognition_2022_processed` copy is bbox-only (no
+polygons — unusable for segmentation).
+
+**Decision MD-30**: substitute the Food Recognition Benchmark 2022 release
+(same MyFoodRepo source, CC BY 4.0; its ontology covers cereal via
+porridge/muesli/crunch-muesli/birchermuesli/flakes-oat plus rice-whole-grain,
+bread-wholemeal, and mashed-potatoes-…-butter). Acquisition route: Kaggle
+mirror `sainikhileshreddy/food-recognition-2022` (5.27 GB, needs a
+user-supplied API key), landing in `/Users/r/repos/medata/data/foodrec2022/`.
+A background retry watch on the v0.4 links continues; v0.4 would be an
+additional source if it ever resurfaces, not a replacement.
+
 ## 7. Public-data posture (confirmed)
 
 The stated preference — freely available public data, no repeated work — holds across
