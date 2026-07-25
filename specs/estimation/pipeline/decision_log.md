@@ -218,7 +218,7 @@ LiDAR alone produces metric volume on iPhone 12 Pro+; the card adds an independe
 ## Decision 7: iPhone 12 Pro and later (LiDAR floor)
 
 **Date**: 2026-05-05
-**Status**: superseded — the v1 hardware floor was narrowed to iPhone 13 Pro Max only, iOS 26.5 minimum (Req 1.2 / design §0; device-narrowing landed with Decision 40 / task 75). The non-LiDAR relaxation noted here still applies at runtime (`noLidarConfidence`), but the calibration/performance targets are measured only on iPhone 13 Pro Max.
+**Status**: superseded — the v1 hardware floor was narrowed to iPhone 13 Pro Max only, iOS 26.5 minimum (Req 1.2 / design §0; device-narrowing landed with Decision 40 / task 75). The non-LiDAR relaxation noted here still applies at runtime (`noLidarConfidence`), but the calibration/performance targets are measured only on iPhone 13 Pro Max. *Annotation 2026-07-25:* the floor moved again — iOS 26.5 with an **iPhone 16 Pro** hardware floor (segmenter-foundation Decision 22), and the non-LiDAR two-view + ID-1-card path is retained, not descoped (segmenter-foundation Decision 26). The "iOS minimum: iOS 17" and iPhone 12 Pro–13 Pro floor below are historical.
 
 ### Context
 
