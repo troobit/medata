@@ -6,7 +6,7 @@ references:
 
 ## Acquisition
 
-- [ ] 1. Acquire MyFoodRepo-273 into data/myfoodrepo273/ with SOURCE.md provenance <!-- id:vbs7lh4 -->
+- [-] 1. Acquire MyFoodRepo-273 into data/myfoodrepo273/ with SOURCE.md provenance <!-- id:vbs7lh4 -->
   - AIcrowd Food Recognition Benchmark (MyFoodRepo-273): images + COCO-format polygon annotations
   - Target is the MAIN checkout gitignored tree: /Users/r/repos/medata/data/myfoodrepo273/ (absolute path — data/ does not exist in worktrees)
   - SOURCE.md follows data/foodseg103/SOURCE.md: source URLs, SHA-256 checksums, actual attached licence (expected CC BY 4.0), image/annotation counts
