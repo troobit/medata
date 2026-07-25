@@ -59,6 +59,7 @@ per-decision format see `rules/references/decision-log-format.md`.
 | [MD-26](#md-26-phased-delivery-behind-a-dev-stub-segmenter) | Process & Method | Phased delivery behind a dev-stub segmenter | accepted |
 | [MD-27](#md-27-evaluation-harness-gated-behind-a-compile-flag) | Process & Method | Evaluation harness gated behind a compile flag | accepted |
 | [MD-28](#md-28-measure-latency-in-release-before-treating-it-as-a-defect) | Process & Method | Measure latency in Release before treating it as a defect | accepted |
+| [MD-29](#md-29-palette-v2--cereal-solid-class-on-a-cofid-porridge-basis) | Segmentation & Classes | Palette v2 — cereal solid class on a CoFID porridge basis | accepted |
 
 ---
 
@@ -456,6 +457,98 @@ the MAPE objective; the sample-size floor keeps shipped β_c statistically defen
 
 - **Positive:** Accuracy decomposes into segmenter + density components.
 - **Negative:** A held-out segmenter test set must be maintained.
+
+---
+
+## MD-29: Palette v2 — cereal solid class on a CoFID porridge basis
+
+**Date**: 2026-07-25
+**Status**: accepted
+**Sources**: myfoodrepo-bridge PRD (Palette and food DB, reqs 1–4); segmenter-foundation D21; bugfix/segmenter-output-stride-ignored report §Known gaps
+
+### Context
+
+The palette had no cereal class: breakfast cereals (porridge, muesli, granola,
+cornflakes) fell through to `unknown_food`, a gap recorded by the
+segmenter-output-stride-ignored investigation and visible in the Nutrition5k
+mapping where `oatmeal`/`granola`/`cereal`/`muesli` are all unmapped. The
+MyFoodRepo-273 bridge adds training supervision for cereals, so the palette and
+the food DB must grow a channel for them first — without disturbing the channel
+indices that the carb-priority staples, the validation floors, and the dataset
+tooling already depend on.
+
+### Decision
+
+Palette **v2** appends a single `cereal` solid class at index 24: 25 solids,
+liquids at 25–32, sentinels at 33/34/35, 36 channels, `version: "v2"`.
+`v1Standard` is retained in `ClassPalette.swift` solely as the
+`PaletteMigrator` v1 → v2 source; the bake lock anchors on `v2Standard` and
+rejects the v1 label. The DB row is porridge-based from **CoFID 2021**:
+
+- Composition and energy: food code **11-1108** "Porridge, made with whole
+  milk" — carbohydrate 13.3 g/100 g (monosaccharide equivalents), protein
+  4.9, fat 4.7, AOAC fibre 0.9, energy 472 kJ/100 g.
+- Density: **1.03 g/cm³, EST_SOLID** — a contiguous semi-fluid mass near milk
+  density; CoFID carries no density and FAO/INFOODS v2.0 has no comparable
+  cooked-porridge entry, so no CoFID density code exists to cite.
+- β = 1.0, `uncalibrated_unity` (β_c calibration stays deferred past the MVP).
+
+`cereal` does **not** join the carb-priority staple set (the per-class ≥ 0.45
+validation floor) now; that call is deferred until the MyFoodRepo-273 coverage
+audit and the first merged-corpus training run show what supervision the class
+actually gets.
+
+### Rationale
+
+Appending after the existing 24 solids keeps every v1 index stable — the first
+8 staple channels keep their positions, so `validation.py` and
+`prepare_dataset.py` stay index-stable and persisted v1 masks keep their
+meaning up to the shifted liquids/sentinels, which the v1 → v2 migration
+handles. The as-served porridge basis matches the table's cooked/as-served
+mass contract: the visual hull sees a milk-swollen bowl, and dry-flake values
+against that volume would over-count carbs several-fold. Porridge is also the
+best single carbs-per-volume compromise across the family (≈ 0.14 g/cm³,
+between a dry-flake bowl and a milk-heavy muesli bowl). Keeping cereal out of
+the staple floor avoids gating promotion on a class whose supervision is
+unknown — a floor there would either spuriously block an otherwise-good model
+or invite faking coverage.
+
+### Alternatives Considered
+
+- **Dry-flake representative** (CoFID 11-742 cornflakes, 90.9 g carbs/100 g,
+  or 11-780 muesli Swiss style, 72.6 g/100 g): rejected — dry-basis
+  composition applied to the hull volume of a bowl served with milk
+  over-counts carbs roughly five-fold; it violates the FOOD_DATA as-served
+  basis rule.
+- **Per-cereal palette channels** (separate porridge/muesli/granola/cornflakes
+  classes): rejected — the PRD scopes palette growth to one class; finer
+  distinctions belong as DB sub-class rows (Decision 24 precedent), and
+  per-fine-class training coverage is unverified.
+- **Redefine v1 in place** (Decision 23 precedent, no version bump): rejected
+  — cereal shifts the liquid and sentinel indices, silently changing the
+  meaning of persisted v1 masks; a version bump with a migrator path keeps old
+  meals honest.
+- **Cereal into the carb-priority staple set immediately**: rejected — the
+  coverage audit has not run; the floor would gate promotion on an unknown.
+
+### Consequences
+
+**Positive:**
+- Breakfast cereals stop disappearing into `unknown_food` once the retrained
+  36-channel model is promoted and deployed.
+- Staple channel indices and existing tooling stay stable; v1 meals migrate
+  through the existing `PaletteMigrator` edition path.
+- The bake lock now provably rejects the retained v1 declaration, so a stale
+  bake cannot ship.
+
+**Negative:**
+- One coarse row cannot fit the whole family: carbs per unit volume vary ~3×
+  between porridge and a dry-cereal bowl, so dry-served cereals will be
+  misestimated until sub-class handling exists.
+- Until the retrained model ships, the palette/DB run ahead of the bundled
+  35-channel segmenter, which cannot emit the cereal channel.
+- The 50 g as-served spoon serving is an unverified figure (recorded honestly
+  as such in `solid_servings`).
 
 ---
 
