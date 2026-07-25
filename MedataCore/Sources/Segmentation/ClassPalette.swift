@@ -56,8 +56,8 @@ public struct ClassPalette: Sendable, Equatable {
 }
 
 public extension ClassPalette {
-    // The v1 palette matching tools/food_db/generate.py and design §3.5,
-    // redefined in place with the coarse liquid classes (Decisions 23/24).
+    // The v1 palette (design §3.5, coarse liquid classes per Decisions 23/24),
+    // retained for the v1 → v2 persisted-meal migration (PaletteMigrator).
     // Indices 0–23: solid food classes; 24–31: liquid classes; 32: background;
     // 33: unknown_food; 34: unsupported_liquid.
     static let v1Standard = ClassPalette(
@@ -76,6 +76,30 @@ public extension ClassPalette {
         unknownFood: 33,
         unsupportedLiquid: 34,
         version: "v1"
+    )
+
+    // The v2 palette matching tools/food_db/generate.py: v1 plus the `cereal`
+    // solid class (breakfast cereals — porridge/muesli/granola/cornflakes;
+    // myfoodrepo-bridge PRD). Cereal appends after the existing 24 solids so
+    // the carb-priority staple channels (first 8 solids) keep their indices.
+    // Indices 0–24: solid food classes; 25–32: liquid classes; 33: background;
+    // 34: unknown_food; 35: unsupported_liquid.
+    static let v2Standard = ClassPalette(
+        foodClasses: [
+            "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
+            "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
+            "pork", "fish_white", "egg", "cheese", "salad_leaves",
+            "broccoli", "carrot", "peas", "beans_baked", "lentils",
+            "apple", "banana", "tomato", "mixed_vegetables", "cereal"
+        ],
+        liquidClasses: [
+            "water", "coffee", "tea", "milk",
+            "fruit_juice", "soup", "beer", "wine"
+        ],
+        background: 33,
+        unknownFood: 34,
+        unsupportedLiquid: 35,
+        version: "v2"
     )
 }
 
