@@ -28,26 +28,31 @@ references:
   - Expect roughly 20 min/epoch on M5 Pro MPS; ~10+ hours for 60 epochs
   - Blocked-by: 8id22y4 (Preflight the merged corpus and measure one epoch)
 
+- [ ] 4. Integration follow-up: align make_fixtures.py and test_lineage.py with the v2 mapping
+  - Do this together with the dataset-bridge resume: when class_mapping_foodseg103 regenerates to v2, tools/segmenter/make_fixtures.py DEFAULT_NUM_CLASSES moves 35 -> 36 and tools/segmenter/tests/test_lineage.py:31 palette_version assertion moves v1 -> v2
+  - Spike files NUM_CLASSES = 35 are pinned historical evidence — leave them
+  - Flagged unowned at integration 2026-07-25 by the training context
+
 ## Validation and promotion
 
-- [ ] 4. Validate against the leak-free anchor and record the promotion verdict <!-- id:8id22y6 -->
+- [ ] 5. Validate against the leak-free anchor and record the promotion verdict <!-- id:8id22y6 -->
   - run_validation.py output into tools/segmenter/build/lineage.json including per-staple and cereal IoU
   - Promotion criterion: leak-free mean food-class IoU beats the 0.3776 anchor of 24e0b022241a AND no existing carb-priority staple regresses materially; otherwise record the rejection like Decisions 24/25
   - Verdict entry (promotion or rejection, with numbers) in specs/estimation/segmenter-foundation/decision_log.md, Enhanced Nygard format; outcome note in docs/agent-notes/model-production.md
   - If promoting while below the 0.48/0.45 gates: developer-phase override with attributable reason; export_eligible stays truthful
   - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
 
-- [ ] 5. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
+- [ ] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
   - Only on promotion; export.py gates: 24 MiB weight budget, 36 channels in palette order, oracle parity
   - make deploy-release; verify device launch log shows the new segmenterSource=coreml_<12-hex> with matching buildStamp via make logs-device
   - Blocked-by: 8id22y6 (Validate against the leak-free anchor and record the promotion verdict)
 
 ## Human gates
 
-- [ ] 6. STOP — on-device capture verification by a human <!-- id:8id22y8 -->
+- [ ] 7. STOP — on-device capture verification by a human <!-- id:8id22y8 -->
   - A human points the phone at real meals (including a cereal bowl) to confirm the overlay and carb readings; the agent verifies only launch log and build stamp
   - Blocked-by: 8id22y7 (Export, swap the bundled model, and deploy for verification)
 
-- [ ] 7. STOP — ANE residency check in Xcode <!-- id:8id22y9 -->
+- [ ] 8. STOP — ANE residency check in Xcode <!-- id:8id22y9 -->
   - Core ML performance report is a manual Xcode step; record as pending rather than claiming it
   - Blocked-by: 8id22y7 (Export, swap the bundled model, and deploy for verification)
