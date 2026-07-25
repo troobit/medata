@@ -36,21 +36,33 @@ AFCD_DB = os.path.join(OUTPUT_DIR, "afcd_db.sqlite")
 # Palette edition this bake stamps into meta.palette_version. It MUST equal
 # ClassPalette.version (the Swift single source of truth); verify_palette_lock
 # enforces that before any DB is written (Req 8.4 / design §3.6 bake lock).
-PALETTE_VERSION = "v1"
+PALETTE_VERSION = "v2"
+
+# The current standard palette declaration in ClassPalette.swift this bake is
+# locked against. v1Standard remains in that file as the migration source
+# (PaletteMigrator v1 -> v2), so the lock must anchor on the v2 declaration.
+_PALETTE_MARKER = "v2Standard"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CLASS_PALETTE_SWIFT = _REPO_ROOT / "MedataCore/Sources/Segmentation/ClassPalette.swift"
 
 
 def class_palette_version() -> str:
-    """Read ClassPalette.version from v1Standard in ClassPalette.swift.
+    """Read ClassPalette.version from the current standard palette declaration
+    (_PALETTE_MARKER) in ClassPalette.swift.
 
     The lock tracks the Swift source directly rather than a duplicated constant so
     a future palette bump there forces this bake to be reconciled rather than
-    silently shipping a stale-edition DB.
+    silently shipping a stale-edition DB. The search anchors AFTER the marker so
+    the retained v1Standard declaration's version string is never matched.
     """
     text = _CLASS_PALETTE_SWIFT.read_text()
-    match = re.search(r'version:\s*"([^"]+)"', text)
+    marker = text.find(_PALETTE_MARKER)
+    if marker < 0:
+        raise SystemExit(
+            f"no {_PALETTE_MARKER} palette found in {_CLASS_PALETTE_SWIFT}"
+        )
+    match = re.search(r'version:\s*"([^"]+)"', text[marker:])
     if match is None:
         raise SystemExit(
             f"could not read ClassPalette.version from {_CLASS_PALETTE_SWIFT}"
@@ -59,13 +71,16 @@ def class_palette_version() -> str:
 
 
 def palette_class_list() -> list:
-    """Ordered palette content from ClassPalette.swift v1Standard: foodClasses
-    then liquidClasses, declaration order, sentinels excluded — the same
-    regex-read pattern as class_palette_version (design §DB bake)."""
+    """Ordered palette content from ClassPalette.swift's current standard
+    palette (_PALETTE_MARKER): foodClasses then liquidClasses, declaration
+    order, sentinels excluded — the same regex-read pattern as
+    class_palette_version (design §DB bake)."""
     text = _CLASS_PALETTE_SWIFT.read_text()
-    marker = text.find("v1Standard")
+    marker = text.find(_PALETTE_MARKER)
     if marker < 0:
-        raise SystemExit(f"no v1Standard palette found in {_CLASS_PALETTE_SWIFT}")
+        raise SystemExit(
+            f"no {_PALETTE_MARKER} palette found in {_CLASS_PALETTE_SWIFT}"
+        )
     body = text[marker:]
 
     def class_array(name: str) -> list:
@@ -176,8 +191,8 @@ CREATE TABLE IF NOT EXISTS liquid_subclasses (
 
 SCHEMA_AFCD = SCHEMA_FOODS  # AFCD uses the same schema as CoFID; values may differ
 
-# 24 solid food classes + 8 coarse liquid classes co-curated with the
-# segmenter palette (ClassPalette.v1Standard: foodClasses then liquidClasses,
+# 25 solid food classes + 8 coarse liquid classes co-curated with the
+# segmenter palette (ClassPalette.v2Standard: foodClasses then liquidClasses,
 # declaration order — the channel order is load-bearing).
 # Values: (class_id, name, density g/cm³, energy kJ/100g, carbs_mono g/100g,
 #          protein g/100g, fat g/100g, fibre g/100g, beta, beta_status,
@@ -239,6 +254,14 @@ FOOD_DATA = [
     ("banana",           "Banana (raw)",                   0.87, 403.0,  20.0,  1.2,  0.3,  1.1,  1.0, "uncalibrated_unity", "EST_SOLID", "CoFID", "none", 0),
     ("tomato",           "Tomato (raw)",                   0.65, 73.0,    3.0,  0.7,  0.3,  1.0,  1.0, "uncalibrated_unity", "EST_SOLID", "CoFID", "none", 0),
     ("mixed_vegetables", "Mixed vegetables",               0.65, 150.0,   4.5,  2.5,  0.5,  2.0,  1.0, "uncalibrated_unity", "MEASURED",  "CoFID", "none", 0),
+    # Breakfast cereal class appended at palette v2 (myfoodrepo-bridge PRD).
+    # Coarse family row covering porridge/muesli/granola/cornflakes as served
+    # in a bowl. Representative: CoFID 11-1108 "Porridge, made with whole milk"
+    # — the as-served basis matching this table's cooked/as-served contract
+    # (dry-flake values would over-count a milk-swollen bowl 5-6x by volume).
+    # Density: contiguous semi-fluid mass near milk density; no FAO v2.0
+    # cooked-porridge entry, hence EST_SOLID.
+    ("cereal",           "Breakfast cereal (porridge, made with whole milk)", 1.03, 472.0, 13.3, 4.9, 4.7, 0.9, 1.0, "uncalibrated_unity", "EST_SOLID", "CoFID", "none", 0),
     # Coarse liquid classes (Req 7.1, Decisions 23/24) — CoFID-primary values
     # per 100 g; density converts the measured/canonical volume to mass.
     # Liquids never enter the β fit (Req 4.7); β stays at unity.
@@ -252,7 +275,7 @@ FOOD_DATA = [
     ("wine",             "Wine (average)",                 0.99, 283.0,   2.6,  0.1,  0.0,  0.0,  1.0, "uncalibrated_unity", "CoFID",     "CoFID", "none", 0),
 ]
 
-SOLID_CLASS_COUNT = 24
+SOLID_CLASS_COUNT = 25
 LIQUID_CLASS_COUNT = 8
 assert len(FOOD_DATA) == SOLID_CLASS_COUNT + LIQUID_CLASS_COUNT, (
     f"Expected {SOLID_CLASS_COUNT} solid + {LIQUID_CLASS_COUNT} liquid food "
@@ -321,6 +344,11 @@ SOLID_SERVINGS = [
     ("banana",           "banana",           "bananas",            80.0, 0.5, _BDA_PORTION_SHEET),
     ("tomato",           "tomato",           "tomatoes",           80.0, 0.5, _BDA_PORTION_SHEET),
     ("mixed_vegetables", "heaped tablespoon", "heaped tablespoons", 27.0, 1.0, _BDA_PORTION_SHEET),
+    # As-served porridge basis (CoFID 11-1108): a serving spoon of made-up
+    # porridge, consistent with the rice/pasta/mash spoon-scale precedent.
+    # BDA quotes 40 g of DRY oats, not an as-served figure, so the honest
+    # source label is the unverified one.
+    ("cereal",           "spoon",            "spoons",             50.0, 1.0, _CRAWLEY_UNVERIFIED),
 ]
 
 # Solid classes deliberately WITHOUT a serving definition (the app falls back

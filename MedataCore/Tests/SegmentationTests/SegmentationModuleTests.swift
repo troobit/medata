@@ -68,26 +68,66 @@ final class SegmentationModuleTests: XCTestCase {
         XCTAssertEqual(palette.totalClasses,
                        palette.foodClasses.count + palette.liquidClasses.count + 3)
         XCTAssertEqual(palette.totalClasses, 35)
-        // Redefined in place — no v2 (Decision 23).
+        // Retained as the migration source palette (myfoodrepo-bridge PRD).
         XCTAssertEqual(palette.version, "v1")
     }
 
-    func testV1StandardPredicatesOverFullIndexRange() {
-        let palette = ClassPalette.v1Standard
-        for classId in 0..<palette.foodClasses.count {
-            XCTAssertTrue(palette.isFoodClass(classId), "solid \(classId)")
-            XCTAssertFalse(palette.isLiquidClass(classId), "solid \(classId)")
-        }
-        let liquidRange = palette.foodClasses.count
-            ..< (palette.foodClasses.count + palette.liquidClasses.count)
-        for classId in liquidRange {
-            XCTAssertFalse(palette.isFoodClass(classId), "liquid \(classId)")
-            XCTAssertTrue(palette.isLiquidClass(classId), "liquid \(classId)")
-        }
-        for classId in [palette.background, palette.unknownFood,
-                        palette.unsupportedLiquid, -1, palette.totalClasses] {
-            XCTAssertFalse(palette.isFoodClass(classId), "sentinel/out \(classId)")
-            XCTAssertFalse(palette.isLiquidClass(classId), "sentinel/out \(classId)")
+    func testV2StandardAppendsCerealThenLiquidsThenSentinels() {
+        let palette = ClassPalette.v2Standard
+        XCTAssertEqual(palette.foodClasses.count, 25)
+        // Carb-priority staple channels (first 8 solids) keep their v1 indices.
+        XCTAssertEqual(Array(palette.foodClasses.prefix(8)),
+                       Array(ClassPalette.v1Standard.foodClasses.prefix(8)))
+        // Cereal appends after the 24 v1 solids — nothing before it moves.
+        XCTAssertEqual(Array(palette.foodClasses.prefix(24)),
+                       ClassPalette.v1Standard.foodClasses)
+        XCTAssertEqual(palette.foodClasses[24], "cereal")
+        XCTAssertEqual(palette.liquidClasses, [
+            "water", "coffee", "tea", "milk",
+            "fruit_juice", "soup", "beer", "wine"
+        ])
+        // Sentinels follow the liquids: 25 solids + 8 liquids → 33/34/35.
+        XCTAssertEqual(palette.background, 33)
+        XCTAssertEqual(palette.unknownFood, 34)
+        XCTAssertEqual(palette.unsupportedLiquid, 35)
+        XCTAssertEqual(palette.totalClasses,
+                       palette.foodClasses.count + palette.liquidClasses.count + 3)
+        XCTAssertEqual(palette.totalClasses, 36)
+        XCTAssertEqual(palette.version, "v2")
+    }
+
+    func testV2StandardProtoBridgeRoundTripsAll36Channels() {
+        let palette = ClassPalette.v2Standard
+        let pb = palette.pb
+        let recovered = ClassPalette(pb: pb)
+        XCTAssertEqual(recovered, palette)
+        XCTAssertEqual(recovered.totalClasses, 36)
+        XCTAssertEqual(pb.foodClasses.count, 25)
+        XCTAssertEqual(pb.liquidClasses.count, 8)
+        XCTAssertEqual(pb.background, 33)
+        XCTAssertEqual(pb.unknownFood, 34)
+        XCTAssertEqual(pb.unsupportedLiquid, 35)
+        XCTAssertEqual(pb.version, "v2")
+    }
+
+    func testStandardPalettePredicatesOverFullIndexRange() {
+        for palette in [ClassPalette.v1Standard, ClassPalette.v2Standard] {
+            let version = palette.version
+            for classId in 0..<palette.foodClasses.count {
+                XCTAssertTrue(palette.isFoodClass(classId), "\(version) solid \(classId)")
+                XCTAssertFalse(palette.isLiquidClass(classId), "\(version) solid \(classId)")
+            }
+            let liquidRange = palette.foodClasses.count
+                ..< (palette.foodClasses.count + palette.liquidClasses.count)
+            for classId in liquidRange {
+                XCTAssertFalse(palette.isFoodClass(classId), "\(version) liquid \(classId)")
+                XCTAssertTrue(palette.isLiquidClass(classId), "\(version) liquid \(classId)")
+            }
+            for classId in [palette.background, palette.unknownFood,
+                            palette.unsupportedLiquid, -1, palette.totalClasses] {
+                XCTAssertFalse(palette.isFoodClass(classId), "\(version) sentinel/out \(classId)")
+                XCTAssertFalse(palette.isLiquidClass(classId), "\(version) sentinel/out \(classId)")
+            }
         }
     }
 }

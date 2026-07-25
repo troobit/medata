@@ -22,7 +22,7 @@ import generate
 
 LIQUID_CLASSES = ["water", "coffee", "tea", "milk",
                   "fruit_juice", "soup", "beer", "wine"]
-SOLID_COUNT = 24
+SOLID_COUNT = 25
 
 
 @pytest.fixture(scope="module")
@@ -48,16 +48,17 @@ def connect(path):
 
 # --- FOOD_DATA content (Req 7.1) ---
 
-def test_food_data_is_24_solid_plus_8_liquid():
+def test_food_data_is_25_solid_plus_8_liquid():
     ids = [row[0] for row in generate.FOOD_DATA]
     assert len(ids) == SOLID_COUNT + len(LIQUID_CLASSES), (
-        f"FOOD_DATA must hold 24 solid + 8 liquid classes, got {len(ids)}"
+        f"FOOD_DATA must hold 25 solid + 8 liquid classes, got {len(ids)}"
     )
     # Channel order is load-bearing: liquids append after the solids in
-    # ClassPalette.v1Standard declaration order (Decision 23/24).
+    # ClassPalette.v2Standard declaration order (Decision 23/24; cereal at
+    # index 24 per the myfoodrepo-bridge PRD).
     assert ids[SOLID_COUNT:] == LIQUID_CLASSES
     assert ids[0] == "white_rice"
-    assert ids[SOLID_COUNT - 1] == "mixed_vegetables"
+    assert ids[SOLID_COUNT - 1] == "cereal"
 
 
 def test_liquid_rows_carry_carb_density_and_source():
