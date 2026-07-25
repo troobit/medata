@@ -21,7 +21,7 @@ references:
   - Launch a one-epoch measurement run per docs/ml-training.md section 4 before committing to the full run; record epoch wall-clock
   - Blocked-by: 8id22y3 (Move export and validation tooling to 36 channels)
 
-- [-] 3. Run the full detached training job on the merged corpus at 36 classes <!-- id:8id22y5 -->
+- [x] 3. Run the full detached training job on the merged corpus at 36 classes <!-- id:8id22y5 -->
   - LAUNCHED 2026-07-26 from the main checkout: 12 epochs (total-step parity ~1.6x the incumbent's 60x5,553; ~6.5 h projected), batch 16, lr 1e-3, plain CE with class-weighting none (matches incumbent recipe for attributable comparison), geometric augment on, photometric OFF (recorded choice), out build/checkpoint_merged_v2.pt, log build/train_merged_v2.log, resume sidecar active
   - Launch from the MAIN checkout (/Users/r/repos/medata) after palette + bridge merges — never from a temporary worktree; nohup caffeinate -is with the tools/segmenter/.venv python, log file retained, resume sidecar active
   - Staple-safe recipe: class rebalancing none or at most sqrt_inverse; NO inverse-frequency weighting; geometric augmentation on; photometric augmentation at your discretion with the choice recorded
@@ -36,14 +36,14 @@ references:
 
 ## Validation and promotion
 
-- [ ] 5. Validate against the leak-free anchor and record the promotion verdict <!-- id:8id22y6 -->
+- [x] 5. Validate against the leak-free anchor and record the promotion verdict <!-- id:8id22y6 -->
   - run_validation.py output into tools/segmenter/build/lineage.json including per-staple and cereal IoU
   - Promotion criterion: leak-free mean food-class IoU beats the 0.3776 anchor of 24e0b022241a AND no existing carb-priority staple regresses materially; otherwise record the rejection like Decisions 24/25
   - Verdict entry (promotion or rejection, with numbers) in specs/estimation/segmenter-foundation/decision_log.md, Enhanced Nygard format; outcome note in docs/agent-notes/model-production.md
   - If promoting while below the 0.48/0.45 gates: developer-phase override with attributable reason; export_eligible stays truthful
   - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
 
-- [ ] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
+- [-] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
   - Only on promotion; export.py gates: 24 MiB weight budget, 36 channels in palette order, oracle parity
   - make deploy-release; verify device launch log shows the new segmenterSource=coreml_<12-hex> with matching buildStamp via make logs-device
   - Blocked-by: 8id22y6 (Validate against the leak-free anchor and record the promotion verdict)
