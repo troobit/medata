@@ -60,6 +60,27 @@ Make targets set).
 The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
 window is unhittable; details and the log tells are in the sections below.
 
+## Pulling app data off the device without sudo (field triage)
+
+`make logs-device` needs sudo (tethered `log collect` requires root). The
+outcome store + capture bundles cover most triage WITHOUT logs, no sudo:
+
+```
+xcrun devicectl device info files --device 6AD781BA-89FF-5A82-A2A1-B5EC9469F465 \
+  --domain-type appDataContainer --domain-identifier rtob.MeData --subdirectory Documents
+xcrun devicectl device copy from --device 6AD781BA-89FF-5A82-A2A1-B5EC9469F465 \
+  --domain-type appDataContainer --domain-identifier rtob.MeData \
+  --source Documents/meals.sqlite --destination meals.sqlite
+```
+
+`meals.sqlite` carries `estimation_outcomes` (per-attempt failure JSON +
+stage measurements — query with `json_extract`); `Documents/captures/*.fixture`
+replays offline. This chain (outcome rows → fixture argmax histograms →
+palette/mapping cross-check) diagnosed both the stride bug and
+unrecognised-food-estimated-as-residual-sliver without a single re-capture.
+Launch (`devicectl device process launch`) fails with `BSErrorCode Locked`
+when the phone is locked — install still succeeds; open from the home screen.
+
 ## Console.app filter recipe (live viewing)
 
 Re-derived at least four times — this is the recipe:
