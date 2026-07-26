@@ -21,6 +21,7 @@ struct RecordsView: View {
     @State private var selection: Set<String> = []
     @State private var showBulkDeleteConfirm = false
     @State private var showDateRangeSheet = false
+    @State private var showDeleteAllConfirm = false
 
     init(store: any PersistenceStore) {
         self.store = store
@@ -52,6 +53,17 @@ struct RecordsView: View {
                 titleVisibility: .visible
             ) {
                 Button("Delete", role: .destructive) { deleteSelected() }
+                Button("Cancel", role: .cancel) {}
+            }
+            .confirmationDialog(
+                "Delete all ^[\(model.rows.count) record](inflect: true)?",
+                isPresented: $showDeleteAllConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete All", role: .destructive) {
+                    let rows = model.rows
+                    Task { await model.deleteBulk(rows) }
+                }
                 Button("Cancel", role: .cancel) {}
             }
             .sheet(isPresented: $showDateRangeSheet) {
@@ -91,6 +103,14 @@ struct RecordsView: View {
                     Button("Delete by Date…", role: .destructive) {
                         showDateRangeSheet = true
                     }
+                    // One-tap full-history purge: clearing debug-era records
+                    // must not require picker work — stale records would
+                    // otherwise feed the meal-glucose regression suggestions
+                    // (records-deletion smolspec).
+                    Button("Delete All Records…", role: .destructive) {
+                        showDeleteAllConfirm = true
+                    }
+                    .disabled(model.rows.isEmpty)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
