@@ -26,6 +26,11 @@ a confirmed date-range purge. Full findings in
   bar, presenting From/To date pickers (defaulting to the earliest record and
   now), a live count of records in range, and a confirmed destructive delete
   routed through the same batched store path.
+- A "Delete All Records…" action MUST sit beside "Delete by Date…" — a
+  one-tap full-history purge behind a total-count-naming confirmation,
+  through the same batched path. Clearing debug-era records must not require
+  picker work: stale records would otherwise feed the meal-glucose
+  regression suggestions (regression-suggestion-integration).
 - Glucose deletion MUST be supported by a new `deleteBslEvent(id:)` store
   method gated on `event_type = bsl` (mirroring the insulin/intake gates).
   This supersedes home-router Req 3.5 (glucose read-only).

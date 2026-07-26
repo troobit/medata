@@ -31,3 +31,9 @@ references:
   - Update `docs/agent-notes/persistence.md` (new store methods, re-ingest wrinkle) and `docs/agent-notes/ui-capture-flow.md`-adjacent records note if one exists.
   - Stream: 1
   - References: specs/ui/records-deletion/smolspec.md
+
+- [x] 5. Delete All Records menu action
+  - "Delete All Records…" beside "Delete by Date…" in the toolbar menu: one-tap full-history purge, confirmation naming the total count, routed through `deleteBulk`; disabled when the list is empty.
+  - Motivated by field feedback 2026-07-26: clearing debug-era records must not require date-picker work — stale records would interfere with the meal-glucose regression suggestions.
+  - Stream: 1
+  - References: App/RecordsView.swift, specs/ui/records-deletion/smolspec.md
