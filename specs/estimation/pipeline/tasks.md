@@ -556,7 +556,7 @@ metadata:
 
 ## v1 Adjustments — New Tasks (May 2026)
 
-- [x] 72. Replace auto-derived capture path with persistent `CaptureMode` toggle
+- [x] 72. Replace auto-derived capture path with persistent `CaptureMode` toggle <!-- id:1keh1vh -->
   - Add `CaptureMode` enum (`single`, `double`) in `MedataCore`.
   - Add `SettingsKeys.captureMode` UserDefaults key; default `.double` on first install.
   - Capture view: persistent segmented control above the shutter, single tap to switch; ignores in-flight estimations (matches §7.4 behaviour).
@@ -567,7 +567,7 @@ metadata:
   - Decision: 35
   - Requirements: [3.5](requirements.md#3.5), [3.8](requirements.md#3.8)
 
-- [x] 73. Migrate photo storage to PhotoKit (`PHAsset.localIdentifier`)
+- [x] 73. Migrate photo storage to PhotoKit (`PHAsset.localIdentifier`) <!-- id:na4humg -->
   - On successful capture, persist the original RGB nadir frame to the user's Photos library via `PHPhotoLibrary.shared().performChanges`; record the returned `PHAsset.localIdentifier` as `MealRecord.photoAssetID` and `meals.photo_asset_id`.
   - Request `PHAuthorizationStatus(for: .addOnly)` on first capture; show Irish-English permission-denied banner if refused (estimation still completes; `photoAssetID = ""`).
   - SQLite migration: add `photo_asset_id TEXT NOT NULL DEFAULT ''` column to `meals`; drop `image` artefact rows from existing meals (they remain on disk; cleanup is a separate dev task).
@@ -577,7 +577,7 @@ metadata:
   - Decision: 37
   - Requirements: [17.1](requirements.md#17.1), [17.2](requirements.md#17.2), [17.3](requirements.md#17.3)
 
-- [x] 74. Rewrite Settings view; bundle CoFID + AFCD; remove IFCDB
+- [x] 74. Rewrite Settings view; bundle CoFID + AFCD; remove IFCDB <!-- id:0wrqeo3 -->
   - Delete `SettingsKeys.ifcdbOverlayEnabled`, `SettingsKeys.retentionDays`, the Settings retention picker, and the IFCDB toggle.
   - Bundle `cofid_db.sqlite` and `afcd_db.sqlite` as fixed read-only assets; `FoodDatabase` ATTACHes both at launch and applies the CoFID-wins COALESCE lookup from design §4.1.
   - About / Legal screen: list both source attributions ("Macros: CoFID 2024 + AFCD 2024" + the respective licence statements).
@@ -587,7 +587,7 @@ metadata:
   - Decision: 39
   - Requirements: [11.1](requirements.md#11.1), [11.4](requirements.md#11.4)
 
-- [x] 75. Narrow hardware floor + replace per-stage perf checks with single 30 s soft check
+- [x] 75. Narrow hardware floor + replace per-stage perf checks with single 30 s soft check <!-- id:f8a1to9 -->
   - Update Info.plist `MinimumOSVersion` to 26.5; deployment target → iOS 26.5.
   - Remove the iPhone 12 Pro device-allow guard; document iPhone 13 Pro Max as the only supported device. Update Irish-English unsupported-device message.
   - Delete tasks 65/66's per-path XCTClockMetric tests; add a single end-to-end XCTest that asserts `< 30 s` for both `single` and `double` modes on the v1 device.

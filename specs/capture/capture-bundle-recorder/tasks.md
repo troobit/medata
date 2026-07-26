@@ -1,7 +1,7 @@
 ---
 references:
-    - smolspec.md
-    - decision_log.md
+    - specs/capture/capture-bundle-recorder/smolspec.md
+    - specs/capture/capture-bundle-recorder/decision_log.md
 ---
 # Capture Bundle Recorder
 

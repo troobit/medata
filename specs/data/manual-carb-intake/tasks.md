@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/data/manual-carb-intake/requirements.md
+    - specs/data/manual-carb-intake/design.md
+    - specs/data/manual-carb-intake/decision_log.md
 ---
 # Tasks: Manual Carb/Macro Intake
 

@@ -1,6 +1,12 @@
 ---
 references:
     - specs/bugfixes/closeout-trail-mvp-cleanup/smolspec.md
+parked_note: |
+  Parked (2026-07-26, spec-janitor): tasks 6-7 (STOP device verification and the
+  atomic four-spec closeout commit) remain open with no activity since early July.
+  The code-side tasks 1-5 landed. Left open deliberately - the verification needs
+  a human with the device; unpark by running task 6 or annotate as superseded if
+  the closeout is no longer wanted.
 ---
 # MVP Closeout Trail — Tasks
 

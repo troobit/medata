@@ -1,6 +1,6 @@
 ---
 references:
-    - prd.md
+    - specs/estimation/myfoodrepo-bridge/prd.md
 ---
 # MyFoodRepo-273 bridge — Palette and food DB
 

@@ -1,6 +1,6 @@
 ---
 references:
-    - prd.md
+    - specs/estimation/estimation-quality/prd.md
 ---
 # MVP estimation quality — Segmentation approach research
 

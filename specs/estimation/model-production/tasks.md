@@ -18,6 +18,11 @@ metadata:
         [Amended: the bars are now mean ≥ 0.48 and per-class ≥ 0.45, re-derived by
         segmenter-foundation Decisions 5 and 14 (were 0.60/0.50); completed task
         entries below keep their recorded 0.60/0.50 history.]
+        [Amended 2026-07-26 (spec-janitor): tasks 6 and 8 assert "27 output channels" —
+        correct when written, superseded by estimation/nutrition5k-calibration, which
+        amended the v1 palette to 35 channels (Req 4.4 already says 35). Completed-task
+        text keeps its recorded history; the export checks in tools/segmenter/export.py
+        follow the amended palette.]
         This note lives in front matter because rune rejects prose between the H1 and the
         first task/phase.
 ---
@@ -96,7 +101,7 @@ metadata:
 
 ## Uncalibrated Honesty
 
-- [x] 10. Surface uncalibrated low-confidence honesty in ResultView
+- [x] 10. Surface uncalibrated low-confidence honesty in ResultView <!-- id:q9g8wuu -->
   - In `ResultView`, when `meal.perClassCalibration` is non-`calibrated` (`uncalibrated_unity`), render a low-confidence indication reusing the `ConfidencePill` styling / very-low surface (`ResultView.swift:156`, `:220-248`); no new view type.
   - Add one new copy string (metric-only English) conveying the known upward (over-estimating) volume bias — the carbohydrate value is more likely high than low (Req 7.3). Keep it distinct from the existing `dev_stub` placeholder banner, which marks *fake* numbers; this marks a *real but uncalibrated* number.
   - Confirm (no change): β = 1.0 / `uncalibrated_unity` is already the DB default (`tools/food_db/generate.py:70-96`) and `MealRecord.perClassCalibration` already persists the status (`Pipeline.swift:428-429`) — no schema change.

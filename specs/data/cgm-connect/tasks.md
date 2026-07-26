@@ -1,9 +1,9 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
-    - prerequisites.md
+    - specs/data/cgm-connect/requirements.md
+    - specs/data/cgm-connect/design.md
+    - specs/data/cgm-connect/decision_log.md
+    - specs/data/cgm-connect/prerequisites.md
 ---
 # Tasks: CGM Connect
 

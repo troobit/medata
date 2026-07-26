@@ -1,9 +1,9 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
-    - copy-inventory.md
+    - specs/ui/design-handoff-00/requirements.md
+    - specs/ui/design-handoff-00/design.md
+    - specs/ui/design-handoff-00/decision_log.md
+    - specs/ui/design-handoff-00/copy-inventory.md
 ---
 # UI Design Handoff 00 — Tasks
 

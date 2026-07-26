@@ -129,7 +129,7 @@ Delete-and-re-add covers the correction need for the low-friction manual records
 ## Decision 5: Glucose is read-only on the Records surface
 
 **Date**: 2026-07-07
-**Status**: accepted
+**Status**: superseded by ui/records-deletion Decision 3 (glucose rows become deletable via a bsl-gated `deleteBslEvent(id:)`)
 
 ### Context
 

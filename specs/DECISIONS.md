@@ -957,7 +957,7 @@ of the shell, not the algorithms.
 ## MD-23: Hardware floor — iPhone 13 Pro Max / iOS 26.5, iPhone-only
 
 **Status**: accepted
-**Sources**: research D7 (superseded), research D40; bugfix/clean-build-baseline D1, D3
+**Sources**: research D7 (superseded), research D40; clean-build-baseline D1, D3 (relocated 2026-07-26 from specs/bugfixes/ to specs/clean-build-baseline/ — warning cleanup, not a defect)
 
 ### Context
 

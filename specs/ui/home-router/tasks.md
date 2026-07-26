@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/ui/home-router/requirements.md
+    - specs/ui/home-router/design.md
+    - specs/ui/home-router/decision_log.md
 ---
 # Home Router
 

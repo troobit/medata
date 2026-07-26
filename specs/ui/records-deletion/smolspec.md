@@ -7,7 +7,7 @@ in the meal overview's toolbar menu. This change makes the list the primary
 deletion surface with the standard iOS patterns: swipe-to-delete on every row
 type, edit-mode multi-select with Select All and a confirmed bulk delete, and
 a confirmed date-range purge. Full findings in
-`specs/general/UI-IMPROVEMENTS.md` (2026-07-26 review).
+`specs/ui/records-deletion/UI-IMPROVEMENTS.md` (2026-07-26 review).
 
 ## Requirements
 - Every record row type (meal, insulin, glucose, intake) MUST support

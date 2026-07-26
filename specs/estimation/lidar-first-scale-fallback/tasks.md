@@ -1,7 +1,7 @@
 ---
 references:
-    - smolspec.md
-    - decision_log.md
+    - specs/estimation/lidar-first-scale-fallback/smolspec.md
+    - specs/estimation/lidar-first-scale-fallback/decision_log.md
 ---
 # LiDAR-First Scale Fallback
 

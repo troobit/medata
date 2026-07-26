@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/estimation/snaq-parity/requirements.md
+    - specs/estimation/snaq-parity/design.md
+    - specs/estimation/snaq-parity/decision_log.md
 ---
 # SNAQ Parity
 

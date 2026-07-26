@@ -1,6 +1,6 @@
 ---
 references:
-    - prd.md
+    - specs/serving-adjust/prd.md
 ---
 # Serving-based portion adjustment — Food database servings
 
