@@ -76,7 +76,8 @@ struct MealOverviewView: View {
                 }
                 .accessibilityIdentifier("overview.photoFallback")
             }
-            MaskOverlayLoader(store: store, mealId: record.id)
+            MaskOverlayLoader(store: store, mealId: record.id,
+                              paletteVersion: record.paletteVersion)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 240)
@@ -189,7 +190,10 @@ struct MealOverviewView: View {
     // by class id, so resolve the name to its palette index; unrecognised names
     // fold to a stable non-negative index so the swatch is still deterministic.
     private func swatchColour(for className: String) -> Color {
-        let palette = ClassPalette.v1Standard
+        // Per-record palette: v2 shifts cereal/liquid indices by one, so the
+        // stored paletteVersion picks the wheel position, keeping v1-era
+        // meals' swatches stable (app-palette-drift-after-v2-promotion).
+        let palette = ClassPalette.standard(for: record.paletteVersion)
         let id: Int
         if let index = palette.foodClasses.firstIndex(of: className) {
             id = index

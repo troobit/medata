@@ -216,10 +216,11 @@ private struct BenchmarkMealEditorSheet: View {
     @State private var isSaving = false
     @State private var saveError: String?
 
-    // Pickable classes: the 35-class palette minus its three sentinels — the
-    // same surface the segmenter emits and Macros resolves against.
+    // Pickable classes: the current 36-class palette minus its three
+    // sentinels — the same surface the segmenter emits and Macros resolves
+    // against (v2 since the ab812dc3aa9d promotion, adding cereal).
     private static let classIDs =
-        ClassPalette.v1Standard.foodClasses + ClassPalette.v1Standard.liquidClasses
+        ClassPalette.v2Standard.foodClasses + ClassPalette.v2Standard.liquidClasses
 
     struct EditorItem: Identifiable {
         let id = UUID()

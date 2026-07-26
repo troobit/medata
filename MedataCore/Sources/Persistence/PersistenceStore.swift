@@ -433,6 +433,23 @@ public protocol PersistenceStore: Sendable {
     // unconditionally, matching `deleteMeal`).
     func deleteIntakeEntry(id: UUID) async throws
 
+    // specs/ui/records-deletion Req (glucose deletable, superseding
+    // home-router Req 3.5). Deletes a single bsl event by id, gated on
+    // `event_type = bsl` (insulin/intake convention). A reading deleted
+    // inside the live ingestion window may re-ingest on the next poll —
+    // accepted (records-deletion Decision 3). Notifies `eventsDidChange`
+    // once.
+    func deleteBslEvent(id: UUID) async throws
+
+    // specs/ui/records-deletion (bulk + date-range purge, Decision 2). One
+    // write transaction deleting the given event rows by id (any event type
+    // — the ids come from loaded rows) and the given meals with their full
+    // cascade (events row, meal_artefacts, corrections; artefact directories
+    // removed best-effort after commit). `IN` lists are chunked under
+    // SQLite's bound-variable cap. Notifies `eventsDidChange` ONCE when
+    // anything was deleted — never per row.
+    func deleteRecords(mealIDs: [UUID], eventIDs: [UUID]) async throws
+
     // specs/data/manual-carb-intake, design.md "Quick-add presets — new
     // table". Returns every preset ordered `sort_order ASC`. Presets are not
     // `events` rows: none of these three methods touch `eventsDidChange`

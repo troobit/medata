@@ -21,7 +21,10 @@ struct SegmentationReviewView: View {
     // raster is the only place they surface (§5.2). Empty when no mask (Req 6.8).
     @State private var presentClassIds: Set<Int> = []
 
-    private let palette = ClassPalette.v1Standard
+    // Per-record palette: sentinel indices moved in v2 (background 32→33,
+    // unknown_food 33→34), so the banners must read the record's own layout
+    // (app-palette-drift-after-v2-promotion).
+    private var palette: ClassPalette { .standard(for: record.paletteVersion) }
     private var table: ClassColourTable { ClassColourTable(version: record.paletteVersion) }
 
     private var hasUnknownRegion: Bool { presentClassIds.contains(palette.unknownFood) }

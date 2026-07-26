@@ -251,6 +251,12 @@ private struct ThrowingPersistenceStore: PersistenceStore {
     func deleteIntakeEntry(id: UUID) async throws {
         fatalError("unused")
     }
+    func deleteBslEvent(id: UUID) async throws {
+        fatalError("unused")
+    }
+    func deleteRecords(mealIDs: [UUID], eventIDs: [UUID]) async throws {
+        fatalError("unused")
+    }
     func quickPresets() async throws -> [QuickPreset] {
         fatalError("unused")
     }
