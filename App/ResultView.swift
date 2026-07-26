@@ -466,6 +466,17 @@ struct ResultView: View {
                     .foregroundStyle(Color.captureChromeText.opacity(0.7))
             }
             .foregroundStyle(Color.captureChromeText)
+            // Estimated plate mass beside the hero (specs/ui/mass-readout):
+            // the kitchen-scales validation number — a scale reads total mass,
+            // not carbs, so the mass estimate must be visible without
+            // scrolling to the summary card. Tracks pending adjustments the
+            // same way the hero carbs do.
+            Text("≈ \(Int(pendingTotalMassG.rounded())) g on plate")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .animation(reduceMotion ? nil : .smooth, value: pendingTotalMassG)
+                .accessibilityIdentifier("result.massLine")
             if showsEstimatedLine {
                 Text("estimated \(ResultFormat.carbsGrams(record.macros.totalCarbsG)) g")
                     .font(.caption.monospacedDigit())
@@ -834,6 +845,12 @@ struct ResultView: View {
     private var foodCount: Int { record.macros.perClass.count }
     private var totalMassGrams: Int {
         Int(record.macros.perClass.values.reduce(Float(0)) { $0 + $1.massG }.rounded())
+    }
+
+    // Live total mass for the hero mass line: the per-row pending grams sum,
+    // which equals the original estimate until the user adjusts a row.
+    private var pendingTotalMassG: Double {
+        foodRows.reduce(0) { $0 + pendingGramsFor($1) }
     }
 
     // "white_rice" → "White rice".

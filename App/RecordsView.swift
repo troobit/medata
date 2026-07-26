@@ -220,6 +220,12 @@ private struct MealRecordRow: View {
     let meal: DisplayMeal
 
     private var carbs: Int { Int(meal.displayTotalCarbsG.rounded()) }
+    // Estimated plate mass (specs/ui/mass-readout): the number a kitchen
+    // scale can validate, alongside the carb figure it cannot.
+    private var massG: Int {
+        Int(meal.record.macros.perClass.values
+            .reduce(Float(0)) { $0 + $1.massG }.rounded())
+    }
 
     var body: some View {
         HStack {
@@ -227,9 +233,14 @@ private struct MealRecordRow: View {
                 .foregroundStyle(Color.textSecondary)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(carbs) g")
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(carbs) g carbs")
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(Color.textPrimary)
+                    Text("≈ \(massG) g")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(Color.textSecondary)
+                }
                 Text(timeString(meal.record.createdAt))
                     .font(.caption)
                     .foregroundStyle(Color.textSecondary)
