@@ -340,11 +340,15 @@ public struct Pipeline: Sendable {
         diagnostics.debugNadirSegmentation = nadirSeg
         let palette = nadirSeg.probabilities.palette
 
-        // Fail-closed near-empty-mask gate (estimation-runtime-consistency):
-        // refuse before Volume/β when food coverage is below the stated minimum,
-        // so a speckle-only mask surfaces as a consistent `noFoodPixels` refusal
-        // rather than a wildly variable carb number. Guards both capture paths —
-        // the nadir mask is the primary silhouette for each.
+        // Fail-closed gates on the nadir argmax, guarding both capture paths —
+        // the nadir mask is the primary silhouette for each. Order matters:
+        // a dominant `unknown_food` region refuses `unrecognisedFood` first
+        // (the model saw food it cannot name — bugfix
+        // unrecognised-food-estimated-as-residual-sliver); only then does a
+        // near-empty recognised mask surface as `noFoodPixels`
+        // (estimation-runtime-consistency), so a speckle-only mask refuses
+        // legibly rather than emitting a wildly variable carb number.
+        try enforceRecognisedFoodDominance(argmax: nadirSeg.argmax, palette: palette)
         try enforceMinimumFoodCoverage(argmax: nadirSeg.argmax, palette: palette)
 
         // β-correction table from database at current edition.

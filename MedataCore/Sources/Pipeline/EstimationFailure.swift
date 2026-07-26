@@ -25,6 +25,11 @@ public enum EstimationFailure: Error, Equatable {
     case noScaleAvailable
     // Zero food pixels survive the silhouette test (§5 edge case 3).
     case noFoodPixels
+    // The segmenter labelled a substantial region `unknown_food` and it
+    // dominates the recognised classes — the model saw food it cannot name,
+    // so any estimate would come from a residual sliver (bugfix
+    // unrecognised-food-estimated-as-residual-sliver).
+    case unrecognisedFood
     // All per-class volumes are below 1 cm³ post β-correction.
     case noFoodVolumeRecovered
     // ≥1 food class has <30% LiDAR depth coverage in single-view path
@@ -71,6 +76,8 @@ public enum EstimationFailure: Error, Equatable {
             return "Unable to determine meal scale. Please include the reference card in the image."
         case .noFoodPixels:
             return "No food detected in the image. Please ensure the meal is clearly visible."
+        case .unrecognisedFood:
+            return "MeData can't name this food yet, so no estimate was made."
         case .noFoodVolumeRecovered:
             return "Unable to estimate the meal volume. Please retake the photo."
         case .lidarCoverageTooLow(let classes):

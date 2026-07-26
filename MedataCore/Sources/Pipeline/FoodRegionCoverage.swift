@@ -92,3 +92,50 @@ func enforceMinimumFoodCoverage(argmax: ArgmaxMap, palette: ClassPalette) throws
         throw EstimationFailure.noFoodPixels
     }
 }
+
+// MARK: - Recognised-food dominance gate
+// (bugfix unrecognised-food-estimated-as-residual-sliver)
+
+// Floor below which an `unknown_food` region never trips the dominance gate,
+// so a genuinely empty scene still refuses `noFoodPixels` downstream. 1 % of
+// the frame (~27 650 px at 1920×1440) is a real food-sized region — an order
+// of magnitude above edge speckle, and below the ~10 % a plated
+// out-of-palette food measured in the field captures.
+let unknownFoodRefuseFloorFraction: Float = 0.01
+
+// The unknown_food fraction must strictly exceed this multiple of the
+// recognised food+liquid fraction to refuse — i.e. refuse only when > 80 % of
+// the food-like area is food the model cannot name. An evenly mixed plate
+// (half recognised) keeps its partial estimate.
+let unknownFoodDominanceRatio: Float = 4
+
+// Refuses with `unrecognisedFood` when the segmenter's `unknown_food`
+// sentinel dominates the recognised classes: the model saw food it cannot
+// name, so an estimate would be driven by a residual sliver (or nothing) and
+// misreport the meal. Runs BEFORE `enforceMinimumFoodCoverage` so the
+// unknown-dominant case wins over the misleading `noFoodPixels` copy.
+// Boundary semantics match the sibling gate: exactly at the floor or exactly
+// at the ratio accepts.
+func enforceRecognisedFoodDominance(argmax: ArgmaxMap, palette: ClassPalette) throws {
+    let total = argmax.width * argmax.height
+    guard total > 0 else { return }
+    var recognised = 0
+    var unknown = 0
+    argmax.pixels.withUnsafeBytes { raw in
+        let buf = raw.bindMemory(to: UInt8.self).baseAddress!
+        for i in 0..<total {
+            let c = Int(buf[i])
+            if palette.isFoodClass(c) || palette.isLiquidClass(c) {
+                recognised += 1
+            } else if c == palette.unknownFood {
+                unknown += 1
+            }
+        }
+    }
+    let unknownFraction = Float(unknown) / Float(total)
+    let recognisedFraction = Float(recognised) / Float(total)
+    if unknownFraction >= unknownFoodRefuseFloorFraction,
+       unknownFraction > unknownFoodDominanceRatio * recognisedFraction {
+        throw EstimationFailure.unrecognisedFood
+    }
+}
