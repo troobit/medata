@@ -101,6 +101,15 @@ public extension ClassPalette {
         unsupportedLiquid: 35,
         version: "v2"
     )
+
+    // Resolves a persisted `paletteVersion` label to its standard palette —
+    // the read-side counterpart of the per-record `paletteVersion` column, so
+    // display code renders v1-era meals with v1 indices and v2 meals with v2
+    // (bugfix app-palette-drift-after-v2-promotion). Unrecognised labels fall
+    // back to v1, preserving pre-resolver behaviour for e.g. "uitest".
+    static func standard(for version: String) -> ClassPalette {
+        version == "v2" ? .v2Standard : .v1Standard
+    }
 }
 
 public extension ClassPalette {

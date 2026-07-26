@@ -72,7 +72,11 @@ struct MedataApp: App {
             // plane-fit-refusal diagnostics). The Pipeline's own segmenter keeps
             // the default `.perCapture` (`.info`).
             segmenter: try! Pipeline.makeSegmenter(maskLog: .livePreview),
-            palette: .v1Standard,
+            // Must match PipelineFactory's palette (v2 since the ab812dc3aa9d
+            // promotion) — a v1 palette against the 36-channel model misses
+            // cereal in the arming predicate and misreads the sentinels
+            // (bugfix app-palette-drift-after-v2-promotion).
+            palette: .v2Standard,
             source: Pipeline.preShutterSourceTag == "pre_shutter_stub"
                 ? .preShutterStub : .preShutterCoreML
         )
@@ -102,7 +106,7 @@ struct MedataApp: App {
             interruptions: engine.interruptions,
             supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
             databaseEdition: "CoFID 2024 + AFCD 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v2",
             // Slim capture-stage refusal records carry the same lineage tag
             // the pipeline stamps on its own outcome records (snaq-parity).
             segmenterSource: pipeline.segmenterSource,

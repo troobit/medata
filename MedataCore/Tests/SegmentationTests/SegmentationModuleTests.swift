@@ -130,4 +130,15 @@ final class SegmentationModuleTests: XCTestCase {
             }
         }
     }
+
+    // Bugfix app-palette-drift-after-v2-promotion: the persisted
+    // paletteVersion label must resolve to the matching standard palette;
+    // unrecognised labels (e.g. "uitest") fall back to v1, preserving
+    // pre-resolver display behaviour.
+    func testStandardForVersionResolvesLabelToPalette() {
+        XCTAssertEqual(ClassPalette.standard(for: "v1"), .v1Standard)
+        XCTAssertEqual(ClassPalette.standard(for: "v2"), .v2Standard)
+        XCTAssertEqual(ClassPalette.standard(for: "uitest"), .v1Standard)
+        XCTAssertEqual(ClassPalette.standard(for: ""), .v1Standard)
+    }
 }

@@ -58,6 +58,23 @@ Cross-repo check (2026-07-05): a store-written fixture loads in medreg via `medr
 
 Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT EXISTS` retrofits it onto v4 DBs — no DDL on legacy tables): `id` TEXT PK, `name`, `carbs_g` NOT NULL, optional `protein_g`/`fat_g`/`fibre_g`, `sort_order`. The three authored defaults ("A pint" 17 g, "Bagel" 45 g, "Chips" 40 g) are seeded **at most once per DB**, gated on the `quick_presets_seeded` meta flag — deleting all presets does NOT reseed on relaunch. `saveQuickPreset` is INSERT OR REPLACE (insert and update in one); preset writes do not notify `eventsDidChange`.
 
+## Record deletion (records-deletion)
+
+`deleteBslEvent(id:)` mirrors the insulin/intake single-row gates
+(`event_type = bsl`, notify once) — glucose rows are deletable since
+records-deletion Decision 3, superseding home-router Req 3.5. Wrinkle: a
+reading deleted inside the live LibreLinkUp polling window re-ingests on the
+next poll (keep-first merge probes incoming timestamps); accepted, no UI
+messaging.
+
+`deleteRecords(mealIDs:eventIDs:)` is the batched bulk/date-range path: ONE
+write transaction (chunked `IN` deletes at 500 ids/statement — the
+32,766-bound-variable cap precedent; per-meal `events`/`meal_artefacts`/
+`corrections` cascade identical to `deleteMeal`), best-effort artefact-dir
+removal after commit, ONE `eventsDidChange` notification. Never loop the
+single-row deletes for bulk work — each notifies and every observer reloads
+per tick.
+
 ## Estimation outcomes (snaq-parity)
 
 `estimation_outcomes` (schema v6; `CREATE IF NOT EXISTS` retrofits it onto v5

@@ -65,13 +65,38 @@ final class RecordsModel {
             try? await store.deleteMeal(id: meal.id)
         case .insulin(let entry):
             try? await store.deleteInsulinEvent(id: entry.id)
-        case .glucose:
-            // Read-only: glucose is import-sourced and re-appears on the next
-            // import, so no delete affordance exists here (Req 3.5).
-            break
+        case .glucose(let reading):
+            // Deletable since records-deletion Decision 3 (supersedes
+            // home-router Req 3.5). A reading inside the live ingestion
+            // window may re-ingest on the next poll — accepted.
+            try? await store.deleteBslEvent(id: reading.id)
         case .intake(let record):
             try? await store.deleteIntakeEntry(id: record.id)
         }
+    }
+
+    // Bulk/date-range purge (records-deletion Decision 2): meals carry a
+    // cascade, everything else is an events row — one batched store call,
+    // one transaction, one change notification regardless of size.
+    func deleteBulk(_ rowsToDelete: [RecordRow]) async {
+        var mealIDs: [UUID] = []
+        var eventIDs: [UUID] = []
+        for row in rowsToDelete {
+            switch row {
+            case .meal(let meal): mealIDs.append(meal.id)
+            case .insulin(let entry): eventIDs.append(entry.id)
+            case .glucose(let reading): eventIDs.append(reading.id)
+            case .intake(let record): eventIDs.append(record.id)
+            }
+        }
+        try? await store.deleteRecords(mealIDs: mealIDs, eventIDs: eventIDs)
+    }
+
+    // Rows inside a closed date range — the source for the date-range purge
+    // sheet's live count and its delete. The timeline is fully loaded and
+    // unwindowed by design (Decision 8), so filtering in memory is exact.
+    func rows(in range: ClosedRange<Date>) -> [RecordRow] {
+        rows.filter { range.contains($0.timestamp) }
     }
 
     // Reuses MealHistoryModel's corrections-overlay composition (Decision 13)

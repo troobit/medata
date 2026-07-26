@@ -14,6 +14,14 @@ struct RecordsView: View {
     @State private var model: RecordsModel
     @State private var path: [MealRoute] = []
 
+    // Deletion surfaces (specs/ui/records-deletion): edit-mode multi-select
+    // with Select All + confirmed bulk delete, and a date-range purge sheet.
+    // Selection keys are RecordRow.id (String).
+    @State private var editMode: EditMode = .inactive
+    @State private var selection: Set<String> = []
+    @State private var showBulkDeleteConfirm = false
+    @State private var showDateRangeSheet = false
+
     init(store: any PersistenceStore) {
         self.store = store
         _model = State(initialValue: RecordsModel(store: store))
@@ -21,9 +29,10 @@ struct RecordsView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
+            List(selection: $selection) {
                 ForEach(model.rows) { row in
                     rowView(row)
+                        .tag(row.id)
                 }
                 .onDelete { offsets in
                     let toDelete = offsets.map { model.rows[$0] }
@@ -35,16 +44,86 @@ struct RecordsView: View {
             // Deliberately untitled (snaqui Req 4); inline mode so no
             // large-title band is reserved.
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    CloseCoverButton { dismiss() }
-                }
+            .environment(\.editMode, $editMode)
+            .toolbar { toolbarContent }
+            .confirmationDialog(
+                "Delete ^[\(selection.count) record](inflect: true)?",
+                isPresented: $showBulkDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) { deleteSelected() }
+                Button("Cancel", role: .cancel) {}
+            }
+            .sheet(isPresented: $showDateRangeSheet) {
+                DateRangePurgeSheet(model: model)
             }
             .navigationDestination(for: MealRoute.self) { route in
                 mealRouteDestination(route, store: store, path: $path)
             }
         }
         .task { await model.start() }
+    }
+
+    private var isEditing: Bool { editMode == .active }
+
+    private var allSelected: Bool {
+        !model.rows.isEmpty && selection.count == model.rows.count
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            CloseCoverButton { dismiss() }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(isEditing ? "Done" : "Select") {
+                let exiting = isEditing
+                withAnimation {
+                    editMode = exiting ? .inactive : .active
+                    if exiting { selection.removeAll() }
+                }
+            }
+            .accessibilityIdentifier("records.selectToggle")
+        }
+        if !isEditing {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Delete by Date…", role: .destructive) {
+                        showDateRangeSheet = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityIdentifier("records.menu")
+            }
+        }
+        if isEditing {
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button(allSelected ? "Deselect All" : "Select All") {
+                    selection = allSelected ? [] : Set(model.rows.map(\.id))
+                }
+                .accessibilityIdentifier("records.selectAll")
+                Spacer()
+                Button(role: .destructive) {
+                    showBulkDeleteConfirm = true
+                } label: {
+                    Text("Delete (\(selection.count))")
+                }
+                .disabled(selection.isEmpty)
+                .accessibilityIdentifier("records.deleteSelected")
+            }
+        }
+    }
+
+    private func deleteSelected() {
+        let rows = model.rows.filter { selection.contains($0.id) }
+        Task {
+            await model.deleteBulk(rows)
+            withAnimation {
+                selection.removeAll()
+                editMode = .inactive
+            }
+        }
     }
 
     @ViewBuilder
@@ -57,10 +136,80 @@ struct RecordsView: View {
         case .insulin(let entry):
             InsulinRecordRow(entry: entry)
         case .glucose(let reading):
+            // Deletable since records-deletion Decision 3 (supersedes
+            // home-router Req 3.5 read-only).
             GlucoseRecordRow(reading: reading)
-                .deleteDisabled(true)
         case .intake(let record):
             IntakeRecordRow(record: record)
+        }
+    }
+}
+
+// Date-range purge sheet (records-deletion): From/To pickers defaulting to
+// the earliest record → now, a live count of records in range, and a
+// confirmed destructive delete through the same batched path as bulk
+// selection. Colocated to avoid a project.pbxproj entry for a new file.
+private struct DateRangePurgeSheet: View {
+    let model: RecordsModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var fromDate: Date = .now
+    @State private var toDate: Date = .now
+    @State private var showConfirm = false
+
+    private var range: ClosedRange<Date> {
+        let start = Calendar.current.startOfDay(for: fromDate)
+        let end = Calendar.current.date(
+            byAdding: DateComponents(day: 1, second: -1),
+            to: Calendar.current.startOfDay(for: toDate)
+        ) ?? toDate
+        return start...max(start, end)
+    }
+
+    private var inRangeCount: Int { model.rows(in: range).count }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("From", selection: $fromDate, displayedComponents: .date)
+                DatePicker("To", selection: $toDate, displayedComponents: .date)
+                LabeledContent("Records in range", value: "\(inRangeCount)")
+                Button(role: .destructive) {
+                    showConfirm = true
+                } label: {
+                    Text("Delete ^[\(inRangeCount) record](inflect: true)")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(inRangeCount == 0)
+                .accessibilityIdentifier("records.rangeDelete")
+            }
+            .navigationTitle("Delete by Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .confirmationDialog(
+                "Delete ^[\(inRangeCount) record](inflect: true)?",
+                isPresented: $showConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    let rows = model.rows(in: range)
+                    Task {
+                        await model.deleteBulk(rows)
+                        dismiss()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .onAppear {
+                if let earliest = model.rows.last?.timestamp {
+                    fromDate = earliest
+                }
+                toDate = .now
+            }
         }
     }
 }

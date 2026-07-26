@@ -503,6 +503,56 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         changeBroadcaster.notify()
     }
 
+    public func deleteBslEvent(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a meal/insulin/intake row sharing the
+            // id survives. Bsl events have no side tables.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.bsl]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    // Chunk size for `IN (…)` lists — comfortably under SQLite's 32,766
+    // bound-variable cap (the mergeBslKeepFirst precedent, cgm-connect
+    // Phase 2).
+    private static let deleteChunkSize = 500
+
+    public func deleteRecords(mealIDs: [UUID], eventIDs: [UUID]) async throws {
+        guard !mealIDs.isEmpty || !eventIDs.isEmpty else { return }
+        try await queue.write { db in
+            for chunk in stride(from: 0, to: eventIDs.count, by: Self.deleteChunkSize)
+                .map({ Array(eventIDs[$0..<min($0 + Self.deleteChunkSize, eventIDs.count)]) }) {
+                let placeholders = repeatElement("?", count: chunk.count).joined(separator: ",")
+                try db.execute(
+                    sql: "DELETE FROM events WHERE id IN (\(placeholders))",
+                    arguments: StatementArguments(chunk.map(\.uuidString))
+                )
+            }
+            // Meal cascade mirrors deleteMeal — events row plus side tables.
+            for id in mealIDs {
+                try db.execute(
+                    sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                    arguments: [id.uuidString, EventType.meal]
+                )
+                try db.execute(sql: "DELETE FROM meal_artefacts WHERE meal_id = ?",
+                               arguments: [id.uuidString])
+                try db.execute(sql: "DELETE FROM corrections WHERE meal_id = ?",
+                               arguments: [id.uuidString])
+            }
+        }
+        // Best-effort filesystem cleanup after commit (deleteMeal precedent).
+        for id in mealIDs {
+            let url = artefactsBaseURL
+                .appendingPathComponent("meals", isDirectory: true)
+                .appendingPathComponent(id.uuidString, isDirectory: true)
+            try? FileManager.default.removeItem(at: url)
+        }
+        changeBroadcaster.notify()
+    }
+
     // Builds the `metadata` JSON object per medreg's convention: exactly
     // `kind`, `insulin_type`, and `schema_version` (integer), plus `note`
     // only when provided — the key is absent, never null, when nil.

@@ -95,7 +95,7 @@ enum MaskOverlayDecoder {
         guard CFDataGetLength(raw) >= bytesPerRow * height,
               let labels = CFDataGetBytePtr(raw) else { return nil }
 
-        let palette = ClassPalette.v1Standard
+        let palette = ClassPalette.standard(for: paletteVersion)
         let table = ClassColourTable(version: paletteVersion)
         let background = palette.background
 
