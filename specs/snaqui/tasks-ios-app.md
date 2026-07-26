@@ -1,6 +1,6 @@
 ---
 references:
-    - prd.md
+    - specs/snaqui/prd.md
 ---
 # SNAQ-inspired UI uplift — iOS app
 

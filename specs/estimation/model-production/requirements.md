@@ -35,7 +35,7 @@ This spec defines the repeatable process that takes the on-device food segmenter
 
 1. <a name="2.1"></a>The process SHALL remap FoodSeg103 (103 classes) to the 35-channel v1 palette via `tools/segmenter/build_class_mapping.py` and `class_mapping_foodseg103_v1.json`.  
 2. <a name="2.2"></a>The process SHALL cut train, validation, and held-out splits with a fixed seed so the same dataset yields identical splits across runs. (Amended by segmenter-foundation Req 2.6: the held-out split is re-cut stratified so every carb-priority staple has held-out instances — a new fixed seed, stratified, then frozen again.)  
-3. <a name="2.3"></a>The remapped class channel order SHALL match `ClassPalette.v1Standard` (24 food + background + unknown_food + unsupported_liquid); a build whose mapping reorders or drops a channel SHALL fail before training.  
+3. <a name="2.3"></a>The remapped class channel order SHALL match `ClassPalette.v1Standard` (24 food + background + unknown_food + unsupported_liquid); a build whose mapping reorders or drops a channel SHALL fail before training. *(Parenthetical superseded by `estimation/nutrition5k-calibration`, which amended v1 to 35 channels — 24 solid food + 8 standalone liquid + background + unknown_food + unsupported_liquid.)*  
 4. <a name="2.4"></a>Acquiring the FoodSeg103 dataset (Apache 2.0) SHALL be recorded as a human-gated prerequisite, not an automated step.  
 
 ### 3. Segmenter Training

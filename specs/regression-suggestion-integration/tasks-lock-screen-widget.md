@@ -1,6 +1,6 @@
 ---
 references:
-    - prd.md
+    - specs/regression-suggestion-integration/prd.md
 ---
 # Insulin dose inflow (medreg integration) — Lock screen widget
 

@@ -1,7 +1,7 @@
 ---
 references:
-    - specs/bugfixes/clean-build-baseline/smolspec.md
-    - specs/bugfixes/clean-build-baseline/decision_log.md
+    - specs/clean-build-baseline/smolspec.md
+    - specs/clean-build-baseline/decision_log.md
 ---
 # Clean Build Baseline Tasks
 

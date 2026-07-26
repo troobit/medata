@@ -1,5 +1,7 @@
 # PRD: SNAQ-inspired UI uplift — portion adjustment and page declutter
 
+> **Superseded in part (2026-07-26)**: the global "Ate N of M" portion stepper this PRD added to ResultView is superseded by `specs/serving-adjust/`, which replaces the PORTION card and `PortionStepper` pair with per-food serving steppers on the Per food rows. The correction-persistence mechanism (`appendCorrection`), corrected Graph carb bars, and page-declutter work remain in force.
+
 ## Product summary
 
 MeData estimates the carbohydrate content of everything on the plate, but the user does not always eat the whole plate: with five baked potatoes captured, they may eat two. SNAQ's serving-portion adjustment (observed in the collaborator screenshots, see `docs/agent-notes/snaq-flow-and-gap-analysis.md`) lets the user state how much of the estimate they actually consumed, and that single control is the highest-impact gap between "what the camera saw" and "what went into the body" — the number the glucose graph actually needs.

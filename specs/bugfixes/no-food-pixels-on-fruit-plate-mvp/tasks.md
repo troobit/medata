@@ -2,6 +2,14 @@
 references:
     - specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/smolspec.md
     - specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/agent_protocol.md
+parked_note: |
+  Parked (2026-07-26, spec-janitor): both underlying bugs (lost mask-age across
+  the nadir-to-oblique stash; PreShutterSegmenter cadence stall) are fixed, but
+  the closeout tasks 8-10 have been blocked since 2026-06-16 on
+  bugfixes/lidar-plane-fit-degenerate-on-clean-capture - whose fix has since
+  landed, so the block is stale. Unpark by running the task-8 on-device
+  verification (Single and Double modes) and the tasks 9-10 documentation
+  closeout.
 ---
 # No Food Pixels Refusal On Fruit Plate Double-Mode Capture — Tasks
 
@@ -69,7 +77,7 @@ references:
 
 ## Verify
 
-- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky --> <!-- BLOCKED 2026-06-16 — Blocked-by: lidar-plane-fit-degenerate-on-clean-capture (real-mask degenerate fit). Mask contract met (cadence + lost-age fixes verified; `event=estimate.start maskAgeMs=170` on the iPhone 13 Pro Max Double; `noFoodPixels` resolved). End-to-end `estimate.end success=true` gated on the lidar fix; see `## Verification attempt 2026-06-16` in smolspec.md. -->
+- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky --> <!-- BLOCKED 2026-06-16 — Blocked-by: lidar-plane-fit-degenerate-on-clean-capture (real-mask degenerate fit). Mask contract met (cadence + lost-age fixes verified; `event=estimate.start maskAgeMs=170` on the iPhone 13 Pro Max Double; `noFoodPixels` resolved). End-to-end `estimate.end success=true` gated on the lidar fix; see `## Verification attempt 2026-06-16` in smolspec.md. --> <!-- id:7265qtb -->
   - Agent: rebuild for device, print install/launch commands and Console filter.
   - User: install, launch, capture in **Single** mode first (one nadir tap at a fruit plate), then in **Double** mode (nadir + oblique at a fruit plate). Paste both trails back.
   - Success criteria (BOTH modes) — `event=estimate.start maskAgeMs=N` with `N >= 0` AND `N <= 750`.

@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/estimation/segmenter-foundation/requirements.md
+    - specs/estimation/segmenter-foundation/design.md
+    - specs/estimation/segmenter-foundation/decision_log.md
 metadata:
     ledger_note: |-
         What `[x]` means here. A checked box means that task's deliverable landed — for

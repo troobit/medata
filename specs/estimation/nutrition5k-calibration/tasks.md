@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/estimation/nutrition5k-calibration/requirements.md
+    - specs/estimation/nutrition5k-calibration/design.md
+    - specs/estimation/nutrition5k-calibration/decision_log.md
 ---
 # nutrition5k-calibration
 

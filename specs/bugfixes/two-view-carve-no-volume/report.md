@@ -155,3 +155,6 @@ cause of the device symptom.
 - `App/TiltBubbleGuide.swift` + `App/CaptureFlowView.swift` (`tiltGuide`) — the Track 2 tilt
   aim guide, wired 2026-06-24; the oblique-aim fix this report points to. Two-view collection
   (a well-aimed device trail) remains the open follow-up.
+- `specs/bugfixes/closeout-trail-mvp-cleanup/decision_log.md` Decision 1 — tightened the
+  oblique arming window from ±30° to ±15° around 25° against the same mis-aimed-oblique →
+  `noFoodVolumeRecovered` defect; complementary to the aim guide above.

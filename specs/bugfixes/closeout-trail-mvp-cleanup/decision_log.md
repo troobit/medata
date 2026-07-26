@@ -70,6 +70,11 @@ cap). Affects `App/CaptureFlowModel.swift` (`obliqueTiltOk`, `canShutter`,
 `MeData/Tests/CaptureFlowModelTiltGateTests.swift`. The Pipeline-side
 `obliqueTiltOutOfRange` refusal and its tests are unchanged.
 
+Related: `specs/bugfixes/two-view-carve-no-volume/report.md` root-caused the same
+mis-aimed-oblique → `noFoodVolumeRecovered` failure (non-overlapping image-centred
+silhouettes at 46–57° tilt) and wired the tilt aim guide as its remediation; this
+arming-window tightening and that aim guide are complementary fixes for one defect.
+
 ---
 
 ## Decision 2: Parallelise the segmentation postprocess hot passes across CPU cores

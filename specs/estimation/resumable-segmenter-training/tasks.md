@@ -1,7 +1,7 @@
 ---
 references:
-    - smolspec.md
-    - decision_log.md
+    - specs/estimation/resumable-segmenter-training/smolspec.md
+    - specs/estimation/resumable-segmenter-training/decision_log.md
 ---
 # Resumable Segmenter Training
 

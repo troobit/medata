@@ -1,8 +1,8 @@
 ---
 references:
-    - requirements.md
-    - design.md
-    - decision_log.md
+    - specs/estimation/cross-dataset-calibration/requirements.md
+    - specs/estimation/cross-dataset-calibration/design.md
+    - specs/estimation/cross-dataset-calibration/decision_log.md
 ---
 # Tasks: cross-dataset-calibration
 

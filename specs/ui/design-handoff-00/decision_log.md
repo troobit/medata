@@ -615,7 +615,7 @@ Direct user instruction — the user zone wins over the handoff drawing. The ite
 ## Decision 20: Graph is the launch root; Capture becomes a presented surface
 
 **Date**: 2026-07-04
-**Status**: accepted
+**Status**: superseded by ui/home-router Decision 7 (HomeView replaces Graph as the launch root; Graph is demoted to a visualisation surface)
 
 ### Context
 

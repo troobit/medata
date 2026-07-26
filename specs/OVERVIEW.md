@@ -28,13 +28,16 @@
 | [Shutter Blocked Feedback](#shutter-blocked-feedback) | ui | 2026-05-31 | In Progress | smol | Surface haptic, indicator badge, and OSLog diagnostics when the disabled Photo-tab shutter is tapped. |
 | [Bubble-only Cleanup](#bubble-only-cleanup) | ui | 2026-06-24 | Done | smol | Remove the unused .gauge/.dial tilt-guide designs and selector, leaving the device-confirmed .bubble guide as the sole design. |
 | [Loading Symbol Animation](#loading-symbol-animation) | ui | 2026-07-04 | In Progress | smol | Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar→dot); on-device verify and call-site adoption outstanding. |
-| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root; Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
-| [Home Router](#home-router) | ui | 2026-07-07 | In Progress | full | Home page becomes the launch root (no tab bar): six routed full-screen covers with Capture primary, unified Records timeline (meals + insulin + glucose, delete for manual entries only), Graph demoted to visualisation-only. 8/9 tasks done; on-device visual verify (task 9) human-gated. |
+| [Design Handoff 00](#design-handoff-00) | ui | 2026-07-04 | Done | full | Adopt the first external design handoff, amended in use: Graph (carbs vs glucose, renamed from Trends) is the launch root (Decision 20 — since superseded by home-router Decision 7, HomeView); Capture/Data/Settings present as full-screen covers; redesigned screens, Meal overview, minimal wording, no disclaimer copy (dev-phase rule), versioned handoff archive. All 27 tasks done + Decisions 19–21; device-verify checklist in prerequisites.md. |
+| [Home Router](#home-router) | ui | 2026-07-07 | In Progress | full | Home page becomes the launch root (no tab bar): six routed full-screen covers with Capture primary, unified Records timeline (meals + insulin + glucose, delete for manual entries only — since superseded by Records Deletion), Graph demoted to visualisation-only. 8/9 tasks done; on-device visual verify (task 9) human-gated. |
+| [Records Deletion](#records-deletion) | ui | 2026-07-26 | In Progress | smol | The Records list becomes the primary deletion surface: swipe-delete on every row type (glucose included, superseding home-router Req 3.5), edit-mode multi-select with Select All, a confirmed date-range purge, and one-tap Delete All Records. 4/5 tasks done; build + device-look verify (task 4) human-gated. |
+| [Mass Readout](#mass-readout) | ui | 2026-07-26 | No Tasks | smol | Display-only mass readout: estimated grams beside carbs on the Result hero and Records rows for scale-truth field validation. Smolspec authored; tasks not yet written. |
 | [Regression Suggestion Integration](#regression-suggestion-integration) | data · ui | 2026-07-05 | Done | prd | Insulin dosing as a first-class event stream conforming to medreg's insulin-event convention: dose-entry sheet from the Graph toolbar, Graph dose markers/stats, `medata://` deep links, and lock-/home-screen launcher widgets (`MeDataWidgets`). All 20 tasks across 3 contexts done. |
 | [CGM Connect](#cgm-connect) | data | 2026-07-10 | In Progress | full | Live glucose ingestion behind a source abstraction (HealthKit primary, LibreLinkUp follower complement) writing `bsl` events with cross-source 5-minute-grid dedup, firewalled from estimation by a package-graph test. 13/14 tasks done; on-device verify (task 14) human-gated. |
 | [Manual Carb Intake](#manual-carb-intake) | data · ui | 2026-07-07 | In Progress | full | Manual carb/macro logging without the camera: carb-entry sheet (keypad, 1–999 g, optional macros behind a disclosure), one-tap quick-add presets (`quick_presets` table, seeded defaults), inline edit/delete of manual entries, `EventType.intake` folded into the Graph carb series and Records timeline. All 11 tasks done; on-device verification checklist (design.md) human-gated. |
-| [Snaqui](#snaqui) | ui · data | 2026-07-13 | In Progress | prd | SNAQ-inspired uplift: portion-adjustment control on the result screen (N-of-M fractions + multiples, persisted as append-only `PbUserCorrection`), Graph carb bars honour corrected totals, full-screen pages lose their redundant navigation titles, metric-chip row wraps instead of truncating. 7/8 tasks done; on-device looks-right pass (task 8) human-gated. |
+| [Snaqui](#snaqui) | ui · data | 2026-07-13 | In Progress | prd | SNAQ-inspired uplift: portion-adjustment control on the result screen (N-of-M fractions + multiples, persisted as append-only `PbUserCorrection`), Graph carb bars honour corrected totals, full-screen pages lose their redundant navigation titles, metric-chip row wraps instead of truncating. The global portion stepper is since superseded by Serving Adjust's per-food rows. 7/8 tasks done; on-device looks-right pass (task 8) human-gated. |
 | [Serving Adjust](#serving-adjust) | data · ui | 2026-07-17 | In Progress | prd | Move the portion control onto the per-ingredient rows counting in household servings (spoons, potatoes) with grams secondary: a data-driven solid-food servings table in the DB generator (mirroring `liquid_servings`) and a reshaped result screen with per-row steppers + one-tap plate-fraction, persisted through the existing append-only `PbUserCorrection`. 10/11 tasks done; on-device looks-right pass human-gated. |
+| [Clean Build Baseline](#clean-build-baseline) | platform | 2026-06-03 | Done | smol | Zero-warning baseline: eliminate the five compiler/validator warnings (iPhone-only `TARGETED_DEVICE_FAMILY`, nonisolated reader, `UIScreen.main` deprecation) with the smallest viable changes. Relocated 2026-07-26 from `specs/bugfixes/` — warning cleanup, not a defect. All 4 tasks done. |
 
 ---
 
@@ -221,7 +224,7 @@ Reusable SwiftUI loader that draws the Medata mark stroke-by-stroke (bowl→bar�
 
 ## Design Handoff 00
 
-Adopt the first external design handoff (archived wireframes + scaffold), amended in use (Decisions 19–21): the three-tab bar is gone — **Graph** (carbs charted against `bsl` glucose events; renamed from Trends everywhere in UI) is the launch root, with Capture, Data, and Settings presenting as full-screen covers and the AR session running only while Capture is frontmost. Redesigned capture/result/data screens, Meal overview, mask-artefact persistence, a verbatim minimal-wording copy inventory (no reassurance/disclaimer copy — developer-phase rule, Req 14.5), and a numbered, versioned handoff archive under `design-system/wireframes/` with a 12-row deviations manifest. Supersedes parts of iPhone Experience per its §16 table. All 27 tasks done; on-device verification in prerequisites.md.
+Adopt the first external design handoff (archived wireframes + scaffold), amended in use (Decisions 19–21): the three-tab bar is gone — **Graph** (carbs charted against `bsl` glucose events; renamed from Trends everywhere in UI) is the launch root (Decision 20 — since superseded by home-router Decision 7, which makes HomeView the launch root), with Capture, Data, and Settings presenting as full-screen covers and the AR session running only while Capture is frontmost. Redesigned capture/result/data screens, Meal overview, mask-artefact persistence, a verbatim minimal-wording copy inventory (no reassurance/disclaimer copy — developer-phase rule, Req 14.5), and a numbered, versioned handoff archive under `design-system/wireframes/` with a 12-row deviations manifest. Supersedes parts of iPhone Experience per its §16 table. All 27 tasks done; on-device verification in prerequisites.md.
 
 - [copy-inventory.md](ui/design-handoff-00/copy-inventory.md)
 - [decision_log.md](ui/design-handoff-00/decision_log.md)
@@ -232,12 +235,27 @@ Adopt the first external design handoff (archived wireframes + scaffold), amende
 
 ## Home Router
 
-Home page becomes the launch root: no tab bar, six routed full-screen covers (Capture primary, plus Intake, Records, Graph, Settings, insulin), the deep-link handoff relocated to `AppRoot`, and `TrendsView` demoted to visualisation-only per the design's removal audit. Adds the unified Records timeline (meals + insulin + glucose most-recent-first; delete for manual entries only, glucose read-only) and the `RecordRow.intake(IntakeRecord)` seam consumed by manual-carb-intake (Decisions 12–14). 8/9 tasks done; on-device visual verify (task 9) is human-gated.
+Home page becomes the launch root: no tab bar, six routed full-screen covers (Capture primary, plus Intake, Records, Graph, Settings, insulin), the deep-link handoff relocated to `AppRoot`, and `TrendsView` demoted to visualisation-only per the design's removal audit. Adds the unified Records timeline (meals + insulin + glucose most-recent-first; delete for manual entries only, glucose read-only — Req 3.5/Decision 5 since superseded by Records Deletion, which makes glucose deletable) and the `RecordRow.intake(IntakeRecord)` seam consumed by manual-carb-intake (Decisions 12–14). 8/9 tasks done; on-device visual verify (task 9) is human-gated.
 
 - [decision_log.md](ui/home-router/decision_log.md)
 - [design.md](ui/home-router/design.md)
 - [requirements.md](ui/home-router/requirements.md)
 - [tasks.md](ui/home-router/tasks.md)
+
+## Records Deletion
+
+The Records list becomes the primary deletion surface: swipe-delete on every row type — glucose rows lose their read-only rule (superseding home-router Req 3.5/Decision 5 via a bsl-gated `deleteBslEvent(id:)`) — plus edit-mode multi-select with Select All and a confirmed bulk delete, a From/To date-range purge with live in-range count, and a one-tap Delete All Records action. Store side: chunked single-transaction `deleteRecords(mealIDs:eventIDs:)` with one `eventsDidChange` notification per purge. Sourced from the 2026-07-26 Records-surface UX review (UI-IMPROVEMENTS.md, relocated here from `specs/general/`). 4/5 tasks done; build + device-look verify (task 4) human-gated.
+
+- [UI-IMPROVEMENTS.md](ui/records-deletion/UI-IMPROVEMENTS.md)
+- [decision_log.md](ui/records-deletion/decision_log.md)
+- [smolspec.md](ui/records-deletion/smolspec.md)
+- [tasks.md](ui/records-deletion/tasks.md)
+
+## Mass Readout
+
+Display-only mass readout: the estimated plate mass in grams shown beside the carb figure on the Result hero and Records rows, so field captures can be sanity-checked against scale truth. Smolspec authored 2026-07-26; tasks not yet written.
+
+- [smolspec.md](ui/mass-readout/smolspec.md)
 
 ## Regression Suggestion Integration
 
@@ -270,7 +288,7 @@ A direct manual carb-logging path alongside the photo pipeline: a carb-entry she
 
 ## Snaqui
 
-SNAQ-inspired UI uplift, PRD-lane spec (top-level folder, no domain directory). The user states how much of the estimated plate they actually ate — a portion control on both result-screen presentations expressing N-of-M fractions and above-one multiples, persisted through the existing append-only `PbUserCorrection` mechanism so the original estimate is never overwritten and re-adjustment history is preserved. Closes the downstream gap where `TrendsModel` read raw `totalCarbsG`: Graph carb bars, Records rows, and Meal overview all show one corrected "eaten" number. Page chrome declutter: the seven full-screen pages drop their navigation titles (modal sheets keep theirs), and the Graph metric-chip row wraps onto a second line instead of truncating, with active chips coloured per series as the chart legend. 7/8 tasks done; the on-device looks-right pass (task 8: portion ergonomics, portrait truncation, reclaimed band) is human-gated.
+SNAQ-inspired UI uplift, PRD-lane spec (top-level folder, no domain directory). The user states how much of the estimated plate they actually ate — a portion control on both result-screen presentations expressing N-of-M fractions and above-one multiples, persisted through the existing append-only `PbUserCorrection` mechanism so the original estimate is never overwritten and re-adjustment history is preserved. Closes the downstream gap where `TrendsModel` read raw `totalCarbsG`: Graph carb bars, Records rows, and Meal overview all show one corrected "eaten" number. Page chrome declutter: the seven full-screen pages drop their navigation titles (modal sheets keep theirs), and the Graph metric-chip row wraps onto a second line instead of truncating, with active chips coloured per series as the chart legend. The global "Ate N of M" portion stepper is since superseded by Serving Adjust's per-food serving rows (noted in the PRD); the correction persistence and corrected Graph totals remain in force. 7/8 tasks done; the on-device looks-right pass (task 8: portion ergonomics, portrait truncation, reclaimed band) is human-gated.
 
 - [prd.md](snaqui/prd.md)
 - [tasks-ios-app.md](snaqui/tasks-ios-app.md)
@@ -282,3 +300,11 @@ PRD-lane spec (top-level folder, no domain directory). Reshape the snaqui portio
 - [prd.md](serving-adjust/prd.md)
 - [tasks-food-database-servings.md](serving-adjust/tasks-food-database-servings.md)
 - [tasks-ios-app.md](serving-adjust/tasks-ios-app.md)
+
+## Clean Build Baseline
+
+Zero-warning baseline (top-level folder): eliminate the five compiler/validator warnings on the research branch — iPhone-only `TARGETED_DEVICE_FAMILY` (a product decision recorded in DECISIONS.md MD-23), a nonisolated reader, and the `UIScreen.main` deprecation — with the smallest viable changes. Relocated 2026-07-26 from `specs/bugfixes/` by the spec janitor: warning cleanup with product decisions, not a defect with a root cause. All 4 tasks done.
+
+- [decision_log.md](clean-build-baseline/decision_log.md)
+- [smolspec.md](clean-build-baseline/smolspec.md)
+- [tasks.md](clean-build-baseline/tasks.md)
