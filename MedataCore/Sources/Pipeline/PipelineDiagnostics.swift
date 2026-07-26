@@ -62,6 +62,7 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             case .iterationDiverged: caseName = "iterationDiverged"
             case .noScaleAvailable: caseName = "noScaleAvailable"
             case .noFoodPixels: caseName = "noFoodPixels"
+            case .unrecognisedFood: caseName = "unrecognisedFood"
             case .noFoodVolumeRecovered: caseName = "noFoodVolumeRecovered"
             case .lidarCoverageTooLow(let classes):
                 caseName = "lidarCoverageTooLow"
