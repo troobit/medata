@@ -44,6 +44,7 @@ references:
   - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
 
 - [-] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
+  - PARTIAL at closeout 2026-07-26: export gates passed (22,169,442 B, 36 channels, oracle argmax parity 0.9999), bundled segmenter.mlpackage swapped (medata.modelVersion=ab812dc3aa9d), make deploy-release INSTALLED the release build on the iPhone 16 Pro but the launch step failed with the device locked — the segmenterSource/buildStamp launch-log verify is still pending (unlock, open MeData, check make logs-device)
   - Only on promotion; export.py gates: 24 MiB weight budget, 36 channels in palette order, oracle parity
   - make deploy-release; verify device launch log shows the new segmenterSource=coreml_<12-hex> with matching buildStamp via make logs-device
   - Blocked-by: 8id22y6 (Validate against the leak-free anchor and record the promotion verdict)
