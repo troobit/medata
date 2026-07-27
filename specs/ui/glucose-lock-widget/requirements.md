@@ -1,0 +1,108 @@
+# Requirements: Glucose Lock Screen Widget
+
+## Introduction
+
+A WidgetKit accessory widget that surfaces the current (or most-recent) blood-glucose reading and a trend arrow on the Lock Screen with no interaction beyond a glance. The reading, its timestamp, a derived trend, and a target-band status are written by the app to a shared App Group snapshot whenever glucose events change; the widget renders solely from that snapshot. Data comes from the existing `bsl` event stream (CGM Connect and Libre screenshot import) — this feature adds a display surface, not a new data source.
+
+## Non-Goals
+
+- No ActivityKit Live Activity — the always-present accessory widget is the sole surface (a time-boxed Live Activity is a possible future).
+- No Home Screen `systemSmall` glucose widget — Lock Screen and StandBy only.
+- No editing, logging, or dose entry from the widget — read-only glance surface (the existing launcher widgets own actions).
+- No new glucose ingestion, network calls, or estimation-path code — reads only what the app already stored.
+- No mg/dL display — mmol/L only, matching CGM Connect.
+- No historical chart, sparkline, or multi-reading history in the widget itself.
+- No plumbing of a source-specific trend value (e.g. LibreLinkUp's `TrendArrow`) — the trend is derived uniformly from recent readings.
+
+## Requirements
+
+### 1. Shared latest-reading snapshot
+
+**User Story:** As a user, I want the app to publish my most recent glucose reading to a place the widget can read, so that the Lock Screen shows current data without the widget touching the database.
+
+**Acceptance Criteria:**
+
+1. <a name="1.1"></a>The system SHALL maintain a shared snapshot readable by the widget extension with a fixed schema: a schema version, the most-recent `bsl` reading value in mmol/L, the reading's timestamp, the derived trend (Req 3), and the target-band status (Req 4). No other fields are required.  
+2. <a name="1.2"></a>WHEN the set of `bsl` events changes, the system SHALL recompute the snapshot from the latest `bsl` events and write it.  
+3. <a name="1.3"></a>WHEN the written snapshot differs from the stored snapshot in value, trend, status, or timestamp, the system SHALL request a widget timeline reload.  
+4. <a name="1.4"></a>WHEN no `bsl` events exist, the system SHALL write a snapshot representing the never-recorded state (Req 8.1).  
+5. <a name="1.5"></a>The snapshot SHALL be written atomically, so a concurrent widget read never observes a partially written snapshot.  
+6. <a name="1.6"></a>IF the shared container is unavailable or not writable, the app SHALL fail without crashing and SHALL leave any previously written snapshot untouched.  
+7. <a name="1.7"></a>WHEN the snapshot is missing, undecodable, or carries an unrecognised schema version, the widget SHALL render the never-recorded state (Req 8.1).  
+
+### 2. Widget rendering and placements
+
+**User Story:** As a user, I want a glucose tile on my Lock Screen and StandBy, so that I can read my level at a glance.
+
+**Acceptance Criteria:**
+
+1. <a name="2.1"></a>The widget SHALL be offered as a distinct kind in the widget gallery, separate from the existing launcher widgets, with a functional display name and description (no reassurance/disclaimer copy).  
+2. <a name="2.2"></a>The widget SHALL support the `accessoryCircular`, `accessoryRectangular`, and `accessoryInline` families, and SHALL render in StandBy.  
+3. <a name="2.3"></a>In `accessoryCircular`, the widget SHALL show the reading value, the status indicator (Req 4.2), and the trend arrow (Req 3) when a trend is available.  
+4. <a name="2.4"></a>In `accessoryRectangular`, the widget SHALL show the reading value, the status indicator, the trend arrow when available, and the reading's relative age (Req 5.5).  
+5. <a name="2.5"></a>In `accessoryInline`, the widget SHALL show the reading value and the trend arrow when available on a single line, within the family's single-line width.  
+6. <a name="2.6"></a>The widget SHALL render solely from the shared snapshot and SHALL NOT query the event log, the persistence store, or any network.  
+7. <a name="2.7"></a>The value SHALL be shown in mmol/L to one decimal place; a reading already normalised to an out-of-measurable-range sentinel (HI/LO) SHALL be shown as that sentinel rather than a fabricated decimal.  
+8. <a name="2.8"></a>Rendering glucose on a locked device is intended; the widget carries no privacy or consent copy (developer-phase copy rule).  
+
+### 3. Trend arrow derivation
+
+**User Story:** As a user, I want a trend arrow, so that I can tell at a glance whether my glucose is rising or falling.
+
+**Acceptance Criteria:**
+
+1. <a name="3.1"></a>The system SHALL derive the trend from `bsl` readings whose timestamps fall within the 15 minutes preceding the current time, as a single rate of change in mmol/L per minute over those readings.  
+2. <a name="3.2"></a>The system SHALL classify the rate into one of seven states — steady, rising-slow, rising, rising-fast, falling-slow, falling, falling-fast — by fixed, non-overlapping thresholds (recorded in the decision log), each rendered as a corresponding arrow glyph.  
+3. <a name="3.3"></a>IF fewer than two readings fall within the preceding 15 minutes, OR the earliest and latest in-window readings span less than 10 minutes, THEN the system SHALL report no trend and the widget SHALL show the value without an arrow.  
+4. <a name="3.4"></a>WHEN the most-recent reading is itself older than 15 minutes, the system SHALL report no trend (no two readings can fall within the window).  
+5. <a name="3.5"></a>The trend derivation SHALL be a pure function in the shared maths module (`TrendsMath`), covered by unit tests including each threshold boundary, so the same computation is reusable by the graph.  
+
+### 4. Target-band status
+
+**User Story:** As a user, I want the tile to signal low / in-range / high at a glance, so that I notice an out-of-range level without reading the number — even though the Lock Screen renders widgets in monochrome.
+
+**Acceptance Criteria:**
+
+1. <a name="4.1"></a>The system SHALL classify the reading against the existing `TrendsMath` target band: low below 3.9 mmol/L, in-range from 3.9 to 10.0 mmol/L inclusive, high above 10.0 mmol/L.  
+2. <a name="4.2"></a>The widget SHALL distinguish low / in-range / high with a channel that survives the Lock Screen's monochrome vibrant rendering — a functional glyph or short status token, not colour alone.  
+3. <a name="4.3"></a>The widget MAY additionally apply per-status colour where the system renders it in full colour (StandBy day mode); this colour SHALL be an enhancement layered on the Req 4.2 channel, never the sole status signal.  
+4. <a name="4.4"></a>WHEN the reading is stale (Req 5.2) or absent (Req 8), the status indicator SHALL be suppressed.  
+
+### 5. Staleness
+
+**User Story:** As a user, I want an old reading to look old, so that I don't act on a value that no longer reflects my glucose.
+
+**Acceptance Criteria:**
+
+1. <a name="5.1"></a>WHEN the most-recent reading is 15 minutes old or less, the widget SHALL render it at full prominence with its status indicator and trend arrow (if any).  
+2. <a name="5.2"></a>WHEN the most-recent reading is older than 15 minutes and 30 minutes old or less, the widget SHALL render the value de-emphasised (reduced opacity, which survives monochrome rendering) with its relative age, with no status indicator and no trend arrow.  
+3. <a name="5.3"></a>WHEN the most-recent reading is older than 30 minutes, the widget SHALL hide the numeric value and show the reading's relative age as a "last reading" label, distinguishing this from the never-recorded state (Req 8.1).  
+4. <a name="5.4"></a>The widget's timeline entry-generation SHALL be a pure function of the snapshot and a reference time that emits entries at the 15-minute and 30-minute age boundaries, so the full → de-emphasised → last-reading transitions are pre-baked and appear without new data arriving; this function SHALL be unit-tested.  
+5. <a name="5.5"></a>Relative age SHALL be shown to the minute (e.g. "12m") for the first hour and to the hour beyond it; a reading timestamped in the future (clock skew) SHALL be treated as zero age.  
+
+### 6. Refresh
+
+**User Story:** As a user, I want the tile to update when new glucose arrives, so that it reflects my latest reading.
+
+**Acceptance Criteria:**
+
+1. <a name="6.1"></a>WHEN the app or its background glucose refresh writes a newer reading (Req 1.2, 1.3), the widget SHALL reflect it at its next system-permitted reload.  
+2. <a name="6.2"></a>The widget SHALL NOT depend on its own polling or background execution for data — freshness is bounded by the app/background-refresh write cadence, and the staleness treatment (Req 5) covers the gap between writes.  
+
+### 7. Tap target
+
+**User Story:** As a user, I want tapping the tile to open the glucose graph, so that the full trend is one tap away.
+
+**Acceptance Criteria:**
+
+1. <a name="7.1"></a>WHEN the widget is tapped, the system SHALL open the app to the Graph view via a `medata://` deep link, reusing the existing deep-link handling.  
+2. <a name="7.2"></a>WHEN the tap occurs on a locked device, the Graph destination SHALL still be reached after the user authenticates and the app opens.  
+
+### 8. No-data and empty states
+
+**User Story:** As a user with no glucose data yet, I want the tile to say so plainly, so that it isn't showing a stale or fabricated number.
+
+**Acceptance Criteria:**
+
+1. <a name="8.1"></a>WHEN no `bsl` reading has ever been recorded (or the snapshot is unreadable per Req 1.7), the widget SHALL show a never-recorded placeholder with no numeric value, no status indicator, and no trend arrow — visually distinct from the >30-minute last-reading state (Req 5.3).  
+2. <a name="8.2"></a>All placeholder, gallery-preview, and label copy SHALL be functional only, with no disclaimer, reassurance, or consent text (developer-phase copy rule).  
