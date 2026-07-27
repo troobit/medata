@@ -3,3 +3,21 @@ agents:
   claude-code:
     type: claude-code
     auto-approve: true
+
+  # Per-variant model aliases for the MVP compete run.
+  # Launch order (sequential): opus -> opus-5 -> fable
+  #   orbit run --tasks-file specs/mvp/tasks.md --variants 3 --variant-agents opus,opus-5,fable
+  opus:
+    type: claude-code
+    auto-approve: true
+    model: claude-opus-4-8
+
+  opus-5:
+    type: claude-code
+    auto-approve: true
+    model: claude-opus-5
+
+  fable:
+    type: claude-code
+    auto-approve: true
+    model: claude-fable-5
