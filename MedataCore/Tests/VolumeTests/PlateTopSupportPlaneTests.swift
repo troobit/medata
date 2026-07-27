@@ -1,0 +1,220 @@
+import CaptureKit
+import Foundation
+import PortableContracts
+import Segmentation
+import SupportPlane
+import XCTest
+@testable import Volume
+
+// Regression tests for bug `flat-food-volume-overread-table-plane`.
+//
+// Field capture 1785135663727 (two slices of rye bread on a white plate on a
+// marble worktop) estimated 682.3 cm3 / 272.9 g — a ~2.9x over-read, surfaced
+// to the user as "7.5 slices" of bread instead of 2.
+//
+// The support plane is the reference surface every height-field sample is
+// measured against: `HeightFieldEstimator` integrates
+// `max(0, z_support - z_top)` per pixel. The food rests on the PLATE, so the
+// plate top is the correct reference. `LiDARPlaneFitter` collects candidates in
+// bands as thick as the food bbox in each direction, which on a normal capture
+// reach well past the plate onto the table; the table then wins RANSAC on area
+// and every height gains the plate's rise above the table.
+//
+// The absolute error is the plate rise (26 mm on the field capture), so the
+// RELATIVE error scales inversely with food height — which is why flat foods
+// such as bread blow up while tall foods look merely "coarse".
+//
+// Scene: a 10 mm-thick flat slab of food on a plate whose top sits 20 mm above
+// the table. The fit lands on the table and the volume trebles.
+//
+// BOTH TESTS ARE SKIPPED, DELIBERATELY. The table is currently the SPECIFIED
+// reference surface, not an accident: pipeline Req 4.2 fits "at and around the
+// lower edge of the food bounding region", DECISIONS.md MD-9 calls edge-band
+// sampling "the table-plane prior", and bugfix
+// lidar-plane-fit-degenerate-on-clean-capture Decision 1 tuned the mask so the
+// band "sits on table pixels, not plate rim" — rejecting a smaller fraction
+// because it would overlap the plate. Meanwhile nutrition5k-calibration Req 3.6
+// requires the opposite for the offline path: integrate "above the surface the
+// food rests on (the plate top), not the surrounding table".
+//
+// These tests therefore encode ONE candidate resolution — that the device adopt
+// the plate-top reference the calibration path already uses. That choice has
+// open design questions (bowls, whose rim sits ABOVE the food surface; food
+// overhanging the plate onto the table; candidate starvation) and reverses a
+// documented decision, so it needs a spec update before it can be asserted as
+// the contract. Un-skip as part of that work.
+//
+// Field evidence, capture bundle 1785135663727-success.fixture: shipped band
+// scan 682.96 cm3 (device recorded 682.31); plane fitted to the plate surface
+// 235.96 cm3; the fitted plane sits 26.1 mm below the plate the bread rests on.
+// Mass 272.92 g -> 94.4 g, i.e. "7.5 slices" -> ~2.6.
+final class PlateTopSupportPlaneTests: XCTestCase {
+
+    // Remove alongside the spec decision that settles the reference surface.
+    private func skipPendingSpecDecision() throws {
+        throw XCTSkip(
+            "Support-plane reference surface (table vs the surface the food "
+            + "rests on) is pending a spec decision; see the class comment."
+        )
+    }
+
+    // Depths in mm along the optical axis; a horizontal plane at Z = -d reads a
+    // constant depth d, so each surface is one flat depth value.
+    private let tableDepthMm: Float = 400
+    private let plateTopDepthMm: Float = 380   // 20 mm above the table
+    private let foodTopDepthMm: Float = 370    // 10 mm-thick slab on the plate
+
+    private let width = 240
+    private let height = 180
+
+    // Centred 40x40 food square; a plate disc of radius 30 px around it; table
+    // everywhere else. The bbox-sized bands therefore span roughly 120x120 px,
+    // in which table pixels outnumber plate pixels about 9:1 — the same
+    // area domination that made the field capture pick the worktop.
+    private let foodMinX = 100, foodMaxX = 139
+    private let foodMinY = 70, foodMaxY = 109
+    private let plateRadiusPx: Float = 30
+
+    private func intrinsics() -> CameraIntrinsics {
+        CameraIntrinsics(
+            fx: 200, fy: 200, cx: 120, cy: 90,
+            imageWidth: width, imageHeight: height
+        )
+    }
+
+    private func isFood(_ x: Int, _ y: Int) -> Bool {
+        x >= foodMinX && x <= foodMaxX && y >= foodMinY && y <= foodMaxY
+    }
+
+    private func isPlate(_ x: Int, _ y: Int) -> Bool {
+        let dx = Float(x) - 120, dy = Float(y) - 90
+        return (dx * dx + dy * dy).squareRoot() <= plateRadiusPx
+    }
+
+    // Deterministic sub-millimetre depth jitter. Perfectly coplanar synthetic
+    // points make the refine() scatter matrix singular and trip the
+    // `lidarFitDegenerate` stability gate (bug
+    // lidar-plane-fit-degenerate-on-clean-capture); real LiDAR always carries
+    // noise, and the field capture fitted at 1.95 mm residual. Amplitude stays
+    // well inside the fitter's +/-5 mm inlier band.
+    private func jitterMm(_ x: Int, _ y: Int) -> Float {
+        var h = UInt64(truncatingIfNeeded: x &* 73_856_093 ^ y &* 19_349_663)
+        h ^= h >> 33; h = h &* 0xff51_afd7_ed55_8ccd; h ^= h >> 33
+        return (Float(h % 2001) / 1000 - 1)   // -1.0 ... +1.0 mm
+    }
+
+    private func depthAt(_ x: Int, _ y: Int) -> Float {
+        let base: Float
+        if isFood(x, y) { base = foodTopDepthMm }
+        else if isPlate(x, y) { base = plateTopDepthMm }
+        else { base = tableDepthMm }
+        return base + jitterMm(x, y)
+    }
+
+    private func scene() -> (DepthMap, BinaryMask, CameraIntrinsics) {
+        let k = intrinsics()
+        let depth = makeDepthMap(
+            width: width, height: height, intrinsics: k,
+            depthMm: { y, x in self.depthAt(x, y) }
+        )
+        let mask = makeBinaryMask(width: width, height: height) { y, x in
+            self.isFood(x, y)
+        }
+        return (depth, mask, k)
+    }
+
+    // The fitted support plane must be the surface the food RESTS ON (the plate
+    // top at 380 mm), not the table it merely sits near (400 mm).
+    func testSupportPlaneLandsOnPlateTopNotTable() throws {
+        try skipPendingSpecDecision()
+        let (depth, mask, k) = scene()
+        let outcome = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
+            depth: depth,
+            colourIntrinsics: k,
+            foodRegionMask: mask,
+            gravityCamera: Vec3(0, 0, 1)
+        ))
+        let plane = try XCTUnwrap(outcome.plane, "expected a support plane fit")
+
+        // distanceMm = n·p with n ≈ (0,0,1), so a surface at depth d gives -d.
+        let fittedDepthMm = -plane.distanceMm
+        XCTAssertEqual(
+            fittedDepthMm, plateTopDepthMm, accuracy: 3,
+            """
+            Support plane landed \(fittedDepthMm) mm out instead of the plate top \
+            at \(plateTopDepthMm) mm. A fit on the table (\(tableDepthMm) mm) adds \
+            the plate's rise to every height-field sample.
+            """
+        )
+    }
+
+    // End-to-end consequence: the integrated volume must be the slab's own
+    // volume, not the slab plus the plate's rise over the slab's footprint.
+    func testFlatFoodVolumeExcludesPlateRise() throws {
+        try skipPendingSpecDecision()
+        let (depth, mask, k) = scene()
+        let palette = makePalette(numFood: 1)
+        let foodClass = 0
+
+        let argmax = makeArgmax(width: width, height: height) { y, x in
+            self.isFood(x, y) ? foodClass : palette.background
+        }
+        let probs = makeProbTensor(width: width, height: height, palette: palette) { y, x, c in
+            let food = self.isFood(x, y)
+            if c == foodClass { return food ? 1 : 0 }
+            if c == palette.background { return food ? 0 : 1 }
+            return 0
+        }
+
+        let planeOutcome = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
+            depth: depth,
+            colourIntrinsics: k,
+            foodRegionMask: mask,
+            gravityCamera: Vec3(0, 0, 1)
+        ))
+        let plane = try XCTUnwrap(planeOutcome.plane, "expected a support plane fit")
+
+        let outcome = HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
+            probabilities: probs,
+            argmax: argmax,
+            depth: depth,
+            intrinsics: k,
+            supportPlane: plane,
+            beta: BetaCorrection(entries: [:], defaultBeta: 1.0),
+            palette: palette
+        ))
+        let estimate = try XCTUnwrap(outcome.estimate, "expected a volume estimate")
+        let volumeCm3 = try XCTUnwrap(estimate.perClassVolumesCm3["food_0"])
+
+        // Footprint: 40x40 px at 370 mm with f = 200 → 74 mm per 40 px, so
+        // ~54.8 cm2; times the 10 mm slab → ~54.8 cm3. Off-axis pixel-area
+        // weighting moves this a little, so assert the slab thickness implied
+        // by the volume rather than a hard-coded number.
+        let footprintCm2 = footprintAreaCm2(depth: depth, k: k)
+        let impliedThicknessMm = 10 * volumeCm3 / footprintCm2
+        XCTAssertEqual(
+            impliedThicknessMm, 10, accuracy: 1.5,
+            """
+            Implied food thickness \(impliedThicknessMm) mm (volume \(volumeCm3) cm3 \
+            over \(footprintCm2) cm2) instead of the true 10 mm slab. A table-referenced \
+            plane inflates this to ~30 mm — the flat-food over-read.
+            """
+        )
+    }
+
+    // Sum of the same off-axis pixel areas the estimator uses, over the food
+    // silhouette, so the assertion above is independent of the projection maths.
+    private func footprintAreaCm2(depth: DepthMap, k: CameraIntrinsics) -> Float {
+        let fMean = (k.fx + k.fy) / 2
+        var areaMm2: Float = 0
+        for y in 0..<height {
+            for x in 0..<width where isFood(x, y) {
+                let zt = depthAt(x, y)
+                let du = Float(x) - k.cx, dv = Float(y) - k.cy
+                let cosTheta = fMean / (fMean * fMean + du * du + dv * dv).squareRoot()
+                areaMm2 += (zt * zt) / (k.fx * k.fy * cosTheta * cosTheta * cosTheta)
+            }
+        }
+        return areaMm2 / 100
+    }
+}
