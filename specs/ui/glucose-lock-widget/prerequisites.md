@@ -11,7 +11,7 @@ These steps require human intervention outside code (Xcode capabilities, signing
 - [ ] **App→extension snapshot round-trip (the real safeguard for Req 1.7).** With a device install, confirm a reading written by the app is read back by the widget. Note the misprovisioning trap: a missing/mis-provisioned App Group does **not** make `UserDefaults(suiteName:)` return nil — it returns a non-nil *private* store, so the app writes where the widget cannot see and the widget shows never-recorded. This round-trip is the only reliable detector; the nil guard will not fire for it.
 - [ ] The `CFPrefsPlistSource … detaching from cfprefsd` console warning is expected with App Group suites and is safe to ignore — do not treat it as a failure during bring-up.
 
-## On-Device Verification (task 13 — STOP, not agent-executable)
+## On-Device Verification (task 14 — STOP, not agent-executable)
 
 - [ ] `make build-app` embeds `MeDataWidgets.appex` with the App Group entitlement; `make test` (both XCTest and swift-testing totals) and `make spell` are green.
 - [ ] The glucose widget appears in the Lock Screen widget gallery as a **distinct kind**, separate from the two launcher widgets.
