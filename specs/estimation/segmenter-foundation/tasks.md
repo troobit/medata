@@ -84,7 +84,7 @@ metadata:
   - Done in design §5.1 (Decisions 7, 16): four ordered stop-on-fail criteria — Core ML conversion; FP16 artefact <= 24 MiB (export.py WEIGHTS_MAX_BYTES); <= 250 ms ANE-resident at 513x513 on the iPhone 16 Pro (v1 hardware floor per Decision 22, measured directly); equivalence per model-production Req 4.3 as amended (argmax > 99%, logit < 0.5).
   - Requirements: [3.1](requirements.md#3.1)
 
-- [x] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
+- [ ] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
   - Build tools/segmenter/spike_segformer.py (HF transformers added to tools/segmenter/requirements.txt as a spike-only dependency): load a public SegFormer-B0 checkpoint (accuracy irrelevant), graft a 35-channel head, coremltools FP16 export at 513x513, measure artefact size, run the equivalence oracle (oracle_agreement at export.py:401, reference_input at export.py:150). Emit build/spike_segformer.json (four booleans + measurements; latency left pending). A hard conversion failure ends the spike (criterion 1 fails, Req 3.2).
   - 2026-07-11: code half landed and unit-tested; the CONVERSION RUN is still pending — torch/transformers are not installed in the dev environment, so the script must be executed in the gated session (python tools/segmenter/spike_segformer.py) before the verdict JSON exists.
   - Blocked-by: 2mfkxza (Specify the SegFormer-B0 conversion-spike procedure)
