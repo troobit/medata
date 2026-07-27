@@ -139,7 +139,13 @@ Positive `r` → up arrow, negative → down. Boundaries are testable exact valu
 ## Decision 5: Staleness thresholds — dim after 15 min, hide value after 30 min
 
 **Date**: 2026-07-27
-**Status**: accepted
+**Status**: accepted — the *thresholds* stand; the colour wording below is superseded by Decision 7
+
+**Note:** this entry was written before the WidgetKit rendering review and describes the
+status signal as a colour ("status colour", "colour suppressed"). Decision 7 established
+that the Lock Screen always renders accessory widgets in monochrome vibrant mode, so status
+is carried by a non-colour token instead. Read every "colour" below as "status indicator";
+the 15/30-minute thresholds and the dim-then-hide ladder are unaffected.
 
 ### Context
 
@@ -256,7 +262,7 @@ Showing age-without-value preserves the staleness signal the whole feature is bu
 ## Decision 9: Timeline staleness modelled as a pure entry-generation function
 
 **Date**: 2026-07-27
-**Status**: accepted
+**Status**: accepted — refined by Decision 12 (the pure function emits render states, not WidgetKit `TimelineEntry` values)
 
 ### Context
 
@@ -339,3 +345,71 @@ An `actor` keeps the 24h store read off the main thread and serialises the compa
 
 **Positive:** Correct cold start; budget-efficient; thread-correct; degrades gracefully.
 **Negative:** Background updates are not guaranteed real-time — accepted (Req 6.2); a dropped background reload shows a dimmed/last-reading state until the next foreground or permitted reload.
+
+---
+
+## Decision 12: WidgetKit types stay in the extension; the shared module exposes pure render points
+
+**Date**: 2026-07-27
+**Status**: accepted
+
+### Context
+
+Decision 10 established `GlucoseWidgetShared` as a Foundation-only target with zero
+dependencies, linked by the widget extension and depended on by `Persistence`. The first
+draft of the design then placed the whole timeline layer in that module — including
+`struct GlucoseEntry: TimelineEntry` and a `TimelineReloadPolicy` — so that the staleness
+transitions (Decision 9) would be unit-testable in MedataCore.
+
+Both of those are WidgetKit types. Putting them in `GlucoseWidgetShared` would force an
+`import WidgetKit` into a module that `Persistence` depends on, so WidgetKit would ride
+transitively into `Pipeline` and on into the macOS `HarnessCLI` executable — a UI framework
+in the estimation and harness link closures, for no benefit. The `dump-package` assertion
+guarding that module cannot detect this: it enumerates *package* dependency edges, and
+system frameworks never appear there.
+
+### Decision
+
+Keep every unit-testable value in `GlucoseWidgetShared` and Foundation-only: `GlucoseRender`,
+`GlucoseTimeline.render`, `GlucoseTimeline.renderPoints` (returning
+`[(date: Date, render: GlucoseRender)]`), and `GlucoseTimeline.nextBoundary` (returning
+`Date?`). The widget extension owns the WidgetKit surface: a `GlucoseEntry: TimelineEntry`
+wrapper over `(date, render)`, and the `Date?` → `.after(_)` / `.never` reload-policy mapping.
+
+### Rationale
+
+The split puts the module boundary where the testability argument actually needs it. Every
+branch of the staleness ladder is a pure function of `(snapshot, reference date)` and stays
+in `make test`; what moves to the extension is a struct declaration and a two-case mapping,
+which have no logic to test and are covered by the on-device pass anyway. `Date?` is the
+honest shared vocabulary for "when does this next change" — `TimelineReloadPolicy` is
+WidgetKit's encoding of that same fact, and encoding it twice is what created the problem.
+
+### Alternatives Considered
+
+- **Import WidgetKit into `GlucoseWidgetShared`**: Simplest edit — Rejected: falsifies
+  Decision 10's central claim, drags WidgetKit into `Persistence` → `Pipeline` → `HarnessCLI`,
+  and the existing package-graph assertion cannot catch the regression.
+- **Split off a third target for the timeline maths**: A `GlucoseWidgetTimeline` module the
+  extension links alongside — Rejected: same objection Decision 10 already made to splitting
+  the enums out; an extra target for one enum and three functions that share the DTO anyway.
+- **Move the staleness maths into the extension entirely**: Rejected: it is the logic
+  Decision 9 exists to make unit-testable, and the app target has no test surface.
+
+### Consequences
+
+**Positive:**
+- Decision 10's Foundation-only guarantee is true as written.
+- The full staleness ladder stays inside `make test`; no WidgetKit in the estimation or
+  harness link closures.
+
+**Negative:**
+- One extra hop in the extension (`renderPoints` → `[GlucoseEntry]`, `nextBoundary` → policy)
+  that would not exist if the module could speak WidgetKit directly.
+- The boundary is held by review, not by an executable assertion — the `dump-package` test
+  is blind to framework imports, so this is called out explicitly in the design's testing
+  strategy.
+
+### Impact
+
+`GlucoseWidgetShared` API surface (design "Components and Interfaces"), tasks 7 and 11.
