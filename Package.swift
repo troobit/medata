@@ -35,7 +35,12 @@ let package = Package(
         // ingestion (specs/data/cgm-connect) is a data stream beside the
         // estimation pipeline, deliberately NOT reachable via the MedataCore
         // product (Req 7.1). The app links it in Phase 4.
-        .library(name: "GlucoseIngestion", targets: ["GlucoseIngestion"])
+        .library(name: "GlucoseIngestion", targets: ["GlucoseIngestion"]),
+        // Discrete product, deliberately NOT part of the MedataCore umbrella
+        // (specs/ui/glucose-lock-widget Decision 10): the MeDataWidgets
+        // extension links exactly this and therefore cannot acquire GRDB
+        // transitively. Foundation-only, zero dependencies.
+        .library(name: "GlucoseWidgetShared", targets: ["GlucoseWidgetShared"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
@@ -106,10 +111,23 @@ let package = Package(
             dependencies: ["PortableContracts"],
             path: "MedataCore/Sources/Confidence"
         ),
+        // Glucose widget contract (specs/ui/glucose-lock-widget Decisions 10, 12):
+        // the snapshot DTO, the two leaf enums, the App Group / widget-kind ids,
+        // the UserDefaults snapshot store, and the pure staleness maths.
+        // Foundation only — the dependency list MUST stay empty (asserted in
+        // GlucoseWidgetSharedTests) and the target MUST NOT import WidgetKit:
+        // Persistence depends on it, so either would ride into Pipeline and on
+        // into the macOS HarnessCLI.
+        .target(
+            name: "GlucoseWidgetShared",
+            path: "MedataCore/Sources/GlucoseWidgetShared"
+        ),
         .target(
             name: "Persistence",
             dependencies: [
                 "PortableContracts",
+                // TrendsMath returns GlucoseTrend / GlucoseBandStatus.
+                "GlucoseWidgetShared",
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
@@ -250,6 +268,8 @@ let package = Package(
             dependencies: [
                 "Persistence",
                 "PortableContracts",
+                // TrendsMath's glucose trend/band helpers return its enums.
+                "GlucoseWidgetShared",
                 // Test-only: PaletteMigratorTests exercises the real
                 // v1 → v2 ClassPalettes (myfoodrepo-bridge PRD). The
                 // Persistence TARGET stays palette-agnostic.
@@ -273,6 +293,11 @@ let package = Package(
             resources: [
                 .copy("Resources/corpus")
             ]
+        ),
+        .testTarget(
+            name: "GlucoseWidgetSharedTests",
+            dependencies: ["GlucoseWidgetShared"],
+            path: "MedataCore/Tests/GlucoseWidgetSharedTests"
         ),
         .testTarget(
             name: "GlucoseIngestionTests",

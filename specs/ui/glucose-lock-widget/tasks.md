@@ -9,7 +9,7 @@ references:
 
 ## Shared contract & pure logic (MedataCore)
 
-- [ ] 1. Add GlucoseWidgetShared SwiftPM target + library product <!-- id:7k39hjc -->
+- [x] 1. Add GlucoseWidgetShared SwiftPM target + library product <!-- id:7k39hjc -->
   - New Foundation-only target at MedataCore/Sources/GlucoseWidgetShared/ exposed as its own .library product (discrete, not umbrella) so the extension links exactly it and cannot pull GRDB (Decision 10). No WidgetKit import in this target — ever (Decision 12); Persistence depends on it, so a framework import here reaches Pipeline and HarnessCLI.
   - Add the Persistence -> GlucoseWidgetShared dependency edge (TrendsMath returns GlucoseTrend).
   - Config/wiring only — no preceding test.
@@ -17,7 +17,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1)
   - References: Package.swift, specs/ui/glucose-lock-widget/design.md
 
-- [ ] 2. Write GlucoseWidgetShared tests (Red) <!-- id:7k39hjd -->
+- [x] 2. Write GlucoseWidgetShared tests (Red) <!-- id:7k39hjd -->
   - GlucoseSnapshot encode/decode round-trip identity; unknown-version blob -> .neverRecorded; corrupt/undecodable blob -> .neverRecorded.
   - GlucoseSnapshot.make sanity guard: non-finite or mmolL outside 1.0-35.0 -> .neverRecorded.
   - dump-package assertion: GlucoseWidgetShared has an empty dependency list (mirrors cgm-connect firewall test). Known limit: package edges only, so it cannot see an accidental import WidgetKit (Decision 12) — that stays a review concern.
@@ -26,7 +26,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [2.7](requirements.md#2.7), [8.1](requirements.md#8.1)
   - References: MedataCore/Tests/GlucoseWidgetSharedTests/
 
-- [ ] 3. Implement GlucoseWidgetShared DTO, enums, store (Green) <!-- id:7k39hje -->
+- [x] 3. Implement GlucoseWidgetShared DTO, enums, store (Green) <!-- id:7k39hje -->
   - GlucoseSnapshot Codable (version, mmolL?, readingDate?, trend?, status?) + .neverRecorded + the sanity-guarded GlucoseSnapshot.make(mmolL:readingDate:trend:status:) builder (the publisher's only construction path).
   - GlucoseTrend (7 states, arrow glyph) and GlucoseBandStatus (low/inRange/high) enums.
   - appGroupID = group.rtob.MeData; widgetKind = ie.medata.widget.glucose (pinned here because the app's reloadTimelines(ofKind:) and the extension's StaticConfiguration(kind:) are in different targets and must match exactly; follows the existing ie.medata.widget.* launcher convention).
@@ -36,7 +36,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [2.7](requirements.md#2.7), [4.1](requirements.md#4.1), [8.1](requirements.md#8.1)
   - References: MedataCore/Sources/GlucoseWidgetShared/
 
-- [ ] 4. Write TrendsMath trend/rate/bandStatus tests (Red) <!-- id:7k39hjf -->
+- [x] 4. Write TrendsMath trend/rate/bandStatus tests (Red) <!-- id:7k39hjf -->
   - glucoseRate: exact threshold boundaries 0.056/0.111/0.166 (and negatives), half-open inclusivity; <2 readings and <10-min span -> nil; latest reading >15 min old -> nil; sign -> up/down direction.
   - bandStatus: 3.9 and 10.0 boundaries (low <3.9, in-range inclusive, high >10.0).
   - Blocked-by: 7k39hje (Implement GlucoseWidgetShared DTO, enums, store Green)
@@ -44,7 +44,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [4.1](requirements.md#4.1)
   - References: MedataCore/Tests/PersistenceTests/
 
-- [ ] 5. Implement TrendsMath glucoseRate / trend / bandStatus (Green) <!-- id:7k39hjg -->
+- [x] 5. Implement TrendsMath glucoseRate / trend / bandStatus (Green) <!-- id:7k39hjg -->
   - glucoseRate: least-squares slope (mmol/L per min) over readings within 15 min preceding now; nil unless >=2 readings AND earliest-latest span >=10 min.
   - trend: |rate| -> steady/slow/medium/fast band, sign -> direction, returning GlucoseTrend.
   - bandStatus: reuse targetLowMmolL / targetHighMmolL.
@@ -53,7 +53,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [4.1](requirements.md#4.1)
   - References: MedataCore/Sources/Persistence/TrendsMath.swift
 
-- [ ] 6. Write GlucoseTimeline render/renderPoints/nextBoundary tests (Red) <!-- id:7k39hjh -->
+- [x] 6. Write GlucoseTimeline render/renderPoints/nextBoundary tests (Red) <!-- id:7k39hjh -->
   - render(snapshot, at:) crosses fresh -> stale -> lastReading at readingDate+15m and +30m; neverRecorded distinct from lastReading.
   - renderPoints(snapshot, from:) instants anchored to readingDate: reference, max(ref, readingDate+15m), max(ref, readingDate+30m); single point when already >30m stale or never-recorded.
   - nextBoundary(snapshot, after:) returns the next 15m/30m instant while the ladder can still advance, nil in the terminal lastReading / neverRecorded states.
@@ -63,11 +63,11 @@ references:
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [8.1](requirements.md#8.1)
   - References: MedataCore/Tests/GlucoseWidgetSharedTests/
 
-- [ ] 7. Implement GlucoseRender + GlucoseTimeline (Green) <!-- id:7k39hji -->
+- [x] 7. Implement GlucoseRender + GlucoseTimeline (Green) <!-- id:7k39hji -->
   - GlucoseRender enum: fresh(value,status,trend?) / stale(value,age) / lastReading(age) / neverRecorded.
   - GlucoseTimeline.render + renderPoints + nextBoundary as tested. Foundation types only: renderPoints returns [(date: Date, render: GlucoseRender)] and nextBoundary returns Date? — NOT TimelineEntry / TimelineReloadPolicy, which are WidgetKit and belong in the extension (Decision 12). The widget maps nil -> .never, non-nil -> .after(_) in task 11.
   - Lives in GlucoseWidgetShared so it is MedataCore-testable and importable by the widget.
-  - Blocked-by: 7k39hjh (Write GlucoseTimeline render/entries tests Red)
+  - Blocked-by: 7k39hjh (Write GlucoseTimeline render/renderPoints/nextBoundary tests Red)
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [6.2](requirements.md#6.2), [8.1](requirements.md#8.1)
   - References: MedataCore/Sources/GlucoseWidgetShared/

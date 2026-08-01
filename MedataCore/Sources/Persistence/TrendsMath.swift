@@ -1,4 +1,8 @@
 import Foundation
+// Leaf enums only (GlucoseTrend / GlucoseBandStatus). GlucoseWidgetShared is
+// Foundation-only with an empty dependency list, so this edge adds nothing to
+// the estimation link closure (glucose-lock-widget Decision 10).
+import GlucoseWidgetShared
 
 // Pure maths for the Trends surface (UI Design Handoff 00, Reqs 10.2/10.3/10.5).
 // No UI imports and no store access — the App's TrendsModel feeds it plain
@@ -152,6 +156,84 @@ public enum TrendsMath {
                 start: dayStart, total: total, average: average, count: dayItems.count
             )
         }
+    }
+
+    // MARK: - Glucose trend (glucose-lock-widget Reqs 3.1-3.4, Decision 4)
+
+    // Band edges on |rate|, in mmol/L per minute. Half-open: a boundary value
+    // belongs to the faster band.
+    public static let slowRateThreshold = 0.056
+    public static let mediumRateThreshold = 0.111
+    public static let fastRateThreshold = 0.166
+
+    // Slope of a least-squares fit over the readings in the closed window
+    // [now − window, now], in mmol/L per minute. Anchoring to `now` rather than
+    // to the latest reading keeps trend and staleness on the same clock, so a
+    // lagging reading cannot report a trend the staleness ladder already calls
+    // stale.
+    //
+    // nil unless at least two readings fall in the window AND the earliest and
+    // latest span `minSpan` — two near-simultaneous readings would otherwise
+    // amplify a millimole of noise into a spurious fast arrow.
+    public static func glucoseRate(
+        _ readings: [GlucoseReading], now: Date,
+        window: TimeInterval = 15 * 60, minSpan: TimeInterval = 10 * 60
+    ) -> Double? {
+        let windowStart = now.addingTimeInterval(-window)
+        let inWindow = readings
+            .filter { $0.timestamp >= windowStart && $0.timestamp <= now }
+            .sorted { $0.timestamp < $1.timestamp }
+
+        guard let earliest = inWindow.first, let latest = inWindow.last,
+              inWindow.count >= 2,
+              latest.timestamp.timeIntervalSince(earliest.timestamp) >= minSpan
+        else { return nil }
+
+        // x in minutes from the earliest in-window reading, so the slope is
+        // already per-minute.
+        let xs = inWindow.map { $0.timestamp.timeIntervalSince(earliest.timestamp) / 60 }
+        let ys = inWindow.map(\.mmolL)
+        let xMean = xs.reduce(0, +) / Double(xs.count)
+        let yMean = ys.reduce(0, +) / Double(ys.count)
+
+        var covariance = 0.0
+        var variance = 0.0
+        for (x, y) in zip(xs, ys) {
+            covariance += (x - xMean) * (y - yMean)
+            variance += (x - xMean) * (x - xMean)
+        }
+        guard variance > 0 else { return nil }
+        return covariance / variance
+    }
+
+    // The rate → arrow-state map. Split out from `trend(_:now:)` so the band
+    // edges are testable as exact values, with no floating-point reconstruction
+    // from timestamps in between.
+    public static func trend(forRate rate: Double) -> GlucoseTrend {
+        let rising = rate > 0
+        switch abs(rate) {
+        case ..<slowRateThreshold: return .steady
+        case ..<mediumRateThreshold: return rising ? .risingSlow : .fallingSlow
+        case ..<fastRateThreshold: return rising ? .rising : .falling
+        default: return rising ? .risingFast : .fallingFast
+        }
+    }
+
+    // nil when no rate qualifies (Reqs 3.3, 3.4) — the widget then shows the
+    // value with no arrow.
+    public static func trend(_ readings: [GlucoseReading], now: Date) -> GlucoseTrend? {
+        guard let rate = glucoseRate(readings, now: now) else { return nil }
+        return trend(forRate: rate)
+    }
+
+    // The reading's position against the target band (Req 4.1). Runs on the raw
+    // value while the widget shows one decimal place, so a raw 3.87 displays
+    // "3.9" yet carries the low token — the raw-value band is the authority at
+    // the boundary.
+    public static func bandStatus(_ mmolL: Double) -> GlucoseBandStatus {
+        if mmolL < targetLowMmolL { return .low }
+        if mmolL > targetHighMmolL { return .high }
+        return .inRange
     }
 
     // MARK: - Carb axis mapping (Req 10.2)
