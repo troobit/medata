@@ -5,14 +5,16 @@ import WidgetKit
 // (Lock screen widget context). Two STATIC widget kinds: lock-screen accessory
 // widgets carry a single tap target each, so "Log dose" and "Capture" are
 // separate widgets the user places side by side. Neither displays data — each
-// deep-links into the app (App/AppRoot.swift handleDeepLink), so there is no
-// persistence import and no App Group here.
+// deep-links into the app (App/AppRoot.swift handleDeepLink), so neither has a
+// persistence import. Keep them that way: the App Group and the snapshot read
+// belong to the data-driven glucose kind in GlucoseWidget.swift alone.
 
 @main
 struct MeDataWidgetBundle: WidgetBundle {
     var body: some Widget {
         InsulinDoseWidget()
         CaptureWidget()
+        GlucoseWidget()
     }
 }
 

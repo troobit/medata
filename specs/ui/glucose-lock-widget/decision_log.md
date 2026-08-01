@@ -481,3 +481,74 @@ minute.
 
 `GlucoseTimeline.renderPoints` / `nextBoundary` (design "Timeline maths"), task 7, and the
 `.after(_)` policy the extension derives in task 11.
+
+---
+
+## Decision 14: The widget entry carries `readingDate` so a fresh reading's age can tick
+
+**Date**: 2026-08-01
+**Status**: accepted
+
+### Context
+
+Req 2.4 asks `accessoryRectangular` to show the reading's relative age alongside the value,
+token and arrow, and the design's per-family line says exactly that. But `GlucoseRender.fresh`
+carries no age string — only `.stale` and `.lastReading` do. That is not an oversight in
+Decision 9's ladder: the stale and last-reading entries are minted AT a known transition
+instant (readingDate + 15m + 1s / + 30m + 1s), so their baked age is correct when the entry
+first renders. A fresh entry has no such anchor — it is minted at whatever moment
+`getTimeline` runs and then stays on screen for up to 15 minutes, so any age baked into it
+would read "0m" for almost its entire life.
+
+The design's `GlucoseEntry` snippet declared only `{ date, render }`, which leaves the
+extension no way to render a fresh age at all.
+
+### Decision
+
+Add `readingDate: Date?` to `GlucoseEntry` (the extension-side WidgetKit adapter only —
+`GlucoseWidgetShared` is untouched) and render the fresh state's age in `accessoryRectangular`
+with SwiftUI's `Text(readingDate, style: .relative)`. The stale and last-reading states keep
+the pure ladder's own age string.
+
+### Rationale
+
+`.relative` is WidgetKit's own answer to a label that must tick without new timeline entries —
+the system re-renders the text itself, so the fresh age stays truthful for the whole 15
+minutes at zero cost to the reload budget. Confining the field to `GlucoseEntry` keeps
+Decision 12's boundary intact: the shared module still speaks only `GlucoseRender` and `Date?`,
+and no test in `GlucoseWidgetSharedTests` changes.
+
+Keeping the baked string for the stale and last-reading states is deliberate, not
+inconsistency for its own sake: Req 5.5 pins that format ("12m" to the minute for the first
+hour, hours beyond) and `GlucoseTimeline.ageString` is the tested implementation of it.
+Replacing it with `.relative` everywhere would make the specified format untested and unused.
+
+### Alternatives Considered
+
+- **Omit the age from the fresh rectangular state**: No new field, no format split - Rejected:
+  silently drops the Req 2.4 age for the one state a user looks at most, leaving no way to
+  tell a 1-minute reading from a 14-minute one.
+- **Bake an age string into the fresh entry**: Reuse `ageString` at entry-mint time - Rejected:
+  frozen at "0m" for up to 15 minutes, which is a wrong number rather than a missing one.
+- **Emit a fresh entry per minute**: Fifteen extra entries so the baked string stays accurate -
+  Rejected: fifteen times the timeline for one label, and it contradicts Decision 9's
+  transition-anchored point set.
+- **Use `.relative` for every state**: One format throughout - Rejected: leaves `ageString`
+  and its Req 5.5 format tested but unused in production, and the terminal states have a
+  correct anchored value already.
+
+### Consequences
+
+**Positive:**
+- Req 2.4's age holds in the fresh state without extra timeline entries or reload budget.
+- `GlucoseWidgetShared` and its tests are unchanged; Decision 12's boundary still holds.
+
+**Negative:**
+- Two age formats on one surface — the system's "12 min" when fresh, the ladder's "12m" when
+  stale. Worth a look during the on-device pass (task 14).
+- `GlucoseEntry` now carries a field that only one family and one state reads.
+
+### Impact
+
+`GlucoseEntry` in `MeData/MeDataWidgets/GlucoseWidget.swift`; the design's Decision 12 entry
+snippet (marked superseded there); task 11.
