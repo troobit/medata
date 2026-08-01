@@ -44,7 +44,7 @@ help:
 	@echo "                       (name=<dir> [branch=<branch>]; branch defaults to name, off HEAD)"
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
-	@echo "  spell                Irish/British spelling lint (tools/check_spelling.sh)"
+	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
 	@echo "  build-app            xcodebuild MeData for device, Debug  [DEVICE_UDID=$(DEVICE_UDID)]"
 	@echo "  deploy-device        build-app + install + launch on the device, with build stamp"
 	@echo "  deploy-release       Release build with the REAL bundled segmenter, install + launch"

@@ -42,10 +42,10 @@ struct LauncherProvider: TimelineProvider {
 struct InsulinDoseWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ie.medata.widget.insulin", provider: LauncherProvider()) { _ in
-            LauncherView(symbol: "syringe", label: "Log dose")
+            LauncherView(symbol: "syringe", label: "dose")
                 .widgetURL(URL(string: "medata://insulin/add"))
         }
-        .configurationDisplayName("Log dose")
+        .configurationDisplayName("dose")
         .description("Opens the insulin dose entry.")
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .systemSmall])
     }
