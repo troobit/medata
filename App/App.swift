@@ -12,6 +12,11 @@ struct MedataApp: App {
     @State private var preShutterSegmenter: PreShutterSegmenter?
     @State private var glucoseConnections: GlucoseConnectionsModel
     private let store: any PersistenceStore
+    // Retained for the process lifetime so its `eventsDidChange` subscription
+    // and the Task consuming it outlive this init (glucose-lock-widget
+    // Decision 11). nil only under the UI-test harness, which returns below
+    // before it is built.
+    private let glucoseWidgetPublisher: GlucoseWidgetPublisher?
     @Environment(\.scenePhase) private var scenePhase
 
     #if DEBUG
@@ -40,10 +45,21 @@ struct MedataApp: App {
             _uiTestHarness = State(initialValue: harness)
             _visionCardDetector = State(initialValue: nil)
             _preShutterSegmenter = State(initialValue: nil)
+            // No widget publishing under the harness: it would fire a 24h store
+            // read on a launch the comment above keeps hermetic, and there is
+            // no Lock Screen to publish to.
+            glucoseWidgetPublisher = nil
             return
         }
         _uiTestHarness = State(initialValue: nil)
         #endif
+
+        // Lock Screen glucose snapshot (glucose-lock-widget Reqs 1.2-1.4).
+        // Constructed BEFORE the glucose sources start below: its init binds
+        // `store.eventsDidChange` synchronously, and AsyncStream has no replay,
+        // so a `bsl` write landing before this line would never reach the
+        // widget.
+        glucoseWidgetPublisher = GlucoseWidgetPublisher(store: store)
 
         // BGTask registration must complete before the application finishes
         // launching; start() then registers the sources and reconnects any

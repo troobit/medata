@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- glucose-lock-widget Req 1: must match the group in
+	     MeData/MeData.entitlements exactly. The extension only reads the
+	     snapshot the app publishes; a missing or mis-provisioned group does
+	     NOT make UserDefaults(suiteName:) nil, it silently yields a private
+	     store, so the app→extension round-trip on device is the real check
+	     (see specs/ui/glucose-lock-widget/prerequisites.md). -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.rtob.MeData</string>
+	</array>
+</dict>
+</plist>

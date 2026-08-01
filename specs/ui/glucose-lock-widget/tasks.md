@@ -74,7 +74,7 @@ references:
 
 ## App integration
 
-- [ ] 8. Implement GlucoseWidgetPublisher (app-lifetime actor) <!-- id:7k39hjj -->
+- [x] 8. Implement GlucoseWidgetPublisher (app-lifetime actor) <!-- id:7k39hjj -->
   - actor (not @MainActor). Init order is subscribe -> prime -> consume: bind store.eventsDidChange to a stored property SYNCHRONOUSLY in init (the property is changeBroadcaster.subscribe(), no await needed, and AsyncStream has no replay), THEN spawn the process-lifetime Task which does the prime recompute+write (fixes cold-start never-recorded) and only then loops over the captured stream. Priming before subscribing would drop any tick landing during the async 24h read.
   - On each tick read last 24h bsl via store.events(in:type:.bsl) (Double? value + Date timestamp -> GlucoseReading, same compactMap idiom as App/TrendsModel.swift:117), build the snapshot via GlucoseSnapshot.make, and write + WidgetCenter.shared.reloadTimelines(ofKind: GlucoseSnapshotStore.widgetKind) ONLY when the snapshot differs (value/trend/status/timestamp).
   - No unit test — behaviour verified on device (Decision 11).
@@ -83,7 +83,7 @@ references:
   - Requirements: [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [6.1](requirements.md#6.1), [6.2](requirements.md#6.2)
   - References: App/GlucoseWidgetPublisher.swift
 
-- [ ] 9. Wire publisher into App.swift + add medata://graph deep link <!-- id:7k39hjk -->
+- [x] 9. Wire publisher into App.swift + add medata://graph deep link <!-- id:7k39hjk -->
   - Construct and retain GlucoseWidgetPublisher for the process lifetime in App.swift init, BEFORE the glucose.registerBackgroundRefresh()/glucose.start() pair so the subscription exists first. Note App.swift's DEBUG UITestSupport branch returns early above those calls — decide deliberately whether the publisher is constructed above the early return (harness launches then do a store read, against the "hermetic" comment) or below it (no widget publishing under UI test); below it is the default.
   - Deep link is THREE edits, not one: (a) add DeepLinkTarget.graphCover; (b) add ("graph","")/("graph","/") to handleDeepLink with the capture case's three branches (insulin sheet up -> defer; nothing presented -> present .graph; other cover up -> defer); (c) handle .graphCover in BOTH dismissal sites — the fullScreenCover onDismiss switch AND the .sheet(isPresented: $showInsulinSheet) onDismiss, which currently tests `pendingDeepLink == .captureCover` by equality. Skipping (c) silently drops a widget tap made while the dose sheet is open.
   - The medata scheme is already registered in MeData/Info.plist (CFBundleURLTypes) — confirmed, no plist change needed.
@@ -94,7 +94,7 @@ references:
 
 ## Widget extension
 
-- [ ] 10. Add App Group entitlements + Xcode target wiring <!-- id:7k39hjl -->
+- [x] 10. Add App Group entitlements + Xcode target wiring <!-- id:7k39hjl -->
   - Add App Group group.rtob.MeData to MeData.entitlements (currently HealthKit keys only); create MeDataWidgets.entitlements with the same group.
   - Set CODE_SIGN_ENTITLEMENTS for the widget target; add the GlucoseWidgetShared product to the widget target. The widget target today has NO packageProductDependencies and a deliberately empty Frameworks phase (docs/agent-notes/widget-extension.md) — this is a hand-edit of an objectVersion-77 pbxproj using PBXFileSystemSynchronizedRootGroup, so it needs a new XCSwiftPackageProductDependency plus the matching Frameworks build-file entry, not just a setting. The app target already reaches GlucoseWidgetShared transitively via MedataCore -> Pipeline -> Persistence; adding it explicitly is optional.
   - Config/wiring only — provisioning is human-gated (prerequisites.md).

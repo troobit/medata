@@ -10,5 +10,14 @@
 	<true/>
 	<key>com.apple.developer.healthkit.background-delivery</key>
 	<true/>
+	<!-- glucose-lock-widget Req 1: shared container between the app and the
+	     MeDataWidgets extension. The app writes the glucose snapshot into
+	     UserDefaults(suiteName: group.rtob.MeData); the widget reads it.
+	     MeDataWidgets.entitlements MUST carry the same group, and both
+	     signing profiles must include the App Group for a device install. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.rtob.MeData</string>
+	</array>
 </dict>
 </plist>
