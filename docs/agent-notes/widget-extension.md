@@ -81,6 +81,15 @@ kind exists for the Lock Screen glance.
   Xcode capability toggle) — same dance as the original widget bundle id. A
   simulator build with `CODE_SIGNING_ALLOWED=NO` compiles and links fine and is
   the way to verify the pbxproj wiring without touching provisioning.
+- **Verifying the wiring without provisioning** (what task 13 checks): build with
+  `-destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO`, then confirm
+  (a) `MeData.app/PlugIns/MeDataWidgets.appex` exists,
+  (b) `…/MeDataWidgets.build/Objects-normal/arm64/MeDataWidgets.LinkFileList`
+  lists `GlucoseWidgetShared.o` and nothing else beyond the two target objects,
+  (c) `strings …/MeDataWidgets.debug.dylib | grep ie.medata.widget` shows all
+  three kinds and `otool -L` on it shows no GRDB. Grep the `.debug.dylib`, not
+  the 72 KB stub executable. What this CANNOT prove is that the App Group
+  entitlement survives signing — that needs the device build (task 14).
 
 ## Glucose kind data flow
 
