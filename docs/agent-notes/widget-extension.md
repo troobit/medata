@@ -1,20 +1,29 @@
-# MeDataWidgets extension (launcher widgets)
+# MeDataWidgets extension
 
 Widget extension target `MeDataWidgets`, sources at `MeData/MeDataWidgets/`
-(one Swift file + Info.plist). Two STATIC launcher widget kinds in one
-`WidgetBundle` — `ie.medata.widget.insulin` ("Log dose", syringe, opens
-`medata://insulin/add`) and `ie.medata.widget.capture` ("Capture", camera,
-opens `medata://capture`). Families: `accessoryCircular`,
-`accessoryRectangular` (lock screen), `systemSmall` (home screen). Lock-screen
-accessory widgets carry a SINGLE tap target — that is why dose and capture are
-separate kinds, not two buttons in one widget. Deep links are handled by
+(`MeDataWidgets.swift` + `GlucoseWidget.swift` + Info.plist + entitlements).
+THREE kinds in one `WidgetBundle`:
+
+| Kind | File | Data | Tap |
+|---|---|---|---|
+| `ie.medata.widget.insulin` | `MeDataWidgets.swift` | none | `medata://insulin/add` |
+| `ie.medata.widget.capture` | `MeDataWidgets.swift` | none | `medata://capture` |
+| `ie.medata.widget.glucose` | `GlucoseWidget.swift` | App Group snapshot | `medata://graph` |
+
+Lock-screen accessory widgets carry a SINGLE tap target — that is why dose and
+capture are separate kinds, not two buttons in one widget, and why the glucose
+kind's whole view is one `widgetURL`. Deep links are handled by
 `App/AppRoot.swift handleDeepLink` (see `insulin-dose-ui.md`).
 
 The two LAUNCHER kinds display no data: no persistence imports, `Timeline`
-policy `.never`. Keep them that way. A third, data-driven kind
-(`specs/ui/glucose-lock-widget`) now lives in the same extension and brings the
-App Group + snapshot cache — see "App Group + GlucoseWidgetShared" below. The
-30 MB memory cap and the no-GRDB rule still bind every kind in the bundle.
+policy `.never`. Keep them that way — the App Group and the snapshot read
+belong to the glucose kind alone. The 30 MB memory cap and the no-GRDB /
+no-network rule bind every kind in the bundle, glucose included.
+
+Families differ by kind: the launchers support `accessoryCircular`,
+`accessoryRectangular` and `systemSmall`; glucose supports `accessoryCircular`,
+`accessoryRectangular` and `accessoryInline` — no `systemSmall`, because the
+kind exists for the Lock Screen glance.
 
 ## pbxproj setup (hand-edited, objectVersion 77)
 
@@ -72,3 +81,44 @@ App Group + snapshot cache — see "App Group + GlucoseWidgetShared" below. The
   Xcode capability toggle) — same dance as the original widget bundle id. A
   simulator build with `CODE_SIGNING_ALLOWED=NO` compiles and links fine and is
   the way to verify the pbxproj wiring without touching provisioning.
+
+## Glucose kind data flow
+
+App side is `App/GlucoseWidgetPublisher.swift`, an `actor` (deliberately not
+`@MainActor` — it runs on every CGM tick) held for the process lifetime by
+`App.swift`. It reads the trailing 24 h of `bsl` rows, builds a
+`GlucoseSnapshot`, and writes + reloads ONLY when the value differs from what
+is already stored. Reloads are scoped: `reloadTimelines(ofKind:)` with the
+glucose kind, so glucose writes do not spend the shared WidgetKit reload budget
+on the co-hosted launchers.
+
+- The contract is one `Codable` blob under one key in
+  `UserDefaults(suiteName: "group.rtob.MeData")` — plist-level atomicity, so a
+  concurrent reader sees the old blob or the new one, never a splice. Both
+  sides go through `GlucoseSnapshotStore` (`widgetKind`, `write`, `read`); the
+  kind string is pinned there because app and extension are separate targets
+  and the two literals must match exactly.
+- **A nil suite is not a misprovisioning detector.**
+  `UserDefaults(suiteName:)` returns nil only for an invalid or own-bundle
+  name. A missing App Group entitlement still yields a non-nil PRIVATE store,
+  so the app writes where the widget cannot see and the widget shows
+  never-recorded. Only the on-device round trip catches it (see
+  `specs/ui/glucose-lock-widget/prerequisites.md`). The
+  `CFPrefsPlistSource … detaching from cfprefsd` console warning is expected
+  with App Group suites and is not a failure.
+- Atomicity is not freshness: each process caches its own CFPreferences view,
+  so nothing may depend on an immediate cross-process read-back. The ordering
+  works because the widget reads inside a `getTimeline` that the app's reload
+  triggered.
+- All staleness/render logic is pure and lives in `GlucoseTimeline` /
+  `TrendsMath` inside the package; `GlucoseWidget.swift` is only the WidgetKit
+  adapter plus per-family views. Keep new display rules on the package side
+  where they are testable — the appex has no executable test target.
+- One exception the pure ladder cannot express: a FRESH entry spans up to 15
+  minutes of wall time, so its age is rendered with `Text(_, style: .relative)`
+  from a `readingDate` carried on the entry, rather than a baked string that
+  would read "0m" for most of that window.
+- The timeline policy is `.after(nextBoundary)` while a staleness transition is
+  still ahead, and `.never` once the state is terminal (last-reading /
+  never-recorded) — a terminal state cannot advance on its own and waits for
+  the app's explicit reload.

@@ -115,7 +115,7 @@ references:
 
 ## Verification
 
-- [ ] 12. Update docs/agent-notes/widget-extension.md for the data-driven kind <!-- id:7k39hjp -->
+- [x] 12. Update docs/agent-notes/widget-extension.md for the data-driven kind <!-- id:7k39hjp -->
   - The note's closing line ("No data display: no persistence imports, no App Group ... Keep it that way unless a data-showing widget is actually specced") is now false — a data-showing widget IS specced. Record the third kind ie.medata.widget.glucose, the App Group group.rtob.MeData, and the GlucoseWidgetShared product as the only package product the appex links (still no GRDB and no network in the extension).
   - Keep the existing objectVersion-77 pbxproj and signing gotchas; add whatever the task-10 wiring turned up (packageProductDependencies + Frameworks-phase entry on a filesystem-synchronized target; CODE_SIGN_ENTITLEMENTS).
   - Blocked-by: 7k39hjm (Implement GlucoseWidget data-driven kind + views)
