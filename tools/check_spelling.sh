@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check_spelling.sh — Irish/British English spelling linter (Req 19.2).
+# check_spelling.sh — spelling linter (Req 19.2).
 # Scans *.swift files and bundled string catalogs for US-English spellings.
 # Exits 0 if clean, 1 if any violations are found.
 # CI usage: bash tools/check_spelling.sh
@@ -9,7 +9,7 @@ set -euo pipefail
 # Allow tests to override REPO_ROOT via environment variable.
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
-# US-English words banned in favour of Irish/British spellings.
+# US-English words banned in favour of normal spellings.
 # Each entry is a standalone word boundary pattern.
 BANNED_WORDS=(
     "recognized"
