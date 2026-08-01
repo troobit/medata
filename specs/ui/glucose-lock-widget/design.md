@@ -122,10 +122,18 @@ public enum GlucoseRender: Equatable, Sendable {
 }
 
 public enum GlucoseTimeline {
+    // One second, per Decision 13: the bands are inclusive (age ≤15m is fresh), so
+    // the first instant the ladder has actually advanced is one second past the
+    // boundary. An entry ON the boundary would render fresh and freeze the ladder
+    // a step behind for its whole life.
+    public static let transitionOffset: TimeInterval = 1
+
     // Render instants anchored to readingDate (the staleness boundaries are ages of
-    // the reading, NOT of `reference`): reference, max(reference, readingDate+15m),
-    // max(reference, readingDate+30m) — deduped/ordered. If the reading is already >30m
+    // the reading, NOT of `reference`): reference, max(reference, readingDate+15m+1s),
+    // max(reference, readingDate+30m+1s) — deduped/ordered. If the reading is already >30m
     // stale (or never-recorded) at `reference`, a single point is returned.
+    // (Superseded wording: this list previously read readingDate+15m / +30m exactly —
+    // see Decision 13 for why that could not advance past the fresh state.)
     public static func renderPoints(_ snapshot: GlucoseSnapshot, from reference: Date)
         -> [(date: Date, render: GlucoseRender)]
     public static func render(_ snapshot: GlucoseSnapshot, at date: Date) -> GlucoseRender

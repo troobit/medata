@@ -413,3 +413,71 @@ WidgetKit's encoding of that same fact, and encoding it twice is what created th
 ### Impact
 
 `GlucoseWidgetShared` API surface (design "Components and Interfaces"), tasks 7 and 11.
+
+---
+
+## Decision 13: Ladder transition instants sit one second past the age boundary
+
+**Date**: 2026-08-01
+**Status**: accepted — refines the `renderPoints` / `nextBoundary` contract in Decisions 9 and 12
+
+### Context
+
+Req 5.1 makes the fresh band inclusive ("15 minutes old **or less**") and Req 5.2 makes the
+stale band inclusive at its far edge ("30 minutes old or less"). Decision 9's timeline
+function was then specified to emit its transition entries at `readingDate + 15m` and
+`readingDate + 30m` exactly.
+
+Those two statements contradict each other. Evaluating the render at exactly
+`readingDate + 15m` yields *fresh*, because the age is exactly 15 minutes and the band is
+inclusive. WidgetKit shows each entry until the next one, so the entry meant to start the
+de-emphasised phase would instead re-assert full prominence for the whole 15–30 minute
+window, and the entry at `readingDate + 30m` would render *stale* rather than last-reading.
+The ladder would run one step behind for its entire life and never reach the last-reading
+state at all — the exact failure Decision 9 exists to prevent.
+
+### Decision
+
+Keep `render(_:at:)` inclusive at both boundaries, matching Reqs 5.1 and 5.2 literally.
+Anchor the transition instants emitted by `renderPoints(_:from:)` and returned by
+`nextBoundary(_:after:)` one second past each boundary — `readingDate + 15m + 1s` and
+`readingDate + 30m + 1s` — as the first whole second at which the ladder has actually
+advanced. The offset is a named constant, `GlucoseTimeline.transitionOffset`.
+
+### Rationale
+
+The requirement text is about which state a given age is *in*; the timeline is about when
+the state *changes*. For an inclusive band these are one second apart, and conflating them
+is what produced the off-by-one-step ladder. Putting the offset in the timeline layer keeps
+the requirement's wording untouched and testable as written, and one second is the natural
+grain: WidgetKit schedules to the second, and no requirement distinguishes ages finer than a
+minute.
+
+### Alternatives Considered
+
+- **Make the bands half-open (`age < 15m` is fresh)**: The transition instants would then be
+  the boundaries exactly — Rejected: it contradicts the literal "15 minutes old or less" in
+  Req 5.1 and would require a requirements change for a purely internal scheduling concern.
+- **Leave the instants on the boundary and special-case the render at those points**: A
+  render that disagrees with `render(_:at:)` for the same instant — Rejected: two answers for
+  one input, and the pure function stops being the single source of truth for the ladder.
+- **Sub-second offset (`nextUp`)**: Mathematically the true infimum — Rejected: not
+  meaningfully representable through WidgetKit's second-grained scheduling, and it makes the
+  tests read as floating-point trivia rather than behaviour.
+
+### Consequences
+
+**Positive:**
+- The ladder advances through all four states, with every transition covered by a unit test.
+- Reqs 5.1/5.2 stay literally true of `render(_:at:)`; no requirement rewording.
+
+**Negative:**
+- The transition instants are one second later than a reader of Decision 9 would expect; the
+  constant and this entry are the only places that explain why.
+- The widget is de-emphasised one second later than the strictest reading of Req 5.2 would
+  have it — below any perceptible threshold.
+
+### Impact
+
+`GlucoseTimeline.renderPoints` / `nextBoundary` (design "Timeline maths"), task 7, and the
+`.after(_)` policy the extension derives in task 11.
