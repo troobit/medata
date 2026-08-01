@@ -33,11 +33,12 @@ struct AppRoot: View {
     @State private var showInsulinSheet = false
     @State private var pendingDeepLink: DeepLinkTarget?
 
-    // The two deep links under the `medata` scheme — each a single-tap
-    // lock-screen widget launcher (PRD amendment to App 10).
+    // The deep links under the `medata` scheme — each a single-tap lock-screen
+    // widget target (PRD amendment to App 10; glucose-lock-widget Req 7.1).
     private enum DeepLinkTarget {
         case insulinSheet  // medata://insulin/add
         case captureCover  // medata://capture
+        case graphCover  // medata://graph — the glucose widget's tap target
     }
 
     init(
@@ -94,6 +95,8 @@ struct AppRoot: View {
                 showInsulinSheet = true
             case .captureCover:
                 activeSheet = .capture
+            case .graphCover:
+                activeSheet = .graph
             case nil:
                 break
             }
@@ -137,12 +140,20 @@ struct AppRoot: View {
         }
         // Relocated from TrendsView (Decision 10): the dose sheet keeps its
         // native drag-to-dismiss (no CloseCoverButton — design: Cover
-        // vocabulary). `onDismiss` sequences a pending medata://capture
-        // present behind the sheet's dismissal.
+        // vocabulary). `onDismiss` sequences a pending cover present behind the
+        // sheet's dismissal — every cover target, not just capture: a glucose
+        // widget tap arriving while this sheet is up would otherwise be set and
+        // then silently discarded (glucose-lock-widget design, Deep link).
         .sheet(isPresented: $showInsulinSheet, onDismiss: {
-            if pendingDeepLink == .captureCover {
+            switch pendingDeepLink {
+            case .captureCover:
                 pendingDeepLink = nil
                 activeSheet = .capture
+            case .graphCover:
+                pendingDeepLink = nil
+                activeSheet = .graph
+            case .insulinSheet, nil:
+                break
             }
         }) {
             InsulinDoseSheet(store: store)
@@ -171,6 +182,10 @@ struct AppRoot: View {
     // from any state, dismissing whatever is presented first (App 10):
     //   medata://insulin/add — the dose-entry sheet
     //   medata://capture     — the Capture cover
+    //   medata://graph       — the Graph cover (glucose widget tap, Req 7.1).
+    //                          From a locked device iOS defers the open until
+    //                          the user authenticates, then `onOpenURL` fires
+    //                          here as usual (Req 7.2) — nothing extra needed.
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "medata" else { return }
         switch (url.host, url.path) {
@@ -189,6 +204,16 @@ struct AppRoot: View {
                 activeSheet = .capture
             } else if activeSheet != .capture {
                 pendingDeepLink = .captureCover
+                activeSheet = nil
+            }
+        case ("graph", ""), ("graph", "/"):
+            if showInsulinSheet {
+                pendingDeepLink = .graphCover
+                showInsulinSheet = false
+            } else if activeSheet == nil {
+                activeSheet = .graph
+            } else if activeSheet != .graph {
+                pendingDeepLink = .graphCover
                 activeSheet = nil
             }
         default:

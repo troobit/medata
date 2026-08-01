@@ -10,6 +10,7 @@
 		111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */ = {isa = PBXBuildFile; productRef = 111EC91D2FBD45B500272C1E /* MedataCore */; };
 		118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */ = {isa = PBXBuildFile; productRef = 118B44A52FF0000000272C1E /* GlucoseGraph */; };
 		11CC66A03000000000272C1E /* GlucoseIngestion in Frameworks */ = {isa = PBXBuildFile; productRef = 11CC66A13000000000272C1E /* GlucoseIngestion */; };
+		11DD77A02FF3000000272C1E /* GlucoseWidgetShared in Frameworks */ = {isa = PBXBuildFile; productRef = 11DD77A12FF3000000272C1E /* GlucoseWidgetShared */; };
 		111EC9232FBD47A100272C1E /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC91F2FBD47A100272C1E /* App.swift */; };
 		111EC9242FBD47A100272C1E /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9212FBD47A100272C1E /* ResultView.swift */; };
 		111EC9252FBD47A100272C1E /* CaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9202FBD47A100272C1E /* CaptureFlowView.swift */; };
@@ -25,6 +26,7 @@
 		111ECA052FBD47A100272C1E /* ARPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA062FBD47A100272C1E /* ARPreviewView.swift */; };
 		111ECA0C2FBD47A100272C1E /* PhotoLibrarySaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111ECA0B2FBD47A100272C1E /* PhotoLibrarySaver.swift */; };
 		112B11C02FCE000000272C1E /* AppRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D02FCE000000272C1E /* AppRoot.swift */; };
+		11AB00112FF3000000272C1E /* GlucoseWidgetPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB00222FF3000000272C1E /* GlucoseWidgetPublisher.swift */; };
 		113B22A02FD0000000272C1E /* LiveIndicatorBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B02FD0000000272C1E /* LiveIndicatorBadge.swift */; };
 		113B22F42FD0000000272C1E /* TiltBubbleGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22F52FD0000000272C1E /* TiltBubbleGuide.swift */; };
 		113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113B22B32FD0000000272C1E /* ShutterButton.swift */; };
@@ -83,6 +85,7 @@
 		111ECA062FBD47A100272C1E /* ARPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ARPreviewView.swift; path = ../App/ARPreviewView.swift; sourceTree = SOURCE_ROOT; };
 		111ECA0B2FBD47A100272C1E /* PhotoLibrarySaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PhotoLibrarySaver.swift; path = ../App/PhotoLibrarySaver.swift; sourceTree = SOURCE_ROOT; };
 		112B11D02FCE000000272C1E /* AppRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppRoot.swift; path = ../App/AppRoot.swift; sourceTree = SOURCE_ROOT; };
+		11AB00222FF3000000272C1E /* GlucoseWidgetPublisher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseWidgetPublisher.swift; path = ../App/GlucoseWidgetPublisher.swift; sourceTree = SOURCE_ROOT; };
 		113B22B02FD0000000272C1E /* LiveIndicatorBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveIndicatorBadge.swift; path = ../App/LiveIndicatorBadge.swift; sourceTree = SOURCE_ROOT; };
 		113B22F52FD0000000272C1E /* TiltBubbleGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TiltBubbleGuide.swift; path = ../App/TiltBubbleGuide.swift; sourceTree = SOURCE_ROOT; };
 		113B22B32FD0000000272C1E /* ShutterButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ShutterButton.swift; path = ../App/ShutterButton.swift; sourceTree = SOURCE_ROOT; };
@@ -143,6 +146,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				MeDataWidgets.entitlements,
 			);
 			target = 11ED00042FF2000000272C1E /* MeDataWidgets */;
 		};
@@ -177,6 +181,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11DD77A02FF3000000272C1E /* GlucoseWidgetShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -201,6 +206,7 @@
 				111ECA062FBD47A100272C1E /* ARPreviewView.swift */,
 				111ECA0B2FBD47A100272C1E /* PhotoLibrarySaver.swift */,
 				112B11D02FCE000000272C1E /* AppRoot.swift */,
+				11AB00222FF3000000272C1E /* GlucoseWidgetPublisher.swift */,
 				113B22B02FD0000000272C1E /* LiveIndicatorBadge.swift */,
 				113B22F52FD0000000272C1E /* TiltBubbleGuide.swift */,
 				113B22B32FD0000000272C1E /* ShutterButton.swift */,
@@ -299,6 +305,9 @@
 				11ED00022FF2000000272C1E /* MeDataWidgets */,
 			);
 			name = MeDataWidgets;
+			packageProductDependencies = (
+				11DD77A12FF3000000272C1E /* GlucoseWidgetShared */,
+			);
 			productName = MeDataWidgets;
 			productReference = 11ED00012FF2000000272C1E /* MeDataWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -399,6 +408,7 @@
 				111ECA052FBD47A100272C1E /* ARPreviewView.swift in Sources */,
 				111ECA0C2FBD47A100272C1E /* PhotoLibrarySaver.swift in Sources */,
 				112B11C02FCE000000272C1E /* AppRoot.swift in Sources */,
+				11AB00112FF3000000272C1E /* GlucoseWidgetPublisher.swift in Sources */,
 				113B22A02FD0000000272C1E /* LiveIndicatorBadge.swift in Sources */,
 				113B22F42FD0000000272C1E /* TiltBubbleGuide.swift in Sources */,
 				113B22A32FD0000000272C1E /* ShutterButton.swift in Sources */,
@@ -653,6 +663,7 @@
 		11ED00092FF2000000272C1E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MeDataWidgets/MeDataWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6G974YC4Z2;
@@ -680,6 +691,7 @@
 		11ED000A2FF2000000272C1E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = MeDataWidgets/MeDataWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6G974YC4Z2;
@@ -755,6 +767,10 @@
 		11CC66A13000000000272C1E /* GlucoseIngestion */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = GlucoseIngestion;
+		};
+		11DD77A12FF3000000272C1E /* GlucoseWidgetShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = GlucoseWidgetShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
