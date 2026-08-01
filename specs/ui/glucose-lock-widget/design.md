@@ -146,11 +146,22 @@ public enum GlucoseTimeline {
 In the widget target only (`GlucoseWidget.swift`), a thin adapter:
 
 ```swift
-struct GlucoseEntry: TimelineEntry { let date: Date; let render: GlucoseRender }
+struct GlucoseEntry: TimelineEntry {
+    let date: Date
+    let render: GlucoseRender
+    let readingDate: Date?   // Decision 14 — see below
+}
 
 // renderPoints → [GlucoseEntry]; nextBoundary → policy:
 //   non-nil ⇒ .after(boundary)   nil ⇒ .never
 ```
+
+(Superseded wording: this snippet previously declared `GlucoseEntry` as `{ date, render }`
+only. `GlucoseRender.fresh` carries no age string — deliberately, since a fresh entry has no
+transition instant to anchor one to and lives up to 15 minutes — so the two-field entry left
+`accessoryRectangular` unable to show the Req 2.4 age at full prominence. `readingDate` rides
+along for that one label, rendered with `Text(_, style: .relative)` so it ticks without extra
+entries. `GlucoseWidgetShared` is unchanged; see Decision 14.)
 
 Reload policy by terminal state: `fresh`/`stale` timelines use `.after(next boundary)` so the ladder advances even without a new write; `lastReading` and `neverRecorded` use `.never` (a now-in-the-past `.after` would trigger a pointless reload-asap, and the "Xh ago" label need not tick between data writes) — the next app/background write reloads them explicitly.
 

@@ -103,7 +103,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1), [1.6](requirements.md#1.6)
   - References: MeData/MeData.entitlements, MeData/MeDataWidgets/MeDataWidgets.entitlements, MeData/MeData.xcodeproj/project.pbxproj
 
-- [ ] 11. Implement GlucoseWidget data-driven kind + views <!-- id:7k39hjm -->
+- [x] 11. Implement GlucoseWidget data-driven kind + views <!-- id:7k39hjm -->
   - New StaticConfiguration(kind: GlucoseSnapshotStore.widgetKind). Define GlucoseEntry: TimelineEntry HERE (the WidgetKit adapter, Decision 12) over GlucoseTimeline.renderPoints, and map nextBoundary -> .after(_) / nil -> .never.
   - TimelineProvider witnesses (placeholder / getSnapshot / getTimeline) MUST be marked nonisolated explicitly — the target builds with SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, see the existing LauncherProvider and docs/agent-notes/widget-extension.md.
   - Per-family views (accessoryCircular / accessoryRectangular / accessoryInline) + StandBy; non-colour status token as the sole signal, per-status Color only under @Environment(\.widgetRenderingMode)==.fullColor; reduced opacity for the stale state; containerBackground clear (match LauncherView); functional copy only.
