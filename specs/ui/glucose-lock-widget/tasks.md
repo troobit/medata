@@ -123,7 +123,7 @@ references:
   - Requirements: [1.1](requirements.md#1.1)
   - References: docs/agent-notes/widget-extension.md
 
-- [ ] 13. Verify: make test + spell green, build embeds the extension <!-- id:7k39hjn -->
+- [x] 13. Verify: make test + spell green, build embeds the extension <!-- id:7k39hjn -->
   - make test — both XCTest and swift-testing totals green (new GlucoseWidgetShared + TrendsMath tests included); make spell clean.
   - make build-app embeds MeDataWidgets.appex with the App Group entitlement (first build may need -allowProvisioningUpdates).
   - Blocked-by: 7k39hjk (Wire publisher into App.swift + add medata://graph deep link), 7k39hjm (Implement GlucoseWidget data-driven kind + views)
