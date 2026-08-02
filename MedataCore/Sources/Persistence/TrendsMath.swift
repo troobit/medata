@@ -174,7 +174,9 @@ public enum TrendsMath {
     //
     // nil unless at least two readings fall in the window AND the earliest and
     // latest span `minSpan` — two near-simultaneous readings would otherwise
-    // amplify a millimole of noise into a spurious fast arrow.
+    // amplify a millimole of noise into a spurious fast arrow. The ≥2-readings
+    // guard also covers Req 3.4: a latest reading older than the window leaves
+    // fewer than 2 readings in it.
     public static func glucoseRate(
         _ readings: [GlucoseReading], now: Date,
         window: TimeInterval = 15 * 60, minSpan: TimeInterval = 10 * 60
