@@ -57,6 +57,12 @@ tools/segmenter/.venv/
 # Personal working notes — not tracked
 nextup.md
 
+# Variant comparison reports — per-session working artefacts of a multi-variant
+# run, not a spec deliverable. The spec's own documents record what the
+# comparison decided; the report itself is scratch. `**` matches any depth, so
+# this covers every spec domain (specs/PROCESS.md §3) without a per-spec entry.
+specs/**/comparison-report/
+
 # In-repo per-spec worktrees (git metadata still lives in .git/worktrees/)
 .worktrees/
 
