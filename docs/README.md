@@ -5,15 +5,17 @@ two photographs using on-device computer vision (no LLM, no network in the estim
 path). Start with the project [`README.md`](../README.md) for structure, build commands,
 and the **Phase 1 / 2 / 3 delivery plan**.
 
-**Current state:** Phase 1 — full pipeline runs on the iPhone 16 Pro (hardware floor since
-segmenter-foundation Decision 22) with a development
-stub in the segmenter slot (`specs/estimation/pipeline/requirements.md` §23). Carb numbers are
-placeholders; capture flow, gating, persistence and refusal paths are real.
+**Current state:** the full pipeline runs on the iPhone 16 Pro (hardware floor since
+segmenter-foundation Decision 22). Debug builds still use the development stub in the segmenter
+slot (`DEV_STUB_SEGMENTER`, `specs/estimation/pipeline/requirements.md` §23), but Release now
+bundles a real model (`coreml_ab812dc3aa9d`, 36 channels, palette v2). The MVP gate is the
+on-device verification of that model — see [`roadmap.md`](roadmap.md).
 
 ## Documents
 
 | Document | Purpose |
 |---|---|
+| [`roadmap.md`](roadmap.md) | **What to do next, in order.** The remaining path to MVP (one batched on-device session) and the capture → truth → error loop that makes accuracy improvable afterwards. |
 | [`architecture.md`](architecture.md) | **Start here.** Layers, modules, abstractions, and Swift/SwiftUI conventions — written for developers joining the project. Links to the specs for detail. |
 | [`ios-device-setup.md`](ios-device-setup.md) | Build, sign, and side-load the iOS app to the iPhone 16 Pro (or any LiDAR-equipped iPhone). |
 | [`mvp-unblock-runbook.md`](mvp-unblock-runbook.md) | **Do this now to unblock the MVP.** Ordered, time-boxed operational steps and go/no-go gates for producing the on-device segmenter — the one human/GPU/device-gated task left. Links into `ml-training.md` for detail. |
