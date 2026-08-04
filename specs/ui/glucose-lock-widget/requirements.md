@@ -7,7 +7,7 @@ A WidgetKit accessory widget that surfaces the current (or most-recent) blood-gl
 ## Non-Goals
 
 - No ActivityKit Live Activity — the always-present accessory widget is the sole surface (a time-boxed Live Activity is a possible future).
-- No Home Screen `systemSmall` glucose widget — Lock Screen and StandBy only.
+- No Home Screen-only glucose widget for its own sake. `systemSmall` is offered solely because StandBy's widget panel is fed from the Home Screen pool and accessory families never reach it; the Home Screen listing is a side effect of StandBy support, not a targeted placement (Decision 3, amended 2026-08-03).
 - No editing, logging, or dose entry from the widget — read-only glance surface (the existing launcher widgets own actions).
 - No new glucose ingestion, network calls, or estimation-path code — reads only what the app already stored.
 - No mg/dL display — mmol/L only, matching CGM Connect.
@@ -37,7 +37,7 @@ A WidgetKit accessory widget that surfaces the current (or most-recent) blood-gl
 **Acceptance Criteria:**
 
 1. <a name="2.1"></a>The widget SHALL be offered as a distinct kind in the widget gallery, separate from the existing launcher widgets, with a functional display name and description (no reassurance/disclaimer copy).  
-2. <a name="2.2"></a>The widget SHALL support the `accessoryCircular`, `accessoryRectangular`, and `accessoryInline` families, and SHALL render in StandBy.  
+2. <a name="2.2"></a>The widget SHALL support the `accessoryCircular`, `accessoryRectangular`, and `accessoryInline` families, and SHALL additionally support `systemSmall` — the family StandBy's widget panel draws from, without which the widget cannot render in StandBy at all (Decision 3, amended 2026-08-03).  
 3. <a name="2.3"></a>In `accessoryCircular`, the widget SHALL show the reading value, the status indicator (Req 4.2), and the trend arrow (Req 3) when a trend is available.  
 4. <a name="2.4"></a>In `accessoryRectangular`, the widget SHALL show the reading value, the status indicator, the trend arrow when available, and the reading's relative age (Req 5.5).  
 5. <a name="2.5"></a>In `accessoryInline`, the widget SHALL show the reading value and the trend arrow when available on a single line, within the family's single-line width.  
