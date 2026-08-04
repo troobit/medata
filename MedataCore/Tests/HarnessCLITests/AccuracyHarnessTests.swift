@@ -127,6 +127,89 @@ final class AccuracyHarnessTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // MARK: - Untruthed meals (bugfix: accuracy-harness-scores-untruthed-fixtures-as-zero)
+
+    // A run where NO meal carries truth must not report a perfect score. Before
+    // the fix this returned MAPE 0% and MAE = the predicted grams, so a device
+    // replay could pass the bar without a single measurement.
+    func testAllUntruthedMealsScoreNothingAndFailTheBar() {
+        // Predicted 20 g against proto3-default zero truth. The old behaviour:
+        // MAPE 0% (guard act > 0 → 0) and MAE 20 g ≤ 25 g → passesBar true.
+        let meals = (0..<5).map { i in makeMeal("m\(i)", predicted: 20, actual: 0) }
+
+        let report = AccuracyHarness.evaluate(meals: meals)
+
+        XCTAssertEqual(report.scoredCount, 0)
+        XCTAssertEqual(report.unscoredCount, 5)
+        XCTAssertFalse(report.passesBar,
+                       "A run that scored nothing must not pass the accuracy bar")
+        XCTAssertEqual(report.rows.count, 5)
+        XCTAssertTrue(report.rows.allSatisfy { !$0.isScored })
+        // Absent, not zero — a zero would read as an exact prediction.
+        XCTAssertTrue(report.rows.allSatisfy { $0.absoluteErrorG == nil })
+        XCTAssertTrue(report.rows.allSatisfy { $0.percentError == nil })
+    }
+
+    // Untruthed meals are excluded from the aggregates rather than dragging them
+    // toward zero: the metrics must equal those of the truthed meals alone.
+    func testUntruthedMealsAreExcludedFromMetrics() {
+        let truthed = [
+            makeMeal("t1", predicted: 90,  actual: 100),
+            makeMeal("t2", predicted: 110, actual: 100),
+        ]
+        let mixed = truthed + [makeMeal("u1", predicted: 500, actual: 0)]
+
+        let truthedOnly = AccuracyHarness.evaluate(meals: truthed)
+        let report = AccuracyHarness.evaluate(meals: mixed)
+
+        XCTAssertEqual(report.scoredCount, 2)
+        XCTAssertEqual(report.unscoredCount, 1)
+        XCTAssertEqual(report.mape, truthedOnly.mape, accuracy: 0.0001,
+                       "An untruthed meal must not move MAPE")
+        XCTAssertEqual(report.mae, truthedOnly.mae, accuracy: 0.0001,
+                       "An untruthed meal must not move MAE")
+        // The wildly-wrong untruthed prediction is still reported, just unscored.
+        XCTAssertEqual(report.rows.count, 3)
+        XCTAssertEqual(report.rows.last?.predictedCarbsG, 500)
+        XCTAssertFalse(report.rows.last?.isScored ?? true)
+    }
+
+    // Scored rows carry the per-fixture error the aggregates are built from.
+    func testScoredRowsCarryPerFixtureError() {
+        let report = AccuracyHarness.evaluate(meals: [
+            makeMeal("m1", predicted: 75, actual: 100),
+        ])
+
+        let row = try? XCTUnwrap(report.rows.first)
+        XCTAssertEqual(row?.fixtureID, "m1")
+        XCTAssertEqual(row?.groundTruthCarbsG, 100)
+        XCTAssertEqual(row?.predictedCarbsG, 75)
+        XCTAssertEqual(row?.absoluteErrorG ?? 0, 25, accuracy: 0.0001)
+        XCTAssertEqual(row?.percentError ?? 0, 25, accuracy: 0.0001)
+        XCTAssertTrue(row?.isScored ?? false)
+    }
+
+    // An empty run scores nothing and must not pass the bar either.
+    func testEmptyRunFailsTheBar() {
+        let report = AccuracyHarness.evaluate(meals: [])
+        XCTAssertEqual(report.scoredCount, 0)
+        XCTAssertEqual(report.unscoredCount, 0)
+        XCTAssertTrue(report.rows.isEmpty)
+        XCTAssertFalse(report.passesBar)
+    }
+
+    // A negative or non-finite truth is not usable truth.
+    func testNonPositiveAndNonFiniteTruthIsNotScored() {
+        let report = AccuracyHarness.evaluate(meals: [
+            makeMeal("neg", predicted: 50, actual: -10),
+            makeMeal("nan", predicted: 50, actual: .nan),
+            makeMeal("inf", predicted: 50, actual: .infinity),
+        ])
+        XCTAssertEqual(report.scoredCount, 0)
+        XCTAssertEqual(report.unscoredCount, 3)
+        XCTAssertFalse(report.passesBar)
+    }
+
     private func makeMeal(
         _ id: String,
         predicted: Float,
