@@ -36,7 +36,7 @@ BUILD_STAMP := $(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell worktree
+.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell worktree harness-accuracy
 
 help:
 	@echo "MeData targets:"
@@ -45,6 +45,9 @@ help:
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
+	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
+	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
+	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
 	@echo "  build-app            xcodebuild MeData for device, Debug  [DEVICE_UDID=$(DEVICE_UDID)]"
 	@echo "  deploy-device        build-app + install + launch on the device, with build stamp"
 	@echo "  deploy-release       Release build with the REAL bundled segmenter, install + launch"
@@ -77,6 +80,23 @@ test:
 
 spell:
 	bash tools/check_spelling.sh
+
+# Replay recorded capture bundles through the offline accuracy harness.
+# Pull bundles off the device first (Files app, or the devicectl recipe in
+# docs/agent-notes/device-build-and-test.md).
+#
+# Device bundles record ground truth as zero — it is back-filled off-device — so
+# a field replay reports every meal as UNSCORED and exits non-zero. That is the
+# harness working correctly, not a failure of the captures.
+harness-accuracy:
+	@test -n "$(FIXTURES)" || { \
+	  echo "usage: make harness-accuracy FIXTURES=<dir> SHA=<checkpoint-sha256> [OUT=<file>]"; \
+	  echo "  SHA must match the fixtures' segmenter stamp, e.g. coreml_ab812dc3aa9d"; \
+	  exit 1; }
+	swift run HarnessCLI accuracy \
+	  --fixtures-dir "$(FIXTURES)" \
+	  --checkpoint-sha256 "$(SHA)" \
+	  $(if $(OUT),--output "$(OUT)",)
 
 build-app:
 	$(XCODEBUILD) -configuration Debug -derivedDataPath $(DERIVED_DEBUG) \

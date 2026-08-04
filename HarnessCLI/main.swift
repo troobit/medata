@@ -77,10 +77,70 @@ struct AccuracyJSON: Encodable {
     let mape: Float; let mae: Float
     let ci95Lower: Float?; let ci95Upper: Float?
     let passesBar: Bool
+    // Meals that carried usable ground truth versus those that did not. A device
+    // capture bundle records truth as zero (back-filled off-device), so a field
+    // replay is normally all-unscored — which is why `mape`/`mae` must be read
+    // together with `scoredCount`.
+    let scoredCount: Int; let unscoredCount: Int
+    // Distinct segmenter checkpoints across the loaded fixtures. Normally one;
+    // more than one means the run mixed models and the aggregate is not
+    // attributable to any single checkpoint.
+    let checkpointSHAs: [String]
     let perClass: [String: PerClassJSON]
+    let rows: [RowJSON]
     struct PerClassJSON: Encodable {
         let mape: Float; let mae: Float
         let sampleCount: Int; let calibrationStatus: String
+    }
+    struct RowJSON: Encodable {
+        let fixtureID: String; let capturePath: String
+        let groundTruthCarbsG: Float; let predictedCarbsG: Float
+        // Null when the meal carries no truth — absent, not zero.
+        let absoluteErrorG: Float?; let percentError: Float?
+        let scored: Bool
+    }
+}
+
+// Writes the accuracy artifact and applies the exit policy, shared by the
+// `accuracy` and legacy-eval paths so the two cannot drift apart.
+func emitAccuracy(_ report: AccuracyReport,
+                  checkpointSHAs: [String] = [],
+                  to outputPath: String) throws {
+    try writeJSON(AccuracyJSON(
+        mape: report.mape, mae: report.mae,
+        ci95Lower: report.ci95Lower, ci95Upper: report.ci95Upper,
+        passesBar: report.passesBar,
+        scoredCount: report.scoredCount, unscoredCount: report.unscoredCount,
+        checkpointSHAs: checkpointSHAs,
+        perClass: report.perClassStats.mapValues { s in
+            AccuracyJSON.PerClassJSON(mape: s.mape, mae: s.mae,
+                                      sampleCount: s.sampleCount,
+                                      calibrationStatus: s.calibrationStatus.rawValue)
+        },
+        rows: report.rows.map { r in
+            AccuracyJSON.RowJSON(
+                fixtureID: r.fixtureID, capturePath: r.capturePath,
+                groundTruthCarbsG: r.groundTruthCarbsG,
+                predictedCarbsG: r.predictedCarbsG,
+                absoluteErrorG: r.absoluteErrorG, percentError: r.percentError,
+                scored: r.isScored)
+        }
+    ), to: outputPath)
+
+    if report.unscoredCount > 0 {
+        fputs("WARNING: \(report.unscoredCount) of \(report.rows.count) meals carry no "
+              + "ground truth and were excluded from MAPE/MAE. Device capture bundles "
+              + "record truth as zero; back-fill it off-device before reading these "
+              + "aggregates as accuracy.\n", stderr)
+    }
+    guard report.scoredCount > 0 else {
+        fputs("FAIL: no meal carried ground truth — nothing was scored.\n", stderr)
+        exit(1)
+    }
+    if !report.passesBar {
+        fputs("FAIL: MAPE=\(report.mape)% MAE=\(report.mae)g over "
+              + "\(report.scoredCount) scored meal(s)\n", stderr)
+        exit(1)
     }
 }
 
@@ -233,19 +293,8 @@ func runAccuracy(args: Args) throws {
         )
     }
     let report = AccuracyHarness.evaluate(meals: evalMeals)
-    try writeJSON(AccuracyJSON(
-        mape: report.mape, mae: report.mae,
-        ci95Lower: report.ci95Lower, ci95Upper: report.ci95Upper,
-        passesBar: report.passesBar,
-        perClass: report.perClassStats.mapValues { s in
-            AccuracyJSON.PerClassJSON(mape: s.mape, mae: s.mae,
-                                     sampleCount: s.sampleCount,
-                                     calibrationStatus: s.calibrationStatus.rawValue)
-        }
-    ), to: args.outputPath)
-    if !report.passesBar {
-        fputs("FAIL: MAPE=\(report.mape)% MAE=\(report.mae)g\n", stderr); exit(1)
-    }
+    let checkpointSHAs = Set(fixtures.map(\.segmenterCheckpointSha256)).sorted()
+    try emitAccuracy(report, checkpointSHAs: checkpointSHAs, to: args.outputPath)
 }
 
 // MARK: - calibrate (task 58, extended by nutrition5k-calibration tasks 21–22)
@@ -534,19 +583,9 @@ func runLegacyEval(outcome: CalibrationOutcome, args: Args) throws {
                              groundTruthTotalCarbsG: m.groundTruthTotalCarbsG)
     }
     let report = AccuracyHarness.evaluate(meals: evalMeals)
-    try writeJSON(AccuracyJSON(
-        mape: report.mape, mae: report.mae,
-        ci95Lower: report.ci95Lower, ci95Upper: report.ci95Upper,
-        passesBar: report.passesBar,
-        perClass: report.perClassStats.mapValues { s in
-            AccuracyJSON.PerClassJSON(mape: s.mape, mae: s.mae,
-                                     sampleCount: s.sampleCount,
-                                     calibrationStatus: s.calibrationStatus.rawValue)
-        }
-    ), to: args.outputPath)
-    if !report.passesBar {
-        fputs("FAIL: MAPE=\(report.mape)% MAE=\(report.mae)g\n", stderr); exit(1)
-    }
+    // Legacy eval works from calibration inputs, not fixtures, so no checkpoint
+    // set is available here.
+    try emitAccuracy(report, to: args.outputPath)
 }
 
 // MARK: - seg-bench (task 64)

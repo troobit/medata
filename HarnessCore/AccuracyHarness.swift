@@ -47,45 +47,90 @@ public struct LatencyStats: Sendable {
     public let mean: Double
 }
 
+// Per-meal error row. `absoluteErrorG`/`percentError` are nil for an untruthed
+// meal: no truth means no error, and reporting zero (or |pred − 0|) would read
+// as a perfect or merely-large result rather than an absent measurement.
+public struct MealErrorRow: Sendable, Equatable {
+    public let fixtureID: String
+    public let capturePath: String
+    public let groundTruthCarbsG: Float
+    public let predictedCarbsG: Float
+    public let absoluteErrorG: Float?
+    public let percentError: Float?
+
+    public var isScored: Bool { absoluteErrorG != nil }
+}
+
 // Full accuracy report emitted to CI.
 public struct AccuracyReport: Sendable {
-    // Point-estimate MAPE (%) over all eval meals (Req 21.3).
+    // Point-estimate MAPE (%) over the SCORED eval meals (Req 21.3).
     public let mape: Float
-    // Point-estimate MAE (g) over all eval meals.
+    // Point-estimate MAE (g) over the SCORED eval meals.
     public let mae: Float
-    // CI (bootstrap 95%) per Req 21.8 — nil when n < 30.
+    // CI (bootstrap 95%) per Req 21.8 — nil when scored n < 30.
     public let ci95Lower: Float?
     public let ci95Upper: Float?
     // Per-class breakdown distinguishing cal/pooled/unity statuses (Req 21.4).
     public let perClassStats: [String: ClassAccuracyStats]
     // Per-stage latency keyed by stage name, then by capturePath raw value (Req 21.5).
     public let latencyStats: [String: [String: LatencyStats]]
+    // Meals carrying usable ground truth, and those that do not. Device capture
+    // bundles record truth as zero by design (back-filled off-device), so an
+    // unscored count is the normal case for a field replay, not an error.
+    public let scoredCount: Int
+    public let unscoredCount: Int
+    // Per-meal rows, scored and unscored alike, in input order.
+    public let rows: [MealErrorRow]
+
     // Whether the accuracy bar is met (MAPE < 20% AND MAE ≤ 25 g, per Req 21.3).
-    public var passesBar: Bool { mape < 20.0 && mae <= 25.0 }
+    // A run that scored nothing cannot pass a bar it never measured.
+    public var passesBar: Bool { scoredCount > 0 && mape < 20.0 && mae <= 25.0 }
 }
 
 // Computes MAPE, MAE, per-class breakdown, and latency stats from eval meals.
 public enum AccuracyHarness {
 
     public static func evaluate(meals: [MealEvalInput]) -> AccuracyReport {
-        guard !meals.isEmpty else {
-            return AccuracyReport(
-                mape: 0, mae: 0, ci95Lower: nil, ci95Upper: nil,
-                perClassStats: [:], latencyStats: [:]
+        let rows = meals.map { m -> MealErrorRow in
+            let predicted = m.predictedCarbsPerClass.values.reduce(0, +)
+            let truth = m.groundTruthTotalCarbsG
+            let scored = isScorable(truth)
+            return MealErrorRow(
+                fixtureID: m.fixtureID,
+                capturePath: m.capturePath.rawValue,
+                groundTruthCarbsG: truth,
+                predictedCarbsG: predicted,
+                absoluteErrorG: scored ? abs(predicted - truth) : nil,
+                percentError: scored ? abs(predicted - truth) / truth * 100 : nil
             )
         }
 
-        // Total predicted carbs per meal.
-        let predictedTotals = meals.map { m in
+        // Only meals with usable ground truth contribute to MAPE/MAE. Scoring an
+        // untruthed meal against zero yields MAPE 0% and MAE = the predicted
+        // grams — a confident pass on a measurement that never happened.
+        let scoredMeals = meals.filter { isScorable($0.groundTruthTotalCarbsG) }
+        let unscoredCount = meals.count - scoredMeals.count
+
+        guard !scoredMeals.isEmpty else {
+            return AccuracyReport(
+                mape: 0, mae: 0, ci95Lower: nil, ci95Upper: nil,
+                perClassStats: perClassStats(meals: meals),
+                latencyStats: latencyStats(meals: meals),
+                scoredCount: 0, unscoredCount: unscoredCount, rows: rows
+            )
+        }
+
+        // Total predicted carbs per scored meal.
+        let predictedTotals = scoredMeals.map { m in
             m.predictedCarbsPerClass.values.reduce(0, +)
         }
-        let groundTruths = meals.map(\.groundTruthTotalCarbsG)
+        let groundTruths = scoredMeals.map(\.groundTruthTotalCarbsG)
 
         let mape = pointMAPE(predicted: predictedTotals, actual: groundTruths)
         let mae  = pointMAE(predicted: predictedTotals, actual: groundTruths)
 
         let (ciLower, ciUpper): (Float?, Float?)
-        if meals.count >= 30 {
+        if scoredMeals.count >= 30 {
             let ci = bootstrapCI95(predicted: predictedTotals, actual: groundTruths)
             ciLower = ci.lower
             ciUpper = ci.upper
@@ -94,6 +139,9 @@ public enum AccuracyHarness {
             ciUpper = nil
         }
 
+        // Per-class and latency breakdowns are descriptive of the whole run
+        // (they report predicted distribution, status and timing, not error),
+        // so they stay over every meal.
         let perClass = perClassStats(meals: meals)
         let latency  = latencyStats(meals: meals)
 
@@ -101,9 +149,16 @@ public enum AccuracyHarness {
             mape: mape, mae: mae,
             ci95Lower: ciLower, ci95Upper: ciUpper,
             perClassStats: perClass,
-            latencyStats: latency
+            latencyStats: latency,
+            scoredCount: scoredMeals.count,
+            unscoredCount: unscoredCount,
+            rows: rows
         )
     }
+
+    // A meal is scorable when it carries a finite, strictly positive truth.
+    // Proto3 defaults an unset ground_truth_total_carbs_g to 0.
+    static func isScorable(_ truth: Float) -> Bool { truth.isFinite && truth > 0 }
 
     // MARK: - Metric helpers
 

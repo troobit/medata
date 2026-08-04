@@ -88,28 +88,34 @@ tensor). A sixteen-item session is ~3 GB and a field day is ~6 GB. Clear
 
 ---
 
-## 3. P1 — Make the replay loop reachable and honest (small code, no new spec)
+## 3. P1 — Make the replay loop reachable and honest — **DONE 2026-08-04**
 
-Four small fixes. None is more than a few dozen lines, and together they turn the harness from
-"technically present" into "runnable and trustworthy". Do these while the device session findings
-are still warm.
+Landed in `specs/bugfixes/accuracy-harness-scores-untruthed-fixtures-as-zero/`. `make test` green
+(XCTest 515 executed / 5 skipped / 0 failures; swift-testing 203 in 25 suites), `make spell` clean.
 
-1. **Fix the zero-truth scoring bug.** `HarnessCore/AccuracyHarness.swift:113` does
-   `guard act > 0 else { return 0 }`, and `pointMAE` averages against zero. Device bundles record
-   truth as zero by design, so replaying one today reports **MAPE 0 % / MAE = the predicted grams** —
-   a confidently wrong pass. Untruthed fixtures must be *excluded from the metric and counted
-   separately* as unscored, never scored as perfect. This is the one item here that is a correctness
-   defect rather than an enhancement; it belongs in the `specs/bugfixes/` lane.
-2. **Add Make targets.** The Makefile has no harness entry point at all, which puts the loop
-   outside the project convention that tooling runs through `make`. Add `make harness-accuracy`
-   and `make harness-replay FIXTURE=…`.
-3. **Emit per-fixture rows.** `AccuracyJSON` in `HarnessCLI/main.swift` emits aggregates only.
-   The row shape wanted here — `truthCarbsG`, `estimateCarbsG`, `absoluteErrorG` — already exists as
-   `Report.MealRow` in `MedataCore/Sources/Benchmark/BenchmarkReport.swift` but is app-side and
-   unreachable from the CLI. Mirror it in the harness output rather than inventing a second shape.
-4. **Remove the checkpoint-SHA friction.** `FixtureLoader.validate` demands exact equality with
-   `--checkpoint-sha256`, so the operator must know and retype `coreml_ab812dc3aa9d`. Add a
-   discovery/relaxed flag so replaying a pulled bundle is one command.
+1. **Zero-truth scoring bug — fixed.** `AccuracyHarness.evaluate` now partitions on
+   `isScorable(truth) = truth.isFinite && truth > 0`; only scored meals feed MAPE, MAE and the
+   bootstrap CI, and `passesBar` gained a `scoredCount > 0` conjunct. The fix is at the aggregation
+   layer, **not** in `pointMAPE`/`pointMAE` — `perClassStats` deliberately calls those helpers
+   against a zeros array, so changing their semantics would have silently altered the per-class
+   block. See Decision 1.
+2. **`make harness-accuracy` added** (`FIXTURES=`, `SHA=`, optional `OUT=`), with help text stating
+   that untruthed bundles report UNSCORED and exit non-zero, so that is not misread as a defect in
+   the captures.
+3. **Per-fixture rows emitted.** `AccuracyReport.rows` / `AccuracyJSON.rows` carry `fixtureID`,
+   `capturePath`, truth, prediction, `absoluteErrorG` and `percentError` — the last two **null**
+   for an unscored meal rather than zero (Decision 2). The report also now lists the distinct
+   `checkpointSHAs` across the loaded fixtures, so a run that mixed models is visible.
+4. **Checkpoint-SHA relaxation — dropped, deliberately.** The premise was wrong: on a mismatch
+   `FixtureLoader.Error.checkpointMismatch` already carries `got:` and the CLI prints it, so the
+   operator learns the fixtures' actual stamp from the first failed run. The friction is one extra
+   run, and a relaxed flag would let a run silently mix checkpoints — exactly what the new
+   `checkpointSHAs` field exists to expose. Not worth trading a guard for.
+
+Two adjacent defects were found and **not** fixed here, both recorded in the bugfix report:
+`perClassStats` reports `mape: 0` and `mae` = mean predicted grams for every class by construction
+(same category of defect, pre-existing and documented); and `runAccuracy` still builds
+`ClassPalette.v1Standard` while the promoted bundled model is 36-channel palette v2.
 
 ---
 
