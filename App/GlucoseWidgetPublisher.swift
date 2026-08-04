@@ -1,5 +1,6 @@
 import Foundation
 import GlucoseWidgetShared
+import OSLog
 import Persistence
 import WidgetKit
 
@@ -40,6 +41,27 @@ actor GlucoseWidgetPublisher {
     // never-recorded.
     private static let displayHorizon: TimeInterval = 24 * 60 * 60
 
+    // The window's UPPER bound, and not cosmetic. It was `now`, which silently
+    // dropped any reading timestamped ahead of the device clock — and CGM rows
+    // routinely are, which is precisely why `GlucoseTimeline.render` clamps a
+    // future reading's age to zero ("clock skew, not a prediction", Req 5.5).
+    // With the bound at `now` the render layer's skew handling was unreachable
+    // and the widget sat one reading behind for as long as the skew lasted,
+    // while the Trends screen — which queries to the end of the calendar day —
+    // showed the row perfectly well.
+    //
+    // Bounded rather than open-ended: a future reading renders as fresh, so an
+    // unbounded window would let one corrupt far-future row pin the widget to a
+    // wrong value indefinitely. An hour absorbs real clock and timezone-rounding
+    // skew while capping that blast radius.
+    private static let futureSkewAllowance: TimeInterval = 60 * 60
+
+    // Every interpolation is `.public`: os_log redacts non-literals by default,
+    // which would render the timestamps here as `<private>` — useless for the
+    // one question these lines exist to answer (did a reload get requested for
+    // this reading, and when).
+    private let log = Logger(subsystem: "ie.medata.app", category: "GlucoseWidget")
+
     private let store: any PersistenceStore
     private let changes: AsyncStream<Void>
 
@@ -53,34 +75,70 @@ actor GlucoseWidgetPublisher {
     }
 
     private func run() async {
-        await publishIfChanged()
+        log.info("event=publisher.start")
+        await publishIfChanged(trigger: "prime")
         for await _ in changes {
-            await publishIfChanged()
+            await publishIfChanged(trigger: "tick")
         }
+        // Reached only if the store's broadcaster finishes the stream. If this
+        // ever logs, the widget has silently stopped updating for the rest of
+        // the process lifetime.
+        log.error("event=publisher.streamEnded")
     }
 
     // Writes and reloads ONLY when the recomputed snapshot differs from the
     // stored one (Req 1.3). An unchanged recompute — the common case for a
     // tick from an insulin or intake write — costs one read and nothing else.
-    private func publishIfChanged() async {
-        let snapshot = await currentSnapshot(now: Date())
-        guard snapshot != GlucoseSnapshotStore.read() else { return }
+    private func publishIfChanged(trigger: String) async {
+        let now = Date()
+        let snapshot = await currentSnapshot(now: now)
+        let stored = GlucoseSnapshotStore.read()
+        guard snapshot != stored else {
+            log.debug("""
+                event=publish.skipped trigger=\(trigger, privacy: .public) \
+                reason=unchanged reading=\(Self.stamp(snapshot.readingDate), privacy: .public)
+                """)
+            return
+        }
         GlucoseSnapshotStore.write(snapshot)
         WidgetCenter.shared.reloadTimelines(ofKind: GlucoseSnapshotStore.widgetKind)
+        // `reloadTimelines` is a REQUEST, not a refresh: WidgetKit spends it
+        // from a daily budget and may defer it by many minutes. So this line
+        // means "asked", never "shown" — a widget lagging behind these
+        // timestamps is the system throttling, not a missed write.
+        log.info("""
+            event=publish.reloadRequested trigger=\(trigger, privacy: .public) \
+            was=\(Self.stamp(stored.readingDate), privacy: .public) \
+            now=\(Self.stamp(snapshot.readingDate), privacy: .public) \
+            lagSeconds=\(Int(now.timeIntervalSince(snapshot.readingDate ?? now)), privacy: .public)
+            """)
+    }
+
+    private static func stamp(_ date: Date?) -> String {
+        date.map { ISO8601DateFormatter().string(from: $0) } ?? "none"
     }
 
     // The last 24 hours of `bsl` rows condensed into the snapshot: the newest
     // row is the reading, the trailing 15 minutes drive the trend. A throw
     // (corrupt row) degrades to never-recorded rather than crashing the app.
     private func currentSnapshot(now: Date) async -> GlucoseSnapshot {
-        let window = now.addingTimeInterval(-Self.displayHorizon)...now
-        let events = (try? await store.events(in: window, type: EventType.bsl)) ?? []
+        let oldest = now.addingTimeInterval(-Self.displayHorizon)
+        let newest = now.addingTimeInterval(Self.futureSkewAllowance)
+        let events = (try? await store.events(in: oldest...newest, type: EventType.bsl)) ?? []
         let readings = events.compactMap { event in
             event.value.map { GlucoseReading(timestamp: event.timestamp, mmolL: $0) }
         }
         // `events(in:type:)` is ordered `(timestamp ASC, id ASC)`, so the last
         // row is the most recent one.
         guard let latest = readings.last else { return .neverRecorded }
+        // Confirms or refutes the skew diagnosis from the field: if this fires,
+        // the old `...now` bound was hiding this row from the widget.
+        if latest.timestamp > now {
+            log.info("""
+                event=publish.futureReading \
+                skewSeconds=\(Int(latest.timestamp.timeIntervalSince(now)), privacy: .public)
+                """)
+        }
         return GlucoseSnapshot.make(
             mmolL: latest.mmolL,
             readingDate: latest.timestamp,
