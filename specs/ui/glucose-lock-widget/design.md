@@ -176,7 +176,7 @@ Status is a **non-colour** channel that survives the Lock Screen's monochrome vi
 - Staleness de-emphasis (Req 5.2) uses `.opacity(...)`, which survives monochrome; colour does not carry meaning.
 - Per-status `Color` is applied only under the full-colour StandBy day render (`@Environment(\.widgetRenderingMode) == .fullColor`) as an enhancement layered on the token (Req 4.3).
 
-Per family (Req 2.3–2.5): `accessoryCircular` = value + status token + arrow (its only staleness cue is the opacity, since there is no room for age text — stated in Req 2.3/5.2); `accessoryRectangular` = value + token + arrow + age; `accessoryInline` = value + arrow glyph on one line, always monochrome. All use `.containerBackground(for: .widget) { Color.clear }` (matches the existing `LauncherView`). Widget gallery/display copy is functional only (Req 2.1/8.2).
+Per family (Req 2.3–2.5): `accessoryCircular` = value + status token + arrow (its only staleness cue is the opacity, since there is no room for age text — stated in Req 2.3/5.2); `accessoryRectangular` = value + token + arrow + age; `accessoryInline` = value + arrow glyph on one line, always monochrome. `systemSmall` = the same content as `accessoryRectangular` at the larger type its tile affords; it exists to reach StandBy, whose widget panel draws from the Home Screen pool and never shows accessory families (Req 2.2, Decision 3 as amended). All use `.containerBackground(for: .widget) { Color.clear }` (matches the existing `LauncherView`). Widget gallery/display copy is functional only (Req 2.1/8.2).
 
 ### Deep link (Req 7)
 

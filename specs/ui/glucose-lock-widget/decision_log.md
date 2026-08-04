@@ -65,9 +65,9 @@ A Live Activity is ephemeral: it must be explicitly started and self-expires (8h
 
 ---
 
-## Decision 3: Placements — Lock Screen accessory families + StandBy, no Home Screen small
+## Decision 3: Placements — Lock Screen accessory families + StandBy via `systemSmall`
 
-**Date**: 2026-07-27
+**Date**: 2026-07-27 (amended 2026-08-03)
 **Status**: accepted
 
 ### Context
@@ -76,20 +76,35 @@ WidgetKit offers accessory families (`accessoryCircular`, `accessoryRectangular`
 
 ### Decision
 
-Support `accessoryCircular`, `accessoryRectangular`, `accessoryInline`, and StandBy. Do not offer a Home Screen `systemSmall` glucose widget.
+Support `accessoryCircular`, `accessoryRectangular`, `accessoryInline`, and `systemSmall`. The Lock Screen accessory families are the intended surface; `systemSmall` exists to reach StandBy.
 
 ### Rationale
 
-The reference surface (the FreeStyle LibreLink screenshot) and the "minimise interaction / glance" goal are Lock Screen concerns. StandBy reuses the accessory rendering for near-free. A Home Screen tile is a different placement with no stated need.
+The reference surface (the FreeStyle LibreLink screenshot) and the "minimise interaction / glance" goal are Lock Screen concerns, so the accessory families remain the design target.
+
+StandBy is not free, as this decision originally assumed. StandBy's widget panel is populated from the **Home Screen** widget pool: `systemSmall` is auto-promoted into it, and accessory families never appear there. `supportedFamilies` is placement-agnostic, so there is no way to expose `systemSmall` to StandBy while withholding it from the Home Screen. Supporting StandBy therefore requires accepting a Home Screen listing.
+
+Given the choice between dropping StandBy (a stated Req 2 user story) and accepting an unwanted Home Screen listing, the listing is the lesser cost: it is inert unless the user places it, and the `systemSmall` view reuses the existing render states, adding layout but no new logic or data path.
+
+### Amendment (2026-08-03)
+
+The original decision claimed "StandBy reuses the accessory rendering for near-free" and on that basis rejected `systemSmall` while requiring StandBy — a combination that cannot be built. The error surfaced during task 14 on-device verification, when the widget proved unreachable in StandBy. The requirement was kept and the rejection reversed; Req 2.2 and the Non-Goals list were amended to match.
 
 ### Alternatives Considered
 
-- **Add systemSmall**: Mirror the launcher widgets — Rejected: no requirement; expands rendering/layout surface without demand.
+- **Accessory families only, drop StandBy**: Honour the original no-`systemSmall` stance by amending Req 2.2 to remove the StandBy promise — Rejected: StandBy is a genuine glance surface for a charging bedside phone, which is squarely the feature's use case.
+- **`systemSmall` restricted to StandBy**: Offer the family to StandBy but hide it from the Home Screen gallery — Rejected: WidgetKit exposes no such control; `supportedFamilies` cannot discriminate by placement.
+- **Separate StandBy-only widget kind**: A fourth kind carrying only `systemSmall` — Rejected: it would still be listed on the Home Screen, so it buys nothing while adding a kind and splitting the gallery.
 
 ### Consequences
 
-**Positive:** Focused rendering surface; StandBy comes along cheaply.
-**Negative:** No at-a-glance glucose on the Home Screen; revisit if requested.
+**Positive:**
+- StandBy actually works, so Req 2.2 and the Req 4.3 full-colour enhancement are reachable rather than permanently failing.
+- The `systemSmall` view reuses the existing four render states — no new logic, data path, or timeline behaviour.
+
+**Negative:**
+- Glucose is listed as a Home Screen widget, which this decision originally set out to avoid.
+- One more layout to keep consistent as the render states evolve.
 
 ---
 

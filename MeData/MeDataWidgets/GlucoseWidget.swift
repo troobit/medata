@@ -64,7 +64,9 @@ struct GlucoseWidget: Widget {
         }
         .configurationDisplayName("Glucose")
         .description("Shows the latest glucose reading and its trend.")
-        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .supportedFamilies([
+            .accessoryCircular, .accessoryRectangular, .accessoryInline, .systemSmall,
+        ])
     }
 }
 
@@ -90,6 +92,7 @@ struct GlucoseWidgetView: View {
         switch family {
         case .accessoryCircular: circular
         case .accessoryInline: inline
+        case .systemSmall: small
         default: rectangular
         }
     }
@@ -160,6 +163,48 @@ struct GlucoseWidgetView: View {
             .opacity(Self.staleOpacity)
         case .neverRecorded:
             Text("No glucose reading").font(.caption).opacity(Self.staleOpacity)
+        }
+    }
+
+    // The StandBy surface. StandBy's widget panel is fed from the Home Screen
+    // pool, so `systemSmall` is what reaches it — the accessory families never
+    // do. Offering it therefore also lists the kind on the Home Screen; that is
+    // the unavoidable price of StandBy, not a second placement we wanted.
+    // Content matches `rectangular` (value, token, arrow, age) at the larger
+    // type the panel affords, so the status channel and staleness cues stay
+    // identical across surfaces.
+    @ViewBuilder
+    private var small: some View {
+        switch entry.render {
+        case let .fresh(value, status, trend):
+            VStack(spacing: 2) {
+                Text(value)
+                    .font(.system(size: 44, weight: .semibold, design: .rounded))
+                    .foregroundStyle(tint(status))
+                HStack(spacing: 4) {
+                    if let token = token(status) {
+                        Text(token).fontWeight(.bold).foregroundStyle(tint(status))
+                    }
+                    if let trend { Text(trend.arrow) }
+                }
+                .font(.title3)
+                freshAge
+            }
+        case let .stale(value, age):
+            VStack(spacing: 2) {
+                Text(value).font(.system(size: 44, weight: .semibold, design: .rounded))
+                Text(age).font(.caption)
+            }
+            .opacity(Self.staleOpacity)
+        case let .lastReading(age):
+            VStack(spacing: 2) {
+                Image(systemName: "clock").font(.title2)
+                Text("Last reading").font(.callout)
+                Text(age).font(.caption)
+            }
+            .opacity(Self.staleOpacity)
+        case .neverRecorded:
+            Text("No glucose reading").font(.callout).opacity(Self.staleOpacity)
         }
     }
 

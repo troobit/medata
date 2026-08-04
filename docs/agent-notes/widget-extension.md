@@ -21,9 +21,17 @@ belong to the glucose kind alone. The 30 MB memory cap and the no-GRDB /
 no-network rule bind every kind in the bundle, glucose included.
 
 Families differ by kind: the launchers support `accessoryCircular`,
-`accessoryRectangular` and `systemSmall`; glucose supports `accessoryCircular`,
-`accessoryRectangular` and `accessoryInline` — no `systemSmall`, because the
-kind exists for the Lock Screen glance.
+`accessoryRectangular` and `systemSmall`; glucose supports those three plus
+`accessoryInline`.
+
+Glucose carries `systemSmall` **only to reach StandBy**. StandBy's widget panel
+is populated from the Home Screen pool — `systemSmall` is auto-promoted into it
+and accessory families never appear there — and `supportedFamilies` cannot
+discriminate by placement, so the Home Screen listing is an unavoidable side
+effect, not a wanted placement. Decision 3 originally rejected `systemSmall`
+while requiring StandBy, which is unbuildable; it was amended on 2026-08-03
+after task-14 device verification found the widget absent from StandBy. Do not
+"tidy up" the family back out without also dropping the StandBy requirement.
 
 ## pbxproj setup (hand-edited, objectVersion 77)
 
