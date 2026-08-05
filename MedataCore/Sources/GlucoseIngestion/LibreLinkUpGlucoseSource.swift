@@ -6,6 +6,11 @@
 // setCredentials(email:password:) BEFORE connect and live only in the
 // Keychain (Req 3.1); disconnect wipes them (Req 6.2).
 import Foundation
+// For TrendsMath / GlucoseReading — the adaptive poll interval reuses the
+// display's own rate maths so "falling fast" means the same thing to the
+// scheduler as to the arrow the user is looking at. GlucoseIngestion already
+// depends on Persistence.
+import Persistence
 
 public actor LibreLinkUpGlucoseSource: GlucoseSource {
 
@@ -20,7 +25,27 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // Req 3.2: fetch at an interval no longer than 15 minutes while
     // foregrounded. The spike confirmed ≤15 min is comfortably inside the
     // API's rate limits (3-minute polling has caused account bans).
-    private static let pollInterval: TimeInterval = 15 * 60
+    static let pollInterval: TimeInterval = 15 * 60
+
+    // The tightened interval used while glucose is low or falling fast
+    // (see `nextPollInterval`). Deliberately 5 minutes, not 3: 3-minute
+    // polling is the rate that has caused bans, so this stays clear of it
+    // even during a sustained hypo.
+    static let urgentPollInterval: TimeInterval = 5 * 60
+
+    // Below this the next poll tightens. Set at the top of the target band
+    // (`TrendsMath.targetLowMmolL` = 3.9) plus a margin, so the tightening
+    // starts on the approach to a low rather than after arriving at one —
+    // which is the whole point, given the poll is what makes the display
+    // late.
+    static let urgentThresholdMmolL = 5.0
+
+    // …or if glucose is dropping at least this fast, whatever the level:
+    // `TrendsMath.mediumRateThreshold`, the edge of the plain "falling"
+    // arrow. From 8.0 that reaches 3.9 in about 37 minutes — two 15-minute
+    // polls, i.e. exactly the case where the baseline interval would show a
+    // comfortable number while the real one crossed the band.
+    static let urgentFallRateMmolLPerMin = -TrendsMath.mediumRateThreshold
 
     // Non-secret persisted state; the token lives in the Keychain with the
     // credentials.
@@ -34,6 +59,10 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     private var sink: (any GlucoseIngestSink)?
     private var session: LibreLinkUpSession?
     private var pollTask: Task<Void, Never>?
+    // The wait the poll loop uses next. Updated after every successful fetch
+    // by `nextPollInterval`; starts at the baseline so a first fetch that
+    // fails cannot leave the loop spinning at the urgent rate.
+    private var currentPollInterval: TimeInterval = LibreLinkUpGlucoseSource.pollInterval
     private var connectionState: GlucoseConnectionState = .notConnected
     // Newest native instant a committed ingest has delivered this session
     // (Decision 10 semantics).
@@ -128,6 +157,7 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             _ = try await sink.ingest(samples, from: id)
             guard generation == connectionGeneration else { return false }
             lastSuccessAt = Date()
+            currentPollInterval = Self.nextPollInterval(after: samples, now: Date())
             if let latest = samples.map(\.nativeInstant).max() {
                 lastDeliveredAt = max(lastDeliveredAt ?? .distantPast, latest)
             }
@@ -217,11 +247,44 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
 
     // MARK: - Scheduling (Req 3.2)
 
+    // Adaptive interval (cgm-connect Decision 12). Pure and `static` so every
+    // branch is unit-tested without a network or an actor.
+    //
+    // Motivated by a field event on 2026-08-05: the Abbott app alarmed on a
+    // low while MeData displayed 4.2 mmol/L measured eight minutes earlier —
+    // recent enough to render as FRESH and above the 3.9 target low, so it
+    // showed a confident in-range value during a genuine hypo. The staleness
+    // ladder cannot detect that; only asking sooner can.
+    //
+    // The trade this encodes: spend the vendor's rate-limit budget where
+    // staleness does harm, and nowhere else. Glucose is unremarkable the vast
+    // majority of the time, so the long-run average request rate stays near
+    // the 15-minute baseline and the ban exposure is a short burst during a
+    // hypo rather than a permanent tripling.
+    //
+    // `readings` is whatever the last fetch returned, in any order.
+    static func nextPollInterval(after readings: [GlucoseSample], now: Date) -> TimeInterval {
+        let sorted = readings.sorted { $0.nativeInstant < $1.nativeInstant }
+        guard let latest = sorted.last else { return pollInterval }
+        if latest.mmolL < urgentThresholdMmolL { return urgentPollInterval }
+        // Reuse the display's own rate maths so "falling fast" means the same
+        // thing here as the arrow the user is looking at. A nil rate (too few
+        // readings, or too short a span) is not evidence of a fall.
+        let rate = TrendsMath.glucoseRate(
+            sorted.map { GlucoseReading(timestamp: $0.nativeInstant, mmolL: $0.mmolL) },
+            now: now)
+        if let rate, rate <= urgentFallRateMmolLPerMin { return urgentPollInterval }
+        return pollInterval
+    }
+
     private func startPolling() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Self.pollInterval * 1_000_000_000))
+                // Read the interval BEFORE sleeping so the value chosen by the
+                // fetch that just landed governs the wait that follows it.
+                guard let interval = await self?.currentPollInterval else { break }
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 // `self` gone means the source deallocated without
                 // disconnect() — end the loop rather than spin forever.
                 guard !Task.isCancelled, let self else { break }

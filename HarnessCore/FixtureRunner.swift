@@ -20,6 +20,13 @@ public enum FixtureRunner {
         case missingDepthForSingleView(String)
         case missingObliqueDataForTwoView(String)
         case volumeEstimationFailed(String, Swift.Error)
+        // The probability tensor does not match H*W*C*2 for the resolved
+        // palette. Thrown rather than left to `ProbabilityTensor`'s
+        // precondition, which traps the process: this is a batch tool over
+        // operator-supplied files, so a malformed or mis-palletted bundle must
+        // be a skipped fixture with a message, not a crash that loses the
+        // report for every other bundle in the directory.
+        case probsSizeMismatch(String, expected: Int, got: Int)
     }
 
     // Run the volume + macros pipeline (β = 1) on one fixture.
@@ -39,6 +46,12 @@ public enum FixtureRunner {
         let W = nadirIntrinsics.imageWidth
         let H = nadirIntrinsics.imageHeight
         let gravity = Vec3(pb: fixture.gravity)
+
+        let expectedProbBytes = H * W * C * 2
+        guard fixture.nadirProbs.count == expectedProbBytes else {
+            throw Error.probsSizeMismatch(
+                fixture.fixtureID, expected: expectedProbBytes, got: fixture.nadirProbs.count)
+        }
 
         // Build nadir segmentation result from cached probs + argmax.
         let nadirSeg = makeSegResult(
