@@ -3251,3 +3251,83 @@ Decision 48 quoted 7.154 mm from one capture; the other capture's above-surface 
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `foodEnvelopePercentile` and `foodEnvelopeMinMm` provenance blocks), `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`lowerEdgeBandMm` deleted, replaced by the note recording why), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theEnvelopePercentileIsTheUnitTheEnvelopeBarIsDenominatedIn` and the parameterised `foodEnvelopeMm`), `specs/estimation/pipeline/design.md` (the §6.2 lower-edge band description, marked superseded), `prerequisites.md`, `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and the deleted constant had no reader.
 
 ---
+
+## Decision 57: The fallback's iteration budget truncates a search that never finishes
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.maxIterations = 256` is the fallback leg's RANSAC budget: a bare `for _ in 0..<maxIterations` over the colour-grid edge bands, with no adaptive stopping, no connected-component step, and no early exit of any kind. It is read in `ransac` and nowhere else, which makes it the **first constant this feature has measured that only one leg reads** — Decisions 54 and 55 both measured constants both fitters share, and Decision 56 deleted a fallback-only constant rather than measuring one.
+
+It carried no marker and no comment, which is the shape Decisions 47, 48 and 51 each found. But unlike those, a derivation for it exists, it is correct, and it is a **refutation**. `SupportRegion.ccRansac` and `SupportRegionCandidateTests` both carry the sentence "maxIterations = 256 was sized to find the DOMINANT plane and must not be inherited on faith — P(clean triple) is 98 % at w = 0.25 but 3 % at w = 0.05". The promoted leg acted on that argument and built adaptive stopping around `requiredIterations`; the fallback leg still runs on the number the argument rejects. The reasoning is filed on the leg that abandoned the constant and is unreachable from the constant itself.
+
+Decision 55 measured what the gravity cone takes **out** of this budget — 137 and 10 of 256 draws rejected at 15°, 252 and 207 at 1° — so the spend was characterised before the budget was. What was unmeasured is what the plane does as the budget falls.
+
+### Decision
+
+`maxIterations` is `[owed]`, bracketed **8…unbounded** by the corpus and **4…unbounded** by the committed regression suite, with the shipped 256 strictly inside both.
+
+It is a **floor, not a knob** — the second constant with that shape after Decision 55's cone. And the search it truncates **never finishes**: doubling the budget finds a better hypothesis on both captures, so no value in the sweep is a convergence point and the shipped 256 is an arbitrary cut.
+
+Req 4.3 does **not** pin it. Req 7.6 and the corpus point the **same** way for the first time in this feature.
+
+Not repaired. Adding adaptive stopping to this leg is a code change that moves the shipped fallback plane, and Decisions 52–55's precedent is to record such a repair rather than make it.
+
+### Rationale
+
+**The search never finishes, which is the mirror of Decision 51 rather than its repeat.** That decision measured `SupportRegion.maxIterationsPerPass = 2048` and found it **never fires**: the promoted leg's adaptive target is always the smaller of the two, so the cap truncates nothing. This loop has no target at all. RANSAC's running best is monotone in the draws and nothing here stops it, so a budget of 1024 finds a better hypothesis on **both** captures — improvements at **#689** and **#1005**, against the **#76** and **#210** that 256 stops at. Two caps, two legs, two `[owed]` constants, opposite failures: one never binds, the other cannot stop binding.
+
+The full improvement traces are the reading:
+
+| capture | points | improvements over 1024 draws (iteration → inliers) |
+| --- | --- | --- |
+| `1785135663727` | 1,077,427 | #1 → 189,449; #3 → 379,141; #5 → 520,777; #46 → 596,432; #60 → 613,910; #74 → 651,402; **#76 → 653,816**; #689 → 654,433 |
+| `1785901032716` | 1,475,580 | #1 → 1,264,309; #12 → 1,300,029; #20 → 1,391,616; **#210 → 1,399,938**; #1005 → 1,402,476 |
+
+**It is a floor, and the floor is eight draws.** The selected plane spans **23.474 mm** and **0.152 mm** at the food over a 1…1024 sweep — past Req 5.1's 1 mm on one capture — and every millimetre of the wide one is **below a budget of 8**. From 8 up the two captures hold to **0.027 mm** and **0.152 mm**, both inside Req 5.1, while a budget of 2 sits 23.466 mm out at a 9.504° tilt with a hypothesis holding 0.176 of the points. Below the floor the loop has not yet drawn a triple on the table; above it every further draw refines a plane it already has. One-capture footing, Decision 36's again: `1785901032716`'s table holds **0.857** of the points on the **first** draw, so no budget in the sweep moves it past Req 5.1 at all.
+
+**The promoted leg's own rule, replayed on this leg's own trace, agrees with the argument that was filed against the constant.** Running `requiredIterations` at `ransacSuccessProbability` over the fallback's improvement sequence exits at **39** and **5** draws — **6.6×** and **51×** cheaper — and lands **0.019 mm** and **0.069 mm** from the plane 256 draws produce, both inside Req 5.1 by a factor of fifty and fourteen. The budget is generous because the surface is easy: the winning hypothesis holds **0.607** and **0.949** of the points, far above the w = 0.25 the argument treats as comfortable and the w = 0.05 it treats as starved. That is Decision 51's finding on the other leg — "the budget is sufficient because the dominant plane is EASY" — reproduced on the leg that never got the fix.
+
+**The sweep is exact rather than sampled, and that is a property of the shipped loop.** `uniformInt` consumes exactly one `next()`, the loop draws i, j and k unconditionally before any `continue`, and nothing else touches the RNG — so iteration *t* is the same triple whatever the budget is and a budget-B run is a strict **prefix** of a budget-B′ run. The winner at any budget is the last improvement at or before it. Checked against independently seeded short runs at 4, 64 and 256 draws rather than assumed. No owed constant in this feature has had this: Decisions 46, 51, 52 and 53 all carry a "do not interpolate" rider because their readings wander, and Decisions 47, 49, 50 and 54 are interpolable because readings converge. This one is exact at **every** intermediate value.
+
+**Req 4.3 does not pin it, and the committed suite does.** Req 4.3 requires the plane **used** when the fallback fires to equal the one the edge-band fit **produces** for that capture; both sides move together when the budget moves, which is Decision 54's reading of the same requirement applied to a constant only one leg reads. The shipped bits are reproduced by **{256, 512}** alone — precisely because the search never converges — but that is a fact about the corpus, not a requirement. What bounds the constant is `SupportPlaneRegressionSliceTests`, and this is the **sixth** distinct way the committed suite has spoken here (after Decision 41's brackets, Decision 49's measured silence, Decision 50's structural silence, Decision 52's noise-limited identity and Decision 56's floor at the shipped bar) and the **first through the fallback leg** — every earlier suite reading was on `SPRScene` scenes that run neither extraction nor the fallback fit. At a budget of 1 or 2 the parity capture's pre-feature ring median goes **negative** (−4.309 mm, the sign the whole Req 6.2 criterion is about), its support fraction reads 0.594 against a 0.5 bar, and its volume reads **200.885 cm³** against the 682.96 the file asserts within 5 %. All three go red at once and the suite floors the budget at **4**.
+
+**The suite is the looser of the two sources, which no earlier decision has seen.** Decision 41 found the committed suite binding **tighter** than the corpus on two constants and warned that a value set from captures alone could land inside the corpus bracket and outside the suite's. Here the corpus floors at 8 and the suite at 4: a budget of 4 passes every committed assertion while sitting 2.231 mm from the shipped plane, past Req 5.1's 1 mm. The regression bands are volume and ring-median bands, not transfer bands, and on this constant that gap is four draws.
+
+**What the spend is denominated in, and Req 7.6 agrees with the corpus for the first time.** Every iteration is a full O(n) inlier scan over the **colour** grid — this loop is the one place in the feature that runs at 1920×1440 rather than over the depth annulus — so the budget multiplies **1,077,427** and **1,475,580** candidate points against the promoted leg's 10,469 and 12,551 annulus samples (Decision 51). 256 draws cost **2.76 × 10⁸** and **3.78 × 10⁸** distance tests, **96.9 %** of them past the 8-draw floor. Req 7.6's latency and the 32 GB allocation failure `refine` was rewritten for both live on this path. Decision 55 recorded Req 7.6 pulling one owed constant tighter and noted no other owed constant does; this is the second, and the first where the **corpus pulls the same way**, because everything above the floor is measured rather than insurance the captures cannot price.
+
+**Both brackets are readings at `gravityAngleMaxRad`.** A rejected triple spends an iteration and buys nothing, so the cone decides how much of the budget is reachable. Re-traced at the shipped budget under three cones, the last improvement moves with the bar: **#76 → #46** on the parity capture (45 of 46 draws rejected by then, against 38 of 76 at the shipped cone) and **#210 → #236** on the weighed one (192 of 236, against 9 of 210). Neither floor nor the byte-identical set can be quoted without naming the cone it was read at.
+
+### Alternatives Considered
+
+- **Lower it to 39, the largest replay figure, and record the constant as set** - The corpus floors the answer at 8, the suite at 4, the promoted leg's own rule asks for 39 and 5, and the change would cut 85 % of the fallback's latency on a path that has produced an OOM - Rejected because both floors are read on two captures of an unusually easy surface: the table fills the colour-grid edge bands and the winning hypothesis holds 0.607 and 0.949 of the points. The argument in `ccRansac` prices w = 0.05 at 3 % per triple, and the corpus contains no scene anywhere near it. Req 3.7 forbids setting a bar from the pass side alone, and this is the pass side twice over.
+- **Add adaptive stopping to this leg so the constant becomes a cap like `maxIterationsPerPass`** - It is the repair the argument in `ccRansac` implies, it removes the constant rather than setting it (Decisions 32 and 56's shape), and the replay shows it landing inside Req 5.1 on both captures - Rejected on Decisions 52–55's precedent: it moves the shipped fallback plane, and the fallback plane is what Decision 36 prices `fallbackPenalty` against and what feeds `lidarMmPerPx` on the legacy path. Recorded as the repair this measurement recommends, made at the sitting rather than here.
+- **Raise it, since the search demonstrably has not converged at 256** - Improvements at #689 and #1005 are real, and a budget that stops mid-search is by definition arbitrary - Rejected because the improvements buy nothing: the plane moves 0.001 mm and 0.029 mm at those iterations, both three orders inside Req 5.1, while the cost is linear in the budget on the leg Req 7.6 is most exposed on. The search not converging is an argument that the constant cannot be derived from convergence, not an argument for a larger value.
+- **Treat Req 4.3's byte-identity as pinning the constant to {256, 512} and close it** - The measurement does produce a two-element admissible set, and the agent note reads Req 4.3 as "byte-identical to what the fallback produces today" - Rejected on the requirement's text: it constrains the plane **used** against the plane the edge-band fit **produces**, and both move together. Reading it as a freeze would make every constant either fitter reads unsettleable, which contradicts Decision 54's own reading of the same requirement.
+- **Sweep it jointly with `gravityAngleMaxRad` and report a grid** - The cone measurably moves the floor, and Decision 45 established the joint-pair precedent - Rejected as premature: the cone is itself bracketed 10°…unbounded with no ceiling (Decision 55), and a grid over two constants neither of which the corpus can set produces readings with no value in them. Three cone slices are enough to record that the coupling exists.
+
+### Consequences
+
+**Positive:**
+
+- The fallback leg's budget is measured for the first time, and the constant that Decision 51's argument was written about turns out to be alive on the leg that never received the fix.
+- A fourth kind of provenance failure is identified: a derivation that exists, reads correctly, and argues **against** its own constant — filed on the leg that acted on it, unreachable from the leg that did not.
+- The sweep is **exact at every intermediate value**, the first owed constant in this feature for which that is true, so no interpolation rider is needed in either direction.
+- The committed suite bounds a constant through the **fallback** leg for the first time, which is a source Decisions 50 and 54 both recorded as structurally silent for the promoted one.
+- Req 7.6 and the corpus point the same way for the first time, so the sitting has one direction to move this constant rather than a trade-off.
+- The measurement costs nothing on the promoted leg: `maxIterations` is read in one function and no candidate, verdict or persisted field changes.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the seventh pass running, and this one's brackets are readings at another owed constant's bar.
+- Both floors rest on two captures of the easiest surface in the corpus, so the constant is bracketed where a hard scene would bracket it hardest — the matte-table capture Decision 53 made a hard requirement of the sitting is the one that would price it.
+- The repair the measurement recommends — adaptive stopping on the fallback leg — is recorded and not made, so the feature now carries a third known-unrepaired path after the gravity cone and `SupportRegion.percentile`'s p = 0.5 branch.
+- The shipped 256 is confirmed arbitrary, which means no reading in Decisions 36, 54 or 55 that quotes a fallback plane is quoting a converged one.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (the `maxIterations` provenance block), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theFallbackBudgetTruncatesASearchThatNeverFinishes`, the traced `fallbackRansacTrace`, the `adaptiveStop` replay, the restated regression bands and `foodVolumeCm3`), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and the fallback plane on both committed captures is bit-identical to what it was.
+
+---

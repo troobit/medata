@@ -410,6 +410,30 @@ one place the committed corpus alone is the source (Decision 51):
   the committed slices — but choosing a value inside a bracket is still asserting, which Req 3.7
   forbids.
 
+The budget is **three** constants, not two: the third is on the **fallback** leg and behaves
+nothing like the other two (Decision 57).
+
+- **`LiDARPlaneFitter.maxIterations` is bracketed 8…unbounded by the corpus and 4…unbounded by the
+  committed regression suite**, with the shipped 256 strictly inside both, and it is the only
+  constant task 26 has measured that a single leg reads. There is no adaptive stopping on this
+  leg at all.
+- **Its search never converges**, so no value is a convergence point: 1024 draws still find a
+  better hypothesis on both captures (#689 and #1005, against the #76 and #210 that 256 stops at).
+  The exact mirror of `maxIterationsPerPass`, which never binds.
+- **It is a floor, not a knob.** The plane spans 23.474 mm and 0.152 mm at the food over 1…1024
+  and every millimetre of the wide one is below a budget of 8. From 8 up the captures hold to
+  0.027 and 0.152 mm, inside Req 5.1.
+- **The sweep is exact at every intermediate value** — a budget-B run is a strict prefix of a
+  budget-B′ run — so unlike `ransacSuccessProbability` there is no interpolation rider in either
+  direction.
+- **The committed suite bounds it, through the fallback leg for the first time.** At a budget of
+  1 or 2 all three of `SupportPlaneRegressionSliceTests`'s parity-capture bands go red at once.
+  The suite is the **looser** source here (4 against the corpus's 8), which reverses the risk
+  Decision 41 recorded.
+- **Both brackets are readings at `gravityAngleMaxRad`**, and both floors rest on the easiest
+  surface in the corpus — the matte-table capture is what would price this constant properly.
+  **Req 7.6 and the corpus point the same way**, which is true of no other owed constant.
+
 The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
 
 - **No floor.** The crossed-sector rule separates the corpus's plate-top candidate from its table

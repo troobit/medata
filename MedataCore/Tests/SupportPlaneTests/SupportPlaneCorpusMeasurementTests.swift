@@ -7632,6 +7632,622 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(suiteFloorOnP == 0.1, "\(suiteFloorMoved)")
     }
 
+    // MARK: - The fallback's fixed budget, and the argument the promoted leg made against it
+
+    // One improvement to `LiDARPlaneFitter.ransac`'s running best, and the iteration it
+    // landed on. The shipped loop keeps no record of these — it returns only the winner —
+    // and they are the whole reading, because they are the only iterations at which the
+    // budget can matter.
+    struct BudgetImprovement {
+        let iteration: Int       // 1-based, the iteration that raised the best score
+        let normal: Vec3
+        let d: Float
+        let inliers: [Int]
+        let drawsSoFar: Int      // triples that reached the cone test
+        let rejectedSoFar: Int   // triples the cone turned away
+    }
+
+    // `LiDARPlaneFitter.ransac` with the budget as the loop bound, the cone as an argument
+    // (Decision 55 measured what it takes OUT of the budget and this is where that is paid)
+    // and every improvement recorded. Every other line is the shipped path's — the same
+    // unconditional three draws, the same degenerate-triple test, the same orientation onto
+    // gravity's half-space, the same plain inlier count with no connected component — so at
+    // (`maxIterations`, `gravityAngleMaxRad`) it reproduces the shipped winner exactly.
+    //
+    // ONE run at the top of the sweep is exact for every value below it, and that is a
+    // property of the shipped loop rather than a shortcut. `uniformInt` consumes exactly one
+    // `next()`, the loop draws i, j and k unconditionally before any `continue`, and nothing
+    // else touches the RNG — so iteration t is the SAME triple whatever the budget is, and a
+    // budget-B run is a strict prefix of a budget-B′ run for B < B′. The winner at budget B
+    // is therefore the last improvement at or before B.
+    // `theFallbackBudgetTruncatesASearchThatNeverFinishes` checks that against independent
+    // short runs rather than assuming it.
+    static func fallbackRansacTrace(points: [Vec3], gravity: Vec3, rng: inout SplitMix64,
+                                    budget: Int, coneRad: Float) -> [BudgetImprovement] {
+        var improvements: [BudgetImprovement] = []
+        var bestScore = 0
+        var draws = 0
+        var rejected = 0
+        let n = points.count
+        guard budget >= 1, n >= LiDARPlaneFitter.minPoints else { return improvements }
+
+        for iteration in 1...budget {
+            let i = rng.uniformInt(n)
+            var j = rng.uniformInt(n); if j == i { j = (j + 1) % n }
+            var k = rng.uniformInt(n)
+            if k == i || k == j { k = (k + 1) % n }
+            if k == i || k == j { k = (k + 2) % n }
+            if k == i || k == j { continue }
+
+            let p1 = points[i], p2 = points[j], p3 = points[k]
+            var nHat = (p2 - p1).cross(p3 - p1)
+            if nHat.lengthSquared < 1e-12 { continue }
+            nHat = nHat.normalised()
+            if nHat.dot(gravity) < 0 { nHat = -nHat }
+            draws += 1
+            if acos(SupportRegion.clampedCosine(nHat.dot(gravity))) > coneRad {
+                rejected += 1
+                continue
+            }
+
+            let d = nHat.dot(p1)
+            var inliers: [Int] = []
+            inliers.reserveCapacity(n)
+            for idx in 0..<n where abs(nHat.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                inliers.append(idx)
+            }
+            guard inliers.count > bestScore else { continue }
+            bestScore = inliers.count
+            improvements.append(BudgetImprovement(
+                iteration: iteration, normal: nHat, d: d, inliers: inliers,
+                drawsSoFar: draws, rejectedSoFar: rejected))
+        }
+        return improvements
+    }
+
+    // What the fallback SHIPS at one budget: the winner refined, polished and passed through
+    // the residual gate, exactly as `fitOutcome` does it. The refusal is carried rather than
+    // collapsed to nil because a budget that starves the fit is a different reading from one
+    // that produces a wrong plane, and Req 4.5's rate counts them the same way.
+    struct BudgetReading {
+        let budget: Int
+        let winnerIteration: Int   // 0 when no draw ever improved on nothing
+        let planeAtFoodMm: Float
+        let normal: Vec3
+        let d: Float
+        let tiltDeg: Float
+        let residualMm: Float
+        let inlierCount: Int
+        let hypothesisRatio: Float // the winner's raw inlier share, the adaptive input
+        let refusal: String?
+        let polishIterations: Int
+        let polishStop: PolishStop
+    }
+
+    static func fallbackBudgetReading(points: [Vec3], gravity: Vec3, ray: Vec3,
+                                      budget: Int, coneRad: Float,
+                                      improvements: [BudgetImprovement]) -> BudgetReading {
+        func starved(_ why: String) -> BudgetReading {
+            BudgetReading(budget: budget, winnerIteration: 0, planeAtFoodMm: .nan,
+                          normal: gravity, d: 0, tiltDeg: .nan, residualMm: .nan,
+                          inlierCount: 0, hypothesisRatio: 0, refusal: why,
+                          polishIterations: 0, polishStop: .cap)
+        }
+        guard let winner = improvements.last(where: { $0.iteration <= budget }),
+              winner.inliers.count >= LiDARPlaneFitter.minPoints else {
+            return starved("\(SupportPlaneError.noLidarPoints)")
+        }
+        guard let refined = try? LiDARPlaneFitter.refine(
+            inliers: winner.inliers.map { points[$0] }, seedNormal: winner.normal) else {
+            return starved("\(SupportPlaneError.lidarFitDegenerate)")
+        }
+
+        var normal = refined.0
+        var d = refined.1
+        var polishedInliers = winner.inliers
+        var applied = 0
+        var stop = PolishStop.cap
+        for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+            var reselected: [Int] = []
+            reselected.reserveCapacity(points.count)
+            for idx in 0..<points.count
+            where abs(normal.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                reselected.append(idx)
+            }
+            if reselected == polishedInliers { stop = .fixedPoint; break }
+            if reselected.count < LiDARPlaneFitter.minPoints { stop = .underpopulated; break }
+            guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                inliers: reselected.map { points[$0] }, seedNormal: normal
+            ) else { stop = .degenerate; break }
+            if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity))) > coneRad {
+                stop = .gravity
+                break
+            }
+            polishedInliers = reselected
+            normal = nextNormal
+            d = nextD
+            applied += 1
+        }
+
+        let residual = LiDARPlaneFitter.computeResidual(
+            points: polishedInliers.map { points[$0] }, normal: normal, d: d)
+        return BudgetReading(
+            budget: budget, winnerIteration: winner.iteration,
+            planeAtFoodMm: Self.planeDepthMm(normal: normal, d: d, ray: ray),
+            normal: normal, d: d,
+            tiltDeg: acos(SupportRegion.clampedCosine(normal.dot(gravity))) * 180 / .pi,
+            residualMm: residual, inlierCount: polishedInliers.count,
+            hypothesisRatio: Float(winner.inliers.count) / Float(points.count),
+            refusal: residual > LiDARPlaneFitter.residualMaxMm
+                ? "\(SupportPlaneError.lidarFitResidualTooHigh)" : nil,
+            polishIterations: applied, polishStop: stop)
+    }
+
+    // The promoted leg's stopping rule replayed over the fallback's OWN improvement trace.
+    // `SupportRegion.ccRansac` recomputes `requiredIterations` from the best ratio every time
+    // the best improves and leaves the loop once the iteration count reaches it; this loop
+    // has no such exit. The replay is exact and free — the trace already carries every ratio
+    // and the iteration it was reached on — and it is the counterfactual the comment in
+    // `ccRansac` is an argument for. One difference is inherent and stated rather than
+    // hidden: the promoted rule reads the largest CONNECTED component's share, and the
+    // fallback has no component step, so the ratio here is the raw inlier share. That makes
+    // the replay optimistic about the fallback, which is the safe direction for a claim that
+    // the budget is too large.
+    static func adaptiveStop(_ trace: [BudgetImprovement], pointCount: Int, cap: Int)
+        -> (iterations: Int, winner: BudgetImprovement?) {
+        var required = cap
+        var winner: BudgetImprovement?
+        var iteration = 0
+        while iteration < required && iteration < cap {
+            iteration += 1
+            guard let improvement = trace.first(where: { $0.iteration == iteration }) else {
+                continue
+            }
+            winner = improvement
+            let ratio = Float(improvement.inliers.count) / Float(pointCount)
+            required = Swift.max(1, Swift.min(cap, Int(Self.requiredIterations(
+                inlierRatio: ratio,
+                successProbability: SupportRegion.ransacSuccessProbability).rounded(.up))))
+        }
+        return (iteration, winner)
+    }
+
+    // What `SupportPlaneRegressionSliceTests` asserts about the plane THIS constant produces.
+    // Every other suite reading in this pass has been on `SPRScene` scenes, which run neither
+    // extraction nor the fallback fit (Decisions 50, 54) — the fallback leg's committed
+    // constraints live in the regression file instead, measured against the same two slices.
+    // Restated here rather than referenced because that file computes them from the SHIPPED
+    // budget; the point is to run them at every other value.
+    struct FallbackSuiteBand {
+        let ringMedianMinMm: Float
+        let ringMedianMaxMm: Float
+        let supportFractionMax: Float   // `.infinity` where the file asserts nothing
+        let volumeCm3: Float
+        let volumeTolerance: Float
+    }
+
+    static let fallbackSuiteBands: [String: FallbackSuiteBand] = [
+        // `ringMeasureSeparatesTheTwoReferences` and `correctingThePlaneRemovesVolume`.
+        "1785135663727": FallbackSuiteBand(ringMedianMinMm: 2, ringMedianMaxMm: 8,
+                                           supportFractionMax: 0.5,
+                                           volumeCm3: 682.96, volumeTolerance: 0.05),
+        // `ringMeasureSeparatesTheTwoReferencesOnTheWeighedCapture` and
+        // `theWeighedCapturesFoodMaskIsTooLarge`.
+        "1785901032716": FallbackSuiteBand(ringMedianMinMm: 4, ringMedianMaxMm: .infinity,
+                                           supportFractionMax: .infinity,
+                                           volumeCm3: 714.84, volumeTolerance: 0.05),
+    ]
+
+    // `SupportPlaneRegressionSliceTests.volumeCm3`, restated so a plane the regression file
+    // cannot produce can still be priced through it. Same per-pixel integration above the
+    // plane, same oblique-pixel area term.
+    static func foodVolumeCm3(geometry g: SupportRegion.DepthGeometry,
+                              normal: Vec3, d: Float) -> Float {
+        let k = g.intrinsics
+        let fMean = (k.fx + k.fy) / 2
+        var mm3: Float = 0
+        for index in g.foodIndices {
+            let point = g.points[index]
+            let height = normal.dot(point) - d
+            guard height > 0 else { continue }
+            let x = index % k.imageWidth, y = index / k.imageWidth
+            let du = Float(x) - k.cx, dv = Float(y) - k.cy
+            let cosTheta = fMean / (fMean * fMean + du * du + dv * dv).squareRoot()
+            let z = -point.z
+            mm3 += height * (z * z) / (k.fx * k.fy * cosTheta * cosTheta * cosTheta)
+        }
+        return mm3 / 1000
+    }
+
+    // Halvings down to a single draw, and two doublings above the shipped 256 — the same
+    // shape Decision 51 swept `maxIterationsPerPass` on. 1 is the floor with a meaning: one
+    // triple, refined and polished, which is what the loop degenerates to and what a budget
+    // has to buy something over.
+    static let fallbackBudgetSweep = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+
+    // The budget is spent on DRAWS and the cone rejects some of them before they cost an
+    // inlier scan, so the two are coupled and Decision 55 measured one half of it. Read at
+    // the shipped budget: three cones, its own tightest, the corpus floor that decision
+    // found, and the shipped bar.
+    static let fallbackBudgetConeSweep: [Float] = [1, 8, 15]
+
+    @Test("the fallback's iteration budget truncates a search that never finishes, and the suite bounds it where Req 4.3 does not")
+    func theFallbackBudgetTruncatesASearchThatNeverFinishes() throws {
+        struct Capture {
+            let name: String
+            let slice: DepthSlice
+            let points: [Vec3]
+            let gravity: Vec3
+            let ray: Vec3
+        }
+
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            corpus.append(Capture(name: name, slice: slice, points: points,
+                                  gravity: slice.gravity.normalised(),
+                                  ray: try #require(Self.foodCentroidRay(slice))))
+        }
+
+        let shippedCone = LiDARPlaneFitter.gravityAngleMaxRad
+        let top = try #require(Self.fallbackBudgetSweep.max())
+
+        // One traced run per capture at the top of the sweep, at the shipped cone.
+        var traceByName: [String: [BudgetImprovement]] = [:]
+        var readingsByName: [String: [BudgetReading]] = [:]
+        for c in corpus {
+            var rng = SplitMix64(seed: Fnv1a64.hash(c.slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: c.points, gravity: c.gravity, rng: &rng,
+                budget: top, coneRad: shippedCone)
+            traceByName[c.name] = trace
+            readingsByName[c.name] = Self.fallbackBudgetSweep.map {
+                Self.fallbackBudgetReading(points: c.points, gravity: c.gravity, ray: c.ray,
+                                           budget: $0, coneRad: shippedCone,
+                                           improvements: trace)
+            }
+        }
+
+        // THE ANCHOR, in two halves. At the shipped budget the instrumented chain must BE
+        // `LiDARPlaneFitter.fitOutcome` — the same plane, not a plane within a tolerance —
+        // or nothing below is a reading on the shipped path. And the prefix claim the single
+        // traced run rests on is checked against short runs drawn independently from the
+        // same seed, because if it were false every value below the top would be fiction.
+        for c in corpus {
+            let shipped = try #require(Self.fallbackPlane(c.slice))
+            let reading = try #require(readingsByName[c.name]?
+                .first { $0.budget == LiDARPlaneFitter.maxIterations })
+            let drift = "\(c.name): the instrumented budget chain no longer reproduces"
+                + " LiDARPlaneFitter.fitOutcome at maxIterations"
+            #expect(reading.normal == shipped.normal && reading.d == shipped.distanceMm,
+                    "\(drift)")
+
+            for budget in [4, 64, LiDARPlaneFitter.maxIterations] {
+                var rng = SplitMix64(seed: Fnv1a64.hash(c.slice.depth.depthBytesMm))
+                let direct = Self.fallbackRansacTrace(
+                    points: c.points, gravity: c.gravity, rng: &rng,
+                    budget: budget, coneRad: shippedCone)
+                let derived = (traceByName[c.name] ?? []).filter { $0.iteration <= budget }
+                let notAPrefix = "\(c.name): a budget-\(budget) run is no longer a prefix of"
+                    + " the budget-\(top) run (\(direct.count) improvements direct,"
+                    + " \(derived.count) derived) — the loop's RNG consumption has stopped"
+                    + " being fixed per iteration and the sweep below is sampled, not exact"
+                #expect(direct.count == derived.count, "\(notAPrefix)")
+                for (a, b) in zip(direct, derived) {
+                    #expect(a.iteration == b.iteration && a.normal == b.normal && a.d == b.d,
+                            "\(notAPrefix)")
+                }
+            }
+        }
+
+        for c in corpus {
+            let trace = traceByName[c.name] ?? []
+            print("=== \(c.name) === \(c.points.count) colour-grid candidate points")
+            print("  improvements over \(top) iterations:"
+                  + " \(trace.map { "#\($0.iteration) → \($0.inliers.count)" }.joined(separator: ", "))")
+            for r in readingsByName[c.name] ?? [] {
+                let shippedPlane = readingsByName[c.name]?
+                    .first { $0.budget == LiDARPlaneFitter.maxIterations }?.planeAtFoodMm
+                print("  budget \(r.budget): winner from iteration \(r.winnerIteration),"
+                      + " plane \(fmt(r.planeAtFoodMm)) mm"
+                      + " (\(fmt(r.planeAtFoodMm - (shippedPlane ?? r.planeAtFoodMm))) vs shipped),"
+                      + " tilt \(fmt(r.tiltDeg))°, residual \(fmt(r.residualMm)) mm,"
+                      + " inliers \(r.inlierCount), hypothesis ratio \(fmt(r.hypothesisRatio)),"
+                      + " polish \(r.polishIterations) stopped on \(r.polishStop.rawValue)"
+                      + "\(r.refusal.map { ", REFUSED \($0)" } ?? "")")
+            }
+        }
+
+        // MARK: what the budget buys
+
+        // THE FIRST FINDING, and it is the mirror of Decision 51's. That decision measured
+        // `SupportRegion.maxIterationsPerPass` and found it NEVER FIRES: the promoted leg's
+        // pass stops adaptively at 72, 11, 250 and 12, 41, 5 draws against a cap of 2048, so
+        // the cap truncates nothing it wanted. This loop has NO adaptive stopping at all — a
+        // bare `for _ in 0..<maxIterations` — so it spends every iteration it is given, and
+        // the search it truncates NEVER FINISHES: RANSAC's running best is monotone in the
+        // draws and nothing here stops it, so doubling the budget to 1024 finds a better
+        // hypothesis on BOTH captures (improvements at #689 and #1005, against the #76 and
+        // #210 that 256 stops at). There is no value at which the search is done, and the
+        // shipped 256 is a truncation rather than a convergence point. Two caps on two legs
+        // of one feature, both `[owed]`: one never binds, the other cannot stop binding.
+        var lastImprovement: [String: Int] = [:]
+        for c in corpus {
+            lastImprovement[c.name] = (traceByName[c.name] ?? []).last?.iteration ?? 0
+        }
+        print("last improvement over \(top) iterations: "
+              + lastImprovement.map { "\($0.key) #\($0.value)" }.sorted().joined(separator: ", ")
+              + " — the shipped budget is \(LiDARPlaneFitter.maxIterations)")
+        let converges = "the fallback's search now converges inside the shipped budget"
+            + " (last improvements \(lastImprovement.sorted { $0.key < $1.key }.map(\.value))"
+            + " of \(top)) — the budget has stopped being an arbitrary truncation and can be"
+            + " read as a value the corpus reaches"
+        #expect(lastImprovement.values.allSatisfy { $0 > LiDARPlaneFitter.maxIterations },
+                "\(converges)")
+
+        // THE SECOND FINDING, and it is a FOURTH kind of provenance failure. The constant
+        // carries no marker and no comment — a bare `static let` — which is Decisions 47, 48
+        // and 51's shape. But a derivation for it does exist, it is CORRECT, and it is a
+        // REFUTATION: `SupportRegion.ccRansac` and `SupportRegionCandidateTests` both carry
+        // "maxIterations = 256 was sized to find the DOMINANT plane and must not be inherited
+        // on faith — P(clean triple) is 98 % at w = 0.25 but 3 % at w = 0.05". The promoted
+        // leg ACTED on that and built adaptive stopping; the fallback leg still runs on the
+        // number the argument rejects, and the argument is filed on the leg that abandoned
+        // it. After Decision 56's marker that reads correctly and covers a different
+        // quantity, this is a derivation that reads correctly and argues against its own
+        // constant, recorded where it cannot be found from the constant.
+        //
+        // Replayed rather than argued: the promoted leg's own stopping rule, run over the
+        // fallback's own improvement trace, exits at a small fraction of the budget and
+        // lands INSIDE Req 5.1's 1 mm of the plane the 256 draws produce. The winning
+        // hypothesis holds a far larger share than either ratio the paragraph prices — the
+        // fallback fits the table over the colour-grid edge bands, which is the easiest fit
+        // in the feature — so the budget is generous because the surface is easy, exactly
+        // the shape Decision 51 found on the other leg.
+        var adaptiveByName: [String: (iterations: Int, deltaMm: Float, ratio: Float)] = [:]
+        for c in corpus {
+            let trace = traceByName[c.name] ?? []
+            let stop = Self.adaptiveStop(trace, pointCount: c.points.count,
+                                         cap: LiDARPlaneFitter.maxIterations)
+            let reading = Self.fallbackBudgetReading(
+                points: c.points, gravity: c.gravity, ray: c.ray,
+                budget: stop.iterations, coneRad: shippedCone, improvements: trace)
+            let shipped = try #require(readingsByName[c.name]?
+                .first { $0.budget == LiDARPlaneFitter.maxIterations })
+            adaptiveByName[c.name] = (stop.iterations,
+                                      abs(reading.planeAtFoodMm - shipped.planeAtFoodMm),
+                                      shipped.hypothesisRatio)
+        }
+        print("the promoted leg's stopping rule replayed on the fallback: "
+              + adaptiveByName.map {
+                  "\($0.key) stops at \($0.value.iterations) draws"
+                  + " (\(fmt(Float(LiDARPlaneFitter.maxIterations) / Float($0.value.iterations)))×"
+                  + " cheaper), plane \(fmt($0.value.deltaMm)) mm off the shipped one,"
+                  + " measured ratio \(fmt($0.value.ratio))"
+              }.sorted().joined(separator: "; ")
+              + " — at p = \(SupportRegion.ransacSuccessProbability)")
+        let ruleAgrees = "the promoted leg's stopping rule no longer disagrees with the"
+            + " fallback's budget (\(adaptiveByName.sorted { $0.key < $1.key }.map(\.value.iterations))"
+            + " draws, planes \(adaptiveByName.sorted { $0.key < $1.key }.map { fmt($0.value.deltaMm) }) mm off)"
+            + " — the refutation filed in ccRansac has stopped applying to this constant"
+        #expect(adaptiveByName.values.allSatisfy {
+            $0.iterations < LiDARPlaneFitter.maxIterations
+                && $0.deltaMm < Self.gridTransferToleranceMm
+        }, "\(ruleAgrees)")
+
+        // THE THIRD FINDING: it is a FLOOR, not a knob, and the floor is EIGHT DRAWS. The
+        // plane spans 23.474 mm and 0.152 mm at the food over the sweep, and every millimetre
+        // of the wide one is below a budget of 8 — from 8 up the two captures hold to 0.027
+        // and 0.152 mm, both inside Req 5.1's 1 mm, while a budget of 2 sits 23.466 mm out at
+        // a 9.504° tilt. Second owed constant with this shape after Decision 55's gravity
+        // cone, and for the same reason: below the floor the loop has not yet drawn a triple
+        // on the table, and above it every further draw is refining a plane it already has.
+        // One-capture footing, Decision 36's again: only `1785135663727` moves past Req 5.1
+        // at all, because `1785901032716`'s table holds 0.857 of the points on the FIRST draw
+        // and every budget in the sweep sits within 0.152 mm of the shipped plane there.
+        var spanByName: [String: Float] = [:]
+        var spanAboveFloorByName: [String: Float] = [:]
+        let answerFloor = 8
+        for c in corpus {
+            let readings = (readingsByName[c.name] ?? []).filter { !$0.planeAtFoodMm.isNaN }
+            let planes = readings.map(\.planeAtFoodMm)
+            spanByName[c.name] = (planes.max() ?? 0) - (planes.min() ?? 0)
+            let above = readings.filter { $0.budget >= answerFloor }.map(\.planeAtFoodMm)
+            spanAboveFloorByName[c.name] = (above.max() ?? 0) - (above.min() ?? 0)
+        }
+        print("plane movement at the food over the BUDGET sweep: "
+              + spanByName.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", ")
+              + "; from a budget of \(answerFloor) up: "
+              + spanAboveFloorByName.map { "\($0.key) \(fmt($0.value)) mm" }.sorted()
+                .joined(separator: ", ")
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm")
+        let inert = "the budget is inert on the corpus after all — no value in the sweep moves"
+            + " the fallback plane past Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm"
+            + " (spans \(spanByName.sorted { $0.key < $1.key }.map { fmt($0.value) }))"
+        #expect(spanByName.values.contains { $0 > Self.gridTransferToleranceMm }, "\(inert)")
+        let floorMoved = "the corpus no longer floors the budget at \(answerFloor) draws —"
+            + " above it the plane moves"
+            + " \(spanAboveFloorByName.sorted { $0.key < $1.key }.map { fmt($0.value) }) mm"
+            + " against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm"
+        #expect(spanAboveFloorByName.values
+            .allSatisfy { $0 < Self.gridTransferToleranceMm }, "\(floorMoved)")
+
+        // THE FOURTH FINDING, and it settles which document actually constrains this
+        // constant. Req 4.3 does NOT: it requires the plane USED when the fallback fires to
+        // equal the one the edge-band fit PRODUCES for that capture, and both sides of that
+        // identity move together when the budget moves — Decision 54's reading of the same
+        // requirement, restated on a constant only one leg reads. The byte-identity is an
+        // internal consistency, not a freeze, and the shipped bits are reproduced by
+        // {256, 512} alone precisely because the search never converges: below 256 an
+        // earlier improvement wins, at 1024 a later one does.
+        //
+        // What DOES bound it is the committed SUITE, and this is the SIXTH distinct way the
+        // suite has spoken here — after Decision 41's brackets, Decision 49's measured
+        // silence, Decision 50's structural silence, Decision 52's noise-limited identity
+        // and Decision 56's floor at the shipped bar — and the FIRST through the FALLBACK
+        // leg. `SupportPlaneRegressionSliceTests` measures the pre-feature plane on these
+        // same two slices: its ring median in 2…8 mm and support fraction below 0.5 on
+        // `1785135663727`, its ring median above 4 mm on `1785901032716`, and its food
+        // volume within 5 % of 682.96 and 714.84 cm³. Those are assertions about the plane
+        // this constant produces, so they bracket it, and they bracket it from BELOW: a
+        // budget of 1 or 2 turns the parity capture's ring median NEGATIVE (−4.309 mm, the
+        // sign the whole regression criterion is about), its support to 0.594 against a 0.5
+        // bar and its volume to 200.885 cm³ against 682.96, so all three assertions go red at
+        // once and the suite floors the budget at 4.
+        //
+        // And the suite is the LOOSER of the two sources, which no earlier decision has seen.
+        // Decision 41 found the committed suite binding TIGHTER than the corpus on two
+        // constants and warned that a value set from captures alone could land inside the
+        // corpus bracket and outside the suite's; here the corpus floors at 8 and the suite at
+        // 4, so a budget of 4 passes every committed assertion while sitting 2.231 mm from
+        // the shipped plane — past Req 5.1's 1 mm. The regression bands are volume and
+        // ring-median bands, not transfer bands, and on this constant that gap is 4 draws.
+        var shippedByName: [String: BudgetReading] = [:]
+        for c in corpus {
+            shippedByName[c.name] = try #require(readingsByName[c.name]?
+                .first { $0.budget == LiDARPlaneFitter.maxIterations })
+        }
+        let byteIdenticalBudgets = Self.fallbackBudgetSweep.filter { budget in
+            corpus.allSatisfy { c in
+                guard let shipped = shippedByName[c.name],
+                      let here = (readingsByName[c.name] ?? [])
+                          .first(where: { $0.budget == budget }) else { return false }
+                return here.normal == shipped.normal && here.d == shipped.d
+            }
+        }
+        print("budgets returning the shipped bits on the whole corpus:"
+              + " \(byteIdenticalBudgets) of \(Self.fallbackBudgetSweep)")
+        let converged = "the shipped bits are now reproduced outside {256, 512}"
+            + " (\(byteIdenticalBudgets)) — the search has started converging and finding one"
+            + " needs re-reading"
+        #expect(byteIdenticalBudgets == [LiDARPlaneFitter.maxIterations, 512], "\(converged)")
+
+        struct SuiteVerdict {
+            let budget: Int
+            let failures: [String]
+        }
+        var suiteByName: [String: [SuiteVerdict]] = [:]
+        for c in corpus {
+            let g = try #require(Self.geometry(c.name))
+            let band = try #require(Self.fallbackSuiteBands[c.name])
+            suiteByName[c.name] = (readingsByName[c.name] ?? []).map { r in
+                var failures: [String] = []
+                guard !r.planeAtFoodMm.isNaN else {
+                    return SuiteVerdict(budget: r.budget, failures: ["no plane"])
+                }
+                let plane = SupportPlane(normal: r.normal, distanceMm: r.d,
+                                         residualMm: r.residualMm, convergedIterations: nil)
+                if let ring = SupportRegion.ringStatistics(
+                    for: plane, depth: c.slice.depth, foodMask: c.slice.foodMask,
+                    intrinsics: c.slice.colourIntrinsics) {
+                    if ring.medianMm <= band.ringMedianMinMm || ring.medianMm >= band.ringMedianMaxMm {
+                        failures.append("ring median \(fmt(ring.medianMm)) mm")
+                    }
+                    if ring.supportFraction >= band.supportFractionMax {
+                        failures.append("support \(fmt(ring.supportFraction))")
+                    }
+                } else {
+                    failures.append("no ring")
+                }
+                let volume = Self.foodVolumeCm3(geometry: g, normal: r.normal, d: r.d)
+                if abs(volume - band.volumeCm3) / band.volumeCm3 >= band.volumeTolerance {
+                    failures.append("volume \(fmt(volume)) cm³")
+                }
+                return SuiteVerdict(budget: r.budget, failures: failures)
+            }
+        }
+        for c in corpus {
+            print("  \(c.name) against its committed regression bands: "
+                  + (suiteByName[c.name] ?? []).map {
+                      "\($0.budget)\($0.failures.isEmpty ? " ok" : " RED on \($0.failures.joined(separator: ", "))")"
+                  }.joined(separator: "; "))
+        }
+        let suiteFloor = Self.fallbackBudgetSweep.first { budget in
+            Self.fallbackBudgetSweep.filter { $0 >= budget }.allSatisfy { above in
+                corpus.allSatisfy { c in
+                    suiteByName[c.name]?.first { $0.budget == above }?.failures.isEmpty == true
+                }
+            }
+        }
+        print("committed suite floor on the budget: \(suiteFloor.map(String.init) ?? "none")")
+        let suiteSilent = "the committed regression bands no longer floor the budget"
+            + " (floor \(suiteFloor.map(String.init) ?? "none")) — the fallback leg's one"
+            + " committed source has gone silent on this constant"
+        #expect(suiteFloor != nil && suiteFloor! > 1
+                && suiteFloor! < LiDARPlaneFitter.maxIterations, "\(suiteSilent)")
+
+        // MARK: what it costs
+
+        // THE FIFTH FINDING: what the spend is denominated in. Every iteration is a full O(n)
+        // inlier scan over the COLOUR grid — this loop is the one place in the feature that
+        // runs at 1920×1440 rather than over the depth annulus — so the budget multiplies a
+        // point count two orders of magnitude larger than the promoted leg's 10,469 and
+        // 12,551 annulus samples (Decision 51). Req 7.6's latency and the 32 GB allocation
+        // failure `refine` was rewritten for both live here. Decision 55 recorded Req 7.6
+        // pulling one owed constant TIGHTER and noted no other does; this is the second, and
+        // the first where the corpus does not pull against it — everything above the 8-draw
+        // floor is measured to change nothing, rather than being insurance the captures
+        // cannot price. Decision 54's polish cap is the contrast: there the corpus pointed
+        // ABOVE the shipped value while Req 7.6 pointed below it.
+        for c in corpus {
+            let total = c.points.count * LiDARPlaneFitter.maxIterations
+            let past = c.points.count * (LiDARPlaneFitter.maxIterations - answerFloor)
+            print("  \(c.name): \(c.points.count) points ×"
+                  + " \(LiDARPlaneFitter.maxIterations) = \(total) distance tests,"
+                  + " \(fmt(100 * Float(past) / Float(total))) % of them past the"
+                  + " \(answerFloor)-draw floor the answer settles at")
+        }
+
+        // MARK: the cone the budget is spent against
+
+        // THE SIXTH FINDING: every reading above is a SLICE at `gravityAngleMaxRad`. A
+        // rejected triple costs an iteration and buys nothing, so the cone decides how much
+        // of the budget is reachable — Decision 55 measured 137 and 10 of 256 draws rejected
+        // at the shipped bar and 252 and 207 at 1°, and this is where that spend is paid for.
+        // Re-traced at the shipped budget under three cones, the last improvement moves with
+        // the bar (#76 → #46 and #210 → #236 at 1°, where 45 of 46 and 192 of 236 draws are
+        // rejected by then), so neither the floor nor Req 4.3's admissible set can be quoted
+        // without naming the cone it was read at.
+        var byCone: [Float: [String: (last: Int, rejected: Int, draws: Int, plane: Float)]] = [:]
+        for coneDeg in Self.fallbackBudgetConeSweep {
+            let coneRad = coneDeg * .pi / 180
+            var row: [String: (last: Int, rejected: Int, draws: Int, plane: Float)] = [:]
+            for c in corpus {
+                var rng = SplitMix64(seed: Fnv1a64.hash(c.slice.depth.depthBytesMm))
+                let trace = Self.fallbackRansacTrace(
+                    points: c.points, gravity: c.gravity, rng: &rng,
+                    budget: LiDARPlaneFitter.maxIterations, coneRad: coneRad)
+                let reading = Self.fallbackBudgetReading(
+                    points: c.points, gravity: c.gravity, ray: c.ray,
+                    budget: LiDARPlaneFitter.maxIterations, coneRad: coneRad,
+                    improvements: trace)
+                row[c.name] = (trace.last?.iteration ?? 0,
+                               trace.last?.rejectedSoFar ?? 0,
+                               trace.last?.drawsSoFar ?? 0,
+                               reading.planeAtFoodMm)
+            }
+            byCone[coneDeg] = row
+            print("  cone \(fmt(coneDeg))°: "
+                  + row.map {
+                      "\($0.key) last improvement iteration \($0.value.last),"
+                      + " \($0.value.rejected)/\($0.value.draws) draws rejected by then,"
+                      + " plane \(fmt($0.value.plane)) mm"
+                  }.sorted().joined(separator: "; "))
+        }
+        let coneFree = "the last improvement no longer moves with the gravity cone — the"
+            + " budget's floor is not a reading at gravityAngleMaxRad after all and"
+            + " Decision 55's rejection counts no longer cost anything"
+        #expect(Self.fallbackBudgetConeSweep.contains { coneDeg in
+            guard let tight = byCone[coneDeg], let shipped = byCone[15] else { return false }
+            return corpus.contains { tight[$0.name]?.last != shipped[$0.name]?.last }
+        }, "\(coneFree)")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
