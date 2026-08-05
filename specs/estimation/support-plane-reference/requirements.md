@@ -10,7 +10,7 @@ The LiDAR support plane is fitted to the table rather than to the surface the fo
 - Compensating for food that overhangs its support; the resulting under-measurement is accepted and documented (Decision 4).
 - Re-estimating, migrating, or rewriting meals already stored against the old reference.
 - β_c gravimetric calibration itself (deferred by model-production Decision 3); this feature fixes the geometric basis calibration will later be run against, and constrains how calibration may use it.
-- The accuracy of the two-view silhouette carve, which under-reads for unrelated reasons.
+- The accuracy of the two-view silhouette carve, which under-reads for unrelated reasons — measured on 2026-08-05 at **9.5×** (196 g bread read as 20.7 g) and **10.2×** (320 g white rice read as 31.4 g), both with the class correct. That is an order of magnitude, not a margin, and it is a separate defect: this feature changes only the depth-derived plane.
 
 **Deliberately no longer excluded.** Segmentation accuracy was excluded in an earlier draft. It cannot be: Req 3 makes the food mask an input to selecting the *geometric reference*, so a mask error changes which plane is used and can change the answer by ~3×. The dependency is stated in Req 3.5 rather than waved away.
 
@@ -37,7 +37,7 @@ The LiDAR support plane is fitted to the table rather than to the surface the fo
 
 1. <a name="2.1"></a>The depth points used for the restricted fit SHALL contain no pixel of the food region mask, preserving the exclusion the existing edge-band scan already performs.  
 2. <a name="2.2"></a>The restricted region SHALL be derived from the food region's position in the frame and SHALL be contiguous with it. It SHALL NOT be derived from a fixed frame position — the existing offline implementation seeds at the frame centre on the stated assumption that "the rig centres the plate under the camera", which does not hold for handheld capture where the user centres the food.  
-3. <a name="2.3"></a>The restricted fit SHALL be subject to a residual bar tighter than the 20 mm gate of pipeline Req 4.5, stated as a documented constant. A region straddling a plate and the table 26 mm apart yields roughly 13 mm RMS and would otherwise pass, recording a half-corrected plane as a full success.  
+3. <a name="2.3"></a>The restricted fit SHALL be subject to a documented dispersion bar on the contact ring's inner band, and SHALL reject a fit whose inner band straddles two surfaces, so that a half-corrected plane is not recorded as a full success. A plane-residual bar SHALL NOT be used for this purpose: under RANSAC the residual is computed only over inliers already within the inlier band, so it is bounded by construction and can never fire (Decision 16).  
 4. <a name="2.4"></a>Candidate sufficiency SHALL be assessed in independent depth samples, not in colour-grid points. Candidates are currently enumerated at 1920×1440 with depth sampled from a 256×192 map, replicating each measurement about 56 times, which inflates every count derived from them.  
 5. <a name="2.5"></a>The system SHALL state the minimum food height it can resolve, given that the region is bounded by a depth discontinuity and ARKit's depth map is smoothed over several pixels. Food thinner than that bound SHALL be documented as out of scope for the correction rather than silently under-measured.  
 
@@ -52,6 +52,10 @@ The LiDAR support plane is fitted to the table rather than to the surface the fo
 3. <a name="3.3"></a>The system SHALL reject a restricted fit whose plane lies below the plane the edge-band fit produces for the same capture, since the surface the food rests on cannot be further from the camera than the surrounding surface.  
 4. <a name="3.4"></a>The system SHALL NOT integrate volume against a support plane that lies above the food region's depth samples by more than the documented band of [3.2](#3.2). This bounds [1.3](#1.3): overhanging food legitimately sits below the plane and SHALL NOT trigger rejection.  
 5. <a name="3.5"></a>WHERE the food mask determines which reference is selected, the system SHALL record the mask's food coverage alongside the selected reference, so a reference flip caused by mask instability is attributable after the fact.  
+6. <a name="3.6"></a>The system SHALL evaluate ring support in angular sectors as well as in aggregate, and SHALL reject a candidate whose supporting samples are confined to a subset of those sectors. An aggregate support fraction cannot distinguish a ring lying wholly on the surface the food rests on from one that has crossed that surface's edge onto the surrounding surface: a ring 65 % on the table is 100 % table across roughly 235° and 0 % across the remainder, yet scores 0.65 in aggregate, passes every other guard, and reproduces the defect this feature exists to remove while recording a ring median of approximately zero.  
+7. <a name="3.7"></a>The sector measure SHALL be derived from measurement against the fixture corpus rather than asserted, and its derivation SHALL be recorded. This applies to the sector count, the per-sector support bar, and the number of failing sectors that constitutes a rejection.  
+8. <a name="3.8"></a>The system SHALL resolve the contact ring into radial bands and treat the band nearest the food boundary as authoritative for selection, since the support surface is by definition the one immediately adjacent to the food. An outward rise across bands beyond a documented step SHALL be treated as a raised vessel edge rather than as the support surface (Decision 14).  
+9. <a name="3.9"></a>WHERE the visible support region is too small relative to the food region for the support surface to be observed at all, the system SHALL reject the restricted fit and fall back. When food fills a plate's well the well produces no depth samples, so no candidate plane can be fitted to it, and the system SHALL NOT select a raised edge in its place (Decision 14).  
 
 ### 4. Fallback, and knowing how often it fires
 
@@ -59,7 +63,7 @@ The LiDAR support plane is fitted to the table rather than to the surface the fo
 
 **Acceptance Criteria:**
 
-1. <a name="4.1"></a>WHEN the restricted fit is not produced, fails its residual bar, or is rejected under Req 3, THEN the system SHALL complete the estimate using the existing edge-band fit.  
+1. <a name="4.1"></a>WHEN the restricted fit is not produced, fails the dispersion bar of [2.3](#2.3), or is rejected under Req 3, THEN the system SHALL complete the estimate using the existing edge-band fit.  
 2. <a name="4.2"></a>The set of conditions under which the pipeline refuses to compute SHALL be unchanged from pipeline Req 4.5.  
 3. <a name="4.3"></a>WHEN the fallback fires, the support plane used SHALL be identical to the one the edge-band fit produces for the same capture.  
 4. <a name="4.4"></a>The system SHALL record which reference produced the plane for every attempt, and SHALL report the fallback rate aggregated across a fixture corpus.  
@@ -86,6 +90,7 @@ The LiDAR support plane is fitted to the table rather than to the surface the fo
 1. <a name="6.1"></a>For every attempt that derives a support plane from depth, the system SHALL persist the reference used and the ring measure of [3.1](#3.1), queryable from a pulled device database.  
 2. <a name="6.2"></a>Replaying capture `1785135663727` under the pre-feature fit SHALL yield a ring measure in the +18…+26 mm range recorded by the diagnosis, and under the corrected fit SHALL yield approximately zero. This makes the diagnostic falsifiable rather than merely recorded.  
 3. <a name="6.3"></a>Attempts recorded before this feature SHALL remain distinguishable from attempts recorded after it; the field SHALL be absent rather than defaulted on pre-feature rows.  
+4. <a name="6.4"></a>The system SHALL persist the sector evidence of [3.6](#3.6) — at minimum the count of sectors meeting the per-sector support bar — so that a capture whose ring crossed the support's edge is identifiable from the record alone. A ring median near zero SHALL NOT be sufficient evidence that a fit was correct, since the failure mode of [3.6](#3.6) produces exactly that value.  
 
 ### 7. Accuracy outcome and preserved invariants
 
@@ -102,6 +107,8 @@ The LiDAR support plane is fitted to the table rather than to the surface the fo
 7. <a name="7.7"></a>Identical capture bytes SHALL produce an identical support plane and an identical selected reference across runs.  
 8. <a name="7.8"></a>The feature SHALL be verified on device against a weighed flat-food capture, not only in offline replay.  
 9. <a name="7.9"></a>Meals already stored SHALL NOT be re-estimated, rewritten, or migrated.  
+10. <a name="7.10"></a>At least one acceptance case SHALL be a weighed **single-view LiDAR** capture on a lipped or rimmed plate, exercising [3.6](#3.6) and [3.7](#3.7). No such capture exists: the 2026-08-05 session produced a lipped-plate capture of heaped rice (`1785921526968`, 245 g weighed, read as 841 g across `carrot` + `mixed_vegetables`) but on the two-view path, where no depth-derived plane is selected, so it cannot exercise either criterion.  
+11. <a name="7.11"></a>A weighed capture SHALL count as evidence for this feature only where it completed on the single-view LiDAR path. In the 2026-08-05 session all 22 single-view attempts refused and all three successes were two-view, so four weighed truths yielded no usable evidence.  
 
 ## Test artefacts
 

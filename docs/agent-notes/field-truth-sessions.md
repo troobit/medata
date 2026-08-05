@@ -38,6 +38,14 @@ Readings:
 - Earlier same day, 17:27: pumpkin-only plate — 3 refusals + one "cheese
   18 cm³" estimate from a 0.21 % sliver; full analysis in
   `specs/bugfixes/unrecognised-food-estimated-as-residual-sliver/report.md`.
+- **The 208 g rice bundle does not replay.** `1785054950406-success.fixture`
+  is still on the device and pulls fine (194.9 MB, stamp `ab812dc3aa9d`), but
+  `FixtureLoader` loads **zero meals** from it — `make harness-accuracy` over a
+  directory containing it reports one fewer meal than files present, with no
+  error. Not diagnosed: a fresh weighed capture on the current build is cheaper
+  than repairing a July bundle. The two bread-session bundles from the same era
+  (`1785135663727`, `1785901032716`) load normally, so it is not an era-wide
+  format problem. Don't re-pull it expecting it to work.
 
 Follow-ups seeded by this session:
 
@@ -173,3 +181,71 @@ Multigrain crust is brown-orange and `carrot` is the orange class; the same conf
 "squash/pumpkin read as carrot" in the 2026-07-26 session. This is not a two-view-path defect —
 it is the segmenter giving a different answer to the same question, and it belongs with
 `estimation/estimation-quality`'s run-to-run variance work rather than with the carve.
+
+## 2026-08-05 09:09–09:20 UTC — four weighed truths, all on the wrong path
+
+Build carrying `coreml_ab812dc3aa9d`. 49 attempts, 3 successes. **Every weighed truth landed on
+`two_view_sfs`; all 22 `single_view_lidar` attempts refused.** Raw notes for integration.
+
+### The four events
+
+| Attempt | Truth | Estimate | Error | Class | Path |
+|---|---|---|---|---|---|
+| bowl of prawns (09:09–09:12) | — | refused | `noFoodPixels` ×many, one `unrecognisedFood` | — | mixed |
+| `1785921329668` bread | 196 g | 20.7 g | **9.5× under** | `bread_white` ✓ | two-view |
+| `1785921526968` heaped rice, **lipped plate** | 245 g | 841 g | **3.43× over** | `carrot` + `mixed_vegetables` ✗ | two-view |
+| `1785921628874` white rice | 320 g | 31.4 g | **10.2× under** | `white_rice` ✓ | two-view |
+
+Full decompositions:
+
+- `1785921329668` — `bread_white` 54.6 cm³ / 20.7 g / 10.0 g carbs, MEASURED density.
+  plane residual 2.47 mm, inliers 599,779 / 1,081,362, nadir tilt 1.9°,
+  foodRegionCoverage 99.6 %, segNadir foodCoverage 9 %.
+- `1785921526968` — `carrot` 260.0 cm³ / 189.8 g / 8.4 g carbs (FAO_DENS) **plus**
+  `mixed_vegetables` 1002.1 cm³ / 651.4 g / 29.3 g carbs (MEASURED). Total 1262 cm³ / 841 g /
+  37.7 g carbs. plane residual 2.32 mm, inliers 23,791 / **30,576**, nadir tilt 2.4°,
+  **foodRegionCoverage 0 %**, segNadir foodCoverage **0 %**.
+- `1785921628874` — `white_rice` 43.0 cm³ / 31.4 g / 10.0 g carbs, FAO_DENS.
+  plane residual 2.75 mm, inliers 158,972 / 575,060, nadir tilt 3.5 °,
+  foodRegionCoverage 88.9 %, segNadir foodCoverage 6 %.
+
+All three: `scaleSource = card+lidar`, `cardFallback = false`, `sigmaView = 0.75`.
+
+Bundles on device: `1785921329668-success.fixture` (390.5 MB), `1785921526968-success.fixture`
+(390.3 MB), `1785921628874-success.fixture` (389.8 MB), plus `1785921175528-refused.fixture`
+(198.9 MB, the prawn bowl's `unrecognisedFood`).
+
+### What the numbers say
+
+**The two-view carve under-reads by an order of magnitude, not a margin.** 9.5× and 10.2×, both
+with the class *correct*, so this is the carve and not segmentation. The previously recorded figure
+was ~4× (2026-08-05 bread session). Belongs to `bugfixes/two-view-carve-no-volume`, not to
+`support-plane-reference`.
+
+**Carbs, which is the number that matters:** white rice 320 g → 10.0 g carbs reported against
+~90 g expected for cooked rice. The lipped plate reported 37.7 g against ~69 g expected, so mass
+was 3.4× *over* while carbs were ~45 % *under* — the wrong classes carry much lower carb density,
+and the two errors partly cancel in a way that hides both.
+
+**`1785921526968` is anomalous beyond the misclassification.** `foodRegionCoveragePercent: 0` and
+segmenter `foodCoveragePercent: 0`, with `planeCandidateCount` 30,576 against ~1 M on the
+neighbouring captures — yet it returned a success carrying 1,262 cm³. A success recorded on a frame
+with no confident depth over the food. Worth its own look; not diagnosed here.
+
+**The bowl attempts prove nothing about bowls.** Prawns are not among the 25 solid palette classes,
+so segmentation refused before plane selection was ever reached. Same family as the raw sweet potato
+(2026-08-05 earlier entry). A bowl capture can only exercise the support-plane fallback if the food
+is in palette — rice, pasta or cereal.
+
+**`worldTrackingDegraded` refused 13 of 49 attempts.** Roughly a quarter of shutter presses lost to
+ARKit tracking. Not investigated; it sets the realistic yield of a weighed sitting at about half the
+presses.
+
+### Consequence for `support-plane-reference`
+
+Four weighed truths, zero usable evidence — the feature corrects the *depth-derived* plane, and no
+capture reached that path. `1785921526968` is nonetheless the only lipped-plate capture in
+existence, and Decision 14's radial-band and support-visibility mitigations have no field evidence
+of any kind. Recorded as Reqs 7.10 (a weighed single-view lipped-plate case) and 7.11 (a weighed
+capture counts as evidence only where it completed single-view), with the session written up in
+that spec's `prerequisites.md`.
