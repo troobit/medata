@@ -3201,6 +3201,419 @@ struct SupportPlaneCorpusMeasurementTests {
         return medians[1] - medians[0]
     }
 
+    // MARK: - The pass cap, and what it is the cap ON
+
+    // Decision 47 closed the ring geometry: every constant the sector measure reads now
+    // carries a provenance marker. `maxCandidatePlanes` is outside it, in extraction, and
+    // it carries the same kind of comment the band count did — "Structural: table,
+    // support, one more" — with no marker at all. It has never been varied either.
+    //
+    // Decision 46 is what makes it worth varying. That decision found the radius moves the
+    // selected plane BECAUSE it moves the annulus, and Decision 47 confirmed the
+    // attribution by moving radial geometry without moving the annulus and watching the
+    // plane stand still. The annulus is the sample set extraction draws from; this
+    // constant is how many times it may draw. It is the second constant that changes
+    // which planes COMPETE, and the only one that can add a candidate rather than
+    // reshuffle the set.
+    //
+    // 8 is above anything the corpus can plausibly use and is there to find where
+    // extraction stops on its own. 1 is there because a cap of 1 is the pre-feature
+    // single-plane fit, which is the floor a sequential design has to beat.
+    static let maxCandidatePlanesSweep = [1, 2, 3, 4, 5, 6, 8]
+
+    // `SupportRegion.extractCandidates` with the pass cap as an argument. Every other
+    // line is the shipped path's — the same `ccRansac`, the same consensus polish, the
+    // same `minResidueSamples` floor, the same inlier removal — so at
+    // `maxCandidatePlanes` it reproduces the shipped call exactly, which the anchor below
+    // checks candidate by candidate.
+    //
+    // The passes are a PREFIX chain: pass n reads only the residue pass n−1 left and the
+    // rng state it left, so a run at a higher cap contains a run at a lower one verbatim.
+    // That is why one run at the sweep's top measures every cap below it, and why a cap
+    // can only ever truncate — it can never change a candidate the shorter run produced.
+    static func extractCandidates(annulus: [Int], geometry g: SupportRegion.DepthGeometry,
+                                  gravity: Vec3, rng: inout SplitMix64,
+                                  maxPasses: Int) -> [SupportRegion.PlaneCandidate] {
+        var residue = annulus
+        var candidates: [SupportRegion.PlaneCandidate] = []
+        let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
+        let residueFloor = SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)
+
+        for _ in 0..<maxPasses {
+            guard residue.count >= residueFloor else { break }
+            guard let hypothesis = SupportRegion.ccRansac(
+                indices: residue, geometry: g, gravity: gravity,
+                rng: &rng, scratch: scratch) else { break }
+
+            var inliers = hypothesis.members
+            guard let refined = try? LiDARPlaneFitter.refine(
+                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+            ) else { break }
+            var normal = refined.0
+            var d = refined.1
+
+            for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+                var reselected: [Int] = []
+                reselected.reserveCapacity(residue.count)
+                for idx in residue
+                where abs(normal.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                    reselected.append(idx)
+                }
+                let component = scratch.largestComponent(of: reselected)
+                let next = component.members
+                if next == inliers || next.count < LiDARPlaneFitter.minPoints { break }
+                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                    inliers: next.map { g.points[$0] }, seedNormal: normal
+                ) else { break }
+                if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity)))
+                    > LiDARPlaneFitter.gravityAngleMaxRad {
+                    break
+                }
+                inliers = next
+                normal = nextNormal
+                d = nextD
+            }
+
+            let component = scratch.largestComponent(of: inliers)
+            candidates.append(SupportRegion.PlaneCandidate(
+                normal: normal, d: d,
+                residualMm: LiDARPlaneFitter.computeResidual(
+                    points: inliers.map { g.points[$0] }, normal: normal, d: d
+                ),
+                componentSize: component.size,
+                extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count))
+
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
+        }
+        return candidates
+    }
+
+    @Test("the pass cap is what stops extraction on the corpus, and it is not marked")
+    func thePassCapIsWhatStopsExtractionOnTheCorpus() throws {
+        struct Pass {
+            let index: Int
+            let residueCount: Int
+            let residueAreaMm2: Float
+            let planeAtFoodMm: Float
+            let innerSupport: Float
+            let extentMm: Float
+            let componentSize: Int
+            let residualMm: Float
+            let signs: SectorSigns
+            let envelopeMm: Float
+            let annulusMedianMm: Float
+            // Req 3.1's own quantity: the ring's median signed height above the plane. The
+            // candidate a correct fit must select is the one nearest zero, which is how
+            // Decisions 42 and 46 identify it, and it is NOT always the highest-support one.
+            let ringMedianMm: Float
+            let rejections: [SupportRegion.CandidateRejection]
+            var admissible: Bool { rejections.isEmpty }
+            // The guards that are not `[owed]`. Decision 42 sweeps the owed bars and holds
+            // these fixed; the same split is what makes a selection here readable.
+            var rejectedByInherited: Bool {
+                rejections.contains(.ringMedian) || rejections.contains(.escaped)
+            }
+        }
+        struct Capture {
+            let name: String
+            let residueFloor: Int
+            let pixelAreaMm2: Float
+            let passes: [Pass]
+            let halvedPassCount: Int
+            // What is left in the annulus after the last pass took its inliers. This is
+            // what says whether extraction stopped because it ran out of surface or
+            // because the cap said so.
+            let residueAfterLastPass: Int
+            var naturalDepth: Int { passes.count }
+            var starved: Bool { residueAfterLastPass < residueFloor }
+        }
+
+        let sweepTop = try #require(Self.maxCandidatePlanesSweep.max())
+        var captures: [Capture] = []
+
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let ray = try #require(Self.foodCentroidRay(slice))
+            let gravity = slice.gravity.normalised()
+
+            var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let deep = Self.extractCandidates(annulus: samples.annulus, geometry: g,
+                                              gravity: gravity, rng: &rng,
+                                              maxPasses: sweepTop)
+
+            // The anchor. A prefix of the deep run must BE the shipped run, or the sweep
+            // is measuring a different extraction and nothing below says anything about
+            // `maxCandidatePlanes`.
+            let shipped = try #require(Self.candidates(name))
+            let drift = "\(name): the parameterised extraction no longer reproduces"
+                + " SupportRegion.extractCandidates at maxCandidatePlanes"
+                + " (\(shipped.count) shipped, \(deep.prefix(SupportRegion.maxCandidatePlanes).count)"
+                + " in the prefix) — the pass cap sweep is not measuring the shipped path"
+            #expect(shipped.count == deep.prefix(SupportRegion.maxCandidatePlanes).count, "\(drift)")
+            for (a, b) in zip(shipped, deep) {
+                #expect(a.d == b.d && a.normal == b.normal
+                        && a.componentSize == b.componentSize
+                        && a.residueCount == b.residueCount, "\(drift)")
+            }
+
+            let pixelAreaMm2 = g.mmPerPx * g.mmPerPx
+            var passes: [Pass] = []
+            for (i, c) in deep.enumerated() {
+                let annulusMedianMm = SupportRegion.medianHeight(
+                    indices: samples.annulus, geometry: g, normal: c.normal, d: c.d)
+                let envelopeMm = SupportRegion.foodEnvelopeMm(
+                    geometry: g, normal: c.normal, d: c.d)
+                var rejections: [SupportRegion.CandidateRejection] = []
+                var ringMedianMm = Float.nan
+                if let ring = SupportRegion.ringStatistics(samples: samples, geometry: g,
+                                                           normal: c.normal, d: c.d) {
+                    rejections = Self.allRejections(CandidateMeasurement(
+                        candidate: c, ring: ring, annulusMedianMm: annulusMedianMm,
+                        envelopeMm: envelopeMm))
+                    ringMedianMm = ring.medianMm
+                }
+                passes.append(Pass(
+                    index: i,
+                    residueCount: c.residueCount,
+                    residueAreaMm2: Float(c.residueCount) * pixelAreaMm2,
+                    planeAtFoodMm: Self.planeDepthMm(normal: c.normal, d: c.d, ray: ray),
+                    innerSupport: Self.innerSupportFraction(samples: samples, geometry: g,
+                                                            normal: c.normal, d: c.d),
+                    extentMm: c.extentMm,
+                    componentSize: c.componentSize,
+                    residualMm: c.residualMm,
+                    signs: Self.sectorSigns(samples: samples, geometry: g,
+                                            normal: c.normal, d: c.d),
+                    envelopeMm: envelopeMm,
+                    annulusMedianMm: annulusMedianMm,
+                    ringMedianMm: ringMedianMm,
+                    rejections: rejections))
+            }
+
+            // Req 5.1's 2× halving, the bound that has now capped three constants. The
+            // question here is not whether the ring survives — Decision 38 settled that —
+            // but whether the two grids stop at the same DEPTH once the cap is lifted.
+            let halvedG = try #require(Self.geometry(slice, decimation: 2))
+            let halvedSlice = Self.decimated(slice, by: 2)
+            let halvedSamples = SupportRegion.ringSamples(geometry: halvedG)
+            var halvedRng = SplitMix64(seed: Fnv1a64.hash(halvedSlice.depth.depthBytesMm))
+            let halvedDeep = Self.extractCandidates(
+                annulus: halvedSamples.annulus, geometry: halvedG,
+                gravity: halvedSlice.gravity.normalised(), rng: &halvedRng,
+                maxPasses: sweepTop)
+
+            // The removal chain replayed, so the residue the pass AFTER the last one would
+            // have drawn from is a number rather than an inference. Removal is
+            // order-dependent and each pass filters what the previous left, which is
+            // exactly what this reproduces.
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            var residue = samples.annulus
+            for c in deep {
+                residue = residue.filter { abs(c.normal.dot(g.points[$0]) - c.d) >= removalBandMm }
+            }
+
+            captures.append(Capture(
+                name: name,
+                residueFloor: SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx),
+                pixelAreaMm2: pixelAreaMm2,
+                passes: passes,
+                halvedPassCount: halvedDeep.count,
+                residueAfterLastPass: residue.count))
+        }
+
+        for c in captures {
+            print("=== \(c.name): natural depth \(c.naturalDepth) passes"
+                  + " (cap \(SupportRegion.maxCandidatePlanes)),"
+                  + " residue floor \(c.residueFloor) samples"
+                  + " = \(fmt(SupportRegion.minResidueAreaMm2)) mm²,"
+                  + " residue left after the last pass \(c.residueAfterLastPass) samples"
+                  + " = \(fmt(Float(c.residueAfterLastPass) * c.pixelAreaMm2)) mm²"
+                  + " \(c.starved ? "BELOW the floor — starved" : "ABOVE the floor — the cap stopped it"),"
+                  + " halved-grid natural depth \(c.halvedPassCount)")
+            for p in c.passes {
+                print("  pass \(p.index + 1): residue \(p.residueCount) samples"
+                      + " = \(fmt(p.residueAreaMm2)) mm²"
+                      + " (\(fmt(p.residueAreaMm2 / SupportRegion.minResidueAreaMm2))× the floor),"
+                      + " PLANE AT FOOD \(fmt(p.planeAtFoodMm)) mm,"
+                      + " inner support \(fmt(p.innerSupport)),"
+                      + " extent \(fmt(p.extentMm)) mm,"
+                      + " component \(p.componentSize),"
+                      + " residual \(fmt(p.residualMm)) mm,"
+                      + " supporting \(p.signs.supporting), crossed \(p.signs.crossedFailing),"
+                      + " escaped \(p.signs.escapedFailing),"
+                      + " RING MEDIAN \(fmt(p.ringMedianMm)) mm,"
+                      + " food envelope \(fmt(p.envelopeMm)) mm,"
+                      + " annulus median \(fmt(p.annulusMedianMm)) mm,"
+                      + " \(p.admissible ? "ADMISSIBLE" : p.rejections.map(\.rawValue).joined(separator: "+"))")
+            }
+            for cap in Self.maxCandidatePlanesSweep {
+                let prefix = c.passes.prefix(cap)
+                guard let best = prefix.max(by: { $0.innerSupport < $1.innerSupport }) else {
+                    print("  cap \(cap): no candidate")
+                    continue
+                }
+                // Selection under Decision 40's rule, at every value of `maxCrossedSectors`
+                // the two constraint sets leave open (Decision 43's 0…2). The rule rejects
+                // first and the shipped ranking picks from what survives, which is the
+                // order `fitFoodSupportPlane` applies today with `admissibility` in place
+                // of the rule.
+                let underRule = (0...2).map { ceiling -> String in
+                    let surviving = prefix.filter { $0.signs.crossedFailing <= ceiling }
+                    guard let pick = surviving.max(by: { $0.innerSupport < $1.innerSupport })
+                    else { return "\(ceiling): FALLBACK" }
+                    return "\(ceiling): pass \(pick.index + 1) @ \(fmt(pick.planeAtFoodMm)) mm"
+                }
+                print("  cap \(cap): \(prefix.count) candidates,"
+                      + " selected pass \(best.index + 1) at \(fmt(best.planeAtFoodMm)) mm,"
+                      + " inner support \(fmt(best.innerSupport)),"
+                      + " crossed \(best.signs.crossedFailing),"
+                      + " admissible \(prefix.filter(\.admissible).count)"
+                      + " | under Decision 40's rule at maxCrossedSectors"
+                      + " [\(underRule.joined(separator: ", "))]")
+            }
+            // The candidate a correct fit must select, by Req 3.1's own quantity rather
+            // than by the ranking — the identification Decisions 42 and 46 make and
+            // Decision 43's bracket does not use.
+            if let intended = c.passes.min(by: { abs($0.ringMedianMm) < abs($1.ringMedianMm) }) {
+                print("  intended by ring median: pass \(intended.index + 1)"
+                      + " (ring median \(fmt(intended.ringMedianMm)) mm,"
+                      + " crossed \(intended.signs.crossedFailing),"
+                      + " inner support \(fmt(intended.innerSupport)),"
+                      + " envelope \(fmt(intended.envelopeMm)) mm)"
+                      + " — the highest-support candidate is pass"
+                      + " \((c.passes.max { $0.innerSupport < $1.innerSupport }?.index ?? 0) + 1)")
+            }
+        }
+
+        // `maxCrossedSectors` read at FULL pass depth, with the intended candidate
+        // identified by Req 3.1's ring median rather than by the ranking. Decision 43 took
+        // the floor from the highest-support candidate on each capture, which on
+        // `1785901032716` is the table — the plane the guard exists to reject — so its
+        // floor was never read off a plane the feature must admit there.
+        var crossedFloor = 0, crossedCeiling = Int.max
+        for c in captures {
+            guard let intended = c.passes.min(by: { abs($0.ringMedianMm) < abs($1.ringMedianMm) })
+            else { continue }
+            crossedFloor = max(crossedFloor, intended.signs.crossedFailing)
+            // Every candidate the feature must NOT select, taken as Decision 43 takes it:
+            // the ranking's winner where that is not the intended plane.
+            if let ranked = c.passes.max(by: { $0.innerSupport < $1.innerSupport }),
+               ranked.index != intended.index {
+                crossedCeiling = min(crossedCeiling, ranked.signs.crossedFailing - 1)
+            }
+        }
+        print("maxCrossedSectors at full pass depth: corpus \(crossedFloor)…\(crossedCeiling)"
+              + " — against Decision 43's 0…2, whose floor is the highest-support candidate's")
+
+        // THE NEGATIVE FIRST, and it is the opposite of Decision 46's. The cap never
+        // truncates: at eight passes both captures still stop at three, and both stop
+        // STARVED — the residue left after the last pass is below `minResidueAreaMm2`, so
+        // it is the residue floor that ends extraction and the cap has never been reached.
+        // Every claim about the value above 3 is therefore unfalsifiable on this corpus.
+        for c in captures {
+            let binds = "\(c.name) now runs \(c.naturalDepth) passes with the cap lifted to"
+                + " \(sweepTop) and \(c.starved ? "starves" : "does NOT starve") — if the cap"
+                + " is what stops extraction then maxCandidatePlanes is truncating the"
+                + " candidate set and everything Decisions 42-47 read off that set is read"
+                + " off a truncation"
+            #expect(c.naturalDepth == SupportRegion.maxCandidatePlanes && c.starved, "\(binds)")
+        }
+
+        // Which makes Decision 38's repair unconditional. That decision restored the
+        // native/halved candidate counts to 3 → 3 by re-denominating the residue floor in
+        // mm², and both numbers were AT the cap — so the agreement could have been the cap
+        // truncating both. It is not: lift the cap and the two grids still agree.
+        for c in captures {
+            let truncated = "\(c.name)'s native and halved grids stop at \(c.naturalDepth)"
+                + " and \(c.halvedPassCount) passes with the cap lifted — Decision 38's"
+                + " 3 → 3 agreement was the cap truncating both, not the area invariance it"
+                + " is recorded as"
+            #expect(c.halvedPassCount == c.naturalDepth, "\(truncated)")
+        }
+
+        // THE FLOOR, and it is the corpus's, not the suite's. On `1785901032716` the plane
+        // a correct fit must select is pass 2 — nearest Req 3.1's zero at −2.658 mm — while
+        // the RANKING's winner is pass 1, the table, at +3.039 mm. So the intended plane is
+        // not in the candidate set at all below a cap of 2, and no setting of any owed
+        // constant recovers it: the capture falls back by construction. Decision 18's
+        // silent-failure case, arriving one level above the guard that exists to catch it.
+        let rankingDisagrees = captures.compactMap { c -> String? in
+            guard let intended = c.passes.min(by: { abs($0.ringMedianMm) < abs($1.ringMedianMm) }),
+                  let ranked = c.passes.max(by: { $0.innerSupport < $1.innerSupport }),
+                  intended.index != ranked.index else { return nil }
+            return "\(c.name): intended pass \(intended.index + 1), ranked pass \(ranked.index + 1)"
+        }
+        print("captures where the ranking's winner is NOT the intended plane:"
+              + " \(rankingDisagrees.isEmpty ? ["none"] : rankingDisagrees)")
+        let rankingSuffices = "the ranking now picks the intended plane on every corpus"
+            + " capture — the pass cap's floor of 2 was read off a disagreement that is gone,"
+            + " and sequential extraction is no longer load-bearing on this corpus"
+        #expect(!rankingDisagrees.isEmpty, "\(rankingSuffices)")
+
+        // And NO ceiling. Every cap from the natural depth upward produces the same
+        // candidates, the same selection and the same verdicts, so the corpus cannot tell
+        // 3 from 8. What holds the ceiling open is `minResidueAreaMm2` — itself `[owed]`
+        // and bounded from above only (Decision 32) — because it is what stops extraction
+        // first. The headroom is the coupling: lower the residue floor below what the
+        // corpus leaves after its last pass and the cap starts to bind.
+        let headroom = captures.map { c in
+            (name: c.name,
+             leftMm2: Float(c.residueAfterLastPass) * c.pixelAreaMm2,
+             share: Float(c.residueAfterLastPass) * c.pixelAreaMm2 / SupportRegion.minResidueAreaMm2)
+        }
+        print("residue left after the last pass, against the shipped floor:"
+              + " \(headroom.map { "\($0.name) \(fmt($0.leftMm2)) mm² = \(fmt($0.share))× the floor" })"
+              + " — a floor below \(fmt(headroom.map(\.leftMm2).max() ?? 0)) mm² gives the"
+              + " corpus a fourth pass and the cap something to truncate")
+        let noCoupling = "every corpus capture now leaves less than half the residue floor"
+            + " after its last pass — the pass cap and minResidueAreaMm2 have stopped being"
+            + " coupled and the cap can be given a ceiling without setting the floor first"
+        #expect((headroom.map(\.share).max() ?? 0) > 0.5, "\(noCoupling)")
+
+        // THE CONSEQUENCE, and it belongs to another constant. Read at full pass depth with
+        // the intended plane identified by Req 3.1's ring median rather than by the ranking,
+        // the corpus DETERMINES `maxCrossedSectors` at 2: the intended plane on
+        // `1785901032716` carries 2 crossed sectors and the table it must beat carries 3.
+        // Decision 43's floor of 0 came from the highest-support candidate on each capture,
+        // which on that capture is the table — a plane the guard exists to reject — so its
+        // 0…2 was never read off a plane the feature must admit there. This is the first
+        // thing in hand that narrows that bracket, and it is a slice at the shipped
+        // (radius, count, bar, band count), like every reading since Decision 44.
+        let determined = "the corpus no longer determines maxCrossedSectors at full pass"
+            + " depth (\(crossedFloor)…\(crossedCeiling)) — Decision 43's 0…2 stands and the"
+            + " narrowing this records is gone"
+        #expect(crossedFloor == crossedCeiling && crossedFloor == 2, "\(determined)")
+
+        // One side finding, and it is a correction to Decision 34. That decision recorded
+        // `foodEnvelopeMinMm` as having no floor because the scenes the guard is written
+        // for — a bowl, a plane on the food top — are "negative-envelope cases the corpus
+        // does not contain". The corpus does contain one: `1785901032716`'s pass 3 sits
+        // 9.736 mm ABOVE the plate, reads 6 escaped sectors, and its envelope is POSITIVE
+        // at 7.154 mm. So the guard's own case is reachable with a positive envelope, and
+        // the corpus supplies a floor candidate rather than none.
+        for c in captures {
+            guard let intended = c.passes.min(by: { abs($0.ringMedianMm) < abs($1.ringMedianMm) })
+            else { continue }
+            let above = c.passes.filter { $0.index != intended.index && $0.ringMedianMm < 0 }
+            guard let highest = above.min(by: { $0.envelopeMm < $1.envelopeMm }) else { continue }
+            print("\(c.name): a plane above the support surface (pass \(highest.index + 1),"
+                  + " ring median \(fmt(highest.ringMedianMm)) mm) has envelope"
+                  + " \(fmt(highest.envelopeMm)) mm against the intended plane's"
+                  + " \(fmt(intended.envelopeMm)) mm — a foodEnvelopeMinMm floor candidate,"
+                  + " where Decision 34 recorded none")
+            let noFloor = "\(c.name)'s above-surface candidate now has an envelope at or"
+                + " above the intended plane's — the foodEnvelopeMinMm floor candidate this"
+                + " records is gone and Decision 34's \"no floor\" stands unqualified"
+            #expect(highest.envelopeMm < intended.envelopeMm, "\(noFloor)")
+        }
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a

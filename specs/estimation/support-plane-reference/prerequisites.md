@@ -216,7 +216,7 @@ guards are evaluated independently rather than short-circuited. Which capture fi
 
 | Guard | What the corpus reaches | The capture that fires it |
 |---|---|---|
-| `foodEnvelopeMinMm` | every envelope positive, 7.2–39.6 mm | 5, the bowl — the only source of a negative envelope |
+| `foodEnvelopeMinMm` | **bracketed 7.154…21.041 mm** — a plane above the surface reads a *positive* 7.154 mm (Decision 48) | 5, the bowl — still the only source of a *negative* envelope |
 | `bandStepMaxMm` | every inner→mid step a **fall**, −0.5…−6.5 mm | 3 and 4, the rimmed plate — the only source of an outward rise |
 | `supportVisibilityMin` | floor 0.246 against a 0.15 bar | 4, the ~90 %-covered well |
 | `escapeBandMm` | annulus medians −36.6…**+5.7** mm against a 30 mm bar | **none of the six** — see below |
@@ -244,6 +244,17 @@ and capture 6 is what closes it: a correct fit on a small plate is the only scen
 many crossed sectors a *right* plane can carry. Dump the crossed and escaped counts alongside the
 per-sector medians. Note that a rimmed plate is the counter-case, where a correct plane's ring can
 reach a rim genuinely above it, so captures 3 and 4 grade the rule as well as capture 6 sets it.
+
+**The corpus narrows that to a single value once the intended plane is identified correctly
+(Decision 48).** The 0…2 above takes its floor from the plate-top candidate on `1785135663727` —
+the *highest-support* candidate there, and the correct one. On `1785901032716` the highest-support
+candidate is the **table**, the plane the guard exists to reject, and the plane a correct fit must
+admit is the second extraction pass — nearest Req 3.1's zero at a ring median of −2.658 mm, and
+carrying **2** crossed sectors. Floor 2, ceiling 2 (the table's 3, minus one). So at the shipped
+`(ringOuterMm, ringSectorCount, sectorSupportMin, ringBandCount)` the corpus determines the
+constant, and the sitting's job at capture 6 is to **confirm or break** that rather than choose
+freely inside 0…2. Bring the reading back to those four constants before treating it as settled —
+each is bracketed and each re-denominates this one.
 
 **And the committed suite agrees with the corpus here, which it does nowhere else (Decision 43).**
 Read through the rule, the eight committed scenes bracket `maxCrossedSectors` at **0…2** — the
@@ -436,9 +447,10 @@ is no way to recover it afterwards.
   | `minSupportingSectors` | 6…7 | ≤ 5 |
   | `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
   | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
-  | `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
+  | `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) |
   | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
-  | `maxCrossedSectors` | 0…2 | 0…2 — **they agree** (Decision 43) |
+  | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48; 0…2 in Decision 43) |
+  | `maxCandidatePlanes` | ≥ 2 (`sequentialExtractionSurfacesThePlate`) | ≥ 2, no ceiling — the cap never fires (Decision 48) |
 
   **Both sector rows are denominated in `ringSectorCount`, which is `[owed]` too
   (Decision 44), and in `sectorSupportMin`, which is `[owed]` as well (Decision 45).**
