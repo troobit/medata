@@ -200,15 +200,34 @@ public enum SupportRegion {
     // `ringBandsAreFeasible`, so only the second is left here and the value has one
     // job. The value itself does not move — nothing measured justifies moving it.
     //
+    // Denominated in millimetres², not samples, since Decision 38. It was `500` raw
+    // depth samples, and a sample count divides by four under a 2x grid halving where
+    // the surface it stands for does not: the corpus runs three extraction passes
+    // natively and two at half resolution, so `planeCandidateCount` — a PERSISTED field
+    // (Req 6.1) — was a property of the sensor's grid rather than of the scene
+    // (Decision 35). Converting through the same `mmPerPx` the ring radii and
+    // `minAcceptedExtentMm` already use removes the dependence: the residue's AREA is
+    // near-invariant across the halving (36 280 → 36 176 mm² and 42 458 → 41 961 mm²
+    // on the first pass) where its sample count quarters.
+    //
+    // The VALUE does not move. 500 samples at the corpus's pixel areas of 3.465 mm² and
+    // 3.383 mm² is 1732.6 mm² and 1691.5 mm², so 1691 mm² is the largest whole
+    // millimetre² at or below both and every corpus pass keeps its verdict.
+    //
     // The corpus bounds it from ABOVE only. Measured residue per pass is
-    // [10469, 3310, 581] and [12551, 2811, 932], so any floor above 581 cuts a pass the
-    // corpus produces. Both third-pass candidates are then rejected on their own merits
-    // (`extent` at 12 px, and `supportFraction`), so cutting them would change no plane
-    // on this corpus — but it would drop the persisted `planeCandidateCount` from 3 to
-    // 2, and pass 3 is where a plate under a dominant table can still surface. Nothing
-    // in the corpus fails for want of residue, so there is no measured floor and the
-    // lower end stays owed to the capture session.
-    public static let minResidueSamples = 500
+    // [36 280, 11 471, 2013] mm² and [42 458, 9509, 3153] mm², so any floor above
+    // 2013 mm² cuts a pass the corpus produces. Both third-pass candidates are then
+    // rejected on their own merits (`extent` at 22.3 mm, and `supportFraction`), so
+    // cutting them would change no plane on this corpus — but it would drop
+    // `planeCandidateCount` from 3 to 2, and pass 3 is where a plate under a dominant
+    // table can still surface. Nothing in the corpus fails for want of residue, so
+    // there is no measured floor and the lower end stays owed to the capture session.
+    public static let minResidueAreaMm2: Float = 1691
+    // The floor as the sample count a given capture's grid expresses it in. Rounded UP,
+    // so the bar is never weaker than the area it stands for.
+    public static func minResidueSamples(mmPerPx: Float) -> Int {
+        Int((minResidueAreaMm2 / (mmPerPx * mmPerPx)).rounded(.up))
+    }
     // [owed] minimum bbox extent of the winning inlier component, in MILLIMETRES —
     // a sliver gives a badly conditioned normal (Req 2.3).
     //
@@ -594,7 +613,7 @@ public enum SupportRegion {
         // pass-1 ratio is high. Reported so that holds as a measurement.
         let residueInlierRatio: Float
         // The denominator of `residueInlierRatio`: how many annulus samples this pass
-        // had left to draw from. Reported so `minResidueSamples` — the only floor the
+        // had left to draw from. Reported so `minResidueAreaMm2` — the only floor the
         // corpus can bracket rather than derive — is measurable per pass.
         let residueCount: Int
     }
@@ -606,9 +625,12 @@ public enum SupportRegion {
         var residue = annulus
         var candidates: [PlaneCandidate] = []
         let scratch = ComponentScratch(width: g.width, height: g.height)
+        // Converted once per capture: the floor is an area, and this is the sample count
+        // this grid expresses it in (Decision 38).
+        let residueFloor = minResidueSamples(mmPerPx: g.mmPerPx)
 
         for _ in 0..<maxCandidatePlanes {
-            guard residue.count >= minResidueSamples else { break }
+            guard residue.count >= residueFloor else { break }
             guard let hypothesis = ccRansac(indices: residue, geometry: g, gravity: gravity,
                                             rng: &rng, scratch: scratch) else { break }
 

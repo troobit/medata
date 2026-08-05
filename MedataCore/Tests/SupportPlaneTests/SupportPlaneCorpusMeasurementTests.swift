@@ -310,34 +310,47 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
-    // `minResidueSamples` is what is left of `minCandidateSamples` once the whole-fit
+    // The residue floor is what is left of `minCandidateSamples` once the whole-fit
     // question is asked exactly. The corpus can bound it from above and not from below:
     // it shows which passes a floor would cut, but nothing in it fails for want of
     // residue, so there is no evidence for where the floor belongs (Decision 32).
+    //
+    // Measured in MILLIMETRES² since Decision 38, for the same reason the extent bar is
+    // (Decision 37): a sample count is a property of the grid, and this one decided how
+    // many extraction passes ran.
     @Test("the corpus bounds the residue floor from above only")
     func residueFloorIsBoundedFromAboveOnly() throws {
-        var smallestResidue = Int.max
+        var smallestResidueMm2 = Float.greatestFiniteMagnitude
         for name in Self.captures {
+            let g = try #require(Self.geometry(name))
             let candidates = try #require(Self.candidates(name))
+            let pixelAreaMm2 = g.mmPerPx * g.mmPerPx
             let residues = candidates.map(\.residueCount)
-            print("\(name): residue per pass \(residues),"
-                  + " extents \(candidates.map(\.extentPx)) px"
-                  + " = \(candidates.map { fmt($0.extentMm) }) mm")
+            let residueAreas = residues.map { Float($0) * pixelAreaMm2 }
+            print("\(name): residue per pass \(residues) samples"
+                  + " = \(residueAreas.map { fmt($0) }) mm², floor"
+                  + " \(SupportRegion.minResidueAreaMm2) mm²"
+                  + " = \(SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)) samples here,"
+                  + " extents \(candidates.map { fmt($0.extentMm) }) mm")
             // Every pass the corpus produces must survive the shipped floor, or the
             // constant is silently discarding candidates — and `planeCandidateCount` is
             // persisted, so a cut pass changes the record even when it changes no plane.
-            for residue in residues {
-                let cut = "\(name) runs a pass on \(residue) samples, below the"
-                    + " \(SupportRegion.minResidueSamples) floor — the floor would cut it"
-                #expect(residue >= SupportRegion.minResidueSamples, "\(cut)")
+            for area in residueAreas {
+                let cut = "\(name) runs a pass on \(area) mm² of residue, below the"
+                    + " \(SupportRegion.minResidueAreaMm2) mm² floor — the floor would cut it"
+                #expect(area >= SupportRegion.minResidueAreaMm2, "\(cut)")
             }
-            smallestResidue = min(smallestResidue, residues.min() ?? Int.max)
+            // The re-denomination holds the value: at corpus resolution the area floor
+            // is the 500 samples the count floor was, or fewer, so nothing it used to
+            // admit is now rejected.
+            #expect(SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx) <= 500)
+            smallestResidueMm2 = min(smallestResidueMm2, residueAreas.min() ?? .greatestFiniteMagnitude)
         }
         // The ceiling, stated as a number so a future session can see how little room
         // there is between the shipped floor and the first pass it would cost.
-        print("corpus smallest residue \(smallestResidue),"
-              + " shipped floor \(SupportRegion.minResidueSamples)")
-        #expect(smallestResidue > SupportRegion.minResidueSamples)
+        print("corpus smallest residue \(fmt(smallestResidueMm2)) mm²,"
+              + " shipped floor \(SupportRegion.minResidueAreaMm2) mm²")
+        #expect(smallestResidueMm2 > SupportRegion.minResidueAreaMm2)
     }
 
     // `minAcceptedExtentMm` rejects a badly conditioned normal (Req 2.3). The corpus
@@ -747,15 +760,66 @@ struct SupportPlaneCorpusMeasurementTests {
                     "\(name) ring median moves \(a.ring.medianMm) -> \(b.ring.medianMm) mm")
             #expect(tiltDeg < 1.5, "\(name) normal tilts \(tiltDeg)° across the halving")
 
-            // What does NOT transfer, and it is a persisted field (Req 6.1, task 12):
-            // the coarser grid runs fewer extraction passes, because the residue after
-            // each pass is smaller. `planeCandidateCount` is therefore grid-dependent
-            // even where the plane is not, so a device/replay comparison must read it
-            // as a property of the capture's resolution rather than of the scene.
-            let stable = "\(name) now extracts \(halved.candidates.count) candidates on the"
-                + " halved grid against \(native.candidates.count) native — planeCandidateCount"
-                + " has become grid-independent and the Decision 35 caveat can be dropped"
-            #expect(halved.candidates.count < native.candidates.count, "\(stable)")
+            // `planeCandidateCount` is persisted (Req 6.1, task 12) and used to be the
+            // second thing here that did not transfer: the coarser grid ran fewer
+            // extraction passes, because the residue floor was a raw SAMPLE count and
+            // the residue quarters under a 2x halving. Decision 38 denominated the floor
+            // in millimetres² instead, and the count now follows the scene.
+            let drifted = "\(name) extracts \(halved.candidates.count) candidates on the"
+                + " halved grid against \(native.candidates.count) native —"
+                + " planeCandidateCount is grid-dependent again"
+            #expect(halved.candidates.count == native.candidates.count, "\(drifted)")
+        }
+    }
+
+    // The measurement behind Decision 38, and the reason the floor could be re-denominated
+    // without inventing a value: the residue's AREA is what the grid leaves alone. The
+    // sample count quarters under a 2x halving because a depth pixel covers 4x the
+    // surface, and the two cancel.
+    @Test("the residue a pass draws from is an area, and the area survives a grid halving")
+    func residueAreaTransfersAcrossAGridHalving() throws {
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let native = try #require(Self.gridFit(slice, decimation: 1))
+            let halved = try #require(Self.gridFit(slice, decimation: 2))
+            let nativeArea = native.mmPerPx * native.mmPerPx
+            let halvedArea = halved.mmPerPx * halved.mmPerPx
+            let nativeResidues = native.candidates.map { Float($0.candidate.residueCount) * nativeArea }
+            let halvedResidues = halved.candidates.map { Float($0.candidate.residueCount) * halvedArea }
+            print("\(name): residue per pass \(native.candidates.map(\.candidate.residueCount))"
+                  + " -> \(halved.candidates.map(\.candidate.residueCount)) samples,"
+                  + " \(nativeResidues.map { fmt($0) }) -> \(halvedResidues.map { fmt($0) }) mm²;"
+                  + " floor \(SupportRegion.minResidueSamples(mmPerPx: native.mmPerPx))"
+                  + " -> \(SupportRegion.minResidueSamples(mmPerPx: halved.mmPerPx)) samples")
+
+            #expect(nativeResidues.count == halvedResidues.count)
+            // Pass 1 draws from the annulus itself, which nothing has removed from yet,
+            // so this is the grid acting on a fixed set of surface: 0.3 % and 1.2 %.
+            let annulusDrift = abs(nativeResidues[0] - halvedResidues[0]) / nativeResidues[0]
+            #expect(annulusDrift < 0.02,
+                    "\(name) annulus area \(nativeResidues[0]) -> \(halvedResidues[0]) mm²")
+            for (i, (a, b)) in zip(nativeResidues, halvedResidues).enumerated() {
+                // Later passes drift further — up to 22.7 % on pass 3 — because each
+                // pass removes its OWN inliers within a mm band and that removal is
+                // resolved on the grid, so the coarser run removes a slightly different
+                // set. The bar is 25 %: what matters is that the drift stays an order
+                // below the 4x the sample count moves by, not that it vanishes.
+                let drift = abs(a - b) / max(a, b)
+                #expect(drift < 0.25,
+                        "\(name) pass \(i + 1) residue \(a) -> \(b) mm², \(drift * 100) % apart")
+            }
+            // The sample count is what moves: each pass draws from roughly a quarter of
+            // the samples on the halved grid, which is why a floor denominated in them
+            // decided how many passes ran.
+            for (a, b) in zip(native.candidates, halved.candidates) {
+                #expect(b.candidate.residueCount < a.candidate.residueCount / 2)
+            }
+            // The pass the old floor cut. Its residue clears the area floor on both
+            // grids while its halved-grid SAMPLE count is below the 500 the floor used
+            // to be — which is the whole of Decision 38 in one comparison.
+            let last = try #require(halved.candidates.last)
+            #expect(last.candidate.residueCount < 500)
+            #expect(Float(last.candidate.residueCount) * halvedArea >= SupportRegion.minResidueAreaMm2)
         }
     }
 
