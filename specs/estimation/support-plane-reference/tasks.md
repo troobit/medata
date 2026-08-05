@@ -198,7 +198,7 @@ references:
 
 ## Documents
 
-- [ ] 25. Amend every document that names the old support-plane reference <!-- id:284ca5q -->
+- [x] 25. Amend every document that names the old support-plane reference <!-- id:284ca5q -->
   - Edits, not cross-references: pipeline Req 4.2, pipeline design section 6.2, the pipeline glossary, and DECISIONS.md MD-9 (superseding entry, not a silent rewrite)
   - Add the support-plane reference to the nutrition5k-calibration transfer contract alongside masking (Req 5.2), which its own Req 3.6 already contradicts
   - State the two-view + ID-1-card path as unaffected: it derives no depth-derived plane, so the definitional change applies but no behaviour changes

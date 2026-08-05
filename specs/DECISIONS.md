@@ -39,7 +39,8 @@ per-decision format see `rules/references/decision-log-format.md`.
 | [MD-6](#md-6-protocol-seams-at-every-injectable-boundary) | Pipeline Architecture | Protocol seams at every injectable boundary | accepted |
 | [MD-7](#md-7-metric-scale-from-lidar-andor-id-1-card-via-pnp-card-optional) | Scale & Geometry | Metric scale from LiDAR and/or ID-1 card via PnP; card optional | accepted |
 | [MD-8](#md-8-degrade-confidence-instead-of-refusing-keep-only-undefined-cases-hard) | Scale & Geometry | Degrade confidence instead of refusing; keep only undefined cases hard | accepted |
-| [MD-9](#md-9-on-device-plane-fit-robustness) | Scale & Geometry | On-device plane-fit robustness | accepted |
+| [MD-9](#md-9-on-device-plane-fit-robustness) | Scale & Geometry | On-device plane-fit robustness | amended |
+| [MD-31](#md-31-the-support-plane-is-the-surface-the-food-rests-on-not-the-table) | Scale & Geometry | The support plane is the surface the food rests on, not the table | accepted |
 | [MD-10](#md-10-multi-food-semantic-segmentation-liquids-excluded) | Segmentation & Classes | Multi-food semantic segmentation; liquids excluded | accepted |
 | [MD-11](#md-11-deterministic-per-class-voxel-ownership) | Segmentation & Classes | Deterministic per-class voxel ownership | accepted |
 | [MD-12](#md-12-segmenter-and-c-quality-bars) | Segmentation & Classes | Segmenter and β_c quality bars | accepted |
@@ -60,6 +61,7 @@ per-decision format see `rules/references/decision-log-format.md`.
 | [MD-27](#md-27-evaluation-harness-gated-behind-a-compile-flag) | Process & Method | Evaluation harness gated behind a compile flag | accepted |
 | [MD-28](#md-28-measure-latency-in-release-before-treating-it-as-a-defect) | Process & Method | Measure latency in Release before treating it as a defect | accepted |
 | [MD-29](#md-29-palette-v2--cereal-solid-class-on-a-cofid-porridge-basis) | Segmentation & Classes | Palette v2 — cereal solid class on a CoFID porridge basis | accepted |
+| [MD-30](#md-30-bridge-dataset-substituted--food-recognition-benchmark-2022-replaces-myfoodrepo-273-v04) | Segmentation & Classes | Bridge dataset substituted — Food Recognition Benchmark 2022 replaces MyFoodRepo-273 v0.4 | accepted |
 
 ---
 
@@ -338,8 +340,8 @@ while keeping genuinely meaningless captures out.
 
 ## MD-9: On-device plane-fit robustness
 
-**Status**: accepted
-**Sources**: bugfix/lidar-plane-fit-oom-on-device-1920x1440 D1; bugfix/lidar-plane-fit-degenerate-on-clean-capture D1, D2; pipeline-rdc D7
+**Status**: amended — the edge-band half is **superseded by [MD-31](#md-31-the-support-plane-is-the-surface-the-food-rests-on-not-the-table)**; the scatter-matrix half stands
+**Sources**: bugfix/lidar-plane-fit-oom-on-device-1920x1440 D1; bugfix/lidar-plane-fit-degenerate-on-clean-capture D1, D2; pipeline-rdc D7; support-plane-reference D1–D28
 
 ### Context
 
@@ -356,16 +358,123 @@ approximations). A DEBUG candidate-point counter (`debugLastCandidatePointCount`
 emitted for diagnostics, but there is **no enforced candidate ceiling** — the
 scatter-matrix form already bounds memory regardless of n.
 
+**Amendment (2026-08-05).** The four-edge-band scan is **no longer the fit**. It is the
+**fallback**, reached only where the restricted fit of MD-31 declines. The scatter-matrix
+SVD, the absent candidate ceiling and the diagnostics counter are untouched and apply to
+both paths.
+
 ### Rationale
 
 The scatter-matrix form is mathematically equivalent at bounded memory independent of
-resolution; edge-band sampling gives the table-plane prior that food segmentation alone
-cannot.
+resolution.
+
+Edge-band sampling was justified here as giving "the table-plane prior that food
+segmentation alone cannot". **That justification is withdrawn**: the table plane is the
+wrong prior. Volume is integrated per-pixel above π_sup, so fitting the table adds the
+height of any raised support to every food pixel — measured at 26.1 mm, a 2–3.6× volume
+over-read. The prior that was missing was never spatial coverage; it was the food mask,
+which MD-31 makes an input to selecting the reference.
 
 ### Consequences
 
 - **Positive:** Plane fit is memory-bounded and robust on real captures.
+- **Positive:** The fallback keeps that robustness on the path MD-31 declines, so the
+  restricted fit cannot make a capture that succeeds today fail.
 - **Negative:** Candidate sampling is a heuristic that future captures may stress.
+- **Negative:** Every attempt recorded before MD-31 carries the edge-band basis, and no
+  field distinguishes it on those rows — which is why MD-31 adds one going forward
+  rather than backfilling.
+
+---
+
+## MD-31: The support plane is the surface the food rests on, not the table
+
+**Status**: accepted
+**Sources**: support-plane-reference D1–D28 (`specs/estimation/support-plane-reference/decision_log.md`)
+
+### Context
+
+MD-9 fitted π_sup to four edge bands around the food bounding box, and pipeline Req 4.2
+specified exactly that. Both were faithfully implemented. Both were wrong about *which
+surface* π_sup names: the bands land on the table around the plate, not on the plate top
+the food rests on.
+
+Volume is integrated per-pixel above π_sup, so the plate's height is added to every food
+pixel. Two independent weighed captures fix the magnitude: 2 slices of bread at 80 g read
+as 285.94 g (3.57×, implying a 10.1 mm slice), and 208 g of rice read as 440 g (2.1×). The
+offset is roughly constant in height, so the relative over-read is proportionally largest
+on the flattest food — the case the tool is most often pointed at.
+
+### Decision
+
+**π_sup is the surface the food rests on.** Where LiDAR depth is available, fit it by
+CC-RANSAC over native-depth-grid samples in a millimetre-denominated annulus around the
+food mask, admit a candidate only where a **contact ring** just outside the food boundary
+supports it in aggregate, across radial bands and across **angular sectors**, and score
+the admissible set on inner-band support fraction. Where nothing is admissible, fall back
+to MD-9's edge-band fit unchanged, record which reference produced the plane, and penalise
+σ_plane multiplicatively on the fallback. Device and offline harness call one
+implementation. β_c applies only where the calibration artefact records a matching
+reference; an artefact recording none is refused.
+
+### Rationale
+
+The definitional change is the load-bearing part: the code matched the spec, so fixing
+only the code would leave the two disagreeing. The operational parts follow from what can
+go wrong once the fit is restricted. Native-grid enumeration exists because colour-grid
+candidates replicate each depth measurement ~56× and inflate every count derived from
+them. Largest-connected-component scoring exists because a plane straddling a step
+otherwise beats either surface alone. The **sector** guard exists because an aggregate
+support fraction cannot tell a ring lying wholly on the plate from one that has crossed
+onto the table: a ring 65 % on the table scores 0.65, has a flat radial profile and a ring
+median of ≈ 0, and passes every other guard while reproducing the exact defect — recording
+the diagnostic that is otherwise read as proof of correctness. Fail-closed β transfer
+exists because every artefact predating this work was fitted on the old basis.
+
+### Alternatives Considered
+
+- **Flood-fill the plate region from a frame-centre seed and least-squares fit it** (the
+  offline harness's existing `fitPlateRegionPlane`): rejected for the device path — it
+  assumes the rig centres the plate under the camera, which does not hold for handheld
+  capture where the user centres the *food*. It survives, scoped to the N5k **mixture**
+  corpus, which is a fixed overhead rig where the assumption does hold and where fixtures
+  carry no segmentation output from which any food mask could be derived.
+- **Keep the edge-band fit and subtract a per-capture plate-height offset**: rejected —
+  the offset is exactly the unknown, it varies with vessel, and it would record a
+  corrected number against an uncorrected geometric basis.
+- **A plane-residual bar as the straddle detector** (the first draft): rejected — under
+  RANSAC the residual is computed over inliers already inside the ±5 mm band, so it is
+  bounded by construction and can never fire. Inner-band MAD, its replacement, was found
+  to share the defect and was deleted with it.
+- **Re-estimate stored meals against the corrected plane**: rejected — stored meals are
+  left exactly as recorded; the diagnostic field is absent rather than defaulted on
+  pre-feature rows, which is what keeps the two eras distinguishable.
+
+### Consequences
+
+**Positive:**
+- Removes a 2–3.6× systematic over-read on the primary capture path.
+- The reference, ring measure, band medians and supporting-sector count are persisted per
+  attempt, so this class of defect is visible from a pulled database without an offline
+  investigation.
+- Device and offline replay derive the plane from one implementation, so a β fitted
+  offline is valid on device by construction rather than by convention.
+
+**Negative:**
+- Rejection routes to the old over-read. The fallback rate is therefore itself a defect
+  measure, and must be reported or the argument for this architecture is unfalsifiable.
+- The N5k single-dominant corpus is rebased onto the new reference while mixture fixtures
+  stay on the old one, so the corpus spans two references permanently, not in transition.
+- A ring lying wholly on a wide plate rim still under-reads by the rim height and records
+  a clean diagnostic. Bounded by weighed truth, not by the record.
+- Food narrower than ~8 mm at 350 mm range falls back rather than being measured.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (new), `LiDARSupportPlaneFitter`,
+`EstimationAttemptRecord`, `CalibrationArtifact`, `HarnessCore/FixtureRunner`, the accuracy
+report, pipeline Req 4.2 / design §6.2 / the π_sup glossary entry, `nutrition5k-calibration`
+Reqs 3.6 and 5.1, and MD-9 above.
 
 ---
 
