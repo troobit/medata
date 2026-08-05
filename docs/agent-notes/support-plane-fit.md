@@ -512,6 +512,49 @@ over the sweep with *no ordering in the radius* — and at 22 and 24 mm the corp
 admit no common value at all. So Decision 45's collision-free 5 × 11 grid is a slice taken at the
 shipped radius, not a property of the rule outright.
 
+## The band count, the divisor nobody marked (Decision 47)
+
+`ringBandCount = 3` was the only one of the seven constants the sector measure reads with **no
+provenance marker** — its comment said "structural: inner / mid / outer". It had never been
+varied. Decision 46 swept the *numerator* of the inner-band edge
+(`ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount`) and left the divisor alone.
+
+`theBandCountIsTheRadialDivisorOfTheSectorRule` re-bands both corpus captures and all eight
+committed scenes at nine counts, at the shipped radius. **Bracketed 2…3** — two values, the
+tightest bracket in the feature, shipped value **on the ceiling**.
+
+- **Floor of 2, reason one: a guard stops existing.** At one band there is no mid band, so
+  `admissibility`'s `ring.bandMedianMm.count > 1` test is false and `bandStep` neither fires nor
+  reports that it did not — while `bowl` and `rim in the mid band` assert that it does. If you
+  ever change this constant, that `count > 1` is the line to look at first.
+- **Floor of 2, reason two: the suite collapses.** At one band the inner band *is* the whole
+  8…25 mm ring, so the rimmed-plate rims fall inside it, a must-pass scene reads 8 of 8 crossed,
+  and both suite intervals go empty (`maxCrossedSectors` 8…2, `minSupportingSectors` 6…0).
+- **Ceiling of 3: Req 5.1's halving, third constant off it.** `ringMinSamples` is floored *per
+  band* and this constant is how many bands there are, so it bites hardest here — halved counts
+  [322, 361, 323] / [313, 292, 299] at three bands, [237, 197, 215, 255] / [258, 264, 204, 280]
+  at four. Decision 44 read the same halving as `ringSectorCount ≤ 11`, Decision 46 as
+  `ringOuterMm ≥ 22 mm`.
+- **It moves no plane.** 0.000 mm at the food on both captures at every count, against Decision
+  46's 18.719 mm on the radius. The candidate set is fixed because the annulus is. This is the
+  measurement behind Decision 46's claim that the movement belongs to the *annulus* — worth
+  knowing before attributing plane movement to any other radial constant.
+
+**Two constants are denominated in it.** `bandStepMaxMm`'s suite ceiling collapses — 13.470,
+9.288, 6.755, 5.496, 0.211 mm at 2…6 bands — and the interval **inverts** from seven bands, where
+the scene that must fire reads a smaller step than the scene that must pass. A rim spanning a
+fixed radial distance stops being a step between *adjacent* bands once the bands are narrower
+than the rim. The shipped 6 mm holds at 2, 3 and 4 bands, covering the whole Req 5.1 bracket, so
+the pair is coupled but does not collide. And `maxCrossedSectors` reads **1…2 at two bands**
+against 0…2 at three — so Decision 43's "nothing in hand narrows 0…2" is a three-band reading,
+moved by Decision 43's own recorded blind spot (at two bands the inner band ends at 16.5 mm and a
+rimmed-plate rim *does* reach it).
+
+**Caveat, same shape as Decision 46's.** This bracket is a slice at `ringOuterMm = 25`, and both
+its ends come from constraints the radius also moves. Unlike the other three sector constants,
+though, committed evidence alone brackets it, so it is fixed **before** the capture sitting rather
+than at it.
+
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 
 **Both committed captures fall back under the shipped constants.** That is a per-capture fact

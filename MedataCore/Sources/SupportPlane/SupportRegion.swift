@@ -149,13 +149,48 @@ public enum SupportRegion {
     // 22 and 24 mm the two constraint sets admit no common value at all. Decision 45's
     // collision-free (count × bar) grid is therefore a slice at the shipped radius.
     public static let ringOuterMm: Float = 25
-    // Structural: inner / mid / outer.
+    // [owed], and BRACKETED 2…3 — two values, the tightest bracket in this feature, with
+    // the shipped one ON the ceiling (Decision 47). This said "Structural: inner / mid /
+    // outer" and was the only constant the sector measure reads that carried no provenance
+    // marker at all. It had never been varied, and it divides in two places at once: the
+    // INNER BAND the crossed-sector rule reads, whose outer edge is
+    // `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount` = 13.667 mm shipped, and
+    // the band partition `ringMinSamples` is floored PER member of.
+    //
+    // The FLOOR of 2 arrives twice, independently. A guard stops EXISTING: at one band
+    // there is no mid band, `admissibility`'s `bandMedianMm.count > 1` test is false, and
+    // the `bandStep` guard neither fires nor reports that it did not — while two committed
+    // scenes (`bowl`, `rim in the mid band`) assert that it does. And the committed suite
+    // goes empty: at one band the inner band IS the whole ring, the rimmed-plate scenes'
+    // rims fall inside it, a scene that must PASS reads 8 of 8 crossed, and both suite
+    // intervals collapse together (`maxCrossedSectors` 8…2, `minSupportingSectors` 6…0).
+    //
+    // The CEILING of 3 is Req 5.1's, for the third time — Decision 44 read the same 2×
+    // halving as `ringSectorCount` ≤ 11 and Decision 46 as `ringOuterMm` ≥ 22 mm. It lands
+    // hardest here because this constant IS how many bands the floor applies to: halved
+    // counts are [322, 361, 323] and [313, 292, 299] at three bands, [237, 197, 215, 255]
+    // and [258, 264, 204, 280] at four.
+    //
+    // It does NOT move the answer. The selected plane at the food is unchanged to 0.000 mm
+    // on both captures at every band count, against Decision 46's 18.719 mm on the radius —
+    // so that finding belongs to the ANNULUS specifically, which this constant leaves
+    // alone. It is fixed BEFORE the sitting rather than at it, since committed evidence
+    // already brackets it to two values.
     public static let ringBandCount = 3
     // [owed] below the smallest measured rim step — and UNEXERCISED (Decision 34). The
     // guard fires on an outward RISE; every inner→mid step in the corpus is a FALL, of
     // −0.5 to −6.5 mm, because a flat plate ends and the table begins. The corpus is
     // therefore 6.5 mm from the bar on the wrong side and supplies no floor either. The
     // ceiling still waits on the ruler measurement in `prerequisites.md`.
+    //
+    // DENOMINATED IN `ringBandCount` (Decision 47), which is the constant this one most
+    // obviously belongs to: the step is a difference between two bands that constant
+    // creates. Decision 41's suite interval of 0.024…9.288 mm is a reading at THREE bands.
+    // Over 2…10 bands the ceiling collapses — 13.470, 9.288, 6.755, 5.496, 0.211 mm — and
+    // from seven bands the interval INVERTS and no value satisfies the suite at all, because
+    // a rim spanning a fixed radial distance stops being a step between adjacent bands once
+    // the bands are narrower than the rim. The shipped 6 holds at 2, 3 and 4 bands, which
+    // covers the whole Req 5.1 bracket, so the pair is coupled but does not collide.
     public static let bandStepMaxMm: Float = 6
     // [owed] prerequisites capture 4 is the only source for the VALUE. Its firability
     // is settled (Decision 29): the ratio is computed over the ANNULUS, which begins at
