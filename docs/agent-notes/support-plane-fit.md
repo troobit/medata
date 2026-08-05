@@ -131,11 +131,19 @@ than deferred:
   now asks it directly. The substitution is outcome-identical *by construction* — the ring
   is a strict subset of the annulus, so under 500 annulus samples some band is under 167
   — not by measurement, which is why it is safe on a two-capture corpus.
-- What is left is `minResidueSamples`, same value 500, one job, still `[owed]`. The corpus
-  bounds it **above only**: per-pass residues are `[10469, 3310, 581]` and
-  `[12551, 2811, 932]`, so a floor over 581 starts cutting passes. Do not read that as a
-  derivation — 581 is where a floor begins costing something, not where a pass stops being
-  worth running, and a cut pass drops the persisted `planeCandidateCount`.
+- What is left is the residue floor, one job, still `[owed]` — and since Decision 38 it is
+  `minResidueAreaMm2 = 1691`, not `minResidueSamples = 500`. A sample count quarters under
+  a 2× grid halving where the surface does not, which is why the corpus ran three
+  extraction passes natively and two halved, making the persisted `planeCandidateCount` a
+  property of the sensor's grid. Converted through `mmPerPx` (rounded **up**, so the bar is
+  never weaker) the count is 3 → 3. The value did not move: 500 samples is 1732.6 and
+  1691.5 mm² on the two captures, so 1691 is the largest whole mm² at or below both. The
+  corpus still bounds it **above only**, now at 2013 mm² (per-pass residues
+  `[36 280, 11 471, 2013]` and `[42 458, 9509, 3153]` mm²). Do not read that as a
+  derivation — it is where a floor begins costing something, not where a pass stops being
+  worth running. The residue *area* is what the grid leaves alone: the annulus agrees to
+  0.3 % and 1.2 % across the halving, later passes to 5–23 %, the spread coming from
+  inlier removal being resolved on the grid.
 - `minAcceptedExtentMm = 44` is **bracketed at 22.3…47.8 mm**, not set. Above a 22.3 mm
   (12 px), 153-sample sliver it correctly rejects; at or below the 47.8 mm smallest extent
   reaching the later guards — and that candidate fails `supportFraction` anyway, so the
@@ -157,9 +165,13 @@ And what Decision 35 settled — the two Req 5.1 figures, which are not constant
   envelope — coarsening `f_d` and raising `z` are one constraint. Note the 4 px smear is
   already 14.9 mm at 128×96, well past `ringInnerMm`, and the plane still transfers: the
   smear bounds how clean the ring *measure* is, not where the plane lands.
-- **`planeCandidateCount` is grid-dependent where the plane is not** — three passes natively,
-  two at half resolution, because each pass leaves a smaller residue. It is persisted, so do
-  not read a resolution change as a scene change.
+- **`planeCandidateCount` was grid-dependent where the plane is not — Decision 38 fixed
+  that.** Three passes natively, two at half resolution, because the residue floor was a
+  raw sample count and sample counts quarter under a halving. It is persisted (Req 6.1), so
+  the field recorded the sensor's grid rather than the scene. `minResidueAreaMm2 = 1691`
+  converts through the same `mmPerPx`, and the count is 3 → 3. The residue *area* is the
+  invariant: the annulus agrees to 0.3 % and 1.2 % across the halving; later passes drift
+  5–23 %, because inlier removal is resolved on the grid.
 - **The extent bar was the only one denominated in pixels — Decision 37 fixed that.** Pixel
   extents halve with the grid (123→61, 76→38, 155→77, 44→22) and the last of those crossed
   the old 24 px bar: same scene, same plane, opposite verdict. `minAcceptedExtentMm = 44`

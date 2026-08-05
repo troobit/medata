@@ -1761,3 +1761,64 @@ The repair did not wait for Bucket C because the corpus already demonstrates the
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`minAcceptedExtentMm`, `PlaneCandidate.extentMm`, `extractCandidates`, `admissibility`, `fitFoodSupportPlane`), `MedataCore/Tests/SupportPlaneTests/` (`SupportRegionSelectionTests`, `SupportPlaneRegressionSliceTests`, `SupportPlaneCorpusMeasurementTests` — the bracket derivation and the grid-transfer test, which changes sense), `requirements.md` Req 5.1, `design.md` (the `SupportRegion` block, the transfer table, and the owed-numbers section) and task 26's detail. Shipped behaviour is unchanged on the corpus by construction.
 
 ---
+
+## Decision 38: The residue floor is re-denominated in millimetres², and the pass count stops reading the grid
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 35 measured Req 5.1's transfer across depth grids and left three riders. Decision 37 closed one of them — `minAcceptedExtentPx`, the only bar in `admissibility` denominated in pixels. The second stands: **`planeCandidateCount` is grid-dependent where the plane is not**, three extraction passes natively against two at half resolution.
+
+The cause is one constant. `extractCandidates` stops when the residue falls below `minResidueSamples = 500`, a raw count of native depth samples. Halving the grid quarters every sample count while the surface those samples stand for is unchanged, so pass 3 — which enters with 581 and 932 samples natively — enters with roughly a quarter of that and is cut. `planeCandidateCount` is persisted (Req 6.1, task 12), so the record of how many candidate planes a capture produced was a property of the sensor's resolution rather than of the scene.
+
+This is the same defect class Decision 37 repaired, and the same conversion repairs it: `mmPerPx` is already computed in `prepare` and already converts every ring radius and the extent bar. Nothing here needs a capture.
+
+### Decision
+
+**`minResidueSamples = 500` becomes `minResidueAreaMm2: Float = 1691`**, converted per capture by `minResidueSamples(mmPerPx:)`, which rounds **up** so the bar is never weaker than the area it stands for. `extractCandidates` converts once per capture and compares residue counts against that.
+
+**The value does not move.** 500 samples at the corpus's measured pixel areas of 3.465 mm² and 3.383 mm² is 1732.6 mm² and 1691.5 mm², so 1691 mm² is the largest whole millimetre² at or below both — the floor is 488 and 500 samples on the two captures, and every corpus pass keeps its verdict.
+
+**The area is the invariant, and it is measured rather than argued.** Pass 1 draws from the annulus, which no removal has touched, and its area agrees across the halving to **0.29 %** and **1.17 %** (36 279.6 → 36 175.7 mm², 42 458.0 → 41 961.0 mm²) where its sample count quarters. Later passes drift further — **5.02 %, 6.43 %** and **4.94 %, 22.75 %** — because each pass removes its own polished inliers within a millimetre band and that removal is resolved on the grid, so the coarser run removes a slightly different set. Every drift is an order below the 4× the sample count moves by.
+
+**The rider closes.** The pass the old floor cut enters with 155 and 180 samples on the halved grid, below the 500 the count floor was and above the 122 and 125 the area floor expresses itself as there. `planeCandidateCount` is now **3 → 3** on both captures, and the plane at the food is unchanged: 0.835 mm and 0.037 mm of movement, the figures Decision 35 recorded.
+
+### Rationale
+
+The choice between denominations is a question about what the floor is *for*, and the two questions it could be asking have different answers. If it is a statistical floor — enough draws for RANSAC — a sample count is right and the grid-dependence is correct behaviour, as it is for `ringMinSamples`, whose 200 comes from binomial separation per sector (Decision 20) and whose refusal at 64×48 is the transfer's legitimate floor. But the residue floor does not ask that: `ccRansac` already guards its own minimum at `LiDARPlaneFitter.minPoints`, and `admissibility` decides whether whatever the pass finds is usable. What is left for this constant to ask is physical — is there enough **surface** left that another pass could find something — and surface is area.
+
+Holding the value while changing its units is the discipline Decision 37 records and `minResidueSamples` itself already carried from Decision 32: the corpus brackets this constant, it does not set it, so a change of denomination must not smuggle in a change of behaviour. 1691 mm² is chosen the same way 44 mm was — the largest whole unit at or below the shipped value on every corpus capture — so the bar is never stricter than the one it replaces.
+
+The repair did not wait for the capture session because the corpus already demonstrates the failure, on the committed slices, at a resolution one halving down. The session will supply captures at whatever grid the device gives; a floor that means a different physical thing on each of them is a floor that cannot be set by them.
+
+### Alternatives Considered
+
+- **Record the grid-dependence and leave the constant in samples** - Decision 35's own resolution: note that `planeCandidateCount` must be read as a property of resolution and move on - Rejected for the reason Decision 37 gives: documenting a quantity that does not transfer preserves the defect and leaves Req 5.1's transfer claim carrying an exception. The field is persisted, so the exception would have to be carried by every future reader of the estimation record, not just by this design.
+- **Denominate the floor as a fraction of the annulus** - The residue-to-annulus ratio is also grid-stable (0.316/0.334 and 0.224/0.215 entering pass 2) and needs no `mmPerPx` - Rejected because it makes the floor depend on food size: a large plate has a large annulus, so the same physical scrap of surface would be sufficient on a small capture and insufficient on a big one. Area is the quantity the question is actually about.
+- **Derive the value from `minAcceptedExtentMm` rather than holding it** - A candidate is admissible only if its component spans 44 mm in both axes, so a residue smaller than 44² = 1936 mm² looks like it cannot produce one - Rejected because the bound is not sound: a component whose bounding box is 44 × 44 mm need not fill it — a diagonal run of ~24 depth pixels spans the same box — so a residue below 1936 mm² can still yield an admissible candidate. That 1691 mm² sits just under 1936 mm² is a corroboration that the floor is permissive relative to the extent bar, not a derivation of it.
+- **Set the floor at the measured ceiling of 2013 mm²** - The corpus shows exactly where a floor starts costing a pass - Rejected as the circularity Req 3.7 forbids, in the same shape Decision 32 rejected raising it to 1200 samples: 2013 mm² is where a floor begins cutting passes the corpus produces, not where a pass stops being worth running.
+
+### Consequences
+
+**Positive:**
+
+- Req 5.1's second rider closes: `planeCandidateCount` is 3 → 3 across a 2× halving where it was 3 → 2, so a persisted field now records a property of the scene.
+- The bracket becomes physical — bounded above at **2013 mm²** — where 581 samples meant different physical areas on the two captures and nothing at all on another grid.
+- Only one Decision 35 rider is left, the ring's sample floor, and that one is correct as it stands: `ringMinSamples` is a statistical requirement per sector, so its refusal at 64×48 is the transfer's honest resolution floor rather than a denomination defect.
+- The measurement distinguishes what the grid does to a fixed set of surface (0.3 %, 1.2 %) from what sequential inlier removal does on top of it (up to 22.7 %), which is a figure any future change to the removal band can be checked against.
+- N5k's 3.389× pixel-density gap is neutralised for this constant as well as for the extent bar, before Bucket C rather than during it.
+
+**Negative:**
+
+- The constant is still `[owed]`. Re-denominating it does not set it, and 1691 mm² remains a value traced to a chosen sample count rather than to any measured property of a surface worth another pass.
+- The margin above the floor narrows on coarser grids: the smallest residue clears it by 1.86× natively and **1.44×** at half resolution, so the halved grid is closer to losing the pass than the native one is.
+- A third pass now runs on 155 samples where it previously ran on 581. Nothing in the corpus is decided by it — both third-pass candidates are rejected on `extent` and `supportFraction` — but a RANSAC pass over 155 samples is a weaker draw than the count floor used to permit, and no capture in hand exercises what it produces.
+- `minResidueAreaMm2` needs a conversion where `minResidueSamples` was directly comparable to `residueCount`, so a reader of `extractCandidates` has one more indirection between the constant and the guard.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`minResidueAreaMm2`, `minResidueSamples(mmPerPx:)`, `extractCandidates`, the `PlaneCandidate.residueCount` comment), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`residueFloorIsBoundedFromAboveOnly` restated in mm², the new `residueAreaTransfersAcrossAGridHalving`, and the candidate-count assertion in `planeTransfersAcrossADepthGridHalving`, which changes sense), `design.md`, `docs/agent-notes/support-plane-fit.md` and task 26's detail. Shipped behaviour is unchanged on the corpus by construction; on a coarser grid the pass count rises to what the native grid already produced.
+
+---
