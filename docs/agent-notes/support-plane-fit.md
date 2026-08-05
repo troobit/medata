@@ -812,3 +812,83 @@ scene where it *would* fire is exactly the scene this corpus lacks. The target i
 **It is the only owed constant the committed corpus alone can set.** Every other one waits on the
 capture sitting or on model-production Bucket C. This one does not — but choosing a value inside
 the bracket is still asserting, which Req 3.7 forbids.
+
+## The inlier band, and where four `[inherited]` markers terminate (Decision 52)
+
+Decision 51 closed the file's provenance audit with "every constant in `SupportRegion` now carries
+a provenance marker". That was true and it was not sufficient, and the reason is worth keeping:
+**an `[inherited]` marker is a pointer, and it is only as good as the constant it points at.**
+
+Four markers in `SupportRegion` resolve, directly or in one hop, to `LiDARPlaneFitter.inlierBandMm`:
+
+| Marker | Reads |
+|---|---|
+| `ringBandMm` | `[inherited] LiDARPlaneFitter.inlierBandMm = 5` |
+| `ringMedianMaxMm` | `[inherited] ringBandMm` |
+| `inlierRemovalMultiple` | a multiple **of** `inlierBandMm` |
+| `supportVisibility` | a count **within** `inlierBandMm` |
+
+In `LiDARPlaneFitter.swift` it was a bare `static let inlierBandMm: Float = 5` with no comment, in a
+block headed "Tunable parameters per design §6.2". **One file outside the file being audited.** When
+sweeping this feature's provenance, follow `[inherited]` out of the module — the audit's scope was
+the defect.
+
+**It is the fifth constant that decides which planes compete, and the most upstream.**
+`annulusOuterMm` fixes the set extraction draws from, `maxCandidatePlanes` how many times it may
+draw, `inlierRemovalMultiple` what each draw leaves, `ringOuterMm` re-rings a set already chosen.
+This one decides **what an inlier is**, in three places at once: the RANSAC inlier test, the
+consensus polish's re-selection, and the removal band the multiple is denominated in. So it moves
+the plane further than anything else swept — **18.132 mm** and **19.389 mm** at the food over
+1…12.5 mm, the first owed constant to move *both* captures past Req 5.1's 1 mm. Readings **wander**
+rather than climb (support 0.312 at 3 mm, 0.281 at 4 mm), because extraction re-runs and the
+candidate is re-selected: **do not interpolate**.
+
+**The corpus interval is empty at the shipped bars.** Three constraints, all read on the plane a
+correct fit must select (Decision 48's identification — nearest Req 3.1's zero, not the ranking's
+winner):
+
+| Constraint | Admits |
+|---|---|
+| `ringMedian` — a bar that *is* the band | ≥ 4 mm (fails at 3 mm and below on both captures) |
+| `maxCrossedSectors` ≤ 2 | ≤ 5 mm on `1785901032716` |
+| `ringSupportMin` ≥ 0.6 | ≥ 10 mm on `1785901032716` |
+
+The last two are **disjoint**. The interval is non-empty only once `ringSupportMin` falls to
+**0.362** or below, and there it is exactly the shipped 5 mm; below ~0.28 it widens to {4, 5} mm.
+So the corpus determines the band *conditionally*, and hands `ringSupportMin` its **first ceiling**
+in the same reading — Decision 29 recorded that it had none, and Decision 41's suite ceiling of
+0.676 was the only bound in existence. The band, the support bar and the crossed count are **one
+joint set**, the first three-way one in the feature.
+
+**design.md's ε/h table is superseded on its load-bearing row.** It priced "plate above table" at
+h = 26 mm — which is pipeline Decision 6's plane *error at the food*, not the step between the two
+competing surfaces over the annulus. Measured from the shipped run:
+
+| Capture | Competing surfaces | h | shipped ε/h |
+|---|---|---|---|
+| `1785901032716` | table +3.039 mm / plate −2.658 mm | **11.706 mm** | **0.427** |
+| `1785135663727` | closest pair | 19.464 mm | 0.257 |
+
+0.427 is outside Gallo et al.'s 0.25…0.35 and in the same band as the two rows that table already
+marked outside. **So the straddler is real**: at the *shipped* band the plate candidate's largest
+connected component holds **22.1 %** of its members within one band of the surface below it. That
+settles design.md's one explicitly deferred question ("task 26 settles it by measurement; neither
+reading may be assumed") for the first of its two readings.
+
+**The 15° gravity cone is not an invariant of the candidate set.** `SupportRegion.extractCandidates`
+gates gravity on the RANSAC hypothesis and on every consensus-polish iteration — but **not on the
+first refinement between them**, and a polish that reaches its fixed point immediately leaves that
+plane standing. The committed corpus contains a candidate at **20.512°** (25.422° at a 4 mm band).
+It is rejected downstream on `extent` and `supportFraction`, so nothing observable changes today.
+Two consequences: any argument stated in terms of the cone is about a bound the candidate set does
+not respect, and **repairing the gate removes a candidate and therefore moves the answer** — which
+is why it is recorded at the call site rather than fixed.
+
+**The committed scenes bound no tolerance, anywhere.** `SPRScene.makeDepth` adds ±0.3 mm of
+synthetic noise, an order of magnitude below the smallest band swept, so every scene sample sits on
+its own surface and any tolerance from 1 to 12.5 mm classifies it identically: `maxCrossedSectors`
+0…2 and `minSupportingSectors` 6…7 at *every* band, with no scene's `supportFraction` or
+`ringMedian` verdict broken. This is the third distinct kind of suite silence — Decision 49's was
+measured, Decision 50's was structural (no scene runs extraction), this one is a property of the
+scenes' noise model. **The suite validates every guard's logic and no tolerance in any of them**;
+do not read a tolerance bracket off it.
