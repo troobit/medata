@@ -171,10 +171,10 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
-    // The support-surface depth-noise distribution, and the Decision 46 tension.
+    // The support-surface depth-noise distribution, and the pipeline Decision 46 tension.
     // `ringSupportMin = 0.6` over a +/-`ringBandMm` band is a statement about noise: a
     // plane truly on the support surface passes only if a 0.6 share of inner-band
-    // samples lands within +/-5 mm, which implies sigma_z <~ 5.9 mm. Decision 46's
+    // samples lands within +/-5 mm, which implies sigma_z <~ 5.9 mm. Pipeline Decision 46's
     // matte-table evidence puts a 20 mm residual bar elsewhere in the codebase.
     //
     // Both are right about different things, and the measurement is what separates
@@ -217,7 +217,7 @@ struct SupportPlaneCorpusMeasurementTests {
         // The result task 26 needs and does NOT get: at essentially the same range —
         // 338.9 mm and 336.9 mm — the two captures disagree about per-sample noise on a
         // flat surface by 2x, and `ringBandMm = 5` falls between them. That is a surface
-        // difference, not a range one, which is exactly what Decision 46's matte-table
+        // difference, not a range one, which is exactly what pipeline Decision 46's matte-table
         // evidence predicts. A constant cannot be set from a corpus that straddles it,
         // so `ringSupportMin` stays `[owed]` and `prerequisites.md`'s "capture at least
         // one on a matte surface" becomes a requirement rather than a suggestion.
@@ -1543,10 +1543,22 @@ struct SupportPlaneCorpusMeasurementTests {
         .supportFraction, .sectors, .foodEnvelope, .bandStep, .visibility, .escaped,
     ]
 
+    // A committed scene as the suite states it: the grid, the plane its own test
+    // evaluates at, and which guards that test requires to pass and to fire. Held apart
+    // from `SceneReading` because a reading is taken at ONE ring geometry and the
+    // sweeps re-take it at others.
+    struct SceneSpec {
+        let label: String
+        let grid: SPRScene.Grid
+        let planeHeightMm: Float
+        let requiresPass: [SupportRegion.CandidateRejection]
+        let requiresFire: [SupportRegion.CandidateRejection]
+    }
+
     // The eight scenes the committed suites assert on, each at the plane its own test
     // evaluates. Changing a scene changes these bounds, which is the point: they are
     // properties of the committed tests, not of the geometry.
-    static func sceneReadings() -> [SceneReading] {
+    static func sceneSpecs() -> [SceneSpec] {
         let all = everyGuard
         let scenes: [(String, SPRScene.Grid, Float,
                       [SupportRegion.CandidateRejection], [SupportRegion.CandidateRejection])] = [
@@ -1571,9 +1583,18 @@ struct SupportPlaneCorpusMeasurementTests {
             ("fully covered well", SPRScene.rimmedPlate(foodRadiusPx: 20, rimStartPx: 20), 35,
              [], [.foodEnvelope]),
         ]
-        return scenes.compactMap { label, grid, heightMm, requiresPass, requiresFire in
+        return scenes.map {
+            SceneSpec(label: $0.0, grid: $0.1, planeHeightMm: $0.2,
+                      requiresPass: $0.3, requiresFire: $0.4)
+        }
+    }
+
+    static func sceneReadings() -> [SceneReading] {
+        return sceneSpecs().compactMap { spec in
+            let (label, grid) = (spec.label, spec.grid)
+            let (requiresPass, requiresFire) = (spec.requiresPass, spec.requiresFire)
             guard let measured = SPRScene.measure(grid) else { return nil }
-            let p = SPRScene.plane(atHeightMm: heightMm)
+            let p = SPRScene.plane(atHeightMm: spec.planeHeightMm)
             guard let ring = SupportRegion.ringStatistics(
                 samples: measured.samples, geometry: measured.geometry,
                 normal: p.normal, d: p.d) else { return nil }
@@ -2297,6 +2318,435 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(!barsMovingTheCount.isEmpty, "\(separable)")
     }
 
+    // MARK: - The ring radius, and what it is the radius OF
+
+    // `ringOuterMm` is `[owed]` with no derivation at all. Decision 33 measured its
+    // stated rule — "inside the smallest measured plate margin" — and found it
+    // unsatisfiable, since the tightest margin is 4 mm and `ringInnerMm` is 8, and
+    // nothing has replaced it. Meanwhile Decisions 44 and 45 measured the sector
+    // measure's other two free constants and concluded they must be fixed jointly.
+    //
+    // This is the third, and it is upstream of both. The sector rule reads the INNER
+    // BAND, whose outer edge is `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount`
+    // = 13.667 mm at the shipped value — so Decision 33's "only 4 of 8 sectors reach the
+    // inner band" and Decision 43's rimmed-plate blind spot ("their rims never reach the
+    // inner band the sector median is computed over") are both readings of this constant.
+    // And unlike the count and the bar, it moves the ANNULUS with it, `2 × ringOuterMm`,
+    // so it changes which planes compete rather than only how a fixed set is read.
+    // Coarse outside the bracket, 1 mm inside it: the floor and the ceiling below are
+    // read off this grid, so a spacing of 5 mm there would report a precision the sweep
+    // does not have.
+    static let ringOuterSweep: [Float] = [
+        13, 15, 17, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 40,
+    ]
+
+    @Test("the ring radius is the radial unit of the sector rule, and it re-selects the candidates")
+    func ringRadiusIsTheRadialUnitOfTheSectorRule() throws {
+        let specs = Self.sceneSpecs()
+        #expect(specs.count == 8, "a scene stopped producing a spec")
+        let mustPass = specs.filter { $0.requiresPass.contains(.sectors) }
+        let mustFire = specs.filter { $0.requiresFire.contains(.sectors) }
+
+        struct Corpus {
+            let name: String
+            let signs: SectorSigns
+            let supportFraction: Float
+            let ringMedianMm: Float
+            let bandCounts: [Int]
+            let candidateCount: Int
+            let ringSampleCount: Int
+            let annulusSampleCount: Int
+            // Where the SELECTED plane cuts the food-centroid ray, in millimetres of
+            // range. Taken from the native grid's centroid so every radius is compared at
+            // one physical direction — the same instrument Decision 35 measures Req 5.1's
+            // 1 mm transfer tolerance with, and the units volume is integrated in.
+            let planeAtFoodMm: Float
+            let normal: Vec3
+            var feasible: Bool {
+                bandCounts.allSatisfy { $0 >= SupportRegion.ringMinSamples }
+            }
+            var occupied: Int { signs.sectorSampleCounts.filter { $0 > 0 }.count }
+        }
+
+        struct Radius {
+            let outerMm: Float
+            let innerBandOuterMm: Float
+            let corpus: [Corpus]
+            // `maxCrossedSectors`, Decision 43's two constraint sets at this radius.
+            let corpusFloor: Int, corpusCeiling: Int
+            let suiteFloor: Int, suiteCeiling: Int
+            // `minSupportingSectors`, the unsigned count Decision 41 found contradictory.
+            let countCorpusCeiling: Int
+            let countSuiteFloor: Int, countSuiteCeiling: Int
+            // Req 5.1's 2× depth-grid halving, the same transfer Decision 44 read the
+            // count's ceiling off. A narrower ring holds fewer samples and the halving
+            // quarters them, so this is where the radius acquires a FLOOR.
+            let halvedBandCounts: [String: [Int]]
+            var halvedFeasible: Bool {
+                halvedBandCounts.values.allSatisfy {
+                    $0.allSatisfy { $0 >= SupportRegion.ringMinSamples }
+                }
+            }
+            var jointFloor: Int { max(corpusFloor, suiteFloor) }
+            var jointCeiling: Int { min(corpusCeiling, suiteCeiling) }
+            var jointFeasible: Bool { jointFloor <= jointCeiling }
+            var countJointFloor: Int { countSuiteFloor }
+            var countJointCeiling: Int { min(countCorpusCeiling, countSuiteCeiling) }
+            var countJointFeasible: Bool { countJointFloor <= countJointCeiling }
+            var feasible: Bool { corpus.allSatisfy(\.feasible) }
+        }
+
+        // The halved geometry is a property of the capture, not of the radius, so it is
+        // prepared once and re-ringed inside the sweep.
+        var halvedGeometry: [String: SupportRegion.DepthGeometry] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            halvedGeometry[name] = try #require(Self.geometry(slice, decimation: 2))
+        }
+
+        var radii: [Radius] = []
+        for outerMm in Self.ringOuterSweep {
+            var corpus: [Corpus] = []
+            var halvedBands: [String: [Int]] = [:]
+            for name in Self.captures {
+                let slice = try DepthSlice.load(name)
+                let g = try #require(Self.geometry(name))
+                let halved = Self.ringSamples(
+                    geometry: try #require(halvedGeometry[name]), outerMm: outerMm)
+                var halvedCounts = [Int](repeating: 0, count: SupportRegion.ringBandCount)
+                for band in halved.band { halvedCounts[band] += 1 }
+                halvedBands[name] = halvedCounts
+                let samples = Self.ringSamples(geometry: g, outerMm: outerMm)
+                // Re-extracted, not re-read: the annulus is `2 × outerMm`, so the
+                // candidate set is a function of the radius too.
+                var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+                let candidates = SupportRegion.extractCandidates(
+                    annulus: samples.annulus, geometry: g,
+                    gravity: slice.gravity.normalised(), rng: &rng)
+                let best = try #require(candidates.max {
+                    Self.innerSupportFraction(samples: samples, geometry: g,
+                                              normal: $0.normal, d: $0.d)
+                    < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                normal: $1.normal, d: $1.d)
+                }, "no candidate survives extraction at ringOuterMm = \(fmt(outerMm))")
+                var counts = [Int](repeating: 0, count: SupportRegion.ringBandCount)
+                for band in samples.band { counts[band] += 1 }
+                corpus.append(Corpus(
+                    name: name,
+                    signs: Self.sectorSigns(samples: samples, geometry: g,
+                                            normal: best.normal, d: best.d,
+                                            count: SupportRegion.ringSectorCount),
+                    supportFraction: Self.innerSupportFraction(
+                        samples: samples, geometry: g, normal: best.normal, d: best.d),
+                    ringMedianMm: SupportRegion.medianHeight(
+                        indices: samples.ring, geometry: g, normal: best.normal, d: best.d),
+                    bandCounts: counts,
+                    candidateCount: candidates.count,
+                    ringSampleCount: samples.ring.count,
+                    annulusSampleCount: samples.annulus.count,
+                    planeAtFoodMm: Self.planeDepthMm(
+                        normal: best.normal, d: best.d,
+                        ray: try #require(Self.foodCentroidRay(slice))),
+                    normal: best.normal))
+            }
+            let plate = try #require(corpus.first { $0.name == "1785135663727" })
+            let table = try #require(corpus.first { $0.name == "1785901032716" })
+            let passSigns = try mustPass.map { try #require(Self.sceneSigns($0, outerMm: outerMm)) }
+            let fireSigns = try mustFire.map { try #require(Self.sceneSigns($0, outerMm: outerMm)) }
+            radii.append(Radius(
+                outerMm: outerMm,
+                innerBandOuterMm: SupportRegion.ringInnerMm
+                    + (outerMm - SupportRegion.ringInnerMm) / Float(SupportRegion.ringBandCount),
+                corpus: corpus,
+                corpusFloor: plate.signs.crossedFailing,
+                corpusCeiling: table.signs.crossedFailing - 1,
+                suiteFloor: passSigns.map(\.crossedFailing).max() ?? 0,
+                suiteCeiling: (fireSigns.map(\.crossedFailing).min() ?? 0) - 1,
+                countCorpusCeiling: plate.signs.supporting,
+                countSuiteFloor: (fireSigns.map(\.supporting).max() ?? 0) + 1,
+                countSuiteCeiling: passSigns.map(\.supporting).min() ?? 0,
+                halvedBandCounts: halvedBands))
+        }
+
+        // The plane the SHIPPED radius selects, per capture — the reference every other
+        // radius's selection is compared against.
+        let shippedRadius = try #require(radii.first { $0.outerMm == SupportRegion.ringOuterMm })
+        var shippedPlaneAtFood: [String: Float] = [:]
+        var shippedNormal: [String: Vec3] = [:]
+        for c in shippedRadius.corpus {
+            shippedPlaneAtFood[c.name] = c.planeAtFoodMm
+            shippedNormal[c.name] = c.normal
+        }
+
+        for r in radii {
+            print("ringOuterMm=\(fmt(r.outerMm)) (inner band ends \(fmt(r.innerBandOuterMm)) mm,"
+                  + " annulus \(fmt(2 * r.outerMm)) mm):")
+            for c in r.corpus {
+                print("  \(c.name): candidates \(c.candidateCount), ring \(c.ringSampleCount),"
+                      + " annulus \(c.annulusSampleCount), bands \(c.bandCounts)"
+                      + " \(c.feasible ? "feasible" : "REFUSED");"
+                      + " best support \(fmt(c.supportFraction)), ring median"
+                      + " \(fmt(c.ringMedianMm)) mm, PLANE AT FOOD \(fmt(c.planeAtFoodMm)) mm"
+                      + " (\(fmt(c.planeAtFoodMm - (shippedPlaneAtFood[c.name] ?? c.planeAtFoodMm)))"
+                      + " vs shipped, tilt"
+                      + " \(fmt(Self.angleDeg(c.normal, shippedNormal[c.name] ?? c.normal)))°),"
+                      + " occupied \(c.occupied)/8,"
+                      + " supporting \(c.signs.supporting), failing \(c.signs.failing.count),"
+                      + " crossed \(c.signs.crossedFailing), escaped \(c.signs.escapedFailing)")
+            }
+            print("  maxCrossedSectors corpus \(r.corpusFloor)…\(r.corpusCeiling),"
+                  + " suite \(r.suiteFloor)…\(r.suiteCeiling),"
+                  + " joint \(r.jointFloor)…\(r.jointCeiling)"
+                  + " \(r.jointFeasible ? "" : "EMPTY");"
+                  + " minSupportingSectors corpus ≤ \(r.countCorpusCeiling),"
+                  + " suite \(r.countSuiteFloor)…\(r.countSuiteCeiling),"
+                  + " joint \(r.countJointFloor)…\(r.countJointCeiling)"
+                  + " \(r.countJointFeasible ? "" : "EMPTY")")
+            print("  Req 5.1 halved bands \(r.halvedBandCounts)"
+                  + " \(r.halvedFeasible ? "feasible" : "REFUSED")")
+        }
+
+        // Anchor. At the shipped radius this must reproduce Decisions 41, 43 and 45
+        // exactly — plate 0 crossed, table 3, joint `maxCrossedSectors` 0…2, and the
+        // unsigned count's empty 6…5 — or the re-ringing has diverged from
+        // `SupportRegion.ringSamples` and nothing below is a measurement of the radius.
+        let shipped = shippedRadius
+        let anchor = "re-ringing at ringOuterMm no longer reproduces the recorded reading"
+            + " (crossed joint \(shipped.jointFloor)…\(shipped.jointCeiling), count joint"
+            + " \(shipped.countJointFloor)…\(shipped.countJointCeiling)) — the sweep is not"
+            + " measuring the same ring Decisions 43 and 45 measured"
+        #expect(shipped.jointFloor == 0 && shipped.jointCeiling == 2
+                && shipped.countSuiteFloor == 6 && shipped.countCorpusCeiling == 5,
+                "\(anchor)")
+
+        // THE FINDING, and it is not the one Decisions 44 and 45 make. Those two swept a
+        // constant and closed with "no value moves": the count and the bar re-READ a fixed
+        // candidate set, so they can only move a bracket. This one moves the ANSWER. The
+        // annulus is `2 × ringOuterMm`, so extraction runs on a different sample set at
+        // every radius and the plane it selects lands somewhere else at the food.
+        //
+        // The units are Decision 35's — millimetres of range along the food-centroid ray,
+        // added to every food pixel — so the span is directly comparable with Req 5.1's
+        // 1 mm transfer tolerance.
+        var spanByCapture: [String: (lo: Float, hi: Float)] = [:]
+        for r in radii {
+            for c in r.corpus {
+                let existing = spanByCapture[c.name] ?? (c.planeAtFoodMm, c.planeAtFoodMm)
+                spanByCapture[c.name] = (min(existing.lo, c.planeAtFoodMm),
+                                         max(existing.hi, c.planeAtFoodMm))
+            }
+        }
+        let spans = spanByCapture.mapValues { $0.hi - $0.lo }
+        let widestSpan = spans.values.max() ?? 0
+        print("plane movement at the food over the radius sweep:"
+              + " \(spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm transfer tolerance")
+        let inert = "ringOuterMm no longer moves the selected plane at the food beyond Req"
+            + " 5.1's own transfer tolerance (\(fmt(widestSpan)) mm against"
+            + " \(fmt(Self.gridTransferToleranceMm)) mm) — it is a bracket-only constant"
+            + " like ringSectorCount and sectorSupportMin, and this finding can be retired"
+        #expect(widestSpan > Self.gridTransferToleranceMm, "\(inert)")
+
+        // And the movement is not drift around one surface. On the capture whose
+        // best-support candidate Decision 30 identified as the TABLE, the selection
+        // bifurcates: the narrow radii pick a plane roughly a plate's height nearer the
+        // camera, reading a NEGATIVE ring median where the shipped radius reads positive.
+        // Which surface this capture selects is therefore a function of an owed constant.
+        let table = radii.compactMap { r in
+            r.corpus.first { $0.name == "1785901032716" }.map { (r.outerMm, $0) }
+        }
+        let low = table.filter { $0.1.ringMedianMm < 0 }.map(\.0)
+        let high = table.filter { $0.1.ringMedianMm > 0 }.map(\.0)
+        print("1785901032716 selects a negative-ring-median plane at \(low.map { fmt($0) })"
+              + " and a positive one at \(high.map { fmt($0) }) —"
+              + " separation \((table.filter { $0.1.ringMedianMm > 0 }.map(\.1.planeAtFoodMm).min() ?? 0) - (table.filter { $0.1.ringMedianMm < 0 }.map(\.1.planeAtFoodMm).max() ?? 0)) mm at the food")
+        let oneSurface = "the second capture's selection no longer changes sign with the"
+            + " radius (low \(low.map { fmt($0) }), high \(high.map { fmt($0) })) — the"
+            + " bifurcation this records has gone"
+        #expect(!low.isEmpty && !high.isEmpty, "\(oneSurface)")
+
+        // The CEILING, and it comes from the committed suite exactly as Decision 41 warned
+        // it would: the scenes place their features at fixed pixel radii, so a wide enough
+        // ring reaches the rim a scene put outside it. Both suite intervals go empty
+        // together — every sector of a scene that must PASS reads crossed.
+        let suiteHolds = radii.filter { $0.suiteFloor <= $0.suiteCeiling }.map(\.outerMm)
+        let suiteCeiling = suiteHolds.max() ?? 0
+        print("radii at which the committed suite still admits a maxCrossedSectors:"
+              + " \(suiteHolds.map { fmt($0) }) — ceiling \(fmt(suiteCeiling)) mm")
+        let unbounded = "the committed suite now admits every radius in the sweep — it has"
+            + " stopped capping ringOuterMm and the ceiling this records is gone"
+        #expect(suiteCeiling < Self.ringOuterSweep.max() ?? 0, "\(unbounded)")
+
+        // The FLOOR, and it is Req 5.1's — the mirror of Decision 44's ceiling on the
+        // count. A narrower ring holds fewer samples per band and the 2× halving quarters
+        // them, so below some radius `ringBandsAreFeasible` refuses on a grid where the
+        // plane still transfers within a millimetre.
+        let transfers = radii.filter(\.halvedFeasible).map(\.outerMm)
+        let floor = transfers.min() ?? 0
+        print("radii at which the ring survives the Req 5.1 halving: \(transfers.map { fmt($0) })"
+              + " — floor \(fmt(floor)) mm; ringOuterMm bracketed \(fmt(floor))…\(fmt(suiteCeiling)) mm")
+        let noFloor = "the Req 5.1 halving no longer refuses any radius in the sweep — the"
+            + " floor this records is gone and ringOuterMm is capped only from above"
+        #expect(floor > Self.ringOuterSweep.min() ?? 0, "\(noFloor)")
+        let shippedInside = "the shipped ringOuterMm has left the bracket its own"
+            + " constraints produce (\(fmt(floor))…\(fmt(suiteCeiling)) mm)"
+        #expect(SupportRegion.ringOuterMm >= floor
+                && SupportRegion.ringOuterMm <= suiteCeiling, "\(shippedInside)")
+
+        // And the bracket cannot be read the way the other two were. The count and the bar
+        // both erode monotonically, so Decisions 44 and 45 could name an end and say what
+        // lies past it. The radius does not: the plate candidate — the one plane a correct
+        // fit must admit — reads no crossed sector at every radius in the sweep EXCEPT one
+        // in the middle of it, where re-extraction hands it a different plane. A value
+        // between two clean radii is therefore not implied by either.
+        let cleanPassSide = radii.filter { $0.corpusFloor == 0 }.map(\.outerMm)
+        let dirty = Self.ringOuterSweep.filter { !cleanPassSide.contains($0) }
+        print("radii at which the intended plate candidate reads no crossed sector:"
+              + " \(cleanPassSide.map { fmt($0) }); interior exceptions \(dirty.map { fmt($0) })")
+        let monotonic = "the radius's pass side now erodes monotonically like the count's"
+            + " (clean at \(cleanPassSide.map { fmt($0) })) — ringOuterMm can be bracketed"
+            + " by interpolation after all"
+        #expect(dirty.contains { $0 > (cleanPassSide.min() ?? 0)
+                                 && $0 < (cleanPassSide.max() ?? 0) }, "\(monotonic)")
+
+        // Which makes `maxCrossedSectors` denominated in a THIRD owed constant. Decision 44
+        // recorded it as a count of sectors, Decision 45 as a count read at a bar; it is
+        // also a count read at a radius, and the radius reorders it rather than scaling it.
+        let brackets = radii.filter(\.jointFeasible).map { "\($0.jointFloor)…\($0.jointCeiling)" }
+        print("joint maxCrossedSectors brackets over the radius sweep: \(brackets)")
+        let radiusInvariant = "maxCrossedSectors reads one bracket at every radius"
+            + " (\(Set(brackets).sorted())) — it is not denominated in ringOuterMm and the"
+            + " session may fix the count and the bar without it"
+        #expect(Set(brackets).count > 1, "\(radiusInvariant)")
+    }
+
+    // The control the sweep above needs. Its pass side alternates between clean and dirty
+    // at 1 mm steps of the radius, which admits two readings: either the radius genuinely
+    // reorders the candidates, or extraction is unstable and moving the annulus merely
+    // re-rolls it. The two are told apart by holding the radius FIXED at the shipped value
+    // and varying only the RANSAC seed — the one input the sweep above holds constant,
+    // since `Fnv1a64.hash(depthBytesMm)` is a property of the capture.
+    //
+    // If the spread under seeds alone matches the spread under radii, the sweep is
+    // measuring extraction variance and `ringOuterMm` is not the constant carrying it.
+    @Test("candidate selection at the shipped radius is unstable under the RANSAC seed alone")
+    func candidateSelectionIsSeedUnstableAtTheShippedRadius() throws {
+        struct Roll {
+            let seed: UInt64
+            let planeAtFoodMm: Float
+            let crossed: Int
+            let supporting: Int
+            let supportFraction: Float
+            let ringMedianMm: Float
+            let candidateCount: Int
+        }
+
+        var spreadByCapture: [String: Float] = [:]
+        var seedVerdicts: [String: (crossed: Set<Int>, supporting: Set<Int>)] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let ray = try #require(Self.foodCentroidRay(slice))
+            let shippedSeed = Fnv1a64.hash(slice.depth.depthBytesMm)
+
+            var rolls: [Roll] = []
+            for i in 0..<Self.seedRolls {
+                // The shipped seed first, so the roll the corpus actually reads is in the
+                // set rather than compared against it.
+                let seed = i == 0 ? shippedSeed : shippedSeed &+ UInt64(i) &* 0x9E37_79B9_7F4A_7C15
+                var rng = SplitMix64(seed: seed)
+                let candidates = SupportRegion.extractCandidates(
+                    annulus: samples.annulus, geometry: g,
+                    gravity: slice.gravity.normalised(), rng: &rng)
+                guard let best = candidates.max(by: {
+                    Self.innerSupportFraction(samples: samples, geometry: g,
+                                              normal: $0.normal, d: $0.d)
+                    < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                normal: $1.normal, d: $1.d)
+                }) else { continue }
+                let signs = Self.sectorSigns(samples: samples, geometry: g,
+                                             normal: best.normal, d: best.d,
+                                             count: SupportRegion.ringSectorCount)
+                rolls.append(Roll(
+                    seed: seed,
+                    planeAtFoodMm: Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray),
+                    crossed: signs.crossedFailing,
+                    supporting: signs.supporting,
+                    supportFraction: Self.innerSupportFraction(
+                        samples: samples, geometry: g, normal: best.normal, d: best.d),
+                    ringMedianMm: SupportRegion.medianHeight(
+                        indices: samples.ring, geometry: g, normal: best.normal, d: best.d),
+                    candidateCount: candidates.count))
+            }
+            #expect(rolls.count == Self.seedRolls, "extraction failed on some seed")
+
+            let planes = rolls.map(\.planeAtFoodMm)
+            let spread = (planes.max() ?? 0) - (planes.min() ?? 0)
+            spreadByCapture[name] = spread
+            seedVerdicts[name] = (crossed: Set(rolls.map(\.crossed)),
+                                  supporting: Set(rolls.map(\.supporting)))
+            print("\(name) at ringOuterMm=\(fmt(SupportRegion.ringOuterMm)),"
+                  + " \(Self.seedRolls) seeds:")
+            for r in rolls {
+                print("  plane at food \(fmt(r.planeAtFoodMm)) mm, support \(fmt(r.supportFraction)),"
+                      + " ring median \(fmt(r.ringMedianMm)) mm, supporting \(r.supporting),"
+                      + " crossed \(r.crossed), candidates \(r.candidateCount)")
+            }
+            print("  spread at the food \(fmt(spread)) mm;"
+                  + " crossed counts \(Set(rolls.map(\.crossed)).sorted());"
+                  + " supporting counts \(Set(rolls.map(\.supporting)).sorted())")
+        }
+
+        // The caveat. The shipped radius's reading is ONE draw, and a different draw of the
+        // same capture puts the plane elsewhere — further than the 1 mm Decision 35 measures
+        // the grid transfer at. This is NOT a Req 5.1 failure: the seed is
+        // `Fnv1a64.hash(depthBytesMm)`, so identical bytes draw identically and replay
+        // reproduces device exactly, which is what the requirement asks. What it bounds is
+        // how much of any plane-at-the-food figure this feature quotes is the capture and
+        // how much is the draw.
+        let widest = spreadByCapture.values.max() ?? 0
+        print("selection spread under the seed alone:"
+              + " \(spreadByCapture.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against the \(fmt(Self.gridTransferToleranceMm)) mm Decision 35 measures"
+              + " the Req 5.1 grid transfer at")
+        let stable = "candidate selection no longer moves the plane at the food under the"
+            + " RANSAC seed alone (\(fmt(widest)) mm) — the caveat this records is gone and"
+            + " the corpus's plane figures are properties of the captures outright"
+        #expect(widest > Self.gridTransferToleranceMm, "\(stable)")
+
+        // And the reassurance, which is what licenses every bracket the feature has read
+        // off one draw. The plane moves; the SECTOR VERDICT does not. Across eight draws
+        // per capture the supporting and crossed counts are single-valued, so Decisions 40
+        // to 45 are reading a property of the captures even though the plane behind it is
+        // a draw. It is also what separates this control from the radius sweep, where the
+        // intended candidate's crossed count alternates 0 and 2 at 1 mm steps: the radius
+        // reorders the candidates, it does not merely re-roll them.
+        let verdictsStable = seedVerdicts.allSatisfy { $0.value.crossed.count == 1
+                                                       && $0.value.supporting.count == 1 }
+        print("sector verdicts under the seed:"
+              + " \(seedVerdicts.map { "\($0.key) crossed \($0.value.crossed.sorted()) supporting \($0.value.supporting.sorted())" }.sorted().joined(separator: ", "))")
+        let verdictMoved = "the sector verdict now moves with the RANSAC seed"
+            + " (\(seedVerdicts)) — the brackets Decisions 40-45 read off one draw per"
+            + " capture are properties of that draw and must be re-read across seeds"
+        #expect(verdictsStable, "\(verdictMoved)")
+    }
+
+    static let seedRolls = 8
+
+    // One committed scene re-ringed at a radius other than the shipped one. The plane is
+    // the scene's own, so only the ring geometry moves.
+    static func sceneSigns(_ spec: SceneSpec, outerMm: Float) -> SectorSigns? {
+        guard let g = SupportRegion.prepare(
+            depth: SPRScene.makeDepth(spec.grid),
+            colourIntrinsics: SPRScene.colourIntrinsics,
+            foodRegionMask: SPRScene.makeColourMask(spec.grid)) else { return nil }
+        let p = SPRScene.plane(atHeightMm: spec.planeHeightMm)
+        return sectorSigns(samples: ringSamples(geometry: g, outerMm: outerMm),
+                           geometry: g, normal: p.normal, d: p.d,
+                           count: SupportRegion.ringSectorCount)
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
@@ -2594,6 +3044,61 @@ struct SupportPlaneCorpusMeasurementTests {
             }
         }
         return counts
+    }
+
+    // `SupportRegion.ringSamples` with the OUTER radius as a parameter. Everything else —
+    // the distance transform, `ringInnerMm`, `ringBandCount`, `annulusOuterMultiple`, the
+    // validity and food-mask exclusions, the sector bucketing — is the shipped path's, so
+    // at `ringOuterMm` it reproduces `ringSamples` exactly and the sweep below is
+    // measuring the radius alone.
+    //
+    // Note what moves with it and what does not. The inner edge is `ringInnerMm`, fixed
+    // by the depth smear (Decision 39), so the radius sets the ring's WIDTH; the band
+    // width is that width over `ringBandCount`, so the inner band the sector rule reads
+    // ends at `ringInnerMm + (outerMm − ringInnerMm) / 3`. And the annulus is
+    // `2 × outerMm`, so this is the first swept constant that changes which planes
+    // COMPETE rather than only how a fixed set is read.
+    static func ringSamples(geometry g: SupportRegion.DepthGeometry,
+                            outerMm: Float) -> SupportRegion.RingSamples {
+        let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
+        let bandWidthMm = (outerMm - SupportRegion.ringInnerMm) / Float(SupportRegion.ringBandCount)
+        let annulusOuterMm = SupportRegion.annulusOuterMultiple * outerMm
+        var ring: [Int] = [], band: [Int] = [], sector: [Int] = [], annulus: [Int] = []
+        guard bandWidthMm > 0 else {
+            return SupportRegion.RingSamples(ring: ring, band: band, sector: sector,
+                                             annulus: annulus)
+        }
+        for y in 0..<g.height {
+            for x in 0..<g.width {
+                let idx = y * g.width + x
+                guard g.valid[idx], !g.foodMask.isFood(x: x, y: y) else { continue }
+                let distMm = distancePx[idx] * g.mmPerPx
+                guard distMm <= annulusOuterMm else { continue }
+                annulus.append(idx)
+                guard distMm >= SupportRegion.ringInnerMm, distMm <= outerMm else { continue }
+                let b = min(SupportRegion.ringBandCount - 1,
+                            Int((distMm - SupportRegion.ringInnerMm) / bandWidthMm))
+                ring.append(idx)
+                band.append(b)
+                sector.append(b == 0 ? SupportRegion.sectorIndex(x: x, y: y, geometry: g) : -1)
+            }
+        }
+        return SupportRegion.RingSamples(ring: ring, band: band, sector: sector,
+                                         annulus: annulus)
+    }
+
+    // The inner-band share within ±`ringBandMm`, computed without `ringStatistics`'s
+    // `ringMinSamples` guard so a radius that refuses the floor can still be read. This
+    // is the quantity `bestCandidate` ranks on.
+    static func innerSupportFraction(samples: SupportRegion.RingSamples,
+                                     geometry g: SupportRegion.DepthGeometry,
+                                     normal: Vec3, d: Float) -> Float {
+        var total = 0, supported = 0
+        for (i, idx) in samples.ring.enumerated() where samples.band[i] == 0 {
+            total += 1
+            if abs(normal.dot(g.points[idx]) - d) <= SupportRegion.ringBandMm { supported += 1 }
+        }
+        return total == 0 ? 0 : Float(supported) / Float(total)
     }
 
     static func prepared(_ name: String) -> (SupportRegion.DepthGeometry, SupportRegion.RingSamples)? {

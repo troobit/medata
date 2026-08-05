@@ -116,6 +116,38 @@ public enum SupportRegion {
     //
     // What is owed is the margin the SECTOR measure needs in enough sectors, which is a
     // joint derivation with the trio and waits on the same captures.
+    //
+    // BRACKETED 22…32 mm, and it is the first owed constant that MOVES THE ANSWER
+    // (Decision 46). The other two sector constants re-read a fixed candidate set, so the
+    // most they can move is a verdict. This one moves the ANNULUS — the candidate bound is
+    // `2 × ringOuterMm` — so extraction runs on a different sample set at every value. Over
+    // a 13…40 mm sweep the SELECTED plane moves 18.719 mm at the food on `1785901032716`
+    // and 4.162 mm on `1785135663727`, against the 1 mm Decision 35 measures Req 5.1's grid
+    // transfer at. Decisions 44 and 45 both closed with "no value moves"; that stops here.
+    //
+    // Both ends of the bracket are new. The FLOOR is Req 5.1's, the mirror of the ceiling
+    // Decision 44 read off the same halving: a narrower ring holds fewer samples per band
+    // and the 2× halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses on a
+    // grid where the plane still transfers within a millimetre (halved bands [78, 111, 48]
+    // at 13 mm against the 200 floor). The CEILING is the committed suite's, arriving as
+    // Decision 41 predicted: the scenes place their features at fixed pixel radii, so at
+    // 35 mm the ring reaches the rim a scene put outside it, every sector of a scene that
+    // must PASS reads crossed, and both suite intervals go empty.
+    //
+    // DO NOT INTERPOLATE INSIDE THE BRACKET. The pass side alternates at 1 mm steps: the
+    // corpus's only intended-correct candidate reads 0 crossed sectors at 22, 23, 25, 26,
+    // 28, 29 and 31 mm and 2 at 24, 27, 30 and 32 mm, its plane oscillating over 4.162 mm
+    // with them. A radius between two clean radii is not implied by either. This is not
+    // extraction noise — held at the shipped radius over eight RANSAC seeds the plane moves
+    // 2.095 mm but the sector verdict never does, so the radius is REORDERING the
+    // candidates rather than re-rolling them.
+    //
+    // FIX IT FIRST, and fix all three together. Decision 45's joint (count, bar) pair is a
+    // TRIPLE: the radius selects the candidates the other two are read on, so it is fixed
+    // before them. `maxCrossedSectors` is denominated in all three — the joint bracket
+    // reads 0…0, 0…1, 0…2 and 2…2 over the sweep with no ordering in the radius, and at
+    // 22 and 24 mm the two constraint sets admit no common value at all. Decision 45's
+    // collision-free (count × bar) grid is therefore a slice at the shipped radius.
     public static let ringOuterMm: Float = 25
     // Structural: inner / mid / outer.
     public static let ringBandCount = 3
@@ -139,7 +171,7 @@ public enum SupportRegion {
     // [inherited] LiDARPlaneFitter.inlierBandMm = 5.
     public static let ringBandMm: Float = 5
     // [owed] must be measured against the support-surface noise distribution: a
-    // ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm. The Decision 46 tension is
+    // ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm. The pipeline Decision 46 tension is
     // resolved in KIND (Decision 29) — that 20 mm bar is a whole-plane residual over a
     // matte table, not a per-sample σ — but not in VALUE: the measured per-sample σ on
     // a flat surface is 3.44 mm on one committed slice and 6.98 mm on the other, at
