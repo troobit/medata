@@ -4,6 +4,7 @@ import Foundation
 import PortableContracts
 @testable import SupportPlane
 import Testing
+import Volume
 
 // The task 26 corpus measurement pass: the instrumented run, guards disabled, that
 // `prerequisites.md` asks for. It dumps per-candidate `supportFraction`,
@@ -5609,6 +5610,372 @@ struct SupportPlaneCorpusMeasurementTests {
                 "SPRScene's noise reached the band sweep — the suite's silence needs re-reading")
     }
 
+    // MARK: - τ_conf: the constant upstream of the one Decision 52 found
+
+    // Decision 52 followed four `[inherited]` markers out of `SupportRegion` and into
+    // `LiDARPlaneFitter.inlierBandMm`, "the most upstream constant, because it decides what
+    // an INLIER is". There is one further step up the same file: `confidenceThreshold`
+    // decides what a SAMPLE is, and every sample the inlier test is applied to has already
+    // passed it. `SupportRegion.prepare` reads it directly, so it governs the promoted path
+    // and the legacy band scan alike.
+    //
+    // It differs from every constant swept so far in KIND, and the difference is the finding:
+    // its domain is not an interval. ARKit reports three confidence LEVELS, scaled to bytes
+    // 0/127/255, so τ_conf has exactly three behaviours over the whole of [0, 1] — accept
+    // LOW and up, accept MEDIUM and up, accept HIGH only. A twelve-value sweep therefore
+    // enumerates the domain EXHAUSTIVELY rather than sampling it, which no other bracket in
+    // Decisions 29-52 does.
+    @Test("the confidence bar has three states, not a bracket, and it moves the plane")
+    func theConfidenceBarHasThreeStatesRatherThanABracket() throws {
+        // The premise. Three levels is an ARKit fact; that these slices contain nothing else
+        // is a measurement, and it is what makes the three states exhaustive.
+        for name in Self.captures + Self.rejectedCaptures {
+            let slice = try DepthSlice.load(name)
+            var histogram: [UInt8: Int] = [:]
+            for byte in slice.depth.confidenceBytes { histogram[byte, default: 0] += 1 }
+            print("\(name): confidence bytes"
+                  + " \(histogram.sorted { $0.key < $1.key }.map { "\($0.key)×\($0.value)" })")
+            let unexpected = Set(histogram.keys).subtracting(Self.arkitConfidenceBytes)
+            let notQuantised = "\(name) carries confidence bytes \(unexpected.sorted()) outside"
+                + " the three ARKit levels — τ_conf has more than three states and this whole"
+                + " derivation has to be re-read as a continuous sweep"
+            #expect(unexpected.isEmpty, "\(notQuantised)")
+        }
+
+        // The anchor on the mechanism. At the shipped bar the rewritten map must admit exactly
+        // the samples the untouched one does, or the sweep is measuring a different corpus.
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let shipped = try #require(Self.geometry(name))
+            let rewritten = Self.reconfidenced(slice, tauConf: LiDARPlaneFitter.confidenceThreshold)
+            let mirrored = try #require(SupportRegion.prepare(
+                depth: rewritten.depth, colourIntrinsics: rewritten.colourIntrinsics,
+                foodRegionMask: rewritten.foodMask))
+            let drifted = "\(name): the rewritten confidence map does not reproduce the shipped"
+                + " validity set at the shipped bar"
+            #expect(mirrored.valid == shipped.valid, "\(drifted)")
+            #expect(mirrored.foodIndices == shipped.foodIndices,
+                    "\(name): the rewritten confidence map moves the food sample set")
+        }
+
+        var byCapture: [String: [TauReading]] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            var readings: [TauReading] = []
+            for tau in Self.tauConfSweep {
+                guard let reading = Self.tauReading(slice, tauConf: tau) else {
+                    print("\(name) at τ_conf \(fmt(tau)): NO plane — the fit is starved")
+                    continue
+                }
+                readings.append(reading)
+                print("\(name) τ_conf \(fmt(tau)): valid \(reading.validCount),"
+                      + " food \(reading.foodSampleCount), annulus \(reading.annulusCount),"
+                      + " ring \(reading.ringCount) (feasible \(reading.ringFeasible)),"
+                      + " passes \(reading.passCount), plane at food \(fmt(reading.planeAtFoodMm)) mm,"
+                      + " intended pass \(reading.intendedPass),"
+                      + " ring median \(fmt(reading.intendedRingMedianMm)) mm,"
+                      + " support \(fmt(reading.intendedSupportFraction)),"
+                      + " supporting \(reading.intendedSupporting),"
+                      + " crossed \(reading.intendedCrossed),"
+                      + " envelope \(fmt(reading.intendedEnvelopeMm)) mm")
+            }
+            #expect(readings.count == Self.tauConfSweep.count,
+                    "\(name): some τ_conf in the sweep produced no plane at all")
+            byCapture[name] = readings
+        }
+
+        // FINDING 1. Twelve values, three readings. The state boundaries are exactly 0 and
+        // the MEDIUM level, so "do not interpolate" — the rider Decisions 46, 51 and 52 all
+        // carry — does not apply here: there is nothing between the states to interpolate to.
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            let states = Set(readings.map(\.validCount))
+            print("\(name): \(Self.tauConfSweep.count) values swept →"
+                  + " \(states.count) distinct sample sets \(states.sorted())")
+            let tooFine = "\(name) resolves \(states.count) sample sets across the sweep —"
+                + " τ_conf is finer-grained than the three ARKit levels"
+            #expect(states.count <= 3, "\(tooFine)")
+            for reading in readings {
+                let expectedState = reading.tauConf <= 0 ? 0
+                    : (reading.tauConf <= Self.mediumConfidence ? 1 : 2)
+                let sameState = readings.filter {
+                    ($0.tauConf <= 0 ? 0 : ($0.tauConf <= Self.mediumConfidence ? 1 : 2))
+                        == expectedState
+                }
+                let strayed = "\(name): τ_conf \(fmt(reading.tauConf)) does not agree with the"
+                    + " rest of its state — the boundaries are not at 0 and"
+                    + " \(fmt(Self.mediumConfidence))"
+                #expect(sameState.allSatisfy { $0.validCount == reading.validCount },
+                        "\(strayed)")
+            }
+        }
+
+        // FINDING 2. It moves the answer. `annulusOuterMm` (Decision 49),
+        // `ransacSuccessProbability` (51) and `inlierBandMm` (52) are the only other owed
+        // constants that do, and this one moves the selected plane past the 1 mm Decision 35
+        // measures Req 5.1's transfer at on one of the two captures. It also moves the PASS
+        // COUNT, which couples it to Decision 48's cap and Decision 50's ordering.
+        var largestMovement: Float = 0
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            let planes = readings.map(\.planeAtFoodMm)
+            let movement = (planes.max() ?? 0) - (planes.min() ?? 0)
+            largestMovement = max(largestMovement, movement)
+            print("\(name): plane at the food over the three states"
+                  + " \(Set(planes.map { fmt($0) }).sorted()) — \(fmt(movement)) mm;"
+                  + " pass counts \(Set(readings.map(\.passCount)).sorted())")
+        }
+        let planeToleranceMm: Float = 1
+        let barIsInert = "τ_conf moves the selected plane by at most \(fmt(largestMovement)) mm"
+            + " on every capture — it is bracket-only like the sector count and the band count,"
+            + " not a constant that moves the answer"
+        #expect(largestMovement > planeToleranceMm, "\(barIsInert)")
+
+        // FINDING 3. The FLOOR is measured and it is strictly above zero — on ONE capture.
+        // Admitting LOW moves the plane 2.003 mm on `1785135663727` and pushes the intended
+        // candidate's inner-band median away from the zero Req 3.1 wants, so the accept-all
+        // state is ruled out and the choice is between the upper two. The other capture cannot
+        // price it: 36 of its 49,152 pixels are LOW, 0.07 %, and admitting all of them moves
+        // nothing to three decimal places. So this floor rests on a single capture, which is
+        // the same one-capture footing Decision 36 recorded for `fallbackPenalty`.
+        var canPriceTheFloor: [String] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let readings = try #require(byCapture[name])
+            let acceptAll = try #require(readings.first { $0.tauConf <= 0 })
+            let shipped = try #require(readings.first {
+                $0.tauConf == LiDARPlaneFitter.confidenceThreshold
+            })
+            let lowShare = Float(acceptAll.validCount - shipped.validCount)
+                / Float(slice.depth.width * slice.depth.height)
+            print("\(name): accepting LOW adds"
+                  + " \(acceptAll.validCount - shipped.validCount) samples (\(fmt(lowShare)) of"
+                  + " the grid) and moves the plane"
+                  + " \(fmt(abs(acceptAll.planeAtFoodMm - shipped.planeAtFoodMm))) mm;"
+                  + " intended inner median \(fmt(shipped.intendedInnerMedianMm)) →"
+                  + " \(fmt(acceptAll.intendedInnerMedianMm)) mm")
+            guard lowShare >= Self.materialLowShare else { continue }
+            canPriceTheFloor.append(name)
+            let lowIsHarmless = "\(name): accepting LOW samples no longer degrades the intended"
+                + " candidate's inner-band median — τ_conf's floor of 0 is not measured any more"
+            #expect(abs(acceptAll.intendedInnerMedianMm) > abs(shipped.intendedInnerMedianMm),
+                    "\(lowIsHarmless)")
+        }
+        print("captures carrying a material LOW population: \(canPriceTheFloor)")
+        let floorIsBroadlyBased = "more than one capture now carries a material LOW population —"
+            + " τ_conf's floor is no longer resting on \(canPriceTheFloor.first ?? "one capture")"
+            + " alone"
+        #expect(canPriceTheFloor.count == 1, "\(floorIsBroadlyBased)")
+
+        // FINDING 4. The corpus cannot reproduce the bug that set the shipped value, and on
+        // the captures it does contain the state the shipped value REJECTS reads better.
+        // `lidar-plane-fit-matte-table-confidence` lowered the bar from 0.66 to 0.40 because
+        // HIGH-only starved the fit into `noLidarPoints`; at HIGH-only both committed captures
+        // still fit, on the promoted path and on the fitter's own band scan, and the intended
+        // candidate's inner-band support RISES on both. The floor argument the shipped value
+        // rests on is evidence outside this corpus, so the corpus must not re-set the constant
+        // in either direction — a matte-table capture is a requirement of the sitting.
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let readings = try #require(byCapture[name])
+            let shipped = try #require(readings.first {
+                $0.tauConf == LiDARPlaneFitter.confidenceThreshold
+            })
+            let highOnly = try #require(readings.first { $0.tauConf > Self.mediumConfidence })
+            let starved = Self.fallbackPlane(
+                Self.reconfidenced(slice, tauConf: HeightFieldEstimator.tauConfidence)) == nil
+            print("\(name) at HIGH only: \(highOnly.validCount) of \(shipped.validCount) samples"
+                  + " survive, ring feasible \(highOnly.ringFeasible),"
+                  + " passes \(shipped.passCount) → \(highOnly.passCount),"
+                  + " intended support \(fmt(shipped.intendedSupportFraction)) →"
+                  + " \(fmt(highOnly.intendedSupportFraction)), supporting"
+                  + " \(shipped.intendedSupporting) → \(highOnly.intendedSupporting),"
+                  + " band-scan fit starved: \(starved)")
+            let ringStarves = "\(name): the ring stops clearing ringMinSamples at HIGH only —"
+                + " the corpus now reproduces the matte-table starvation and τ_conf has a"
+                + " corpus floor"
+            #expect(highOnly.ringFeasible, "\(ringStarves)")
+            let scanStarves = "\(name): the fitter's band scan refuses at HIGH only — the corpus"
+                + " now reproduces lidar-plane-fit-matte-table-confidence"
+            #expect(!starved, "\(scanStarves)")
+            let noImprovement = "\(name): the intended candidate's support no longer improves at"
+                + " HIGH only — the corpus's mild argument against the shipped state has gone"
+            #expect(highOnly.intendedSupportFraction > shipped.intendedSupportFraction,
+                    "\(noImprovement)")
+            let sectorsStill = "\(name): the supporting-sector count no longer rises by exactly"
+                + " one at HIGH only — Decision 41's interval reading needs re-checking"
+            #expect(highOnly.intendedSupporting == shipped.intendedSupporting + 1,
+                    "\(sectorsStill)")
+        }
+
+        // FINDING 5. Decision 41's one genuinely EMPTY joint interval is denominated here. On
+        // `1785135663727` the intended candidate reads 5 supporting sectors at the shipped bar
+        // — "so minSupportingSectors must fall to 5 or below", against a suite floor of 6 that
+        // no value could satisfy — and 6 at HIGH only, where 6…6 is non-empty. It does not
+        // RESOLVE the collision: `1785901032716`'s tighter reading rises 2 → 3 and stays far
+        // below the floor. What it establishes is that the contradiction is a reading at a
+        // constant this task owes, on the capture it was recorded on.
+        let collisionCapture = "1785135663727"
+        let collisionReadings = try #require(byCapture[collisionCapture])
+        let atShipped = try #require(collisionReadings.first {
+            $0.tauConf == LiDARPlaneFitter.confidenceThreshold
+        })
+        let atHighOnly = try #require(collisionReadings.first { $0.tauConf > Self.mediumConfidence })
+        print("\(collisionCapture): minSupportingSectors' corpus ceiling"
+              + " \(atShipped.intendedSupporting) → \(atHighOnly.intendedSupporting)"
+              + " against the committed suite's floor of 6")
+        let collisionStands = "the supporting count no longer crosses the suite's floor of 6"
+            + " between the two states — Decision 41's collision is not denominated in τ_conf"
+            + " after all"
+        #expect(atShipped.intendedSupporting < 6 && atHighOnly.intendedSupporting >= 6,
+                "\(collisionStands)")
+
+        // FINDING 6, and the reason this constant is upstream rather than beside: BOTH of
+        // Decision 52's determinations move. That decision measured the corpus interval for
+        // the inlier band to be empty at the shipped bars, non-empty only once `ringSupportMin`
+        // falls to 0.362 or below, and there exactly the shipped 5 mm — handing `ringSupportMin`
+        // its first corpus ceiling. Re-read at HIGH only, the ceiling is 0.497 and the band the
+        // corpus points at is 6 mm. So Decision 52's three-way joint set is FOUR-way, with
+        // τ_conf at its head: it decides what a sample is, before the band decides which
+        // samples are inliers.
+        var gridByState: [Float: [String: [TauReading]]] = [:]
+        for tau in [Float(0), LiDARPlaneFitter.confidenceThreshold, 1] {
+            var byName: [String: [TauReading]] = [:]
+            for name in Self.captures {
+                let slice = try DepthSlice.load(name)
+                byName[name] = Self.inlierBandSweep.compactMap {
+                    Self.tauReading(slice, tauConf: tau, bandMm: $0)
+                }
+            }
+            gridByState[tau] = byName
+        }
+        func determination(_ byName: [String: [TauReading]]) -> (ceiling: Float, bands: [Float]) {
+            let ceiling = Self.captures.compactMap { name -> Float? in
+                byName[name]?.filter { $0.intendedCrossed <= 2 && !$0.ringMedianGuardFires }
+                    .map(\.intendedSupportFraction).max()
+            }.min() ?? 0
+            let bands = Self.inlierBandSweep.filter { band in
+                Self.captures.allSatisfy { name in
+                    guard let r = byName[name]?.first(where: { $0.bandMm == band }) else {
+                        return false
+                    }
+                    return r.intendedSupportFraction >= ceiling
+                        && !r.ringMedianGuardFires && r.intendedCrossed <= 2
+                }
+            }
+            return (ceiling, bands)
+        }
+        for tau in gridByState.keys.sorted() {
+            let read = determination(try #require(gridByState[tau]))
+            print("τ_conf \(fmt(tau)): ringSupportMin's corpus ceiling \(fmt(read.ceiling)),"
+                  + " inlier bands the corpus admits there \(read.bands.map { fmt($0) })")
+        }
+        let shippedState = determination(try #require(gridByState[LiDARPlaneFitter.confidenceThreshold]))
+        let highOnlyState = determination(try #require(gridByState[1]))
+        let bandMoved = "the band the corpus admits at its own ringSupportMin ceiling is no"
+            + " longer the shipped 5 mm at the shipped bar — Decision 52's reading has moved"
+        #expect(shippedState.bands == [LiDARPlaneFitter.inlierBandMm], "\(bandMoved)")
+        let ceilingIsFixed = "ringSupportMin's corpus ceiling no longer rises at HIGH only —"
+            + " Decision 52's first ceiling for it is not denominated in τ_conf after all"
+        #expect(highOnlyState.ceiling > shippedState.ceiling, "\(ceilingIsFixed)")
+        let bandIsFixed = "the inlier band the corpus determines no longer moves with τ_conf —"
+            + " Decision 52's conditional determination is not a slice at this bar after all"
+        #expect(highOnlyState.bands != shippedState.bands, "\(bandIsFixed)")
+
+        // FINDING 7, the one positive: `maxCrossedSectors` reads the same in all three states
+        // at the shipped band, so Decision 48's determination at 2 survives τ_conf DIRECTLY.
+        // It survives only there — at HIGH only the band the corpus points at is 6 mm, where
+        // the intended candidate reads fewer crossed sectors — so it remains a reading at the
+        // shipped band, which is what Decision 48 already says it is.
+        let crossedCapture = "1785901032716"
+        let crossedAtShippedBand = Set((byCapture[crossedCapture] ?? []).map(\.intendedCrossed))
+        print("\(crossedCapture): crossed sectors at the shipped band across all three states"
+              + " \(crossedAtShippedBand.sorted())")
+        let crossedMoves = "\(crossedCapture)'s crossed count moves with τ_conf at the shipped"
+            + " band — Decision 48's determination of maxCrossedSectors at 2 is a slice at this"
+            + " bar too"
+        #expect(crossedAtShippedBand == [2], "\(crossedMoves)")
+    }
+
+    // τ_conf is TWO constants under one name, which is Decision 32's `minCandidateSamples`
+    // shape a second time — and this time the two values fall on OPPOSITE sides of the only
+    // boundary in the domain. `LiDARPlaneFitter.confidenceThreshold` = 0.40 admits MEDIUM;
+    // `HeightFieldEstimator.tauConfidence` = 0.66, the value the fitter's bar was lowered
+    // FROM, admits HIGH only. One pipeline reads one confidence surface at two levels, so the
+    // support plane is fitted to MEDIUM and HIGH samples while the food volume above it is
+    // integrated over HIGH alone.
+    //
+    // Not repaired here. Aligning them adds or removes samples on every capture and moves the
+    // answer, which is the same discipline Decision 52 applied to the unenforced gravity gate.
+    // What is recorded is the consequence for the corpus's own composition, because Decision
+    // 31 excluded a capture on a number read at the support plane's bar.
+    @Test("the confidence bar is two constants, and they straddle the MEDIUM level")
+    func theConfidenceBarIsTwoConstantsStraddlingTheMediumLevel() throws {
+        print("support plane τ_conf \(fmt(LiDARPlaneFitter.confidenceThreshold)),"
+              + " height field τ_conf \(fmt(HeightFieldEstimator.tauConfidence)),"
+              + " MEDIUM level \(fmt(Self.mediumConfidence))")
+        let aligned = "the two τ_conf values no longer straddle the MEDIUM level — the support"
+            + " plane and the height field now read the same confidence states and this"
+            + " divergence is closed"
+        #expect(LiDARPlaneFitter.confidenceThreshold < Self.mediumConfidence
+                && HeightFieldEstimator.tauConfidence > Self.mediumConfidence, "\(aligned)")
+
+        // Decision 31's disqualifying number, read at both bars. "43.2 % of its food mask is
+        // ARKit-low against 0.0 % on both admitted captures" is the SUPPORT PLANE's reading;
+        // at the bar that actually consumes the food samples neither admitted capture reads 0.
+        for name in Self.captures + Self.rejectedCaptures {
+            let slice = try DepthSlice.load(name)
+            let atFitter = Self.lowConfidenceFoodShare(slice, tauConf: LiDARPlaneFitter.confidenceThreshold)
+            let atHeightField = Self.lowConfidenceFoodShare(slice, tauConf: HeightFieldEstimator.tauConfidence)
+            print("\(name): food discarded at the support plane's bar \(fmt(atFitter)),"
+                  + " at the height field's \(fmt(atHeightField))")
+            if Self.captures.contains(name) {
+                #expect(atFitter == 0, "\(name) stopped reading 0 at the support plane's bar")
+                let agrees = "\(name) now reads 0 at the height field's bar too — Decision 31's"
+                    + " zero on both admitted captures holds at both bars after all"
+                #expect(atHeightField > 0, "\(agrees)")
+            }
+        }
+
+        // And the exclusion itself, which is CIRCULAR in this constant. Decision 31 rejected
+        // `1785054950406` because τ_conf removes its mound and the surviving food then sits
+        // BELOW the plane fitted around it, "so there is no mound left to anchor a non-flat
+        // criterion against". At τ_conf = 0 the same slice reads a POSITIVE food envelope: the
+        // mound is in the data, and the second ground is a restatement of the first.
+        //
+        // The exclusion still holds, on a grounds Decision 31 did not state: the samples the
+        // mound is made of are the ones ARKit marks unreliable, and admitting them wrecks the
+        // ring fit the capture would have to anchor — its intended candidate's ring median goes
+        // from a near-exact −0.018 mm to −4.589 mm. The third ground REVERSES: the spurious
+        // separable sector count Decision 31 committed the slice to prevent does not appear in
+        // either state below the MEDIUM level, and does appear at HIGH only.
+        for name in Self.rejectedCaptures {
+            let slice = try DepthSlice.load(name)
+            let acceptAll = try #require(Self.tauReading(slice, tauConf: 0))
+            let shipped = try #require(Self.tauReading(
+                slice, tauConf: LiDARPlaneFitter.confidenceThreshold))
+            let highOnly = try #require(Self.tauReading(slice, tauConf: 1))
+            for reading in [acceptAll, shipped, highOnly] {
+                print("\(name) at τ_conf \(fmt(reading.tauConf)): food"
+                      + " \(reading.foodSampleCount), envelope \(fmt(reading.intendedEnvelopeMm)) mm,"
+                      + " ring median \(fmt(reading.intendedRingMedianMm)) mm,"
+                      + " supporting \(reading.intendedSupporting)")
+            }
+            let noMound = "\(name)'s food envelope no longer changes sign between accepting LOW"
+                + " and the shipped bar — Decision 31's second ground is not circular in τ_conf"
+            #expect(acceptAll.intendedEnvelopeMm > 0 && shipped.intendedEnvelopeMm < 0,
+                    "\(noMound)")
+            let lowIsClean = "\(name)'s ring fit no longer degrades when LOW samples are"
+                + " admitted — the ground the exclusion actually stands on has gone"
+            #expect(abs(acceptAll.intendedRingMedianMm) > abs(shipped.intendedRingMedianMm),
+                    "\(lowIsClean)")
+            let trapMoved = "\(name)'s spurious separable sector count no longer appears at HIGH"
+                + " only alone — Decision 31's third ground needs re-reading"
+            #expect(acceptAll.intendedSupporting < 4 && shipped.intendedSupporting < 4
+                    && highOnly.intendedSupporting >= 4, "\(trapMoved)")
+        }
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
@@ -5986,6 +6353,164 @@ struct SupportPlaneCorpusMeasurementTests {
     static func prepared(_ name: String) -> (SupportRegion.DepthGeometry, SupportRegion.RingSamples)? {
         guard let g = geometry(name) else { return nil }
         return (g, SupportRegion.ringSamples(geometry: g))
+    }
+
+    // MARK: - The confidence bar, and what it decides a SAMPLE is
+
+    // ARKit's three confidence levels as `DepthMap` bytes (§6.0): LOW → 0, MEDIUM → 127,
+    // HIGH → 255. τ_conf is compared against `byte / 255`, so the constant's whole domain
+    // is THREE states rather than a continuum. The measurement below asserts the corpus
+    // carries no other byte value, because that is what makes three exhaustive.
+    static let arkitConfidenceBytes: Set<UInt8> = [0, 127, 255]
+
+    // The MEDIUM level normalised, and the only boundary inside τ_conf's domain that the
+    // sweep can cross: at or below it MEDIUM survives, above it only HIGH does. The shipped
+    // `LiDARPlaneFitter.confidenceThreshold` sits below, and `HeightFieldEstimator.tauConfidence`
+    // — the 0.66 the fitter's bar was lowered FROM — sits above.
+    static let mediumConfidence = Float(127) / 255
+
+    // Twelve values across the whole domain, deliberately dense either side of
+    // `mediumConfidence`. Twelve rather than three because the collapse to three distinct
+    // readings is a FINDING and not an assumption: a corpus carrying a byte the ARKit levels
+    // do not produce would separate 0.45 from 0.49, and this sweep would say so.
+    static let tauConfSweep: [Float] = [0, 0.1, 0.2, 0.3, 0.4, 0.45, 0.49, 0.5, 0.6, 0.66, 0.8, 1.0]
+
+    // A LOW population large enough for the accept-all state to be readable at all. One percent
+    // of the depth grid is ~491 samples on the corpus grid, above `ringMinSamples`; below it a
+    // capture cannot say whether admitting LOW would cost anything.
+    static let materialLowShare: Float = 0.01
+
+    // τ_conf re-denominated as a rewritten confidence map, which is what lets this sweep run
+    // the SHIPPED path end to end. `SupportRegion.prepare` drops a sample when
+    // `confidence / 255 < LiDARPlaneFitter.confidenceThreshold`; rewriting every byte to 255
+    // when it clears `tauConf` and to 0 otherwise makes the shipped bar admit exactly the set
+    // `tauConf` admits. Unlike every other sweep in this file — the count, the bar, the radius,
+    // the band count, the removal band, the iteration budget, the inlier band — there is no
+    // restatement of shipped code here that could drift from it, and the anchor below checks
+    // the identity at the shipped value.
+    //
+    // The depth bytes are untouched, so `Fnv1a64.hash(depthBytesMm)` is identical at every
+    // value and the RANSAC SEED is held across the sweep. The draw is not: `uniformInt(n)`
+    // reads the residue size, which moves with the sample set.
+    static func reconfidenced(_ slice: DepthSlice, tauConf: Float) -> DepthSlice {
+        let rewritten = [UInt8](slice.depth.confidenceBytes).map { byte -> UInt8 in
+            Float(byte) / 255 >= tauConf ? 255 : 0
+        }
+        return DepthSlice(
+            name: slice.name,
+            depth: DepthMap(
+                depthBytesMm: slice.depth.depthBytesMm,
+                confidenceBytes: Data(rewritten),
+                width: slice.depth.width, height: slice.depth.height,
+                rowStrideBytes: slice.depth.rowStrideBytes,
+                depthIntrinsics: slice.depth.depthIntrinsics,
+                depthFromColour: slice.depth.depthFromColour),
+            colourIntrinsics: slice.colourIntrinsics,
+            gravity: slice.gravity,
+            foodMask: slice.foodMask)
+    }
+
+    // One capture read at one confidence bar and one inlier band. Both are arguments because
+    // the band is what τ_conf turns out to be upstream OF (Decision 52's constant), and the
+    // grid of the two is the only way to see that.
+    struct TauReading {
+        let tauConf: Float
+        let bandMm: Float
+        let validCount: Int
+        let foodSampleCount: Int
+        let annulusCount: Int
+        let ringCount: Int
+        let ringFeasible: Bool
+        let passCount: Int
+        // The plane the ranking selects, where it cuts the food-centroid ray. The ray is
+        // taken from the UNTOUCHED slice — the mask centroid does not depend on validity —
+        // so the millimetres compare across the sweep.
+        let planeAtFoodMm: Float
+        let intendedPass: Int
+        let intendedRingMedianMm: Float
+        let intendedInnerMedianMm: Float
+        let intendedSupportFraction: Float
+        let intendedSupporting: Int
+        let intendedCrossed: Int
+        let intendedEnvelopeMm: Float
+        var ringMedianGuardFires: Bool { abs(intendedInnerMedianMm) > bandMm }
+    }
+
+    static func tauReading(_ slice: DepthSlice, tauConf: Float,
+                           bandMm: Float = LiDARPlaneFitter.inlierBandMm) -> TauReading? {
+        let rewritten = reconfidenced(slice, tauConf: tauConf)
+        guard let g = SupportRegion.prepare(depth: rewritten.depth,
+                                            colourIntrinsics: rewritten.colourIntrinsics,
+                                            foodRegionMask: rewritten.foodMask),
+              let ray = foodCentroidRay(slice) else { return nil }
+        let samples = SupportRegion.ringSamples(geometry: g)
+        var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+        let candidates = extractCandidates(annulus: samples.annulus, geometry: g,
+                                           gravity: rewritten.gravity.normalised(),
+                                           rng: &rng, bandMm: bandMm)
+        guard !candidates.isEmpty else { return nil }
+
+        func ringMedian(_ c: SupportRegion.PlaneCandidate) -> Float {
+            SupportRegion.medianHeight(indices: samples.ring, geometry: g,
+                                       normal: c.normal, d: c.d)
+        }
+        // The ranking's winner, read at the SHIPPED band so the sweep does not move the
+        // ranking as well as the sample set, and the plane a correct fit must select —
+        // Decision 48's identification, the candidate nearest Req 3.1's zero.
+        let winner = candidates.max {
+            innerSupportFraction(samples: samples, geometry: g, normal: $0.normal, d: $0.d,
+                                 bandMm: LiDARPlaneFitter.inlierBandMm)
+            < innerSupportFraction(samples: samples, geometry: g, normal: $1.normal, d: $1.d,
+                                   bandMm: LiDARPlaneFitter.inlierBandMm)
+        }
+        guard let winner,
+              let intendedIndex = (0..<candidates.count).min(by: {
+                  abs(ringMedian(candidates[$0])) < abs(ringMedian(candidates[$1]))
+              }) else { return nil }
+        let intended = candidates[intendedIndex]
+        let signs = sectorSigns(samples: samples, geometry: g,
+                                normal: intended.normal, d: intended.d,
+                                count: SupportRegion.ringSectorCount,
+                                supportMin: SupportRegion.sectorSupportMin, bandMm: bandMm)
+
+        return TauReading(
+            tauConf: tauConf,
+            bandMm: bandMm,
+            validCount: g.valid.filter { $0 }.count,
+            foodSampleCount: g.foodSampleCount,
+            annulusCount: samples.annulus.count,
+            ringCount: samples.ring.count,
+            ringFeasible: SupportRegion.ringBandsAreFeasible(samples: samples),
+            passCount: candidates.count,
+            planeAtFoodMm: planeDepthMm(normal: winner.normal, d: winner.d, ray: ray),
+            intendedPass: intendedIndex + 1,
+            intendedRingMedianMm: ringMedian(intended),
+            intendedInnerMedianMm: bandMediansMm(samples: samples, geometry: g,
+                                                 normal: intended.normal, d: intended.d,
+                                                 bandCount: SupportRegion.ringBandCount)[0],
+            intendedSupportFraction: innerSupportFraction(samples: samples, geometry: g,
+                                                          normal: intended.normal, d: intended.d,
+                                                          bandMm: bandMm),
+            intendedSupporting: signs.supporting,
+            intendedCrossed: signs.crossedFailing,
+            intendedEnvelopeMm: SupportRegion.foodEnvelopeMm(geometry: g, normal: intended.normal,
+                                                             d: intended.d))
+    }
+
+    // Share of food-mask samples a given bar discards. `lowConfidenceFoodShare` is this at
+    // the fitter's own bar; the bar is a parameter here because there are TWO of them.
+    static func lowConfidenceFoodShare(_ slice: DepthSlice, tauConf: Float) -> Float {
+        let w = slice.depth.width, h = slice.depth.height
+        let confidence = slice.depth.confidenceBytes
+        guard confidence.count >= w * h else { return 0 }
+        var food = 0, low = 0
+        for y in 0..<h {
+            for x in 0..<w where slice.foodMask.isFood(x: x, y: y) {
+                food += 1
+                if Float(confidence[y * w + x]) / 255 < tauConf { low += 1 }
+            }
+        }
+        return food == 0 ? 0 : Float(low) / Float(food)
     }
 
     static func candidates(_ name: String) -> [SupportRegion.PlaneCandidate]? {

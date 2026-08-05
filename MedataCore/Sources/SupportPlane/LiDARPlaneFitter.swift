@@ -20,6 +20,29 @@ public enum LiDARPlaneFitter {
     // residual gate still reject a bad plane, and σ_plane = exp(−r/5) carries the
     // extra medium-confidence noise into the confidence surface (Decision 46).
     // Bug `lidar-plane-fit-matte-table-confidence` 2026-07-06.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 53, and upstream of
+    // `inlierBandMm` below: this decides what a SAMPLE is, and every sample the inlier test is
+    // applied to has already passed it. Three things that decision measured and this comment
+    // must not lose:
+    //
+    // 1. Its domain is NOT an interval. ARKit reports three levels, so over the whole of
+    //    [0, 1] there are three behaviours — accept LOW and up (τ ≤ 0), accept MEDIUM and up
+    //    (0 < τ ≤ 127/255 = 0.498, where the 0.40 sits), accept HIGH only (above 0.498). A
+    //    value between 0.40 and 0.49 is not a different setting; there is nothing to tune.
+    // 2. It MOVES THE PLANE — 2.098 mm at the food on `1785135663727`, past the 1 mm Req 5.1's
+    //    transfer is measured at — and it changes the extraction pass count, so `bandMm` above,
+    //    `SupportRegion.minResidueAreaMm2` and `maxCandidatePlanes` are all denominated in it.
+    // 3. The corpus does NOT reproduce the starvation the paragraph above describes: at HIGH
+    //    only both committed captures still fit and the intended candidate's ring support
+    //    RISES. The matte-table capture that justifies the 0.40 is not in the corpus, so do
+    //    not re-set this from the corpus alone in either direction.
+    //
+    // The second half of the same constant lives in `Volume.HeightFieldEstimator.tauConfidence`
+    // at 0.66, on the FAR side of the MEDIUM level: the support plane is fitted to MEDIUM and
+    // HIGH samples while the food volume above it is integrated over HIGH alone. Deliberately
+    // not aligned here — closing it adds or removes samples on every capture and moves the
+    // answer (Decision 53).
     static let confidenceThreshold: Float = 0.40
     static let maxIterations: Int = 256
     // ε, the RANSAC inlier band. `[owed]` to support-plane-reference task 26 as of its

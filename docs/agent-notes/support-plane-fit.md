@@ -892,3 +892,87 @@ its own surface and any tolerance from 1 to 12.5 mm classifies it identically: `
 measured, Decision 50's was structural (no scene runs extraction), this one is a property of the
 scenes' noise model. **The suite validates every guard's logic and no tolerance in any of them**;
 do not read a tolerance bracket off it.
+
+## The confidence bar, and why it is not a bracket at all (Decision 53)
+
+There is one step further up the same file than Decision 52 took it.
+`LiDARPlaneFitter.confidenceThreshold` — τ_conf — decides what a **sample** is: `SupportRegion.prepare`
+drops any pixel below it before back-projection, so every sample the inlier test is ever applied to
+has already passed it. It is the **sixth** constant that decides which planes compete and the most
+upstream of the six.
+
+**Its domain is three states, not a range. This is the thing to remember.** ARKit reports three
+confidence *levels*, scaled to bytes `{0, 127, 255}`, and all three committed slices carry exactly
+those values and nothing else. So over the whole of [0, 1] there are three behaviours:
+
+| State | τ_conf | What survives |
+|---|---|---|
+| accept-all | ≤ 0 | LOW, MEDIUM, HIGH |
+| MEDIUM+ | 0 < τ ≤ 127/255 = **0.498** | MEDIUM, HIGH — the shipped 0.40 is here, 0.098 clear of the boundary |
+| HIGH-only | > 0.498 | HIGH — `HeightFieldEstimator.tauConfidence = 0.66` is here |
+
+Twelve swept values collapse to three sample sets. **Do not treat this constant as tunable between
+0.40 and 0.49** — there is nothing there. It is also the only owed constant whose domain the corpus
+enumerates *exhaustively*; every other bracket in Decisions 29-52 is an interval with unread values
+inside it, which is why they all carry an interpolation rider and this one cannot.
+
+**The sweep needs no restatement of shipped code, and that trick is reusable.** Every other sweep in
+`SupportPlaneCorpusMeasurementTests` reimplements a stage with the constant as an argument
+(`ccRansac`, the pass chain, `sectorSigns`, `sectorIndex`) and pins the copy against the shipped
+function. For τ_conf, rewrite the *confidence map* instead — each byte to 255 if it clears the swept
+bar, else 0 — and the shipped 0.40 then admits exactly the set the swept bar admits. `prepare`,
+`ringSamples`, `extractCandidates` and `admissibility` all run unmodified. The depth bytes are
+untouched, so `Fnv1a64.hash(depthBytesMm)` is identical and the **RANSAC seed is held** across the
+sweep (the draw is not — `uniformInt(n)` reads a residue size that moves).
+
+**It moves the plane and the pass count.** 2.098 mm at the food on `1785135663727` (349.229 /
+349.325 / 351.328), past Req 5.1's 1 mm; 0.038 mm on the other. Extraction runs three passes at
+MEDIUM+ and **two** at HIGH-only on `1785135663727`, because a 12.7 % smaller annulus starves the
+residue floor a pass early — so `minResidueAreaMm2`, `maxCandidatePlanes` and Req 7.6's latency are
+denominated here too.
+
+**Both of Decision 52's determinations are readings in the MEDIUM+ state:**
+
+| State | `ringSupportMin` corpus ceiling | Inlier band the corpus admits |
+|---|---|---|
+| accept-all | 0.362 | 5 mm |
+| MEDIUM+ (shipped) | 0.362 | 5 mm |
+| HIGH-only | **0.497** | **6 mm** |
+
+So Decision 52's three-way joint set is **four-way**, with τ_conf at its head. Accept-all reads the
+same as shipped because the capture that binds both quantities, `1785901032716`, has only 36 LOW
+pixels.
+
+**The corpus cannot settle it, in either direction.** The shipped 0.40 exists because
+`lidar-plane-fit-matte-table-confidence` had HIGH-only starving the fit to `noLidarPoints`. At
+HIGH-only on this corpus **nothing starves** — every ring band clears `ringMinSamples`, extraction
+still yields candidates, the fitter's own band scan still returns a plane — and the intended
+candidate *improves* on both captures (support 0.629 → 0.690 and supporting sectors 5 → 6; support
+0.362 → 0.379, supporting 2 → 3). The corpus mildly argues against the shipped state while being
+unable to justify the alternative, because the matte-table scene is not in it. **A matte-surface
+capture now bounds two constants** (this and `ringSupportMin`), and the capture session should record
+the ARKit confidence *histogram* per surface — the level mix per surface material is the measurement.
+
+The floor *is* measured: admitting LOW moves the plane 2.003 mm on `1785135663727` (22.7 % of its grid
+is LOW) and pushes the intended inner-band median from −0.521 to −1.454 mm. Only that capture can say
+so; the other's 36 LOW pixels (0.07 %) change nothing. One-capture footing, as with `fallbackPenalty`.
+
+**τ_conf is two constants under one name, straddling the boundary.** The support plane's bar is 0.40
+and the food height field's is `HeightFieldEstimator.tauConfidence = 0.66`, on the far side of MEDIUM.
+So the plane is fitted to MEDIUM+HIGH samples while the volume above it is integrated over HIGH alone.
+Deliberately not aligned — closing it changes which samples exist and moves the volume — and pinned at
+both call sites. Practical consequence: **any "0 % low-confidence" claim has to name which bar it is
+read at.** Decision 31's "43.2 % against 0.0 % on both admitted captures" is the plane's bar; at the
+height field's the three shares are 60.3 %, 2.7 % and 1.9 %.
+
+**Decision 31's exclusion of `1785054950406` stands on a different ground than it records.** Its
+second ground (the surviving food's envelope is negative, so no mound to anchor) is circular: at
+τ_conf = 0 the same slice reads **+58.353 mm**. The mound is in the data, and τ_conf removes it. Its
+third ground reverses — the spurious separable count needs 4 supporting sectors, and the capture reads
+2 at accept-all, 3 at shipped, 4 only at HIGH-only. What actually disqualifies it: admitting the LOW
+samples the mound is made of takes the intended candidate's ring median from **−0.018 mm to
+−4.589 mm**. Its mound and its usable support surface cannot both be present at one setting, so no
+threshold recovers it and capture 2 still has to be taken.
+
+**One positive.** `maxCrossedSectors` reads 2 at the shipped band in all three states — the only
+member of the joint set that survives τ_conf directly.

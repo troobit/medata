@@ -287,6 +287,14 @@ public enum SupportRegion {
     // some band and then reading the band's floor off it is Req 3.7's circularity between
     // two constants rather than within one. The two are set jointly, with
     // `maxCrossedSectors` as the third member.
+    //
+    // AND THE CEILING IS ITSELF A READING at one further constant (Decision 53).
+    // `LiDARPlaneFitter.confidenceThreshold` decides which samples the ring holds at all, and
+    // it has three states rather than a range. At the shipped state the ceiling is the 0.362
+    // above and the band it admits is the shipped 5 mm; with only HIGH-confidence samples the
+    // ceiling is 0.497 and the band the corpus admits is 6 mm. So the joint set is FOUR-way and
+    // the confidence bar heads it — it decides what a sample is, before the band decides which
+    // samples are inliers.
     public static let ringSupportMin: Float = 0.6
     // Sector measure (Req 3.6, Decisions 18–20). Equal arcs about the food-mask
     // centroid; empty sectors count as neither supporting nor failing, and the bar is
@@ -787,6 +795,12 @@ public enum SupportRegion {
         // invalid returns are zeroed depth and are excluded by the z > 0 guard.
         // τ_conf = 0.40 applies here exactly as it does in the band scan, so
         // `lidar-plane-fit-matte-table-confidence` is not bypassed (Req 7.5).
+        //
+        // That bar is `[owed]` and it is the most upstream constant this file reads — it
+        // decides what a SAMPLE is, so every guard below is denominated in it and it moves the
+        // selected plane. See `LiDARPlaneFitter.confidenceThreshold` for the reading
+        // (Decision 53); the short version is that its domain is three ARKit levels rather
+        // than a range, and the corpus admits two of the three states.
         let confidence = depth.confidenceBytes
         let hasConfidence = confidence.count >= count
 
