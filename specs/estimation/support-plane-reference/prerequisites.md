@@ -40,14 +40,24 @@ before it is written.
   test (Decision 22); the fraction is gone.
 
 - [x] **Is `ringInnerMm = 8` inside the depth smear at real capture distance?**
-  **Answered 2026-08-05 by the task 26 measurement pass (Decision 29) — no, and the envelope
-  is ≈ 365 mm.** Measured on both committed slices: `mmPerPx` 1.862 and 1.839 at median food
-  depths of 338.9 mm and 336.9 mm, so the ~4 px smear spans **7.45 mm and 7.36 mm** — inside
-  8 mm on both, but with under 8 % to spare. Since `smear_mm = 4z/f_d` and `f_d ≈ 182 px`,
-  8 mm covers range to **≈ 365 mm** and no further; at 500 mm the smear is ~11 mm. The
-  radius must become `max(ringInnerMm, 4 × mmPerPx)` before any capture beyond ~365 mm is
-  trusted. Decision 14's "already at the ~7 mm depth smear floor" is confirmed at this
-  corpus's range and only there.
+  **Answered 2026-08-05 by the task 26 measurement pass (Decision 29) — yes at this corpus's
+  range, and only there.** Measured on both committed slices: `mmPerPx` 1.862 and 1.839 at
+  median food depths of 338.9 mm and 336.9 mm, so the ~4 px smear spans **7.45 mm and
+  7.36 mm** — inside 8 mm on both, but with under 8 % to spare. Since `smear_mm = 4z/f_d`,
+  the envelope is `ringInnerMm × f_d / 4`: **364.1 mm** at f_d 182.0 px and **366.4 mm** at
+  183.2 px, so the corpus stands at **93.1 %** and **92.0 %** of its own bound. At 500 mm the
+  smear is ~11 mm. Decision 14's "already at the ~7 mm depth smear floor" is confirmed here
+  and nowhere else.
+
+  **The repair this item used to prescribe is measured and rejected (Decision 39).** It read
+  "the radius must become `max(ringInnerMm, 4 × mmPerPx)`". It must not: `mmPerPx` is `z/f_d`
+  and carries range and grid resolution alike, but only range moves the smear, because a
+  coarser grid subsamples a map ARKit has already smoothed. At 128 px the smear-tracking
+  radius reads 14.9 mm for a physical smear still near 7.4, leaving three ring bands of
+  3.37 mm against depth pixels of 3.73 mm — each narrower than one pixel — and
+  `1785135663727` loses ring feasibility (inner band 166 against a 200 floor) on the grid
+  where the plane transfers within 0.9 mm today. **The envelope is a range bound, and only a
+  capture can close it** — which is why the range is now on the recording list below.
 
 - [ ] **Measure your own plates with a ruler.** Rim height above the well, and well diameter,
   for the plates you actually eat off. The design's rimmed-plate exposure table uses assumed
@@ -218,6 +228,18 @@ least one with the food well centred on a large plate, and at least one with the
 edge. Note the plate diameter and the food's placement for each — the pass measures the margin per
 sector, but only the session can arrange for the margins to differ.
 
+**Note the capture RANGE for every capture (Decision 39).** How far the phone was from the food,
+to the nearest centimetre — a tape measure, or read `mmPerPx × f_d` back off the slice afterwards.
+This is the cheapest thing on the list and the only one with a hard bound already measured against
+it: `ringInnerMm = 8` covers the ~4 px depth smear only out to `ringInnerMm × f_d / 4`, which is
+**364 mm** on this device, and the two committed captures sit at **93 %** and **92 %** of that. A
+capture taken from a little further back has its inner ring band inside the smear, so its ring
+median and per-sector fractions are contaminated by food-edge bleed — and nothing in the estimate
+says so. The obvious fix, scaling the radius with `mmPerPx`, is measured and rejected (Decision 39),
+so a capture is the only thing that can close this. **If a capture must be taken beyond ~360 mm,
+take a second of the same scene inside it**: the pair is what separates a contaminated ring measure
+from a real one.
+
 **Note the depth resolution if any capture is not a 256×192 LiDAR frame (Decision 35).** The plane
 itself transfers: across a 2× grid halving it moves 0.835 mm and 0.037 mm on the two committed
 captures, which is what Req 5.1's 1 mm tolerance is set from. One thing still does not:
@@ -240,7 +262,8 @@ as the field-side reading of the same quantity.
 ### Recording a capture
 
 For each: weigh the food, plate it, capture on the iPhone 16 Pro, then note the stem, the
-weighed grams, the food class and the vessel (flat plate / rimmed plate / bowl) in
+weighed grams, the food class, the vessel (flat plate / rimmed plate / bowl), the plate diameter
+and the food's placement on it, the surface material, and the **capture range** in
 `docs/agent-notes/field-truth-sessions.md`, following the 2026-07-26 session's table format.
 The mass has to be written down at capture time — bundles record ground truth as zero and there
 is no way to recover it afterwards.

@@ -1822,3 +1822,65 @@ The repair did not wait for the capture session because the corpus already demon
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`minResidueAreaMm2`, `minResidueSamples(mmPerPx:)`, `extractCandidates`, the `PlaneCandidate.residueCount` comment), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`residueFloorIsBoundedFromAboveOnly` restated in mm², the new `residueAreaTransfersAcrossAGridHalving`, and the candidate-count assertion in `planeTransfersAcrossADepthGridHalving`, which changes sense), `design.md`, `docs/agent-notes/support-plane-fit.md` and task 26's detail. Shipped behaviour is unchanged on the corpus by construction; on a coarser grid the pass count rises to what the native grid already produced.
 
 ---
+
+## Decision 39: The smear-tracking inner radius is measured and refused, and the envelope stays a range bound
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decisions 37 and 38 each found a bar whose denomination made it read the depth grid rather than the scene, and repaired it by converting through `mmPerPx`. One instruction of the same shape was still outstanding, and it was written as an obligation rather than a proposal. `ringInnerMm = 8` stands for ARKit's ~4 px depth smear at the food boundary, and Decision 29 measured that the smear spans 7.45 mm and 7.36 mm on the two committed slices — inside 8 mm, but by under 8 %. Since a smear is a fixed count of pixels, `smear_mm = 4z/f_d`, so 8 mm covers capture range only to about 365 mm. Decision 29 concluded, and both `SupportRegion`'s own comment and the `prerequisites.md` item of the same name repeat, that the radius "must become `max(ringInnerMm, 4 × mmPerPx)`" before any capture beyond that range is trusted.
+
+Taken at face value this is the third instance of the Decision 37/38 pattern and the last one available: a bar that means a different physical thing on a different grid, with the conversion already computed in `prepare` and used by every other radius. The two prior repairs each held their value while changing their units, and each closed a rider on Req 5.1. This one was expected to do the same.
+
+It does not, and the difference is what `mmPerPx` is made of. `mmPerPx` is `z/f_d`; coarsening the grid divides f_d exactly as increasing the range multiplies z, so the quantity cannot tell the two apart. Only one of them moves the smear. A coarser grid subsamples a map ARKit has *already* smoothed, so the physical smear is unchanged while `4 × mmPerPx` doubles.
+
+### Decision
+
+**The repair is rejected and the instruction is withdrawn.** `ringInnerMm` stays at a fixed 8 mm with no `mmPerPx` term. The envelope it carries is restated as what it is — a **range** bound of `ringInnerMm × f_d / 4`, computed from the corpus at **364.1 mm** and **366.4 mm** — and left to the capture session rather than paid for in code.
+
+**The session gains one recording requirement.** `prerequisites.md` now asks for the capture range alongside the plate diameter, the surface material and the depth resolution it already asks for. This is the cheapest of the four to record and the only one with a hard bound already measured against it.
+
+**The measurement is committed** as `smearTrackingInnerRadiusCollapsesTheRing` and `smearEnvelopeIsARangeBoundTheCorpusNearlyReaches`, so the rejection is reproducible and the instruction cannot be re-derived from the same reasoning a third time.
+
+### Rationale
+
+The measurement is one-sided at corpus range and decisive one halving down. Natively the repair is a no-op — `max` picks the constant on both captures, because the smear is 7.45 and 7.36 mm against 8 — so nothing in the corpus argues *for* it either. At 128 px the smear-tracking radius reads **14.9 mm** and **14.7 mm** for a physical smear still near 7.4 mm, and the cost is structural before it is statistical: the radius eats 6.9 mm of a 17 mm ring, so the three bands it leaves are **3.37 mm and 3.43 mm wide against depth pixels of 3.73 mm and 3.68 mm**. Each band is narrower than one pixel. Decision 14 resolved the ring radially in order to tell the surface immediately beside the food from the one beyond it, and a band the grid cannot resolve cannot make that distinction whatever its samples total.
+
+What the sample counts then do is confirm it. `1785135663727` loses ring feasibility outright, its inner band falling to **166** against `ringMinSamples = 200`, and `1785901032716` clears the floor by nothing at all at exactly **200**. Two captures of the same scene type, taken 2 mm of range apart, landing either side of the bar is the signature of a quantisation artefact rather than of support. Both clear it comfortably under the shipped radius, at [313, 292, 299] and [322, 361, 323] — and that is the grid on which Req 5.1's documented 2× transfer envelope rests, where the plane moves 0.835 mm and 0.037 mm. Obeying the instruction would spend a measured transfer on a smear the grid does not have.
+
+Refusing it leaves the range envelope open, and that is the honest place for it. `f_d` is the sensor's and does not vary; `z` is the photographer's and does. The corpus stands at **93.1 %** and **92.0 %** of its own envelope on two captures framed as tightly as flat bread on a plate allows, so the headroom is under 8 % on the most favourable scenes the feature has. A session that shoots one plate from a little further back crosses it, and nothing in the record would say so — which makes recording the range a prerequisite of closing the constant rather than a nicety.
+
+This also draws the line the previous two decisions did not have to. Decision 38 already noted that `ringMinSamples`'s refusal at 64×48 is "the transfer's honest resolution floor and not a denomination defect", because a statistical requirement per sector is legitimately grid-dependent. The same test applies here and gives the same answer for a different reason: `ringInnerMm` is not grid-dependent at all, it is *range*-dependent, and `mmPerPx` is the wrong instrument because it conflates the two. Not every constant that can be multiplied by `mmPerPx` should be.
+
+### Alternatives Considered
+
+- **Implement `max(ringInnerMm, 4 × mmPerPx)` as Decision 29 instructed** - Take the third instance of the Decision 37/38 pattern and close the envelope in code - Rejected on the measurement: it is a no-op at corpus range and costs ring feasibility on one of two captures at 128 px, leaving three sub-pixel bands on both. It buys nothing measurable and spends Req 5.1's 2× transfer envelope.
+- **Refuse the fit outright when `4 × mmPerPx` exceeds `ringInnerMm`** - Make the envelope a feasibility guard rather than a moving radius, in the shape Decision 38 endorsed for `ringMinSamples` - Rejected because it refuses on the same conflated quantity: it would reject the 128 px grid, where the plane demonstrably transfers within 0.9 mm and all three bands are full, and `gridTransferRefusesBelowTheRingSampleFloor` already asserts that fit as feasible. A guard that fires on the transfer test's passing case is measuring the wrong thing.
+- **Key the envelope on the native grid width rather than on `mmPerPx`** - Recover `z` by assuming 256×192 and compare that against the envelope, so range and resolution are separated - Rejected as an assumption dressed as a measurement. `SupportRegion` sees one depth map and cannot know whether a coarse one is a subsampled ARKit frame or a coarser sensor's native output; hard-coding 256×192 would break exactly the N5k grid Decision 37 went out of its way to neutralise.
+- **Raise `ringInnerMm` to cover a longer range unconditionally** - Set it at, say, 12 mm so the envelope reaches ~545 mm - Rejected because it is the circularity Req 3.7 forbids, applied to a `[measured]` constant. Nothing measures a scene that needs 12 mm; it would narrow the ring by a quarter on every capture in hand to buy an envelope no capture has ever approached, and `ringOuterMm` is itself `[owed]` against a restated rule (Decision 33), so the ring's width is not a free parameter.
+- **Leave the instruction standing and record the doubt** - Note in the decision log that the repair may be wrong and defer - Rejected because the instruction appears in three places as a "must", and the next session to look for a Decision 37/38-shaped repair would find it and implement it. The measurement exists and settles it; leaving it open invites the wrong work.
+
+### Consequences
+
+**Positive:**
+
+- An instruction that reads as an obvious repair, and would have cost Req 5.1's measured 2× transfer envelope, is refused on measurement rather than followed on pattern.
+- The envelope is now a computed figure — `ringInnerMm × f_d / 4`, 364.1 mm and 366.4 mm — asserted against the corpus rather than a "≈ 365 mm" quoted in prose across three documents.
+- The corpus's headroom is stated as a fraction, 93.1 % and 92.0 %, which says the constant is near its bound in a way "inside 8 mm on both" does not.
+- The capture session gains a recording requirement that costs one number per capture and is the only thing that can close the envelope.
+- The limit of the `mmPerPx` conversion is now recorded. Decisions 37 and 38 established it as the repair for grid dependence; this establishes that it cannot repair range dependence, and says why.
+
+**Negative:**
+
+- `ringInnerMm` remains correct only below ~365 mm, and the feature ships with that gap open. Nothing in the shipped path detects a capture beyond it or marks the ring measure as contaminated.
+- The rejection rests on two captures 2 mm of range apart, both flat bread on a white plate. The sub-pixel-band argument is structural and does not depend on them, but the 166-against-200 figure that makes it concrete does.
+- One more thing is added to a capture session that already carries plate diameter, food placement, surface material, depth resolution, weighed mass, class and vessel per capture.
+- A future device with a different f_d moves the envelope, and nothing recomputes it outside the test.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringInnerMm` comment, which stated the repair as required), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`smearTrackingInnerRadiusCollapsesTheRing`, `smearEnvelopeIsARangeBoundTheCorpusNearlyReaches`, and the `geometry(_:decimation:)` and `bandCounts(geometry:innerMm:)` helpers), `prerequisites.md` (the `ringInnerMm` item and the capture-recording list), `design.md` (Stated limits, Req 2.5) and task 26's detail. **No shipped behaviour changes at any grid or range** — the decision is to leave a constant alone, and the measurement is what says that is the right thing to do.
+
+---

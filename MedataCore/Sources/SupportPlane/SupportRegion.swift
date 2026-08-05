@@ -84,9 +84,22 @@ public enum SupportRegion {
 
     // [measured] Decision 29. The ~4 px depth smear spans 7.45 mm and 7.36 mm on the
     // two committed slices, at median food depths of 338.9 mm and 336.9 mm — inside
-    // 8 mm on both. The smear is a fixed PIXEL count, so `smear_mm = 4z/f_d` with
-    // f_d ≈ 182 px: 8 mm covers capture range to ≈ 365 mm and no further. Beyond that
-    // this must become `max(ringInnerMm, 4 × mmPerPx)`.
+    // 8 mm on both. The smear is a fixed PIXEL count, so `smear_mm = 4z/f_d`: with
+    // f_d 182.0 and 183.2 px the envelope is 364.1 mm and 366.4 mm, and the corpus sits
+    // at 93.1 % and 92.0 % of it. Under 8 % of headroom, so the range a capture is taken
+    // at now matters and `prerequisites.md` asks for it to be recorded per capture.
+    //
+    // Decision 29 concluded this "must become `max(ringInnerMm, 4 × mmPerPx)`" beyond
+    // the envelope. Measured and REJECTED (Decision 39). `mmPerPx` is `z/f_d` and carries
+    // range and grid resolution alike, but only range moves the smear — a coarser grid
+    // subsamples a map ARKit has already smoothed. At 128 px the smear-tracking radius
+    // therefore reads 14.9 mm for a physical smear still near 7.4, eats 6.9 mm of a
+    // 17 mm ring, and leaves three bands of 3.37 and 3.43 mm against depth pixels of
+    // 3.73 and 3.68 — each band narrower than one pixel. `1785135663727` loses ring
+    // feasibility outright (inner band 166 against `ringMinSamples`) and `1785901032716`
+    // clears it by nothing (exactly 200), on a grid where the plane transfers within
+    // 0.9 mm today. The envelope is a RANGE bound and is left to the capture session;
+    // it must not be paid for with Req 5.1's transfer.
     public static let ringInnerMm: Float = 8
     // [owed] against a RESTATED rule (Decision 33). The old rule — "must sit inside the
     // smallest measured plate margin" — is measured and unsatisfiable: the support

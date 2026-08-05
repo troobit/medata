@@ -108,10 +108,22 @@ committed `.depthslice` fixtures. Adding a capture to it means cutting a slice w
 `tools/fixture_slice.py` and appending the stem to its `captures` list. What it settled
 (Decision 29):
 
-- `ringInnerMm = 8` holds, and the **range envelope is ≈ 365 mm**. The 4 px smear measures
+- `ringInnerMm = 8` holds, and the **range envelope is `ringInnerMm × f_d / 4`** — 364.1 mm
+  and 366.4 mm, with the corpus standing at 93.1 % and 92.0 % of it. The 4 px smear measures
   7.45 mm and 7.36 mm at 338.9 mm and 336.9 mm. Because the smear is a fixed pixel count,
-  `smear_mm = 4z/f_d` with `f_d ≈ 182 px` — beyond ~365 mm the constant must become
-  `max(ringInnerMm, 4 × mmPerPx)` or the ring sits inside the smear.
+  `smear_mm = 4z/f_d`; beyond the envelope the ring's inner band sits inside the smear.
+
+  **Do not "fix" this with `mmPerPx`.** Decision 29 instructed that the constant become
+  `max(ringInnerMm, 4 × mmPerPx)`, and Decision 39 measured that and refused it. `mmPerPx`
+  is `z/f_d` and carries range and grid resolution alike, but only range moves the smear — a
+  coarser grid subsamples a map ARKit has already smoothed. At 128 px the smear-tracking
+  radius reads 14.9 mm for a physical smear still near 7.4 mm, leaves three ring bands of
+  3.37 mm against depth pixels of 3.73 mm (each narrower than one pixel), and drops
+  `1785135663727`'s inner band to 166 against the 200 floor on the very grid where the plane
+  transfers within 0.9 mm. `mmPerPx` repairs grid dependence (Decisions 37, 38); it cannot
+  repair range dependence. The envelope closes by recording the capture range, which
+  `prerequisites.md` now requires. Measured by `smearTrackingInnerRadiusCollapsesTheRing`
+  and `smearEnvelopeIsARangeBoundTheCorpusNearlyReaches`.
 - `ringMinSamples = 200` per band holds at 5.6–7.0× margin (`[1120, 1132, 1213]` and
   `[1294, 1347, 1392]`), and inner-band sectors carry 102–184 samples apiece.
 - `supportVisibilityMin` **is firable**, and the earlier note here saying otherwise was
@@ -161,10 +173,12 @@ And what Decision 35 settled — the two Req 5.1 figures, which are not constant
   integrated per-pixel above the plane, so a millimetre there is a millimetre everywhere.
 - **The transfer floors at the ring, not the plane.** 128×96 holds; 64×48 leaves the inner
   band at 37 and 32 samples against `ringMinSamples = 200` and `ringBandsAreFeasible`
-  refuses. Since `mmPerPx = z / f_d`, that is the same bound as Decision 29's ≈ 365 mm range
-  envelope — coarsening `f_d` and raising `z` are one constraint. Note the 4 px smear is
-  already 14.9 mm at 128×96, well past `ringInnerMm`, and the plane still transfers: the
-  smear bounds how clean the ring *measure* is, not where the plane lands.
+  refuses. Since `mmPerPx = z / f_d`, coarsening `f_d` and raising `z` move the same
+  *quantity* — but they are **not the same constraint**, and Decision 39 is where that
+  distinction is measured. The 4 px smear reads 14.9 mm at 128×96, well past `ringInnerMm`,
+  while the plane still transfers within a millimetre, because decimation subsamples an
+  already-smoothed map and the physical smear never moved. The smear bounds how clean the
+  ring *measure* is, not where the plane lands — and it is bounded by **range**, not by grid.
 - **`planeCandidateCount` was grid-dependent where the plane is not — Decision 38 fixed
   that.** Three passes natively, two at half resolution, because the residue floor was a
   raw sample count and sample counts quarter under a halving. It is persisted (Req 6.1), so

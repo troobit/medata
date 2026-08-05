@@ -856,6 +856,111 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // The last standing "must" on a `[measured]` constant, measured before it is obeyed.
+    //
+    // `ringInnerMm = 8` stands for the ~4 px depth smear, and a smear is a PIXEL
+    // quantity, so what it spans in millimetres scales with range: `smear_mm = 4z/f_d`.
+    // Decision 29 measured the envelope at ≈365 mm and both the constant's own comment
+    // and `prerequisites.md` conclude that the radius "must become
+    // `max(ringInnerMm, 4 × mmPerPx)`" before any capture beyond it is trusted.
+    //
+    // It must not. `mmPerPx` is `z/f_d` and carries BOTH quantities — coarsening the grid
+    // divides f_d exactly as increasing the range multiplies z — but only one of them
+    // moves the smear. Decimation subsamples a map ARKit has ALREADY smoothed, so the
+    // physical smear stays where it was while `4 × mmPerPx` doubles, and the proposed
+    // radius chases a smear the grid does not have. This measures what obeying it costs.
+    @Test("the smear-tracking inner radius chases a smear a coarser grid does not have")
+    func smearTrackingInnerRadiusCollapsesTheRing() throws {
+        var halvedFeasible: [String: Bool] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let native = try #require(Self.geometry(slice, decimation: 1))
+            let halved = try #require(Self.geometry(slice, decimation: 2))
+
+            for g in [native, halved] {
+                let proposed = max(SupportRegion.ringInnerMm, 4 * g.mmPerPx)
+                let shipped = Self.bandCounts(geometry: g, innerMm: SupportRegion.ringInnerMm)
+                let dynamic = Self.bandCounts(geometry: g, innerMm: proposed)
+                let bandWidthMm = (SupportRegion.ringOuterMm - proposed)
+                    / Float(SupportRegion.ringBandCount)
+                print("\(name): \(g.width)px mmPerPx \(fmt(g.mmPerPx)) — inner radius"
+                      + " \(fmt(SupportRegion.ringInnerMm)) -> \(fmt(proposed)) mm,"
+                      + " band width \(fmt(bandWidthMm)) mm against one pixel of"
+                      + " \(fmt(g.mmPerPx)) mm, bands \(shipped) -> \(dynamic)")
+
+                if g.width == native.width {
+                    // At corpus range the repair is a no-op: `max` picks the constant,
+                    // because the smear is 7.45 and 7.36 mm against 8. Whatever is
+                    // decided here, nothing on this corpus moves.
+                    #expect(proposed == SupportRegion.ringInnerMm)
+                    #expect(dynamic == shipped)
+                } else {
+                    #expect(proposed > SupportRegion.ringInnerMm)
+                    // The robust half of the finding, and it holds on both captures: the
+                    // radius eats 6.9 mm of a 17 mm ring, so the three bands it leaves are
+                    // each NARROWER THAN ONE DEPTH PIXEL. Three sub-pixel bands are not
+                    // three radial samples of the surface whatever their counts total —
+                    // Decision 14 resolved the ring radially to tell the surface next to
+                    // the food from the one beyond it, and a band the grid cannot resolve
+                    // cannot make that distinction.
+                    #expect(bandWidthMm < g.mmPerPx)
+                    #expect(shipped.allSatisfy { $0 >= SupportRegion.ringMinSamples })
+                    halvedFeasible[name] = dynamic
+                        .allSatisfy { $0 >= SupportRegion.ringMinSamples }
+                }
+            }
+        }
+
+        // And the fragile half, which is the reason this is a rejection rather than a
+        // trade-off. Under the shipped radius BOTH captures clear the sample floor at
+        // 128 px, which is what Req 5.1's documented 2× transfer envelope rests on. Under
+        // the smear-tracking radius one of them stops clearing it and the other clears it
+        // by nothing at all — the inner band reads 166 against a 200 floor on
+        // `1785135663727` and exactly 200 on `1785901032716`. Two captures of the same
+        // scene type, one plate apart, landing either side of the bar is what a
+        // sub-pixel band produces: the counts are quantisation, not support.
+        let survivors = halvedFeasible.filter(\.value).keys.sorted()
+        print("smear-tracking radius at 128 px: \(halvedFeasible.count - survivors.count)"
+              + " of \(halvedFeasible.count) captures lose ring feasibility;"
+              + " survivors \(survivors)")
+        let free = "every capture keeps ring feasibility at 128 px under a smear-tracking"
+            + " inner radius — the repair costs nothing measurable and Decision 39's"
+            + " rejection no longer has evidence behind it"
+        #expect(survivors.count < halvedFeasible.count, "\(free)")
+    }
+
+    // What is left once the repair is refused: a RANGE envelope on a constant that has
+    // no range term. `ringInnerMm` covers the smear out to `ringInnerMm × f_d / 4`, and
+    // f_d is the one quantity here the capture session cannot vary by accident — it is
+    // the sensor's. So the envelope is a property of the device, computed once from the
+    // corpus, and the session's job is to stay inside it and record where it stood.
+    //
+    // The margin is the finding: the corpus does not sit comfortably inside this bound.
+    @Test("the smear envelope is a range bound derived from f_d, and the corpus nearly reaches it")
+    func smearEnvelopeIsARangeBoundTheCorpusNearlyReaches() throws {
+        for name in Self.captures {
+            let g = try #require(Self.geometry(name))
+            // `mmPerPx` is `median(foodDepths) / f_d`, so this recovers the range the
+            // smear was measured at without the pass having to carry it separately.
+            let rangeMm = g.mmPerPx * g.intrinsics.fx
+            let envelopeMm = SupportRegion.ringInnerMm * g.intrinsics.fx / 4
+            let usedFraction = rangeMm / envelopeMm
+            print("\(name): f_d \(fmt(g.intrinsics.fx)) px, range \(fmt(rangeMm)) mm,"
+                  + " smear \(fmt(4 * g.mmPerPx)) mm against ringInnerMm"
+                  + " \(fmt(SupportRegion.ringInnerMm)) mm — envelope \(fmt(envelopeMm)) mm,"
+                  + " corpus at \(fmt(usedFraction * 100)) % of it")
+
+            #expect(rangeMm < envelopeMm)
+            // Under 8 % of headroom, on both captures, on the flattest possible framing.
+            // A session that shoots one plate from a little further back leaves the
+            // envelope without anything in the record saying so — which is why the range
+            // is now a thing `prerequisites.md` asks to be written down per capture.
+            let roomier = "\(name) sits at \(usedFraction * 100) % of the envelope — the corpus"
+                + " has more headroom than Decision 29 measured and the warning can relax"
+            #expect(usedFraction > 0.9, "\(roomier)")
+        }
+    }
+
     // Decision 35 found the one constant that could not transfer: the extent bar was
     // denominated in PIXELS while every other bar in `admissibility` is a millimetre or
     // a dimensionless fraction, which is what Req 5.1's transfer rests on. It halved
@@ -1339,6 +1444,35 @@ struct SupportPlaneCorpusMeasurementTests {
         return SupportRegion.prepare(depth: slice.depth,
                                      colourIntrinsics: slice.colourIntrinsics,
                                      foodRegionMask: slice.foodMask)
+    }
+
+    static func geometry(_ slice: DepthSlice, decimation: Int) -> SupportRegion.DepthGeometry? {
+        let scaled = decimated(slice, by: decimation)
+        return SupportRegion.prepare(depth: scaled.depth,
+                                     colourIntrinsics: scaled.colourIntrinsics,
+                                     foodRegionMask: scaled.foodMask)
+    }
+
+    // `ringSamples`'s radial banding with the inner radius as a parameter, so a proposed
+    // radius can be measured before it is shipped. Everything else — the distance
+    // transform, `ringOuterMm`, `ringBandCount`, the validity and food-mask exclusions —
+    // is the shipped path's.
+    static func bandCounts(geometry g: SupportRegion.DepthGeometry, innerMm: Float) -> [Int] {
+        var counts = [Int](repeating: 0, count: SupportRegion.ringBandCount)
+        let bandWidthMm = (SupportRegion.ringOuterMm - innerMm) / Float(SupportRegion.ringBandCount)
+        guard bandWidthMm > 0 else { return counts }
+        let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
+        for y in 0..<g.height {
+            for x in 0..<g.width {
+                let idx = y * g.width + x
+                guard g.valid[idx], !g.foodMask.isFood(x: x, y: y) else { continue }
+                let distMm = distancePx[idx] * g.mmPerPx
+                guard distMm >= innerMm, distMm <= SupportRegion.ringOuterMm else { continue }
+                counts[min(SupportRegion.ringBandCount - 1,
+                           Int((distMm - innerMm) / bandWidthMm))] += 1
+            }
+        }
+        return counts
     }
 
     static func prepared(_ name: String) -> (SupportRegion.DepthGeometry, SupportRegion.RingSamples)? {
