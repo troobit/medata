@@ -2184,3 +2184,82 @@ The eight scenes read through Decision 40's rule, each at the plane its own comm
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`crossedSectorRuleIsBracketedByBothConstraintSets`, and `SceneReading` gains its `signs` member), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md` (the owed-numbers section and the Decision 40/41 paragraphs), `prerequisites.md` (capture 6, captures 3/4, and the suite-bracket table), `decision_log.md` (Decision 41's consequence), task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
 
 ---
+
+## Decision 44: The sector count is the unit the other sector constants are denominated in, and Req 5.1 caps it at 11
+
+**Date**: 2026-08-06
+**Status**: accepted (re-denominates the brackets of Decisions 40, 41 and 43)
+
+### Context
+
+Every bracket this feature has recorded for the sector measure is a **count of sectors**: Decision 40's `maxCrossedSectors` 0…2, Decision 41's `minSupportingSectors` 6…7, Decision 43's empty joint interval 6…5. Each was read at `ringSectorCount = 8`, and none of them says so. `ringMinSamples = 200` is worse placed still — it is annotated `[measured]`, and its whole derivation is `ringSectorCount × 25`, so a constant marked settled takes an `[owed]` constant as its input.
+
+Req 3.7 names three constants the design may not ship asserted — `ringSectorCount`, `sectorSupportMin`, `minSupportingSectors` — and the feature has treated them as three peers. Decisions 30, 40, 41, 42 and 43 all attacked `minSupportingSectors` and the rule that replaces it. Nothing has measured the count itself, and if the capture session moves it, every sector bracket in the documents is void.
+
+The question is answerable without a capture: the committed rings can be re-cut into any number of equal arcs and re-read. `SupportRegion.sectorIndex` is one `atan2` and a bucket index about the food-mask centroid, so the same ring samples support any count.
+
+### Decision
+
+`ringSectorCount` is recorded as **bracketed 4…8, not set**, with a hard ceiling of **11** from Req 5.1's grid-transfer claim. It stays `[owed]`.
+
+Every sector bracket already recorded is restated as **denominated in the count**: `maxCrossedSectors` 0…2 means 0…2 *at eight sectors*, and reads 0…0 at four and 1…2 at eleven. So the count must be fixed **before** the capture session, not read out of it alongside the constants it denominates.
+
+Nothing is rewired and no value moves.
+
+### Rationale
+
+Both corpus captures' best candidates and all eight committed scenes, re-sectored at nine counts. `crossed` is Decision 40's failing-sector rule; `joint` is the intersection of the corpus and suite brackets on `maxCrossedSectors`, exactly as Decision 43 computes it at 8.
+
+| N | plate crossed | table crossed | corpus | suite | joint | min sector samples | `ringMinSamples` | halved grid |
+|---|---|---|---|---|---|---|---|---|
+| 4 | 0 | 2 | 0…1 | 0…0 | **0…0** | 248 | 100 | feasible |
+| 6 | 0 | 3 | 0…2 | 0…1 | 0…1 | 137 | 150 | feasible |
+| **8** | **0** | **3** | **0…2** | **0…2** | **0…2** | 102 | 200 | feasible |
+| 10 | **1** | 5 | 1…4 | 0…2 | 1…2 | 80 | 250 | feasible |
+| 11 | 1 | 6 | 1…5 | 0…2 | 1…2 | 73 | 275 | feasible |
+| 12 | 1 | 7 | 1…6 | 0…3 | 1…3 | 66 | 300 | **refused** |
+| 16 | 1 | 7 | 1…6 | 0…4 | 1…4 | 45 | 400 | refused |
+| 24 | 1 | 13 | 1…12 | 0…6 | 1…6 | 29 | 600 | refused |
+| 32 | 1 | 18 | 1…17 | 0…9 | 1…9 | 21 | 800 | refused |
+
+**Nine counts, eight distinct joint intervals.** `maxCrossedSectors` is a count of sectors, so of course it scales — but it was recorded as "0…2, and nothing in hand narrows it", which reads as a range the session may choose from. It is a range *conditional on a constant that is itself owed*.
+
+**The ceiling is Req 5.1's, and the constraint is self-tightening.** `ringMinSamples = ringSectorCount × 25` rises with the count, so asking for finer arcs raises the very floor the ring must clear. The native corpus is nowhere near it — the thinnest radial band holds 1120 samples, which would carry 44 sectors. The 2× halved grid is: its thinnest band holds **292**, so 292/25 = **11** is the last count at which `ringBandsAreFeasible` still passes on both captures. Decision 35 recorded that Req 5.1's transfer "floors at the ring, not the plane"; this measures the count as the knob that sets where that floor sits. Above 11 the plane still transfers and the ring measure does not, which is the same refusal Decision 39 declined to engineer around with `mmPerPx`.
+
+**No floor, and that is a negative result worth having.** Decision 40's rule works by finding an arc of the ring sitting above the candidate plane while the rest supports it, so a coarse cut might have averaged the crossing away inside one sector. It does not: the corpus separates its plate-top candidate from its table candidate at **every** count from 4 to 32. The rule's separation is robust to the count; only its bracket is not.
+
+**The pass side erodes above 8, and that is where the bracket's top comes from.** The plate-top candidate — the plane a correct fit must admit — reads **0** crossed sectors at 4, 6 and 8 and **1** from 10 upward. Narrow enough arcs resolve the direction in which its own ring ran off the plate onto the table, which is Decision 33's plate margin read a third way, and the rule's floor stops being zero. So the count is bracketed 4…8 by the pass side, inside the Req 5.1 ceiling of 11.
+
+**And the trade inside that bracket runs backwards.** A *coarser* cut leaves *less* freedom in the constant it denominates: joint bracket widths are 1 at four sectors, 2 at six, 3 at eight. At four, `maxCrossedSectors` is **determined** at 0 by evidence already committed — the suite's silent-failure scene reads 1 crossed sector there and the plate candidate reads 0, so no value but 0 survives. Decision 43's "any choice among the three is asserting" is therefore partly an artefact of the shipped count, which is precisely the count at which the freedom is widest.
+
+That does not make four the answer. At four sectors an arc is 90°, and whether that resolves the straddle Req 3.6 and Decision 18 describe is exactly what the corpus cannot say — the corpus has no clean correct fit (Decision 29) and its only straddle is the table candidate, which four sectors happen to catch. Buying determinacy in `maxCrossedSectors` by asserting `ringSectorCount` moves the assertion rather than removing it.
+
+### Alternatives Considered
+
+- **Set `ringSectorCount = 8` now, as the largest count with a clean pass side inside the Req 5.1 ceiling** - The bracket has a defensible top and the shipped value is already there - Rejected because 4 and 6 are equally clean on both sides, so the top of a three-value bracket is still an end of a bracket. Req 3.7 names this constant for exactly this move.
+- **Set `ringSectorCount = 4` and discharge `maxCrossedSectors` with it** - It would close two owed constants at once from evidence in hand, and the joint bracket collapses to a single value - Rejected because it buys determinacy in one constant by asserting another, and the 90° arc's adequacy against Decision 18's straddle is a property of scenes the corpus does not contain. It also halves the resolution of the guard whose whole job is angular.
+- **Re-denominate `ringMinSamples` so it stops moving with the count** - Fix it at 200 regardless, and the Req 5.1 ceiling disappears - Rejected because the 25-samples-per-sector derivation is what gives the 0.5 support bar its binomial footing (Decision 20, σ ≈ 0.10 at 25 samples against σ ≈ 0.19 at the old floor of 60 overall). Decoupling them leaves the sector fraction unfloored at high counts, which is the noise regime Decision 20 removed.
+- **Record the count as settled at 8 because nothing has ever moved it** - It has survived every decision from 18 onward - Rejected because surviving is not measurement. This pass is the first thing to vary it, and it finds every recorded sector bracket depends on it.
+- **Sweep `sectorSupportMin` in the same pass** - The third member of the trio is equally unmeasured - Deferred rather than rejected: the support bar is a fraction of a sector's samples, not a count of sectors, so it is not re-denominated by this finding and its measurement is a separate one. Recorded here so the omission is deliberate.
+
+### Consequences
+
+**Positive:**
+
+- `ringSectorCount` gets its first two-sided bracket — 4…8 from the pass side, 11 as a hard ceiling — where before it had no measurement at all.
+- Req 5.1's transfer claim acquires a stated ceiling on the count, so a later session cannot raise `ringSectorCount` without re-reading Decision 35. The coupling was invisible before: `ringMinSamples` is `[measured]` and takes an `[owed]` input.
+- Decisions 40, 41 and 43's brackets are restated in their true units, and the capture session's ordering changes with them — the count is fixed first, and capture 6 then reads `maxCrossedSectors` in whatever unit that fixed.
+- The rule's separation is confirmed robust to the count over an 8× range, which is a stronger statement about Decision 40 than any single-count reading could make.
+
+**Negative:**
+
+- Three counts survive both sides, so nothing is set. The feature gains another bracket rather than a value, and `ringSectorCount` joins the list task 27 waits on.
+- The shipped count is the one leaving `maxCrossedSectors` *least* determined, so Decision 43's headline — two constraint sets agreeing on 0…2 with nothing to narrow it — is weaker than it read.
+- The ceiling of 11 comes from a 2× halving of two captures. A sensor with a different native grid moves it, and the corpus cannot say by how much.
+- The 4…8 bracket's top rests on one candidate on one capture — `1785135663727`'s plate top is the only intended-correct plane the corpus has, and Decision 29 already records that it is not a clean one.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`sectorCountIsTheUnitOfTheSectorTrio`; `sectorSigns` gains a count parameter and a `sectorSampleCounts` member, and `SceneReading` carries its ring so it can be re-sectored), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio and `ringMinSamples` comments), `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---

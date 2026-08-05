@@ -178,6 +178,27 @@ public enum SupportRegion {
     // exactly, which they do for no other [owed] constant. Nothing in hand narrows
     // 0…2: every committed scene and both corpus candidates return the same verdict
     // at 0, at 1 and at 2.
+    //
+    // READ 0…2 AS "0…2 AT EIGHT SECTORS" (Decision 44). `ringSectorCount` is not a peer
+    // of the other two constants here — it is the UNIT they and `maxCrossedSectors` are
+    // denominated in, and it is [owed] as well. Re-cutting the same rings at nine counts
+    // gives eight distinct joint intervals: 0…0 at four sectors, 0…2 at eight, 1…2 at
+    // eleven. Fix the count BEFORE the capture session; capture 6 then reads
+    // `maxCrossedSectors` in whatever unit that fixed.
+    //
+    // The count is bracketed 4…8 and not set. No floor: the rule separates the two corpus
+    // candidates at every count from 4 to 32, so a coarse cut does not average the
+    // crossing away. The top is the PASS side — the plate-top candidate a correct fit must
+    // admit reads 0 crossed sectors at 4, 6 and 8 and 1 from 10 up, because narrow arcs
+    // resolve where its own ring ran off the plate (Decision 33). Above that sits a hard
+    // ceiling of 11 from Req 5.1, in `ringMinSamples` below.
+    //
+    // And the trade runs backwards: a COARSER cut leaves LESS freedom in the constant it
+    // denominates. Joint bracket widths are 1, 2, 3 at counts 4, 6, 8 — at four sectors
+    // `maxCrossedSectors` is determined at 0 by evidence already committed. That is not a
+    // reason to pick four: it asserts `ringSectorCount` to avoid asserting
+    // `maxCrossedSectors`, and a 90° arc's adequacy against Decision 18's straddle is a
+    // property of scenes the corpus does not contain.
     public static let ringSectorCount = 8
     public static let sectorSupportMin: Float = 0.5
     public static let minSupportingSectors = 6
@@ -208,6 +229,15 @@ public enum SupportRegion {
     // counts are [1120, 1132, 1213] and [1294, 1347, 1392], 5.6× to 7.0× the floor,
     // and inner-band sectors carry 102–184 samples apiece against the 25 the
     // derivation targets — binomial σ ≈ 0.042 at the 0.5 bar.
+    //
+    // [measured] ON AN [owed] INPUT (Decision 44). The derivation is
+    // `ringSectorCount × 25`, so this constant rises with a count that is not itself set,
+    // and the floor tightens as the arcs it exists to protect get finer. That is what caps
+    // `ringSectorCount` at 11: Req 5.1's 2× grid halving leaves the thinnest radial band
+    // at 292 samples, and 292/25 = 11 is the last count `ringBandsAreFeasible` still
+    // passes on both captures. The native grid would carry 44. Above 11 the plane still
+    // transfers within a millimetre and the ring measure does not — the same refusal
+    // Decision 39 declined to engineer around with `mmPerPx`.
     public static let ringMinSamples = 200
     // [inherited] ringBandMm. The SIGNED admission guard of Req 3.2 — the support
     // fraction is unsigned and cannot separate a plane above the ring (table, +)
