@@ -120,10 +120,12 @@ measured value against a constant flips as soon as the constant crosses it.
 | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
 | `maxCrossedSectors` | 0…2 | 0…2 (Decision 43) |
 
-**Every row of the sector part of that table is denominated in `ringSectorCount`, which is
-itself `[owed]` (Decision 44).** Read `maxCrossedSectors` 0…2 as "0…2 *at eight sectors*" —
-re-cut the same rings at nine counts and you get eight distinct joint intervals. See the
-sector-count section below before setting anything with "sector" in its name.
+**Every row of the sector part of that table is denominated in `ringSectorCount` *and*
+`sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
+`maxCrossedSectors` 0…2 as "0…2 *at eight sectors with a support bar of 0.5*" — re-cut the same
+rings at nine counts and you get eight distinct joint intervals; hold the count and drop the bar
+to 0.1 and it is 0…0. See the two sector sections below before setting anything with "sector" in
+its name, and fix the count and the bar **together**.
 
 `foodEnvelopeMinMm` and `escapeBandMm` are bound **tighter by the suite than by the corpus**,
 so a value defensible against every capture can still turn the suite red.
@@ -394,7 +396,59 @@ out, and the first invalidates how the other sector brackets read.
 
 **Practical rule: fix the count before the capture session, not from it.** Capture 6 reads
 `maxCrossedSectors` in whatever unit the count fixed, so taking the captures first and
-choosing the count afterwards measures nothing.
+choosing the count afterwards measures nothing. **But not the count alone — see below.**
+
+## The support bar is the population, and 0.5 is a cliff edge (Decision 45)
+
+`sectorSupportMin = 0.5` had never been varied either.
+`supportBarSelectsThePopulationTheRuleReads` re-classifies the same two corpus candidates and
+the same eight committed scenes at eleven bars. The bar is not a peer of the other two: the
+crossed-sector rule reads the sign of sectors that **fail** it, so it chooses the population
+Decision 40's inheritance claim is a statement about.
+
+The window below is Decision 40's, recomputed — how far `ringBandMm` may move before either
+candidate changes its crossed count, lower edge the plate's highest failing median, upper
+edge the table's lowest crossed median.
+
+| `sectorSupportMin` | plate crossed | table crossed | `ringBandMm`'s room | joint `maxCrossedSectors` |
+|---|---|---|---|---|
+| 0.0 | 0 | **0** | — rule silent | empty |
+| 0.1–0.3 | 0 | 2 | −32.564…+16.603 (**49.167 mm**) | 0…0, 0…0, 0…1 |
+| 0.4 | 0 | 3 | −9.680…+16.603 (26.283 mm) | 0…2 |
+| **0.5** | **0** | **3** | **−6.794…+16.603 (23.397 mm)** | **0…2** |
+| 0.6–0.8 | 0 | 4 | +3.711…+5.974 (**2.263 mm**) | 0…2 |
+| 0.9–1.0 | 0 | 4 | +3.846…+5.974 (2.128 mm) | 0…2 |
+
+- **The ceiling is a cliff and the shipped value stands on it.** A **10.339×** collapse in one
+  notch, 0.5 → 0.6, the largest step in the sweep by a wide margin. Decision 40 supplied the
+  criterion without knowing it was one — 2.128 mm is "fitted", 23.397 mm is "inherited" — so
+  the cliff picks the ceiling with no new threshold. The bar is bracketed **0…0.5**, and the
+  shipped 0.5 is *on* the ceiling rather than inside the bracket. **Do not raise it**: one
+  notch up and `ringBandMm` stops being inherited, which is the ground Decision 40 rejected
+  the all-sector formulation on.
+- **Both edges converge on the bar, from opposite sides.** Noisy sectors that sit *on* the
+  correct plane start failing and read near zero, lifting the floor −32.564 → +3.846; sectors
+  holding the table plane at a small positive offset fail and become crossed, dropping the
+  ceiling +16.603 → +5.974. One constant squeezes the bar from both directions.
+- **The floor is the rule's own.** At 0 nothing fails, the population is empty, and a rule with
+  nothing to read admits the plane Decision 18 exists to reject. Only 0 is silent at eight
+  sectors; at four the floor rises to 0.3.
+- **Decision 40's all-sector contrast understates itself.** At 1.0 the reading reproduces
+  +3.846…+5.974 exactly — but that is the room the bar has *at its current value*. Read without
+  conditioning on where `ringBandMm` sits, the all-sector failing medians **interleave**: the
+  table's lowest is +0.426, *below* the plate's highest +3.846, a separation of −3.419 mm. So
+  the `sectorSupportMin` gate inside the rule is more load-bearing than Decision 40 recorded.
+
+**This supersedes Decision 44's ordering.** The count's own pass-side bracket is a function of
+the bar — counts with a clean pass side and a firing rule are 6, 8, 10, 11 at 0.1–0.2; **all
+five** Req 5.1 permits at 0.3; 4, 6, 8, 10 at 0.4; and 4, 6, 8 from 0.5 up. The erosion above
+eight sectors that gives 4…8 its top is a consequence of the bar being at 0.5. **Fix the count
+and the bar together, before the sitting.**
+
+One positive, and it is the strongest statement the feature has about the rule: over the whole
+5 × 11 grid **no cell collides**. Wherever the rule fires, the suite and the corpus admit a
+common `maxCrossedSectors`, so Decision 43's agreement is a property of the rule rather than of
+the shipped pair.
 
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 

@@ -1529,9 +1529,11 @@ struct SupportPlaneCorpusMeasurementTests {
         let normal: Vec3
         let planeD: Float
 
-        func signs(at count: Int) -> SectorSigns {
+        func signs(at count: Int,
+                   supportMin: Float = SupportRegion.sectorSupportMin) -> SectorSigns {
             SupportPlaneCorpusMeasurementTests.sectorSigns(
-                samples: samples, geometry: geometry, normal: normal, d: planeD, count: count)
+                samples: samples, geometry: geometry, normal: normal, d: planeD,
+                count: count, supportMin: supportMin)
         }
     }
 
@@ -2020,6 +2022,281 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(cleanFloor.count > 1, "\(collapsed)")
     }
 
+    // MARK: - The support bar, and what it is the bar OF
+
+    // The third member of Req 3.7's trio and the one nothing has ever varied. Decision 44
+    // measured the count and deferred this in as many words: "the support bar is a
+    // fraction of a sector's samples, not a count of sectors, so it is not re-denominated
+    // by this finding and its measurement is a separate one".
+    //
+    // It is not a peer of the other two either, and Decision 40 is where that shows.
+    // The crossed-sector rule reads the SIGN of sectors that FAIL this bar, so
+    // `sectorSupportMin` selects the population the rule is computed over. Decision 40's
+    // central claim — that the rule's magnitude bar is `[inherited]` rather than fitted,
+    // because failing sectors separate over 23.397 mm where all sectors separate over
+    // 2.128 mm — is a statement about that population. And "all sectors" is precisely this
+    // constant at 1.0, so the 2.128 mm figure Decision 40 quotes as a contrast is its own
+    // sweep's other end. The claim is a reading at 0.5 of a quantity that moves with the
+    // bar, and nothing records what it does in between.
+    static let supportBarSweep: [Float] = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+    // The counts Req 5.1's ceiling leaves open (Decision 44: 4…11 by the sample floor,
+    // 4…8 by the pass side), for the two-dimensional half of the sweep.
+    static let feasibleCountSweep = [4, 6, 8, 10, 11]
+
+    @Test("the support bar selects the population Decision 40's rule reads, and brackets itself")
+    func supportBarSelectsThePopulationTheRuleReads() throws {
+        var rings: [String: (SupportRegion.DepthGeometry, SupportRegion.RingSamples,
+                             SupportRegion.PlaneCandidate)] = [:]
+        for name in Self.captures {
+            let (g, samples) = try #require(Self.prepared(name))
+            rings[name] = (g, samples, try #require(Self.bestCandidate(name)))
+        }
+        let readings = Self.sceneReadings()
+        #expect(readings.count == 8, "a scene stopped producing ring statistics")
+        let mustPass = readings.filter { $0.requiresPass.contains(.sectors) }
+        let mustFire = readings.filter { $0.requiresFire.contains(.sectors) }
+
+        // One reading of both constraint sets at one (count, bar) pair.
+        struct Bar {
+            let supportMin: Float
+            let count: Int
+            let plate: SectorSigns
+            let table: SectorSigns
+            let corpusFloor: Int
+            let corpusCeiling: Int
+            let suiteFloor: Int
+            let suiteCeiling: Int
+            var jointFloor: Int { max(corpusFloor, suiteFloor) }
+            var jointCeiling: Int { min(corpusCeiling, suiteCeiling) }
+            var jointFeasible: Bool { jointFloor <= jointCeiling }
+            // Decision 40's window, recomputed at this bar. It is a VERDICT-INVARIANCE
+            // interval, not a population separation: how far `ringBandMm` may move before
+            // one of the two candidates changes its crossed count. The lower edge is the
+            // highest failing median of the plane a correct fit must ADMIT — below it the
+            // plate gains a crossed sector — and the upper edge is the lowest CROSSED
+            // median of the plane the rule must reject, above which the table loses one.
+            let invarianceLowMm: Float
+            let invarianceHighMm: Float
+            var invarianceMm: Float { invarianceHighMm - invarianceLowMm }
+            var barInside: Bool {
+                invarianceLowMm < SupportRegion.ringBandMm
+                    && SupportRegion.ringBandMm < invarianceHighMm
+            }
+            // The harsher reading of the same two populations: the plate's highest failing
+            // median against the table's lowest failing median, with no conditioning on the
+            // bar's current value. Positive means the two sets of failing sectors are
+            // separated outright; negative means they interleave and only the bar's
+            // position keeps the verdicts apart.
+            let separationLowMm: Float
+            let separationHighMm: Float
+            var separationMm: Float { separationHighMm - separationLowMm }
+            // Whether the rule can fire at all: a rule reading a population the wrong
+            // plane contributes nothing to cannot reject it.
+            var fires: Bool { table.crossedFailing > 0 }
+        }
+
+        func read(count: Int, supportMin: Float) throws -> Bar {
+            var signs: [String: SectorSigns] = [:]
+            for (name, r) in rings {
+                signs[name] = Self.sectorSigns(samples: r.1, geometry: r.0,
+                                               normal: r.2.normal, d: r.2.d,
+                                               count: count, supportMin: supportMin)
+            }
+            let plate = try #require(signs["1785135663727"])
+            let table = try #require(signs["1785901032716"])
+            let passCrossed = mustPass.map { $0.signs(at: count, supportMin: supportMin).crossedFailing }
+            let fireCrossed = mustFire.map { $0.signs(at: count, supportMin: supportMin).crossedFailing }
+            return Bar(
+                supportMin: supportMin, count: count, plate: plate, table: table,
+                corpusFloor: plate.crossedFailing,
+                corpusCeiling: table.crossedFailing - 1,
+                suiteFloor: passCrossed.max() ?? 0,
+                suiteCeiling: (fireCrossed.min() ?? 0) - 1,
+                invarianceLowMm: plate.failingMedians.max() ?? -.infinity,
+                invarianceHighMm: table.failingMedians
+                    .filter { $0 > SupportRegion.ringBandMm }.min() ?? .infinity,
+                separationLowMm: plate.failingMedians.max() ?? -.infinity,
+                separationHighMm: table.failingMedians.min() ?? .infinity)
+        }
+
+        // MARK: the bar swept at the shipped count
+        let bars = try Self.supportBarSweep.map {
+            try read(count: SupportRegion.ringSectorCount, supportMin: $0)
+        }
+        for b in bars {
+            print("supportMin \(fmt(b.supportMin)):"
+                  + " plate supporting \(b.plate.supporting) failing \(b.plate.failing.count)"
+                  + " crossed \(b.plate.crossedFailing) escaped \(b.plate.escapedFailing);"
+                  + " table supporting \(b.table.supporting) failing \(b.table.failing.count)"
+                  + " crossed \(b.table.crossedFailing);"
+                  + " invariance \(fmt(b.invarianceLowMm))…\(fmt(b.invarianceHighMm)) mm"
+                  + " (\(fmt(b.invarianceMm)) wide, ringBandMm inside: \(b.barInside));"
+                  + " separation \(fmt(b.separationLowMm))…\(fmt(b.separationHighMm)) mm"
+                  + " (\(fmt(b.separationMm)));"
+                  + " maxCrossedSectors corpus \(b.corpusFloor)…\(b.corpusCeiling),"
+                  + " suite \(b.suiteFloor)…\(b.suiteCeiling),"
+                  + " joint \(b.jointFloor)…\(b.jointCeiling)"
+                  + " \(b.jointFeasible ? "" : "EMPTY")")
+        }
+
+        let shipped = try #require(bars.first { $0.supportMin == SupportRegion.sectorSupportMin })
+
+        // Anchor. At the shipped bar this reproduces Decisions 40, 43 and 44 exactly — the
+        // window they quote, the crossed counts, and the joint bracket. If it does not, the
+        // parameterised classification has diverged from `ringStatistics` and nothing below
+        // is a measurement of the bar.
+        let anchor = "re-classifying at sectorSupportMin no longer reproduces the recorded"
+            + " reading (plate crossed \(shipped.plate.crossedFailing), table crossed"
+            + " \(shipped.table.crossedFailing), window \(fmt(shipped.invarianceLowMm))…"
+            + "\(fmt(shipped.invarianceHighMm)) mm, joint \(shipped.jointFloor)…\(shipped.jointCeiling))"
+        #expect(shipped.plate.crossedFailing == 0 && shipped.table.crossedFailing == 3
+                && shipped.jointFloor == 0 && shipped.jointCeiling == 2
+                && abs(shipped.invarianceLowMm - -6.794) < 0.01
+                && abs(shipped.invarianceHighMm - 16.603) < 0.01, "\(anchor)")
+
+        // THE FLOOR, and it is the rule's own rather than the unsigned count's. Set the bar
+        // low enough and no sector fails on the wrong plane, so the population Decision 40's
+        // rule reads is EMPTY — and a rule with nothing to read admits the plane Decision 18
+        // exists to reject. At the shipped count only 0 is silent; the grid below shows the
+        // floor rising with a coarser cut, which is the first half of the coupling.
+        let firing = bars.filter(\.fires).map(\.supportMin)
+        let silent = bars.filter { !$0.fires }.map(\.supportMin)
+        print("bars at which the rule fires on the table candidate: \(firing.map { fmt($0) });"
+              + " silent at \(silent.map { fmt($0) })")
+        let noFloor = "the crossed-sector rule fires at every bar in the sweep"
+            + " (\(bars.map { fmt($0.supportMin) })) — sectorSupportMin has no floor from"
+            + " the rule and this finding has moved"
+        #expect(!silent.isEmpty, "\(noFloor)")
+
+        // THE CEILING, and Decision 40 quoted it without recognising it as one. Both edges
+        // of the window converge on the bar as `sectorSupportMin` rises, from opposite
+        // sides: sectors that sit ON the plate candidate's plane but are noisy start
+        // FAILING, and they read near zero, so the lower edge climbs; sectors that hold the
+        // table candidate's plane at a small positive offset fail too and become crossed, so
+        // the upper edge falls. At 1.0 every sector fails and the window is Decision 40's
+        // "over all sectors" figure exactly — that contrast is this sweep's endpoint.
+        let allSectors = try #require(bars.last)
+        print("invariance window over the sweep:"
+              + " \(bars.map { "\(fmt($0.supportMin)):\(fmt($0.invarianceMm))" })")
+        let degenerate = "the bar at 1.0 no longer reproduces Decision 40's all-sector"
+            + " window (+3.846…+5.974 mm, 2.128 wide) — the contrast it draws is not this"
+            + " sweep's endpoint after all"
+        #expect(abs(allSectors.invarianceLowMm - 3.846) < 0.01
+                && abs(allSectors.invarianceHighMm - 5.974) < 0.01, "\(degenerate)")
+
+        // And the same endpoint read without conditioning on where `ringBandMm` currently
+        // sits: over ALL sectors the two candidates' failing medians INTERLEAVE — the
+        // table's lowest is below the plate's highest — so the 2.128 mm Decision 40 quotes
+        // is the room the bar has at its own value, not a gap between the populations.
+        // The contrast it draws understates its own case.
+        print("all-sector separation \(fmt(allSectors.separationLowMm))…"
+              + "\(fmt(allSectors.separationHighMm)) mm (\(fmt(allSectors.separationMm)))"
+              + " against the failing-sector separation at the shipped bar"
+              + " \(fmt(shipped.separationLowMm))…\(fmt(shipped.separationHighMm)) mm"
+              + " (\(fmt(shipped.separationMm)))")
+        let stillSeparated = "the all-sector populations no longer interleave"
+            + " (\(fmt(allSectors.separationMm)) mm) — Decision 40's 2.128 mm contrast is a"
+            + " genuine gap and the harsher reading has stopped saying anything extra"
+        #expect(allSectors.separationMm < 0 && shipped.separationMm > 0, "\(stillSeparated)")
+
+        // `ringBandMm` sits inside the invariance window at every firing bar, because the
+        // window's edges are DEFINED by the crossed counts either side of it — so
+        // "inherited or fitted" is not a yes/no, it is the window's WIDTH, and Decision 40
+        // supplies the criterion: 2.128 mm is "being fitted to the corpus", 23.397 mm is
+        // "being inherited". Applied to the sweep, that criterion needs no threshold of its
+        // own, because the collapse is a cliff rather than a slope — one notch of the bar.
+        let byConstruction = "ringBandMm has left the invariance window at some firing bar —"
+            + " the window's edges no longer bracket it by construction"
+        #expect(bars.allSatisfy { !$0.fires || $0.barInside }, "\(byConstruction)")
+        let firingBars = bars.filter(\.fires)
+        let widths = firingBars.map { (bar: $0.supportMin, mm: $0.invarianceMm) }
+        let cliff = try #require(zip(widths, widths.dropFirst()).max {
+            ($0.0.mm / $0.1.mm) < ($1.0.mm / $1.1.mm)
+        })
+        print("the largest single-notch collapse is \(fmt(cliff.0.bar)) → \(fmt(cliff.1.bar)):"
+              + " \(fmt(cliff.0.mm)) → \(fmt(cliff.1.mm)) mm, a factor of"
+              + " \(fmt(cliff.0.mm / cliff.1.mm)); shipped bar \(fmt(SupportRegion.sectorSupportMin))")
+        let onTheCliff = "the invariance window's collapse is no longer a cliff at the"
+            + " shipped bar (largest step \(fmt(cliff.0.bar))→\(fmt(cliff.1.bar)), factor"
+            + " \(fmt(cliff.0.mm / cliff.1.mm))) — sectorSupportMin's ceiling stops being"
+            + " self-selecting and needs a threshold of its own"
+        #expect(cliff.0.bar == SupportRegion.sectorSupportMin
+                && cliff.0.mm / cliff.1.mm > 5, "\(onTheCliff)")
+
+        // So the bar is bracketed by Decision 40's own argument, and the shipped value is
+        // AT the ceiling rather than inside it: every bar above the cliff leaves
+        // `ringBandMm` the ~2 mm of room Decision 40 rejected the all-sector formulation for.
+        let wide = firingBars.filter { $0.invarianceMm > 10 }.map(\.supportMin)
+        print("bars leaving ringBandMm more than 10 mm of room: \(wide.map { fmt($0) });"
+              + " sectorSupportMin bracketed \(fmt(wide.min() ?? 0))…\(fmt(wide.max() ?? 0))"
+              + " at ringSectorCount \(SupportRegion.ringSectorCount)")
+        let atTheCeiling = "the shipped sectorSupportMin is no longer the largest bar leaving"
+            + " ringBandMm inherited (\(wide.map { fmt($0) })) — it has stopped sitting on"
+            + " the edge of its own bracket"
+        #expect(wide.max() == SupportRegion.sectorSupportMin, "\(atTheCeiling)")
+        let determined = "the support bar's bracket has collapsed to one value —"
+            + " sectorSupportMin would be measured rather than owed"
+        #expect(wide.count > 1, "\(determined)")
+
+        // MARK: the two constants together
+        // Decision 44 says fix the count FIRST, then read `maxCrossedSectors` in the unit
+        // it fixed. That ordering assumes the count's own reading does not depend on the
+        // bar. Both constants are owed, so the assumption is measurable: read the joint
+        // bracket over the whole grid and ask whether the count's bracket moves with it.
+        print("joint bracket on maxCrossedSectors over (count × supportMin):")
+        var cleanCountsByBar: [Float: [Int]] = [:]
+        var collisions: [String] = []
+        for supportMin in Self.supportBarSweep {
+            var row: [String] = []
+            var clean: [Int] = []
+            for count in Self.feasibleCountSweep {
+                let b = try read(count: count, supportMin: supportMin)
+                if !b.jointFeasible && b.fires {
+                    collisions.append("\(count)×\(fmt(supportMin))")
+                }
+                // An empty joint bracket has two causes and they are not the same finding:
+                // the rule may be SILENT (nothing crossed on the plane it must reject, so
+                // no ceiling exists) or the two constraint sets may CONTRADICT, which is
+                // Decision 41's collision reappearing on the rule Decision 43 said escaped it.
+                let cell: String
+                if b.jointFeasible {
+                    cell = "\(b.jointFloor)…\(b.jointCeiling)"
+                } else {
+                    cell = b.fires ? "COLLIDES" : "silent"
+                }
+                row.append("\(count):\(cell)")
+                if b.plate.crossedFailing == 0 && b.fires { clean.append(count) }
+            }
+            cleanCountsByBar[supportMin] = clean
+            print("  supportMin \(fmt(supportMin)): \(row.joined(separator: "  "))"
+                  + " | counts with a clean pass side and a firing rule: \(clean)")
+        }
+
+        // Decision 43's headline survives the whole grid: wherever the rule fires at all,
+        // the suite and the corpus still admit a common `maxCrossedSectors`. The collision
+        // that broke the unsigned count belongs to the count, not to the (count, bar) pair —
+        // which is a stronger statement than Decision 43 could make at one pair.
+        let collided = "the crossed-sector rule now inherits Decision 41's collision at some"
+            + " (count × supportMin) pair (\(collisions)) — Decision 43's finding is a"
+            + " property of the shipped pair rather than of the rule"
+        #expect(collisions.isEmpty, "\(collided)")
+
+        // Decision 44 bracketed `ringSectorCount` 4…8 on the pass side, read at the shipped
+        // bar. If the bar moves that bracket, the two constants are not separable and the
+        // stated ordering is not enough — the session has to fix them together.
+        let atShipped = try #require(cleanCountsByBar[SupportRegion.sectorSupportMin])
+        let barsMovingTheCount = Self.supportBarSweep.filter {
+            (cleanCountsByBar[$0] ?? []) != atShipped && !(cleanCountsByBar[$0] ?? []).isEmpty
+        }
+        print("Decision 44's count bracket at the shipped bar: \(atShipped);"
+              + " bars that move it: \(barsMovingTheCount.map { fmt($0) })")
+        let separable = "the count's pass-side bracket reads the same at every bar that"
+            + " admits one — ringSectorCount and sectorSupportMin are separable and"
+            + " Decision 44's ordering is sufficient"
+        #expect(!barsMovingTheCount.isEmpty, "\(separable)")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
@@ -2421,11 +2698,15 @@ struct SupportPlaneCorpusMeasurementTests {
         return min(count - 1, max(0, Int(normalised * Float(count))))
     }
 
-    // The inner band re-cut into `count` equal arcs. `samples.sector` is only ever
-    // populated for band 0, so the band test is what selects the inner band here too.
+    // The inner band re-cut into `count` equal arcs, classified at `supportMin`. Both are
+    // `[owed]` constants, so both are arguments here: the count says how the ring is cut
+    // and the bar says which of the resulting sectors Decision 40's rule may read.
+    // `samples.sector` is only ever populated for band 0, so the band test is what selects
+    // the inner band here too.
     static func sectorSigns(samples: SupportRegion.RingSamples,
                             geometry g: SupportRegion.DepthGeometry,
-                            normal: Vec3, d: Float, count: Int) -> SectorSigns {
+                            normal: Vec3, d: Float, count: Int,
+                            supportMin: Float = SupportRegion.sectorSupportMin) -> SectorSigns {
         var total = [Int](repeating: 0, count: count)
         var supported = [Int](repeating: 0, count: count)
         var heights = [[Float]](repeating: [], count: count)
@@ -2442,12 +2723,12 @@ struct SupportPlaneCorpusMeasurementTests {
         }
         // Empty sectors count as neither supporting nor failing, as in `ringStatistics`.
         let failing = (0..<count).filter {
-            total[$0] > 0 && fraction($0) < SupportRegion.sectorSupportMin
+            total[$0] > 0 && fraction($0) < supportMin
         }
         let failingMedians = failing.map { medians[$0] }
         return SectorSigns(
             supporting: (0..<count).filter {
-                total[$0] > 0 && fraction($0) >= SupportRegion.sectorSupportMin
+                total[$0] > 0 && fraction($0) >= supportMin
             }.count,
             medians: medians,
             failing: failing,

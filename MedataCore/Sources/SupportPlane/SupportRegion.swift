@@ -199,6 +199,26 @@ public enum SupportRegion {
     // reason to pick four: it asserts `ringSectorCount` to avoid asserting
     // `maxCrossedSectors`, and a 90° arc's adequacy against Decision 18's straddle is a
     // property of scenes the corpus does not contain.
+    //
+    // `sectorSupportMin` is the POPULATION the rule reads, and the shipped value is on a
+    // CLIFF (Decision 45). The rule classifies sectors that FAIL this bar, so Decision 40's
+    // inheritance claim is a statement about the set this constant selects. Re-classified at
+    // eleven bars, `ringBandMm`'s room — how far it may move before either corpus candidate
+    // changes its crossed count — reads 49.167 mm at 0.1-0.3, 26.283 at 0.4, 23.397 at 0.5,
+    // then 2.263 at 0.6 and 2.128 at 1.0. A 10.3x collapse in ONE notch, at exactly the
+    // shipped value. Decision 40's own criterion (2.128 is fitted, 23.397 is inherited)
+    // therefore caps the bar at 0.5 with no new threshold, and it is bracketed 0…0.5 with
+    // the shipped value ON the ceiling. Both edges converge on the bar as it rises: noisy
+    // sectors that sit ON the correct plane start failing and read near zero, lifting the
+    // floor from −32.564 to +3.846, while sectors holding the table plane at a small
+    // positive offset fail and become crossed, dropping the ceiling from +16.603 to +5.974.
+    // At 0 nothing fails and the rule is silent, which is the floor.
+    //
+    // FIX THE COUNT AND THE BAR TOGETHER, not in sequence — Decision 44's ordering is
+    // superseded. The count's own pass-side bracket moves with the bar: counts with a clean
+    // pass side are 6, 8, 10, 11 at 0.1-0.2; all five Req 5.1 permits at 0.3; 4, 6, 8, 10 at
+    // 0.4; and 4, 6, 8 from 0.5 up. So the erosion above eight sectors that gave 4…8 its top
+    // is a consequence of the bar sitting at 0.5.
     public static let ringSectorCount = 8
     public static let sectorSupportMin: Float = 0.5
     public static let minSupportingSectors = 6

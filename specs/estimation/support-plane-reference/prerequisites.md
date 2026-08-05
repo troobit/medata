@@ -256,12 +256,20 @@ rims never reach the inner band the sector median is computed over. Captures 3 a
 source for it, so shoot at least one of them with the food close enough to the rim that the ring
 reaches it, and record whether the rim falls in the inner band.
 
-**Fix `ringSectorCount` BEFORE the sitting — it is the unit capture 6 reports in (Decision 44).**
-Every sector bracket in this document is a count of sectors read at eight of them. Re-cut the same
-rings at nine counts and the joint bracket on `maxCrossedSectors` takes eight distinct values:
-**0…0** at four sectors, 0…1 at six, **0…2** at eight, 1…2 at ten and eleven. Take the captures
-first and choose the count afterwards and capture 6 measures nothing, because the number it
-produces is denominated in a constant that was still moving.
+**Fix `ringSectorCount` AND `sectorSupportMin` BEFORE the sitting, and fix them TOGETHER
+(Decisions 44, 45).** Every sector bracket in this document is a count of sectors read at eight of
+them, at a support bar of 0.5. Re-cut the same rings at nine counts and the joint bracket on
+`maxCrossedSectors` takes eight distinct values: **0…0** at four sectors, 0…1 at six, **0…2** at
+eight, 1…2 at ten and eleven. Take the captures first and choose the count afterwards and capture 6
+measures nothing, because the number it produces is denominated in a constant that was still moving.
+
+Decision 44 said to fix the count first and read the rest in the unit it set. That ordering is
+**superseded**: the count's own bracket is a function of the bar. Counts with a clean pass side —
+the plane a correct fit must admit reading no crossed sector, and the rule still firing on the
+plane it must reject — are 6, 8, 10, 11 at a bar of 0.1–0.2; **all five** Req 5.1 permits at 0.3;
+4, 6, 8, 10 at 0.4; and 4, 6, 8 from 0.5 up. So the pass-side erosion above eight sectors that
+gives 4…8 its top is itself a consequence of the bar sitting at 0.5. Choose the **pair** and record
+both, with the reason, before the sitting.
 
 The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
 
@@ -281,7 +289,27 @@ committed suite together, so choosing four would close it without capture 6 at a
 asserts `ringSectorCount` in order to avoid asserting `maxCrossedSectors`, and whether a 90° arc
 resolves Req 3.6's straddle is a property of scenes the corpus does not contain — which is what
 capture 6 is for. Note the choice and its reason before the sitting, and record every sector figure
-with the count it was read at.
+with the count **and the bar** it was read at.
+
+The bar is bracketed **0…0.5** and the shipped 0.5 is **on** the ceiling (Decision 45):
+
+- **Floor, and it is the rule's own.** At 0 no sector fails, so the population the crossed-sector
+  rule reads is empty and it admits the plane Decision 18 exists to reject. At eight sectors that
+  is the only silent bar; at four the floor rises to 0.3, which is the coupling from the other side.
+- **Ceiling, 0.5, and it is a cliff rather than a slope.** The room `ringBandMm` has — how far it
+  may move before either corpus candidate changes its crossed count — is 49.167 mm at 0.1–0.3,
+  26.283 at 0.4, **23.397 at 0.5**, then **2.263 at 0.6** and 2.128 at 1.0. A 10.339× collapse in
+  one notch, at exactly the shipped value. Decision 40 already supplied the criterion — 2.128 mm is
+  "fitted", 23.397 mm is "inherited" — so no new threshold is needed to read it.
+- **Why both edges move.** As the bar rises, noisy sectors that sit *on* the correct plane start
+  failing and read near zero, lifting the window's floor from −32.564 to +3.846 mm; sectors holding
+  the table plane at a small positive offset fail too and become crossed, dropping its ceiling from
+  +16.603 to +5.974 mm. The bar is squeezed from both directions by one constant.
+
+Dump the per-sector fractions for every capture so the bar can be re-read off the sitting at any
+value, not only the one chosen going in. Nothing about the cliff generalises from two captures — it
+is sharp because a handful of sectors cross together between 0.5 and 0.6 on the corpus's two
+candidates, and only the session can say whether that holds on a plate it has not seen.
 
 **Vary how much plate shows, and record it.** The measured support margin — the distance from the
 food boundary at which the surface falls away — is 16, 40, 10, 42, 6, 4, 6, 44 mm on
@@ -390,9 +418,10 @@ is no way to recover it afterwards.
   | `maxCrossedSectors` | 0…2 | 0…2 — **they agree** (Decision 43) |
 
   **Both sector rows are denominated in `ringSectorCount`, which is `[owed]` too
-  (Decision 44).** `minSupportingSectors` 6…7 and `maxCrossedSectors` 0…2 hold at eight sectors
-  and nowhere else; at four the latter is 0…0. Fix the count before reading either — see the
-  capture-session section above.
+  (Decision 44), and in `sectorSupportMin`, which is `[owed]` as well (Decision 45).**
+  `minSupportingSectors` 6…7 and `maxCrossedSectors` 0…2 hold at eight sectors and a bar of 0.5,
+  and nowhere else: at four sectors the latter is 0…0, and at eight sectors with a bar of 0.1 it is
+  0…0 too. Fix the **pair** before reading either — see the capture-session section above.
 
   **Two of these bind tighter than the corpus**, so a value set at the sitting against captures
   alone can land inside the corpus's bracket and outside the suite's: `foodEnvelopeMinMm` above
@@ -407,6 +436,9 @@ is no way to recover it afterwards.
   **Superseded by Decision 43**: the scene does not move. Measured on the same eight scenes, the
   rule brackets `maxCrossedSectors` at 0…2 where the count's joint interval is empty, so the
   collision belongs to the count alone and every committed scene survives the replacement intact.
+  **Confirmed over the whole grid (Decision 45)**: across five counts × eleven support bars, no
+  cell collides — wherever the rule fires at all, the suite and the corpus admit a common
+  `maxCrossedSectors`. The agreement is a property of the rule, not of the shipped pair.
 
 ## Before testing
 
