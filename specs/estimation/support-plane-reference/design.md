@@ -193,6 +193,14 @@ A 3 mm-tall item 100 mm across occupies ~2,700 depth samples, so per-pixel noise
 
 Edge behaviour is the residual: the smear under-reads a border strip roughly half a kernel wide around the food's perimeter, which is a perimeter-proportional bias and therefore worst on small items.
 
+### Voxel-carve exposure (Req 1.6)
+
+**Measured: correcting the plane changes the excluded-voxel count by zero.** The prediction in the parity audit — that raising the plane ~26 mm deletes a slab of voxels, and compounds with Decision 4's overhang — assumed a grid fixed in space with the plane sliding through it. The grid is not fixed. `VoxelGridSizer` anchors `originCamera1` **on** the support plane (the food-mask centroid back-projected onto it), and `VoxelGrid.voxelCentre` offsets every voxel along `axisZ` by `dz = (iz + 0.5) · edgeMm`, which is strictly one-signed. Raising the plane translates the entire grid with it, so every voxel keeps its signed distance and `signedDistance < 0` decides identically before and after. `VoxelCarvePlaneExclusionTests` measures this at the diagnosed 26.1 mm rise and asserts the delta is 0.
+
+The real consequence is a **translation, not a deletion**: the ~26 mm between the table and the plate top used to lie inside the grid and now lies outside it. Food overhanging below the plate leaves the grid rather than being dropped by the plane test — the same under-measurement Decision 4 already accepts and brackets at ~11 %, reached by a different route. **Nothing compounds**, because both mechanisms are the same 26 mm counted once.
+
+**A separate defect the measurement surfaced, deliberately not fixed here.** The absolute counts are not benign even though the delta is zero. Under the convention `Pipeline` actually passes — `nadir.gravity`, which `CameraGravity` documents as world-**up** in the camera frame — `axisZ = −gravity` points down, the grid extends *below* the plane, and **every voxel is excluded**: 23,040 of 23,040 in the measured case, before and after. Under the opposite convention the volume tests use (`(0,0,−1)`, commented as gravity pointing down) none is. The two-view carve therefore recovers no volume at all on a LiDAR device whose depth-derived plane reaches it, which is consistent with the ~10× under-read measured on 2026-08-05. That belongs to `bugfixes/two-view-carve-no-volume`; the two-view carve's accuracy is an explicit Non-Goal here, and the Req 1.6 answer holds under either convention, so this feature does not turn on resolving it.
+
 ### Document amendments (Reqs 1.4, 5.2)
 
 Edits, not cross-references: pipeline Req 4.2, pipeline design §6.2, the pipeline glossary, `DECISIONS.md` MD-9 (superseding entry, not a silent rewrite), and — added after review — the `nutrition5k-calibration` transfer contract (Req 5.2), which Req 3.6 of that spec already contradicts.
@@ -207,9 +215,9 @@ Edits, not cross-references: pipeline Req 4.2, pipeline design §6.2, the pipeli
 | `CardOnlyPlaneFitter` | **No** | No depth map |
 | `CalibrationArtifact.mixtureObservation` (`:157`) | **Yes — and it cannot take the new path** | Live caller of `fitPlateRegionPlane`. No mask exists at this site; see below |
 | `CalibrationArtifact` artefact fields | **Metadata only** | Records the reference (Req 5.3) |
-| `VoxelCarveEstimator` | **Consumer, compounding** | Excludes `signedDistance < 0` — a **hard** exclusion, unlike the height field's `max(0, ·)` clamp. Raising the plane 26 mm deletes a slab, and overhanging food (Decision 4) sits inside it, so the effect there is deletion rather than under-measurement. Measured under Req 1.6 |
+| `VoxelCarveEstimator` | **Consumer, no change** | Excludes `signedDistance < 0` — a **hard** exclusion, unlike the height field's `max(0, ·)` clamp. This row previously predicted that raising the plane 26 mm would delete a slab and compound with Decision 4's overhang. **Measured under Req 1.6 and superseded: the excluded-voxel count does not change** — see "Voxel-carve exposure" below |
 | `HeightFieldEstimator.integrate` | **Consumer** | Formula unchanged |
-| `DiagProbe/main.swift` | **No** | Untracked throwaway; delete |
+| `DiagProbe/main.swift` | **No** | Throwaway probe from the diagnosis; delete. (It is *tracked*, not untracked as this row first recorded — `git rm`, and the `CHANGELOG` entry that introduced it stays as history) |
 | `PlateRegionPlaneTests` | **Keep** | The flood fill survives for the mixture path (above), so its tests survive with it |
 | `PlateTopSupportPlaneTests` (`Tests/VolumeTests/`, `XCTSkip` at `:55`) | **Yes** | Un-skip; it encodes this resolution |
 
@@ -409,7 +417,11 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 
 **Deliberately no randomised generator.** An earlier draft proposed property tests; both were near-tautologies (fallback totality is guaranteed by the ordering contract; same-process determinism has no failure mode), `swift-testing`'s `arguments:` is parameterised rather than generative and has no shrinking, and CLAUDE.md's MVP gate says not to add test scaffolding unasked. The perturbation-stability property that *would* find counterexamples — ε < 1 mm of noise must not flip the reference — is expressed instead as a fixed parameterised sweep over seeded perturbations of the two real captures, which needs no new harness.
 
-**Regression against real captures.** Reqs 6.2, 7.1–7.3 via `make harness-accuracy`. The 195/204 MB bundles are large because of RGB; a **depth-only slice** (256×192 Float32 depth + food mask ≈ 200 KB) is committed to the repo so Reqs 6.2 and 7.1 are executable by anyone, with the full bundles pulled from the device only for the volume criteria that need imagery.
+**Regression against real captures.** Reqs 6.2, 7.1–7.3 via `make harness-accuracy`. The 195/204 MB bundles are large because of RGB; a **depth-only slice** (256×192 Float32 depth + confidence + food mask, ~290 KB) is committed to the repo so Reqs 6.2 and 7.1 are executable by anyone, with the full bundles pulled from the device only for the volume criteria that need imagery.
+
+`tools/fixture_slice.py` cuts the slices; `SupportPlaneRegressionSliceTests` runs the criteria. Two properties of that suite are deliberate. Every assertion measures a **named** plane — the pre-feature edge-band fit, or the highest-support candidate taken *before* admissibility — never the plane the guards selected, so nothing in it moves when task 26 sets the `[owed]` constants. And the food mask is carried on the depth grid, which makes the slice small but means the pre-feature comparison has to expand it back to 1920×1440: `LiDARPlaneFitter` sizes its bands from the mask's own bbox, so a depth-grid mask against colour intrinsics fits nothing meaningful. The expansion quantises to one depth pixel (~7.5 colour pixels) against bands hundreds of pixels thick, and the check that this is immaterial is that both pre-feature volumes reproduce the recorded figures within 5 %.
+
+Three figures the criteria state do **not** reproduce and are superseded by Decision 28 — Req 6.2's +18…+26 mm, Req 7.1's 235.96 cm³ and Req 7.2's ~200 cm³. Reqs 7.3 and 7.4 stay blocked on captures that do not exist rather than on code.
 
 **Numbers this design owes the requirements** — to be fixed during implementation against the fixture corpus, not asserted now. Every `SupportRegion` constant is annotated `[derived]`, `[inherited]`, or `[owed]`; the `[owed]` ones are task 26 corpus measurements, with the sector trio under Req 3.7's explicit ban on shipping asserted values, and each measured value lands with its derivation recorded in `decision_log.md` (Req 3.7). Beyond the constants: the Req 4.5 fallback-rate defect threshold, Req 5.1's device/replay plane tolerance and named fixture, Req 7.6's latency and memory budget, and `fallbackPenalty`. Each is a measurement, and stating a value here would be inventing evidence.
 
