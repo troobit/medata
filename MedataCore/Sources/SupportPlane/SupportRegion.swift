@@ -171,6 +171,13 @@ public enum SupportRegion {
     // [owed] to prerequisites capture 6; shipping the rule means asserting that count,
     // which is what Req 3.7 forbids for exactly these constants. Setting the trio waits
     // on the captures alone now, not on a proposal as well.
+    //
+    // The committed SUITE brackets it at 0…2 as well (Decision 43) — the same eight
+    // scenes on which `minSupportingSectors` has an EMPTY joint interval, 6…5. So no
+    // committed scene has to move when the rule lands, and the two sources agree
+    // exactly, which they do for no other [owed] constant. Nothing in hand narrows
+    // 0…2: every committed scene and both corpus candidates return the same verdict
+    // at 0, at 1 and at 2.
     public static let ringSectorCount = 8
     public static let sectorSupportMin: Float = 0.5
     public static let minSupportingSectors = 6

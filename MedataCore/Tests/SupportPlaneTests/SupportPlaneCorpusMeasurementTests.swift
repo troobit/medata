@@ -1518,6 +1518,10 @@ struct SupportPlaneCorpusMeasurementTests {
         let visibility: Float
         let envelopeMm: Float
         let annulusMedianMm: Float
+        // The same ring read the way Decision 40's rule reads it. Carried here so the
+        // suite can be measured against the REPLACEMENT sector guard on exactly the
+        // scenes it is measured against the shipped one.
+        let signs: SectorSigns
     }
 
     // Every guard, for the four scenes whose committed test requires the whole fit to
@@ -1570,7 +1574,9 @@ struct SupportPlaneCorpusMeasurementTests {
                     geometry: measured.geometry, normal: p.normal, d: p.d),
                 annulusMedianMm: SupportRegion.medianHeight(
                     indices: measured.samples.annulus, geometry: measured.geometry,
-                    normal: p.normal, d: p.d))
+                    normal: p.normal, d: p.d),
+                signs: sectorSigns(samples: measured.samples, geometry: measured.geometry,
+                                   normal: p.normal, d: p.d))
         }
     }
 
@@ -1669,6 +1675,126 @@ struct SupportPlaneCorpusMeasurementTests {
             + " exceeds what the corpus's intended candidate scores (\(corpusIntendedSectors)):"
             + " the collision this test records is resolved and it can be retired"
         #expect(sectorFloor > corpusIntendedSectors, "\(resolved)")
+    }
+
+    // MARK: - The replacement sector guard against both constraint sets
+
+    // Decision 41 left one thing unresolved and named it: the suite and the corpus
+    // CONTRADICT on `minSupportingSectors` — floor 6 against ceiling 5 — so "the scene
+    // has to move with the constant", a dependency Decision 40 did not anticipate.
+    // Decision 42 then measured that the only thing holding the wrong plane out of a
+    // 0 % fallback rate is `ringMedianMaxMm` clearing it by 0.338 mm, and called that an
+    // argument for the crossed-sector rule "that does not need capture 6".
+    //
+    // Both point at the same question and neither asks it: does the REPLACEMENT guard
+    // have the collision too? The contradiction is a property of the unsigned count, not
+    // of the scenes, and the scenes are unchanged — so the rule can be measured against
+    // exactly the two constraint sets that broke the count, on the same eight scenes and
+    // the same six corpus candidates, before capture 6 exists.
+    //
+    // `maxCrossedSectors` is bracketed 0…2 by the corpus (Decision 40). This asks what
+    // the committed suite brackets it to, whether the two intervals intersect where the
+    // count's did not, and whether anything in hand distinguishes the values inside.
+    @Test("the crossed-sector rule is bracketed by the suite too, and the two agree")
+    func crossedSectorRuleIsBracketedByBothConstraintSets() throws {
+        let readings = Self.sceneReadings()
+        #expect(readings.count == 8, "a scene stopped producing ring statistics")
+
+        for r in readings {
+            print("\(r.label): supporting \(r.signs.supporting)/\(SupportRegion.ringSectorCount),"
+                  + " failing \(r.signs.failing.count)"
+                  + " \(r.signs.failingMedians.map { fmt($0) }),"
+                  + " crossed \(r.signs.crossedFailing), escaped \(r.signs.escapedFailing)")
+        }
+
+        // The scenes whose committed assertions run through the sector guard. Every
+        // other scene bounds this constant no more than it bounds the shipped count.
+        let mustPass = readings.filter { $0.requiresPass.contains(.sectors) }
+        let mustFire = readings.filter { $0.requiresFire.contains(.sectors) }
+        #expect(mustPass.count == 5, "the set of scenes requiring the sector guard to pass moved")
+        #expect(mustFire.count == 1, "the set of scenes requiring the sector guard to fire moved")
+
+        // A ceiling on crossed sectors reads the opposite way round to a floor on
+        // supporting ones: a scene that must be ADMITTED floors the ceiling, and the
+        // scene the guard exists to REJECT caps it one below its own count.
+        let suiteFloor = mustPass.map(\.signs.crossedFailing).max() ?? 0
+        let suiteCeiling = (mustFire.map(\.signs.crossedFailing).min() ?? 0) - 1
+        print("suite brackets maxCrossedSectors \(suiteFloor)…\(suiteCeiling)")
+
+        // The corpus side, recomputed rather than quoted from Decision 40 — the two
+        // constraint sets have to be comparable on one run.
+        var byCapture: [String: SectorSigns] = [:]
+        for name in Self.captures {
+            let (g, samples) = try #require(Self.prepared(name))
+            let best = try #require(Self.bestCandidate(name))
+            byCapture[name] = Self.sectorSigns(
+                samples: samples, geometry: g, normal: best.normal, d: best.d)
+        }
+        // `1785135663727` selects its plate top — the plane a correct fit must ADMIT.
+        // `1785901032716` selects the TABLE — Decision 18's silent failure, and the
+        // plane the guard exists to reject.
+        let plate = try #require(byCapture["1785135663727"])
+        let table = try #require(byCapture["1785901032716"])
+        let corpusFloor = plate.crossedFailing
+        let corpusCeiling = table.crossedFailing - 1
+        print("corpus brackets maxCrossedSectors \(corpusFloor)…\(corpusCeiling)")
+
+        // THE FINDING. On the shipped count the two sets have no common value; on the
+        // rule that replaces it they do, and no scene had to move to get it.
+        let jointFloor = max(suiteFloor, corpusFloor)
+        let jointCeiling = min(suiteCeiling, corpusCeiling)
+        print("joint interval \(jointFloor)…\(jointCeiling)"
+              + " (\(max(0, jointCeiling - jointFloor + 1)) admissible values)")
+        let collided = "the suite and the corpus now contradict on maxCrossedSectors as"
+            + " well (\(suiteFloor)…\(suiteCeiling) against \(corpusFloor)…\(corpusCeiling)) —"
+            + " the crossed-sector rule inherits Decision 41's collision and a committed"
+            + " scene has to move after all"
+        #expect(jointFloor <= jointCeiling, "\(collided)")
+
+        // Same two sources, same eight scenes, the OTHER formulation of the same guard:
+        // the unsigned count's joint interval is empty. This is the comparison, and it
+        // is the whole reason the rule is worth having before capture 6.
+        let countFloor = (mustFire.map(\.supportingSectors).max() ?? 0) + 1
+        let countCeiling = min(mustPass.map(\.supportingSectors).min() ?? 0,
+                               plate.supporting)
+        print("for comparison, minSupportingSectors joint interval"
+              + " \(countFloor)…\(countCeiling) — empty")
+        let countFeasible = "the unsigned sector count now has a feasible joint interval"
+            + " (\(countFloor)…\(countCeiling)) — Decision 41's collision has resolved by"
+            + " some other route and this comparison no longer says anything"
+        #expect(countFloor > countCeiling, "\(countFeasible)")
+
+        // And nothing in hand distinguishes the values inside the joint interval: every
+        // committed scene and every corpus candidate returns the same verdict at each of
+        // them. So the interval is not narrowable by more measurement of what exists —
+        // it is owed to capture 6 in the strict sense, and the rule's verdicts today do
+        // not depend on which value is eventually chosen.
+        for value in jointFloor...jointCeiling {
+            for r in mustPass {
+                #expect(r.signs.crossedFailing <= value,
+                        "\(r.label) is rejected by the crossed rule at maxCrossedSectors \(value)")
+            }
+            for r in mustFire {
+                #expect(r.signs.crossedFailing > value,
+                        "\(r.label) is admitted by the crossed rule at maxCrossedSectors \(value)")
+            }
+            #expect(plate.crossedFailing <= value,
+                    "1785135663727's plate top is rejected at maxCrossedSectors \(value)")
+            #expect(table.crossedFailing > value,
+                    "1785901032716's table plane is admitted at maxCrossedSectors \(value)")
+        }
+        let indistinguishable = "the joint interval has collapsed to one value —"
+            + " maxCrossedSectors would be measured rather than owed"
+        #expect(jointCeiling > jointFloor, "\(indistinguishable)")
+
+        // The margin the rule replaces. Decision 42 measured `ringMedianMaxMm` clearing
+        // the table candidate by 0.338 mm on a 5 mm bar; the rule clears it by whole
+        // sectors, and by the SAME distance at every value in the joint interval.
+        print("the table candidate is rejected by \(table.crossedFailing) crossed sectors"
+              + " against a ceiling of at most \(jointCeiling) — margin"
+              + " \(table.crossedFailing - jointCeiling) sectors, where ringMedianMaxMm's"
+              + " margin on the same candidate is 0.338 mm on a"
+              + " \(SupportRegion.ringMedianMaxMm) mm bar")
     }
 
     // MARK: - Req 4.5: what the fallback rate is a function of

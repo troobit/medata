@@ -2033,7 +2033,7 @@ The measurement recomputes the corpus figures from `Self.measurements` rather th
 
 - Six owed constants now carry two brackets each, and the documents have to keep both current — a maintenance surface that did not exist before.
 - The intervals are properties of eight synthetic scenes at one range on one grid, so they are not evidence about the world in the way the corpus is. They constrain what the session may set without also editing tests; they do not say what is correct.
-- The `minSupportingSectors` collision is recorded, not resolved. Task 26 gains a dependency — the scene must move when the crossed-sector rule lands — that Decision 40 did not anticipate.
+- The `minSupportingSectors` collision is recorded, not resolved. ~~Task 26 gains a dependency — the scene must move when the crossed-sector rule lands — that Decision 40 did not anticipate.~~ **Superseded by Decision 43**: measured against the same eight scenes, the crossed-sector rule's joint interval is 0…2 where the count's is empty, so no committed scene moves when the rule lands. The collision is a property of the unsigned count alone.
 - `bandStepMaxMm`'s suite floor of 0.024 mm is nearly vacuous, being sensor noise on a flat scene; it is a floor in form more than in force.
 
 ### Impact
@@ -2104,5 +2104,83 @@ Req 4.5's threshold stays deferred, and the recorded reason is now the stronger 
 ### Impact
 
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`OwedBars`, `admissible(_:bars:)`, `selection(_:bars:)` and `fallbackRateIsAFunctionOfTheOwedConstantsAlone`), `prerequisites.md` (the Req 4.5 denominator item, still open with a second reason), task 26's detail and task 27's, and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
+
+---
+
+## Decision 43: The crossed-sector rule clears both constraint sets where the count clears neither
+
+**Date**: 2026-08-06
+**Status**: accepted (discharges Decision 41's third negative consequence)
+
+### Context
+
+Decision 41 measured the committed suite as a second source of bounds on six `[owed]` constants and found one outright contradiction: `minSupportingSectors` is floored at **6** by the silent-failure scene the guard exists to reject and capped at **5** by what a real intended candidate scores on the corpus (Decision 33). It recorded the collision rather than resolving it, and drew a consequence — "the scene has to move when Decision 40's crossed-sector rule lands", a dependency task 26 did not previously carry.
+
+Decision 42 then measured that the only thing keeping a wrong plane out of a 0 % fallback rate is `ringMedianMaxMm` clearing the table candidate by **0.338 mm** on a 5 mm bar, and called that "a concrete argument for implementing Decision 40's crossed-sector rule that does not depend on capture 6".
+
+Both point at the same unasked question. The contradiction is a property of the unsigned *count*, not of the scenes: the count takes `|height|`, so the case that must be admitted and the case that must be rejected land on the same number (Decision 30). The scenes are unchanged. So the replacement rule can be measured against exactly the two constraint sets that broke the count — the same eight committed scenes and the same corpus candidates — before capture 6 exists, and the claim that a scene must move can be checked rather than assumed.
+
+### Decision
+
+`maxCrossedSectors` is recorded as bracketed **0…2 by the committed suite**, which is the corpus's own bracket unchanged. The joint interval is **0…2**, three admissible values, and no committed scene and no corpus candidate distinguishes them: every one returns the same verdict at 0, at 1 and at 2. The same two sources give the unsigned count a joint interval of **6…5** — empty.
+
+**Decision 41's third negative consequence is withdrawn.** No committed scene has to move when the crossed-sector rule lands. The dependency was a property of the count it replaces.
+
+The rule is still **not implemented**. The interval has three values, nothing in hand narrows it, and Req 3.7 bans shipping the count asserted. No constant's value moves and no shipped code changes.
+
+### Rationale
+
+The eight scenes read through Decision 40's rule, each at the plane its own committed test evaluates:
+
+| Scene | Supporting | Failing-sector medians | Crossed | Escaped |
+|---|---|---|---|---|
+| plate above table | 8 of 8 | — | 0 | 0 |
+| flat surface | 8 of 8 | — | 0 | 0 |
+| rim in the outer band | 8 of 8 | — | 0 | 0 |
+| overhanging food | 7 of 8 | −20.024 mm | 0 | **1** |
+| food across the plate edge | **5 of 8** | +19.967, +19.947, +19.980 mm | **3** | 0 |
+| rim in the mid band | 8 of 8 | — | 0 | 0 |
+| bowl | 0 of 8 | +15.047 … +15.591 mm | 8 | 0 |
+| fully covered well | 8 of 8 | — | 0 | 0 |
+
+**The brackets.** Five scenes' committed assertions require the sector guard to pass; the largest crossed count among them is **0**, so the suite floors `maxCrossedSectors` at 0. One scene requires it to fire, at 3 crossed, so the suite caps it at **2**. That is 0…2, and the corpus is 0…2 as well — the plate-top candidate carries 0 crossed sectors and the table candidate carries 3. Unlike Decision 41's six constants, where the suite bound three of them *tighter* than the corpus, here it adds no constraint the corpus did not already impose. The capture session can set this constant against captures alone with no risk of turning the suite red.
+
+**Why the collision does not recur.** On the corpus the admit case and the reject case both score 5 of 8 supporting sectors and are 3 apart in the crossed reading; in the suite the reject scene scores 5 as well while every admit scene scores 7 or 8. The count therefore has to be simultaneously ≤ 5 and ≥ 6 and the rule has to be simultaneously ≥ 0 and ≤ 2. This is Decision 30's finding discharged rather than restated: the statistic that separates the two cases is the one the rule reads.
+
+**The escape half now has a committed scene.** `overhangingFood` is the first committed scene to produce a failing sector at all, and it reads **−20.024 mm** — an escape, which Decision 40's rule declines to reject on. Until now the escape reading was exercised only by `1785135663727`'s plate top on the corpus. A rule whose non-rejecting half fires on no test is a rule half-checked.
+
+**The margin the rule replaces.** At the loosest admissible ceiling the table candidate is rejected by 3 crossed sectors against 2 — a margin of one whole sector, and of three at `maxCrossedSectors = 0`. Decision 42's 0.338 mm on a 5 mm bar is 6.8 % of an inherited constant sized for a different job.
+
+**What the agreement is not.** `foodAcrossPlateEdge` is authored as "the geometry of capture `1785901032716`", so both ceilings come from one physical situation modelled twice, and their agreement at 3 is not two independent measurements. The floor of 0 is the independent part — five synthetic scenes and one real candidate. The finding does not rest on independence: what it says is that the *same* evidence which is infeasible under the count is feasible under the rule.
+
+**And one limit stands.** Decision 40's stated blind spot is a rimmed plate where a correct plane's ring reaches a rim genuinely above it. The suite has two rimmed-plate scenes and neither exercises it — both read 8 of 8 supporting and no failing sector, because their rims never reach the inner band the sector median is computed over. Prerequisites captures 3 and 4 remain the only source for that case, and the suite's silence on it is now measured rather than assumed.
+
+### Alternatives Considered
+
+- **Implement the rule now at `maxCrossedSectors = 0`** - Both constraint sets floor it at 0, so 0 is the one value both sources reach directly - Rejected because floors and ceilings are not evidence of a value. All three of 0, 1 and 2 return identical verdicts on everything in hand, so choosing 0 is choosing the end of a bracket, which is what Req 3.7 names these constants to prevent. Capture 6 exists to say how many crossed sectors a *correct* fit can carry, and no scene in hand carries one.
+- **Move `foodAcrossPlateEdge` now so `minSupportingSectors = 5` becomes feasible** - Decision 41's own first alternative, revisited - Rejected on the same ground and now with a measurement behind it: the collision is not in the scene, and the rule that replaces the count clears the scene untouched. Editing it would repair a guard being retired and lose the corpus's own geometry from the suite.
+- **Record the suite bracket without comparing it to the count's** - Report 0…2 and stop - Rejected as half the finding. That the interval is non-empty matters only against the fact that the other formulation's is empty on the same eight scenes; neither number says it alone.
+- **Extend a rimmed-plate scene until its rim reaches the inner band, closing Decision 40's blind spot in the suite** - Author the counter-case rather than wait for captures 3/4 - Rejected because it would invent the evidence the capture is for. Where a real rim sits relative to a real food boundary is exactly what is being measured, and a synthetic scene would set the constant to whatever radius was chosen for it.
+
+### Consequences
+
+**Positive:**
+
+- Decision 41's third negative consequence is discharged with a measurement. Task 26 loses a dependency rather than gaining one, and no committed scene has to move.
+- `maxCrossedSectors` is the first `[owed]` constant whose two constraint sets **agree exactly**, so the session sets it from captures with no suite interaction to track.
+- The rule's escape half is exercised by a committed scene for the first time, at −20.024 mm.
+- The verdict invariance is asserted rather than assumed: every committed scene and both corpus candidates are checked at each of 0, 1 and 2, so "the value cannot be narrowed by what exists" is a test result and not a reading of one.
+- Decision 42's argument for the rule is strengthened in the currency it was made in — a one-sector margin at the loosest ceiling against 0.338 mm on a 5 mm bar.
+
+**Negative:**
+
+- Both ceilings trace to one physical situation, `foodAcrossPlateEdge` being a model of capture `1785901032716`, so the two sources are less independent than the two brackets look.
+- The rule is now checked from two directions and still cannot ship, which sharpens the tension Decision 42 recorded rather than relieving it: the better guard stays out of the binary until capture 6.
+- Decision 40's rimmed-plate blind spot is confirmed uncovered by the suite, so captures 3 and 4 acquire a job the documents had left implicit.
+- The suite adds no constraint here, so unlike Decision 41 this measurement gives the capture session nothing it did not have — its value is in what it rules out.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`crossedSectorRuleIsBracketedByBothConstraintSets`, and `SceneReading` gains its `signs` member), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md` (the owed-numbers section and the Decision 40/41 paragraphs), `prerequisites.md` (capture 6, captures 3/4, and the suite-bracket table), `decision_log.md` (Decision 41's consequence), task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
 
 ---

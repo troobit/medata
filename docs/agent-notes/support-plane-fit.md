@@ -118,6 +118,7 @@ measured value against a constant flips as soon as the constant crosses it.
 | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
 | `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
 | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
+| `maxCrossedSectors` | 0…2 | 0…2 (Decision 43) |
 
 `foodEnvelopeMinMm` and `escapeBandMm` are bound **tighter by the suite than by the corpus**,
 so a value defensible against every capture can still turn the suite red.
@@ -126,7 +127,8 @@ candidate scores 5 of 8 sectors, and the silent-failure scene the guard exists t
 scores 5 too, so the suite floors it at 6 and the corpus caps it at 5. Do not resolve that by
 retuning `foodAcrossPlateEdge`: it is Decision 30's finding (the unsigned count cannot
 separate the two cases), and it resolves when Decision 40's crossed-sector rule replaces the
-count, with the scene moving at the same time.
+count. The scene does **not** have to move with it — Decision 43 measured the rule against
+these same eight scenes and it clears them all; see below.
 
 `SupportPlaneCorpusMeasurementTests` is the instrumented, guards-disabled pass over the
 committed `.depthslice` fixtures. Adding a capture to it means cutting a slice with
@@ -324,6 +326,30 @@ it over all six corpus candidates — one reads 6 crossed / 0 escaped, one 0 / 7
 genuinely mixed at 2 / 4, so the classification is not degenerate. Note the counter-case
 the corpus cannot supply: on a **rimmed** plate a correct plane's ring can reach a rim
 genuinely above it, which is captures 3 and 4, not capture 6.
+
+**The suite brackets it at 0…2 as well, and that discharges the collision (Decision 43).**
+`crossedSectorRuleIsBracketedByBothConstraintSets` reads the eight committed scenes through
+the rule. Five scenes whose assertions require the sector guard to pass carry 0 crossed
+sectors; the silent-failure scene carries 3 at +19.95…+19.98 mm. Joint interval 0…2, against
+an **empty** 6…5 for `minSupportingSectors` on the same eight scenes. So the Decision 41
+collision belongs to the unsigned count, not to the suite — nothing has to move. This is the
+only `[owed]` constant whose two sources agree exactly.
+
+Three things that fall out and are worth not re-deriving:
+
+- Nothing in hand narrows 0…2. The test loops every committed scene and both corpus
+  candidates at each of 0, 1 and 2 and the verdicts are identical, so the constant is owed
+  in the strict sense and *any* choice among the three is asserting.
+- `overhangingFood` is the first committed scene to exercise the rule's **escape** half, at
+  −20.024 mm. Before this the escape reading fired only on the corpus.
+- Neither rimmed-plate scene covers the counter-case above. Both read 8 of 8 supporting with
+  no failing sector, because their rims sit outside the inner band the sector median is
+  computed over. Do not try to fix that by moving `rimStartPx` — where a real rim sits
+  relative to a real food boundary is what captures 3 and 4 are for.
+
+Against Decision 42's 0.338 mm: the rule rejects the table candidate by 3 crossed sectors
+against a ceiling of at most 2 — a one-sector margin at the loosest admissible value, three
+at the tightest — where `ringMedianMaxMm` clears it by 6.8 % of an inherited bar.
 
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 
