@@ -229,3 +229,58 @@ bundle scores nothing: `scoredCount: 0`, `passesBar: false`, per-row `scored: fa
 error fields absent rather than zero, plus a stderr warning. Do not read the non-zero exit as a
 defect in the capture. `predictedCarbsG` is still on the row, which is the main reason to replay
 an untruthed bundle at all.
+
+## Why the support-plane defect survived every diagnostic (2026-08-05)
+
+The plane fitted to the table for months while `planeResidualMm`, `planeInlierCount` and
+`foodRegionCoveragePercent` all read healthy. Three independent reasons, each verified in
+source during the `support-plane-reference` design. **Do not trust these three signals to
+tell you a plane fit is correct.**
+
+### 1. The residual cannot discriminate — it is bounded by the inlier band
+
+`LiDARPlaneFitter.fitOutcome` computes `computeResidual(points: polishedInliers…)`, and
+inliers are re-selected within `inlierBandMm = 5` of the refined plane. **RMS over points
+each within ±5 mm is ≤ 5 mm by construction.** The residual therefore measures how tightly
+the winning inliers hug their own plane, never whether that plane is the right surface.
+
+This is why the diagnosis found the *wrong* (table) plane at **1.95 mm** and the *correct*
+(plate) plane at **2.27 mm** — the wrong plane scored better. Any guard keyed on residual
+inherits the same blindness; a straddling region does not present as high residual, because
+straddling points are never inliers.
+
+### 2. Inlier and candidate counts are inflated ~56×
+
+`collectCandidatePoints` enumerates on the **colour** grid (1920×1440) and samples depth
+bilinearly from the **256×192** map. Each real depth measurement is therefore counted about
+56 times, and neighbouring colour pixels are not independent observations.
+
+"1,286,181 inliers" is roughly 23,000 independent measurements. That inflation is what made
+the wrong fit look statistically overwhelming, and it means any threshold on candidate or
+inlier count is calibrated against replicas rather than data. Counts recorded before the
+`support-plane-reference` work are colour-grid counts; counts on a `.foodSupport` row after
+it are native depth samples. **They differ by ~56× and must never be compared across
+references** — `planeReference` is what disambiguates them.
+
+### 3. RANSAC selects on area, and the table is the largest flat thing in frame
+
+`ransac` scores `bestScore = inliers.count`. Nothing in the selection knows where the food
+is. In the diagnosed capture the worktop took 510,499 votes against roughly 64,000 for the
+plate. The algorithm worked exactly as designed and returned the biggest gravity-aligned
+plane; that is simply not the surface the food rests on.
+
+### Latent trap: `depthIntrinsics` is all zeros on device
+
+`ARKitCaptureEngine` constructs `CameraIntrinsics(fx: 0, fy: 0, cx: 0, cy: 0, …)` for the
+depth map — only `imageWidth`/`imageHeight` are real. It has **no production readers today**,
+so nothing has failed yet. Any code back-projecting native depth samples must derive them
+from the colour intrinsics:
+
+```
+fx_d = fx_c · W_d/W_c        cx_d = (cx_c + 0.5) · W_d/W_c − 0.5
+```
+
+Reaching for `depth.depthIntrinsics` yields a divide-by-zero and a NaN plane; passing
+`colourIntrinsics` straight through yields a 7.5× lateral error that tilts the plane. The
+half-pixel terms are not optional — dropping them shifts the principal point by ~3.75 colour
+pixels.

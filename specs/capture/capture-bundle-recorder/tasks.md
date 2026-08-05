@@ -26,4 +26,11 @@ references:
   - Defect 2 (FIXED): `FixtureRunner.run` now throws `probsSizeMismatch` instead of relying on that precondition — a batch tool over operator-supplied files must skip a malformed bundle, not crash and lose every other fixture's result
   - Measurement: the replay produced bread_wholemeal **98.92 g** carbs against the device's own recorded **103.71 g** for the same attempt — **-4.79 g, -4.6 %**. Replay is close but NOT bit-exact, so a replayed error figure is not the device's figure. Truth is zero as designed, so it correctly reported UNSCORED and exited non-zero (that is the harness working, not a failure)
   - Still outstanding on this task: the on-device half — bundles in the Files app, filenames joining to Estimation Log rows, stage timings, no memory-warning kill; plus the estimation-diagnostics note and make spell
+
+- [ ] 5. Record the pre-shutter mask on an emptyFoodMask refusal
+  - Found 2026-08-05 (raw sweet potato session): Pipeline.estimate fits the support plane from captureResult.preShutterFoodMask BEFORE segmentation, so an empty pre-shutter mask short-circuits to noFoodPixels and the bundle carries no probs, no argmax and no mask — the refusal was decided by the live preview segmenter and NOTHING about that decision is recorded
+  - Consequence: these bundles cannot be replayed through FixtureRunner (it needs probs) and the one question worth asking offline — was the pre-shutter mask right? — is unanswerable. That is the opposite of what the recorder exists for
+  - A BinaryMask at preview resolution is a few KB against the 3.6 MB bundle, so cost is not the obstacle
+  - Related and NOT the same bug: bugfixes/no-food-pixels-on-fruit-plate-mvp is about no mask reaching the pipeline (maskAgeMs=-1). Here a mask arrived and was legitimately empty
+  - References: docs/agent-notes/field-truth-sessions.md
   - Blocked-by: 9r168ot (Bundles reachable from the Files app on device builds)

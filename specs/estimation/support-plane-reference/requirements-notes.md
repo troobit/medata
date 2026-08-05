@@ -59,6 +59,17 @@ minimum-height floor (`integrate` imposes none).
 (independently confirmed as a **2.1× over-read** against 208 g weighed truth), apple
 943 cm³/519 g. Consistent with a constant height offset.
 
+**Independently reproduced with weighed truth, 2026-08-05.** A fresh capture
+(`1785901032716`, build `6db23e7-20260805-115608`) of 2 slices multigrain bread weighed at
+**80 g / ~34 g carbs** returned 714.84 cm³ → 285.94 g → 108.66 g carbs: a **3.57× mass** and
+**3.20× carbs** over-read, with the class correct (`bread_wholemeal`), density correct
+(0.400 MEASURED) and β = 1. Solving `(h + 26.1)/h = 3.57` gives an implied true slice thickness
+of **10.1 mm** against the 10.9 mm derived above from a different capture — agreement to about a
+millimetre, from an unrelated scene with independent truth. `planeResidualMm` 1.97 with
+1,286,181/1,478,354 inliers: the fit is confident and wrong, exactly as the band-scan analysis
+predicts. This removes any remaining doubt that the 26.1 mm figure is a property of the fit
+rather than of that one capture.
+
 ---
 
 ## 2. The fix already exists — offline only
