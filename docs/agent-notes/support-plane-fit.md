@@ -162,6 +162,31 @@ Three traps for anyone measuring against this corpus:
   on one capture and 6.98 mm on the other, both at ~337 mm. `ringBandMm = 5` falls between
   them, so `ringSupportMin` is underivable until a matte-surface capture exists.
 
+**Most of the guard table has never run** (Decision 34). `admissibility` short-circuits, so
+the reason it returns is the FIRST guard to fire, not the only one — which matters when you
+are measuring rather than estimating. Evaluate them independently
+(`SupportPlaneCorpusMeasurementTests.allRejections`) and the picture is:
+
+| Reason | Fires on the corpus? | Note |
+|---|---|---|
+| `extent`, `supportFraction`, `sectors` | yes | the only three under the shipped order |
+| `ringMedian` | only when evaluated independently | 4 of 6 candidates |
+| `ringUnavailable` | no | all bands clear `ringMinSamples` |
+| `foodEnvelope` | no | every corpus envelope positive, 7.2–39.6 mm |
+| `bandStep` | no | every inner→mid step is a FALL, −0.5…−6.5 mm |
+| `visibility` | no | corpus floor 0.246 against a 0.15 bar |
+| `escaped` | no | annulus medians −36.6…**+5.7** mm against a 30 mm bar |
+
+So `foodEnvelopeMinMm`, `bandStepMaxMm`, `supportVisibilityMin` and `escapeBandMm` are worse
+off than the other `[owed]` constants: nothing in the corpus says their guards do anything at
+all. `foodEnvelopeMinMm` is bounded **above** at 25.8 mm — over that it rejects the candidate
+the design intends to select — and not below. `escapeBandMm`'s one-sidedness is *correct*:
+Req 3.3 rejects a plane lying below its surroundings, which reads a **positive** annulus
+median; the −36.6 mm candidate is a plane above them, and `ringMedianMaxMm` is what rejects it.
+`ringSupportMarginMin` is worse still — it compares the top two **admissible** candidates and
+neither capture produces one, so it cannot run; the gaps real candidates open (0.312 and 0.117)
+straddle the shipped 0.15.
+
 And one defect in the guard itself (Decision 30, proposed, not fixed): `ringStatistics`
 counts a supporting sector on `|height| ≤ ringBandMm`, so the count is **blind to sign**.
 A correct plane whose ring escaped downward (failing sectors −6.8…−32.6 mm) and a table

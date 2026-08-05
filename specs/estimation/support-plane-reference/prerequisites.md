@@ -158,7 +158,9 @@ fractions, the **per-sector signed inner-band medians** (added for Decision 30 �
 separates a correct plane whose ring escaped from a table plane, and the unsigned count cannot),
 the raw signed heights (the noise distribution below is computed from these; there is no MAD
 statistic to dump — Decision 19 deleted it with its guard), and the **per-sector support margin**
-(added for Decision 33 — how far the plate extends beyond the food, per arc). Setting `ringSupportMin`,
+(added for Decision 33 — how far the plate extends beyond the food, per arc), and the **full
+guard-verdict vector** per candidate (added for Decision 34 — `admissibility` short-circuits, so
+the reason it returns says which guard came *first*, not which guards fired). Setting `ringSupportMin`,
 `ringSupportMarginMin`, `supportVisibilityMin` and the three sector constants from the observed
 separation is the point of the session; asserting them first and then measuring the fallback rate
 they cause is circular, and Req 3.7 now forbids it for the sector constants. Task 26 already
@@ -173,6 +175,30 @@ means `ringSupportMin` cannot be derived at all until the spread is characterise
 Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
 was never the same quantity — but the underlying worry it encodes is now measured and real. Take
 at least one of the six on a matte surface, and note the surface material for each.
+
+**Four guards have never fired, so four captures have a second job (Decision 34).** Setting a
+constant and *exercising* the guard it gates are different asks, and for these four only the
+second is within reach of a capture session. Of the nine rejection reasons, three ever fire on
+the corpus — `extent`, `supportFraction`, `sectors` — and a fourth, `ringMedian`, only when the
+guards are evaluated independently rather than short-circuited. Which capture fires which:
+
+| Guard | What the corpus reaches | The capture that fires it |
+|---|---|---|
+| `foodEnvelopeMinMm` | every envelope positive, 7.2–39.6 mm | 5, the bowl — the only source of a negative envelope |
+| `bandStepMaxMm` | every inner→mid step a **fall**, −0.5…−6.5 mm | 3 and 4, the rimmed plate — the only source of an outward rise |
+| `supportVisibilityMin` | floor 0.246 against a 0.15 bar | 4, the ~90 %-covered well |
+| `escapeBandMm` | annulus medians −36.6…**+5.7** mm against a 30 mm bar | **none of the six** — see below |
+
+`escapeBandMm` fires when the surroundings sit more than 30 mm *above* the candidate plane
+(Req 3.3; the one-sidedness is confirmed correct). No planned capture produces that, so it will
+still be unexercised after the sitting unless one is arranged deliberately — food on a plate set
+down inside something with walls well above it, or a capture where the depth region escapes
+through a dropout. Worth one shutter press if the sitting allows; note that it is a deliberate
+adversarial capture rather than a normal meal.
+
+`ringSupportMarginMin` is not on the table at all: it compares the top two **admissible**
+candidates, and until some capture yields two, it cannot run. The gaps real candidates open are
+0.312 and 0.117, straddling the shipped 0.15.
 
 **Vary how much plate shows, and record it.** The measured support margin — the distance from the
 food boundary at which the surface falls away — is 16, 40, 10, 42, 6, 4, 6, 44 mm on
