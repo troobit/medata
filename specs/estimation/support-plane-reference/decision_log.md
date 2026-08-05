@@ -2263,3 +2263,92 @@ That does not make four the answer. At four sectors an arc is 90°, and whether 
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`sectorCountIsTheUnitOfTheSectorTrio`; `sectorSigns` gains a count parameter and a `sectorSampleCounts` member, and `SceneReading` carries its ring so it can be re-sectored), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio and `ringMinSamples` comments), `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
 
 ---
+
+## Decision 45: The support bar selects the population the crossed-sector rule reads, and the shipped value sits on a cliff
+
+**Date**: 2026-08-06
+**Status**: accepted (qualifies Decisions 40 and 44; strengthens Decision 43)
+
+### Context
+
+`sectorSupportMin` is the third constant Req 3.7 names and the only one nothing has ever varied. Decision 44 measured `ringSectorCount` and deferred this one in as many words — "the support bar is a fraction of a sector's samples, not a count of sectors, so it is not re-denominated by this finding and its measurement is a separate one".
+
+It is not a peer of the other two either, and Decision 40 is where that shows. The crossed-sector rule reads the sign of sectors that **fail** this bar, so `sectorSupportMin` selects the population the rule is computed over. Decision 40's central claim — that the rule's magnitude bar is `[inherited]` rather than fitted, because failing sectors separate over **23.397 mm** where all sectors separate over **2.128 mm** — is a statement about that population. And "all sectors" is precisely this constant at 1.0, so the contrast Decision 40 draws is its own sweep's other endpoint. The claim is a reading at 0.5 of a quantity that moves with the bar, and nothing recorded what it does in between.
+
+Decision 44 also left an ordering instruction that assumes the two constants are separable: fix the count **before** the sitting, then read `maxCrossedSectors` in whatever unit that fixed. Whether the count's own bracket depends on the bar was never asked.
+
+### Decision
+
+`sectorSupportMin` is recorded as **bracketed 0…0.5 at eight sectors, with the shipped 0.5 sitting ON the ceiling rather than inside the bracket**. It stays `[owed]`.
+
+Decision 44's ordering is **superseded**: `ringSectorCount` and `sectorSupportMin` must be fixed **jointly**, not in sequence, because the count's pass-side bracket is a function of the bar.
+
+Nothing is rewired and no value moves.
+
+### Rationale
+
+The same two corpus candidates and the same eight committed scenes, re-classified at eleven bars. The window is Decision 40's, recomputed: how far `ringBandMm` may move before either candidate changes its crossed count — lower edge the plate candidate's highest failing median, upper edge the table candidate's lowest crossed median.
+
+| `sectorSupportMin` | plate supporting / crossed | table supporting / crossed | invariance window | joint `maxCrossedSectors` |
+|---|---|---|---|---|
+| 0.0 | 8 / 0 | 8 / **0** | — (rule silent) | empty |
+| 0.1 | 7 / 0 | 6 / 2 | −32.564…+16.603 (**49.167**) | 0…0 |
+| 0.2 | 7 / 0 | 6 / 2 | −32.564…+16.603 (49.167) | 0…0 |
+| 0.3 | 7 / 0 | 6 / 2 | −32.564…+16.603 (49.167) | 0…1 |
+| 0.4 | 6 / 0 | 5 / 3 | −9.680…+16.603 (26.283) | 0…2 |
+| **0.5** | **5 / 0** | **5 / 3** | **−6.794…+16.603 (23.397)** | **0…2** |
+| 0.6 | 4 / 0 | 3 / 4 | +3.711…+5.974 (**2.263**) | 0…2 |
+| 0.7–0.8 | 4 / 0 | 1 / 4 | +3.711…+5.974 (2.263) | 0…2 |
+| 0.9–1.0 | 3 / 0 | 1–0 / 4 | +3.846…+5.974 (**2.128**) | 0…2 |
+
+**The ceiling is a cliff, and the shipped value is standing on it.** The window collapses **10.339×** in one notch, 23.397 mm at 0.5 to 2.263 mm at 0.6, and it is the largest single step in the sweep by a wide margin. Decision 40 supplied the criterion without knowing it was one: 2.128 mm is "being fitted to the corpus", 23.397 mm is "being inherited". So the criterion needs no threshold of its own — the collapse picks the ceiling, and the ceiling is 0.5. Raise `sectorSupportMin` by one notch and `ringBandMm` stops being inherited, which is the ground Decision 40 rejected the all-sector formulation on.
+
+**Both edges converge on the bar, from opposite sides.** As `sectorSupportMin` rises, sectors that sit *on* the plate candidate's plane but are noisy start failing, and they read near zero, so the lower edge climbs from −32.564 to +3.846. Meanwhile sectors holding the table candidate's plane at a small positive offset fail too and become crossed, so the upper edge falls from +16.603 to +5.974. The bar is squeezed from both directions by the same constant.
+
+**Decision 40's contrast understates its own case.** At 1.0 the reading reproduces its all-sector figure exactly, +3.846…+5.974. But that is the room the bar has *at its current value*, not a gap between the two populations: read without conditioning on where `ringBandMm` sits, the all-sector failing medians **interleave** — the table's lowest is +0.426, *below* the plate's highest +3.846, a separation of **−3.419 mm**. At the shipped bar the same reading is +23.397 mm and genuinely positive. Restricting the rule to failing sectors is therefore more necessary than Decision 40 recorded, not less.
+
+**The floor is the rule's own.** At 0.0 nothing fails, the population the rule reads is empty, and a rule with nothing to read admits the plane Decision 18 exists to reject. At eight sectors that is the only silent bar; at four it is 0.0…0.2, which is the coupling arriving from the other side.
+
+**And the count is not separable from the bar** — the finding that supersedes Decision 44's ordering. The counts with a clean pass side and a firing rule, per bar:
+
+| `sectorSupportMin` | counts with a clean pass side |
+|---|---|
+| 0.1–0.2 | 6, 8, 10, 11 |
+| 0.3 | **4, 6, 8, 10, 11** |
+| 0.4 | 4, 6, 8, 10 |
+| 0.5–1.0 | **4, 6, 8** |
+
+Decision 44's 4…8 is a reading at 0.5. Lower the bar and the fine end opens up — at 0.3 every count Req 5.1 permits has a clean pass side, so the "pass-side erosion above 8" that gave the bracket its top is itself a consequence of the bar being at 0.5. Raise it and nothing changes, because 0.5 is already at the ceiling. Fixing the count first and the bar afterwards therefore fixes the count against a value that has not been chosen yet.
+
+**Decision 43 is strengthened, not qualified.** Over the whole grid — five counts × eleven bars — **no cell collides**: wherever the rule fires at all, the suite and the corpus admit a common `maxCrossedSectors`. Decision 43 could only say that at one pair; it is now a property of the rule rather than of the shipped pair.
+
+### Alternatives Considered
+
+- **Set `sectorSupportMin = 0.5` now, since it is the ceiling of a measured bracket** - The cliff is sharp, the shipped value is exactly at it, and Decision 40's criterion picks it without a free parameter - Rejected because a ceiling is an end of a bracket, and 0.1…0.4 are all admissible on the same criterion with *wider* windows. Req 3.7 names this constant for exactly this move. The cliff says where the bar may not go, not where it should sit.
+- **Set `sectorSupportMin` low — 0.3 — to buy back the count's fine end** - It would restore counts 10 and 11 to the pass side and widen the invariance window to 49.167 mm, so both other sector constants gain room - Rejected because it optimises the corpus's two candidates. A low bar means a sector counts as supporting on a small share of its samples, which is the noise regime Decision 20 removed the old 60-sample floor to escape, and the corpus contains no scene where that misfires. It is fitting, in the direction the measurements happen to reward.
+- **Keep Decision 44's ordering and note the bar dependence as a caveat** - Less churn in `prerequisites.md`, and the ordering is still better than no ordering - Rejected because the ordering's whole purpose was to stop capture 6 measuring a number in a unit that was still moving. If the unit itself moves with a third owed constant, the instruction gives false assurance.
+- **Sweep the bar against the fallback rate as well (Decision 42's function)** - The rate is a readout of the owed constants and this is one of them - Deferred rather than rejected: Decision 42 already sweeps `minSupportingSectors` and reads 1.000 → 0.500 → 0.000, and the crossed rule is not wired into `admissibility`, so a rate swept on this bar would grade the shipped guard rather than the replacement. Recorded so the omission is deliberate.
+- **Treat the interleaving at 1.0 as a defect in Decision 40's window** - It reports 2.128 mm where the honest separation is −3.419 mm - Rejected: the invariance interval is the right statistic for asking how much room an inherited bar has, and Decision 40 uses it consistently. The interleaving is an additional finding in the same direction, not a correction.
+
+### Consequences
+
+**Positive:**
+
+- `sectorSupportMin` gets its first bracket — 0…0.5 at eight sectors — where before it had no measurement at all. All three constants Req 3.7 names are now bracketed rather than merely owed.
+- Decision 40's inheritance claim acquires the condition it was always subject to: `ringBandMm` is inherited *while `sectorSupportMin` ≤ 0.5*, and one notch above that it is fitted. A later session cannot raise the bar without re-reading Decision 40.
+- The capture session's ordering is corrected before the sitting rather than after it: the count and the bar are fixed together, and capture 6 reports in a unit fixed by both.
+- Decision 43's agreement between the two constraint sets is confirmed over a 55-cell grid instead of a single pair — the strongest statement the feature has about the crossed-sector rule.
+- The all-sector interleaving strengthens the case for the `sectorSupportMin` gate inside the rule, which Decision 40 flagged as the thing someone would be tempted to drop as redundant.
+
+**Negative:**
+
+- Another bracket rather than a value, and the bracket's ceiling is where the shipped placeholder already sits — so the measurement constrains the session's freedom without reducing what it owes.
+- Two owed constants are now known to be jointly determined, which makes the sitting harder to plan: `prerequisites.md` can no longer give a sequence, only a pair to choose before the captures.
+- The cliff rests on the two corpus candidates. It is sharp because a handful of sectors cross the bar together between 0.5 and 0.6, and a corpus of two captures cannot say whether that coincidence generalises.
+- `maxCrossedSectors` is now denominated in **two** owed constants, so Decision 43's "the two sources agree exactly" holds per (count, bar) pair rather than absolutely.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`supportBarSelectsThePopulationTheRuleReads`; `sectorSigns` and `SceneReading.signs(at:)` gain a `supportMin` parameter), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
