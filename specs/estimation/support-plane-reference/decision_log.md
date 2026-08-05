@@ -1079,3 +1079,114 @@ Recording the skipped classes rather than dropping them quietly matters for the 
 `tools/food_db/generate.py`, `CalibrationArtifact`, `CalibrateRun.applyReferenceGate`, `HarnessCLI/main.swift`, and the design's Data Models section.
 
 ---
+
+## Decision 27: The voxel-carve exposure is a grid translation, and the excluded-voxel count does not change
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Req 1.6 requires the voxel carve's use of the support plane as a lower carving bound to be evaluated against the corrected plane, and any change in excluded voxels to be stated. The design's pattern-parity audit had already committed to an answer in advance: `VoxelCarveEstimator` drops a voxel outright when `signedDistanceToPlane(centre) < 0`, a hard exclusion where the height field only clamps with `max(0, ·)`, so raising the plane 26.1 mm was expected to delete a slab of voxels — and, because overhanging food (Decision 4) sits inside that slab, to compound with the ~11 % under-measurement Decision 4 already accepts.
+
+That prediction was never measured. Task 24 measures it.
+
+### Decision
+
+State the measured result: correcting the support plane changes the excluded-voxel count by **zero**. The exposure is a translation of the voxel grid, not a deletion of voxels from it, and it does not compound with Decision 4. The measurement is pinned as `VoxelCarvePlaneExclusionTests` rather than recorded only in prose.
+
+### Rationale
+
+The prediction assumed a grid fixed in space with the plane sliding through it. The grid is not fixed. `VoxelGridSizer.size` anchors `originCamera1` **on** the support plane — the food-mask centroid back-projected onto it — and `VoxelGrid.voxelCentre` offsets each voxel along `axisZ` by `dz = (iz + 0.5) · edgeMm`, which is strictly one-signed. Raising the plane translates the whole grid with it, so every voxel keeps the signed distance it had and the exclusion decides identically before and after.
+
+What does change is where the grid sits: the ~26 mm between the table and the plate top used to lie inside it and now lies outside it. Food overhanging below the plate leaves the grid rather than failing the plane test. That is the same under-measurement Decision 4 brackets at ~11 %, reached by a different mechanism — so it is the same 26 mm counted once, and there is nothing to compound.
+
+Pinning the measurement as a test rather than a number in the design matters because the conclusion is contingent on two implementation details a future change could quietly reverse: the origin being on the plane, and `dz` being one-signed. A prose statement would go stale silently; `testVoxelHeightOffsetsAreOneSigned` fails loudly.
+
+### Alternatives Considered
+
+- **State the predicted slab deletion without measuring** - Carry the parity-audit row's figure into the requirements as the Req 1.6 answer - Rejected because it is wrong, and wrong in the direction that overstates this feature's risk: it would have booked a compounding error against Decision 4 that does not exist, and might have bought an unnecessary mitigation.
+- **Change `VoxelCarveEstimator` to clamp rather than exclude** - Match the height field's `max(0, ·)` so the two consumers treat the plane alike - Rejected as out of scope. The exclusion is not what makes the two-view carve wrong (see below), the two-view carve's accuracy is an explicit Non-Goal, and changing a carving bound to fix a defect that is not this feature's would move the number without evidence.
+- **Fix the `gravityCamera` sign disagreement found while measuring** - Resolve whether the parameter means world-up or gravity-down, and make callers agree - Rejected here and referred to `bugfixes/two-view-carve-no-volume`. The Req 1.6 answer is zero under **both** conventions, so this feature does not depend on the resolution, and folding an unrelated defect into it would make the accuracy change unattributable.
+
+### Consequences
+
+**Positive:**
+
+- Req 1.6 is answered with a measurement rather than an assumption, and the assumption turned out to be wrong.
+- No compounding with Decision 4, so the accepted overhang bracket stays ~11 % rather than needing to widen.
+- The measurement surfaced a real and more serious defect: under the convention `Pipeline` actually passes (`nadir.gravity`, world-up), `axisZ = −gravity` points down, the grid extends below the plane, and **every** voxel is excluded — 23,040 of 23,040 in the measured case. The two-view carve recovers no volume at all on a LiDAR device whose depth-derived plane reaches it, which is consistent with the ~10× under-read measured on 2026-08-05.
+
+**Negative:**
+
+- That defect is now known and left unfixed in this feature, which is a deliberate scope choice but means the two-view path stays broken while this spec closes.
+- The zero-change result rests on two implementation details of `VoxelGridSizer`/`VoxelGrid` rather than on a stated contract; the pinning test is the mitigation, not a guarantee.
+- The design's parity-audit row had to be superseded rather than merely updated, since a reader who had already taken the compounding claim as given needs to see it withdrawn.
+
+### Impact
+
+`specs/estimation/support-plane-reference/design.md` (parity audit row and the new "Voxel-carve exposure" section), `MedataCore/Tests/VolumeTests/VoxelCarvePlaneExclusionTests.swift`. No production code changes. `bugfixes/two-view-carve-no-volume` gains a concrete mechanism and a measured figure.
+
+---
+
+## Decision 28: Three acceptance figures do not reproduce and are superseded by the committed slices
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Reqs 6.2, 7.1 and 7.2 each name a number taken from the original diagnosis of the flat-food over-read: a pre-feature contact-ring measure of +18…+26 mm on capture `1785135663727`, a corrected volume of 235.96 cm³ on the same capture, and ~200 cm³ on the weighed capture `1785901032716`. All three were recorded by a throwaway probe (`DiagProbe/main.swift`) against the full 195 MB bundles, on a machine holding the device. Nothing in the repository could execute them, which is why task 22 commits depth-only slices of both captures.
+
+With the slices in place the figures became checkable for the first time. Two of the three do not reproduce, and the third cannot be reached by any candidate plane.
+
+### Decision
+
+Supersede the three figures with the measurements the committed slices produce, and re-express the criteria they support in terms that the data sustains:
+
+| Criterion | Stated | Measured | Disposition |
+|---|---|---|---|
+| Req 6.2 pre-feature ring measure | +18…+26 mm | **+4.2 mm** | Range superseded; the *sign and separation* are asserted instead |
+| Req 6.2 corrected ring measure | ≈ 0 | **−0.93 mm** | Holds |
+| Req 7.1 pre-feature volume | 682.96 cm³ | **714.8 cm³** (+4.7 %) | Holds, inside Req 7.1's own 5 % band |
+| Req 7.1 corrected volume | 235.96 cm³ | **306.8 cm³** (+30 %) | Superseded; a >50 % reduction is asserted instead |
+| Req 7.2 pre-feature volume | 714.84 cm³ | **735.7 cm³** (+2.9 %) | Holds |
+| Req 7.2 corrected volume | ~200 cm³ ± 20 % | **646.7 cm³** best candidate | Unreachable; recorded as mask-bound, not plane-bound |
+
+`SupportPlaneRegressionSliceTests` asserts the surviving claims. Reqs 6.2, 7.1 and 7.2 keep their stated figures in the requirements document with the measured ones recorded beside them, so the disagreement stays visible rather than being edited away.
+
+### Rationale
+
+The two pre-feature volumes reproduce within 5 % and 3 %. That agreement is what makes the rest of the table trustworthy: it establishes that the slice is faithful to the bundle and that integrating on the native depth grid agrees with the shipped colour-grid height field. A disagreement of 30 % on the corrected volume, against that background, is a disagreement about *which plane the diagnosis fitted*, not about the data — and volume on this capture moves ~70 cm³ per 3 mm of plane height, so a probe fitting the plate 3 mm differently accounts for the whole gap. The probe is gone (task 23), so the 235.96 figure is no longer reconstructible and cannot be treated as ground truth.
+
+The Req 7.2 case is different in kind and more useful. No candidate plane yields ~200 cm³ because the constraint is not the plane: the food mask covers ~298 cm² of depth samples, where two slices of bread are ~200 cm², and 200 cm³ over 298 cm² implies a mean food height of 6.7 mm against the ~11 mm the depth map shows. That is a segmentation error, which Req 7.2 half-anticipated by pinning the class as a precondition. Recording it as mask-bound keeps this feature from being graded on a defect it does not control — and, equally, stops a future plane change from being tuned to hit 200 cm³ by compensating for a bad mask.
+
+Asserting reductions and separations rather than absolute figures is the honest form for a criterion whose reference implementation has been deleted. Req 7.1 already describes itself as "a parity check against a known implementation, not an accuracy claim"; with the known implementation gone, what remains checkable is the claim the feature actually makes — that correcting the reference removes most of the over-read.
+
+### Alternatives Considered
+
+- **Re-state the criteria at the measured values** - Replace +18…+26 mm with +4.2 mm and 235.96 cm³ with 306.8 cm³, and assert those - Rejected because it is circular: the measurement would become its own acceptance criterion, and any error in the slice or the integration would be baked in as the target. Asserting a *reduction* is falsifiable in a way that asserting the number just measured is not.
+- **Keep the stated figures and let the tests fail** - Leave Reqs 6.2/7.1 asserting +18…+26 mm and 235.96 cm³ until someone reconciles them - Rejected because a permanently red suite stops being read, and the reconciliation cannot happen: the probe that produced the figures no longer exists and the captures have no weighed truth to appeal to.
+- **Rebuild `DiagProbe` and reconcile against it** - Restore the deleted probe, re-run it, and find the 3 mm - Rejected as a poor trade. It would reinstate code task 23 deletes for good reasons, to reconcile a figure that Req 7.1 itself says is not an accuracy claim, on a capture with no weighed truth. Task 27's weighed on-device capture is the evidence that would actually settle it.
+- **Widen Req 7.2's band until 646.7 cm³ fits** - Treat the gap as tolerance rather than as a mask defect - Rejected outright. It would hide a segmentation error inside a support-plane criterion and make the feature look accurate by loosening the thing measuring it.
+
+### Consequences
+
+**Positive:**
+
+- Reqs 6.2, 7.1 and 7.2 are executable by anyone with the repository for the first time, which is what Req 6.2's "falsifiable rather than merely recorded" asks for.
+- The surviving assertions are constant-free — each measures a named plane rather than the selected one — so they do not move when task 26 sets the `[owed]` thresholds.
+- The Req 7.2 finding attributes a real defect to segmentation rather than leaving it to be absorbed into plane tuning.
+- The corrected ring measure of −0.93 mm is direct evidence that the geometry works on real device data, independent of whether the guards currently admit it.
+
+**Negative:**
+
+- Three figures the requirements state are now known to be wrong, and the requirements keep stating them; a reader must reach this decision to learn that.
+- The corrected-volume criterion is weaker than it was — "less than half" instead of a 5 % band — so a fit that removed 55 % rather than 57 % of the over-read would pass. Task 27's weighed capture is what restores a hard bound.
+- Both slices currently fall back, so the criteria exercise candidate planes the selection does not yet choose. That gap closes only when task 26 measures the constants.
+
+### Impact
+
+`tools/fixture_slice.py`, `MedataCore/Tests/SupportPlaneTests/{DepthSlice.swift,SupportPlaneRegressionSliceTests.swift,Fixtures/}`, `Package.swift`, and the Reqs 6.2/7.1/7.2 notes in `requirements.md`. Task 26 gains its first real corpus measurements; task 27 gains a specific figure to check on device.
+
+---

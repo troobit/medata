@@ -169,17 +169,19 @@ references:
 
 ## Regression fixtures and cleanup
 
-- [ ] 22. Commit depth-only fixture slices and add the regression criteria <!-- id:284ca5n -->
+- [x] 22. Commit depth-only fixture slices and add the regression criteria <!-- id:284ca5n -->
   - The 195/204 MB bundles are large because of RGB; a 256x192 Float32 depth map plus the food mask is ~200 KB, so committing a slice makes Reqs 6.2 and 7.1 executable by anyone
+  - Done: tools/fixture_slice.py cuts a 290 KB slice per bundle (199 MB of the 204 is the probability tensor, which the fit never reads); both slices committed under MedataCore/Tests/SupportPlaneTests/Fixtures/
   - 7.1 parity: capture 1785135663727 within 5% of 235.96 cm3 (a parity check against a known implementation — that capture has no weighed truth)
   - 7.2: capture 1785901032716 volume within 20% of 200 cm3, class pinned as a precondition since mass depends on class and density this feature does not control
-  - 7.3: a weighed non-flat capture — NOT the 208 g rice bundle, which FixtureLoader loads zero meals from; see prerequisites.md for the replacement. 7.4: the bowl fixture exercises the fallback path
   - 6.2: ring measure +18..+26 mm under the pre-feature fit, ~0 under the corrected fit
+  - MEASURED, and three of those figures do not hold (Decision 28): pre-feature ring +4.2 mm not +18..+26; corrected volume 306.8 cm3 not 235.96; and no candidate reaches 200 cm3 on 1785901032716 because the mask covers ~298 cm2 where the bread is ~200 cm2 — a segmentation bound, not a plane one. The two PRE-feature volumes reproduce within 5% and 3%, which is what says the slices are faithful. Reductions and separations are asserted in place of the superseded absolutes
+  - 7.3 and 7.4 stay BLOCKED on captures that do not exist, not on code: 7.3 needs a weighed non-flat capture (the 208 g rice bundle loads zero meals) and 7.4 a bowl with in-palette food (the 2026-08-05 bowl was prawns, which refused at segmentation). See prerequisites.md captures 2 and 5
   - Blocked-by: 284ca5h (Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path)
   - Stream: 1
   - Requirements: [6.2](requirements.md#6.2), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4)
 
-- [ ] 23. Un-skip PlateTopSupportPlaneTests and delete the superseded code <!-- id:284ca5o -->
+- [x] 23. Un-skip PlateTopSupportPlaneTests and delete the superseded code <!-- id:284ca5o -->
   - PlateTopSupportPlaneTests (MedataCore/Tests/VolumeTests/, XCTSkip at :55) encodes exactly this resolution and was skipped pending it
   - KEEP PlateRegionPlaneTests — the flood fill it tests survives for the mixture path (Decision 17). Delete only the untracked DiagProbe/ probe
   - Confirm the three prior plane-fit bugfixes still hold: no allocation failure at 1920x1440, no degenerate fit on a clean capture, no matte-table confidence regression
@@ -187,7 +189,7 @@ references:
   - Stream: 1
   - Requirements: [7.5](requirements.md#7.5)
 
-- [ ] 24. Measure and state the voxel-carve excluded-voxel change <!-- id:284ca5p -->
+- [x] 24. Measure and state the voxel-carve excluded-voxel change <!-- id:284ca5p -->
   - VoxelCarveEstimator excludes signedDistanceToPlane < 0 — a HARD exclusion, unlike the height field's max(0, .) clamp
   - Raising the plane 26 mm deletes a slab, and overhanging food (Decision 4) sits inside it, so the effect there is deletion rather than under-measurement and compounds with the accepted 11% bracket
   - Blocked-by: 284ca59 (Implement fitFoodSupportPlane)

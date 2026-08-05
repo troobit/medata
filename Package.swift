@@ -233,7 +233,13 @@ let package = Package(
         .testTarget(
             name: "SupportPlaneTests",
             dependencies: ["SupportPlane", "CaptureKit", "CardDetection", "PortableContracts"],
-            path: "MedataCore/Tests/SupportPlaneTests"
+            path: "MedataCore/Tests/SupportPlaneTests",
+            // Depth-only slices of the two field captures Reqs 6.2/7.1 name, cut by
+            // `tools/fixture_slice.py`. ~290 KB each against the 195 MB bundles they
+            // come from, which is what makes those criteria executable off-device.
+            resources: [
+                .copy("Fixtures")
+            ]
         ),
         .testTarget(
             name: "MetricScaleTests",
