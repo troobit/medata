@@ -124,6 +124,7 @@ measured value against a constant flips as soon as the constant crosses it.
 | `ransacSuccessProbability` | none — no scene runs extraction | 0.9…unbounded, NOT interpolable (Decision 51) |
 | `maxIterationsPerPass` | none — no scene runs extraction | 128…unbounded, never fires (Decision 51) |
 | `consensusPolishMaxPasses` | none — no scene runs extraction or the fallback fit | 1…unbounded, **always** fires, interpolable (Decision 54) |
+| `gravityAngleMaxRad` | none — no scene runs extraction or the fallback fit | 10°…unbounded, a **floor** not a knob (Decision 55) |
 
 **Every row of the sector part of that table is denominated in `ringSectorCount` *and*
 `sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
@@ -1051,3 +1052,65 @@ produced the 32 GB allocation failure. Readings are monotone (each depth is one 
 of the same map), so unlike Decisions 46, 51 and 52 the bracket **may** be interpolated. The
 committed suite is silent for Decision 50's structural reason: no scene runs extraction, and
 none runs the fallback fit either.
+
+## The gravity cone bounds nothing, and tightening it makes that worse (Decision 55)
+
+`LiDARPlaneFitter.gravityAngleMaxRad = 15°` is read at **four** gates — more than any other
+constant here — and enforced at two. `SupportRegion.ccRansac` and `LiDARPlaneFitter.ransac`
+test every hypothesis against it and reject; `extractCandidates` and `fitOutcome` test every
+consensus re-selection and **`break`**, which keeps the plane the *previous* iteration
+produced. The refinement between the two stages is not gated at all.
+
+Decisions 52 and 54 described that mechanism. This one swept the bar, and the mechanism turns
+out not to be a property of the shipped value:
+
+| cone | 1° | 2° | 3° | 5° | 8° | 10–20° | 25° | 30–45° | 90° |
+|---|---|---|---|---|---|---|---|---|---|
+| candidates outside their own cone | **4/4** | 5/6 | 1/5 | 3/6 | **0/6** | 1/6 | 0/6 | 0/6 | 0/6 |
+| worst tilt standing | 3.643° | **18.955°** | 9.167° | 10.519° | 7.892° | 20.512° | 24.223° | 25.500° | 79.809° |
+
+- **At a 1° cone every candidate is outside 1°**, each recorded as `gravity` at 0 applied
+  iterations. The gate admits only hypotheses within 1° and the set it produces is entirely
+  outside it. In units of the bar the violation is **9.5×** at 2° and 1.37× at the shipped 15°.
+- **It is not monotone.** 8° leaves nothing outside itself; 15° leaves a candidate at 20.512°.
+  Do not pick a value by asking how far outside it the set reaches — that quantity does not
+  order with the constant.
+
+**It is a floor, not a knob.** The selected plane spans 3.758 mm and 14.584 mm at the food
+over 1…90°, and **every millimetre is below 10°**. From 10° to 90° — the gate fully off at the
+top, since both fitters orient onto gravity's half-space before measuring — the plane is
+unchanged to **0.000 mm** on both captures. Unlike `inlierBandMm` and
+`ransacSuccessProbability`, which wander across their range, this one either admits the
+hypothesis that produces the correct fit or it does not.
+
+**The floor's derivation is the margin, and it is the number to remember.** The corpus's one
+intended-correct fit is the **plate top at 8.309°**, from a hypothesis at **8.900°**, so the
+shipped 15° carries **6.100°** of margin. Its own table candidate in the same capture is at
+2.030°: the surface this feature exists to find sits **6.3° off the surface the fallback leg
+finds**, in the same frame. That is why the two legs disagree about how much room the guard
+needs — the fallback fits the table at 1.742° and 0.579° and would be comfortable at 5°.
+
+Consequences worth not re-deriving:
+
+- **The fallback leg barely moves** — 0.226 mm and 0.074 mm over the whole sweep, inside
+  Req 5.1 even at a 1° cone, against 14.584 mm on the promoted leg. This is the **exact
+  reverse of Decision 54**, where the fallback moved further. Two constants both fitters read,
+  opposite sensitivities.
+- **Below 8° the joint `maxCrossedSectors` interval is empty**, and at 8° the plane still
+  moves 1.802 mm (353.130 mm, support 0.536, 2 crossed against 351.328 / 0.629 / 0). 10° is
+  the first swept value that reproduces the shipped answer exactly.
+- **No ceiling anywhere.** At 90° the corpus reads the same planes and the same 2…2. The one
+  thing the cone buys above 45° is excluding `1785135663727`'s **79.809°** third-pass
+  candidate 1305.187 mm away — which `minAcceptedExtentMm` rejects anyway at 35.370 mm. On
+  this corpus the guard could be deleted without changing an answer; the wall-and-floor scenes
+  it exists for are not in it.
+- **Req 7.6 is denominated here in the *tightening* direction**, which no other owed constant
+  is. The fallback's fixed 256-iteration budget loses 137 and 10 draws to the gate at 15°,
+  173 and 29 at 8°, 252 and 207 at 1°; extraction pays again because `requiredIterations`
+  cannot stop adaptively until a good component exists (pass 1 of `1785135663727`: 72 draws
+  at 15° and above, 86 at 8°, **169** at 1°).
+- **Do not re-derive it from `CaptureFlowModel`'s 15° oblique shutter gate.** That is a camera
+  **pose** tolerance (`abs(θ − 25) ≤ 15`); this is the angle between a fitted plane's normal
+  and gravity. The two 15s are a coincidence.
+- The 6.3° disagreement between the plate top and its own table is **unexplained** — it could
+  be the plate, the fit, or the recorded gravity, and two captures cannot separate them.

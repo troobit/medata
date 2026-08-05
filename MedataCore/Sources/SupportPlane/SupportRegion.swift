@@ -1081,6 +1081,12 @@ public enum SupportRegion {
             // straddling measurement below reads across, and design.md's refutation of the
             // bridging argument is stated in terms of a cone this does not enforce.
             //
+            // SWEPT (Decision 55): the bar itself is `[owed]`, and the gap above is not a
+            // property of the shipped 15° — it is a property of the gate. At a 1° cone ALL
+            // FOUR candidates this loop produces lie outside 1°; at 2° five of six do, the
+            // worst at 18.955°. Tightening the bar widens the violation in units of the bar,
+            // so no value repairs this and only the code can.
+            //
             // NOT repaired here. Adding the gate removes a candidate and therefore moves the
             // answer, which is a change task 26 measures and the sitting prices.
             guard let refined = try? LiDARPlaneFitter.refine(
