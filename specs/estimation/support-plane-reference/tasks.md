@@ -120,12 +120,12 @@ references:
 
 ## Harness parity and reporting
 
-- [ ] 15. Write a failing test that device and offline derive the same support plane <!-- id:284ca5g -->
+- [x] 15. Write a failing test that device and offline derive the same support plane <!-- id:284ca5g -->
   - One shared implementation is what makes this structural rather than a convention — the test guards the deletion in the next task
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1)
 
-- [ ] 16. Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path <!-- id:284ca5h -->
+- [x] 16. Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path <!-- id:284ca5h -->
   - HarnessCore already depends on SupportPlane, so the promotion moves in the allowed direction and no shipped code gains a HARNESS_ENABLED dependency
   - FixtureRunner has no food mask at that call site today — derive it from nadirSeg's argmax, the same source the device segmenter produces
   - Do NOT delete plateRegionMask/fitPlateRegionPlane: CalibrationArtifact.mixtureObservation:157 is a live caller (reached from HarnessCLI/main.swift:397 and :542) and mixture fixtures carry neither probs nor argmax, so no food mask can be derived there (Decision 17)
@@ -144,24 +144,24 @@ references:
   - Stream: 1
   - Requirements: [5.4](requirements.md#5.4)
 
-- [ ] 18. Write a failing test for fallback-rate aggregation in the accuracy report <!-- id:284ca5j -->
+- [x] 18. Write a failing test for fallback-rate aggregation in the accuracy report <!-- id:284ca5j -->
   - Decision 11's decisive argument for this architecture rests on the fallback rate being measurable, so an unreported rate makes that argument unfalsifiable
   - Stream: 1
   - Requirements: [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
 
-- [ ] 19. Implement fallback-rate reporting in the accuracy report <!-- id:284ca5k -->
+- [x] 19. Implement fallback-rate reporting in the accuracy report <!-- id:284ca5k -->
   - Aggregate across the fixture corpus, segmented by reference
   - Blocked-by: 284ca5d (Add the EstimationAttemptRecord fields and persist from both paths), 284ca5j (Write a failing test for fallback-rate aggregation in the accuracy report)
   - Stream: 1
   - Requirements: [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
 
-- [ ] 20. Write failing tests for the calibration-artefact reference guard <!-- id:284ca5l -->
+- [x] 20. Write failing tests for the calibration-artefact reference guard <!-- id:284ca5l -->
   - Absent reference MUST block application, not permit it — every artefact produced before this feature records none, and those are the ones calibrated on the old basis
   - Assert beta_c is fitted on the subset sharing the reference it will be applied under
   - Stream: 1
   - Requirements: [5.3](requirements.md#5.3), [5.4](requirements.md#5.4)
 
-- [ ] 21. Add supportPlaneReference to the calibration artefact and enforce it fail-closed <!-- id:284ca5m -->
+- [x] 21. Add supportPlaneReference to the calibration artefact and enforce it fail-closed <!-- id:284ca5m -->
   - Nothing breaks today because every beta is uncalibrated_unity (Decision 10)
   - Blocked-by: 284ca5b (Implement LiDARSupportPlaneFitter dispatch and extend SupportPlaneFitStats), 284ca5l (Write failing tests for the calibration-artefact reference guard)
   - Stream: 1

@@ -996,3 +996,86 @@ The counts have to cross the boundary somehow, and every alternative either re-d
 `SupportRegion.fitFoodSupportPlane`, `LiDARSupportPlaneFitter`, the `SupportRegionScenes` test helper, and the design's Components and Interfaces block.
 
 ---
+
+## Decision 25: `SupportPlaneReference` gains a `plateRegion` case for the mixture path
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The design's Components block declares `SupportPlaneReference` with two cases, `foodSupport` and `edgeBand`. Its "mixture calibration path keeps the flood fill" section then states that mixture artefacts "record the plate-region reference" while single-dominant artefacts record `foodSupport`, and that Req 5.4 keeps β_c fitted within a reference. Those two statements contradict each other: with a two-case enum there is no value a mixture artefact can record, so the reference it was fitted under is either absent — which Req 5.3 says must block application — or misrecorded as one of the two the device produces.
+
+Decision 17 made this permanent rather than transitional: mixture fixtures carry neither `probs_hwc` nor `argmax_hw`, so `fitPlateRegionPlane` survives for that corpus indefinitely and the calibration corpus spans two references by construction.
+
+### Decision
+
+Add a third case, `plateRegion`, to `SupportPlaneReference`. It is never produced on device or by the single-view replay; it exists so a calibration artefact can state which basis each β was fitted on.
+
+### Rationale
+
+Req 5.4 is only enforceable if every β can name its reference. A third case is the minimum that makes the partition total, and it keeps the partition in one type rather than splitting it across an enum plus a "some other basis" convention that each consumer would re-invent. The device path is unaffected because nothing on it can produce the value: `fitFromDepth` returns `foodSupport` or `edgeBand` and no other writer exists.
+
+### Alternatives Considered
+
+- **Leave the mixture reference absent**: no type change - Rejected: Req 5.3 makes absent block application, so every mixture β would be permanently unbakeable, which is a harsher outcome than the Req 5.4 partition asks for and hides the distinction rather than recording it.
+- **Record the mixture reference as `edgeBand`**: reuses an existing case for "not the food-support plane" - Rejected: the flood-filled plate region is not the edge band; conflating them makes the fallback rate of Req 4.4 unreadable, since the same value would mean both "the restricted fit was rejected" and "this plate came from the mixture corpus".
+- **A separate `CalibrationBasis` enum in HarnessCore**: keeps the shipped enum at two cases - Rejected: two enums over the same domain must be kept in step by hand, and the artefact would then carry a value that no runtime type can be compared against.
+
+### Consequences
+
+**Positive:**
+- Req 5.4's within-reference rule becomes checkable in code rather than by convention.
+- The fallback rate stays a clean two-way split on the depth-derived subset, because `plateRegion` rows are counted separately.
+
+**Negative:**
+- A case the device can never produce sits in a shipped enum, so every exhaustive switch must handle a branch that cannot occur there.
+- The design's Components block is stale until amended.
+
+### Impact
+
+`SupportPlaneReference`, `CalibrationArtifact`, `CalibrateRun.applyReferenceGate`, and the design's Components and Interfaces block.
+
+---
+
+## Decision 26: The calibration reference guard blocks per artefact and skips per class
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Req 5.3 requires β_c to be applied only when the calibration artefact records a support-plane reference matching the one in use, and says an artefact recording none must block. Req 5.4 requires β_c to be fitted on the subset sharing the reference it will be applied under. Decision 17 makes a mixed-reference artefact the permanent expected shape, not a transitional one — so a guard that aborted on any mismatch would reject every artefact the harness will ever produce, while a guard that only warned would apply `plateRegion` β to `foodSupport` volumes and reintroduce the ~3× error through the calibration path.
+
+### Decision
+
+Enforce at two granularities in `tools/food_db/generate.py`: an absent or mismatched **artefact-level** `support_plane_reference` aborts the bake before anything is written; a **class entry** whose own reference differs from the one in use is not applied, is left at its uncalibrated default, and is reported on stderr and in a `calibration_reference_skipped_classes` meta row. On the fitting side, `CalibrateRun.applyReferenceGate` admits only inputs matching the reference β will be applied under, and the excluded fixture IDs land in the run summary.
+
+### Rationale
+
+The two granularities answer two different questions. The artefact-level value says what basis this calibration run was conducted on; a pre-feature artefact has no answer, and that is the case Req 5.3 names explicitly. The per-class value says what basis one β was fitted on, and a mismatch there is ordinary — it identifies a mixture-corpus class in an artefact whose pool is single-dominant. Aborting on the ordinary case would make the bake unusable; silently applying it would make the guard decorative.
+
+Recording the skipped classes rather than dropping them quietly matters for the same reason the fallback rate does: an artefact where most classes are skipped is measuring corpus coverage, not calibrating, and that must be visible in the output rather than inferable from a diff of β values.
+
+### Alternatives Considered
+
+- **Abort on any per-class mismatch**: strictest reading of "nothing may mix them" - Rejected: a mixed artefact is the permanent expected shape under Decision 17, so this rejects every future artefact and forces the guard to be disabled rather than obeyed.
+- **Warn on mismatch and apply anyway**: preserves current β coverage - Rejected: it is the defect this feature exists to remove, applied one level up — a β fitted above the flood-filled plate region against volumes measured above the food-support plane.
+- **Filter mismatched classes in the Swift writer instead**: the artefact would carry only applicable β - Rejected: the artefact is the audit record of a calibration run, and dropping the mixture β from it destroys the evidence that the mixture corpus was fitted at all. It also moves the guard away from the point of application, where Req 5.3 places it.
+
+### Consequences
+
+**Positive:**
+- Pre-feature artefacts, the ones calibrated on the old basis, cannot bake at all.
+- A mixed-reference artefact bakes exactly the subset that is valid, and says which classes it left out.
+- The fitting side and the application side enforce the same rule, so a mismatch cannot be introduced between them.
+
+**Negative:**
+- Mixture-provenance β never reach the shipped database while the runtime integrates above `foodSupport`, so classes calibrated only on the mixture corpus stay at unity. Nothing breaks today because every β is `uncalibrated_unity` (Decision 10), but this bounds what the N5k mixture corpus can contribute later.
+- Two enforcement points in two languages that must agree on one string constant.
+
+### Impact
+
+`tools/food_db/generate.py`, `CalibrationArtifact`, `CalibrateRun.applyReferenceGate`, `HarnessCLI/main.swift`, and the design's Data Models section.
+
+---

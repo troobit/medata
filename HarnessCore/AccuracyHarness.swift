@@ -2,6 +2,7 @@
 import Foundation
 import Foods
 import PortableContracts
+import SupportPlane
 
 // Per-meal evaluation result used by the accuracy harness.
 public struct MealEvalInput: Sendable {
@@ -14,6 +15,10 @@ public struct MealEvalInput: Sendable {
     public let groundTruthTotalCarbsG: Float
     // Per-stage wall-clock durations in seconds (stage name → elapsed).
     public let stageLatenciesSeconds: [String: Double]
+    // Which surface the support plane referenced (Req 4.4). nil where no plane was
+    // derived from depth — the two-view path, or an attempt that never reached the
+    // fitter — and those attempts stay out of the fallback-rate denominator.
+    public let supportPlaneReference: SupportPlaneReference?
 
     public init(
         fixtureID: String,
@@ -21,7 +26,8 @@ public struct MealEvalInput: Sendable {
         predictedCarbsPerClass: [String: Float],
         statusPerClass: [String: BetaCalibrationStatus],
         groundTruthTotalCarbsG: Float,
-        stageLatenciesSeconds: [String: Double] = [:]
+        stageLatenciesSeconds: [String: Double] = [:],
+        supportPlaneReference: SupportPlaneReference? = nil
     ) {
         self.fixtureID = fixtureID
         self.capturePath = capturePath
@@ -29,7 +35,29 @@ public struct MealEvalInput: Sendable {
         self.statusPerClass = statusPerClass
         self.groundTruthTotalCarbsG = groundTruthTotalCarbsG
         self.stageLatenciesSeconds = stageLatenciesSeconds
+        self.supportPlaneReference = supportPlaneReference
     }
+}
+
+// How often the restricted fit was rejected, across the corpus, segmented by
+// reference (Reqs 4.4, 4.5). Decision 11's argument for this architecture rests
+// on the rate being measurable; an unreported rate makes it unfalsifiable.
+public struct FallbackRateReport: Sendable, Equatable {
+    // Reference raw value → attempts. Segmented rather than reduced to one
+    // figure because the counts on either side of it are not comparable: a
+    // `.foodSupport` row's candidate/inlier counts are native depth samples and
+    // an `.edgeBand` row's are colour-grid points, ~56x more.
+    public let countsByReference: [String: Int]
+    // Attempts that derived no plane from depth — two-view, or card-only.
+    public let unreportedCount: Int
+    // Attempts eligible for the rate: the denominator.
+    public let depthDerivedCount: Int
+    // Attempts that fell back to the edge-band fit: the numerator.
+    public let fallbackCount: Int
+    // nil when nothing was depth-derived. A rate over zero attempts is ABSENT,
+    // not zero — reporting 0 % would read as "the fallback never fired" on a run
+    // where the restricted fit never ran.
+    public let fallbackRate: Float?
 }
 
 // Accuracy metrics for one class.
@@ -81,6 +109,9 @@ public struct AccuracyReport: Sendable {
     public let unscoredCount: Int
     // Per-meal rows, scored and unscored alike, in input order.
     public let rows: [MealErrorRow]
+    // Req 4.4: the fallback rate over the corpus. Independent of scoring — a field
+    // replay scores nothing, and that is the run whose rate matters most.
+    public let fallback: FallbackRateReport
 
     // Whether the accuracy bar is met (MAPE < 20% AND MAE ≤ 25 g, per Req 21.3).
     // A run that scored nothing cannot pass a bar it never measured.
@@ -116,7 +147,8 @@ public enum AccuracyHarness {
                 mape: 0, mae: 0, ci95Lower: nil, ci95Upper: nil,
                 perClassStats: perClassStats(meals: meals),
                 latencyStats: latencyStats(meals: meals),
-                scoredCount: 0, unscoredCount: unscoredCount, rows: rows
+                scoredCount: 0, unscoredCount: unscoredCount, rows: rows,
+                fallback: fallbackRate(meals: meals)
             )
         }
 
@@ -152,13 +184,35 @@ public enum AccuracyHarness {
             latencyStats: latency,
             scoredCount: scoredMeals.count,
             unscoredCount: unscoredCount,
-            rows: rows
+            rows: rows,
+            fallback: fallbackRate(meals: meals)
         )
     }
 
     // A meal is scorable when it carries a finite, strictly positive truth.
     // Proto3 defaults an unset ground_truth_total_carbs_g to 0.
     static func isScorable(_ truth: Float) -> Bool { truth.isFinite && truth > 0 }
+
+    // Aggregate the reference each attempt recorded (Reqs 4.4, 4.5). Computed over
+    // EVERY meal, not just the scored ones: ground truth and plane selection are
+    // independent, and the corpus that most needs the rate is the untruthed one.
+    static func fallbackRate(meals: [MealEvalInput]) -> FallbackRateReport {
+        var counts: [String: Int] = [:]
+        var unreported = 0
+        for m in meals {
+            guard let reference = m.supportPlaneReference else { unreported += 1; continue }
+            counts[reference.rawValue, default: 0] += 1
+        }
+        let depthDerived = meals.count - unreported
+        let fallbacks = counts[SupportPlaneReference.edgeBand.rawValue, default: 0]
+        return FallbackRateReport(
+            countsByReference: counts,
+            unreportedCount: unreported,
+            depthDerivedCount: depthDerived,
+            fallbackCount: fallbacks,
+            fallbackRate: depthDerived > 0 ? Float(fallbacks) / Float(depthDerived) : nil
+        )
+    }
 
     // MARK: - Metric helpers
 

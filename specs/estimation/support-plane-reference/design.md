@@ -242,6 +242,12 @@ Consequences that must be carried:
 
 public enum SupportPlaneReference: String, Sendable, Codable {
     case foodSupport, edgeBand
+    // Superseded by Decision 25: a third case, `plateRegion`, is added for the
+    // mixture calibration path. With two cases a mixture artefact has no value to
+    // record, so Req 5.4's within-reference rule is unenforceable and Req 5.3
+    // treats the mixture β as absent-and-therefore-blocked. Never produced on
+    // device or by the single-view replay.
+    case plateRegion
 }
 
 public struct RingStatistics: Sendable, Equatable {
@@ -363,6 +369,10 @@ Both counts are **native depth samples**, so the ratio is dimensionless and grid
 Req 3.5's mask-coverage recording needs no new field: `foodRegionCoveragePercent` already persists on `EstimationAttemptRecord` (`PipelineDiagnostics.swift:200`) and lands on the same row as `planeReference`, so a reference flip is attributable to mask movement after the fact.
 
 Calibration artefacts gain `supportPlaneReference`; absent blocks β_c application (Decision 10). Nothing breaks today because every β is `uncalibrated_unity`.
+
+**The guard has two granularities, because a mixed artefact is the permanent shape (Decision 26).** The artefact records the reference `betaPool` was fitted under, *and* each class entry records the reference its own β was fitted under — the corpus spans two references by construction under Decision 17, so one value per artefact cannot describe it. An absent or mismatched artefact-level value aborts the bake before anything is written, which is the pre-feature case Req 5.3 names. A class entry under a different reference is left at its uncalibrated default and reported, not aborted on: aborting would reject every artefact the harness will produce from here on. On the fitting side `CalibrateRun.applyReferenceGate` admits only inputs matching the reference β will be applied under, and the excluded fixture IDs land in the run summary — an attempt recording *no* reference is excluded, since absent blocks rather than permits.
+
+**Fallback-rate reporting (Req 4.4).** `AccuracyReport` carries a `FallbackRateReport`: counts segmented by reference, the depth-derived denominator, the `.edgeBand` numerator, and the rate. Attempts that derived no plane from depth — two-view, card-only — stay out of the denominator, and the rate is *absent* rather than zero when nothing was depth-derived, since 0 % would read as "the fallback never fired" on a run where the restricted fit never ran. It is computed over every meal rather than the scored ones: a device replay scores nothing, and that is the run whose rate matters most.
 
 ## Error Handling
 

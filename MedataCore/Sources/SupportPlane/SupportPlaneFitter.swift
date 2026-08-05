@@ -182,7 +182,13 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
     // On the fallback path the returned plane, stats and refusal are the edge-band
     // fitter's own, unmodified (Reqs 4.2, 4.3); only the reference and the ring
     // measure are added alongside them.
-    static func fitFromDepth(
+    //
+    // Public because Req 5.1 makes this the SINGLE support-plane derivation: the
+    // offline harness (`HarnessCore.FixtureRunner`) calls it rather than keeping a
+    // copy, so a β_c fitted offline is valid on device by construction. The
+    // dependency runs harness → SupportPlane, the allowed direction; no shipped code
+    // gains a `HARNESS_ENABLED` dependency.
+    public static func fitFromDepth(
         depth: DepthMap, intrinsics: CameraIntrinsics,
         mask: BinaryMask, gravity: Vec3
     ) -> SupportPlaneFitOutcome {

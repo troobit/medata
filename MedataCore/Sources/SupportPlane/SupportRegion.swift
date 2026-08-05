@@ -25,6 +25,11 @@ import PortableContracts
 public enum SupportPlaneReference: String, Sendable, Codable {
     case foodSupport
     case edgeBand
+    // The N5k mixture calibration path's flood-filled plate region. Never produced
+    // on device or by the single-view replay — it exists so a calibration artefact
+    // can say which basis each β was fitted on, because the mixture corpus keeps the
+    // flood fill permanently (Decision 17) and Req 5.4 forbids mixing references.
+    case plateRegion
 }
 
 // Contact-ring measurements for ONE candidate plane. Every field is persisted or
