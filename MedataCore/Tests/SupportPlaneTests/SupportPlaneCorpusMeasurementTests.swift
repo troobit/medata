@@ -1484,6 +1484,193 @@ struct SupportPlaneCorpusMeasurementTests {
             foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)).plane
     }
 
+    // MARK: - What the committed suite leaves the session room to set
+
+    // `prerequisites.md` still carries one open item that is NOT a hardware gate — "set the
+    // guard constants before task 8 hard-codes them", flagged because task 8 bakes every
+    // threshold into code and tests before anything measures it. Task 8 shipped, so the
+    // question is no longer whether to reorder: it is how much room the committed tests
+    // leave the capture session.
+    //
+    // Every test reference to an `[owed]` constant is SYMBOLIC — `SupportRegion.ringSupportMin`,
+    // never a literal — but symbolic is not the same as insulated. Two shapes hide behind it.
+    // A test that expresses its INPUT in terms of the constant (`extentMm: minAcceptedExtentMm - 1`)
+    // tracks it wherever it goes. A test that fixes a synthetic scene and asserts the scene's
+    // MEASURED value against the constant flips as soon as the constant crosses that value,
+    // and the scene is what pins it. `SupportRegionSelectionTests` says as much in prose —
+    // "the window in which the aggregate passes and the sectors fail is therefore narrow, and
+    // this scene sits inside it by construction" — without measuring how narrow.
+    //
+    // This measures it: per constant, the interval over which every committed assertion keeps
+    // its verdict, against the bracket Decisions 29-40 measured on the corpus.
+    struct SceneReading {
+        let label: String
+        // Which guards this scene's COMMITTED assertions require to pass, and which to
+        // fire. Not "which guards the scene happens to satisfy": the bowl fails almost
+        // every guard, but the only assertion made about it is on the inner→mid step, so
+        // it bounds `bandStepMaxMm` and nothing else. A scene bounds a constant only where
+        // a committed test would change verdict.
+        let requiresPass: [SupportRegion.CandidateRejection]
+        let requiresFire: [SupportRegion.CandidateRejection]
+        let supportFraction: Float
+        let supportingSectors: Int
+        let bandStepMm: Float
+        let visibility: Float
+        let envelopeMm: Float
+        let annulusMedianMm: Float
+    }
+
+    // Every guard, for the four scenes whose committed test requires the whole fit to
+    // succeed — passing one guard is not enough when the assertion is `#require(fit)`.
+    static let everyGuard: [SupportRegion.CandidateRejection] = [
+        .supportFraction, .sectors, .foodEnvelope, .bandStep, .visibility, .escaped,
+    ]
+
+    // The eight scenes the committed suites assert on, each at the plane its own test
+    // evaluates. Changing a scene changes these bounds, which is the point: they are
+    // properties of the committed tests, not of the geometry.
+    static func sceneReadings() -> [SceneReading] {
+        let all = everyGuard
+        let scenes: [(String, SPRScene.Grid, Float,
+                      [SupportRegion.CandidateRejection], [SupportRegion.CandidateRejection])] = [
+            // `#require(SPRScene.fit(...))` — every guard must pass.
+            ("plate above table", SPRScene.plateAboveTable(), 20, all, []),
+            ("flat surface", SPRScene.plateAboveTable(plateHeightMm: 0), 0, all, []),
+            ("rim in the outer band", SPRScene.rimmedPlate(rimStartPx: 24), 20, all, []),
+            ("overhanging food", SPRScene.overhangingFood(lobeHalfAngleDeg: 8), 20, all, []),
+            // The silent-failure case: every guard asserted healthy one by one, then the
+            // verdict pinned to `.sectors`.
+            ("food across the plate edge", SPRScene.foodAcrossPlateEdge(edgeOffsetPx: -10), 0,
+             all.filter { $0 != .sectors }, [.sectors]),
+            // `admissibility(...) == .bandStep` with the guards BEFORE bandStep in the
+            // shipped order required to pass. `annulusMedianMm` and `foodEnvelopeMm` are
+            // passed as literals there, and `visibility`/`escaped` come after, so this
+            // scene bounds neither.
+            ("rim in the mid band", SPRScene.rimmedPlate(rimStartPx: 19), 20,
+             [.supportFraction, .sectors], [.bandStep]),
+            // One assertion only: the step exceeds the bar.
+            ("bowl", SPRScene.bowl(), 20, [], [.bandStep]),
+            // One assertion only: the envelope is below the floor.
+            ("fully covered well", SPRScene.rimmedPlate(foodRadiusPx: 20, rimStartPx: 20), 35,
+             [], [.foodEnvelope]),
+        ]
+        return scenes.compactMap { label, grid, heightMm, requiresPass, requiresFire in
+            guard let measured = SPRScene.measure(grid) else { return nil }
+            let p = SPRScene.plane(atHeightMm: heightMm)
+            guard let ring = SupportRegion.ringStatistics(
+                samples: measured.samples, geometry: measured.geometry,
+                normal: p.normal, d: p.d) else { return nil }
+            return SceneReading(
+                label: label, requiresPass: requiresPass, requiresFire: requiresFire,
+                supportFraction: ring.supportFraction,
+                supportingSectors: ring.supportingSectors,
+                bandStepMm: ring.bandMedianMm[1] - ring.bandMedianMm[0],
+                visibility: ring.supportVisibility,
+                envelopeMm: SupportRegion.foodEnvelopeMm(
+                    geometry: measured.geometry, normal: p.normal, d: p.d),
+                annulusMedianMm: SupportRegion.medianHeight(
+                    indices: measured.samples.annulus, geometry: measured.geometry,
+                    normal: p.normal, d: p.d))
+        }
+    }
+
+    @Test("the committed scenes bound six owed constants, and the sector floor is the tight one")
+    func committedScenesBoundTheOwedConstants() throws {
+        let readings = Self.sceneReadings()
+        #expect(readings.count == 8, "a scene stopped producing ring statistics")
+        // A guard's bound comes from the scenes whose committed assertions require it to
+        // pass, and from those that require it to fire — in opposite directions.
+        func passing(_ guardKind: SupportRegion.CandidateRejection) -> [SceneReading] {
+            readings.filter { $0.requiresPass.contains(guardKind) }
+        }
+        func firing(_ guardKind: SupportRegion.CandidateRejection) -> [SceneReading] {
+            readings.filter { $0.requiresFire.contains(guardKind) }
+        }
+
+        for r in readings {
+            print("\(r.label): fraction \(fmt(r.supportFraction)), sectors \(r.supportingSectors),"
+                  + " inner→mid \(fmt(r.bandStepMm)) mm, visibility \(fmt(r.visibility)),"
+                  + " envelope \(fmt(r.envelopeMm)) mm, annulus \(fmt(r.annulusMedianMm)) mm"
+                  + " [pass \(r.requiresPass.map(\.rawValue).joined(separator: "/"))"
+                  + " fire \(r.requiresFire.map(\.rawValue).joined(separator: "/"))]")
+        }
+
+        // Ceilings: raise the bar past the smallest value a scene that must pass produces,
+        // and that scene starts failing.
+        let supportCeiling = passing(.supportFraction).map(\.supportFraction).min() ?? 0
+        let visibilityCeiling = passing(.visibility).map(\.visibility).min() ?? 0
+        let envelopeCeiling = passing(.foodEnvelope).map(\.envelopeMm).min() ?? 0
+        let sectorCeiling = passing(.sectors).map(\.supportingSectors).min() ?? 0
+        // Floors: the opposite direction, from the scenes each guard exists to reject.
+        let sectorFloor = (firing(.sectors).map(\.supportingSectors).max() ?? 0) + 1
+        let envelopeFloor = firing(.foodEnvelope).map(\.envelopeMm).max() ?? 0
+        // `bandStepMaxMm` and `escapeBandMm` read the other way round — a value BELOW the
+        // bar passes — so their passing scenes floor them and their firing scenes cap them.
+        let stepFloor = passing(.bandStep).map(\.bandStepMm).max() ?? 0
+        let stepCeiling = firing(.bandStep).map(\.bandStepMm).min() ?? 0
+        let escapeFloor = passing(.escaped).map(\.annulusMedianMm).max() ?? 0
+
+        print("suite intervals: ringSupportMin ≤ \(fmt(supportCeiling)),"
+              + " minSupportingSectors \(sectorFloor)…\(sectorCeiling),"
+              + " bandStepMaxMm \(fmt(stepFloor))…\(fmt(stepCeiling)) mm,"
+              + " supportVisibilityMin ≤ \(fmt(visibilityCeiling)),"
+              + " foodEnvelopeMinMm \(fmt(envelopeFloor))…\(fmt(envelopeCeiling)) mm,"
+              + " escapeBandMm ≥ \(fmt(escapeFloor)) mm")
+
+        // Every shipped value sits inside its own interval, or the suite would be red today.
+        #expect(SupportRegion.ringSupportMin <= supportCeiling)
+        #expect(SupportRegion.supportVisibilityMin <= visibilityCeiling)
+        #expect(SupportRegion.foodEnvelopeMinMm > envelopeFloor)
+        #expect(SupportRegion.foodEnvelopeMinMm <= envelopeCeiling)
+        #expect(SupportRegion.bandStepMaxMm >= stepFloor)
+        #expect(SupportRegion.bandStepMaxMm < stepCeiling)
+        #expect(SupportRegion.escapeBandMm >= escapeFloor)
+        #expect(SupportRegion.minSupportingSectors >= sectorFloor)
+        #expect(SupportRegion.minSupportingSectors <= sectorCeiling)
+
+        // Now the same three constants against what the CORPUS says, computed the way the
+        // sibling derivations compute them rather than quoted from them.
+        var corpusIntendedSectors = Int.max
+        var corpusEnvelopeCeiling = Float.greatestFiniteMagnitude
+        var corpusHighestAnnulus = -Float.greatestFiniteMagnitude
+        for name in Self.captures {
+            let measurements = try #require(Self.measurements(name))
+            let best = try #require(Self.bestCandidate(name))
+            let intended = try #require(measurements.first { $0.candidate.d == best.d })
+            corpusIntendedSectors = min(corpusIntendedSectors, intended.ring.supportingSectors)
+            corpusEnvelopeCeiling = min(corpusEnvelopeCeiling, intended.envelopeMm)
+            corpusHighestAnnulus = max(corpusHighestAnnulus,
+                                       measurements.map(\.annulusMedianMm).max() ?? corpusHighestAnnulus)
+        }
+        print("corpus: minSupportingSectors ≤ \(corpusIntendedSectors),"
+              + " foodEnvelopeMinMm ≤ \(fmt(corpusEnvelopeCeiling)) mm,"
+              + " escapeBandMm reached \(fmt(corpusHighestAnnulus)) mm")
+
+        // On two constants the SUITE is the binding constraint, not the corpus — so a
+        // session setting them against captures alone would land inside the corpus's
+        // bracket and outside the suite's.
+        let envelopeTighter = "the corpus now bounds foodEnvelopeMinMm below the suite"
+            + " (\(fmt(corpusEnvelopeCeiling)) vs \(fmt(envelopeCeiling)) mm) — the scenes"
+            + " have stopped being the binding constraint on it"
+        #expect(envelopeCeiling < corpusEnvelopeCeiling, "\(envelopeTighter)")
+        let escapeTighter = "the corpus now reaches an annulus median above the suite's"
+            + " floor on escapeBandMm (\(fmt(corpusHighestAnnulus)) vs \(fmt(escapeFloor)) mm)"
+        #expect(escapeFloor > corpusHighestAnnulus, "\(escapeTighter)")
+
+        // And on one they CONTRADICT. Decision 33 measured that the plate ends inside the
+        // ring in five of eight directions on both captures, so a real intended candidate
+        // scores 5 of 8 and `minSupportingSectors` has to come down to admit it. The suite's
+        // floor is 6, because the silent-failure scene it must reject scores 5 as well. The
+        // session cannot satisfy both: the scene has to move with the constant, and this
+        // assertion is what says so until it does.
+        print("collision: suite floor \(sectorFloor) > corpus ceiling \(corpusIntendedSectors),"
+              + " shipped \(SupportRegion.minSupportingSectors)")
+        let resolved = "the suite's floor on minSupportingSectors (\(sectorFloor)) no longer"
+            + " exceeds what the corpus's intended candidate scores (\(corpusIntendedSectors)):"
+            + " the collision this test records is resolved and it can be retired"
+        #expect(sectorFloor > corpusIntendedSectors, "\(resolved)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.

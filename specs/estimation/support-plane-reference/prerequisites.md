@@ -312,11 +312,39 @@ is no way to recover it afterwards.
   `docs/agent-notes/n5k-calibration-harness.md`. Every β is still `uncalibrated_unity`
   (Decision 10), so nothing downstream changed.
 
-- [ ] **Set the guard constants before task 8 hard-codes them.** `tasks.md` currently orders
+- [x] **Set the guard constants before task 8 hard-codes them.** **Answered 2026-08-06 by
+  measurement, not by reordering (Decision 41).** The item read: "`tasks.md` currently orders
   task 8 (`fitFoodSupportPlane`, which carries every threshold) before task 26 (determine the
-  constants), so the numbers get baked into code and tests before anything measures them. Either
-  reorder, or split task 8 into extract-and-instrument then threshold. Flagged rather than
-  reordered here because it is a task-list change, not a hardware gate.
+  constants), so the numbers get baked into code and tests before anything measures them.
+  Either reorder, or split task 8 into extract-and-instrument then threshold." Task 8 shipped,
+  so reordering is no longer available; what the worry was actually about is measurable.
+
+  The code half is handled by the `[derived]`/`[measured]`/`[inherited]`/`[owed]` provenance
+  annotation and Req 3.7's ban on shipping the sector constants asserted. The test half was
+  not. The scene suites reference owed constants twenty-eight times, all symbolically —
+  which is not the same as insulation, because a fixed scene asserted against a moving
+  constant still flips. `committedScenesBoundTheOwedConstants` measures the interval each
+  constant can move in before a committed assertion changes verdict:
+
+  | Constant | Suite interval | Corpus bracket |
+  |---|---|---|
+  | `ringSupportMin` | ≤ 0.676 | none — needs the matte capture |
+  | `minSupportingSectors` | 6…7 | ≤ 5 |
+  | `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
+  | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
+  | `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
+  | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
+
+  **Two of these bind tighter than the corpus**, so a value set at the sitting against captures
+  alone can land inside the corpus's bracket and outside the suite's: `foodEnvelopeMinMm` above
+  8.233 mm breaks the overhanging-food scene, and `escapeBandMm` below 14.868 mm breaks the
+  rim-in-the-outer-band scene. Check both against this table before writing a value down.
+
+  **And one contradicts it.** A real intended candidate scores 5 of 8 sectors (Decision 33), so
+  `minSupportingSectors` has to come down to 5 or below — but the silent-failure scene the guard
+  exists to reject scores 5 as well, so the suite floors it at 6. No value satisfies both. This
+  is not a session problem to solve at the table: it is Decision 30's finding, and it resolves
+  when Decision 40's crossed-sector rule replaces the unsigned count. The scene moves with it.
 
 ## Before testing
 
