@@ -360,6 +360,31 @@ strictly inside it — the only owed constant in this feature that does:
   admits, so the two may be set independently — true of no other constant that changes the
   candidate set.
 
+The RANSAC budget is **two** constants, and the sitting does not set either of them — this is the
+one place the committed corpus alone is the source (Decision 51):
+
+- **`ransacSuccessProbability` is bracketed 0.9…unbounded, and it is the end of the clamp that
+  binds.** `requiredIterations` is `min(cap, target)` and the target is always the smaller: the
+  passes spend 72, 11, 250 and 12, 41, 5 against a cap of 2048. It carried no provenance marker at
+  all until now.
+- **It moves the plane 3.704 mm**, past the 1 mm Req 5.1 is measured at — only `annulusOuterMm`
+  otherwise does. **Do not interpolate**: the readings wander (351.620, 349.473, 353.130, 351.328,
+  349.426, 349.426 mm) rather than climb, as Decision 46's radius did and Decision 50's removal
+  band did not.
+- **It is what the ~2 mm of draw dependence is denominated in.** Decision 46's eight-seed control
+  re-run against the cap does not move (2.095 mm at 256, 2048 and 8192); re-run against the target
+  it collapses 2.095 → 0.194 mm at 0.99999. Every plane figure Decisions 40–50 quote carries that
+  dependence, and it is **removable** — which is a reason to fix this constant early, since
+  tightening it may be worth re-reading the other brackets at.
+- **`maxIterationsPerPass` never fires and is bracketed 128…unbounded.** The largest draw the
+  corpus needs is 250, so nothing at or above 256 is distinguishable. Its floor is a verdict flip
+  at 64 (5 supporting / 0 crossed → 3 / 2); its ceiling belongs to **Req 7.6 and task 27**, not to
+  a capture, and the low-inlier-ratio scene where it would fire is one this corpus lacks. There is
+  8× of headroom to pay for a tighter target before latency is consulted.
+- **No capture is required for either.** Unlike every other owed constant, these are settable from
+  the committed slices — but choosing a value inside a bracket is still asserting, which Req 3.7
+  forbids.
+
 The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
 
 - **No floor.** The crossed-sector rule separates the corpus's plate-top candidate from its table
@@ -507,6 +532,8 @@ is no way to recover it afterwards.
   | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48; 0…2 in Decision 43) |
   | `maxCandidatePlanes` | ≥ 2 (`sequentialExtractionSurfacesThePlate`) | ≥ 2, no ceiling — the cap never fires *at 2× removal* (Decisions 48, 50) |
   | `inlierRemovalMultiple` | none — no scene runs extraction | 1…2.5× (Decision 50) |
+  | `ransacSuccessProbability` | none — no scene runs extraction | 0.9…unbounded (Decision 51) |
+  | `maxIterationsPerPass` | none — no scene runs extraction | 128…unbounded (Decision 51) |
 
   **Both sector rows are denominated in `ringSectorCount`, which is `[owed]` too
   (Decision 44), and in `sectorSupportMin`, which is `[owed]` as well (Decision 45).**

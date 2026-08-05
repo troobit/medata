@@ -148,7 +148,9 @@ public enum SupportRegion {
     // radius in the sweep, so the alternation was the annulus re-selecting the candidates.
     // The bracket may be interpolated. (The seed control still stands on its own terms: held
     // at the shipped radius over eight RANSAC seeds the plane moves 2.095 mm while the
-    // sector verdict does not, so selection is verdict-stable under the draw.)
+    // sector verdict does not, so selection is verdict-stable under the draw. That 2.095 mm
+    // is now DENOMINATED — it is `ransacSuccessProbability`, not a property of the captures,
+    // and it falls to 0.194 mm at 0.99999 (Decision 51).)
     //
     // FIX IT FIRST — SUPERSEDED (Decision 49). Decision 45's joint (count, bar) pair was a
     // TRIPLE only because the radius selected the candidates the other two were read on. It
@@ -474,12 +476,61 @@ public enum SupportRegion {
     // bracket rather than a 256×192 one, so a capture at another depth resolution can
     // now be admitted to the corpus without restating it.
     public static let minAcceptedExtentMm: Float = 44
-    // [derived] adaptive stopping caps it; the per-pass residue inlier ratio is
-    // reported so the budget holds as a measurement. The budget is sufficient
-    // because extraction is SEQUENTIAL — pass 1 removes the table — not because the
-    // pass-1 inlier ratio is high (it is ~6 %, where 2048 iterations reach ~36 %).
+    // [measured] on the corpus, and it NEVER FIRES (Decision 51). This said `[derived]`
+    // and rested on a quantity: "the budget is sufficient because extraction is
+    // SEQUENTIAL — pass 1 removes the table — not because the pass-1 inlier ratio is high
+    // (it is ~6 %, where 2048 iterations reach ~36 %)". The pass-1 ratio is measured at
+    // 0.402 and 0.698, six to twelve times the quoted figure, so the argument is refuted
+    // by its own number: the budget is sufficient because the dominant plane is EASY, and
+    // the sequential structure is not what pays for it.
+    //
+    // `requiredIterations` is `min(this, target)` and on this corpus the target is always
+    // the smaller. The passes spend 72, 11, 250 and 12, 41, 5 iterations against a cap of
+    // 2048, so the cap truncates nothing at or above 256 — the largest draw the corpus
+    // ever needs is 250 — and it is the third thing in this file that never fires, after
+    // Decision 48's pass cap and Decision 34's five guards.
+    //
+    // Bracketed 128…unbounded from BELOW by the corpus, the shipped value far inside it.
+    // At 64 the sector verdict on `1785135663727` FLIPS from 5 supporting / 0 crossed to
+    // 3 / 2 — the guard every bracket in Decisions 40 to 50 is read from — and at 32 the
+    // plane moves 1.9 mm. At 128 and above the plane is the shipped one to 0.000 mm. The
+    // ceiling is open and stays open: above the largest required draw there is nothing to
+    // distinguish, so what sets it is Req 7.6's worst-case latency and not this corpus.
+    // The scene where it WOULD fire is one with a low inlier ratio, which is exactly the
+    // scene the corpus does not contain — both captures are flat bread on a plate.
     public static let maxIterationsPerPass = 2048
     // Target probability of drawing one outlier-free triple, for adaptive stopping.
+    //
+    // [owed], and it is the constant that actually sets the budget (Decision 51). This
+    // carried NO provenance marker at all — the last constant in this file of which that
+    // was true, after Decision 47's band count and Decision 48's pass cap — and it had
+    // never been varied. It is the live end of a two-constant clamp whose inert end
+    // carries the paragraph of argument.
+    //
+    // It MOVES THE ANSWER, which only `annulusOuterMm` otherwise does. Swept 0.5…0.99999
+    // at the shipped cap the selected plane at the food moves 3.704 mm on
+    // `1785135663727` — past the 1 mm Decision 35 measures Req 5.1's transfer at, and
+    // past the 2.095 mm of draw dependence Decision 46 recorded as a caveat on every
+    // plane figure this feature quotes. Readings wander rather than climb (351.620,
+    // 349.473, 353.130, 351.328, 349.426, 349.426 mm), so like Decision 46's radius and
+    // unlike Decision 50's removal band the bracket must NOT be interpolated.
+    //
+    // And it is what Decision 46's caveat is denominated in. Re-run that decision's
+    // eight-seed control against each end of the clamp: against the CAP the spread does
+    // not move at all — 1.992 mm at 64 and 2.095 mm at 256, 2048 and 8192 — because the
+    // cap is not what ends a pass; against the TARGET it collapses 2.095 → 0.194 mm from
+    // 0.99 to 0.99999, a 10.8x fall that takes it under the Req 5.1 bar. So the draw
+    // dependence Decisions 40 to 50 all carry is not a property of the captures and not
+    // a price of the cap: it is this constant, and it is removable.
+    //
+    // Bracketed 0.9…unbounded by the corpus. Below 0.9 the FLOOR is that the capture
+    // which is otherwise draw-stable stops being so — `1785901032716`'s seed spread is
+    // 0.001 mm at every value from 0.9 up and 2.376 mm at 0.5. The ceiling is open, and
+    // the cap is what pays for tightening it: the largest draw at 0.99 is 250 against
+    // 2048, so there is 8x of headroom before Req 7.6 is consulted at all. Choosing a
+    // value inside the bracket is asserting, which Req 3.7 forbids for exactly these
+    // constants, so the sitting sets it — but unlike every other owed constant it is set
+    // from the committed corpus alone and needs no capture.
     static let ransacSuccessProbability = 0.99
     // The candidate set is an annulus of this radius around the food mask (Decision 15).
     // NOT dilate(foodMask, 2 × foodRadius), which spans ~8.3 s² against the pre-feature

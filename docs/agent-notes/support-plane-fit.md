@@ -121,6 +121,8 @@ measured value against a constant flips as soon as the constant crosses it.
 | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48) |
 | `maxCandidatePlanes` | ≥ 2 | ≥ 2, no ceiling — *at 2× removal* (Decisions 48, 50) |
 | `inlierRemovalMultiple` | none — no scene runs extraction | 1…2.5× (Decision 50) |
+| `ransacSuccessProbability` | none — no scene runs extraction | 0.9…unbounded, NOT interpolable (Decision 51) |
+| `maxIterationsPerPass` | none — no scene runs extraction | 128…unbounded, never fires (Decision 51) |
 
 **Every row of the sector part of that table is denominated in `ringSectorCount` *and*
 `sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
@@ -759,3 +761,54 @@ extraction, so there is nothing to read. The only owed constant of which that is
 
 One positive: `maxCrossedSectors` reads **2…2 at every multiple the bracket admits**, so unlike the
 candidate bound this constant does not denominate Decision 48's determination.
+
+## The iteration budget, and the end of the clamp that binds (Decision 51)
+
+`requiredIterations` is `min(maxIterationsPerPass, log(1 − p) / log(1 − w³))`. Two constants,
+one mechanism, and until this decision the shipped code never reported which end was doing the
+work. The cap carried a `[derived]` marker and a paragraph of argument; the target carried **no
+provenance marker at all** — the last constant in `SupportRegion` of which that was true, after
+Decision 47's band count and Decision 48's pass cap.
+
+**The target always binds; the cap never fires.** Per pass, per capture:
+
+| Capture | pass 1 | pass 2 | pass 3 | cap |
+|---|---|---|---|---|
+| `1785135663727` | 72 (w = 0.402) | 11 (w = 0.718) | 250 (w = 0.263) | 2048 |
+| `1785901032716` | 12 (w = 0.698) | 41 (w = 0.477) | 5 (w = 0.872) | 2048 |
+
+The largest draw the corpus ever needs is **250**, so the cap truncates nothing at or above 256.
+
+**The cap's stated derivation is refuted by its own number.** It priced pass 1 at a ~6 % inlier
+ratio. Measured it is **0.402 and 0.698**, six to twelve times that, and at those ratios the 0.99
+target is met in 69 and 12 iterations. The budget is sufficient because the dominant plane is
+*easy*, not because extraction is sequential.
+
+**The target moves the answer** — only `annulusOuterMm` otherwise does. Swept 0.5…0.99999 the
+selected plane at the food moves **3.704 mm** on `1785135663727`: 351.620, 349.473, 353.130,
+351.328, 349.426, 349.426 mm. Those **wander rather than climb**, so like Decision 46's radius and
+unlike Decision 50's removal band, **do not interpolate inside the bracket**.
+
+**This is what Decision 46's ~2 mm caveat is denominated in.** Every plane figure Decisions 40–50
+quote carries it. Re-run that decision's eight-seed control against each end of the clamp:
+
+| Held at | 0.99 / 2048 | tightened |
+|---|---|---|
+| the **cap** (64 → 8192) | 2.095 mm | 2.095 mm — buys nothing |
+| the **target** (0.99 → 0.99999) | 2.095 mm | **0.194 mm** — a 10.8× fall, under the Req 5.1 bar |
+
+So the draw dependence is neither a property of the captures nor a price of the cap. It is this
+constant, and it is **removable**.
+
+**Brackets.** The cap is **128…unbounded** from below: at 64 the sector verdict on
+`1785135663727` flips from 5 supporting / 0 crossed to 3 / 2 — the guard every bracket in
+Decisions 40–50 is read from — and at 32 the plane moves 1.9 mm, while at 128 and above it is the
+shipped plane to 0.000 mm. Its ceiling is open and stays open: above the largest required draw
+there is nothing to distinguish, so Req 7.6's worst-case latency sets it, and the low-inlier-ratio
+scene where it *would* fire is exactly the scene this corpus lacks. The target is
+**0.9…unbounded**: `1785901032716` is draw-stable at 0.001 mm from 0.9 up and jumps to 2.376 mm at
+0.5. Tightening it is paid for out of the cap's 8× headroom, so the two do not compete.
+
+**It is the only owed constant the committed corpus alone can set.** Every other one waits on the
+capture sitting or on model-production Bucket C. This one does not — but choosing a value inside
+the bracket is still asserting, which Req 3.7 forbids.

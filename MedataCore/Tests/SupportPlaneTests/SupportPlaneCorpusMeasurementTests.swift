@@ -4443,6 +4443,492 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(agreesThroughout, "\(determinationIsASlice)")
     }
 
+    // MARK: - The iteration budget, and the probability that is supposed to set it
+
+    // What one pass actually spent, which the shipped `ccRansac` computes and discards.
+    struct RansacSpend {
+        let iterations: Int        // iterations actually run before the loop exited
+        let bestRatio: Float       // largest component ÷ residue count, the adaptive input
+        let requiredAtBest: Double // requiredIterations at that ratio, UNCLAMPED
+        let stoppedEarly: Bool     // the target probability ended the pass, not the cap
+    }
+
+    // `SupportRegion.requiredIterations` with the target probability as an argument and
+    // WITHOUT the cap clamped on, so the two ends of the clamp can be read apart. The
+    // shipped function is `min(maxIterationsPerPass, this)`, which is exactly what hides
+    // which end binds.
+    static func requiredIterations(inlierRatio w: Float, successProbability p: Double) -> Double {
+        guard w > 0 else { return .infinity }
+        let clean = pow(Double(min(0.999, w)), 3)
+        guard clean < 1 else { return 1 }
+        let n = log(1 - p) / log(1 - clean)
+        return n.isFinite ? Swift.max(1, n.rounded(.up)) : .infinity
+    }
+
+    // `SupportRegion.ccRansac` with the budget pair as arguments and the spend reported.
+    // Every other line is the shipped path's — the same unconditional three draws, the
+    // same gravity gate, the same amortised component labelling — so at
+    // (`maxIterationsPerPass`, `ransacSuccessProbability`) it reproduces the shipped
+    // hypothesis exactly, which the anchor below checks candidate by candidate.
+    static func ccRansac(indices: [Int], geometry g: SupportRegion.DepthGeometry,
+                         gravity: Vec3, rng: inout SplitMix64,
+                         scratch: SupportRegion.ComponentScratch,
+                         maxIterations: Int, successProbability: Double)
+    -> (hypothesis: SupportRegion.RansacHypothesis?, spend: RansacSpend) {
+        let n = indices.count
+        let empty = RansacSpend(iterations: 0, bestRatio: 0,
+                                requiredAtBest: .infinity, stoppedEarly: false)
+        guard n >= LiDARPlaneFitter.minPoints else { return (nil, empty) }
+        var best: SupportRegion.RansacHypothesis?
+        var bestComponent = 0
+        var required = maxIterations
+        var iteration = 0
+
+        while iteration < required && iteration < maxIterations {
+            iteration += 1
+            let i = rng.uniformInt(n)
+            var j = rng.uniformInt(n); if j == i { j = (j + 1) % n }
+            var k = rng.uniformInt(n)
+            if k == i || k == j { k = (k + 1) % n }
+            if k == i || k == j { k = (k + 2) % n }
+            if k == i || k == j { continue }
+
+            let p1 = g.points[indices[i]], p2 = g.points[indices[j]], p3 = g.points[indices[k]]
+            var nHat = (p2 - p1).cross(p3 - p1)
+            if nHat.lengthSquared < 1e-12 { continue }
+            nHat = nHat.normalised()
+            if nHat.dot(gravity) < 0 { nHat = -nHat }
+            if acos(SupportRegion.clampedCosine(nHat.dot(gravity)))
+                > LiDARPlaneFitter.gravityAngleMaxRad { continue }
+
+            let d = nHat.dot(p1)
+            var inliers: [Int] = []
+            inliers.reserveCapacity(n)
+            for idx in indices where abs(nHat.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                inliers.append(idx)
+            }
+            if inliers.count <= bestComponent { continue }
+
+            let component = scratch.largestComponent(of: inliers)
+            guard component.size > bestComponent else { continue }
+            bestComponent = component.size
+            best = SupportRegion.RansacHypothesis(normal: nHat, d: d, members: component.members)
+            let w = Float(bestComponent) / Float(n)
+            required = Swift.max(1, Swift.min(maxIterations,
+                                              Int(requiredIterations(inlierRatio: w,
+                                                                     successProbability: successProbability)
+                                                  .rounded(.up))))
+        }
+
+        let ratio = Float(bestComponent) / Float(n)
+        let unclamped = requiredIterations(inlierRatio: ratio, successProbability: successProbability)
+        return (best, RansacSpend(iterations: iteration, bestRatio: ratio,
+                                  requiredAtBest: unclamped,
+                                  stoppedEarly: iteration < maxIterations))
+    }
+
+    // The pass chain with the budget parameterised and the spend of every pass kept.
+    static func extractCandidates(
+        annulus: [Int], geometry g: SupportRegion.DepthGeometry,
+        gravity: Vec3, rng: inout SplitMix64,
+        maxIterations: Int,
+        successProbability: Double = SupportRegion.ransacSuccessProbability
+    ) -> (candidates: [SupportRegion.PlaneCandidate], spends: [RansacSpend]) {
+        var residue = annulus
+        var candidates: [SupportRegion.PlaneCandidate] = []
+        var spends: [RansacSpend] = []
+        let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
+        let residueFloor = SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)
+
+        for _ in 0..<SupportRegion.maxCandidatePlanes {
+            guard residue.count >= residueFloor else { break }
+            let drawn = Self.ccRansac(indices: residue, geometry: g, gravity: gravity,
+                                      rng: &rng, scratch: scratch,
+                                      maxIterations: maxIterations,
+                                      successProbability: successProbability)
+            spends.append(drawn.spend)
+            guard let hypothesis = drawn.hypothesis else { break }
+
+            var inliers = hypothesis.members
+            guard let refined = try? LiDARPlaneFitter.refine(
+                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+            ) else { break }
+            var normal = refined.0
+            var d = refined.1
+
+            for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+                var reselected: [Int] = []
+                reselected.reserveCapacity(residue.count)
+                for idx in residue
+                where abs(normal.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                    reselected.append(idx)
+                }
+                let component = scratch.largestComponent(of: reselected)
+                let next = component.members
+                if next == inliers || next.count < LiDARPlaneFitter.minPoints { break }
+                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                    inliers: next.map { g.points[$0] }, seedNormal: normal
+                ) else { break }
+                if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity)))
+                    > LiDARPlaneFitter.gravityAngleMaxRad {
+                    break
+                }
+                inliers = next
+                normal = nextNormal
+                d = nextD
+            }
+
+            let component = scratch.largestComponent(of: inliers)
+            candidates.append(SupportRegion.PlaneCandidate(
+                normal: normal, d: d,
+                residualMm: LiDARPlaneFitter.computeResidual(
+                    points: inliers.map { g.points[$0] }, normal: normal, d: d
+                ),
+                componentSize: component.size,
+                extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count))
+
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
+        }
+        return (candidates, spends)
+    }
+
+    // Below the shipped cap in halvings, and two above it. 16 is there because the
+    // pre-feature fitter's budget was 256 and the design's own comment measures this
+    // constant against it; 8192 is far enough above that a cap which binds at 2048 has
+    // room to stop binding.
+    static let ransacBudgetSweep = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192]
+
+    // The seed control is the expensive half, so it runs at four budgets rather than ten:
+    // one far below the shipped cap, one below, the shipped one, and one above.
+    static let ransacBudgetSeedSweep = [64, 256, 2048, 8192]
+
+    // Every value `ransacSuccessProbability` could plausibly take. 0.5 is included as the
+    // degenerate end — if even a coin-flip target reads the same as 0.99, the constant is
+    // not merely loosely set, it is inert.
+    static let ransacProbabilitySweep = [0.5, 0.9, 0.95, 0.99, 0.999, 0.99999]
+
+    @Test("the iteration budget is what the seed spread is denominated in, and its target probability never binds")
+    func theIterationBudgetIsWhatTheSeedSpreadIsDenominatedIn() throws {
+        struct Reading {
+            let budget: Int
+            let planeAtFoodMm: Float
+            let crossed: Int
+            let supporting: Int
+            let ringMedianMm: Float
+            let candidateCount: Int
+            let spends: [RansacSpend]
+        }
+
+        var byCapture: [String: [Reading]] = [:]
+        var spreadByCaptureAndBudget: [String: [Int: Float]] = [:]
+        var everStoppedEarly = false
+        var pass1Ratios: [String: Float] = [:]
+
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let ray = try #require(Self.foodCentroidRay(slice))
+            let shippedSeed = Fnv1a64.hash(slice.depth.depthBytesMm)
+
+            // The anchor. At the shipped pair this mirror must reproduce the shipped call
+            // candidate for candidate, or nothing below is a reading on the shipped path.
+            var anchorRng = SplitMix64(seed: shippedSeed)
+            let anchor = Self.extractCandidates(
+                annulus: samples.annulus, geometry: g, gravity: slice.gravity.normalised(),
+                rng: &anchorRng, maxIterations: SupportRegion.maxIterationsPerPass)
+            var shippedRng = SplitMix64(seed: shippedSeed)
+            let shipped = SupportRegion.extractCandidates(
+                annulus: samples.annulus, geometry: g,
+                gravity: slice.gravity.normalised(), rng: &shippedRng)
+            #expect(anchor.candidates.count == shipped.count,
+                    "the budget mirror stopped reproducing the shipped pass count")
+            for (a, s) in zip(anchor.candidates, shipped) {
+                let samePlane: Bool = a.d == s.d
+                let sameComponent: Bool = a.componentSize == s.componentSize
+                #expect(samePlane && sameComponent,
+                        "the budget mirror diverged from SupportRegion.extractCandidates")
+            }
+            pass1Ratios[name] = anchor.spends.first?.bestRatio ?? 0
+
+            var readings: [Reading] = []
+            for budget in Self.ransacBudgetSweep {
+                var rng = SplitMix64(seed: shippedSeed)
+                let run = Self.extractCandidates(
+                    annulus: samples.annulus, geometry: g,
+                    gravity: slice.gravity.normalised(), rng: &rng, maxIterations: budget)
+                guard let best = run.candidates.max(by: {
+                    Self.innerSupportFraction(samples: samples, geometry: g,
+                                              normal: $0.normal, d: $0.d)
+                    < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                normal: $1.normal, d: $1.d)
+                }) else { continue }
+                let signs = Self.sectorSigns(samples: samples, geometry: g,
+                                             normal: best.normal, d: best.d)
+                if run.spends.contains(where: \.stoppedEarly) { everStoppedEarly = true }
+                readings.append(Reading(
+                    budget: budget,
+                    planeAtFoodMm: Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray),
+                    crossed: signs.crossedFailing,
+                    supporting: signs.supporting,
+                    ringMedianMm: SupportRegion.medianHeight(
+                        indices: samples.ring, geometry: g, normal: best.normal, d: best.d),
+                    candidateCount: run.candidates.count,
+                    spends: run.spends))
+            }
+            byCapture[name] = readings
+
+            print("\(name): the budget swept at the shipped seed")
+            for r in readings {
+                let spend = r.spends.map {
+                    "\($0.iterations)@w=\(fmt($0.bestRatio))"
+                        + ($0.requiredAtBest.isFinite
+                           ? "(needs \(Int($0.requiredAtBest)))" : "(needs ∞)")
+                }
+                print("  cap \(r.budget): plane at food \(fmt(r.planeAtFoodMm)) mm,"
+                      + " ring median \(fmt(r.ringMedianMm)) mm, supporting \(r.supporting),"
+                      + " crossed \(r.crossed), candidates \(r.candidateCount),"
+                      + " spend \(spend.joined(separator: " | "))")
+            }
+
+            // The seed control, re-run at four budgets. Decision 46 measured 2.095 mm of
+            // draw dependence on this capture at the shipped cap and recorded it as a
+            // caveat on every plane figure the feature quotes; what it could not say is
+            // which constant the caveat is denominated in.
+            var spreads: [Int: Float] = [:]
+            for budget in Self.ransacBudgetSeedSweep {
+                var planes: [Float] = []
+                for i in 0..<Self.seedRolls {
+                    let seed = i == 0 ? shippedSeed
+                        : shippedSeed &+ UInt64(i) &* 0x9E37_79B9_7F4A_7C15
+                    var rng = SplitMix64(seed: seed)
+                    let run = Self.extractCandidates(
+                        annulus: samples.annulus, geometry: g,
+                        gravity: slice.gravity.normalised(), rng: &rng, maxIterations: budget)
+                    guard let best = run.candidates.max(by: {
+                        Self.innerSupportFraction(samples: samples, geometry: g,
+                                                  normal: $0.normal, d: $0.d)
+                        < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                    normal: $1.normal, d: $1.d)
+                    }) else { continue }
+                    planes.append(Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray))
+                }
+                spreads[budget] = (planes.max() ?? 0) - (planes.min() ?? 0)
+            }
+            spreadByCaptureAndBudget[name] = spreads
+            print("  seed spread at the food by cap:"
+                  + " \(Self.ransacBudgetSeedSweep.map { "\($0) → \(fmt(spreads[$0] ?? 0)) mm" }.joined(separator: ", "))")
+        }
+
+        // FINDING 1. The clamp has two ends and the shipped one is not the end that binds.
+        // `requiredIterations` is `min(cap, target)`, and on every pass of both captures
+        // the TARGET is smaller: the passes spend 72, 11, 250 and 12, 41, 5 against a cap
+        // of 2048. So `maxIterationsPerPass` NEVER FIRES at the shipped value — the third
+        // constant in this file of which that is true, after Decision 48's pass cap and
+        // Decision 34's five unexercised guards — and the constant that actually sets
+        // every pass's budget is `ransacSuccessProbability`.
+        //
+        // That is the inversion. The cap carries a `[derived]` marker and a paragraph of
+        // sufficiency argument; the target carries NO provenance marker at all, the last
+        // constant in the file of which that is true after Decision 47's band count and
+        // Decision 48's pass cap. The feature has been documenting the inert half of a
+        // two-constant clamp and leaving the live half unmarked.
+        let spendsAtShipped = Self.captures.flatMap {
+            byCapture[$0]?.first { $0.budget == SupportRegion.maxIterationsPerPass }?.spends ?? []
+        }
+        let capFired = spendsAtShipped.contains { $0.iterations >= SupportRegion.maxIterationsPerPass }
+        print("passes at the shipped cap: "
+              + spendsAtShipped.map { "\($0.iterations)/\(SupportRegion.maxIterationsPerPass)" }
+                .joined(separator: ", ")
+              + "; every pass stopped on the target: \(everStoppedEarly && !capFired)")
+        let capBinds = "a pass at the shipped budget ran the cap out"
+            + " (\(spendsAtShipped.map(\.iterations))) — maxIterationsPerPass fires after"
+            + " all and the two ends of the clamp are not separable this way"
+        #expect(everStoppedEarly && !capFired, "\(capBinds)")
+
+        // FINDING 2. And the cap's `[derived]` argument is refuted by its own quantity.
+        // It prices pass 1 at a ~6 % inlier ratio — the figure the whole "the budget is
+        // sufficient because extraction is SEQUENTIAL" paragraph rests on. Measured, the
+        // pass-1 ratio is 0.402 and 0.698, six to twelve times that, and at those ratios
+        // a 0.99 target is met in 69 and 12 iterations. The budget is not sufficient
+        // because extraction is sequential; it is sufficient because the dominant plane
+        // is easy, and the cap is 30x larger than the largest draw the corpus ever needs.
+        let quotedPass1Ratio: Float = 0.06
+        for (name, w) in pass1Ratios.sorted(by: { $0.key < $1.key }) {
+            let needed = Self.requiredIterations(inlierRatio: w, successProbability:
+                                                    SupportRegion.ransacSuccessProbability)
+            print("\(name) pass 1: w = \(fmt(w)) against the quoted"
+                  + " \(fmt(quotedPass1Ratio)); a 0.99 target needs \(Int(needed)) iterations"
+                  + " against a cap of \(SupportRegion.maxIterationsPerPass)")
+            let quoteHolds = "pass 1 on \(name) reads w = \(fmt(w)), which is the ~6 % the"
+                + " design quotes — the sufficiency argument on maxIterationsPerPass stands"
+                + " as written"
+            #expect(w > 4 * quotedPass1Ratio, "\(quoteHolds)")
+        }
+
+        // FINDING 3. The target is the live constant, and it moves the plane past the bar
+        // Req 5.1 is measured at. Swept from a coin flip to five nines at the shipped cap,
+        // the selected plane at the food moves 3.704 mm on `1785135663727` — against the
+        // 1 mm Decision 35 measures the grid transfer at, and larger than the 2.095 mm of
+        // draw dependence Decision 46 recorded as a caveat on the whole feature.
+        //
+        // So this is not a constant being retired. It is an owed constant the feature did
+        // not know it had: unmarked, unvaried, unbracketed, and moving the answer by more
+        // than every constant Decisions 44 to 48 swept except the candidate bound.
+        var probabilityPlanes: [String: [Double: Float]] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let seed = Fnv1a64.hash(slice.depth.depthBytesMm)
+            let ray = try #require(Self.foodCentroidRay(slice))
+            var planes: [Double: Float] = [:]
+            for p in Self.ransacProbabilitySweep {
+                var rng = SplitMix64(seed: seed)
+                let run = Self.extractCandidates(
+                    annulus: samples.annulus, geometry: g,
+                    gravity: slice.gravity.normalised(), rng: &rng,
+                    maxIterations: SupportRegion.maxIterationsPerPass, successProbability: p)
+                guard let best = run.candidates.max(by: {
+                    Self.innerSupportFraction(samples: samples, geometry: g,
+                                              normal: $0.normal, d: $0.d)
+                    < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                normal: $1.normal, d: $1.d)
+                }) else { continue }
+                planes[p] = Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray)
+            }
+            probabilityPlanes[name] = planes
+            let values = Self.ransacProbabilitySweep.compactMap { planes[$0] }
+            let spread = (values.max() ?? 0) - (values.min() ?? 0)
+            print("\(name) over ransacSuccessProbability:"
+                  + " \(Self.ransacProbabilitySweep.map { "\($0) → \(fmt(planes[$0] ?? 0))" }.joined(separator: ", "))"
+                  + " — spread \(fmt(spread)) mm")
+        }
+        let widestOverP = Self.captures.map { name -> Float in
+            let v = Self.ransacProbabilitySweep.compactMap { probabilityPlanes[name]?[$0] }
+            return (v.max() ?? 0) - (v.min() ?? 0)
+        }.max() ?? 0
+        let targetIsInert = "ransacSuccessProbability moves the selected plane by at most"
+            + " \(fmt(widestOverP)) mm across a coin flip to five nines — it cannot change"
+            + " an output and leaves task 26 by being retired rather than bracketed"
+        #expect(widestOverP > Self.gridTransferToleranceMm, "\(targetIsInert)")
+
+        // FINDING 4. Which is what Decision 46's caveat is denominated in, and it is not
+        // the cap. Re-run the eight-seed control at four budgets and the spread does not
+        // move at all — 1.992 mm at 64 and 2.095 mm at 256, 2048 and 8192 — because the
+        // cap is not what ends a pass. Draw dependence is not bought off by a larger
+        // budget; it is bought off by a stricter target, and no amount of the constant
+        // that carries the argument buys any of it.
+        for name in Self.captures {
+            let spreads = try #require(spreadByCaptureAndBudget[name])
+            print("\(name) seed spread against the cap:"
+                  + " \(Self.ransacBudgetSeedSweep.map { "\($0) → \(fmt(spreads[$0] ?? 0)) mm" }.joined(separator: ", "))")
+        }
+        let spreadAtShipped = Self.captures.compactMap {
+            spreadByCaptureAndBudget[$0]?[SupportRegion.maxIterationsPerPass]
+        }.max() ?? 0
+        let spreadAtTop = Self.captures.compactMap {
+            spreadByCaptureAndBudget[$0]?[Self.ransacBudgetSeedSweep.last ?? 0]
+        }.max() ?? 0
+        print("widest seed spread at the shipped cap \(fmt(spreadAtShipped)) mm,"
+              + " at \(Self.ransacBudgetSeedSweep.last ?? 0) \(fmt(spreadAtTop)) mm")
+        let capBuysStability = "raising maxIterationsPerPass from"
+            + " \(SupportRegion.maxIterationsPerPass) to \(Self.ransacBudgetSeedSweep.last ?? 0)"
+            + " narrows the seed spread (\(fmt(spreadAtShipped)) → \(fmt(spreadAtTop)) mm)"
+            + " — the cap does buy draw stability and Decision 46's caveat is denominated"
+            + " in it after all"
+        #expect(spreadAtTop == spreadAtShipped, "\(capBuysStability)")
+
+        // And the other half of that, measured rather than argued. Saying the spread is
+        // denominated in the target only because it is not denominated in the cap would be
+        // an inference, so the eight-seed control runs against the target as well. This is
+        // what a sitting would actually be choosing between: the cap is free and buys
+        // nothing, the target costs iterations and is the only thing that can buy the
+        // draw stability every bracket in Decisions 40 to 50 is quoted at.
+        var spreadByProbability: [String: [Double: Float]] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let ray = try #require(Self.foodCentroidRay(slice))
+            let shippedSeed = Fnv1a64.hash(slice.depth.depthBytesMm)
+            var spreads: [Double: Float] = [:]
+            for p in Self.ransacProbabilitySweep {
+                var planes: [Float] = []
+                for i in 0..<Self.seedRolls {
+                    let seed = i == 0 ? shippedSeed
+                        : shippedSeed &+ UInt64(i) &* 0x9E37_79B9_7F4A_7C15
+                    var rng = SplitMix64(seed: seed)
+                    let run = Self.extractCandidates(
+                        annulus: samples.annulus, geometry: g,
+                        gravity: slice.gravity.normalised(), rng: &rng,
+                        maxIterations: SupportRegion.maxIterationsPerPass,
+                        successProbability: p)
+                    guard let best = run.candidates.max(by: {
+                        Self.innerSupportFraction(samples: samples, geometry: g,
+                                                  normal: $0.normal, d: $0.d)
+                        < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                    normal: $1.normal, d: $1.d)
+                    }) else { continue }
+                    planes.append(Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray))
+                }
+                spreads[p] = (planes.max() ?? 0) - (planes.min() ?? 0)
+            }
+            spreadByProbability[name] = spreads
+            print("\(name) seed spread against the target:"
+                  + " \(Self.ransacProbabilitySweep.map { "\($0) → \(fmt(spreads[$0] ?? 0)) mm" }.joined(separator: ", "))")
+        }
+        let atShippedP = Self.captures.compactMap {
+            spreadByProbability[$0]?[SupportRegion.ransacSuccessProbability]
+        }.max() ?? 0
+        let atStrictestP = Self.captures.compactMap {
+            spreadByProbability[$0]?[Self.ransacProbabilitySweep.last ?? 0]
+        }.max() ?? 0
+        print("widest seed spread at the shipped target \(fmt(atShippedP)) mm,"
+              + " at \(Self.ransacProbabilitySweep.last ?? 0) \(fmt(atStrictestP)) mm")
+        let targetBuysNothingEither = "tightening ransacSuccessProbability from"
+            + " \(SupportRegion.ransacSuccessProbability) to"
+            + " \(Self.ransacProbabilitySweep.last ?? 0) does not narrow the seed spread"
+            + " (\(fmt(atShippedP)) → \(fmt(atStrictestP)) mm) — neither end of the clamp"
+            + " buys draw stability and Decision 46's caveat is denominated in neither"
+        #expect(atStrictestP < atShippedP, "\(targetBuysNothingEither)")
+
+        // FINDING 5. The cap is still bracketed from BELOW, so it is not retired either.
+        // It stops truncating any pass at 256 — the largest draw the corpus needs is 250 —
+        // but the answer locks earlier and lower than that: at 128 the plane is the shipped
+        // one, and at 64 the sector verdict FLIPS from 5 supporting / 0 crossed to 3 / 2,
+        // which is the guard Decisions 40 to 50 read every one of their brackets from.
+        // Bracketed 128…unbounded, the shipped 2048 far inside it, and the ceiling is open
+        // for the same reason Decision 48's was: nothing above the point where it stops
+        // firing is distinguishable.
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            let atShipped = try #require(
+                readings.first { $0.budget == SupportRegion.maxIterationsPerPass })
+            let moved = readings.filter {
+                abs($0.planeAtFoodMm - atShipped.planeAtFoodMm) > Self.gridTransferToleranceMm
+            }.map(\.budget)
+            let flipped = readings.filter {
+                $0.supporting != atShipped.supporting || $0.crossed != atShipped.crossed
+            }.map(\.budget)
+            print("\(name): caps whose plane differs from the shipped cap's by more than"
+                  + " \(fmt(Self.gridTransferToleranceMm)) mm: \(moved);"
+                  + " caps whose sector verdict differs: \(flipped)")
+            let noFloor = "no cap in \(Self.ransacBudgetSweep) moves the plane or the sector"
+                + " verdict on \(name) — the corpus gives maxIterationsPerPass no floor and"
+                + " the constant is unbracketed in both directions"
+            if name == "1785135663727" {
+                #expect(!moved.isEmpty && !flipped.isEmpty, "\(noFloor)")
+                #expect(moved.allSatisfy { $0 < 128 } && flipped.allSatisfy { $0 < 128 },
+                        "the cap floor moved off 128 — the bracket needs re-reading")
+            }
+        }
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
