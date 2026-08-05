@@ -123,6 +123,7 @@ measured value against a constant flips as soon as the constant crosses it.
 | `inlierRemovalMultiple` | none — no scene runs extraction | 1…2.5× (Decision 50) |
 | `ransacSuccessProbability` | none — no scene runs extraction | 0.9…unbounded, NOT interpolable (Decision 51) |
 | `maxIterationsPerPass` | none — no scene runs extraction | 128…unbounded, never fires (Decision 51) |
+| `consensusPolishMaxPasses` | none — no scene runs extraction or the fallback fit | 1…unbounded, **always** fires, interpolable (Decision 54) |
 
 **Every row of the sector part of that table is denominated in `ringSectorCount` *and*
 `sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
@@ -976,3 +977,77 @@ threshold recovers it and capture 2 still has to be taken.
 
 **One positive.** `maxCrossedSectors` reads 2 at the shipped band in all three states — the only
 member of the joint set that survives τ_conf directly.
+
+## The polish cap always binds, and its depth is not what the loop buys (Decision 54)
+
+`LiDARPlaneFitter.consensusPolishMaxPasses = 3` is the **seventh** constant that decides
+which planes compete, the third that can *add* one, and the only one **both** fitters read —
+`SupportRegion.extractCandidates` polishes every candidate with it, `LiDARPlaneFitter.fitOutcome`
+polishes its single winner with the same number.
+
+Unlike Decisions 47, 48 and 51's unmarked constants it *has* a derivation, written in the
+source and in `estimation-runtime-consistency.md`: "the loop usually exits earlier because the
+inlier set reaches a fixed point". **It is false on this corpus, on both legs.**
+
+| At the shipped 3 | stopped by the cap | reached the fixed point | stopped by the gate |
+|---|---|---|---|
+| extraction (6 passes) | **4** | 1 | 1 |
+| the fallback fit (2 captures) | **2** | 0 | 0 |
+
+Swept to 64, the depth the corpus actually needs is **17** in extraction (pass 1 of
+`1785135663727`) and **11** in the fallback. So the plane both paths ship is a truncated
+iterate of the polish map, not its fixed point. This is the exact mirror of Decision 51's
+`maxIterationsPerPass`, which never fires anywhere: two caps, two `[derived]` arguments,
+opposite failures.
+
+**The depth is not what removes the seed dependence the loop was added for.** Decision 46's
+eight-seed control, re-run at three depths:
+
+| Capture | no polish | shipped 3 | converged 64 |
+|---|---|---|---|
+| `1785135663727` | 2.123 mm | **2.095 mm** | 2.067 mm |
+| `1785901032716` | 0.096 mm | 0.001 mm | 0.000 mm |
+
+**2.9 %** on the capture carrying the corpus's only intended-correct fit, for running the loop
+to convergence. It works completely on the other one — which was nearly seed-stable to begin
+with. What *does* remove it is `ransacSuccessProbability` (2.095 → **0.194 mm**, Decision 51).
+The reason is visible in the rolls: the surviving spread is three distinct planes with the
+candidate count itself varying between 2 and 3, so the seeds disagree about **which candidate
+wins**. The polish refines a plane; it does not reorder a set. Do not cite the polish as the
+answer to plane jitter.
+
+**It moves both legs, and the fallback further.** Over 0…64 the promoted plane moves 0.490 and
+0.106 mm at the food — inside Req 5.1's 1 mm. The **fallback** plane moves 0.158 and
+**1.719 mm** (357.506 unpolished → 359.096 shipped → 359.225 converged on `1785901032716`), so
+the shipped cap sits 1.590 mm above the unpolished plane and 0.129 mm short of its own fixed
+point. Req 4.3 holds at every value — one constant moves both legs — but the plane it names is
+what Decision 36 prices `fallbackPenalty` against and what feeds `lidarMmPerPx = |d| / f` on
+the legacy path. Decision 36's 18.37 mm survives (its capture's fallback moves 0.158 mm) and is
+a reading here. **First owed constant measured on the fallback leg.**
+
+**And it changes the candidate SET.** `1785135663727` yields **two** candidates at 0–1 passes
+and **three** from 2 up: a shallower polish leaves a different plane, hence a different removal
+shell, hence a residue that stops at `minResidueAreaMm2` a pass early. Persisted
+`planeCandidateCount` (Req 6.1) is denominated here — its third denominator after Decision 38's
+residue floor and Decision 53's confidence bar.
+
+**Decision 52's unenforced gravity cone is worse than "absent" — it is inverted.**
+`1785135663727`'s third pass records `gravity` at **0 applied iterations at every depth from 2
+up**: the gate fires on the first re-selection and `break`s, which keeps the previous plane —
+the **ungated** refinement before the loop, itself outside the cone. The documented
+conservative fallback is precisely what preserves the plane the cone exists to exclude. The
+tilt left standing moves with the cap: 26.573° at 2 passes, Decision 52's **20.512°** at the
+shipped 3, 18.771° at 4–8, 18.609° from 16. At 0 and 1 passes nothing is outside the cone,
+because that candidate does not exist yet. Still not repaired: removing it moves the answer.
+
+**Bracketed 1…unbounded, interpolable, and the corpus points above the shipped value.** The
+floor of 1 is the corpus's — at 0 the candidate set is short a plane and `maxCrossedSectors`
+reads **2…3** against the 2…2 Decision 48 determined, so the polish is part of what makes that
+determination tight; from 1 up it is 2…2 at every depth. There is no ceiling, and the
+constant's own derivation is met only at 17. What stops that being a proposal is **Req 7.6**:
+this is the innermost loop in extraction — a full re-selection over the residue, a
+connected-component labelling and an SVD per iteration — and 17 quintuples it on the path that
+produced the 32 GB allocation failure. Readings are monotone (each depth is one more iteration
+of the same map), so unlike Decisions 46, 51 and 52 the bracket **may** be interpolated. The
+committed suite is silent for Decision 50's structural reason: no scene runs extraction, and
+none runs the fallback fit either.

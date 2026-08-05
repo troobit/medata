@@ -29,7 +29,43 @@ give identical output; no RNG was added.
   `supportplane.end success=false` trace in `Pipeline.swift`).
 - Existing accuracy/determinism tests in
   `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` cover the
-  polished path unchanged (clean fixtures reach the fixed point immediately).
+  polished path unchanged.
+
+### What the corpus says about all of that (support-plane-reference Decision 54)
+
+Three of the sentences above are claims about real captures, and
+`SupportPlaneCorpusMeasurementTests.thePolishCapIsACapOnALoopThatFixedPointsFirst`
+measures them against the two committed `.depthslice` fixtures. **Read this
+before changing the cap or citing the guard.**
+
+- **"Iterating until the consensus set stops changing" is not what happens.** The
+  cap always binds. At 3, extraction is truncated on 4 of its 6 passes and
+  reaches the fixed point on 1; **both** fallback fits are truncated. Swept to
+  64, the depth the corpus needs is **17** in extraction and **11** in the
+  fallback. The plane both paths ship is a truncated iterate, not the fixed
+  point. (The earlier "clean fixtures reach the fixed point immediately" here
+  was a statement about the synthetic test fixtures, and it does not transfer.)
+- **The polish does not remove the seed dependence it was added for.** Eight
+  seeds, plane at the food: 2.123 / 2.095 / 2.067 mm at 0, 3 and 64 passes on
+  `1785135663727` — **2.9 %** for running the loop to convergence. It works on
+  the other capture (0.096 → 0.001 mm), which was nearly seed-stable already.
+  What removes it is `SupportRegion.ransacSuccessProbability`: 2.095 → 0.194 mm
+  (Decision 51). The residual spread is the seeds disagreeing about which
+  *candidate wins*, and the polish refines a plane rather than reordering a set.
+- **The gravity-cone fallback is inverted in effect.** "A re-selection outside
+  the cone keeps the previous pass's plane" is correct as written, and on
+  `1785135663727`'s third pass the previous plane is the **ungated** refinement
+  before the loop — itself outside the cone at 20.512°. The gate fires at 0
+  applied iterations and the `break` is what preserves the plane the cone exists
+  to exclude. See `support-plane-fit.md`; not repaired, because removing the
+  candidate moves the answer.
+
+Two more things the cap turns out to decide: the candidate **count**
+(`1785135663727` yields 2 candidates at 0–1 passes and 3 from 2 up, so the
+persisted `planeCandidateCount` is denominated here), and the **fallback**
+plane, which moves 1.719 mm on `1785901032716` over 0…64 — past Req 5.1's 1 mm,
+while the promoted plane moves 0.106 mm. `consensusPolishMaxPasses` is `[owed]`,
+bracketed 1…unbounded, and interpolable.
 
 ## Fail-closed food-coverage gate
 
