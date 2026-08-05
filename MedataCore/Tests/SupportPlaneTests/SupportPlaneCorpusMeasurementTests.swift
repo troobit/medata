@@ -12,11 +12,13 @@ import Testing
 //
 // Why this is a test rather than a CLI. Every input it needs — `SupportRegion.prepare`,
 // `ringSamples`, `extractCandidates`, `admissibility` — is internal, and the corpus is
-// the two `.depthslice` fixtures in this target's bundle. A CLI would have to widen the
+// the `.depthslice` fixtures in this target's bundle. A CLI would have to widen the
 // module's public surface to reach the same numbers.
 //
 // The corpus is TWO captures, both flat bread on a white plate, and that bounds what
-// can be concluded here. Constants this pass can set two-sidedly — a floor from what a
+// can be concluded here. A third slice is committed and NOT admitted — see
+// `rejectedCaptures` and `rejectedCaptureIsNotCorpusGrade`, which record the
+// measurement that excludes it. Constants this pass can set two-sidedly — a floor from what a
 // correct capture achieves, a ceiling from the Decision 18 silent-failure geometry —
 // are set. Constants that need a scene the corpus does not contain (a rimmed plate, a
 // bowl, food at a small plate's edge) stay `[owed]`, and `decision_log.md` records
@@ -26,6 +28,20 @@ import Testing
 struct SupportPlaneCorpusMeasurementTests {
 
     static let captures = ["1785135663727", "1785901032716"]
+
+    // Sliced, committed, and deliberately NOT in `captures`. `1785054950406` is the
+    // 208 g mounded-rice bundle from the 2026-07-26 session — on paper the non-flat
+    // anchor `prerequisites.md` calls capture 2, and the only bundle in hand that is
+    // not flat bread. `tools/fixture_slice.py` cuts it cleanly, so the
+    // `FixtureLoader` failure recorded in `field-truth-sessions.md` is not a
+    // slice-level one and the capture reaches this pass intact.
+    //
+    // It is excluded on a measurement, not on the loader's verdict:
+    // `rejectedCaptureIsNotCorpusGrade` below records what disqualifies it. The
+    // slice is committed anyway because the exclusion has to be reproducible — the
+    // capture reads as usable at every level short of the depth confidence map, and
+    // admitting it silently flips the sector derivation to a wrong answer (Decision 31).
+    static let rejectedCaptures = ["1785054950406"]
 
     // MARK: - The dump
 
@@ -257,7 +273,91 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // Why the third committed slice is not in `captures`, measured rather than asserted.
+    //
+    // `1785054950406` is the 208 g mounded-rice capture — the shape the corpus most
+    // lacks, since both admitted captures are flat bread. It passes every check that
+    // does not read the confidence map: it slices cleanly, fills all three bands well
+    // clear of `ringMinSamples`, and its confident food median sits 15.1 mm above its
+    // confident surroundings, which is a plate.
+    //
+    // What disqualifies it is that τ_conf discards the mound. 43 % of its food-mask
+    // samples carry ARKit's low confidence against 0 % on both admitted captures, and
+    // the discarded samples are the NEAR ones — median 247.9 mm against the surviving
+    // 277.8 mm, i.e. the pile itself. What `prepare` is left holding is the flat
+    // remnant around the pile, which is why the best candidate reports a food envelope
+    // BELOW its own plane: after filtering, the capture no longer contains a mound.
+    //
+    // Admitting it would not merely add a weak capture, it would produce a wrong
+    // answer. Its best candidate scores 3 supporting sectors, outside the 4...7 band
+    // Decision 18's geometry produces — so `sectorTrioDoesNotSeparateTheDecision18Case`
+    // would report the trio as separable and the constants would be derived from a
+    // capture whose food is missing (Decision 31).
+    @Test("the rejected capture is disqualified by depth confidence, not by preference")
+    func rejectedCaptureIsNotCorpusGrade() throws {
+        for name in Self.captures {
+            let share = try Self.lowConfidenceFoodShare(name)
+            print("\(name) (admitted): low-confidence food share \(share)")
+            #expect(share == 0)
+        }
+
+        for name in Self.rejectedCaptures {
+            let share = try Self.lowConfidenceFoodShare(name)
+            let (g, samples) = try #require(Self.prepared(name))
+            let best = try #require(Self.bestCandidate(name))
+            let envelope = SupportRegion.foodEnvelopeMm(geometry: g, normal: best.normal, d: best.d)
+            let sectors = Self.sectorFractions(
+                samples: samples, geometry: g, normal: best.normal, d: best.d)
+            let meeting = sectors.filter {
+                $0.total > 0 && $0.fraction >= SupportRegion.sectorSupportMin
+            }.count
+            print("\(name) (rejected): low-confidence food share \(share),"
+                  + " surviving food samples \(g.foodSampleCount),"
+                  + " food envelope \(envelope) mm, supporting sectors \(meeting)")
+
+            // The disqualifier. Both admitted captures read 0; this one loses nearly
+            // half the food region before the fit ever sees it.
+            let recovered = "\(name) no longer loses a large share of its food region to"
+                + " τ_conf (\(share)) — recheck whether it is corpus-grade after all"
+            #expect(share > 0.4, "\(recovered)")
+
+            // The consequence, and the reason the share matters rather than being a
+            // quality note: the food that survives sits below the plane fitted around
+            // it, so there is no mound left to anchor a non-flat criterion against.
+            let mounded = "\(name) now presents a positive food envelope"
+                + " (\(envelope) mm) — it may be usable as the capture 2 non-flat anchor"
+            #expect(envelope < 0, "\(mounded)")
+
+            // The trap. This is what makes the exclusion worth committing a slice for:
+            // a count outside the Decision 18 band is the signal the derivation treats
+            // as "the corpus can now set the trio", and this capture supplies it
+            // spuriously.
+            #expect(meeting < 4,
+                    "\(name) no longer produces a spurious separable sector count")
+        }
+    }
+
     // MARK: - Helpers
+
+    // Share of food-mask samples ARKit marked low-confidence, which `SupportRegion.prepare`
+    // drops at τ_conf before any plane is fitted. Confidence bytes are the three ARKit
+    // levels scaled to 0/127/255, and `confidenceThreshold` 0.40 admits the upper two.
+    static func lowConfidenceFoodShare(_ name: String) throws -> Float {
+        let slice = try DepthSlice.load(name)
+        let w = slice.depth.width, h = slice.depth.height
+        let confidence = slice.depth.confidenceBytes
+        guard confidence.count >= w * h else { return 0 }
+        var food = 0, low = 0
+        for y in 0..<h {
+            for x in 0..<w where slice.foodMask.isFood(x: x, y: y) {
+                food += 1
+                if Float(confidence[y * w + x]) / 255 < LiDARPlaneFitter.confidenceThreshold {
+                    low += 1
+                }
+            }
+        }
+        return food == 0 ? 0 : Float(low) / Float(food)
+    }
 
     static func geometry(_ name: String) -> SupportRegion.DepthGeometry? {
         guard let slice = try? DepthSlice.load(name) else { return nil }

@@ -38,14 +38,27 @@ Readings:
 - Earlier same day, 17:27: pumpkin-only plate — 3 refusals + one "cheese
   18 cm³" estimate from a 0.21 % sliver; full analysis in
   `specs/bugfixes/unrecognised-food-estimated-as-residual-sliver/report.md`.
-- **The 208 g rice bundle does not replay.** `1785054950406-success.fixture`
-  is still on the device and pulls fine (194.9 MB, stamp `ab812dc3aa9d`), but
-  `FixtureLoader` loads **zero meals** from it — `make harness-accuracy` over a
-  directory containing it reports one fewer meal than files present, with no
-  error. Not diagnosed: a fresh weighed capture on the current build is cheaper
-  than repairing a July bundle. The two bread-session bundles from the same era
-  (`1785135663727`, `1785901032716`) load normally, so it is not an era-wide
-  format problem. Don't re-pull it expecting it to work.
+- **The 208 g rice bundle does not replay, and the capture itself is bad.**
+  `1785054950406-success.fixture` is still on the device and pulls fine
+  (194.9 MB, stamp `ab812dc3aa9d`), but `FixtureLoader` loads **zero meals**
+  from it — `make harness-accuracy` over a directory containing it reports one
+  fewer meal than files present, with no error. The two bread-session bundles
+  from the same era (`1785135663727`, `1785901032716`) load normally, so it is
+  not an era-wide format problem.
+
+  **Diagnosed 2026-08-05 at the depth level** (support-plane-reference
+  Decision 31). `tools/fixture_slice.py` cuts it cleanly — the loader failure is
+  not a slice-level one — but **41 %** of the frame and **43.2 %** of the food
+  mask carry ARKit's low confidence, against 22.7 %/0.0 % and 0.1 %/0.0 % on the
+  two bread captures. The discarded samples are the near ones (median 247.9 mm
+  against the surviving 277.8 mm): τ_conf removes the rice mound and leaves the
+  flat remnant around it, so the best support-plane candidate reports the food
+  as 9.0 mm *below* its own plane. The bundle still returned a "success" and
+  603 cm³ at capture time, which is the lesson worth carrying — **an estimate
+  is no evidence the depth frame was any good**. The slice is committed as a
+  rejected fixture in `SupportPlaneCorpusMeasurementTests` so the exclusion is
+  reproducible. Don't re-pull it expecting it to work, and don't re-slice it
+  expecting it to serve as a non-flat anchor.
 
 Follow-ups seeded by this session:
 
