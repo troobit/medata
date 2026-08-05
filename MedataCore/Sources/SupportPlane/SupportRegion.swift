@@ -154,10 +154,33 @@ public enum SupportRegion {
     public static let foodEnvelopeMinMm: Float = 0
     // Structural: table, support, one more.
     public static let maxCandidatePlanes = 3
-    // [owed]
-    public static let minCandidateSamples = 500
+    // [owed] Decision 32, but a NARROWER owing than before. This was
+    // `minCandidateSamples = 500`, one number answering two unrelated questions: "can
+    // this capture support the fit at all" and "is there enough residue left for
+    // another extraction pass". The first is now asked exactly, by
+    // `ringBandsAreFeasible`, so only the second is left here and the value has one
+    // job. The value itself does not move — nothing measured justifies moving it.
+    //
+    // The corpus bounds it from ABOVE only. Measured residue per pass is
+    // [10469, 3310, 581] and [12551, 2811, 932], so any floor above 581 cuts a pass the
+    // corpus produces. Both third-pass candidates are then rejected on their own merits
+    // (`extent` at 12 px, and `supportFraction`), so cutting them would change no plane
+    // on this corpus — but it would drop the persisted `planeCandidateCount` from 3 to
+    // 2, and pass 3 is where a plate under a dominant table can still surface. Nothing
+    // in the corpus fails for want of residue, so there is no measured floor and the
+    // lower end stays owed to the capture session.
+    public static let minResidueSamples = 500
     // [owed] minimum bbox extent of the winning inlier component, in depth pixels —
     // a sliver gives a badly conditioned normal (Req 2.3).
+    //
+    // Bracketed by the corpus at 13…26 and no tighter (Decision 32). Measured extents
+    // are 123, 76, 12 px and 155, 44, 26 px: the 12 px candidate is a 153-sample sliver
+    // sitting 32.9 mm off the ring and is rejected here, which is the guard working, so
+    // the floor is above 12. The ceiling is soft — 26 px is the smallest extent on a
+    // candidate that reaches the later guards, and that candidate is rejected on
+    // `supportFraction` anyway, so the corpus never shows a 26 px candidate deserving
+    // admission. 24 sits inside the bracket with 2 px to spare, which is thin enough
+    // that a capture with smaller surfaces could lose a legitimate candidate here.
     public static let minAcceptedExtentPx = 24
     // [derived] adaptive stopping caps it; the per-pass residue inlier ratio is
     // reported so the budget holds as a measurement. The budget is sufficient
@@ -426,6 +449,16 @@ public enum SupportRegion {
 
     // MARK: – Ring statistics (Reqs 3.1, 3.2, 3.5, 3.6, 3.8, 3.9)
 
+    // Whether `ringStatistics` can return anything at all for this capture, for ANY
+    // candidate plane. The band counts come from `samples.band`, which the plane never
+    // touches, so the answer is a property of the capture and can be asked before a
+    // single plane is fitted (Decision 32).
+    static func ringBandsAreFeasible(samples: RingSamples) -> Bool {
+        var counts = [Int](repeating: 0, count: ringBandCount)
+        for band in samples.band { counts[band] += 1 }
+        return counts.allSatisfy { $0 >= ringMinSamples }
+    }
+
     // nil when any radial band holds fewer than `ringMinSamples` — the floor holds
     // PER band, because radial banding divides the samples (Decision 14) and
     // sectoring divides the inner band again, which is where the 200 comes from
@@ -502,6 +535,10 @@ public enum SupportRegion {
         // The budget is sufficient because pass 1 removes the table, not because the
         // pass-1 ratio is high. Reported so that holds as a measurement.
         let residueInlierRatio: Float
+        // The denominator of `residueInlierRatio`: how many annulus samples this pass
+        // had left to draw from. Reported so `minResidueSamples` — the only floor the
+        // corpus can bracket rather than derive — is measurable per pass.
+        let residueCount: Int
     }
 
     // Sequential CC-RANSAC: up to `maxCandidatePlanes` passes over the annulus, each
@@ -513,7 +550,7 @@ public enum SupportRegion {
         let scratch = ComponentScratch(width: g.width, height: g.height)
 
         for _ in 0..<maxCandidatePlanes {
-            guard residue.count >= minCandidateSamples else { break }
+            guard residue.count >= minResidueSamples else { break }
             guard let hypothesis = ccRansac(indices: residue, geometry: g, gravity: gravity,
                                             rng: &rng, scratch: scratch) else { break }
 
@@ -558,7 +595,8 @@ public enum SupportRegion {
                 ),
                 componentSize: component.size,
                 extentPx: component.minExtentPx,
-                residueInlierRatio: Float(inliers.count) / Float(residue.count)
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count
             ))
 
             let removalBandMm = inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
@@ -785,7 +823,14 @@ public enum SupportRegion {
         guard let g = prepare(depth: depth, colourIntrinsics: colourIntrinsics,
                               foodRegionMask: foodRegionMask) else { return nil }
         let samples = ringSamples(geometry: g)
-        guard samples.annulus.count >= minCandidateSamples else { return nil }
+        // Decision 32: the exact condition, not a proxy for it. `ringStatistics`
+        // returns nil unless EVERY radial band clears `ringMinSamples`, and that test
+        // reads `samples.band` alone, so it is plane-independent and knowable here.
+        // A capture that fails it cannot produce ring statistics for any candidate and
+        // therefore cannot produce an admissible one — the extraction below would run
+        // in full and return nil regardless. Outcome-identical, and it retires an
+        // `[owed]` constant rather than replacing it with another.
+        guard ringBandsAreFeasible(samples: samples) else { return nil }
 
         // Deterministic seed from the depth bytes, threaded through every pass.
         var rng = SplitMix64(seed: Fnv1a64.hash(depth.depthBytesMm))

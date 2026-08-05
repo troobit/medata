@@ -1217,6 +1217,8 @@ Four constants are settled by the pass and their provenance markers change; the 
 
 **Not settled, and why.** `ringSupportMin`, `sectorSupportMin`, `ringSectorCount`, `minSupportingSectors`, `ringSupportMarginMin`, `ringOuterMm`, `bandStepMaxMm`, `foodEnvelopeMinMm`, `minCandidateSamples`, `minAcceptedExtentPx`, `supportVisibilityMin`, Req 4.5's fallback-rate threshold, Req 5.1's tolerance and `fallbackPenalty` all stay `[owed]`. The corpus cannot set them for two measured reasons.
 
+> **`minCandidateSamples` is superseded by Decision 32.** It was two constants under one name. Its whole-fit half is retired — `fitFoodSupportPlane` now tests ring-band feasibility against the already-`[measured]` `ringMinSamples` — and its extraction-pass half survives as `minResidueSamples`, still `[owed]` but bounded above at 581 by this same pass. `minAcceptedExtentPx` also stays `[owed]` and gains a corpus bracket of 13…26.
+
 *The corpus contains no clean correct-fit case.* On `1785135663727` the plate-top candidate reads a ring median of −0.93 mm and a support fraction of 0.629, but its per-sector inner-band medians are `[+3.7, −0.4, +0.8, +1.4, −6.8, −32.6, −9.7, +3.8]`: sectors 4–6 form a contiguous arc sitting up to 32.6 mm below the plate, so the ring genuinely escapes onto the table over ~135°. On `1785901032716` the highest-support candidate is **the table, not the plate** — its per-sector medians are `[+16.6, +4.4, +3.0, +6.0, +19.8, +18.0, +4.7, +0.4]`, with three sectors a plate-height above it. Both captures are near-instances of the Req 3.6 silent-failure geometry rather than clean successes, so a bar fitted to make them pass would be fitted to the wrong side.
 
 *Per-sample noise on a flat surface straddles `ringBandMm`.* The tightest inner-band mode — robust σ over samples within 15 mm of the band median, taken across every candidate so a contaminated winner cannot set it — measures **3.44 mm** on `1785135663727` (over 75.5 % of the band) and **6.98 mm** on `1785901032716` (over 92.0 %). At essentially the same range, 338.9 mm against 336.9 mm, that is a 2× disagreement, so it is a *surface* difference and not a range one — which is what Decision 46's matte-table evidence predicts. `ringBandMm = 5` falls between the two, and `ringSupportMin = 0.6` is a statement about exactly this distribution.
@@ -1376,5 +1378,65 @@ The finding also closes a question `field-truth-sessions.md` left open. The 208 
 ### Impact
 
 `MedataCore/Tests/SupportPlaneTests/Fixtures/1785054950406.depthslice` (new, not read by any derivation), `SupportPlaneCorpusMeasurementTests` (`rejectedCaptures` and `rejectedCaptureIsNotCorpusGrade`), `prerequisites.md`, `docs/agent-notes/field-truth-sessions.md` and task 26's detail. No shipped code changes and no constant's value moves.
+
+---
+
+## Decision 32: One sufficiency constant answered two questions, and one of them has an exact answer
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Task 26 is measurement, not invention: every constant marked `[owed]` in `SupportRegion` has to be derived against the fixture corpus and the derivation recorded. Decisions 29 and 31 established that most of them cannot be, because the corpus is two captures of flat bread on a white plate and the missing scenes — a rimmed plate, a bowl, food at a small plate's edge, a matte surface — are what the remaining bars have to separate.
+
+`minCandidateSamples = 500` is on that owed list, and re-reading its call sites shows it is not one constant. It is used twice, for questions that have nothing to do with each other. In `extractCandidates` it stops the sequential passes once the residue is too thin to be worth another RANSAC draw. In `fitFoodSupportPlane` it refuses the whole fit when the annulus is too small — a sufficiency test on the capture, asked before any plane exists.
+
+The second use has an exact answer sitting beside it. `ringStatistics` returns nil unless *every* radial band clears `ringMinSamples`, and that test reads `samples.band` — the radial banding — and nothing else. It never touches a candidate plane. `ringSamples` is already computed one line above the guard, so the condition that actually decides whether this capture can produce a support fit is knowable there, exactly, for free.
+
+### Decision
+
+Split the constant and retire the half that has an exact answer.
+
+`fitFoodSupportPlane`'s guard becomes `ringBandsAreFeasible(samples:)` — every radial band clears `ringMinSamples` — replacing the annulus count entirely. `ringMinSamples` is `[measured]` (Decision 29), so no `[owed]` value is involved.
+
+What remains is renamed `minResidueSamples`, keeps the value 500 unchanged, and stays `[owed]` for the one question it now asks. The corpus bounds it **from above only**: measured residue per pass is `[10469, 3310, 581]` and `[12551, 2811, 932]`, so any floor above 581 cuts a pass the corpus produces. Nothing in the corpus fails for want of residue, so there is no measured floor and the lower end is owed to the capture session.
+
+`minAcceptedExtentPx = 24` is **bracketed, not set**. Measured extents are 123, 76, 12 px and 155, 44, 26 px. The 12 px candidate is a 153-sample sliver sitting 32.9 mm off the ring, correctly rejected here, so the floor is above 12. The ceiling is soft: 26 px is the smallest extent reaching the later guards, and that candidate is rejected on `supportFraction` anyway, so the corpus never shows a 26 px candidate that deserved admission. 24 sits inside 13…26 with 2 px to spare.
+
+### Rationale
+
+The substitution is outcome-preserving by construction rather than by measurement, which is what makes it safe to ship against a two-capture corpus. The ring is built inside the annulus loop under a narrower radial test, so it is a strict subset. If the annulus holds fewer than 500 samples the ring holds fewer than 500 across three bands, so some band is under 167 and therefore under `ringMinSamples` — everything the retired floor rejected, ring feasibility rejects too. In the other direction a capture that passed 500 but cannot fill three bands used to run a full sequential extraction and then find every candidate's `ringStatistics` nil, returning nil after the work rather than before it. Same answer, less work, and one fewer asserted number on the shipped path.
+
+Keeping `minResidueSamples` at 500 is deliberate. Raising it to the corpus ceiling would look like a derivation and is not one: 581 is where a floor starts *cutting* passes, not where a pass starts being worthless. Both third-pass candidates are rejected on their own merits, so cutting them changes no plane on this corpus — but `planeCandidateCount` is persisted (Req 6.4's neighbourhood), so a cut pass changes the record, and pass 3 is where a plate under a dominant table can still surface. Moving a value on evidence that only says "this is where it would start costing something" is the circularity Req 3.7 forbids, in a smaller shape.
+
+Recording the extent bracket rather than the extent value follows the same line. The corpus supplies one clear sliver and no clear counter-example, so it can say where the bar is *not* and cannot say where it is.
+
+### Alternatives Considered
+
+- **Derive an annulus floor from the measured ring share** - Ring share is 0.331 and 0.321, close to the 17/50 the radial widths predict, so the annulus floor implying three feasible bands is ≈ 1,800; set `minCandidateSamples` there - Rejected because it replaces an exact test with a calibrated proxy for the same test. The ring share depends on mask shape and frame clipping, so the proxy needs an error bar the exact condition does not.
+- **Leave `minCandidateSamples` as one constant and simply record the two uses** - Note the ambiguity in the decision log and change no code - Rejected because the ambiguity is the finding. A single number cannot be derived while it answers two questions, and the whole task is derivation; leaving it fused means neither half can ever be settled.
+- **Raise `minResidueSamples` to 1200** - Take a value comfortably above both third-pass residues, on the grounds that a 581-sample residue is too thin for a meaningful RANSAC draw - Tried and rejected on measurement: it cuts pass 3 on both captures, dropping `planeCandidateCount` from 3 to 2 with no evidence that either cut candidate was worthless. The thinness is asserted, not measured.
+- **Set `minAcceptedExtentPx` to 13, the bottom of the bracket** - Take the most permissive value the corpus admits, so no legitimate candidate is lost - Rejected because the guard's purpose is conditioning, not permissiveness: a 13 px component is a sliver by the Req 2.3 argument regardless of what this corpus happens to contain. The bracket is evidence about the bar's location, not an argument for its lower end.
+
+### Consequences
+
+**Positive:**
+
+- One `[owed]` constant leaves the shipped path entirely, replaced by a `[measured]` one already derived in Decision 29 — the first owed value this feature has retired rather than deferred.
+- A capture that cannot fill its ring bands now falls back before extraction instead of after it, so the wasted sequential RANSAC on a starved capture is gone.
+- `minResidueSamples` has one job, so the capture session can derive it against one question instead of two.
+- The extent bracket is asserted, so a future capture that narrows it below 2 px fails the test rather than silently losing a candidate to the guard.
+
+**Negative:**
+
+- `minResidueSamples` and `minAcceptedExtentPx` both remain `[owed]`; this narrows what they owe without paying it.
+- The extent bracket rests on a single sliver, and its upper end on a candidate rejected for an unrelated reason, so 13…26 is weaker evidence than the interval's width suggests.
+- `PlaneCandidate` gains a `residueCount` field read only by the measurement pass.
+- Task 26 stays open and task 27 stays blocked behind it.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringBandsAreFeasible`, the constant split, `PlaneCandidate.residueCount`), `SupportPlaneCorpusMeasurementTests` (three derivation tests), `SupportRegionSelectionTests` (a stale comment), `design.md` and task 26's detail. No plane moves and no persisted value changes on any capture in the corpus.
 
 ---

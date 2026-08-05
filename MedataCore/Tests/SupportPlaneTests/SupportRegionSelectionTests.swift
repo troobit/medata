@@ -283,7 +283,8 @@ struct SupportRegionSelectionTests {
 
     @Test("the fit returns nil rather than throwing when the annulus is starved")
     func starvedAnnulusReturnsNil() {
-        // A 16x12 depth grid holds far fewer than minCandidateSamples.
+        // A 16x12 depth grid cannot fill three ring bands at ringMinSamples apiece,
+        // so `ringBandsAreFeasible` refuses before any plane is fitted (Decision 32).
         let tiny = SPRScene.grid(width: 16, height: 12) { x, y in
             (0, x >= 6 && x < 10 && y >= 4 && y < 8)
         }
