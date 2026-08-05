@@ -32,10 +32,12 @@ flowchart TD
 
 Per Decision 7, β transfers only if the volume it corrects is computed the way inference computes it. **Single-dominant** fixtures therefore carry **real segmenter probabilities** stamped with the checkpoint SHA, and ingestion runs the trained checkpoint over N5k RGB exactly as `make_fixtures.py` does — tying the **single-dominant** bake to model-production Bucket C (Decision 2/6). **Mixture** fixtures carry a sentinel SHA and bake without the checkpoint (Decision 17). The calibrator, mixture solver, liquid geometry, and reporting are built and unit-tested now against synthetic fixtures.
 
-| Path | Volume input | Masking-transfer guarantee (Req 5.1) | β provenance | Runnable pre-checkpoint |
+| Path | Volume input | Transfer guarantees (Req 5.1) — masking · support-plane reference | β provenance | Runnable pre-checkpoint |
 |---|---|---|---|---|
-| Single-dominant | `HeightFieldEstimator` per-class volume, real segmenter argmax | Yes | `n5k_single_dominant` | No (needs checkpoint) |
-| Mixture (NNLS) | Depth-silhouette **total** above-plane hull volume | No (recorded gap) | `n5k_mixture` | **Yes** — sentinel SHA, bakeable pre-checkpoint (Decision 17) |
+| Single-dominant | `HeightFieldEstimator` per-class volume, real segmenter argmax | Yes · `foodSupport` (restricted fit, device code) | `n5k_single_dominant` | No (needs checkpoint) |
+| Mixture (NNLS) | Depth-silhouette **total** above-plane hull volume | No (recorded gap) · `plateRegion` (flood fill — no mask exists at this site) | `n5k_mixture` | **Yes** — sentinel SHA, bakeable pre-checkpoint (Decision 17) |
+
+**The transfer contract is two-part (Req 5.1, amended by `support-plane-reference` Req 5.2).** β corrects volume to mass, so it transfers only if the volume it corrects is computed the way inference computes it *and* measured from where inference measures it. The second half was previously implicit and contradicted by pipeline Req 4.2: the single-dominant harness path fitted the plate region while the device fitted the table around it. `FixtureRunner` now calls the device's own `LiDARSupportPlaneFitter` with a food mask derived from the segmenter argmax, so the single-dominant slice shares the device reference structurally. The mixture slice cannot follow — its fixtures carry neither `probs_hwc` nor `argmax_hw`, so there is no mask to derive — and keeps the frame-centre flood fill, which is correct for a fixed overhead rig. The corpus therefore spans **two** references by construction. The artefact records the reference per class, the bake refuses an artefact recording none (every pre-`support-plane-reference` artefact records none, and those are the ones fitted on the old basis), and β is fitted only on the subset sharing the reference it will be applied under. Nothing breaks today because every β is still `uncalibrated_unity`.
 
 Each plate feeds **exactly one** path (Req 5.2): single-dominant if the dominant class clears the purity threshold (Req 4.2), else mixture.
 
