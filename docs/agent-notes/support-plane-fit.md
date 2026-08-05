@@ -116,9 +116,10 @@ measured value against a constant flips as soon as the constant crosses it.
 | `minSupportingSectors` | 6…7 | ≤ 5 |
 | `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
 | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
-| `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
+| `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) |
 | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
-| `maxCrossedSectors` | 0…2 | 0…2 (Decision 43) |
+| `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48) |
+| `maxCandidatePlanes` | ≥ 2 | ≥ 2, no ceiling (Decision 48) |
 
 **Every row of the sector part of that table is denominated in `ringSectorCount` *and*
 `sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
@@ -295,8 +296,10 @@ are measuring rather than estimating. Evaluate them independently
 
 So `foodEnvelopeMinMm`, `bandStepMaxMm`, `supportVisibilityMin` and `escapeBandMm` are worse
 off than the other `[owed]` constants: nothing in the corpus says their guards do anything at
-all. `foodEnvelopeMinMm` is bounded **above** at 25.8 mm — over that it rejects the candidate
-the design intends to select — and not below. `escapeBandMm`'s one-sidedness is *correct*:
+all. `foodEnvelopeMinMm` is bounded **above** at 21.0 mm — over that it rejects the candidate
+the design intends to select — and **below at 7.154 mm** (Decision 48, correcting both figures:
+25.8 mm is the *table's* envelope on `1785901032716`, and the corpus does contain a plane above
+the support surface, whose envelope is positive rather than negative). `escapeBandMm`'s one-sidedness is *correct*:
 Req 3.3 rejects a plane lying below its surroundings, which reads a **positive** annulus
 median; the −36.6 mm candidate is a plane above them, and `ringMedianMaxMm` is what rejects it.
 `ringSupportMarginMin` is worse still — it compares the top two **admissible** candidates and
@@ -554,6 +557,53 @@ rimmed-plate rim *does* reach it).
 its ends come from constraints the radius also moves. Unlike the other three sector constants,
 though, committed evidence alone brackets it, so it is fixed **before** the capture sitting rather
 than at it.
+
+## The pass cap never fires, and the ranking picks the table (Decision 48)
+
+`maxCandidatePlanes = 3` was the last comment in `SupportRegion` saying "structural:" where a
+derivation belongs. `thePassCapIsWhatStopsExtractionOnTheCorpus` varies it 1…8.
+
+**It never fires.** Both captures still stop at three passes with the cap at 8, and both stop
+**starved** — replay the removal chain past the last pass and 384 and 46 samples remain, against
+`minResidueSamples` floors of 488 and 500. `minResidueAreaMm2` is what ends extraction.
+
+Two consequences for anyone touching either constant:
+
+- **Set `minResidueAreaMm2` before `maxCandidatePlanes`.** `1785135663727` leaves 1330.7 mm² —
+  78.7 % of the shipped floor — so a floor below 1331 mm² gives it a fourth pass and the cap
+  starts truncating. Until then no ceiling here is readable.
+- **Decision 38's 3 → 3 is unconditional.** Both counts were *at* the cap, so the native/halved
+  agreement could have been the cap truncating both. Lift it and the grids still agree, which is
+  the area-invariance reading that decision recorded.
+
+**The floor of 2 is where sequential extraction earns its keep — and the ranking is what makes
+it necessary.** The corpus candidates, by pass:
+
+| capture | pass | plane at food | ring median | inner support | crossed | envelope |
+|---|---|---|---|---|---|---|
+| `1785135663727` | 1 | 351.328 mm | **−0.928** | **0.629** | 0 | 26.628 mm |
+| | 2 | 371.282 mm | +6.366 | 0.317 | 6 | 39.601 mm |
+| | 3 | 316.216 mm | −32.917 | 0.183 | 0 | 8.958 mm |
+| `1785901032716` | 1 | 356.280 mm | +3.039 | **0.480** | 3 | 25.793 mm |
+| | 2 | 344.883 mm | **−2.658** | 0.362 | 2 | 21.041 mm |
+| | 3 | 335.147 mm | −12.844 | 0.304 | 0 | 7.154 mm |
+
+On `1785901032716` the plane a correct fit must select is **pass 2**, and `fitFoodSupportPlane`'s
+ranking picks **pass 1, the table**. Selection there depends entirely on a guard rejecting the
+table — the same fact Decision 42 records as `ringMedianMaxMm`'s 0.338 mm.
+
+**So the corpus determines `maxCrossedSectors` at 2.** Every earlier reading takes the bracket's
+floor from the highest-*support* candidate on each capture; on this one that is the table. Read
+off the plane that must be **admitted** — pass 2, carrying 2 crossed sectors — the floor is 2 and
+the ceiling is still 2. Same caveat as Decisions 44–47: a slice at the shipped
+`(ringOuterMm, ringSectorCount, sectorSupportMin, ringBandCount)`, all four bracketed.
+
+**And `foodEnvelopeMinMm` has a floor after all.** Decision 34 read the guard's cases as
+negative-envelope scenes the corpus lacks. `1785901032716`'s pass 3 sits 9.736 mm **above** the
+plate with 6 escaped sectors and its envelope is **positive at 7.154 mm** — a plane above a
+surface still has food above *it* wherever the food is taller than the gap. Bracketed
+7.154…21.041 mm by the corpus; against Decision 41's suite ceiling of 8.233 mm the joint window
+is **1.079 mm**, the narrowest in the feature.
 
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 

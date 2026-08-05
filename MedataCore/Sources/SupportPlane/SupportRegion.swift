@@ -281,6 +281,19 @@ public enum SupportRegion {
     // positive offset fail and become crossed, dropping the ceiling from +16.603 to +5.974.
     // At 0 nothing fails and the rule is silent, which is the floor.
     //
+    // AND THE CORPUS DETERMINES IT AT 2 (Decision 48). Everything above reads the bracket
+    // off the HIGHEST-SUPPORT candidate on each capture, and on `1785901032716` that is
+    // the TABLE — the plane the guard exists to reject. The plane a correct fit must admit
+    // there is pass 2, nearest Req 3.1's zero at a ring median of −2.658 mm, and it carries
+    // 2 crossed sectors; the table it must beat carries 3. So the floor is 2, not 0, and
+    // the corpus interval closes to a single value. Decision 43's "nothing in hand narrows
+    // 0…2" was true of the candidates it looked at and not of the capture.
+    //
+    // It stays `[owed]`: this is a slice at the shipped (radius, count, bar, band count),
+    // as every reading since Decision 44 is, and those four are not set. What changes is
+    // that the session no longer chooses freely within 0…2 at the shipped four — it either
+    // reads 2 or moves one of them.
+    //
     // FIX THE COUNT AND THE BAR TOGETHER, not in sequence — Decision 44's ordering is
     // superseded. The count's own pass-side bracket moves with the bar: counts with a clean
     // pass side are 6, 8, 10, 11 at 0.1-0.2; all five Req 5.1 permits at 0.3; 4, 6, 8, 10 at
@@ -342,8 +355,52 @@ public enum SupportRegion {
     // exists to produce. Every envelope the corpus measures is positive (7.2 to 39.6 mm),
     // so the negative-envelope cases the guard is written for — a bowl, a plane on the
     // food top — are scenes it does not contain and there is no floor.
+    //
+    // BOTH HALVES MOVE (Decision 48), because "highest ring support" is the wrong reading
+    // of "intended" on `1785901032716`: the ranking's winner there is the TABLE, and the
+    // plane a correct fit must select is pass 2, nearest Req 3.1's zero. Its envelope is
+    // 21.0 mm, not 25.8, so the ceiling tightens by 4.8 mm.
+    //
+    // And there IS a floor. The corpus contains a plane above the support surface after
+    // all — the same capture's pass 3, sitting 9.736 mm above the plate with 6 escaped
+    // sectors — and its envelope is not negative but POSITIVE at 7.154 mm. A plane above
+    // a surface still has food above IT wherever the food is taller than the gap, so
+    // "plane on the food top → p90 ≈ 0" holds only once the plane reaches the food's own
+    // top. Bracketed 7.154…21.041 mm by the corpus, and against Decision 41's suite
+    // ceiling of 8.233 mm the joint window is 1.079 mm — the narrowest any owed constant
+    // in this feature has. Still `[owed]` to the capture session, no longer floorless.
     public static let foodEnvelopeMinMm: Float = 0
-    // Structural: table, support, one more.
+    // [owed] from BELOW at 2, and UNBOUNDED above — the corpus cannot see this constant at
+    // all (Decision 48). This said "Structural: table, support, one more", the second
+    // constant in this file to carry that word in place of a provenance marker after
+    // `ringBandCount` (Decision 47), and it had never been varied either.
+    //
+    // The cap NEVER FIRES. Lift it to 8 and both captures still stop at three passes, and
+    // both stop STARVED: the residue left after the last pass is 1330.7 mm² and 155.6 mm²
+    // against a `minResidueAreaMm2` of 1691. It is the residue floor that ends extraction,
+    // so no value at or above 3 is distinguishable on this corpus and the ceiling is open.
+    //
+    // That makes it COUPLED to `minResidueAreaMm2`, which is `[owed]` and bounded from
+    // above only. `1785135663727` leaves 78.7 % of the floor after its last pass, so a
+    // session that lowers the floor below 1331 mm² gives that capture a fourth pass and
+    // this cap something to truncate. SET THE RESIDUE FLOOR FIRST; a ceiling here is
+    // unreadable until it is fixed. Cost runs the same way — the RANSAC bound is
+    // `maxIterationsPerPass × maxCandidatePlanes`, so Req 7.6's device latency is
+    // denominated in this constant (task 27).
+    //
+    // The FLOOR of 2 is the corpus's, and it is where sequential extraction earns its
+    // keep. On `1785901032716` the plane a correct fit must select is pass 2 — nearest
+    // Req 3.1's zero at a ring median of −2.658 mm — while the RANKING's winner is pass 1,
+    // the table, at +3.039 mm. Below a cap of 2 the intended plane is not in the candidate
+    // set at all and no setting of any owed constant recovers it. The committed suite
+    // agrees independently: `sequentialExtractionSurfacesThePlate` asserts the plate
+    // arrives on pass 2.
+    //
+    // Two side findings, both belonging to other constants. Decision 38's native/halved
+    // agreement (3 → 3) is confirmed UNCONDITIONAL — both counts were at the cap and could
+    // have been it truncating both; lift the cap and the grids still agree. And read at
+    // full pass depth with the intended plane identified by its ring median rather than by
+    // the ranking, the corpus DETERMINES `maxCrossedSectors` at 2 — see it below.
     public static let maxCandidatePlanes = 3
     // [owed] Decision 32, but a NARROWER owing than before. This was
     // `minCandidateSamples = 500`, one number answering two unrelated questions: "can
