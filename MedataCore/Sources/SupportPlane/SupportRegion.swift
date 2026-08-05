@@ -220,6 +220,14 @@ public enum SupportRegion {
     // `supportFraction` anyway, so the corpus never shows a 26 px candidate deserving
     // admission. 24 sits inside the bracket with 2 px to spare, which is thin enough
     // that a capture with smaller surfaces could lose a legitimate candidate here.
+    //
+    // And that bracket is a 256×192 bracket (Decision 35). This is the ONLY bar in
+    // `admissibility` denominated in pixels — every other one is millimetres or a
+    // dimensionless fraction, which is what Req 5.1's transfer across depth grids rests
+    // on. Halve the grid and extents halve with it: a surface measuring 44 px natively
+    // measures 22 px and is rejected as a sliver by the same 24. Re-derive it against
+    // `mmPerPx`, or state the grid it is denominated on, before any capture at another
+    // depth resolution is admitted to the corpus.
     public static let minAcceptedExtentPx = 24
     // [derived] adaptive stopping caps it; the per-pass residue inlier ratio is
     // reported so the budget holds as a measurement. The budget is sufficient

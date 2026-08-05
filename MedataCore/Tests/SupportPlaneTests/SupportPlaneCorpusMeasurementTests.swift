@@ -691,6 +691,282 @@ struct SupportPlaneCorpusMeasurementTests {
                 && high > SupportRegion.ringSupportMarginMin, "\(settled)")
     }
 
+    // MARK: - Req 5.1: the device/replay tolerance
+
+    // Req 5.1 asks for support-plane coefficients "equal within a documented tolerance,
+    // verified on a named fixture", and the tolerance is one of the numbers design.md
+    // records as owed. Since task 16 there is ONE implementation behind both paths, so
+    // the arithmetic half of the question is already answered exactly: identical bytes
+    // give an identical plane (`fitIsDeterministic`, Req 7.7), and a tolerance over that
+    // would be measuring nothing.
+    //
+    // What legitimately differs between a device capture and its replay is the DEPTH
+    // GRID — design.md's own transfer table names the N5k identity grid — and until now
+    // that claim was tested only on a synthetic scene built to satisfy it
+    // (`fitTransfersAcrossDepthGrids`), where the geometry is exact by construction.
+    // This measures it on the committed captures instead: decimate the depth grid 2x,
+    // refit, and compare where the plane lands at the food.
+    //
+    // The comparison point is the food-mask centroid RAY of the native grid, evaluated
+    // against both planes. That is the quantity volume is integrated against — a plane
+    // that moves 1 mm there adds 1 mm to every food pixel — so it is the tolerance the
+    // requirement is about, rather than a coefficient difference in arbitrary units.
+    @Test("the plane transfers across a depth-grid halving within the documented tolerance")
+    func planeTransfersAcrossADepthGridHalving() throws {
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let native = try #require(Self.gridFit(slice, decimation: 1))
+            let halved = try #require(Self.gridFit(slice, decimation: 2))
+            let ray = try #require(Self.foodCentroidRay(slice))
+            let a = try #require(native.best), b = try #require(halved.best)
+
+            let depthA = Self.planeDepthMm(normal: a.candidate.normal, d: a.candidate.d, ray: ray)
+            let depthB = Self.planeDepthMm(normal: b.candidate.normal, d: b.candidate.d, ray: ray)
+            let moveMm = abs(depthA - depthB)
+            let tiltDeg = Self.angleDeg(a.candidate.normal, b.candidate.normal)
+            print("\(name): \(native.widthPx)px -> \(halved.widthPx)px,"
+                  + " plane depth at food \(fmt(depthA)) -> \(fmt(depthB)) mm"
+                  + " (move \(fmt(moveMm)) mm, tilt \(fmt(tiltDeg))°),"
+                  + " ring median \(fmt(a.ring.medianMm)) -> \(fmt(b.ring.medianMm)) mm,"
+                  + " support \(fmt(a.ring.supportFraction)) -> \(fmt(b.ring.supportFraction)),"
+                  + " candidates \(native.candidates.count) -> \(halved.candidates.count)")
+
+            let outside = "\(name) plane moves \(moveMm) mm across the halving, outside"
+                + " the \(Self.gridTransferToleranceMm) mm tolerance"
+            #expect(moveMm <= Self.gridTransferToleranceMm, "\(outside)")
+            // Same surface, not merely a nearby number: a flip from the plate to the
+            // table would move the ring measure by the plate height, not by a millimetre.
+            #expect(abs(a.ring.medianMm - b.ring.medianMm) <= Self.gridTransferToleranceMm,
+                    "\(name) ring median moves \(a.ring.medianMm) -> \(b.ring.medianMm) mm")
+            #expect(tiltDeg < 1.5, "\(name) normal tilts \(tiltDeg)° across the halving")
+
+            // What does NOT transfer, and it is a persisted field (Req 6.1, task 12):
+            // the coarser grid runs fewer extraction passes, because the residue after
+            // each pass is smaller. `planeCandidateCount` is therefore grid-dependent
+            // even where the plane is not, so a device/replay comparison must read it
+            // as a property of the capture's resolution rather than of the scene.
+            let stable = "\(name) now extracts \(halved.candidates.count) candidates on the"
+                + " halved grid against \(native.candidates.count) native — planeCandidateCount"
+                + " has become grid-independent and the Decision 35 caveat can be dropped"
+            #expect(halved.candidates.count < native.candidates.count, "\(stable)")
+        }
+    }
+
+    // The transfer claim's floor. Halving again refuses the fit outright, and the guard
+    // that refuses it is `ringBandsAreFeasible` — the ring, not the plane. Both bounds
+    // that decide it are the same quantity, `mmPerPx`: coarsening the grid divides f_d
+    // exactly as increasing the range multiplies z, so this is Decision 29's ~365 mm
+    // range envelope reached from the other direction.
+    @Test("the grid transfer has a resolution floor and it is the ring's sample floor")
+    func gridTransferRefusesBelowTheRingSampleFloor() throws {
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let halved = try #require(Self.gridFit(slice, decimation: 2))
+            let quartered = try #require(Self.gridFit(slice, decimation: 4))
+            print("\(name): \(halved.widthPx)px bands \(halved.bandCounts)"
+                  + " mmPerPx \(fmt(halved.mmPerPx)) smear \(fmt(4 * halved.mmPerPx)) mm"
+                  + " feasible \(halved.feasible); \(quartered.widthPx)px bands"
+                  + " \(quartered.bandCounts) mmPerPx \(fmt(quartered.mmPerPx))"
+                  + " smear \(fmt(4 * quartered.mmPerPx)) mm feasible \(quartered.feasible)")
+
+            #expect(halved.feasible)
+            let survives = "\(name) still fills three ring bands at \(quartered.widthPx) px"
+                + " — the transfer envelope is wider than 2x and can be measured further down"
+            #expect(!quartered.feasible, "\(survives)")
+            // The inner band is what runs out first: it is the narrowest in millimetres,
+            // so it is the first to fall below one pixel of width.
+            #expect(quartered.bandCounts[0] < SupportRegion.ringMinSamples)
+            #expect(quartered.bandCounts[0] < quartered.bandCounts[1])
+            // And the smear bound of Decision 29 is already violated one step ABOVE the
+            // floor — at half resolution the 4 px smear is ~15 mm against ringInnerMm 8 —
+            // while the plane still transfers within a millimetre. The smear governs how
+            // clean the ring measure is, not where the plane lands.
+            #expect(4 * halved.mmPerPx > SupportRegion.ringInnerMm)
+        }
+    }
+
+    // The one constant that cannot transfer: `minAcceptedExtentPx` is denominated in
+    // PIXELS. Every other bar in `admissibility` is a millimetre or a dimensionless
+    // fraction, which is what Req 5.1's transfer rests on; this one halves with the grid
+    // and its verdict changes with it. The 13...26 bracket of Decision 32 is a
+    // 256x192 bracket, and nothing says so where the constant is defined.
+    @Test("the extent guard's verdict does not survive a grid halving")
+    func extentGuardIsGridDependent() throws {
+        var flipped = 0
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let native = try #require(Self.gridFit(slice, decimation: 1))
+            let halved = try #require(Self.gridFit(slice, decimation: 2))
+            let ray = try #require(Self.foodCentroidRay(slice))
+
+            for a in native.candidates {
+                // Pair candidates across grids by where they cut the food centroid ray:
+                // the same physical surface, found twice.
+                let depthA = Self.planeDepthMm(normal: a.candidate.normal, d: a.candidate.d, ray: ray)
+                guard let b = halved.candidates.min(by: {
+                    abs(Self.planeDepthMm(normal: $0.candidate.normal, d: $0.candidate.d, ray: ray) - depthA)
+                    < abs(Self.planeDepthMm(normal: $1.candidate.normal, d: $1.candidate.d, ray: ray) - depthA)
+                }) else { continue }
+                let depthB = Self.planeDepthMm(normal: b.candidate.normal, d: b.candidate.d, ray: ray)
+                guard abs(depthA - depthB) <= Self.gridTransferToleranceMm else { continue }
+                print("\(name): surface at \(fmt(depthA)) mm — extent"
+                      + " \(a.candidate.extentPx) px native, \(b.candidate.extentPx) px halved,"
+                      + " bar \(SupportRegion.minAcceptedExtentPx)")
+                // The extent is a pixel count on the winning inlier component, so it
+                // scales with the grid rather than with the surface.
+                #expect(b.candidate.extentPx < a.candidate.extentPx)
+                if a.candidate.extentPx >= SupportRegion.minAcceptedExtentPx,
+                   b.candidate.extentPx < SupportRegion.minAcceptedExtentPx {
+                    flipped += 1
+                }
+            }
+        }
+        // At least one surface the guard admits natively is rejected as a sliver at half
+        // resolution. That is the finding: `minAcceptedExtentPx` is the one bar in
+        // `admissibility` whose answer depends on the sensor's grid.
+        let transfers = "no candidate changes its extent verdict across the halving —"
+            + " minAcceptedExtentPx may transfer after all, recheck before re-denominating it"
+        #expect(flipped >= 1, "\(transfers)")
+
+        // And the grid it does not transfer to is not hypothetical. The N5k corpus runs
+        // the same fitter over RealSense frames whose depth is registered to the colour
+        // grid — `tools/nutrition5k/ingest.py` pins f = 617 px against the device's
+        // measured f_d — so at equal range the same physical sliver spans over three
+        // times as many pixels there. 24 px is a stricter bar on the device than on N5k
+        // by that ratio, and model-production Bucket C is when N5k fixtures first carry a
+        // food mask and reach this guard at all.
+        let deviceFx = try #require(Self.geometry(Self.captures[0])).intrinsics.fx
+        let ratio = Self.n5kPinnedFxPx / deviceFx
+        print("extent denomination: device f_d \(fmt(deviceFx)) px against N5k's pinned"
+              + " \(fmt(Self.n5kPinnedFxPx)) px — the same physical extent spans"
+              + " \(fmt(ratio))x more pixels on the N5k grid")
+        #expect(ratio > 3)
+    }
+
+    // `tools/nutrition5k/ingest.py`'s `PINNED_INTRINSICS`, RealSense D435 factory nominal
+    // at 640x480. Depth is registered to the colour grid there, so this is f_d as well.
+    static let n5kPinnedFxPx: Float = 617
+
+    // MEASURED (Decision 35): the plane moves 0.835 mm on `1785135663727` and 0.037 mm
+    // on `1785901032716` across a 2x grid halving. 1 mm is that rounded up — a bar the
+    // corpus meets on both captures with the wider one at 84 % of it, not a round number
+    // chosen for comfort. The named fixture Req 5.1 asks for is `1785135663727`, the
+    // wider of the two and already the fixture named by Reqs 6.2 and 7.1.
+    //
+    // It bounds a REPLAY-side quantity. The device leg of Req 5.1 is task 27's, and
+    // decimation models a coarser grid rather than a different sensor: it subsamples one
+    // sensor's output, so it carries that sensor's smoothing with it.
+    static let gridTransferToleranceMm: Float = 1
+
+    // Depth grid decimated by `factor` in each axis: sample (factor·x, factor·y). No
+    // interpolation — a subsample is what a coarser sensor grid gives, and an
+    // interpolated one would smooth the very discontinuities the ring reads.
+    static func decimated(_ slice: DepthSlice, by factor: Int) -> DepthSlice {
+        guard factor > 1 else { return slice }
+        let w = slice.depth.width, h = slice.depth.height
+        let nw = w / factor, nh = h / factor
+        let depths: [Float] = slice.depth.depthBytesMm.withUnsafeBytes { raw in
+            let source = raw.bindMemory(to: Float.self)
+            var out = [Float](repeating: 0, count: nw * nh)
+            for y in 0..<nh {
+                for x in 0..<nw { out[y * nw + x] = source[(y * factor) * w + x * factor] }
+            }
+            return out
+        }
+        var confidence = [UInt8](repeating: 255, count: nw * nh)
+        let sourceConfidence = [UInt8](slice.depth.confidenceBytes)
+        if sourceConfidence.count >= w * h {
+            for y in 0..<nh {
+                for x in 0..<nw {
+                    confidence[y * nw + x] = sourceConfidence[(y * factor) * w + x * factor]
+                }
+            }
+        }
+        return DepthSlice(
+            name: slice.name,
+            depth: DepthMap(
+                depthBytesMm: depths.withUnsafeBufferPointer { Data(buffer: $0) },
+                confidenceBytes: Data(confidence),
+                width: nw, height: nh, rowStrideBytes: nw * 4,
+                depthIntrinsics: CameraIntrinsics(fx: 0, fy: 0, cx: 0, cy: 0, distortion: [],
+                                                  imageWidth: nw, imageHeight: nh),
+                depthFromColour: .identity),
+            colourIntrinsics: slice.colourIntrinsics,
+            gravity: slice.gravity,
+            // Left on the ORIGINAL grid: the mask arrives at colour resolution on both
+            // paths, and `downsampleFoodMask` is what puts it on whatever depth grid
+            // the sensor produced. Decimating it here would bypass the step under test.
+            foodMask: slice.foodMask)
+    }
+
+    // The whole pass at one grid resolution: what the ring can support, and every
+    // candidate that produced ring statistics there.
+    struct GridFit {
+        let widthPx: Int
+        let mmPerPx: Float
+        let bandCounts: [Int]
+        let feasible: Bool
+        let candidates: [(candidate: SupportRegion.PlaneCandidate, ring: RingStatistics)]
+
+        // Highest inner-band support, as everywhere else in this pass: the candidate the
+        // design intends to select, taken before admissibility.
+        var best: (candidate: SupportRegion.PlaneCandidate, ring: RingStatistics)? {
+            candidates.max { $0.ring.supportFraction < $1.ring.supportFraction }
+        }
+    }
+
+    static func gridFit(_ slice: DepthSlice, decimation: Int) -> GridFit? {
+        let scaled = decimated(slice, by: decimation)
+        guard let g = SupportRegion.prepare(depth: scaled.depth,
+                                            colourIntrinsics: scaled.colourIntrinsics,
+                                            foodRegionMask: scaled.foodMask) else { return nil }
+        let samples = SupportRegion.ringSamples(geometry: g)
+        var counts = [Int](repeating: 0, count: SupportRegion.ringBandCount)
+        for band in samples.band { counts[band] += 1 }
+        let feasible = SupportRegion.ringBandsAreFeasible(samples: samples)
+        guard feasible else {
+            return GridFit(widthPx: g.width, mmPerPx: g.mmPerPx, bandCounts: counts,
+                           feasible: false, candidates: [])
+        }
+        var rng = SplitMix64(seed: Fnv1a64.hash(scaled.depth.depthBytesMm))
+        let candidates = SupportRegion.extractCandidates(
+            annulus: samples.annulus, geometry: g,
+            gravity: scaled.gravity.normalised(), rng: &rng)
+        return GridFit(
+            widthPx: g.width, mmPerPx: g.mmPerPx, bandCounts: counts, feasible: true,
+            candidates: candidates.compactMap { candidate in
+                guard let ring = SupportRegion.ringStatistics(
+                    samples: samples, geometry: g,
+                    normal: candidate.normal, d: candidate.d) else { return nil }
+                return (candidate, ring)
+            })
+    }
+
+    // The unnormalised camera ray through the NATIVE grid's food-mask centroid, in the
+    // convention `prepare` back-projects with (z negated). Taken once, from the native
+    // grid, so both planes are compared at the same physical direction rather than each
+    // at its own grid's centroid.
+    static func foodCentroidRay(_ slice: DepthSlice) -> Vec3? {
+        guard let g = SupportRegion.prepare(depth: slice.depth,
+                                            colourIntrinsics: slice.colourIntrinsics,
+                                            foodRegionMask: slice.foodMask) else { return nil }
+        return Vec3((g.centroidX - g.intrinsics.cx) / g.intrinsics.fx,
+                    (g.centroidY - g.intrinsics.cy) / g.intrinsics.fy,
+                    -1)
+    }
+
+    // Where the plane cuts that ray, in millimetres of range. Volume is integrated
+    // per-pixel above the plane, so a difference here is a difference added to every
+    // food pixel — the units Req 5.1's tolerance has to be in to mean anything.
+    static func planeDepthMm(normal: Vec3, d: Float, ray: Vec3) -> Float {
+        let denominator = normal.dot(ray)
+        return denominator == 0 ? .nan : d / denominator
+    }
+
+    static func angleDeg(_ a: Vec3, _ b: Vec3) -> Float {
+        acos(SupportRegion.clampedCosine(a.normalised().dot(b.normalised()))) * 180 / .pi
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.

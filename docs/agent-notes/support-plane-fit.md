@@ -139,7 +139,31 @@ than deferred:
 - `minAcceptedExtentPx = 24` is **bracketed at 13…26**, not set. Above a 12 px, 153-sample
   sliver it correctly rejects; at or below the 26 px smallest extent reaching the later
   guards — and that candidate fails `supportFraction` anyway, so the ceiling is soft. The
-  2 px margin is asserted, so a capture that narrows it fails the test.
+  2 px margin is asserted, so a capture that narrows it fails the test. That bracket is a
+  **256×192** bracket: see the grid note below.
+
+And what Decision 35 settled — the two Req 5.1 figures, which are not constants:
+
+- **The tolerance is 1 mm and the fixture is `1785135663727`.** Device and replay run one
+  implementation, so identical bytes agree exactly; the quantity at risk is the depth grid.
+  Decimate 2× and the plane moves 0.835 mm and 0.037 mm at the food-mask centroid ray
+  (normals tilting 0.945° and 0.063°). Compare planes *there*, not by coefficient: volume is
+  integrated per-pixel above the plane, so a millimetre there is a millimetre everywhere.
+- **The transfer floors at the ring, not the plane.** 128×96 holds; 64×48 leaves the inner
+  band at 37 and 32 samples against `ringMinSamples = 200` and `ringBandsAreFeasible`
+  refuses. Since `mmPerPx = z / f_d`, that is the same bound as Decision 29's ≈ 365 mm range
+  envelope — coarsening `f_d` and raising `z` are one constraint. Note the 4 px smear is
+  already 14.9 mm at 128×96, well past `ringInnerMm`, and the plane still transfers: the
+  smear bounds how clean the ring *measure* is, not where the plane lands.
+- **`planeCandidateCount` is grid-dependent where the plane is not** — three passes natively,
+  two at half resolution, because each pass leaves a smaller residue. It is persisted, so do
+  not read a resolution change as a scene change.
+- **`minAcceptedExtentPx` is the only bar denominated in pixels.** Extents halve with the
+  grid (123→61, 155→77, 44→22) and the last of those crosses the 24 px bar: same scene, same
+  plane, opposite verdict. `tools/nutrition5k/ingest.py` pins N5k at f = 617 px against the
+  device's measured f_d = 182 px, so the same physical extent spans 3.4× more pixels there
+  and the bar is 3.4× stricter on device. Nothing has hit it because pre-checkpoint N5k
+  ingestion carries no food mask; model-production Bucket C is when it will.
 
 Three traps for anyone measuring against this corpus:
 

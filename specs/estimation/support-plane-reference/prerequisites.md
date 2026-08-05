@@ -211,6 +211,15 @@ least one with the food well centred on a large plate, and at least one with the
 edge. Note the plate diameter and the food's placement for each — the pass measures the margin per
 sector, but only the session can arrange for the margins to differ.
 
+**Note the depth resolution if any capture is not a 256×192 LiDAR frame (Decision 35).** The plane
+itself transfers: across a 2× grid halving it moves 0.835 mm and 0.037 mm on the two committed
+captures, which is what Req 5.1's 1 mm tolerance is set from. Two things do not. `planeCandidateCount`
+drops from three passes to two, so it reads resolution rather than scene. And `minAcceptedExtentPx`
+is denominated in **pixels** — the only bar in `admissibility` that is — so its 13…26 bracket holds
+only at 256×192, and a surface admitted at 44 px is rejected as a sliver at 22 px. If the session
+sets that constant, set it against `mmPerPx` or state the grid it is denominated on; the N5k corpus
+runs the same guard at f = 617 px against the device's 182 px.
+
 **A capture can succeed and still be empty.** The 208 g rice bundle returned a plausible
 603 cm³ at capture time and reads as well-formed everywhere except the confidence map, where
 41 % of the frame is ARKit-low and the mound is entirely inside that share (Decision 31). Two
