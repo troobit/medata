@@ -10,15 +10,17 @@ Replace "largest gravity-aligned plane in the frame" with "the gravity-aligned p
 
 `ransac`'s minimal sampling, the 15° gravity cone, `refine`'s scatter-matrix SVD and the deterministic consensus polish are correct and reused. Three things change: **which samples compete**, **how a candidate is scored**, and **which candidate wins**.
 
-### Bound the candidate set first
+### Bound the candidate set to an annulus
 
-Today's candidate set is every non-food pixel in the frame, so floors, hobs, draining boards and a second plate all compete. Restricting to `dilate(foodMask, 2 × foodRadius)` on the depth grid is the highest-leverage change in the design and fixes three problems at once:
+**Today's set is already bounded — an earlier draft of this design asserted otherwise and was wrong.** `collectCandidatePoints` defaults to `.bandsAroundFoodRegion` (`LiDARPlaneFitter.swift:61`) and scans four bands around the food bbox, each as thick as the bbox dimension perpendicular to it (`:237-250`), added by `lidar-plane-fit-degenerate-on-clean-capture`. `.insideMask` has exactly one caller, `FixtureRunner` (`:251`). Floors and hobs are not competing for candidate slots; the table is, from inside a region of roughly `4 · w · h`.
 
-- Clutter no longer consumes candidate slots.
-- The plate's inlier fraction rises, which is what makes the RANSAC iteration budget tractable (below).
-- Point count drops ~4×, which is where the CPU headroom for extra passes comes from.
+That refutes the earlier proposal rather than refining it. `dilate(foodMask, 2 × foodRadius)` spans ≈ `(2.9 s)² ≈ 8.3 s²` against the bands' `4 s²` for an `s × s` bbox — **looser than today, not tighter** — so none of the three benefits that draft claimed follow from it.
 
-This is the same scene-dependence objection Decision 9 raised against the next-plane-gap diagnostic; it had re-entered at the extraction stage and is now closed there too.
+The bound that does deliver them is an **annulus of `2 × ringOuterMm` around the food mask**: 50 mm of support surface, concentric with the food rather than square with its bbox. It is tighter than the bands for any food that does not fill its bbox, and it is the same region the ring measure already reads, so it introduces no new scene-dependence.
+
+**Where the sample reduction actually comes from.** The ~56× is the native-depth-grid move (Req 2.4), not the bound: 1920×1440 ÷ 256×192 = 56.25. That change stands on its own, and it is where the CPU headroom for the extra passes comes from. Crediting it to bounding, as the earlier draft did, double-counted one saving and hid that the bound was doing the opposite of what was claimed.
+
+**Where the iteration budget actually comes from.** Not from a raised pass-1 inlier ratio. At the diagnosed capture's ~6 % plate fraction, `maxIterationsPerPass = 2048` reaches only ~36 % probability of a clean triple — an order of magnitude short. The budget is sufficient because extraction is **sequential**: pass 1 removes the table's inliers, and it is the plate's fraction *of the residue* that pass 2's formula applies to. The implementation MUST report the per-pass residue inlier ratio so this holds as a measurement rather than an assumption.
 
 ### Native depth grid, and the intrinsics trap
 
@@ -30,7 +32,17 @@ Sampling moves to the native 256×192 grid (Req 2.4), which removes the ~56× re
 fx_d = fx_c · W_d/W_c        cx_d = (cx_c + 0.5) · W_d/W_c − 0.5
 ```
 
-The half-pixel terms are not optional: dropping them offsets the principal point by ~3.75 colour pixels, tilting every fitted plane. Reaching for `depth.depthIntrinsics` instead yields a divide-by-zero and a NaN plane; passing `colourIntrinsics` straight through yields a 7.5× lateral error. This is the most likely implementation bug in the feature.
+The convention matches `sampleDepthBilinear` (`LiDARPlaneFitter.swift:440-441`), which already resamples this way, so the derivation is consistent with existing code rather than a new claim.
+
+**Severity, corrected — an earlier draft ranked these backwards.** The three failure modes are not comparable:
+
+| Mistake | Consequence | Severity |
+|---|---|---|
+| Read `depth.depthIntrinsics` | fx = 0 → divide-by-zero → NaN plane | **Fatal, obvious** |
+| Pass `colourIntrinsics` through unscaled | fx wrong by 7.5×. At nadir the *plane* barely moves (z is unchanged), but every mm-denominated radius is corrupted — the 8–25 mm ring silently becomes a 1–3.3 mm ring | **Fatal, silent — the one to guard** |
+| Drop the half-pixel terms | principal point off by `0.5(1 − s)` = 0.433 depth px = **3.25 colour px** (not 3.75). Induced plane tilt ≈ 0.016° | **Cosmetic here** |
+
+The half-pixel terms are still correct and should be implemented, but they were previously called "the most likely implementation bug in the feature" on the strength of a tilt that is three orders of magnitude below the gravity cone. The unscaled-intrinsics case earns that label: it leaves the plane fit looking healthy while every ring radius is 7.5× too small, which no plane-level assertion catches.
 
 **Mask downsampling needs a stated rule.** `BinaryMask` is colour-grid; the ring and candidates are depth-grid. A depth pixel is marked food if **any** covered colour pixel is food (conservative — Req 2.1 requires the fitted set to contain no food pixel, so ambiguity must resolve towards exclusion).
 
@@ -38,9 +50,28 @@ The half-pixel terms are not optional: dropping them offsets the principal point
 
 ### Candidate scoring — CC-RANSAC
 
-Score a candidate by **the size of its largest 8-connected inlier component**, not by total inlier count (Gallo, Manduchi & Rafii 2011). Sequential RANSAC's documented failure is a plane straddling two surfaces separated by a step, because the straddling plane holds more inliers than either surface alone — and a plate rim is exactly that step. Component scoring is what stops it, and it does so *inside* the loop by changing which plane wins, rather than as a post-hoc filter that can only reject.
+Score a candidate by **the size of its largest 8-connected inlier component**, not by total inlier count (Gallo, Manduchi & Rafii 2011). This subsumes the connected-component adjacency filter Decision 11 staged second: adjacency becomes a property of the score rather than a separate pass with its own constant.
 
-This subsumes the connected-component adjacency filter Decision 11 staged second: adjacency becomes a property of the score rather than a separate pass with its own constant.
+**What component scoring does and does not buy, stated narrowly.** An earlier draft claimed it defeats the straddling plane and that this is what stops the plate rim being mis-fitted. Adversarial review refuted both halves.
+
+It cannot prefer the plate over the table: the table is a genuine single surface with a far *larger* connected component, so component scoring makes the table win a pass more decisively, not less. What surfaces the plate is sequential extraction removing the table in pass 1, and then ring-based selection choosing among the residue.
+
+**Whether the smeared ramp bridges the two inlier sets is contested and unresolved.** One review argued it does: the rim descends ~26 mm over ~5–6 depth pixels, so a plane tilted 6.7° (inside the 15° cone) crosses it and joins plate-side to table-side inliers through a stripe ~1–2 px wide, which 8-connectivity needs only 1 px to use. A second review refuted that from the cone: the ramp's own slope is ~73°, a 15°-capped plane rises only ~2.1 mm across its whole width, so the plane cannot *track* the ramp and any bridge is local to a single crossing rather than an annular seam. Both are right about their own claim — a plane cannot follow the ramp, but it does not need to if one crossing suffices. **Task 26 settles it by measurement; neither reading may be assumed.**
+
+**What the source paper does settle, and it is more useful.** Gallo et al. state outright that *"for large enough values of ε, an incorrect plane straddling across the two patches will produce a large number of connected inliers"*, and their Fig. 4 gives the operating envelope: reliable while **ε/h ≲ 0.25–0.35** (h = 5 reliable to ε = 1.25; h = 10 reliable to ε = 3.5). With `inlierBandMm = 5`:
+
+| Step | h | ε/h | |
+|---|---|---|---|
+| Plate above table | 26 mm | 0.19 | inside the validated envelope |
+| Rim above well, deep plate | 28 mm | 0.18 | inside |
+| Rim above well, narrow rim | 12 mm | 0.42 | **outside** |
+| Rim above well, minimum | 10 mm | 0.50 | **outside** |
+
+So component scoring is validated for the defect this feature fixes and **not** validated for the rimmed-plate case Req 3.8 and Decision 14 exist to handle. Three further transfer gaps: the paper's model is orthographic with a hard step and vertically-i.i.d. noise — no ramp, no perspective, no spatially-correlated smoothing; the paper warns CC-RANSAC is *worse* than plain RANSAC at very small ε, because components become too small to support the correct plane, which bears on this design's ~4× smaller sample set; and the rim measurement the envelope depends on is one of the ruler measurements prerequisites asks for.
+
+What actually rejects such a straddler is the ring guards. The aggregate bar sits close to its threshold — for a 6.7° tilt over the inner ring, support fraction ≈ 0.56 against a 0.60 minimum — but the sector guard does not: a tilted plane's in-band samples concentrate in the arcs near its zero-crossings, so its supporting sectors fall well short of the bar. The aggregate margin is a measurement to confirm on the corpus, not one to rely on.
+
+Component scoring is retained for the case it genuinely handles — a co-height surface elsewhere in the annulus (a second plate, a board) forms a separate blob and is excluded on connectivity.
 
 **Extraction loop.** Up to `maxCandidatePlanes` passes; each removes the **polished** inlier set within `2 × inlierBandMm` (a thin shell left at 1× seeds near-duplicate planes on the next pass). Stops early when the residue falls below `minCandidateSamples`.
 
@@ -53,20 +84,29 @@ This subsumes the connected-component adjacency filter Decision 11 staged second
 | Guard | Rejects | Req |
 |---|---|---|
 | ring support fraction < `ringSupportMin` | ring not resting on this plane | 3.2 |
-| ring MAD > `ringMadMaxMm` | bimodal ring — straddling two surfaces | 2.3, 3.2 |
-| plane above > `foodAboveFractionMax` of food samples | vessel rim, or a plane on the food top | 3.4 |
-| radial band step > `bandStepMaxMm` rising outward | rim or bowl wall — inner band wins instead | 3.2 |
-| support visibility < `supportVisibilityMin` | support surface not observable under the food | 3.2 |
-| plane below the lowest admissible candidate | region escaped through a dropout | 3.3 |
+| supporting sectors < `minSupportingSectors` | ring crossed the support's edge, or straddles two surfaces — in-band support confined to an arc | 2.3, 3.6 |
+| food's p90 signed height above the plane < `foodEnvelopeMinMm` | vessel rim, or a plane on the food top | 3.4 |
+| \|ring median\| outside the documented band, **signed** | table (+) or raised edge (−) — the sign is what separates them | 3.1, 3.2 |
+| **inner→mid** band step > `bandStepMaxMm` rising outward | the surface the ring rests on is not flat — bowl wall, or a rim beginning inside the ring | 3.8 |
+| support visibility < `supportVisibilityMin` | support surface not observable under the food | 3.9 |
+| plane below the annulus median height by > `escapeBandMm` | region escaped through a depth dropout | 3.3 |
 | fewer than `minAcceptedExtentPx` inlier bbox extent | badly conditioned normal | 2.3 |
 
-**Score.** Among admissible candidates, maximise the ring support fraction — the share of ring samples within ±`ringBandMm` of the plane. **Not** `|median|` closest to zero, which has a 50 % cliff: a ring half on the plate and half on the table has a median that jumps 26 mm as the mixture crosses half, and just past the cliff the *table* plane reads ≈ 0, passes every guard, and is persisted with a textbook-perfect diagnostic. The support fraction degrades continuously instead, and MAD catches the bimodality directly.
+**Support is measured per angular sector, because the aggregate fraction is a majority vote.** Divide the inner band into `ringSectorCount` equal sectors — arcs of equal angle about the food-mask centroid — and count those whose own support fraction meets `sectorSupportMin`. A ring lying wholly on the support surface supports uniformly; a ring that has crossed the support's edge supports in an arc — 65 % on the table is 100 % table across ~235° and 0 % across the rest, which the aggregate reports as a healthy 0.65. Without this, food reaching within ~14 mm of a plate's edge selects the *table* plane, passes every other guard, and persists a ring median of ≈ 0 — the value this design treats as proof of correctness (Decision 18). Cost is one `atan2` and a bucket index per ring sample, reusing the samples radial banding already collects. A sector with no samples counts as neither supporting nor failing, and the bar stays absolute — so a ring heavily clipped by the frame edge loses sectors and fails towards fallback rather than passing on a majority of what remains.
+
+**Sectoring is statistically viable at realistic captures, and the sample floor is derived from it.** At 350 mm range the depth grid resolves ~2 mm/px (the same ~4-px smear figure §Stated limits rests on), so each radial band is 17/3 ≈ 5.7 mm ≈ 2.8 px wide, and a 35 mm-radius food's inner band holds ≈ 400 samples — ~50 per sector; at 500 mm the same food yields ≈ 260, ~33 per sector. The regime that fails is small-and-far: at 25 samples a 0.5 sector bar has binomial σ ≈ 0.10 and separates a supported sector (p ≈ 0.9) from a crossed one (p ≈ 0.3) by > 4σ, but at the previous floor of `ringMinSamples = 60`, sectors averaged 7 samples (σ ≈ 0.19) and a uniformly supported ring at true support 0.6 false-failed the guard roughly two captures in five — noise, not measurement. `ringMinSamples = 200` (= `ringSectorCount` × 25) closes that regime without adding a per-sector constant; the cost is that food smaller than ~25 mm across at 350 mm (~50 mm at 500 mm) falls back — the items the perimeter-smear bias measures worst anyway (Decision 20).
+
+**There is no MAD guard — the sector measure is the dispersion bar Req 2.3 requires.** Decision 16 gave the straddle guard to inner-band MAD; checking its arithmetic against the admissibility floor shows it cannot fire on any candidate that matters. For a two-surface mixture, the in-band majority puts the median on the supported surface, so MAD collapses to the noise scale at any mixture away from 50/50 — and a near-50/50 candidate scores ≈ 0.5 aggregate support and fails `ringSupportMin = 0.6` first. The one straddler the aggregate bar misses, the 6.7° rim-ramp tilt, reads MAD ≈ 5.6 mm and slips under the 6 mm bar. That is the same class of defect as the residual bar Decision 16 itself removed: a bar positioned where it cannot fire. The sector guard covers the whole mixture range instead — support confined to an arc fails it at any fraction beyond roughly two sectors' width — so the MAD bar, its constant and its persisted field are deleted rather than carried as a third inner-band statistic (Decision 19).
+
+**Score.** Among admissible candidates, maximise the ring support fraction — the share of ring samples within ±`ringBandMm` of the plane. **Not** `|median|` closest to zero, which has a 50 % cliff: a ring half on the plate and half on the table has a median that jumps 26 mm as the mixture crosses half, and just past the cliff the *table* plane reads ≈ 0, passes every guard, and is persisted with a textbook-perfect diagnostic. The support fraction degrades continuously instead, and the sector guard reads the straddle's spatial arrangement directly.
 
 **Ambiguity margin.** If the top two admissible candidates are within `ringSupportMarginMin` of each other, reject to fallback. Two candidates 26 mm apart both scoring near-equally is exactly the straddling-ring case, and a coin flip between them moves the carb number 3×.
 
 ### Why there is no separate residual bar
 
-An earlier draft added `restrictedResidualMaxMm = 8`, justified by "a straddling region fits at ~13 mm RMS". That is a property of plain least squares over a fixed region — the flood-fill option Decision 11 rejected. Under RANSAC the residual is computed over `polishedInliers`, each within `inlierBandMm = 5` of the plane, so RMS is **≤ 5 mm by construction** and the bar can never fire. It would also push matte-table captures onto the fallback, since Decision 46 raised the general bar to 20 mm for genuine single-surface depth noise. Ring MAD measures the straddle directly and does fire.
+An earlier draft added `restrictedResidualMaxMm = 8`, justified by "a straddling region fits at ~13 mm RMS". That is a property of plain least squares over a fixed region — the flood-fill option Decision 11 rejected. Under RANSAC the residual is computed over `polishedInliers`, each within `inlierBandMm = 5` of the plane, so RMS is **≤ 5 mm by construction** and the bar can never fire (`LiDARPlaneFitter.swift:25, 136-140`). It would also push matte-table captures onto the fallback, since Decision 46 raised the general bar to 20 mm for genuine single-surface depth noise. The sector measure reads the straddle directly and does fire; the inner-band MAD bar Decision 16 first put here turned out to share the residual bar's cannot-fire defect and is deleted in turn (Decision 19).
+
+Req 2.3 originally mandated the residual bar. It has been **amended** rather than quietly ignored — it now requires a dispersion bar on the ring's inner band and explicitly forbids a plane-residual bar for this purpose (Decision 16). The sector support measure is that dispersion bar: it bounds the angular dispersion of in-band support and rejects the straddling fit Req 2.3 names (Decision 19). A design that refutes a requirement without amending it leaves two documents disagreeing in writing.
 
 ### Fallback ladder (Req 4, Decision 5 ordering)
 
@@ -74,7 +114,9 @@ Restricted fit **first**; on any rejection, the edge-band fit runs and returns b
 
 This preserves Decision 5's stated sequence and has a second benefit: `lidar-plane-fit-degenerate-on-clean-capture` widened the bands because the band scan starves on clean captures. The restricted path samples natively and is immune to that failure, so attempting it first recovers captures that would otherwise refuse.
 
-**Cost, stated honestly.** This is *added* work on the success path, not a replacement — the earlier draft's "not slower than today" compared against the harness's deleted path, not the device's. Added: bounded depth-grid collection (~12k samples after bounding), up to 3 adaptive RANSAC passes, ring construction, two medians. Removed on the success path: the full edge-band colour-grid scan. Req 7.6's budget is measured on device, not asserted here.
+**Cost, stated honestly.** This is *added* work on the success path, not a replacement — the earlier draft's "not slower than today" compared against the harness's deleted path, not the device's. Added: bounded depth-grid collection, up to 3 adaptive RANSAC passes, ring construction, per-band medians. Removed on the success path: the full edge-band colour-grid scan. Req 7.6's budget is measured on device, not asserted here.
+
+**Connected-component labelling is the dominant term and an earlier draft omitted it.** Decision 13 puts CC scoring *inside* the loop, so it runs per hypothesis, not per pass winner: up to `maxIterationsPerPass × maxCandidatePlanes` labellings over the annulus. That is order 10⁸ operations on the path that already produced a 32 GB allocation failure. **Amortise it** — label only hypotheses whose raw inlier count is within a constant factor of the running best, since a hypothesis that cannot win on raw count cannot win on component size either. Without the amortisation the CC cost, not the extra passes, is what Req 7.6 will fail on.
 
 **Confidence.** `sigmaPlane` gains a third factor, 1.0 on `.foodSupport` and `fallbackPenalty` on `.edgeBand` (Decision 12).
 
@@ -101,17 +143,55 @@ Today's table reference over-reads by +26 mm; a rim reference under-reads by 12�
 | rises steeply outward | bowl wall |
 | falls outward | ring has leaked past the plate edge onto the table |
 
-Selection then uses the **inner band** as authoritative — the support surface is by definition the one immediately adjacent to the food — with the outer bands as shape detection. This resolves the partial-fill case *correctly* rather than merely rejecting it: the well plane is already in the candidate set, it was simply not being preferred. It also subsumes the leaked-ring detection, which the earlier single-median design needed MAD to catch.
+Selection then uses the **inner band** as authoritative (Req 3.8) — the support surface is by definition the one immediately adjacent to the food — with the outer bands as shape detection. This resolves the partial-fill case *correctly* rather than merely rejecting it: the well plane is already in the candidate set, it was simply not being preferred. It also subsumes the leaked-ring detection, which the earlier single-median design needed MAD to catch.
 
-**Support visibility, for the case that cannot be solved.** When food fills the well, the well surface produces **no depth samples at all** — nothing in the frame touches it. No candidate plane can be fitted to an unobserved surface, and no ring geometry recovers one; this is a sensing limit, not an algorithm choice. It is however detectable: when the visible support region is too thin relative to the food region (`supportVisibilityMin`), the support surface cannot be verified and the fit falls back. That routes the unobservable case to the edge-band over-read, which is the direction a human catches.
+**The step guard reads the inner→mid step only (Decision 21).** The well plane's own profile *rises outward* whenever the ring spans well and rim — inner ≈ 0, outer ≈ +18 — so a guard firing on any outward rise would reject the exact candidate Decisions 14 and 16 exist to rescue, the same contradiction Decision 16 removed from whole-ring MAD. A rise between mid and outer is a rim beginning ≥ ~14 mm out: shape detection, inner band stays authoritative, well plane wins. A rise already present at inner→mid means the surface the ring itself rests on is not flat — a bowl wall, or a rim hard against the food — and rejects to fallback, the conservative direction.
+
+**Support visibility, for the case that cannot be solved.** When food fills the well, the well surface produces **no depth samples at all** — nothing in the frame touches it. No candidate plane can be fitted to an unobserved surface, and no ring geometry recovers one; this is a sensing limit, not an algorithm choice. It is however detectable: when the visible support region is too thin relative to the food region (`supportVisibilityMin`), the support surface cannot be verified and the fit falls back (Req 3.9). That routes the unobservable case to the edge-band over-read, which is the direction a human catches.
 
 This is the `region area ÷ food-mask area` check Decision 9 kept as a secondary guard and an earlier draft dropped. It returns with a job it is suited to — an observability test, not a selection score, which is what it was rejected as.
 
-**Residual risk, stated.** A fully-filled rimmed plate whose food mounds well above the rim can still pass the visibility test with the ring flat on the rim, and will under-read by the rim height. The radial profile is persisted, so the case is identifiable in the accuracy log rather than invisible.
+**Residual risk, stated.** A fully-filled rimmed plate whose food mounds well above the rim can still pass the visibility test with the ring flat on the rim, and will under-read by the rim height. The persisted radial profile identifies the case only when the ring extends past the rim and the profile falls outward; a ring lying wholly on a wide rim records a flat profile, uniform sectors and a median of ≈ 0 — indistinguishable from a correct fit in the record. This is the one wrong-plane path that survives with healthy diagnostics, and it is bounded by the weighed-truth checks (Reqs 7.2, 7.3, 7.8) rather than by the record.
+
+### Three guards that did not do what their requirement says
+
+Found by adversarial review; all three are stated in the requirements and were mis-implemented in the design rather than merely unmeasured (Decision 22).
+
+**`foodAboveFractionMax = 0.05` rejected this feature's own acceptance capture.** Decision 4 brackets `1785901032716` at 236–262 cm³, an ~11 % spread attributable entirely to the overhanging bread slice. Overhanging food sits *below* the plate plane, so at roughly uniform thickness ~11 % of food samples are "above the plane" by this guard's reckoning — against a 5 % bar. The capture would fall back, return 714.84 cm³, and **fail Req 7.2**, while also contradicting Reqs 1.3 and 3.4 and the design's own "overhanging food — guards must not fire" test case.
+
+The root cause is one constant serving two opposed purposes. Decision 3 uses "plane above a share of food points" to route **bowls** to fallback, where it must fire; Req 3.4 uses the same test to tolerate **overhang**, where it must not. Bowls want the bar low, overhang needs it above 11 %. No value serves both.
+
+Replaced by an **upper-envelope test**: reject when the food's `foodEnvelopePercentile` signed height above the plane falls below `foodEnvelopeMinMm`. Bread — p90 ≈ +8 mm above the plate plane, accepted, and the overhanging slice's samples simply sit in the lower decile where they belong. Bowl — all food lies below the rim plane, so p90 is negative, rejected. Plane on the food top — p90 ≈ 0, rejected. One constant, three cases, and it is denominated in millimetres, which is what Req 3.4 asks for and what the fraction quietly substituted away.
+
+**Req 3.3's guard could not fire.** "Plane below the lowest admissible candidate" compares the minimum of a set against itself, and is circular besides, since admissibility is defined partly by this test. Req 3.3 names the *edge-band* plane as the comparator; the substitution existed only to keep the edge-band fit lazy, which is an optimisation preference, not a comparator. Replaced by the **annulus median height**, already computed and free, with `escapeBandMm` as the band. A plane that escaped through a depth dropout lands far below the surrounding surface and is caught; the edge-band fit stays lazy.
+
+**Req 3.2's signed guard was never implemented.** The design persists `medianMm` but the guard table contained no `|median|` test — only the unsigned support fraction, which cannot distinguish a plane *above* the ring from one *below* it. Req 3.1 is explicit that the sign carries the meaning: table reads strongly positive, a vessel rim reads negative. Restored as a guard row.
+
+### The ring crossing the support's edge
+
+Distinct from the rimmed-plate case above, and more dangerous, because it reinstates the defect this feature exists to remove while recording a clean diagnostic. Food reaching within ~14 mm of a flat plate's edge puts the majority of the *inner* band on the table; aggregate support then favours the table plane. The radial profile is **flat**, not falling — Decision 14's "leaked outward" row describes a ring only partly past the edge and does not fire here.
+
+The sector guard is the answer (Req 3.6, Decision 18), and its constants are corpus measurements rather than assertions (Req 3.7). Two further consequences are carried deliberately:
+
+- **A ring median of ≈ 0 is not evidence of a correct fit.** Req 6.2's before/after comparison still holds — the pre-feature fit does read +18…+26 mm — but the converse does not, and Req 6.4 exists so the record carries the sector evidence needed to tell the cases apart.
+- **A known-better alternative is deliberately unbuilt.** Preferring the highest admissible candidate encodes the physical constraint directly and is deferred, not rejected (Decision 18). If corpus measurement shows the sector guard rejecting captures it should accept, that is the next mechanism, not a new constant.
+
+**`ringSupportMin = 0.6` is in tension with the matte-table evidence and must be measured against it.** A ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm on the support surface. `lidar-plane-fit-matte-table-confidence` and Decision 46 exist because matte tables produce genuine single-surface noise large enough to justify a 20 mm residual bar. If that noise exceeds ~6 mm in practice, every matte-table capture falls back and Req 4.5's fallback-rate defect fires for a reason unrelated to plane selection. Task 26 must measure the support-surface noise distribution before this constant is fixed.
 
 ### Stated limits (Req 2.5)
 
-**Minimum resolvable food height ≈ 8 mm.** ARKit depth is fused from a sparse dot pattern and smoothed across ~4 depth pixels, so a step spreads to 4–6 mm/px and a food edge shallower than the smear cannot be separated from its support. The bread capture's implied 10.1 mm slice sits just above this bound — thinner items (a tortilla, sliced ham, sauce) are out of scope for the correction and fall back rather than being silently under-measured.
+**The limit is on food *width*, not food height — an earlier draft had this the wrong way round.** It read "minimum resolvable food height ≈ 8 mm", derived from "~4 depth pixels of smoothing, so a step spreads to 4–6 mm/px". That conflates a lateral extent with a vertical one: 4–6 mm/px is the gradient of one particular plate step, and ~8 mm is the smear's *lateral* footprint.
+
+Smoothing is approximately a unit-DC-gain low-pass filter: it preserves the amplitude of any plateau wider than its kernel and only widens the transition. So the two real limits are:
+
+| Limit | Value | Mechanism |
+|---|---|---|
+| **Minimum food width** | ≈ 8 mm at 350 mm range | Food narrower than the ~4-px kernel is amplitude-attenuated and genuinely unrecoverable |
+| **Minimum food height** | ≈ 2–4 mm | Bounded by depth noise and support-plane fit error, not by lateral smear |
+
+A 3 mm-tall item 100 mm across occupies ~2,700 depth samples, so per-pixel noise averages down by ~50× and its plateau survives intact. Req 2.5 must therefore state a *width* bound; stating an 8 mm height bound excludes a measurable class of flat food for no sensing reason. Both figures scale with capture range — the ~8 mm width floor is ~6 mm at 300 mm and ~10 mm at 500 mm — so Req 2.5's statement must carry the capture-distance envelope rather than a bare constant.
+
+Edge behaviour is the residual: the smear under-reads a border strip roughly half a kernel wide around the food's perimeter, which is a perimeter-proportional bias and therefore worst on small items.
 
 ### Document amendments (Reqs 1.4, 5.2)
 
@@ -125,18 +205,35 @@ Edits, not cross-references: pipeline Req 4.2, pipeline design §6.2, the pipeli
 | `HarnessCore/FixtureRunner.run` single-view | **Yes** | Req 5.1 parity; private copy deleted |
 | `FixtureRunner` two-view branch | **No** | Silhouette carve, no depth plane (Decision 7) |
 | `CardOnlyPlaneFitter` | **No** | No depth map |
-| `HarnessCore/CalibrationArtifact` | **Metadata only** | Records the reference (Req 5.3) |
+| `CalibrationArtifact.mixtureObservation` (`:157`) | **Yes — and it cannot take the new path** | Live caller of `fitPlateRegionPlane`. No mask exists at this site; see below |
+| `CalibrationArtifact` artefact fields | **Metadata only** | Records the reference (Req 5.3) |
 | `VoxelCarveEstimator` | **Consumer, compounding** | Excludes `signedDistance < 0` — a **hard** exclusion, unlike the height field's `max(0, ·)` clamp. Raising the plane 26 mm deletes a slab, and overhanging food (Decision 4) sits inside it, so the effect there is deletion rather than under-measurement. Measured under Req 1.6 |
 | `HeightFieldEstimator.integrate` | **Consumer** | Formula unchanged |
 | `DiagProbe/main.swift` | **No** | Untracked throwaway; delete |
-| `PlateRegionPlaneTests` | **Delete with the code** | Tests the flood fill, which is not being promoted |
-| `PlateTopSupportPlaneTests` (`XCTSkip`ped, `99ba8c0`) | **Yes** | Un-skip; it encodes this resolution |
+| `PlateRegionPlaneTests` | **Keep** | The flood fill survives for the mixture path (above), so its tests survive with it |
+| `PlateTopSupportPlaneTests` (`Tests/VolumeTests/`, `XCTSkip` at `:55`) | **Yes** | Un-skip; it encodes this resolution |
 
 ### Deleting `fitPlateRegionPlane` rebases the N5k corpus
 
-Device bundles stamp `estimatorPath = "single_dominant"`, so both device replays and N5k fixtures currently take `fitPlateRegionPlane`. Deleting it changes N5k outputs and therefore every previously recorded `nutrition5k-calibration` result. Those results must be regenerated, and the corpus then spans two references — which is what Req 5.4 exists to handle.
+Device bundles stamp `estimatorPath = "single_dominant"`, so both device replays and single-dominant N5k fixtures currently take `fitPlateRegionPlane` via `FixtureRunner.run:82`. Moving them to the promoted path changes N5k outputs and therefore every previously recorded `nutrition5k-calibration` result. Those results must be regenerated, and the corpus then spans two references — which is what Req 5.4 exists to handle.
+
+**Mixture fixtures do not move** (above), so the rebase covers the single-dominant slice only. The regenerated corpus therefore spans two references *by construction*, not merely in transition, and Req 5.4's within-reference fitting rule is permanent rather than a migration measure.
 
 The harness has no food mask at that call site today (`fitPlateRegionPlane` takes only depth, intrinsics, gravity). It derives one from `nadirSeg`'s argmax, the same source the device's segmenter produces, so Req 5.1 parity holds.
+
+### The mixture calibration path keeps the flood fill
+
+`fitPlateRegionPlane` has a **second** caller that an earlier draft's audit recorded as metadata-only: `CalibrationArtifact.mixtureObservation` (`:157`), reached from `HarnessCLI/main.swift:397` and `:542`. Deleting the function without an answer here breaks the mixture β_c path.
+
+The `FixtureRunner` migration does not transfer. **Mixture fixtures carry neither `probs_hwc` nor `argmax_hw`** (`docs/agent-notes/nutrition5k-ingestion.md`), and `mixtureObservation` feeds `TotalHullVolume.integrate`, which is plate-wide rather than per-class. There is no segmentation output at that site from which to derive a `foodRegionMask`, and `fitFoodSupportPlane` requires one. This is a data limitation, not a wiring gap.
+
+**Decision: `plateRegionMask` and `fitPlateRegionPlane` survive as the mixture path's fitter, scoped to it.** The mixture corpus is a fixed overhead rig where the flood fill's frame-centre seed assumption *does* hold — the assumption Req 2.2 rejects for handheld capture. Retaining it there is correct for that corpus rather than a concession.
+
+Consequences that must be carried:
+
+- The Req 5.2 transfer contract records `supportPlaneReference` per artefact. Mixture artefacts record the plate-region reference, single-dominant artefacts record `foodSupport`, and Req 5.4 keeps β_c fitted within a reference. Nothing may mix them.
+- `PlateRegionPlaneTests` is **not** deleted — the earlier audit's "delete with the code" row is withdrawn for the mixture path's sake.
+- Failure at this site must not stay silent. Both callers wrap `mixtureObservation` in `try?`/`catch` and convert a throw into a skip (`planeFitSkipped`, `officialSkipped["plane_fit_failed"]`), so a broken fitter would empty the mixture corpus while the run still reported success. The skip counts MUST be reported, not just collected.
 
 ## Components and Interfaces
 
@@ -148,31 +245,61 @@ public enum SupportPlaneReference: String, Sendable, Codable {
 }
 
 public struct RingStatistics: Sendable, Equatable {
-    public let medianMm: Float        // ≈ 0 on a correct fit; +18…+26 on the table
-    public let madMm: Float           // bimodality detector; ~2 mm clean, large when straddling
-    public let supportFraction: Float // share within ±ringBandMm, INNER band — the score
-    public let bandMedianMm: [Float]  // inner/mid/outer; rises outward on a rimmed plate
-    public let supportVisibility: Float // visible support area ÷ food area
-    public let sampleCount: Int
+    public let medianMm: Float          // whole ring; ≈ 0 on a correct fit, +18…+26 on the table.
+                                        // Persisted for Req 6.2; NOT used for selection.
+    public let bandMedianMm: [Float]    // inner/mid/outer; rises outward on a rimmed plate.
+                                        // Persisted (Decision 14) — the rim/bowl signal.
+                                        // The step guard reads [0]→[1] only (Decision 21).
+    public let supportFraction: Float   // share within ±ringBandMm, INNER band — the score
+    public let supportingSectors: Int   // inner-band sectors meeting sectorSupportMin; empty
+                                        // sectors count as neither supporting nor failing.
+                                        // Persisted (Req 6.4): a median of ~0 is NOT
+                                        // evidence of a correct fit on its own
+    public let bandSampleCount: [Int]   // ringMinSamples holds PER band (Decisions 14, 20)
+    public let supportVisibility: Float // see below; computed from the annulus, not the ring
 }
 
 public enum SupportRegion {
     // Radii in MILLIMETRES, converted per capture from median food depth.
-    public static let ringInnerMm: Float = 8   // beyond the ~7 mm depth smear
-    public static let ringOuterMm: Float = 25
-    public static let ringBandCount = 3        // radial resolution: inner/mid/outer
-    public static let bandStepMaxMm: Float = 6 // outward rise above this = rim or bowl
-    public static let supportVisibilityMin: Float = 0.15
-    public static let ringBandMm: Float = 5
-    public static let ringSupportMin: Float = 0.6
-    public static let ringSupportMarginMin: Float = 0.15
-    public static let ringMadMaxMm: Float = 6
-    public static let ringMinSamples = 60
-    public static let foodAboveFractionMax: Float = 0.05
-    public static let maxCandidatePlanes = 3
-    public static let minCandidateSamples = 500
-    public static let minAcceptedExtentPx = 24
-    public static let maxIterationsPerPass = 2048
+    // Provenance: [derived] derivation in this document; [inherited] from a named
+    // tested constant; [owed] a task 26 corpus measurement — shipping an [owed]
+    // value as-asserted is a defect, and for the sector trio Req 3.7 says so.
+    public static let ringInnerMm: Float = 8   // [derived] ~4 px smear ≈ 8 mm at 350 mm;
+                                               // range envelope owed (prerequisites)
+    public static let ringOuterMm: Float = 25  // [owed] must sit inside the smallest
+                                               // measured plate margin
+    public static let ringBandCount = 3        // structural: inner/mid/outer
+    public static let bandStepMaxMm: Float = 6 // [owed] below the smallest measured rim step
+    public static let supportVisibilityMin: Float = 0.15 // [owed] capture 4 is the only source
+    public static let ringBandMm: Float = 5    // [inherited] inlierBandMm = 5
+    public static let ringSupportMin: Float = 0.6 // [owed] vs support-surface noise
+                                                  // (Decision 46 tension; task 26)
+    // Sector measure (Req 3.6, Decisions 18–20). Sectors are equal arcs about the
+    // food-mask centroid; empty sectors count as neither supporting nor failing,
+    // and the bar is absolute, so heavy frame clipping fails towards fallback.
+    public static let ringSectorCount = 8            // [owed] Req 3.7
+    public static let sectorSupportMin: Float = 0.5  // [owed] Req 3.7
+    public static let minSupportingSectors = 6       // [owed] Req 3.7
+    public static let ringSupportMarginMin: Float = 0.15 // [owed]
+    public static let escapeBandMm: Float = 30       // [owed] Decision 22 — the Req 3.3
+                                                     // comparator; "below the lowest
+                                                     // admissible candidate" cannot fire
+    // [derived] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has
+    // binomial σ ≈ 0.10; at the old floor of 60, sectors averaged 7 samples
+    // (σ ≈ 0.19) and the guard was noise (Decision 20). Holds per radial band;
+    // outer bands always exceed the inner, so one constant covers all three.
+    public static let ringMinSamples = 200
+    // [derived] Decision 22 — replaces foodAboveFractionMax, which rejected this
+    // feature's own acceptance capture. Reject when the plane lies above the
+    // food's upper envelope: percentile of signed food height, in MILLIMETRES
+    // as Req 3.4 states, not a sample-count fraction.
+    public static let foodEnvelopePercentile: Float = 0.90
+    public static let foodEnvelopeMinMm: Float = 0    // [owed] Decision 22
+    public static let maxCandidatePlanes = 3     // structural: table, support, one more
+    public static let minCandidateSamples = 500  // [owed]
+    public static let minAcceptedExtentPx = 24   // [owed]
+    public static let maxIterationsPerPass = 2048 // [derived] adaptive stopping caps it;
+                                                  // per-pass residue ratio is reported
 
     // Depth intrinsics derived from colour (device depthIntrinsics are zeros).
     static func depthIntrinsics(from colour: CameraIntrinsics, depth: DepthMap) -> CameraIntrinsics
@@ -183,7 +310,11 @@ public enum SupportRegion {
     static func contactRing(foodMask: BinaryMask, depth: DepthMap,
                             intrinsics: CameraIntrinsics) -> [Int]
 
-    static func ringStatistics(ring: [Int], plane: SupportPlane, depth: DepthMap,
+    // `annulus` is the bounded candidate set (2 × ringOuterMm around the mask);
+    // `ring` is the 8–25 mm sub-annulus. Both are needed: supportVisibility counts
+    // plane inliers across the whole annulus, which ring indices alone cannot supply.
+    static func ringStatistics(ring: [Int], annulus: [Int], foodSampleCount: Int,
+                               plane: SupportPlane, depth: DepthMap,
                                intrinsics: CameraIntrinsics) -> RingStatistics?
 
     // nil when no candidate is admissible — the caller then runs the edge-band
@@ -201,6 +332,14 @@ public enum SupportRegion {
 }
 ```
 
+**`supportVisibility` is defined as a computation, not a description.** An earlier draft gave it as "visible support area ÷ food area", which no declared signature could produce. It is:
+
+```
+supportVisibility = |{ i ∈ annulus : |signedDistance(p_i, plane)| ≤ inlierBandMm }| ÷ foodSampleCount
+```
+
+Both counts are **native depth samples**, so the ratio is dimensionless and grid-independent (Req 5.1). The numerator is support surface actually observed *and* consistent with the candidate plane — food-mask pixels are already excluded from the annulus, so occluded support does not count itself. The denominator is the food sample count, making it food-relative as Decision 14 intends.
+
 `contactRing` and `ringStatistics` are internal but directly unit-tested: they carry the geometry that decides the fit.
 
 **Stats semantics.** On a `.foodSupport` row, `candidatePointCount` / `inlierCount` mean *native depth samples*; on `.edgeBand` they mean colour-grid points, as today. The two differ by ~56× and must not be compared across references — the persisted `planeReference` is what disambiguates them.
@@ -213,8 +352,11 @@ public enum SupportRegion {
 |---|---|---|
 | `planeReference` | `String?` | `foodSupport` / `edgeBand` |
 | `planeRingMedianMm` | `Float?` | ≈ 0 on a correct fit |
-| `planeRingMadMm` | `Float?` | bimodality; large means a straddling ring |
+| `planeRingBandMediansMm` | `[Float]?` | inner/mid/outer medians — the persisted radial profile Decision 14's residual risk depends on; rising identifies a rim, falling a leaked ring |
 | `planeCandidateCount` | `Int?` | candidates extracted |
+| `planeSupportingSectors` | `Int?` | inner-band sectors meeting the bar (Req 6.4) — distinguishes a correct fit from a ring that crossed the support's edge, which both read median ≈ 0 |
+
+Req 3.5's mask-coverage recording needs no new field: `foodRegionCoveragePercent` already persists on `EstimationAttemptRecord` (`PipelineDiagnostics.swift:200`) and lands on the same row as `planeReference`, so a reference flip is attributable to mask movement after the fact.
 
 Calibration artefacts gain `supportPlaneReference`; absent blocks β_c application (Decision 10). Nothing breaks today because every β is `uncalibrated_unity`.
 
@@ -224,7 +366,7 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 
 | Condition | Result |
 |---|---|
-| Ring has fewer than `ringMinSamples` valid samples | fallback |
+| Any band has fewer than `ringMinSamples` valid samples | fallback |
 | Residue below `minCandidateSamples` before any candidate | fallback |
 | No candidate admissible | fallback |
 | Top two candidates within `ringSupportMarginMin` | fallback |
@@ -237,12 +379,14 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 | Case | Asserts |
 |---|---|
 | Plate 20 mm above table, table dominant ~9:1 | selects the plate; the case today's fitter fails |
-| Ring straddling plate and table ~50/50 | rejected on MAD — the silent-failure case |
-| Rimmed plate, well partly visible | inner band selects the well, not the rim |
+| Ring straddling plate and table ~50/50 | rejected on sectors — support confined to arcs; a MAD bar cannot fire here (Decision 19) |
+| Rimmed plate, well partly visible, rim in the outer band | inner band selects the well, not the rim |
+| Rimmed plate, rim step inside the mid band | rejected on the inner→mid step → fallback, not a rim fit (Decision 21) |
 | Rimmed plate, well fully covered | support visibility fails → fallback, not a rim under-read |
 | Bowl, walls above the food | rejected; `reference == .edgeBand` |
 | Co-height board elsewhere in frame | component scoring excludes it |
 | Overhanging food below the plane | accepted — guards must not fire (Req 1.3) |
+| Food to within 10 mm of a flat plate's edge, ring 65 % on table | rejected on sectors; **must not** select the table with median ≈ 0 (Req 3.6) |
 | Candidate below the lowest admissible | rejected (Req 3.3) |
 | Winning plane below `minAcceptedExtentPx` | rejected |
 | Depth grid ≠ 256×192 (N5k identity grid) | mm-based radii transfer (Req 5.1) |
@@ -253,6 +397,6 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 
 **Regression against real captures.** Reqs 6.2, 7.1–7.3 via `make harness-accuracy`. The 195/204 MB bundles are large because of RGB; a **depth-only slice** (256×192 Float32 depth + food mask ≈ 200 KB) is committed to the repo so Reqs 6.2 and 7.1 are executable by anyone, with the full bundles pulled from the device only for the volume criteria that need imagery.
 
-**Numbers this design owes the requirements** — to be fixed during implementation against the fixture corpus, not asserted now: the Req 4.5 fallback-rate defect threshold, Req 5.1's device/replay plane tolerance and named fixture, Req 7.6's latency and memory budget, and `fallbackPenalty`. Each is a measurement, and stating a value here would be inventing evidence.
+**Numbers this design owes the requirements** — to be fixed during implementation against the fixture corpus, not asserted now. Every `SupportRegion` constant is annotated `[derived]`, `[inherited]`, or `[owed]`; the `[owed]` ones are task 26 corpus measurements, with the sector trio under Req 3.7's explicit ban on shipping asserted values, and each measured value lands with its derivation recorded in `decision_log.md` (Req 3.7). Beyond the constants: the Req 4.5 fallback-rate defect threshold, Req 5.1's device/replay plane tolerance and named fixture, Req 7.6's latency and memory budget, and `fallbackPenalty`. Each is a measurement, and stating a value here would be inventing evidence.
 
-**Device-gated:** Req 7.6's budget and Req 7.8's weighed on-device verification.
+**Device-gated:** Req 7.6's budget, Req 7.8's weighed on-device verification, and Req 7.10's weighed single-view rimmed-plate capture — no such capture exists yet (the 2026-08-05 session's lipped-plate capture landed on the two-view path; prerequisites capture 4 is the retake). Per Req 7.11, a weighed capture counts as evidence only where it completed on the single-view LiDAR path — check `capturePath` before grading anything against it.
