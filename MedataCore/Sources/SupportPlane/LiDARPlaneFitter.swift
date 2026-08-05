@@ -59,20 +59,40 @@ public enum LiDARPlaneFitter {
     // bar and `maxCrossedSectors` pull it in opposite directions. Do not treat the 5 as
     // settled; `SupportRegion.ringBandMm` carries the full reading.
     static let inlierBandMm: Float = 5
-    // The gravity cone. NOTE (Decision 52): `SupportRegion.extractCandidates` gates this
-    // on the RANSAC hypothesis and on every consensus-polish pass, but NOT on the first
-    // refinement between them, and the committed corpus contains a candidate at 20.512°
-    // as a result. The cone is an invariant of the hypotheses, not of the candidate set.
+    // The gravity cone. `[owed]` to support-plane-reference task 26 as of its Decision 55,
+    // which is where the ANGLE was finally swept — Decisions 52 and 54 both described this
+    // guard's mechanism and neither varied its bar.
     //
-    // SHARPENED (Decision 54), and it is worse than "not enforced". On that candidate the
-    // polish gate FIRES on the first re-selection, and its rejection path is `break`, which
-    // keeps the previous plane — the ungated refinement, itself outside the cone. So the
-    // conservative fallback the guard is documented with (a re-selection outside the cone
-    // keeps the previous pass's plane, so the polish can never fail a fit that previously
-    // succeeded) is exactly what preserves the plane the cone exists to exclude. The tilt it
-    // leaves standing is a reading at `consensusPolishMaxPasses` below: 26.573° at 2 passes,
-    // Decision 52's 20.512° at the shipped 3, 18.609° from 16 up. The ANGLE itself has still
-    // never been swept.
+    // It is read at FOUR gates, more than any other constant in that feature: the hypothesis
+    // test and the polish gate, in `SupportRegion.ccRansac` / `extractCandidates` and again in
+    // `ransac` / `fitOutcome` below. Only the two hypothesis tests turn anything away. The
+    // polish gates' rejection path is `break`, which keeps the plane the PREVIOUS iteration
+    // produced, and the refinement between hypothesis and polish is not gated at all. Four
+    // things that decision measured and this comment must not lose:
+    //
+    // 1. It BOUNDS NOTHING, and the violation is worst where the bar is tightest. At a 1° cone
+    //    every candidate extraction produces — 4 of 4 — lies outside 1°, each recorded as
+    //    `gravity` at 0 applied iterations. At 2° it is 5 of 6, the worst at 18.955°, NINE
+    //    times its own bar, against 20.512° at 1.37× the shipped 15°. It is not monotone
+    //    either: 8° leaves nothing outside itself and 15° leaves one candidate at 20.512°.
+    // 2. It is a FLOOR, not a knob. The selected plane spans 3.758 mm and 14.584 mm at the
+    //    food over a 1…90° sweep, past Req 5.1's 1 mm — and every millimetre of it is below
+    //    10°. From 10° to 90°, gate fully off included, the plane is unchanged to 0.000 mm.
+    // 3. The floor's derivation is the margin, and this is the number the value stands on.
+    //    The corpus's one intended-correct fit is the PLATE TOP at 8.309°, from a hypothesis
+    //    at 8.900°, so the shipped 15° carries 6.100° of margin. Its own table candidate in
+    //    the same capture is at 2.030° — the surface this feature exists to find sits 6.3° off
+    //    the surface the fallback leg finds, and only the promoted leg is near the bar.
+    // 4. NO CEILING. At 90° the gate cannot reject anything (both fitters orient onto
+    //    gravity's half-space first) and the corpus reads the same planes and the same
+    //    `maxCrossedSectors` 2…2. On this corpus the guard could be removed without changing
+    //    an answer; the scenes it exists for — a wall, a floor, a counter edge — are not in it.
+    //
+    // Bracketed 10°…unbounded, shipped value strictly inside. Do NOT re-derive it from
+    // `CaptureFlowModel`'s 15° oblique shutter gate: that is a camera-POSE tolerance and this
+    // is the angle between a fitted plane's normal and gravity. The coincidence is not a
+    // derivation. Not repaired, on Decisions 52-54's precedent — gating the first refinement
+    // removes a candidate from `1785135663727` and moves `planeCandidateCount` (Req 6.1).
     static let gravityAngleMaxRad: Float = 15 * .pi / 180
     // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5. Residuals in (8, 20]
     // accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm,

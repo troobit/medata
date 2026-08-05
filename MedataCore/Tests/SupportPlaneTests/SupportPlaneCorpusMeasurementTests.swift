@@ -6603,6 +6603,657 @@ struct SupportPlaneCorpusMeasurementTests {
                 "\(polishFixesIt)")
     }
 
+    // MARK: - The gravity cone, the bar four gates read and two enforce
+
+    // What the cone did on one extraction pass. THREE tilts, because the constant is read at
+    // three points in a single pass and only the first of them turns anything away: the
+    // hypothesis `ccRansac` admits, the UNGATED refinement of that hypothesis, and the plane
+    // that finally reaches `admissibility`. Decision 52 measured the gap between the second
+    // and the shipped bar; Decision 54 traced it through the polish and found the gate's
+    // `break` preserving it. Neither varied the bar itself, which is what this does.
+    struct ConeTrace {
+        let passIndex: Int
+        let hypothesisTiltDeg: Float
+        let hypothesisRejected: Int    // draws the ONE enforced gate turned away
+        let hypothesisDraws: Int
+        let refinementTiltDeg: Float
+        let finalTiltDeg: Float
+        let polishIterations: Int
+        let stop: PolishStop
+        func outside(_ coneDeg: Float) -> Bool { finalTiltDeg > coneDeg }
+    }
+
+    // `SupportRegion.ccRansac` with the cone as an argument and its rejections counted.
+    // Every other line is the shipped path's — the same unconditional three draws, the same
+    // orientation onto gravity's half-space, the same inlier band, the same amortised
+    // component labelling, the same adaptive stopping — so at `gravityAngleMaxRad` it
+    // reproduces the shipped hypothesis exactly, which the anchor below checks candidate by
+    // candidate.
+    static func ccRansac(indices: [Int], geometry g: SupportRegion.DepthGeometry,
+                         gravity: Vec3, rng: inout SplitMix64,
+                         scratch: SupportRegion.ComponentScratch,
+                         coneRad: Float, rejected: inout Int,
+                         draws: inout Int) -> SupportRegion.RansacHypothesis? {
+        let n = indices.count
+        guard n >= LiDARPlaneFitter.minPoints else { return nil }
+        var best: SupportRegion.RansacHypothesis?
+        var bestComponent = 0
+        var required = SupportRegion.maxIterationsPerPass
+        var iteration = 0
+
+        while iteration < required && iteration < SupportRegion.maxIterationsPerPass {
+            iteration += 1
+            let i = rng.uniformInt(n)
+            var j = rng.uniformInt(n); if j == i { j = (j + 1) % n }
+            var k = rng.uniformInt(n)
+            if k == i || k == j { k = (k + 1) % n }
+            if k == i || k == j { k = (k + 2) % n }
+            if k == i || k == j { continue }
+
+            let p1 = g.points[indices[i]], p2 = g.points[indices[j]], p3 = g.points[indices[k]]
+            var nHat = (p2 - p1).cross(p3 - p1)
+            if nHat.lengthSquared < 1e-12 { continue }
+            nHat = nHat.normalised()
+            if nHat.dot(gravity) < 0 { nHat = -nHat }
+            draws += 1
+            if acos(SupportRegion.clampedCosine(nHat.dot(gravity))) > coneRad {
+                rejected += 1
+                continue
+            }
+
+            let d = nHat.dot(p1)
+            var inliers: [Int] = []
+            inliers.reserveCapacity(n)
+            for idx in indices
+            where abs(nHat.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                inliers.append(idx)
+            }
+            if inliers.count <= bestComponent { continue }
+
+            let component = scratch.largestComponent(of: inliers)
+            guard component.size > bestComponent else { continue }
+            bestComponent = component.size
+            best = SupportRegion.RansacHypothesis(normal: nHat, d: d, members: component.members)
+            required = SupportRegion.requiredIterations(
+                inlierRatio: Float(bestComponent) / Float(n))
+        }
+        return best
+    }
+
+    // The pass chain with the cone parameterised at BOTH of the places extraction reads it,
+    // and with the ungated refinement between them left ungated — because that is the shipped
+    // path and the question here is what the bar does to it, not what a repaired gate would.
+    static func extractCandidates(
+        annulus: [Int], geometry g: SupportRegion.DepthGeometry,
+        gravity: Vec3, rng: inout SplitMix64, coneRad: Float,
+        trace: inout [ConeTrace]
+    ) -> [SupportRegion.PlaneCandidate] {
+        var residue = annulus
+        var candidates: [SupportRegion.PlaneCandidate] = []
+        let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
+        let residueFloor = SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)
+
+        func tiltDeg(_ n: Vec3) -> Float {
+            acos(SupportRegion.clampedCosine(n.dot(gravity))) * 180 / .pi
+        }
+
+        for passIndex in 0..<SupportRegion.maxCandidatePlanes {
+            guard residue.count >= residueFloor else { break }
+            var rejected = 0
+            var draws = 0
+            guard let hypothesis = Self.ccRansac(
+                indices: residue, geometry: g, gravity: gravity, rng: &rng,
+                scratch: scratch, coneRad: coneRad,
+                rejected: &rejected, draws: &draws) else { break }
+
+            var inliers = hypothesis.members
+            guard let refined = try? LiDARPlaneFitter.refine(
+                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+            ) else { break }
+            var normal = refined.0
+            var d = refined.1
+            let refinementTilt = tiltDeg(normal)
+
+            var applied = 0
+            var stop = PolishStop.cap
+            for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+                var reselected: [Int] = []
+                reselected.reserveCapacity(residue.count)
+                for idx in residue
+                where abs(normal.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                    reselected.append(idx)
+                }
+                let component = scratch.largestComponent(of: reselected)
+                let next = component.members
+                if next == inliers { stop = .fixedPoint; break }
+                if next.count < LiDARPlaneFitter.minPoints { stop = .underpopulated; break }
+                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                    inliers: next.map { g.points[$0] }, seedNormal: normal
+                ) else { stop = .degenerate; break }
+                if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity))) > coneRad {
+                    stop = .gravity
+                    break
+                }
+                inliers = next
+                normal = nextNormal
+                d = nextD
+                applied += 1
+            }
+            trace.append(ConeTrace(
+                passIndex: passIndex,
+                hypothesisTiltDeg: tiltDeg(hypothesis.normal),
+                hypothesisRejected: rejected, hypothesisDraws: draws,
+                refinementTiltDeg: refinementTilt, finalTiltDeg: tiltDeg(normal),
+                polishIterations: applied, stop: stop))
+
+            let component = scratch.largestComponent(of: inliers)
+            candidates.append(SupportRegion.PlaneCandidate(
+                normal: normal, d: d,
+                residualMm: LiDARPlaneFitter.computeResidual(
+                    points: inliers.map { g.points[$0] }, normal: normal, d: d
+                ),
+                componentSize: component.size,
+                extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count))
+
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
+        }
+        return candidates
+    }
+
+    // The OTHER leg's hypothesis gate. `LiDARPlaneFitter.ransac` reads the same constant on
+    // a fixed 256-iteration budget over the colour-grid edge bands, with no connected
+    // component and no adaptive stopping — so the cone is the only thing the two hypothesis
+    // stages share, and a sweep that reports one of them is measuring half the constant.
+    static func fallbackRansac(points: [Vec3], gravity: Vec3, rng: inout SplitMix64,
+                               coneRad: Float,
+                               rejected: inout Int, draws: inout Int)
+        -> (normal: Vec3, d: Float, inliers: [Int]) {
+        var bestScore = 0
+        var bestInliers: [Int] = []
+        var bestNormal = gravity
+        var bestD: Float = 0
+        let n = points.count
+
+        for _ in 0..<LiDARPlaneFitter.maxIterations {
+            let i = rng.uniformInt(n)
+            var j = rng.uniformInt(n); if j == i { j = (j + 1) % n }
+            var k = rng.uniformInt(n)
+            if k == i || k == j { k = (k + 1) % n }
+            if k == i || k == j { k = (k + 2) % n }
+            if k == i || k == j { continue }
+
+            let p1 = points[i], p2 = points[j], p3 = points[k]
+            var nHat = (p2 - p1).cross(p3 - p1)
+            if nHat.lengthSquared < 1e-12 { continue }
+            nHat = nHat.normalised()
+            if nHat.dot(gravity) < 0 { nHat = -nHat }
+            draws += 1
+            if acos(SupportRegion.clampedCosine(nHat.dot(gravity))) > coneRad {
+                rejected += 1
+                continue
+            }
+
+            let d = nHat.dot(p1)
+            var inliers: [Int] = []
+            inliers.reserveCapacity(n)
+            for idx in 0..<n where abs(nHat.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                inliers.append(idx)
+            }
+            if inliers.count > bestScore {
+                bestScore = inliers.count
+                bestInliers = inliers
+                bestNormal = nHat
+                bestD = d
+            }
+        }
+        return (bestNormal, bestD, bestInliers)
+    }
+
+    struct ConeFallbackReading {
+        let planeAtFoodMm: Float
+        let hypothesisTiltDeg: Float
+        let refinementTiltDeg: Float
+        let tiltDeg: Float
+        let residualMm: Float
+        let inlierCount: Int
+        let hypothesisRejected: Int
+        let hypothesisDraws: Int
+        let iterations: Int
+        let stop: PolishStop
+    }
+
+    // `LiDARPlaneFitter.fitOutcome` with the cone parameterised at both of ITS gates. This is
+    // the plane Req 4.3 pins byte-identical to the legacy fitter and Req 4.6 prices, so it is
+    // reported alongside the promoted one at every value.
+    static func fallbackReading(_ slice: DepthSlice, coneRad: Float,
+                                ray: Vec3) -> ConeFallbackReading? {
+        let inputs = LiDARPlaneFitter.Inputs(
+            depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+            foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+        var stats = SupportPlaneFitStats()
+        let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+        guard points.count >= LiDARPlaneFitter.minPoints else { return nil }
+
+        var rng = SplitMix64(seed: Fnv1a64.hash(inputs.depth.depthBytesMm))
+        let gravity = inputs.gravityCamera.normalised()
+        var rejected = 0
+        var draws = 0
+        let (bestNormal, _, bestInliers) = Self.fallbackRansac(
+            points: points, gravity: gravity, rng: &rng, coneRad: coneRad,
+            rejected: &rejected, draws: &draws)
+        guard bestInliers.count >= LiDARPlaneFitter.minPoints else { return nil }
+        guard let refined = try? LiDARPlaneFitter.refine(
+            inliers: bestInliers.map { points[$0] }, seedNormal: bestNormal) else { return nil }
+
+        func tiltDeg(_ n: Vec3) -> Float {
+            acos(SupportRegion.clampedCosine(n.dot(gravity))) * 180 / .pi
+        }
+        var normal = refined.0
+        var d = refined.1
+        let refinementTilt = tiltDeg(normal)
+        var polishedInliers = bestInliers
+        var applied = 0
+        var stop = PolishStop.cap
+        for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+            var reselected: [Int] = []
+            reselected.reserveCapacity(points.count)
+            for idx in 0..<points.count
+            where abs(normal.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                reselected.append(idx)
+            }
+            if reselected == polishedInliers { stop = .fixedPoint; break }
+            if reselected.count < LiDARPlaneFitter.minPoints { stop = .underpopulated; break }
+            guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                inliers: reselected.map { points[$0] }, seedNormal: normal
+            ) else { stop = .degenerate; break }
+            if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity))) > coneRad {
+                stop = .gravity
+                break
+            }
+            polishedInliers = reselected
+            normal = nextNormal
+            d = nextD
+            applied += 1
+        }
+
+        return ConeFallbackReading(
+            planeAtFoodMm: Self.planeDepthMm(normal: normal, d: d, ray: ray),
+            hypothesisTiltDeg: tiltDeg(bestNormal),
+            refinementTiltDeg: refinementTilt,
+            tiltDeg: tiltDeg(normal),
+            residualMm: LiDARPlaneFitter.computeResidual(
+                points: polishedInliers.map { points[$0] }, normal: normal, d: d),
+            inlierCount: polishedInliers.count,
+            hypothesisRejected: rejected, hypothesisDraws: draws,
+            iterations: applied, stop: stop)
+    }
+
+    // Degrees. The ends are set by what the measurement has to be able to see. 1° is below
+    // any plausible hand-held tilt, where the hypothesis gate should starve outright; 90° is
+    // the gate OFF, because both fitters orient every hypothesis onto gravity's half-space
+    // before measuring the angle and nothing can exceed a right angle after that. The shipped
+    // 15° sits mid-sweep, and 20° and 25° bracket the 20.512° candidate Decision 52 found
+    // surviving it.
+    static let gravityConeSweep: [Float] = [1, 2, 3, 5, 8, 10, 12, 15, 18, 20, 25, 30, 45, 90]
+
+    @Test("the gravity cone is read at four gates, and what it leaves standing is not monotone in the bar")
+    func theGravityConeIsTheBarFourGatesReadAndTwoEnforce() throws {
+        struct Pass {
+            let index: Int
+            let normal: Vec3
+            let d: Float
+            let planeAtFoodMm: Float
+            let ringMedianMm: Float
+            let innerSupport: Float
+            let extentMm: Float
+            let tiltDeg: Float
+            let signs: SectorSigns
+        }
+        struct Reading {
+            let name: String
+            let coneDeg: Float
+            let candidates: [Pass]
+            let trace: [ConeTrace]
+            let fallback: ConeFallbackReading?
+            let selectedIndex: Int?
+            let intendedIndex: Int?
+            var selected: Pass? { selectedIndex.map { candidates[$0] } }
+            var intended: Pass? { intendedIndex.map { candidates[$0] } }
+        }
+        struct Capture {
+            let name: String
+            let slice: DepthSlice
+            let g: SupportRegion.DepthGeometry
+            let samples: SupportRegion.RingSamples
+            let ray: Vec3
+        }
+
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            corpus.append(Capture(name: name, slice: slice, g: g,
+                                  samples: SupportRegion.ringSamples(geometry: g),
+                                  ray: try #require(Self.foodCentroidRay(slice))))
+        }
+
+        func pass(_ index: Int, _ c: SupportRegion.PlaneCandidate,
+                  capture: Capture) -> Pass {
+            Pass(index: index, normal: c.normal, d: c.d,
+                 planeAtFoodMm: Self.planeDepthMm(normal: c.normal, d: c.d, ray: capture.ray),
+                 ringMedianMm: SupportRegion.medianHeight(
+                    indices: capture.samples.ring, geometry: capture.g,
+                    normal: c.normal, d: c.d),
+                 innerSupport: Self.innerSupportFraction(
+                    samples: capture.samples, geometry: capture.g,
+                    normal: c.normal, d: c.d),
+                 extentMm: c.extentMm,
+                 tiltDeg: Self.angleDeg(c.normal, capture.slice.gravity.normalised()),
+                 signs: Self.sectorSigns(samples: capture.samples, geometry: capture.g,
+                                         normal: c.normal, d: c.d))
+        }
+
+        func read(_ capture: Capture, coneDeg: Float) -> Reading {
+            let coneRad = coneDeg * .pi / 180
+            var rng = SplitMix64(seed: Fnv1a64.hash(capture.slice.depth.depthBytesMm))
+            var trace: [ConeTrace] = []
+            let extracted = Self.extractCandidates(
+                annulus: capture.samples.annulus, geometry: capture.g,
+                gravity: capture.slice.gravity.normalised(), rng: &rng,
+                coneRad: coneRad, trace: &trace)
+            let candidates = extracted.enumerated().map {
+                pass($0.offset, $0.element, capture: capture)
+            }
+            return Reading(
+                name: capture.name, coneDeg: coneDeg, candidates: candidates, trace: trace,
+                fallback: Self.fallbackReading(capture.slice, coneRad: coneRad, ray: capture.ray),
+                selectedIndex: (0..<candidates.count).max {
+                    candidates[$0].innerSupport < candidates[$1].innerSupport
+                },
+                intendedIndex: (0..<candidates.count).min {
+                    abs(candidates[$0].ringMedianMm) < abs(candidates[$1].ringMedianMm)
+                })
+        }
+
+        var byCone: [Float: [Reading]] = [:]
+        for coneDeg in Self.gravityConeSweep {
+            byCone[coneDeg] = corpus.map { read($0, coneDeg: coneDeg) }
+        }
+
+        // The anchor, both legs. At the shipped cone the instrumented chain must BE the
+        // shipped extraction, candidate for candidate, and the instrumented fallback must be
+        // the shipped `fitOutcome` plane — or the sweep is measuring a different cone and
+        // nothing below says anything about `gravityAngleMaxRad`.
+        // The sweep's own member, not `gravityAngleMaxRad × 180/π` recomputed — the round trip
+        // through radians does not land on a Float dictionary key.
+        let shippedDeg = try #require(Self.gravityConeSweep.first {
+            abs($0 - LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi) < 1e-3
+        }, "the cone sweep no longer contains the shipped gravityAngleMaxRad")
+        for c in corpus {
+            let shipped = try #require(Self.candidates(c.name))
+            let reading = try #require(byCone[shippedDeg]?.first { $0.name == c.name })
+            let drift = "\(c.name): the instrumented cone chain no longer reproduces"
+                + " SupportRegion.extractCandidates at gravityAngleMaxRad"
+                + " (\(shipped.count) shipped candidates, \(reading.candidates.count) reproduced)"
+            #expect(shipped.count == reading.candidates.count, "\(drift)")
+            for (a, b) in zip(shipped, reading.candidates) {
+                #expect(a.d == b.d && a.normal == b.normal, "\(drift)")
+            }
+            let shippedFallback = try #require(Self.fallbackPlane(c.slice))
+            let reproduced = try #require(reading.fallback)
+            let fallbackDrift = "\(c.name): the instrumented cone chain no longer reproduces"
+                + " LiDARPlaneFitter.fitOutcome at gravityAngleMaxRad"
+            #expect(reproduced.planeAtFoodMm
+                    == Self.planeDepthMm(normal: shippedFallback.normal,
+                                         d: shippedFallback.distanceMm, ray: c.ray),
+                    "\(fallbackDrift)")
+        }
+
+        for coneDeg in Self.gravityConeSweep {
+            print("gravityAngleMaxRad=\(fmt(coneDeg))°:")
+            for r in byCone[coneDeg] ?? [] {
+                let shippedRun = byCone[shippedDeg]?.first { $0.name == r.name }
+                if let s = r.selected, let i = r.intended {
+                    print("  \(r.name): \(r.candidates.count) candidates,"
+                          + " selected pass \((r.selectedIndex ?? 0) + 1),"
+                          + " PLANE AT FOOD \(fmt(s.planeAtFoodMm)) mm"
+                          + " (\(fmt(s.planeAtFoodMm - (shippedRun?.selected?.planeAtFoodMm ?? s.planeAtFoodMm))) vs shipped),"
+                          + " tilt \(fmt(s.tiltDeg))°,"
+                          + " ring median \(fmt(s.ringMedianMm)) mm,"
+                          + " support \(fmt(s.innerSupport)),"
+                          + " crossed \(s.signs.crossedFailing);"
+                          + " intended pass \((r.intendedIndex ?? 0) + 1)"
+                          + " (tilt \(fmt(i.tiltDeg))°,"
+                          + " ring median \(fmt(i.ringMedianMm)) mm,"
+                          + " support \(fmt(i.innerSupport)),"
+                          + " crossed \(i.signs.crossedFailing),"
+                          + " plane \(fmt(i.planeAtFoodMm)) mm)")
+                } else {
+                    print("  \(r.name): NO CANDIDATE — extraction starved at \(fmt(coneDeg))°")
+                }
+                for (t, p) in zip(r.trace, r.candidates) {
+                    print("    pass \(t.passIndex + 1):"
+                          + " hypothesis \(fmt(t.hypothesisTiltDeg))°"
+                          + " (\(t.hypothesisRejected)/\(t.hypothesisDraws) draws rejected by the cone),"
+                          + " ungated refinement \(fmt(t.refinementTiltDeg))°"
+                          + "\(t.refinementTiltDeg > coneDeg ? " OUTSIDE" : "")"
+                          + " → final \(fmt(t.finalTiltDeg))°"
+                          + "\(t.outside(coneDeg) ? " OUTSIDE" : ""),"
+                          + " polish \(t.polishIterations) stopped on \(t.stop.rawValue),"
+                          + " plane \(fmt(p.planeAtFoodMm)) mm,"
+                          + " ring median \(fmt(p.ringMedianMm)) mm,"
+                          + " support \(fmt(p.innerSupport)),"
+                          + " extent \(fmt(p.extentMm)) mm")
+                }
+                if let f = r.fallback {
+                    print("    FALLBACK: hypothesis \(fmt(f.hypothesisTiltDeg))°"
+                          + " (\(f.hypothesisRejected)/\(f.hypothesisDraws) draws rejected),"
+                          + " ungated refinement \(fmt(f.refinementTiltDeg))°"
+                          + " → final \(fmt(f.tiltDeg))°"
+                          + "\(f.tiltDeg > coneDeg ? " OUTSIDE" : ""),"
+                          + " polish \(f.iterations) stopped on \(f.stop.rawValue),"
+                          + " plane \(fmt(f.planeAtFoodMm)) mm"
+                          + " (\(fmt(f.planeAtFoodMm - (shippedRun?.fallback?.planeAtFoodMm ?? f.planeAtFoodMm))) vs shipped),"
+                          + " residual \(fmt(f.residualMm)) mm, inliers \(f.inlierCount)")
+                }
+            }
+        }
+
+        // MARK: what the bar moves
+
+        var spanByName: [String: (lo: Float, hi: Float)] = [:]
+        var fallbackSpanByName: [String: (lo: Float, hi: Float)] = [:]
+        for readings in byCone.values {
+            for r in readings {
+                if let s = r.selected {
+                    let e = spanByName[r.name] ?? (s.planeAtFoodMm, s.planeAtFoodMm)
+                    spanByName[r.name] = (min(e.lo, s.planeAtFoodMm), max(e.hi, s.planeAtFoodMm))
+                }
+                if let f = r.fallback {
+                    let e = fallbackSpanByName[r.name] ?? (f.planeAtFoodMm, f.planeAtFoodMm)
+                    fallbackSpanByName[r.name] = (min(e.lo, f.planeAtFoodMm),
+                                                  max(e.hi, f.planeAtFoodMm))
+                }
+            }
+        }
+        let spans = spanByName.mapValues { $0.hi - $0.lo }
+        let fallbackSpans = fallbackSpanByName.mapValues { $0.hi - $0.lo }
+        print("plane movement at the food over the CONE sweep:"
+              + " \(spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + "; fallback leg"
+              + " \(fallbackSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm transfer tolerance")
+
+        // MARK: what it leaves standing
+
+        for coneDeg in Self.gravityConeSweep {
+            let traces = (byCone[coneDeg] ?? []).flatMap(\.trace)
+            let fallbacks = (byCone[coneDeg] ?? []).compactMap(\.fallback)
+            print("  at \(fmt(coneDeg))°: candidates outside the cone"
+                  + " \(traces.filter { $0.outside(coneDeg) }.count)/\(traces.count)"
+                  + " (worst \(fmt(traces.map(\.finalTiltDeg).max() ?? 0))°),"
+                  + " ungated refinements outside"
+                  + " \(traces.filter { $0.refinementTiltDeg > coneDeg }.count)/\(traces.count),"
+                  + " hypothesis rejections"
+                  + " \(traces.map(\.hypothesisRejected).reduce(0, +))/\(traces.map(\.hypothesisDraws).reduce(0, +))"
+                  + " extraction and"
+                  + " \(fallbacks.map(\.hypothesisRejected).reduce(0, +))/\(fallbacks.map(\.hypothesisDraws).reduce(0, +))"
+                  + " fallback")
+        }
+
+        // MARK: the bracket
+
+        var crossedByCone: [Float: (floor: Int, ceiling: Int)] = [:]
+        for coneDeg in Self.gravityConeSweep {
+            var floor = 0, ceiling = Int.max
+            var complete = true
+            for r in byCone[coneDeg] ?? [] {
+                guard let intended = r.intended, let selected = r.selected else {
+                    complete = false
+                    continue
+                }
+                floor = max(floor, intended.signs.crossedFailing)
+                if r.selectedIndex != r.intendedIndex {
+                    ceiling = min(ceiling, selected.signs.crossedFailing - 1)
+                }
+            }
+            crossedByCone[coneDeg] = (floor, ceiling)
+            print("  \(fmt(coneDeg))°: maxCrossedSectors corpus \(floor)…"
+                  + "\(ceiling == Int.max ? "unbounded" : "\(ceiling)")"
+                  + "\(complete ? "" : " (a capture starved)")"
+                  + " \(floor <= ceiling ? "" : "EMPTY")")
+        }
+
+        // MARK: what the sweep says
+
+        func outsideTheCone(_ coneDeg: Float) -> (outside: Int, total: Int) {
+            let traces = (byCone[coneDeg] ?? []).flatMap(\.trace)
+            return (traces.filter { $0.outside(coneDeg) }.count, traces.count)
+        }
+
+        // THE FIRST FINDING, and it is what the constant is FOR. The cone is read at four
+        // gates — the hypothesis test and the polish gate, on each of the two legs — and only
+        // the hypothesis tests turn anything away. The polish gates' rejection path is
+        // `break`, which KEEPS the plane that failed the check's predecessor, and the
+        // refinement between the two stages is not gated at all (Decisions 52, 54). Vary the
+        // bar and the consequence is not that the violation shrinks: at 1° the cone admits
+        // hypotheses within 1° and EVERY candidate extraction produces is outside 1° — 4 of 4,
+        // each one `gravity` at 0 applied iterations. At 2° it is 5 of 6, the worst at 18.955°,
+        // NINE TIMES its own bar, against 20.512° at 1.37× the shipped 15°. The bar is not a
+        // bound on the candidate set at any value in the sweep that admits one.
+        let atOne = outsideTheCone(1)
+        print("candidates outside their own cone: 1° \(atOne.outside)/\(atOne.total),"
+              + " 2° \(outsideTheCone(2).outside)/\(outsideTheCone(2).total),"
+              + " shipped \(outsideTheCone(shippedDeg).outside)/\(outsideTheCone(shippedDeg).total)")
+        let coneBoundsTheSet = "the cone now bounds the candidate set at its tightest value"
+            + " (\(atOne.outside)/\(atOne.total) outside a 1° cone) — the polish gate's `break`"
+            + " no longer preserves the plane it rejected and Decisions 52 and 54's finding has"
+            + " been repaired somewhere upstream"
+        #expect(atOne.total > 0 && atOne.outside == atOne.total, "\(coneBoundsTheSet)")
+
+        // And it is not monotone in the bar. 8° leaves NOTHING outside itself while the
+        // shipped 15° leaves one candidate at 20.512°, so tightening the guard by seven
+        // degrees moves the worst plane in the set FURTHER out. A guard whose violation does
+        // not fall as its bar falls is not measuring what it names.
+        let atEight = outsideTheCone(8)
+        let atShipped = outsideTheCone(shippedDeg)
+        let monotone = "the cone's violations are monotone in the bar after all"
+            + " (8° \(atEight.outside)/\(atEight.total), shipped"
+            + " \(atShipped.outside)/\(atShipped.total)) — tightening it now tightens the set"
+        #expect(atEight.outside == 0 && atShipped.outside > 0, "\(monotone)")
+
+        // THE SECOND FINDING: it moves the answer, and every millimetre of that movement is
+        // BELOW the floor. 3.758 mm and 14.584 mm at the food over the sweep, both past Req
+        // 5.1's 1 mm — but from 10° to 90° the selected plane is unchanged to 0.000 mm on both
+        // captures, gate fully off included. So unlike `inlierBandMm` (Decision 52) or
+        // `ransacSuccessProbability` (Decision 51), which wander across their whole range, this
+        // constant is a FLOOR rather than a knob: it either admits the hypothesis that produces
+        // the correct fit or it does not, and above that there is nothing to tune.
+        let aboveFloor = Self.gravityConeSweep.filter { $0 >= 10 }
+        var stationary = true
+        for c in corpus {
+            let reference = byCone[shippedDeg]?.first { $0.name == c.name }?.selected?.planeAtFoodMm
+            for coneDeg in aboveFloor {
+                let here = byCone[coneDeg]?.first { $0.name == c.name }?.selected?.planeAtFoodMm
+                if here != reference { stationary = false }
+            }
+        }
+        let eightMoves = corpus.compactMap { c -> Float? in
+            guard let a = byCone[8]?.first(where: { $0.name == c.name })?.selected?.planeAtFoodMm,
+                  let b = byCone[shippedDeg]?.first(where: { $0.name == c.name })?.selected?.planeAtFoodMm
+            else { return nil }
+            return abs(a - b)
+        }.max() ?? 0
+        print("selected plane stationary from 10° to 90°: \(stationary);"
+              + " 8° moves it \(fmt(eightMoves)) mm")
+        let floorMoved = "the corpus no longer floors the cone at 10° — the selected plane"
+            + " \(stationary ? "still" : "no longer") holds to 0.000 mm from 10° up and 8°"
+            + " moves it \(fmt(eightMoves)) mm against Req 5.1's"
+            + " \(fmt(Self.gridTransferToleranceMm)) mm"
+        #expect(stationary && eightMoves > Self.gridTransferToleranceMm, "\(floorMoved)")
+
+        // THE THIRD FINDING, and it is the exact reverse of Decision 54's. That constant moved
+        // the FALLBACK plane further than the promoted one; this one barely touches the
+        // fallback — 0.226 mm and 0.074 mm over the whole sweep, inside Req 5.1 even at a 1°
+        // cone — while moving the promoted plane 3.758 mm and 14.584 mm. The reason is in the
+        // tilts, and it is the floor's derivation: the fallback fits the TABLE over the
+        // colour-grid edge bands and lands at 1.742° and 0.579°, so a 15° cone has thirteen
+        // degrees of headroom there and nothing to do. The promoted fit on `1785135663727` is
+        // the PLATE TOP, at 8.309°, from a hypothesis at 8.900° — 6.3° off the table candidate
+        // in its own capture. One constant gates two surfaces that differ by six degrees in the
+        // same frame, and only the promoted one is anywhere near it.
+        let promoted = spans.values.max() ?? 0
+        let fallbackWidest = fallbackSpans.values.max() ?? 0
+        let hypothesisTilts = (byCone[shippedDeg] ?? []).compactMap { r -> Float? in
+            guard let i = r.intendedIndex, i < r.trace.count else { return nil }
+            return r.trace[i].hypothesisTiltDeg
+        }
+        let worstHypothesis = hypothesisTilts.max() ?? 0
+        print("margin over the hypothesis that produces the intended fit:"
+              + " \(fmt(shippedDeg - worstHypothesis))° at the shipped \(fmt(shippedDeg))°"
+              + " (worst intended hypothesis \(fmt(worstHypothesis))°);"
+              + " promoted leg moves \(fmt(promoted)) mm, fallback leg \(fmt(fallbackWidest)) mm")
+        let legsAgree = "the fallback leg now moves with the cone as well"
+            + " (promoted \(fmt(promoted)) mm, fallback \(fmt(fallbackWidest)) mm) — the"
+            + " asymmetry Decision 54 found running the other way has gone"
+        #expect(promoted > Self.gridTransferToleranceMm
+                && fallbackWidest < Self.gridTransferToleranceMm, "\(legsAgree)")
+        let marginMoved = "the intended fit's own hypothesis no longer sits between 8° and the"
+            + " shipped cone (\(fmt(worstHypothesis))°) — the floor of 10° is not this"
+            + " measurement's and the bracket needs re-reading"
+        #expect(worstHypothesis > 8 && worstHypothesis < shippedDeg, "\(marginMoved)")
+
+        // THE BRACKET: 10…unbounded, with the shipped 15° strictly inside it — the second owed
+        // constant in this feature not sitting on an edge, after Decision 50's removal band.
+        // The FLOOR is the corpus's twice over: below 8° the joint `maxCrossedSectors` interval
+        // is EMPTY, and at 8° the plane moves 1.802 mm. There is NO CEILING at all — at 90° the
+        // gate cannot reject anything (both fitters orient onto gravity's half-space first) and
+        // the corpus reads 2…2 and the same selected plane anyway. What a cone above 45° does
+        // buy is one absurd candidate: `1785135663727`'s third pass finds a 79.809° surface
+        // 1305.187 mm away with support 0.000, which `extent` rejects regardless. So on this
+        // corpus the guard could be removed entirely without changing a single answer, and the
+        // value cannot be set from it.
+        let tightEverywhere = aboveFloor.allSatisfy {
+            crossedByCone[$0]?.floor == 2 && crossedByCone[$0]?.ceiling == 2
+        }
+        let belowIsEmpty = Self.gravityConeSweep.filter { $0 < 8 }.allSatisfy {
+            guard let r = crossedByCone[$0] else { return false }
+            return r.floor > r.ceiling
+        }
+        print("maxCrossedSectors: EMPTY below 8° \(belowIsEmpty), 2…2 from 10° up"
+              + " \(tightEverywhere), gate fully off \(crossedByCone[90].map { "\($0.floor)…\($0.ceiling)" } ?? "—")")
+        let noCeiling = "the corpus now bounds the cone from above — turning the gate off at"
+            + " 90° changes a reading it did not before, and this constant has a two-sided"
+            + " bracket for the first time"
+        #expect(tightEverywhere && belowIsEmpty
+                && crossedByCone[90]?.floor == 2 && crossedByCone[90]?.ceiling == 2,
+                "\(noCeiling)")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a

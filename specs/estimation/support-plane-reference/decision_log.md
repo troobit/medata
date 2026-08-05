@@ -3094,3 +3094,79 @@ On the capture carrying the corpus's only intended-correct fit the polish remove
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`consensusPolishMaxPasses` and `gravityAngleMaxRad` provenance blocks), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`thePolishCapIsACapOnALoopThatFixedPointsFirst`, `thePolishDoesNotRemoveTheSeedSpreadItWasAddedFor`, and the instrumented `extractCandidates` / `fallbackReading` helpers), `docs/agent-notes/estimation-runtime-consistency.md` and `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes.**
 
 ---
+
+## Decision 55: The gravity cone is read at four gates, enforced at two, and bounds nothing
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.gravityAngleMaxRad = 15°` is the last of the constants both fitters read that had never been varied. Decisions 52 and 54 both wrote about it and neither swept it: Decision 52 recorded that `SupportRegion.extractCandidates` leaves the refinement between the RANSAC hypothesis and the consensus polish ungated, so the corpus holds a candidate at 20.512°; Decision 54 traced that candidate through the loop and found the polish gate *firing* on it at zero applied iterations, its `break` preserving the ungated plane. Both decisions ended with the same sentence — the angle itself has never been read.
+
+It is read at **four** gates, and no other constant in this feature is read at more than three. `SupportRegion.ccRansac` tests every hypothesis against it; `SupportRegion.extractCandidates` tests every consensus re-selection; `LiDARPlaneFitter.ransac` and `LiDARPlaneFitter.fitOutcome` do the same on the fallback leg. It is therefore the **eighth** constant that decides which planes compete and the second, after `consensusPolishMaxPasses`, that both fitters share.
+
+Its comment carries a mechanism and no derivation. Nothing anywhere says why 15 rather than 10 or 25.
+
+### Decision
+
+`gravityAngleMaxRad` is `[owed]`. Bracketed **10°…unbounded** by the corpus, with the shipped 15° strictly inside — the second owed constant in this feature not sitting on an edge, after Decision 50's removal band.
+
+The guard **does not bound the candidate set at any value the corpus admits**, and the violation is not monotone in the bar: at a 1° cone every candidate extraction produces is outside 1°, and at 2° the worst is at 18.955° — nine times its own bar — against 20.512° at 1.37× the shipped 15°.
+
+It moves the answer, and **every millimetre of that movement is below the floor**: 3.758 mm and 14.584 mm at the food over the sweep, and 0.000 mm from 10° to 90° with the gate fully off included. So it is a floor, not a knob.
+
+The floor's derivation is measured for the first time: the corpus's one intended-correct fit is the **plate top at 8.309°**, from a hypothesis at **8.900°**, which leaves the shipped value **6.100°** of margin.
+
+Not repaired.
+
+### Rationale
+
+**Four gates, and only the two hypothesis tests turn anything away.** The polish gates' rejection path is `break`, which keeps the plane the *previous* iteration produced, and the refinement between the hypothesis and the polish is not gated at all. Swept, the consequence is not that a tighter cone leaves a tighter set — it is the opposite. At **1°** the hypothesis gate admits only hypotheses within 1° and **4 of the 4 candidates** extraction produces lie outside 1°, every one of them recorded as `gravity` at 0 applied iterations. At 2° it is 5 of 6, the worst at **18.955°**. At the shipped 15° it is 1 of 6, at 20.512°. Read as a ratio to the bar the guard is asked to enforce, the violation is **9.5×** at 2° and **1.37×** at 15°. A guard whose violation grows as its bar falls is not measuring the quantity it names.
+
+**And it is not monotone in either direction.** At 8° *nothing* is outside the cone; seven degrees looser, at the shipped 15°, one candidate sits at 20.512°. The count outside reads 4/4, 5/6, 1/5, 3/6, **0/6**, 1/6, 1/6, 1/6, 1/6, 0/6, 0/6, 0/6, 0/6 over 1…90°. So no value of this constant can be chosen by asking how far outside it the candidate set reaches, because that quantity does not order with it.
+
+**It moves the answer, and all of the movement is on the floor side.** The selected plane at the food spans **3.758 mm** on `1785135663727` and **14.584 mm** on `1785901032716`, both past the 1 mm Decision 35 measures Req 5.1's transfer at. But from **10° to 90°** — the gate switched fully off at the top, since both fitters orient every hypothesis onto gravity's half-space before measuring and nothing can then exceed a right angle — the selected plane is unchanged to **0.000 mm** on both captures. Every millimetre is below 10°. That separates this constant from `inlierBandMm` (Decision 52) and `ransacSuccessProbability` (Decision 51), which wander across their whole range: this one either admits the hypothesis that produces the correct fit or it does not, and above that there is nothing to tune.
+
+**The floor is the corpus's, twice over.** Below 8° the joint `maxCrossedSectors` interval is **empty** on all four values swept — the intended candidate reads 6 crossed sectors where the selected one reads 0, because extraction is drawing from a starved hypothesis pool and finding different surfaces. At 8° the interval recovers to 2…2 but the plane still moves **1.802 mm**: `1785135663727`'s pass 1 lands at 353.130 mm with inner support 0.536 and 2 crossed sectors, against the 351.328 mm / 0.629 / 0 the corpus reads from 10° up. 10° is the first swept value at which the shipped answer is reproduced exactly.
+
+**And the floor's derivation is the thing worth keeping.** The two legs disagree about how much room the guard needs, by six degrees, in the same frame. The fallback leg fits the **table** over the colour-grid edge bands and lands at 1.742° and 0.579° of tilt; the promoted leg fits the **plate top** and lands at 8.309° on `1785135663727`, from a hypothesis at 8.900°. Its own table candidate in the same capture is at 2.030°, so the surface the feature exists to find is **6.3° off the surface the legacy fitter finds**, and only the promoted leg is anywhere near the bar. The shipped 15° therefore carries **6.100°** of margin over the hypothesis that produces the corpus's one intended-correct fit — the first number this constant has ever had attached to it.
+
+**The fallback leg barely moves, which is the exact reverse of Decision 54.** That constant moved the fallback plane 1.719 mm and the promoted one 0.490 mm; this one moves the promoted plane 14.584 mm and the fallback **0.226 mm and 0.074 mm**, inside Req 5.1 at every value including a 1° cone. Req 4.3 holds throughout for the same reason it held there — one constant moves both legs — but the asymmetry runs the other way, and the reason is the six degrees above. Two constants read by both fitters, opposite sensitivities.
+
+**There is no ceiling at all.** At 90° the gate cannot reject anything and the corpus reads `maxCrossedSectors` 2…2 and the same selected plane on both captures. What a cone above 45° does buy is one absurd candidate: `1785135663727`'s third pass finds a **79.809°** surface 1305.187 mm away with inner support 0.000 and a ring median of +163.392 mm — and `minAcceptedExtentMm` rejects it anyway at 35.370 mm of extent. So **on this corpus the guard could be removed entirely without changing a single answer**, which is the strongest statement against setting its value from these captures.
+
+**Req 7.6 is denominated here, and in the tightening direction.** The gate is what the fallback's fixed 256-iteration budget is spent against: at the shipped 15° it turns away **137 and 10** of 256 draws on the two captures, at 8° **173 and 29**, at 1° **252 and 207**. Extraction pays twice, because `requiredIterations` cannot stop adaptively until a good component is found — pass 1 of `1785135663727` costs 72 draws at 15° and above, 86 at 8°, and **169** at 1°. Every other owed constant in this feature trades latency against quality in the *loosening* direction; this one costs both when tightened.
+
+### Alternatives Considered
+
+- **Set it at 10°, the corpus's floor, since the corpus reads every value from there up identically** - It is the tightest value that reproduces the shipped answer exactly, and a tighter cone is a stronger guard for nothing - Rejected because the floor is a reading on one plate at 8.309°, and 10° leaves 1.7° over the hypothesis that produces it. A plate resting a degree less flat than this one falls out, and the corpus contains one plate. The margin is what the sitting prices, not the floor.
+- **Remove the guard, since the corpus reads 90° identically to 15°** - It is measured: no verdict, no plane and no bracket in this feature moves when the cone is switched off, and the one absurd candidate it admits at 90° is rejected on `extent` regardless - Rejected because the corpus is two near-nadir captures of a plate on a table, which is exactly the scene where a gravity cone has nothing to do. The wall-and-floor scenes it exists for are not in it, and 79.809° at 1305 mm is what the annulus finds the moment the gate stops looking.
+- **Repair the two unenforced gates — gate the first refinement and make the polish gate reject rather than `break`** - The measurement shows the guard does not do the job it names at any value, and repairing it is a few lines - Rejected on Decisions 52, 53 and 54's precedent, and more firmly than there: repairing it removes a candidate from `1785135663727`, which changes `planeCandidateCount` (Req 6.1) and the removal chain the third pass draws from. This pass measures; the sitting prices.
+- **Derive it from the capture envelope, since `CaptureFlowModel`'s oblique shutter gate is also 15°** - Two 15s in one pipeline look like one derivation - Rejected because they are different quantities. The capture gate is a **camera pose** tolerance (`abs(θ − 25) ≤ 15`, closeout-trail Decision 1); this is the angle between a fitted plane's normal and gravity, which is a property of the surface and not of how the phone was held. The coincidence is recorded so nobody re-derives one from the other.
+- **Split it per leg, since the two legs need 13° and 6.1° of margin respectively** - The fallback would be comfortable at 5° and the promoted leg would not - Rejected for Decision 54's reason: the two halves have the same job on different sample sets. Recorded as a reading, because a per-leg value would be set from exactly these two margins.
+
+### Consequences
+
+**Positive:**
+
+- The first of the three constants the previous pass named as never swept is measured, and it is the one both fitters read.
+- A guard that has been described in two decisions is finally read against its own bar, and the description turns out to understate it: the cone is not a bound on the candidate set at **any** value, and the violation is worst where the bar is tightest.
+- The floor has a derivation rather than a bracket edge — 8.900°, the hypothesis that produces the corpus's one intended-correct fit — so the shipped value has a margin attached to it for the first time.
+- The corpus's intended plane is measured against its own table in the same capture, at 6.3°, which is a fact about the feature's target surface that nothing else in this pass would have surfaced.
+- The second constant read on the fallback leg, and the first where the two legs' sensitivities run opposite ways.
+- Req 7.6 gains an owed constant that costs latency when **tightened**, which no earlier one did.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the fifth pass running, and this one the corpus cannot bound from above at all — even the gate switched off reads identically.
+- The floor rests on a single plate at a single tilt, so it is a property of one capture rather than of the scene class.
+- The guard is now known to be non-enforcing at every value and is documented rather than repaired for the third decision running.
+- The 6.3° disagreement between the plate top and its own table is unexplained. It could be the plate, the fit, or the recorded gravity, and the corpus cannot separate them.
+- Every plane figure this feature quotes is a reading at a cone that admits planes outside itself, so the candidate set behind them has never been bounded by the thing that is supposed to bound it.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`gravityAngleMaxRad` provenance block), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the unenforced-cone note at `extractCandidates`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theGravityConeIsTheBarFourGatesReadAndTwoEnforce`, and the instrumented `ccRansac` / `extractCandidates` / `fallbackRansac` / `fallbackReading` helpers), `design.md` (the "correct and reused" claim about the cone, and the straddling section's second review, both marked superseded), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes.**
+
+---
