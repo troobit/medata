@@ -878,8 +878,11 @@ Output: π_sup = (n̂, d), residual_mm, ring statistics    — or NOTHING (fall 
 
 3. Sequential CC-RANSAC, up to maxCandidatePlanes passes over the residue, one
    depth-hash-seeded generator threaded through all passes (Req 7.7 determinism):
-       a. Iterations adapt to the observed inlier ratio rather than a fixed 256; the pass-1
-          ratio is ~6 %, where 256 iterations reach ~4 % success.
+       a. Iterations adapt to the observed inlier ratio rather than a fixed 256. (The "~6 %
+          pass-1 ratio, where 256 iterations reach ~4 % success" this step was written
+          against is SUPERSEDED by support-plane-reference Decision 51: measured, the
+          pass-1 ratios are 0.402 and 0.698 and the passes spend 72, 11, 250 and 12, 41, 5
+          draws. Adapting is still right; the figure that motivated it was not the corpus's.)
        b. Score := size of the largest 8-CONNECTED inlier component, not the total inlier
           count — a plane straddling two surfaces separated by a step must lose to either
           surface alone. Component labelling is AMORTISED to hypotheses whose raw inlier
@@ -997,6 +1000,8 @@ Output: π_sup = (n̂, d), residual_mm
 ```
 
 **Parameter justification for §6.2.2 (asserted; sensitivity study in design phase).** Inlier band 5 mm chosen as the standard ARKit LiDAR per-pixel σ. Residual cap 20 mm (Decision 46, raised from 8 mm) admits real-surface roughness and textured tablecloths; residuals in (8, 20] mm accept with σ_plane = exp(−r/5) carrying the degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε floor). 15° gravity-angle bias is wide enough to admit a tray on a slight slope but rejects candidates whose normals don't even vaguely align with up. 256 iterations is standard for a 3-point sample; success probability > 0.999 for 50% inliers.
+
+**Superseded in part, support-plane-reference Decisions 51, 55 and 57.** The "256 iterations" sentence is arithmetically correct and is **not** the derivation of the value: measured on the committed corpus, the fallback fit's winning hypothesis holds 0.607 and 0.949 of its points, and the same success-probability criterion at those ratios asks for **39 and 5 draws**, not 256. The plane the fit ships settles by the **eighth** draw (movement 0.027 and 0.152 mm above it, inside Req 5.1's 1 mm) while the search itself never converges — a budget of 1024 still finds a better hypothesis on both captures. `LiDARPlaneFitter.maxIterations` is therefore `[owed]` to support-plane-reference task 26, bracketed 8…unbounded by the corpus and 4…unbounded by the committed regression suite (Decision 57). The 15° cone is likewise `[owed]`, bracketed 10°…unbounded, and bounds nothing at any value on this corpus (Decision 55). §6.2.2's promoted leg no longer uses a fixed budget at all.
 
 ### 6.3 Card-only iterative support-plane fit (Req 4.3)
 

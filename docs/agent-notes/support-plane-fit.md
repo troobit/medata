@@ -9,8 +9,11 @@ questions. Read this before changing either.
 | `SupportRegion.swift` | which gravity-aligned plane the food is actually resting on | `foodSupport` |
 
 `SupportRegion` is the `specs/estimation/support-plane-reference/` feature.
-`LiDARPlaneFitter` is not being deleted: it is the fallback, and Req 4.3 requires the
-fallback plane to be byte-identical to what it produces today.
+`LiDARPlaneFitter` is not being deleted: it is the fallback, and Req 4.3 requires the plane the
+pipeline USES when the fallback fires to be identical to the one this fitter PRODUCES for that
+capture. That is an internal consistency, not a freeze on this fitter's constants — both sides
+of the identity move together when one of them moves (Decisions 54, 57). An earlier reading of
+this line as "byte-identical to what it produces today" is superseded.
 
 ## Why the old fitter is wrong and still kept
 
@@ -126,6 +129,7 @@ measured value against a constant flips as soon as the constant crosses it.
 | `maxIterationsPerPass` | none — no scene runs extraction | 128…unbounded, never fires (Decision 51) |
 | `consensusPolishMaxPasses` | none — no scene runs extraction or the fallback fit | 1…unbounded, **always** fires, interpolable (Decision 54) |
 | `gravityAngleMaxRad` | none — no scene runs extraction or the fallback fit | 10°…unbounded, a **floor** not a knob (Decision 55) |
+| `LiDARPlaneFitter.maxIterations` | **4…unbounded** — the regression slices, not the scenes (Decision 57) | 8…unbounded, a **floor** not a knob, exact at every value (Decision 57) |
 
 **Every row of the sector part of that table is denominated in `ringSectorCount` *and*
 `sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
@@ -1174,3 +1178,77 @@ defined the fallback's region since that date, and Decision 36 prices the fallba
 it does not set. `collectCandidatePoints` is the region's only definition;
 `specs/estimation/pipeline/design.md` §6.2 still described it in the constant's terms and is
 marked superseded.
+
+## The fallback's iteration budget, and the search that never finishes (Decision 57)
+
+`LiDARPlaneFitter.maxIterations = 256` is read in `ransac` and nowhere else, which makes it the
+**only constant task 26 has measured that one leg reads alone**. The loop is a bare
+`for _ in 0..<maxIterations` — no adaptive stopping, no connected component, no early exit.
+
+**Its derivation exists, is correct, and argues against it.** `SupportRegion.ccRansac` and
+`SupportRegionCandidateTests` both carry "maxIterations = 256 was sized to find the DOMINANT
+plane and must not be inherited on faith — P(clean triple) is 98 % at w = 0.25 but 3 % at
+w = 0.05". The promoted leg acted on that and built `requiredIterations`; the fallback leg still
+runs on the number the argument rejects. The reasoning is filed on the leg that abandoned the
+constant, so it is unreachable from the constant. A fourth kind of provenance failure, after the
+missing markers of Decisions 47/48/51, Decision 52's markers pointing at an underived constant,
+and Decision 56's marker covering a different quantity.
+
+**The search never converges, so no value is a convergence point.** RANSAC's running best is
+monotone in the draws and nothing here stops it:
+
+| capture | points | improvements over 1024 draws |
+|---|---|---|
+| `1785135663727` | 1,077,427 | #1, #3, #5, #46, #60, #74, **#76**, #689 |
+| `1785901032716` | 1,475,580 | #1, #12, #20, **#210**, #1005 |
+
+The bold entry is where a budget of 256 stops. Doubling it finds a better hypothesis on both.
+Exact mirror of `SupportRegion.maxIterationsPerPass`, which never binds at all (Decision 51):
+one cap cannot fire, the other cannot stop firing.
+
+**It is a floor, not a knob, and the floor is eight draws.** The plane spans 23.474 mm and
+0.152 mm at the food over 1…1024, and every millimetre of the wide one is below a budget of 8.
+From 8 up the captures hold to 0.027 and 0.152 mm, inside Req 5.1's 1 mm. A budget of 2 sits
+23.466 mm out at a 9.504° tilt. Second constant with this shape after `gravityAngleMaxRad`.
+
+**The promoted leg's rule, replayed on this leg's own trace, exits at 39 and 5 draws** — 6.6×
+and 51× cheaper — landing 0.019 and 0.069 mm from the shipped plane. The budget is generous
+because the surface is easy: the winning hypothesis holds 0.607 and 0.949 of the points, far
+above the w = 0.25 the argument treats as comfortable.
+
+**The sweep is exact rather than sampled.** `uniformInt` consumes one `next()` and the loop draws
+i, j and k unconditionally before any `continue`, so a budget-B run is a strict **prefix** of a
+budget-B′ run and the winner at any budget is the last improvement at or before it. Checked
+against independently seeded short runs. No interpolation rider is needed in either direction —
+the only owed constant here for which that is true.
+
+**Req 4.3 does not pin it.** That requirement makes the plane *used* equal the plane the
+edge-band fit *produces*, and both move together — Decision 54's reading. The line at the top of
+this note ("byte-identical to what it produces today") is about the pipeline not substituting a
+different plane, not about freezing this fitter's constants. The shipped bits happen to be
+reproduced by {256, 512} alone, which is a corpus fact.
+
+**What bounds it is `SupportPlaneRegressionSliceTests`, and this is the suite's first reading
+through the fallback leg** — every earlier one was on `SPRScene` scenes, which run neither
+extraction nor the fallback fit. At a budget of 1 or 2 the parity capture's pre-feature ring
+median goes **negative** (−4.309 mm, the sign Req 6.2 is about), support reads 0.594 against a
+0.5 bar, and volume reads 200.885 cm³ against 682.96. All three go red at once; the suite floors
+the budget at 4.
+
+**The suite is the looser source, which is new.** Corpus 8, suite 4 — a budget of 4 passes every
+committed assertion while sitting 2.231 mm from the shipped plane, past Req 5.1. Decision 41
+warned about the reverse. The regression bands are volume and ring-median bands, not transfer
+bands.
+
+**Req 7.6 and the corpus point the same way for the first time.** Every iteration is a full O(n)
+scan over the **colour** grid — the one place in the feature that runs at 1920×1440 — so 256
+draws cost 2.76 × 10⁸ and 3.78 × 10⁸ distance tests, 96.9 % of them past the 8-draw floor, on
+the path that produced the 32 GB allocation failure.
+
+**Both brackets are readings at `gravityAngleMaxRad`**: a rejected triple spends an iteration and
+buys nothing, so the last improvement moves with the cone (#76 → #46 at 1°, where 45 of 46 draws
+are rejected by then; #210 → #236, where 192 of 236 are).
+
+**Not repaired.** Adding adaptive stopping here is what the measurement recommends and it moves
+the shipped fallback plane — the plane Decision 36 prices `fallbackPenalty` against and the one
+that feeds `lidarMmPerPx` on the legacy path.

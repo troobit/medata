@@ -52,6 +52,46 @@ public enum LiDARPlaneFitter {
     // not aligned here — closing it adds or removes samples on every capture and moves the
     // answer (Decision 53).
     static let confidenceThreshold: Float = 0.40
+    // The fallback's RANSAC budget: a fixed loop bound with no adaptive stopping, read in
+    // `ransac` below and nowhere else. `[owed]` to support-plane-reference task 26 as of its
+    // Decision 57, and the first constant that feature has measured which only ONE leg reads.
+    //
+    // It carried no marker and no comment, which is Decisions 47, 48 and 51's shape — but
+    // unlike those a derivation for it does exist, it is CORRECT, and it is a REFUTATION.
+    // `SupportRegion.ccRansac` and `SupportRegionCandidateTests` both carry "maxIterations =
+    // 256 was sized to find the DOMINANT plane and must not be inherited on faith — P(clean
+    // triple) is 98 % at w = 0.25 but 3 % at w = 0.05". The promoted leg acted on that and
+    // built adaptive stopping; this leg still runs on the number the argument rejects, and
+    // the argument is filed on the leg that abandoned it. Four things Decision 57 measured
+    // and this comment must not lose:
+    //
+    // 1. The search it truncates NEVER FINISHES. The running best is monotone in the draws
+    //    and nothing here stops it, so doubling the budget to 1024 finds a better hypothesis
+    //    on BOTH committed captures (improvements at #689 and #1005, against the #76 and
+    //    #210 that 256 stops at). The shipped value is a truncation, not a convergence
+    //    point — the exact mirror of `SupportRegion.maxIterationsPerPass`, which never binds
+    //    at all because adaptive stopping ends the pass first (Decision 51).
+    // 2. It is a FLOOR, not a knob, and the floor is EIGHT DRAWS. The plane spans 23.474 mm
+    //    and 0.152 mm at the food over a 1…1024 sweep; from a budget of 8 up the two
+    //    captures hold to 0.027 and 0.152 mm, both inside Req 5.1's 1 mm. Second constant
+    //    with this shape after `gravityAngleMaxRad` (Decision 55).
+    // 3. The promoted leg's own stopping rule, replayed on this leg's own improvement trace,
+    //    exits at 39 and 5 draws — 6.6× and 51× cheaper — and lands 0.019 and 0.069 mm from
+    //    the plane 256 draws produce. The budget is generous because the surface is easy:
+    //    the winning hypothesis holds 0.607 and 0.949 of the points, far above either ratio
+    //    the argument above prices.
+    // 4. Every iteration is a full O(n) inlier scan over the COLOUR grid — 1,077,427 and
+    //    1,475,580 candidate points, two orders of magnitude past the promoted leg's annulus
+    //    — so 256 draws cost 2.76e8 and 3.78e8 distance tests, 96.9 % of them past the
+    //    8-draw floor. Req 7.6's latency and the OOM this fitter has already produced are
+    //    denominated here, in the TIGHTENING direction.
+    //
+    // Bracketed 8…unbounded by the corpus and 4…unbounded by the committed regression
+    // suite — the first owed constant where the corpus binds TIGHTER than the suite, against
+    // Decision 41's warning about the reverse. Req 4.3 does NOT pin it: that requirement
+    // makes the plane USED equal the plane this fit PRODUCES, and both move together
+    // (Decision 54's reading). Both brackets are readings at `gravityAngleMaxRad`, because a
+    // rejected triple spends an iteration and buys nothing.
     static let maxIterations: Int = 256
     // ε, the RANSAC inlier band. `[owed]` to support-plane-reference task 26 as of its
     // Decision 52 — this was a bare number with no derivation anywhere, and it is where
