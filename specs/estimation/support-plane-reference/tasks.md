@@ -8,21 +8,21 @@ references:
 
 ## Geometry and selection
 
-- [ ] 1. Write failing tests for depth-intrinsics derivation and colour-to-depth mask downsampling <!-- id:284ca52 -->
+- [x] 1. Write failing tests for depth-intrinsics derivation and colour-to-depth mask downsampling <!-- id:284ca52 -->
   - Assert fx_d = fx_c*W_d/W_c and cx_d = (cx_c+0.5)*W_d/W_c-0.5 — the half-pixel terms are the point of the test; dropping them shifts the principal point ~3.75 colour pixels
   - Assert a depth pixel is food when ANY covered colour pixel is food, so ambiguity resolves towards exclusion (Req 2.1)
   - MedataCore/Tests/SupportPlaneTests/
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4)
 
-- [ ] 2. Implement depthIntrinsics(from:depth:) and the mask downsample in SupportRegion.swift <!-- id:284ca53 -->
+- [x] 2. Implement depthIntrinsics(from:depth:) and the mask downsample in SupportRegion.swift <!-- id:284ca53 -->
   - New file MedataCore/Sources/SupportPlane/SupportRegion.swift
   - Do NOT read depth.depthIntrinsics — ARKitCaptureEngine writes it as all zeros, which yields a NaN plane
   - Blocked-by: 284ca52 (Write failing tests for depth-intrinsics derivation and colour-to-depth mask downsampling)
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.4](requirements.md#2.4)
 
-- [ ] 3. Write failing tests for contactRing and ringStatistics <!-- id:284ca54 -->
+- [x] 3. Write failing tests for contactRing and ringStatistics <!-- id:284ca54 -->
   - Ring excludes food pixels and samples below tau_conf 0.40; radii converted from mm per capture using median food depth
   - ringStatistics returns whole-ring median (persisted, not used for selection), per-band medians, inner-band support fraction, supporting-sector count, support visibility, per-band sample counts. There is NO MAD statistic: the MAD bar cannot fire on an admissible candidate and is deleted (Decision 19)
   - ringMinSamples = 200 holds per band, derived as ringSectorCount x 25 so sector fractions are measurement rather than noise (Decision 20); assert a thinner inner band returns nil
@@ -32,13 +32,13 @@ references:
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8), [3.9](requirements.md#3.9)
 
-- [ ] 4. Implement contactRing and ringStatistics <!-- id:284ca55 -->
+- [x] 4. Implement contactRing and ringStatistics <!-- id:284ca55 -->
   - ringMinSamples = 200 must hold PER BAND, not just overall — radial banding divides the samples (Decision 14), and sectoring divides the inner band again, which is where the 200 floor comes from (Decision 20)
   - Blocked-by: 284ca54 (Write failing tests for contactRing and ringStatistics)
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8), [3.9](requirements.md#3.9)
 
-- [ ] 5. Write failing tests for bounded candidate sampling and CC-RANSAC extraction <!-- id:284ca56 -->
+- [x] 5. Write failing tests for bounded candidate sampling and CC-RANSAC extraction <!-- id:284ca56 -->
   - Candidate set bounded to an ANNULUS of 2x ringOuterMm around the food mask on the depth grid; assert clutter outside that neighbourhood cannot become a candidate
   - NOT dilate(foodMask, 2x foodRadius): that is ~8.3s^2 against today's four-band ~4s^2, i.e. looser than the code it replaces (Decision 15)
   - Assert scoring uses largest 8-connected inlier component, not total inlier count: a plane straddling two surfaces separated by a step must lose to either surface alone
@@ -46,7 +46,7 @@ references:
   - Stream: 1
   - Requirements: [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4)
 
-- [ ] 6. Implement bounded sampling and sequential CC-RANSAC with adaptive iterations <!-- id:284ca57 -->
+- [x] 6. Implement bounded sampling and sequential CC-RANSAC with adaptive iterations <!-- id:284ca57 -->
   - Remove the polished inlier set within 2x inlierBandMm per pass — a 1x shell seeds near-duplicate planes on the next pass
   - Thread one depth-hash-seeded generator through all passes; ransac draws 3 uniformInt per iteration unconditionally, so the sequence stays pass-count-independent
   - Amortise CC labelling: label only hypotheses whose raw inlier count is within a constant factor of the running best. Unamortised it is up to maxIterationsPerPass x maxCandidatePlanes labellings, order 1e8 ops, on the path that already produced a 32 GB allocation failure (Decision 15)
@@ -55,7 +55,7 @@ references:
   - Stream: 1
   - Requirements: [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4)
 
-- [ ] 7. Write failing tests for admissibility guards, selection and determinism <!-- id:284ca58 -->
+- [x] 7. Write failing tests for admissibility guards, selection and determinism <!-- id:284ca58 -->
   - Guards filter ALL candidates for admissibility, then the best admissible wins — assert a phantom candidate failing a guard does not discard an admissible plate plane
   - Scene cases: plate 20mm above table with table dominant 9:1; ring straddling 50/50 (rejected on sectors, Decision 19); rimmed plate well partly visible with the rim in the outer band (inner band wins — the step guard reads inner-to-mid only, Decision 21); rimmed plate with the rim step inside the mid band (rejected to fallback); rimmed plate well fully covered (visibility fails); bowl; co-height board; overhanging food below the plane must NOT trigger guards; candidate below the lowest admissible; winner below minAcceptedExtentPx; food mask at frame edge
   - Overhang case (Decision 22): the weighed bread capture has ~11% of food samples below the plate plane. Assert the envelope guard ACCEPTS it — a count-fraction bar at 0.05 rejects it and fails Req 7.2
@@ -64,7 +64,7 @@ references:
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8), [3.9](requirements.md#3.9), [7.7](requirements.md#7.7)
 
-- [ ] 8. Implement fitFoodSupportPlane <!-- id:284ca59 -->
+- [x] 8. Implement fitFoodSupportPlane <!-- id:284ca59 -->
   - Returns nil rather than throwing — rejection is an expected outcome on the fallback path
   - Score on inner-band support fraction, not |median| (50% cliff); reject when the top two admissible candidates are within ringSupportMarginMin
   - There is NO MAD guard: the sector guard is the Req 2.3 dispersion bar (Decision 19). The band-step guard reads the inner-to-mid step only, or it rejects the partly-visible well Decision 14 rescues (Decision 21)
@@ -140,7 +140,7 @@ references:
   - Mixture fixtures do NOT move (Decision 17), so the corpus spans two references permanently, not just in transition — Req 5.4's within-reference rule is a standing constraint
   - This restores validity of existing artefacts against the corrected geometry; it is NOT new beta_c gravimetric calibration, which stays a Non-Goal
   - May need compute time; see prerequisites.md
-  - Blocked-by: 284ca5h (Delete plateRegionMask and fitPlateRegionPlane; wire FixtureRunner to the promoted path)
+  - Blocked-by: 284ca5h (Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path)
   - Stream: 1
   - Requirements: [5.4](requirements.md#5.4)
 
@@ -175,7 +175,7 @@ references:
   - 7.2: capture 1785901032716 volume within 20% of 200 cm3, class pinned as a precondition since mass depends on class and density this feature does not control
   - 7.3: a weighed non-flat capture — NOT the 208 g rice bundle, which FixtureLoader loads zero meals from; see prerequisites.md for the replacement. 7.4: the bowl fixture exercises the fallback path
   - 6.2: ring measure +18..+26 mm under the pre-feature fit, ~0 under the corrected fit
-  - Blocked-by: 284ca5h (Delete plateRegionMask and fitPlateRegionPlane; wire FixtureRunner to the promoted path)
+  - Blocked-by: 284ca5h (Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path)
   - Stream: 1
   - Requirements: [6.2](requirements.md#6.2), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4)
 
@@ -183,7 +183,7 @@ references:
   - PlateTopSupportPlaneTests (MedataCore/Tests/VolumeTests/, XCTSkip at :55) encodes exactly this resolution and was skipped pending it
   - KEEP PlateRegionPlaneTests — the flood fill it tests survives for the mixture path (Decision 17). Delete only the untracked DiagProbe/ probe
   - Confirm the three prior plane-fit bugfixes still hold: no allocation failure at 1920x1440, no degenerate fit on a clean capture, no matte-table confidence regression
-  - Blocked-by: 284ca5h (Delete plateRegionMask and fitPlateRegionPlane; wire FixtureRunner to the promoted path)
+  - Blocked-by: 284ca5h (Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path)
   - Stream: 1
   - Requirements: [7.5](requirements.md#7.5)
 
