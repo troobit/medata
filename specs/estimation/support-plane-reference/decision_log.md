@@ -2456,3 +2456,90 @@ The **verdict** is not. Across eight draws per capture the supporting and crosse
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`ringRadiusIsTheRadialUnitOfTheSectorRule` and `candidateSelectionIsSeedUnstableAtTheShippedRadius`; a `ringSamples(geometry:outerMm:)` mirroring the shipped builder, an `innerSupportFraction` that reads below the `ringMinSamples` floor, and the eight committed scenes lifted into a `SceneSpec` list so they can be re-ringed), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringOuterMm` comment), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
 
 ---
+
+## Decision 47: The band count is the divisor the sector measure was never varied over, and two values survive
+
+**Date**: 2026-08-06
+**Status**: accepted (adds a fourth constant to Decision 46's triple; qualifies Decisions 41 and 43; confirms Decision 46's attribution)
+
+### Context
+
+Of the seven constants the sector measure reads — `ringInnerMm`, `ringOuterMm`, `ringBandCount`, `ringBandMm`, `ringSectorCount`, `sectorSupportMin`, `ringMinSamples` — six carry a provenance marker. `ringBandCount` carries none. Its whole comment is "Structural: inner / mid / outer", which is an assertion in a word that does not look like one, and it has never been varied.
+
+Decision 46 is what turns that into a gap. It found `ringOuterMm` upstream of the count and the bar because the crossed-sector rule reads the **inner band**, whose outer edge is `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount` — and then swept only the numerator. The divisor sets the same edge. It also divides in a second place at once: `ringMinSamples` is floored **per band**, so raising the count narrows every band and starves the floor in the same move that sharpens the rule.
+
+Three things separate it from the other three constants in advance of measuring it. It does **not** move the annulus, so unlike the radius the candidate set is fixed. It does move the inner band, and `bestCandidate` ranks on inner-band support, so unlike the count and the bar it is not obviously a pure re-reading. And it is the only one of the four bounded from below by a guard's **existence**: `admissibility` reads `bandMedianMm[1] − bandMedianMm[0]` behind a `count > 1` test.
+
+### Decision
+
+`ringBandCount` is recorded as **bracketed 2…3**, floor from the `bandStep` guard's existence and from the committed suite, ceiling from Req 5.1's grid halving. The shipped 3 sits **on the ceiling**, the position Decision 45 found `sectorSupportMin` in. It is marked `[owed]`; "structural" is withdrawn.
+
+It does **not** move the answer. The selected plane at the food is unchanged to 0.000 mm on both captures at every band count in the sweep, so Decision 46's "first owed constant that moves the answer" is confirmed as a property of the **annulus** specifically rather than of radial geometry generally.
+
+Decision 46's triple stays a triple for the *sitting*. This constant is bracketed to two values by evidence already committed and does not need the captures, so it is fixed **before** them, not with them.
+
+Nothing is rewired and no shipped value moves.
+
+### Rationale
+
+The same two corpus captures and the same eight committed scenes, re-banded at nine counts at the shipped radius. Extraction is re-run but the annulus does not move, so the candidate set is the shipped one at every count and only the reading changes.
+
+| `ringBandCount` | band width | inner band ends | `…3727` sup / crossed | `…2716` sup / crossed | joint `maxCrossedSectors` | `bandStepMaxMm` suite | Req 5.1 halving | `bandStep` guard |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 17.000 | 25.000 | 5 / 0 | 5 / 3 | **empty** | n/a | feasible | **silent** |
+| **2** | 8.500 | 16.500 | 5 / 0 | 5 / 3 | **1…2** | 0.214…13.470 | feasible | runs |
+| **3** | **5.667** | **13.667** | **5 / 0** | **5 / 3** | **0…2** | **0.024…9.288** | feasible | runs |
+| 4 | 4.250 | 12.250 | 5 / 0 | 3 / 5 | 0…2 | 0.024…6.755 | **refused** | runs |
+| 5 | 3.400 | 11.400 | 5 / 0 | 2 / 6 | 0…2 | 0.042…5.496 | **refused** | runs |
+| 6 | 2.833 | 10.833 | 5 / 0 | 5 / 3 | 0…2 | 0.009…0.211 | **refused** | runs |
+| 7 | 2.429 | 10.429 | 5 / 0 | 3 / 5 | 0…2 | **empty** | **refused** | runs |
+| 8 | 2.125 | 10.125 | 5 / 0 | 2 / 6 | 0…2 | **empty** | **refused** | runs |
+| 10 | 1.700 | 9.700 | 5 / 0 | 2 / 6 | 0…2 | **empty** | **refused** | runs |
+
+**The floor is 2, and it arrives twice independently.** The first reason is that a guard stops existing. At one band there is no mid band, `admissibility`'s `bandMedianMm.count > 1` test is false, and the `bandStep` guard does not fire and does not report that it did not — while two committed scenes, `bowl` and `rim in the mid band`, assert that it *does*. That is the shape of failure Decision 18 exists to prevent, reached through a constant nobody was watching. The second reason is the committed suite, arriving as Decision 41 predicted and for the third time: at one band the inner band **is** the whole 8…25 mm ring, so the rims the rimmed-plate scenes place at fixed pixel radii fall inside it, a scene that must *pass* reads all eight sectors crossed, and both suite intervals go empty together — `maxCrossedSectors` 8…2 and `minSupportingSectors` 6…0. Either reason alone excludes 1.
+
+**The ceiling is 3, and it is Req 5.1's for the third time.** Decision 44 read this bound on `ringSectorCount` (≤ 11) and Decision 46 on `ringOuterMm` (≥ 22 mm). The same 2× depth-grid halving reads it here, and it lands hardest, because `ringMinSamples` is floored per band and this constant *is* how many bands there are. Halved band counts are [322, 361, 323] and [313, 292, 299] at three bands, and [237, 197, 215, 255] and [258, 264, 204, 280] at four — refused on a grid where the plane still transfers within a millimetre. One partition, three constants dividing it, one bound; this is the constant that divides it most directly.
+
+**Two values, which is the tightest bracket any owed constant in this feature has** — and the shipped value is on its ceiling rather than inside it.
+
+**It denominates `bandStepMaxMm`, and not by scaling.** The step is a difference between two bands this constant creates, so narrowing them moves the quantity the bar is read against. The suite interval collapses monotonically — 13.470, 9.288, 6.755, 5.496, 0.211 mm of ceiling at 2 through 6 bands — and then **inverts**: from seven bands the scene that must fire on `bandStep` reads a *smaller* step than the scene that must pass, and no value of the constant satisfies the suite at all. A rim spanning a fixed radial distance stops being a step between adjacent bands once the bands are narrower than the rim. Decision 41's 0.024…9.288 mm is a reading at three bands and says so nowhere.
+
+The two shipped values are consistent, but by a margin nothing records: `bandStepMaxMm = 6` sits inside the suite interval at 2, 3 and 4 bands and above its ceiling from 5 up. That covers the whole Req 5.1 bracket, so the pair does not collide — the coupling is real and currently harmless.
+
+**It denominates `maxCrossedSectors` too, which makes a fourth.** Decision 44 recorded that constant as a count of sectors, Decision 45 as a count read at a bar, Decision 46 as a count read at a radius. It is also a count read at a band count: the joint bracket is **1…2 at two bands** and 0…2 at three and above. So Decision 43's headline — that 0 is admissible and nothing in hand narrows 0…2 — is a reading at three bands. What moves it is Decision 43's own recorded blind spot: the rimmed-plate rims "never reach the inner band the sector median is computed over" at three bands, and at two the inner band ends at 16.5 mm instead of 13.667 and one of them does. The blind spot Decision 43 attributed to the scenes is a property of this constant.
+
+**What does not move.** The selected plane is identical at every band count on both captures — 351.328 mm and 356.280 mm at the food throughout, 0.000 mm of movement against Decision 46's 18.719 mm on the radius. The candidate set is fixed because the annulus is, and although selection ranks on inner-band support, the ranking never flips. Decision 46's attribution of the movement to the annulus was an argument; it is now a measurement.
+
+The crossed-sector rule also separates the two corpus candidates at **every** band count — the plate-top candidate reads 0 crossed sectors throughout and the table candidate 3 to 6 — so, as Decision 44 found for the sector count, a coarse divisor does not average the crossing away. And Decision 41's collision on `minSupportingSectors` is band-count invariant: the suite floors it at 6 and the corpus caps it at 5 at every count from 2 up.
+
+### Alternatives Considered
+
+- **Set `ringBandCount = 3` now, since the bracket has two values and 3 is shipped** - The bracket is the tightest in the feature and the value is already in the code, so setting it costs nothing and closes an owed constant - Rejected because 3 is on the **ceiling**, not inside the bracket, and Decision 45 established what that position means: the constraint that produces the edge is the one under-measured there. Req 5.1's halving refuses 4 by 3 samples in the tightest band (197 against 200) on a two-capture corpus, which is not a margin to sit against. Two values is a narrow choice, not an automatic one.
+- **Set `ringBandCount = 2`, the other admissible value, for the sample-count headroom** - Halved bands read [434, 470] and [522, 484] at two bands against [313, 292, 299] and [322, 361, 323] at three, so it clears Req 5.1 with roughly 50 % more margin - Rejected because it is the value at which `maxCrossedSectors` loses 0 from its joint bracket, and because it discards the mid band the outward *profile* is read from — Decision 14's shape detection needs three bands to distinguish flat from rising from falling, and at two "outward" has one meaning only. The headroom is real; it is not free.
+- **Leave `ringBandCount` unmarked as structural, since three bands is what "inner / mid / outer" means** - The name states the intent and the design's Decision 14 describes exactly a three-way shape reading - Rejected because the sweep shows the word carrying weight it has not earned: the constant sets the inner-band edge the sector rule reads, bounds `bandStepMaxMm`'s suite interval, moves `maxCrossedSectors`'s bracket, and is capped by Req 5.1. A constant with four downstream dependants is not structural notation. Decision 14's three-way reading is a *reason* for 3, and it is now recorded as one — in the alternative above, where it belongs.
+- **Sweep the band count jointly with the radius rather than at the shipped radius** - Both divide the same ring and Decision 46 showed the radius reorders what the count reads, so the honest measurement is the 2-D grid - Rejected for this pass and recorded as a limitation instead. The bracket here is produced by Req 5.1's halving and the suite, both of which the radius also moves, so 2…3 is a **slice at `ringOuterMm` = 25** exactly as Decision 45's collision-free grid was. Running the grid means re-extracting at seventeen radii × nine band counts; the sweep at one radius already costs ~35 s.
+- **Re-denominate the bands in millimetres, as Decisions 37 and 38 re-denominated the extent and residue bars** - A band width in millimetres would not move with `ringOuterMm`, and the Req 5.1 ceiling would then be a statement about width rather than count - Rejected on the same ground Decision 46 rejected the matching proposal for the inner band: the unit here is not wrong. A count of bands is what the shape reading needs, and converting it would replace an owed count with an owed width plus an implied count, which is more to own rather than less.
+
+### Consequences
+
+**Positive:**
+
+- `ringBandCount` is bounded at all, and by two values — the tightest bracket in the feature — where it previously had no marker and no measurement. It is the last constant the sector measure reads that had neither.
+- Decision 46's central attribution is confirmed rather than assumed: the plane movement belongs to the annulus, and a constant that divides the inner band without moving the annulus moves nothing at the food.
+- A silent-failure mode is found and bounded before it could be reached: at one band the `bandStep` guard stops firing without saying so, and two committed scenes assert against exactly that.
+- Req 5.1's grid transfer now bounds **three** of the ring's constants — angular resolution (Decision 44), radial extent (Decision 46) and radial resolution (here) — off one halving. The transfer claim is doing more work than any single decision recorded.
+- The capture session's list shortens by one item that was never on it: this constant is settled to two values by committed evidence and needs no capture.
+
+**Negative:**
+
+- The shipped value is on the ceiling of its own bracket, and the constraint producing that ceiling clears by 3 samples in one band on a two-capture corpus.
+- `maxCrossedSectors` is now denominated in **four** owed constants. Decision 43's "nothing in hand narrows 0…2" is a reading at one point of a four-dimensional space, and 2 bands already gives 1…2.
+- The bracket is a slice at the shipped radius, so the same caveat Decision 46 attached to Decision 45's grid attaches here — and the two constants that produce both ends of this bracket are the two the radius also moves.
+- `bandStepMaxMm`'s suite interval is now known to go empty above six bands, which means the guard the interval belongs to is only measurable on the committed scenes at coarse partitions. Nothing says whether that is the scenes or the guard.
+- The measurement suite grows by another ~35 s and is now decisively the slowest thing in `make test`.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theBandCountIsTheRadialDivisorOfTheSectorRule`; a `ringSamples(geometry:bandCount:)` mirroring the shipped builder, a `bandMediansMm` reading below the `ringMinSamples` floor, and `sceneSigns`/`sceneStepMm` overloads that re-band the committed scenes), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringBandCount` and `bandStepMaxMm` comments), `design.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---

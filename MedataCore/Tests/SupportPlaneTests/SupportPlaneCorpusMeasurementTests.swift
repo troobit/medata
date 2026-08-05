@@ -2747,6 +2747,460 @@ struct SupportPlaneCorpusMeasurementTests {
                            count: SupportRegion.ringSectorCount)
     }
 
+    // MARK: - The band count, and what it divides
+
+    // `ringBandCount` is the only constant in the ring geometry carrying NO provenance
+    // marker at all. Every neighbour is `[measured]`, `[inherited]`, `[derived]` or
+    // `[owed]`; this one says "Structural: inner / mid / outer", which is an assertion
+    // wearing a different word. It has never been varied.
+    //
+    // Decision 46 is what makes that a gap rather than a tidiness complaint. It found the
+    // radius upstream of the count and the bar because the sector rule reads the INNER
+    // BAND, whose outer edge is `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount`
+    // — and then swept only the numerator. The divisor sets the same edge. Worse, it
+    // divides in two places at once: the inner band the sector rule reads, and the band
+    // partition `ringMinSamples` is floored PER member of, so raising it narrows the arcs
+    // and starves them in the same move.
+    //
+    // Three properties distinguish it from the other three. It does NOT move the annulus,
+    // so unlike the radius the candidate SET is fixed. It does move which candidate is
+    // SELECTED, since `bestCandidate` ranks on inner-band support and the inner band is
+    // what this divides — so unlike the count and the bar it is not purely a re-reading.
+    // And it is the only one of the four that a guard's existence bounds from below:
+    // `admissibility` reads `bandMedianMm[1] − bandMedianMm[0]` behind a `count > 1` test,
+    // so at one band the `bandStep` guard does not fire and does not report that it did not.
+    //
+    // 1 is included to measure that floor rather than assume it. Above 8 the bands are
+    // narrower than 2.2 mm at the shipped radius, roughly half a depth pixel at corpus
+    // range, so the sweep stops where the partition stops meaning anything.
+    static let ringBandCountSweep = [1, 2, 3, 4, 5, 6, 7, 8, 10]
+
+    @Test("the band count is the radial divisor of the sector rule, and it was never structural")
+    func theBandCountIsTheRadialDivisorOfTheSectorRule() throws {
+        let specs = Self.sceneSpecs()
+        #expect(specs.count == 8, "a scene stopped producing a spec")
+        let mustPass = specs.filter { $0.requiresPass.contains(.sectors) }
+        let mustFire = specs.filter { $0.requiresFire.contains(.sectors) }
+        let stepPass = specs.filter { $0.requiresPass.contains(.bandStep) }
+        let stepFire = specs.filter { $0.requiresFire.contains(.bandStep) }
+
+        struct Corpus {
+            let name: String
+            let signs: SectorSigns
+            let bandCounts: [Int]
+            let bandMediansMm: [Float]
+            let planeAtFoodMm: Float
+            let normal: Vec3
+            let candidateD: Float
+            var feasible: Bool {
+                bandCounts.allSatisfy { $0 >= SupportRegion.ringMinSamples }
+            }
+            // The quantity `bandStepMaxMm` is read against. Undefined at one band, which
+            // is the point of measuring there.
+            var stepMm: Float? {
+                bandMediansMm.count > 1 ? bandMediansMm[1] - bandMediansMm[0] : nil
+            }
+        }
+
+        struct Bands {
+            let count: Int
+            let innerBandOuterMm: Float
+            let bandWidthMm: Float
+            let corpus: [Corpus]
+            // `maxCrossedSectors`, Decision 43's two constraint sets at this band count.
+            let corpusFloor: Int, corpusCeiling: Int
+            let suiteFloor: Int, suiteCeiling: Int
+            // `minSupportingSectors`, the unsigned count Decision 41 found contradictory.
+            let countCorpusCeiling: Int
+            let countSuiteFloor: Int, countSuiteCeiling: Int
+            // `bandStepMaxMm`'s suite interval, which is a difference between two of the
+            // bands this constant creates and so is denominated in it.
+            let stepFloorMm: Float?, stepCeilingMm: Float?
+            // Req 5.1's 2× depth-grid halving, the bound Decision 44 read the count's
+            // ceiling off and Decision 46 the radius's floor.
+            let halvedBandCounts: [String: [Int]]
+            var halvedFeasible: Bool {
+                halvedBandCounts.values.allSatisfy {
+                    $0.allSatisfy { $0 >= SupportRegion.ringMinSamples }
+                }
+            }
+            var jointFloor: Int { max(corpusFloor, suiteFloor) }
+            var jointCeiling: Int { min(corpusCeiling, suiteCeiling) }
+            var jointFeasible: Bool { jointFloor <= jointCeiling }
+            var countJointFloor: Int { countSuiteFloor }
+            var countJointCeiling: Int { min(countCorpusCeiling, countSuiteCeiling) }
+            var feasible: Bool { corpus.allSatisfy(\.feasible) }
+            // Whether the `bandStep` guard can run at all here.
+            var stepGuardRuns: Bool { count > 1 }
+        }
+
+        var halvedGeometry: [String: SupportRegion.DepthGeometry] = [:]
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            halvedGeometry[name] = Self.geometry(slice, decimation: 2)
+        }
+
+        var swept: [Bands] = []
+        for count in Self.ringBandCountSweep {
+            var corpus: [Corpus] = []
+            var halvedBands: [String: [Int]] = [:]
+            for name in Self.captures {
+                let slice = try DepthSlice.load(name)
+                let g = try #require(Self.geometry(name))
+                halvedBands[name] = Self.bandSampleCounts(
+                    Self.ringSamples(geometry: try #require(halvedGeometry[name]),
+                                     bandCount: count),
+                    bandCount: count)
+                let samples = Self.ringSamples(geometry: g, bandCount: count)
+                // Re-read, not re-extracted. The annulus is `2 × ringOuterMm` and does
+                // not move with the band count, so the candidate set is the shipped
+                // one — but selection ranks on inner-band support, and that is what
+                // this constant divides.
+                var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+                let candidates = SupportRegion.extractCandidates(
+                    annulus: samples.annulus, geometry: g,
+                    gravity: slice.gravity.normalised(), rng: &rng)
+                let best = try #require(candidates.max {
+                    Self.innerSupportFraction(samples: samples, geometry: g,
+                                              normal: $0.normal, d: $0.d)
+                    < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                normal: $1.normal, d: $1.d)
+                }, "no candidate survives at ringBandCount = \(count)")
+                corpus.append(Corpus(
+                    name: name,
+                    signs: Self.sectorSigns(samples: samples, geometry: g,
+                                            normal: best.normal, d: best.d,
+                                            count: SupportRegion.ringSectorCount),
+                    bandCounts: Self.bandSampleCounts(samples, bandCount: count),
+                    bandMediansMm: Self.bandMediansMm(samples: samples, geometry: g,
+                                                      normal: best.normal, d: best.d,
+                                                      bandCount: count),
+                    planeAtFoodMm: Self.planeDepthMm(
+                        normal: best.normal, d: best.d,
+                        ray: try #require(Self.foodCentroidRay(slice))),
+                    normal: best.normal,
+                    candidateD: best.d))
+            }
+            let plate = try #require(corpus.first { $0.name == "1785135663727" })
+            let table = try #require(corpus.first { $0.name == "1785901032716" })
+            let passSigns = try mustPass.map { try #require(Self.sceneSigns($0, bandCount: count)) }
+            let fireSigns = try mustFire.map { try #require(Self.sceneSigns($0, bandCount: count)) }
+            let passSteps = try stepPass.compactMap { try Self.sceneStepMm($0, bandCount: count) }
+            let fireSteps = try stepFire.compactMap { try Self.sceneStepMm($0, bandCount: count) }
+            swept.append(Bands(
+                count: count,
+                innerBandOuterMm: SupportRegion.ringInnerMm
+                    + (SupportRegion.ringOuterMm - SupportRegion.ringInnerMm) / Float(count),
+                bandWidthMm: (SupportRegion.ringOuterMm - SupportRegion.ringInnerMm) / Float(count),
+                corpus: corpus,
+                corpusFloor: plate.signs.crossedFailing,
+                corpusCeiling: table.signs.crossedFailing - 1,
+                suiteFloor: passSigns.map(\.crossedFailing).max() ?? 0,
+                suiteCeiling: (fireSigns.map(\.crossedFailing).min() ?? 0) - 1,
+                countCorpusCeiling: plate.signs.supporting,
+                countSuiteFloor: (fireSigns.map(\.supporting).max() ?? 0) + 1,
+                countSuiteCeiling: passSigns.map(\.supporting).min() ?? 0,
+                stepFloorMm: passSteps.max(),
+                stepCeilingMm: fireSteps.min(),
+                halvedBandCounts: halvedBands))
+        }
+
+        let shippedBands = try #require(swept.first { $0.count == SupportRegion.ringBandCount })
+        var shippedPlaneAtFood: [String: Float] = [:]
+        for c in shippedBands.corpus { shippedPlaneAtFood[c.name] = c.planeAtFoodMm }
+
+        for b in swept {
+            print("ringBandCount=\(b.count) (bands \(fmt(b.bandWidthMm)) mm wide,"
+                  + " inner band ends \(fmt(b.innerBandOuterMm)) mm,"
+                  + " bandStep guard \(b.stepGuardRuns ? "runs" : "SILENT")):")
+            for c in b.corpus {
+                print("  \(c.name): bands \(c.bandCounts)"
+                      + " \(c.feasible ? "feasible" : "REFUSED"),"
+                      + " medians \(c.bandMediansMm.map { fmt($0) }),"
+                      + " inner→mid \(c.stepMm.map { fmt($0) } ?? "n/a") mm,"
+                      + " PLANE AT FOOD \(fmt(c.planeAtFoodMm)) mm"
+                      + " (\(fmt(c.planeAtFoodMm - (shippedPlaneAtFood[c.name] ?? c.planeAtFoodMm)))"
+                      + " vs shipped),"
+                      + " supporting \(c.signs.supporting), failing \(c.signs.failing.count),"
+                      + " crossed \(c.signs.crossedFailing), escaped \(c.signs.escapedFailing)")
+            }
+            print("  maxCrossedSectors corpus \(b.corpusFloor)…\(b.corpusCeiling),"
+                  + " suite \(b.suiteFloor)…\(b.suiteCeiling),"
+                  + " joint \(b.jointFloor)…\(b.jointCeiling)"
+                  + " \(b.jointFeasible ? "" : "EMPTY");"
+                  + " minSupportingSectors corpus ≤ \(b.countCorpusCeiling),"
+                  + " suite \(b.countSuiteFloor)…\(b.countSuiteCeiling)")
+            print("  bandStepMaxMm suite \(b.stepFloorMm.map { fmt($0) } ?? "n/a")…"
+                  + "\(b.stepCeilingMm.map { fmt($0) } ?? "n/a") mm;"
+                  + " Req 5.1 halved bands \(b.halvedBandCounts)"
+                  + " \(b.halvedFeasible ? "feasible" : "REFUSED")")
+        }
+
+        // Anchor. At three bands this must reproduce Decisions 41, 43 and 45 exactly, or
+        // the re-banding has diverged from `SupportRegion.ringSamples` and nothing below
+        // is a measurement of the band count.
+        let anchor = "re-banding at ringBandCount no longer reproduces the recorded reading"
+            + " (crossed joint \(shippedBands.jointFloor)…\(shippedBands.jointCeiling), count"
+            + " suite floor \(shippedBands.countSuiteFloor), corpus ceiling"
+            + " \(shippedBands.countCorpusCeiling), bandStep suite"
+            + " \(shippedBands.stepFloorMm.map { fmt($0) } ?? "n/a")…"
+            + "\(shippedBands.stepCeilingMm.map { fmt($0) } ?? "n/a") mm) — the sweep is not"
+            + " measuring the same ring Decisions 41, 43 and 45 measured"
+        #expect(shippedBands.jointFloor == 0 && shippedBands.jointCeiling == 2
+                && shippedBands.countSuiteFloor == 6
+                && shippedBands.countCorpusCeiling == 5
+                && abs((shippedBands.stepCeilingMm ?? 0) - 9.288) < 0.01, "\(anchor)")
+
+        // THE NEGATIVE FIRST, because it is what places this constant among the other
+        // three. Decision 46 found the radius moves the SELECTED plane, 18.719 mm at the
+        // food, and attributed it to the annulus moving with it. That attribution is now
+        // tested rather than argued: the band count leaves the annulus at 2 × ringOuterMm,
+        // so the candidate SET is fixed — but selection ranks on inner-band support and
+        // this constant is what divides the inner band, so the ranking could still have
+        // moved. It does not, anywhere in the sweep, on either capture. Decision 46's
+        // "moves the answer" is a property of the annulus specifically, not of radial
+        // geometry generally.
+        var planeSpan: [String: Float] = [:]
+        for b in swept {
+            for c in b.corpus {
+                let shipped = shippedPlaneAtFood[c.name] ?? c.planeAtFoodMm
+                planeSpan[c.name] = max(planeSpan[c.name] ?? 0, abs(c.planeAtFoodMm - shipped))
+            }
+        }
+        let widestPlane = planeSpan.values.max() ?? 0
+        print("plane movement at the food over the band-count sweep:"
+              + " \(planeSpan.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm and Decision"
+              + " 46's 18.719 mm on the radius")
+        let moves = "the band count now moves the selected plane at the food"
+            + " (\(fmt(widestPlane)) mm) — it has joined ringOuterMm as a constant that"
+            + " moves the ANSWER, and the session must fix it before any plane figure is"
+            + " quoted rather than only before the brackets are read"
+        #expect(widestPlane <= Self.gridTransferToleranceMm, "\(moves)")
+
+        // THE FLOOR, and it is unlike any other bound in this feature: it comes from a
+        // guard's EXISTENCE rather than from a measurement. At one band there is no mid
+        // band, `admissibility` skips the `bandStep` test on a `bandMedianMm.count > 1`
+        // guard, and the two scenes the suite commits to rejecting on that guard are
+        // admitted in silence — the shape of failure Decision 18 exists to prevent,
+        // arriving through a constant nobody was watching.
+        let silent = swept.filter { !$0.stepGuardRuns }.map(\.count)
+        print("band counts at which the bandStep guard cannot run: \(silent);"
+              + " scenes asserting on it: \(stepFire.map(\.label))")
+        let stepAlwaysRuns = "the bandStep guard now runs at every band count in the sweep"
+            + " — the structural floor of 2 this records is gone"
+        #expect(!silent.isEmpty && !stepFire.isEmpty, "\(stepAlwaysRuns)")
+
+        // The same floor arrives a SECOND way, and this one is Decision 41's prediction on
+        // a third constant. At one band the inner band IS the whole 8…25 mm ring, so the
+        // rims the rimmed-plate scenes place at fixed pixel radii fall inside it and a
+        // scene that must PASS reads every sector crossed. Both suite intervals go empty
+        // together, exactly as they do at the radius's ceiling (Decision 46).
+        let oneBand = try #require(swept.first { $0.count == 1 })
+        print("at one band: maxCrossedSectors suite \(oneBand.suiteFloor)…\(oneBand.suiteCeiling)"
+              + " \(oneBand.jointFeasible ? "" : "EMPTY"),"
+              + " minSupportingSectors suite \(oneBand.countSuiteFloor)…\(oneBand.countSuiteCeiling)")
+        let oneBandAdmissible = "the committed suite now admits a single band — the second,"
+            + " independent floor this records is gone and only the bandStep guard's"
+            + " existence keeps ringBandCount above 1"
+        #expect(!oneBand.jointFeasible
+                && oneBand.countSuiteFloor > oneBand.countSuiteCeiling, "\(oneBandAdmissible)")
+
+        // THE CEILING, and it is Req 5.1's for the third time. Decision 44 read it on the
+        // sector count, Decision 46 on the radius; the same 2× halving reads it here,
+        // because `ringMinSamples` is floored PER band and this constant is how many bands
+        // there are. One partition, three constants dividing it, one bound — and this is
+        // the constant that divides it most directly, so the ceiling lands hardest: the
+        // halving refuses four bands outright.
+        let transfers = swept.filter(\.halvedFeasible).map(\.count)
+        let ceiling = transfers.max() ?? 0
+        print("band counts at which the ring survives the Req 5.1 halving: \(transfers)"
+              + " — ceiling \(ceiling); ringBandCount bracketed 2…\(ceiling)")
+        let noCeiling = "the Req 5.1 halving no longer refuses any band count in the sweep"
+            + " — the ceiling this records is gone and ringBandCount is bounded only from"
+            + " below"
+        #expect(ceiling < Self.ringBandCountSweep.max() ?? 0, "\(noCeiling)")
+        // Which leaves a bracket of TWO VALUES, the tightest any owed constant in this
+        // feature has, with the shipped value on its ceiling — the position Decision 45
+        // found `sectorSupportMin` in.
+        let shippedInside = "the shipped ringBandCount has left the bracket its own"
+            + " constraints produce (2…\(ceiling))"
+        #expect(SupportRegion.ringBandCount >= 2
+                && SupportRegion.ringBandCount <= ceiling, "\(shippedInside)")
+        let wide = "ringBandCount's bracket (2…\(ceiling)) has stopped being a two-value"
+            + " choice — the claim that it is the tightest bracket in the feature no"
+            + " longer holds"
+        #expect(ceiling - 2 == 1, "\(wide)")
+
+        // And it denominates `bandStepMaxMm`, the constant it most obviously owns: the step
+        // is a difference between two bands this constant creates, so narrowing them moves
+        // the quantity the bar is read against. The suite interval does not merely shift —
+        // it COLLAPSES and then INVERTS, because a rim spanning a fixed radial distance
+        // stops being a step between adjacent bands once the bands are narrower than it.
+        // Decision 41's 0.024…9.288 mm is a reading at three bands and says so nowhere.
+        let stepIntervals = swept.compactMap { b -> String? in
+            guard let lo = b.stepFloorMm, let hi = b.stepCeilingMm else { return nil }
+            return "\(b.count): \(fmt(lo))…\(fmt(hi))"
+        }
+        let stepEmpty = swept.filter {
+            guard let lo = $0.stepFloorMm, let hi = $0.stepCeilingMm else { return false }
+            return lo > hi
+        }.map(\.count)
+        print("bandStepMaxMm suite intervals over the band-count sweep: \(stepIntervals);"
+              + " empty at \(stepEmpty)")
+        let stepInvariant = "bandStepMaxMm's suite interval no longer goes empty anywhere in"
+            + " the band-count sweep — it is not denominated in ringBandCount and Decision"
+            + " 41's interval can be quoted without one"
+        #expect(!stepEmpty.isEmpty, "\(stepInvariant)")
+        // The two shipped values are consistent, but only just, and by a margin nothing
+        // records: `bandStepMaxMm = 6` is admissible at 2, 3 and 4 bands and above the
+        // suite's ceiling from 5 up. That is inside the Req 5.1 bracket, so the pair does
+        // not collide — the coupling is real and currently harmless.
+        let stepAdmits = swept.filter {
+            guard let lo = $0.stepFloorMm, let hi = $0.stepCeilingMm else { return false }
+            return SupportRegion.bandStepMaxMm >= lo && SupportRegion.bandStepMaxMm < hi
+        }.map(\.count)
+        print("band counts at which the shipped bandStepMaxMm"
+              + " (\(fmt(SupportRegion.bandStepMaxMm)) mm) stays inside the suite:"
+              + " \(stepAdmits) — against the Req 5.1 bracket 2…\(ceiling)")
+        let collides = "the shipped bandStepMaxMm no longer survives every band count Req"
+            + " 5.1 permits (\(stepAdmits) against 2…\(ceiling)) — the two constants now"
+            + " collide and the pair must be set together"
+        #expect((2...ceiling).allSatisfy { stepAdmits.contains($0) }, "\(collides)")
+
+        // And it denominates `maxCrossedSectors` too, which makes a FOURTH. Decision 44
+        // recorded that constant as a count of sectors, Decision 45 as a count read at a
+        // bar, Decision 46 as a count read at a radius; it is also a count read at a band
+        // count. The joint bracket is 1…2 at two bands and 0…2 at three — so Decision 43's
+        // headline, that 0 is admissible and nothing in hand narrows 0…2, is a reading at
+        // three bands. What moves it is Decision 43's own recorded blind spot: the
+        // rimmed-plate rims "never reach the inner band" at three bands, and at two the
+        // inner band ends at 16.5 mm instead of 13.667 and one of them does.
+        let jointBrackets = swept.filter(\.jointFeasible).map {
+            "\($0.count): \($0.jointFloor)…\($0.jointCeiling)"
+        }
+        print("joint maxCrossedSectors brackets over the band-count sweep: \(jointBrackets)")
+        let bandInvariant = "maxCrossedSectors reads one bracket at every band count the"
+            + " suite admits (\(jointBrackets)) — it is not denominated in ringBandCount"
+            + " and Decision 43's 0…2 can be quoted without one"
+        #expect(Set(swept.filter(\.jointFeasible).map { "\($0.jointFloor)…\($0.jointCeiling)" })
+                    .count > 1, "\(bandInvariant)")
+
+        // The reassurance, and it is the same one Decision 44 found for the sector count.
+        // Whatever the divisor, the rule still tells the two corpus candidates apart: the
+        // plate-top candidate a correct fit must admit reads no crossed sector at every
+        // band count, and the table candidate reads at least three at all of them. The
+        // brackets move; the separation does not.
+        let separated = swept.allSatisfy { b in
+            guard let plate = b.corpus.first(where: { $0.name == "1785135663727" }),
+                  let table = b.corpus.first(where: { $0.name == "1785901032716" })
+            else { return false }
+            return plate.signs.crossedFailing < table.signs.crossedFailing
+        }
+        print("crossed counts per band count — plate"
+              + " \(swept.map { $0.corpus.first { $0.name == "1785135663727" }?.signs.crossedFailing ?? -1 }),"
+              + " table"
+              + " \(swept.map { $0.corpus.first { $0.name == "1785901032716" }?.signs.crossedFailing ?? -1 })")
+        let averaged = "the crossed-sector rule no longer separates the two corpus"
+            + " candidates at every band count — the divisor can average the crossing away"
+            + " and Decision 40's rule is a property of the shipped partition"
+        #expect(separated, "\(averaged)")
+    }
+
+    // `ringSamples`'s radial banding with the BAND COUNT as a parameter. Everything else —
+    // the distance transform, `ringInnerMm`, `ringOuterMm`, `annulusOuterMultiple`, the
+    // validity and food-mask exclusions, the sector bucketing — is the shipped path's, so
+    // at `ringBandCount` it reproduces `ringSamples` exactly.
+    //
+    // Note what does NOT move with it. The annulus is `2 × ringOuterMm`, so the candidate
+    // set is untouched: this constant divides the ring it is given rather than resizing it.
+    // What does move is the inner band, `ringInnerMm …  ringInnerMm + (ringOuterMm −
+    // ringInnerMm) / bandCount`, which is both what the sector rule reads and what
+    // selection ranks on.
+    static func ringSamples(geometry g: SupportRegion.DepthGeometry,
+                            bandCount: Int) -> SupportRegion.RingSamples {
+        let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
+        let bandWidthMm = (SupportRegion.ringOuterMm - SupportRegion.ringInnerMm) / Float(bandCount)
+        let annulusOuterMm = SupportRegion.annulusOuterMultiple * SupportRegion.ringOuterMm
+        var ring: [Int] = [], band: [Int] = [], sector: [Int] = [], annulus: [Int] = []
+        guard bandWidthMm > 0 else {
+            return SupportRegion.RingSamples(ring: ring, band: band, sector: sector,
+                                             annulus: annulus)
+        }
+        for y in 0..<g.height {
+            for x in 0..<g.width {
+                let idx = y * g.width + x
+                guard g.valid[idx], !g.foodMask.isFood(x: x, y: y) else { continue }
+                let distMm = distancePx[idx] * g.mmPerPx
+                guard distMm <= annulusOuterMm else { continue }
+                annulus.append(idx)
+                guard distMm >= SupportRegion.ringInnerMm,
+                      distMm <= SupportRegion.ringOuterMm else { continue }
+                let b = min(bandCount - 1,
+                            Int((distMm - SupportRegion.ringInnerMm) / bandWidthMm))
+                ring.append(idx)
+                band.append(b)
+                sector.append(b == 0 ? SupportRegion.sectorIndex(x: x, y: y, geometry: g) : -1)
+            }
+        }
+        return SupportRegion.RingSamples(ring: ring, band: band, sector: sector,
+                                         annulus: annulus)
+    }
+
+    static func bandSampleCounts(_ samples: SupportRegion.RingSamples,
+                                 bandCount: Int) -> [Int] {
+        var counts = [Int](repeating: 0, count: bandCount)
+        for band in samples.band { counts[band] += 1 }
+        return counts
+    }
+
+    // `ringStatistics`'s `bandMedianMm` at a band count other than the shipped one, and
+    // without its `ringMinSamples` guard, so a partition the floor refuses can still be
+    // read. `SupportRegion.median` rather than a middle element, since it averages the two
+    // central values on an even count and the step is a difference of two of these — using
+    // anything else moves Decision 41's ceiling by 8 µm and the anchor below would not
+    // reproduce. An empty band reads NaN rather than being dropped, since dropping it
+    // would renumber the bands the step is taken between.
+    static func bandMediansMm(samples: SupportRegion.RingSamples,
+                              geometry g: SupportRegion.DepthGeometry,
+                              normal: Vec3, d: Float, bandCount: Int) -> [Float] {
+        var heights = [[Float]](repeating: [], count: bandCount)
+        for (i, idx) in samples.ring.enumerated() {
+            heights[samples.band[i]].append(normal.dot(g.points[idx]) - d)
+        }
+        return heights.map { $0.isEmpty ? .nan : SupportRegion.median($0) }
+    }
+
+    // One committed scene re-banded at a band count other than the shipped one. The plane
+    // is the scene's own, so only the radial partition moves.
+    static func sceneSigns(_ spec: SceneSpec, bandCount: Int) -> SectorSigns? {
+        guard let g = SupportRegion.prepare(
+            depth: SPRScene.makeDepth(spec.grid),
+            colourIntrinsics: SPRScene.colourIntrinsics,
+            foodRegionMask: SPRScene.makeColourMask(spec.grid)) else { return nil }
+        let p = SPRScene.plane(atHeightMm: spec.planeHeightMm)
+        return sectorSigns(samples: ringSamples(geometry: g, bandCount: bandCount),
+                           geometry: g, normal: p.normal, d: p.d,
+                           count: SupportRegion.ringSectorCount)
+    }
+
+    // The inner→mid step a committed scene reads at a given band count — the quantity
+    // `bandStepMaxMm` is asserted against. nil at one band, where there is no mid band
+    // and the guard cannot run.
+    static func sceneStepMm(_ spec: SceneSpec, bandCount: Int) throws -> Float? {
+        guard bandCount > 1 else { return nil }
+        guard let g = SupportRegion.prepare(
+            depth: SPRScene.makeDepth(spec.grid),
+            colourIntrinsics: SPRScene.colourIntrinsics,
+            foodRegionMask: SPRScene.makeColourMask(spec.grid)) else { return nil }
+        let p = SPRScene.plane(atHeightMm: spec.planeHeightMm)
+        let medians = bandMediansMm(samples: ringSamples(geometry: g, bandCount: bandCount),
+                                    geometry: g, normal: p.normal, d: p.d,
+                                    bandCount: bandCount)
+        guard medians.count > 1, !medians[0].isNaN, !medians[1].isNaN else { return nil }
+        return medians[1] - medians[0]
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
