@@ -1698,3 +1698,66 @@ The residual finding is the part that changes how Req 4.6 should be read. The cr
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`fallbackPlane`, `foodOffsetsMm` and two derivation tests), the `supportPlaneFallbackPenalty` comment in `MedataCore/Sources/Confidence/Confidence.swift`, the `SupportPlaneTests` dependency list in `Package.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
 
 ---
+
+## Decision 37: The extent bar is re-denominated in millimetres, and Req 5.1 loses its exception
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 35 measured Req 5.1's transfer across depth grids and found it holds — the plane moves 0.835 mm and 0.037 mm across a 2× halving — with one exception. `minAcceptedExtentPx = 24` was the only bar in `admissibility` denominated in **pixels**; every other one is millimetres or a dimensionless fraction, which is precisely what the transfer rests on. A pixel count on the winning inlier component halves when the grid halves, so a surface admitted at 44 px was rejected as a sliver at 22 px by the same constant. Decision 35 recorded the defect and deferred the repair, and the constant's own comment stated the two ways out: "re-derive it against `mmPerPx`, or state the grid it is denominated on, before any capture at another depth resolution is admitted to the corpus."
+
+The gap is not hypothetical. `tools/nutrition5k/ingest.py` pins f = 617 px against the device's measured f_d = 182.033 px, so at equal range the same physical extent spans **3.389×** more pixels on the N5k grid — measured, not assumed. Model-production Bucket C is when N5k fixtures first carry a food mask and reach this guard at all, and at that point a bar tuned on the device grid becomes 3.4× looser there without anything in the code saying so.
+
+Nothing about the repair needs a capture. `mmPerPx = median food depth / f_d` is already computed in `prepare` and already used to convert every ring radius, so the conversion is the module's existing one rather than a new one.
+
+### Decision
+
+**`minAcceptedExtentPx = 24` becomes `minAcceptedExtentMm: Float = 44`.** `PlaneCandidate` gains `extentMm` alongside the raw `extentPx`, computed once at construction as `Float(component.minExtentPx) * g.mmPerPx`; `admissibility` takes `extentMm` and compares it against the new constant. The pixel extent is kept because it is what the component scan produces and what a grid-dependence measurement has to see.
+
+**The value does not move.** 24 px at the corpus's measured `mmPerPx` of 1.8616 and 1.8393 is 44.68 mm and 44.14 mm, so 44 mm is the largest whole millimetre at or below both and **every corpus verdict is unchanged** — at either capture's range the mm bar admits at ≥ 24 px exactly as the pixel bar did.
+
+**The bracket becomes a physical bracket.** Measured extents are 228.973, 141.479, 22.339 mm and 285.084, 80.927, 47.821 mm, so the corpus brackets the constant at **22.339…47.821 mm** where it previously bracketed it at 13…26 px. Those two pixel numbers meant different physical sizes on the two captures, whose `mmPerPx` differ, and meant nothing at all on another grid.
+
+**The transfer is measured, not argued.** Across the same 2× halving Decision 35 used, four surfaces pair across the grids. Their pixel extents halve — 123→61, 76→38, 155→77, 44→22 — while their millimetre extents drift by **1.698, 0.102, 1.839 and 0.000 mm**, at most half a pixel of the halved grid (3.68 mm). Verdict flips fall from one to **zero**. The 44 px → 22 px pair is the exact case Decision 35 named: it now reads 80.927 mm on both grids.
+
+### Rationale
+
+Of the two ways out the constant's comment offered, only one removes the defect. Stating the grid documents that a bar does not transfer; converting it means there is no longer a bar that does not transfer, and Req 5.1's transfer claim stops carrying an exception. That is worth more than the documentation because the exception was load-bearing — Req 5.1 is what makes a β_c constant derived offline valid on device, and a guard whose answer depends on the sensor's grid is exactly the kind of thing that invalidates it silently.
+
+Holding the value fixed while changing its units is the same discipline `minResidueSamples` records: the corpus brackets this constant, it does not set it, so a change of denomination must not smuggle in a change of behaviour. Choosing 44 mm rather than the bracket's midpoint keeps the derivation honest — the number still traces to the pixel value someone once chose, and it is still `[owed]` until a capture session shows what a support surface can legitimately be.
+
+Storing `extentMm` on the candidate rather than passing `mmPerPx` into `admissibility` keeps one conversion in one place. The candidate is built where the geometry is in hand; the guard is called from two sites that would otherwise each have to agree on the conversion.
+
+The repair did not wait for Bucket C because the corpus already demonstrates the failure. A verdict that flips under decimation of the committed slices is evidence in hand, and the N5k ratio only says what the same defect would have cost later.
+
+### Alternatives Considered
+
+- **State the grid the constant is denominated on** - The other option the constant's own comment offered: annotate 24 px as a 256×192 value and require restatement for any other grid - Rejected because it preserves the defect and adds a manual step to every future corpus admission. Req 5.1 would still have to be stated with an exception, and the exception is the part that can invalidate a calibration transfer.
+- **Set the value to the bracket midpoint (~35 mm)** - The corpus brackets 22.3…47.8 mm and 44 sits near the top, with only 3.8 mm of headroom above - Rejected because nothing measured justifies moving the value. The corpus never shows a 47.8 mm candidate deserving admission — that one is rejected on `supportFraction` anyway — so the ceiling is soft and a midpoint would be an invention dressed as a derivation.
+- **Pass `mmPerPx` into `admissibility` and convert at the guard** - Keeps `PlaneCandidate` unchanged - Rejected: two call sites would each have to perform the conversion and agree, where the candidate already knows its own geometry at construction.
+- **Leave it in pixels until Bucket C can measure the N5k leg** - The device grid is fixed at 256×192, so the bar is well defined for every capture that exists today - Rejected on the measurement: decimating the committed slices already flips a verdict, so the defect is demonstrable now and does not need the corpus that would first suffer from it.
+
+### Consequences
+
+**Positive:**
+
+- Req 5.1's transfer claim no longer carries an exception: every bar in `admissibility` is now a millimetre or a dimensionless fraction, and the grid-transfer measurement shows zero verdict flips where it previously showed one.
+- The corpus bracket becomes physical (22.3…47.8 mm) instead of grid-relative (13…26 px), so a capture at another depth resolution can be admitted to the corpus without restating it — which is what `prerequisites.md`'s session will produce.
+- The N5k grid's 3.389× pixel-density difference is now measured and neutralised before Bucket C rather than discovered during it.
+- No shipped behaviour changes on the corpus: the value was chosen so that every candidate keeps its verdict, and the full `SupportPlane` suite passes unchanged.
+- `SupportPlaneCorpusMeasurementTests` now asserts the repair rather than the defect, so a future change that reintroduces a grid-dependent bar fails a test instead of being noticed three decisions later.
+
+**Negative:**
+
+- The constant is still `[owed]`. Re-denominating it does not set it, and 44 mm remains a value traced to a chosen pixel count rather than to a measured property of any support surface.
+- The conversion uses `mmPerPx`, which is derived from the **median food depth**, so the bar now assumes the candidate surface lies at roughly the food's range. That assumption is the same one every ring radius already makes, but it is newly load-bearing for this guard: a candidate surface far behind the food is measured against a `mmPerPx` that is not its own.
+- The headroom above the bar is 3.8 mm on the corpus — the same 2 px as before, restated — so a capture with smaller support surfaces can still close the bracket, and the assertion that guards it now fires in millimetres.
+- `extentPx` and `extentMm` both exist on `PlaneCandidate`. The redundancy is deliberate, but it leaves two numbers where a future reader could reach for the wrong one; only `extentMm` is a bar.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`minAcceptedExtentMm`, `PlaneCandidate.extentMm`, `extractCandidates`, `admissibility`, `fitFoodSupportPlane`), `MedataCore/Tests/SupportPlaneTests/` (`SupportRegionSelectionTests`, `SupportPlaneRegressionSliceTests`, `SupportPlaneCorpusMeasurementTests` — the bracket derivation and the grid-transfer test, which changes sense), `requirements.md` Req 5.1, `design.md` (the `SupportRegion` block, the transfer table, and the owed-numbers section) and task 26's detail. Shipped behaviour is unchanged on the corpus by construction.
+
+---

@@ -75,7 +75,7 @@ struct SupportPlaneCorpusMeasurementTests {
             for (i, candidate) in candidates.enumerated() {
                 print("  --- candidate \(i) ---")
                 print("    residual \(candidate.residualMm) mm, component \(candidate.componentSize),"
-                      + " extent \(candidate.extentPx) px,"
+                      + " extent \(candidate.extentPx) px = \(fmt(candidate.extentMm)) mm,"
                       + " residue \(candidate.residueCount),"
                       + " residue inlier ratio \(candidate.residueInlierRatio)")
                 guard let ring = SupportRegion.ringStatistics(
@@ -107,7 +107,7 @@ struct SupportPlaneCorpusMeasurementTests {
                         normal: candidate.normal, d: candidate.d),
                     foodEnvelopeMm: SupportRegion.foodEnvelopeMm(
                         geometry: g, normal: candidate.normal, d: candidate.d),
-                    extentPx: candidate.extentPx)
+                    extentMm: candidate.extentMm)
                 print("    admissibility    \(verdict?.rawValue ?? "ADMITTED")")
             }
         }
@@ -321,7 +321,8 @@ struct SupportPlaneCorpusMeasurementTests {
             let candidates = try #require(Self.candidates(name))
             let residues = candidates.map(\.residueCount)
             print("\(name): residue per pass \(residues),"
-                  + " extents \(candidates.map(\.extentPx))")
+                  + " extents \(candidates.map(\.extentPx)) px"
+                  + " = \(candidates.map { fmt($0.extentMm) }) mm")
             // Every pass the corpus produces must survive the shipped floor, or the
             // constant is silently discarding candidates — and `planeCandidateCount` is
             // persisted, so a cut pass changes the record even when it changes no plane.
@@ -339,12 +340,16 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(smallestResidue > SupportRegion.minResidueSamples)
     }
 
-    // `minAcceptedExtentPx` rejects a badly conditioned normal (Req 2.3). The corpus
+    // `minAcceptedExtentMm` rejects a badly conditioned normal (Req 2.3). The corpus
     // supplies one clear sliver and no clear counter-example, so it brackets the
     // constant rather than setting it — and the bracket is narrow above (Decision 32).
-    @Test("the corpus brackets minAcceptedExtentPx without setting it")
+    //
+    // The bracket is in MILLIMETRES since Decision 37. In pixels it was 13…26, but that
+    // was a 256×192 bracket: the same two numbers meant different physical sizes on the
+    // two captures, whose `mmPerPx` differ, and meant nothing at all on another grid.
+    @Test("the corpus brackets minAcceptedExtentMm without setting it")
     func extentFloorIsBracketedNotSet() throws {
-        var slivers: [Int] = [], survivors: [Int] = []
+        var slivers: [Float] = [], survivors: [Float] = []
         for name in Self.captures {
             let (g, samples) = try #require(Self.prepared(name))
             for candidate in try #require(Self.candidates(name)) {
@@ -358,29 +363,30 @@ struct SupportPlaneCorpusMeasurementTests {
                         normal: candidate.normal, d: candidate.d),
                     foodEnvelopeMm: SupportRegion.foodEnvelopeMm(
                         geometry: g, normal: candidate.normal, d: candidate.d),
-                    extentPx: candidate.extentPx)
+                    extentMm: candidate.extentMm)
                 if verdict == .extent {
-                    slivers.append(candidate.extentPx)
+                    slivers.append(candidate.extentMm)
                 } else {
-                    survivors.append(candidate.extentPx)
+                    survivors.append(candidate.extentMm)
                 }
             }
         }
         let sliverMax = try #require(slivers.max())
         let survivorMin = try #require(survivors.min())
-        print("extent: slivers \(slivers.sorted()), reaching later guards"
-              + " \(survivors.sorted()), bracket \(sliverMax + 1)...\(survivorMin),"
-              + " shipped \(SupportRegion.minAcceptedExtentPx)")
+        print("extent: slivers \(slivers.sorted().map(fmt)), reaching later guards"
+              + " \(survivors.sorted().map(fmt)), bracket \(fmt(sliverMax))...\(fmt(survivorMin)) mm,"
+              + " shipped \(SupportRegion.minAcceptedExtentMm) mm")
         // The shipped value must sit inside what the corpus brackets, or it is either
         // admitting a sliver or rejecting a candidate the corpus judged on other grounds.
-        #expect(SupportRegion.minAcceptedExtentPx > sliverMax)
-        #expect(SupportRegion.minAcceptedExtentPx <= survivorMin)
-        // The margin above is 2 px. Recorded as an assertion so that a capture which
+        #expect(SupportRegion.minAcceptedExtentMm > sliverMax)
+        #expect(SupportRegion.minAcceptedExtentMm <= survivorMin)
+        // The margin above is 3.8 mm — the same 2 px of Decision 32, now stated in the
+        // units the guard reads. Recorded as an assertion so that a capture which
         // narrows it further fails here rather than silently losing a candidate.
-        let margin = survivorMin - SupportRegion.minAcceptedExtentPx
-        let tightened = "the extent bracket has closed to \(margin) px —"
-            + " minAcceptedExtentPx now needs setting rather than bracketing"
-        #expect(margin >= 2, "\(tightened)")
+        let margin = survivorMin - SupportRegion.minAcceptedExtentMm
+        let tightened = "the extent bracket has closed to \(margin) mm —"
+            + " minAcceptedExtentMm now needs setting rather than bracketing"
+        #expect(margin >= 3.5, "\(tightened)")
     }
 
     // `ringOuterMm = 25` is `[owed]` against a stated rule: it "must sit inside the
@@ -536,7 +542,7 @@ struct SupportPlaneCorpusMeasurementTests {
                 let all = Self.allRejections(m)
                 let verdict = SupportRegion.admissibility(
                     ring: m.ring, annulusMedianMm: m.annulusMedianMm,
-                    foodEnvelopeMm: m.envelopeMm, extentPx: m.candidate.extentPx)
+                    foodEnvelopeMm: m.envelopeMm, extentMm: m.candidate.extentMm)
                 print("\(name): candidate at \(fmt(m.ring.medianMm)) mm — shipped verdict"
                       + " \(verdict?.rawValue ?? "ADMITTED"), all guards \(all.map(\.rawValue))")
                 // Pins the duplication: `allRejections` restates the shipped conditions,
@@ -786,14 +792,19 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
-    // The one constant that cannot transfer: `minAcceptedExtentPx` is denominated in
-    // PIXELS. Every other bar in `admissibility` is a millimetre or a dimensionless
-    // fraction, which is what Req 5.1's transfer rests on; this one halves with the grid
-    // and its verdict changes with it. The 13...26 bracket of Decision 32 is a
-    // 256x192 bracket, and nothing says so where the constant is defined.
-    @Test("the extent guard's verdict does not survive a grid halving")
-    func extentGuardIsGridDependent() throws {
-        var flipped = 0
+    // Decision 35 found the one constant that could not transfer: the extent bar was
+    // denominated in PIXELS while every other bar in `admissibility` is a millimetre or
+    // a dimensionless fraction, which is what Req 5.1's transfer rests on. It halved
+    // with the grid and its verdict halved with it.
+    //
+    // Decision 37 re-denominated it, and this test now measures the repair rather than
+    // the defect. Both quantities are taken across the same halving: the PIXEL extent
+    // still halves — that was never in doubt and is a property of the component scan —
+    // while the MILLIMETRE extent holds, because `mmPerPx` doubles by exactly the same
+    // factor. The verdict follows the millimetres, so no surface changes its answer.
+    @Test("the extent guard's verdict survives a grid halving once denominated in mm")
+    func extentGuardTransfersAcrossAGridHalving() throws {
+        var pairs = 0, flipped = 0
         for name in Self.captures {
             let slice = try DepthSlice.load(name)
             let native = try #require(Self.gridFit(slice, decimation: 1))
@@ -810,32 +821,42 @@ struct SupportPlaneCorpusMeasurementTests {
                 }) else { continue }
                 let depthB = Self.planeDepthMm(normal: b.candidate.normal, d: b.candidate.d, ray: ray)
                 guard abs(depthA - depthB) <= Self.gridTransferToleranceMm else { continue }
+                pairs += 1
+                let driftMm = abs(a.candidate.extentMm - b.candidate.extentMm)
                 print("\(name): surface at \(fmt(depthA)) mm — extent"
-                      + " \(a.candidate.extentPx) px native, \(b.candidate.extentPx) px halved,"
-                      + " bar \(SupportRegion.minAcceptedExtentPx)")
-                // The extent is a pixel count on the winning inlier component, so it
-                // scales with the grid rather than with the surface.
+                      + " \(a.candidate.extentPx) px / \(fmt(a.candidate.extentMm)) mm native,"
+                      + " \(b.candidate.extentPx) px / \(fmt(b.candidate.extentMm)) mm halved"
+                      + " (drift \(fmt(driftMm)) mm), bar \(SupportRegion.minAcceptedExtentMm) mm")
+                // The pixel extent is a count on the winning inlier component, so it
+                // scales with the grid rather than with the surface. Unchanged by
+                // Decision 37 — this is why the bar could not stay denominated in it.
                 #expect(b.candidate.extentPx < a.candidate.extentPx)
-                if a.candidate.extentPx >= SupportRegion.minAcceptedExtentPx,
-                   b.candidate.extentPx < SupportRegion.minAcceptedExtentPx {
+                // The millimetre extent is the same physical span measured twice. One
+                // depth pixel of the halved grid is ~3.7 mm, so the quantisation floor
+                // is that, not zero.
+                #expect(driftMm <= 2 * halved.mmPerPx)
+                if (a.candidate.extentMm >= SupportRegion.minAcceptedExtentMm)
+                    != (b.candidate.extentMm >= SupportRegion.minAcceptedExtentMm) {
                     flipped += 1
                 }
             }
         }
-        // At least one surface the guard admits natively is rejected as a sliver at half
-        // resolution. That is the finding: `minAcceptedExtentPx` is the one bar in
-        // `admissibility` whose answer depends on the sensor's grid.
-        let transfers = "no candidate changes its extent verdict across the halving —"
-            + " minAcceptedExtentPx may transfer after all, recheck before re-denominating it"
-        #expect(flipped >= 1, "\(transfers)")
+        // The finding, inverted from Decision 35: no surface the guard admits natively
+        // is rejected as a sliver at half resolution, and none is admitted that was not.
+        #expect(pairs >= 2, "too few paired surfaces to conclude anything about transfer")
+        let regressed = "\(flipped) of \(pairs) paired surfaces change their extent verdict"
+            + " across the halving — the mm denomination of Decision 37 is not transferring"
+        #expect(flipped == 0, "\(regressed)")
 
-        // And the grid it does not transfer to is not hypothetical. The N5k corpus runs
+        // And the grid it did not transfer to is not hypothetical. The N5k corpus runs
         // the same fitter over RealSense frames whose depth is registered to the colour
         // grid — `tools/nutrition5k/ingest.py` pins f = 617 px against the device's
         // measured f_d — so at equal range the same physical sliver spans over three
-        // times as many pixels there. 24 px is a stricter bar on the device than on N5k
-        // by that ratio, and model-production Bucket C is when N5k fixtures first carry a
-        // food mask and reach this guard at all.
+        // times as many pixels there. A 24 px bar would have been stricter on the device
+        // than on N5k by that ratio; 44 mm is the same bar on both, which is the point of
+        // Decision 37 and why it did not wait for model-production Bucket C to be paid
+        // for. Bucket C is when N5k fixtures first carry a food mask and reach this guard
+        // at all, and the ratio below is what the pixel denomination would have cost then.
         let deviceFx = try #require(Self.geometry(Self.captures[0])).intrinsics.fx
         let ratio = Self.n5kPinnedFxPx / deviceFx
         print("extent denomination: device f_d \(fmt(deviceFx)) px against N5k's pinned"
@@ -1215,7 +1236,7 @@ struct SupportPlaneCorpusMeasurementTests {
     // pins `first` against `admissibility` so this restatement cannot drift from it.
     static func allRejections(_ m: CandidateMeasurement) -> [SupportRegion.CandidateRejection] {
         var fired: [SupportRegion.CandidateRejection] = []
-        if m.candidate.extentPx < SupportRegion.minAcceptedExtentPx { fired.append(.extent) }
+        if m.candidate.extentMm < SupportRegion.minAcceptedExtentMm { fired.append(.extent) }
         if m.ring.supportFraction < SupportRegion.ringSupportMin { fired.append(.supportFraction) }
         if m.ring.supportingSectors < SupportRegion.minSupportingSectors { fired.append(.sectors) }
         if m.envelopeMm < SupportRegion.foodEnvelopeMinMm { fired.append(.foodEnvelope) }

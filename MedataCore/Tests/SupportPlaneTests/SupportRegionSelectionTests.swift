@@ -69,7 +69,7 @@ struct SupportRegionSelectionTests {
         #expect(annulusMedian <= SupportRegion.escapeBandMm)
 
         #expect(SupportRegion.admissibility(ring: ring, annulusMedianMm: annulusMedian,
-                                            foodEnvelopeMm: envelope, extentPx: 64) == .sectors,
+                                            foodEnvelopeMm: envelope, extentMm: 128) == .sectors,
                 "the sector guard must be what rejects it")
         #expect(SPRScene.fit(scene) == nil, "the capture must fall back, not record .foodSupport")
     }
@@ -107,7 +107,7 @@ struct SupportRegionSelectionTests {
         let scene = SPRScene.rimmedPlate(rimStartPx: 19)
         let ring = try #require(SPRScene.ringStatistics(scene, planeHeightMm: 20))
         #expect(SupportRegion.admissibility(ring: ring, annulusMedianMm: 15, foodEnvelopeMm: 8,
-                                            extentPx: 64) == .bandStep)
+                                            extentMm: 128) == .bandStep)
         #expect(SPRScene.fit(scene) == nil)
     }
 
@@ -184,23 +184,23 @@ struct SupportRegionSelectionTests {
     func planeBelowTheAnnulusIsRejected() {
         #expect(SupportRegion.admissibility(
             ring: healthyRing(), annulusMedianMm: SupportRegion.escapeBandMm + 5,
-            foodEnvelopeMm: 8, extentPx: 64
+            foodEnvelopeMm: 8, extentMm: 128
         ) == .escaped)
         #expect(SupportRegion.admissibility(
             ring: healthyRing(), annulusMedianMm: SupportRegion.escapeBandMm - 5,
-            foodEnvelopeMm: 8, extentPx: 64
+            foodEnvelopeMm: 8, extentMm: 128
         ) == nil)
     }
 
-    @Test("a winning component below minAcceptedExtentPx is rejected")
+    @Test("a winning component below minAcceptedExtentMm is rejected")
     func slimComponentIsRejected() {
         #expect(SupportRegion.admissibility(
             ring: healthyRing(), annulusMedianMm: 0, foodEnvelopeMm: 8,
-            extentPx: SupportRegion.minAcceptedExtentPx - 1
+            extentMm: SupportRegion.minAcceptedExtentMm - 1
         ) == .extent)
         #expect(SupportRegion.admissibility(
             ring: healthyRing(), annulusMedianMm: 0, foodEnvelopeMm: 8,
-            extentPx: SupportRegion.minAcceptedExtentPx
+            extentMm: SupportRegion.minAcceptedExtentMm
         ) == nil)
     }
 
@@ -211,16 +211,16 @@ struct SupportRegionSelectionTests {
         let above = healthyRing(bands: [SupportRegion.ringMedianMaxMm + 2, 0, 0])
         let below = healthyRing(bands: [-(SupportRegion.ringMedianMaxMm + 2), 0, 0])
         #expect(SupportRegion.admissibility(ring: above, annulusMedianMm: 0,
-                                            foodEnvelopeMm: 8, extentPx: 64) == .ringMedian)
+                                            foodEnvelopeMm: 8, extentMm: 128) == .ringMedian)
         #expect(SupportRegion.admissibility(ring: below, annulusMedianMm: 0,
-                                            foodEnvelopeMm: 8, extentPx: 64) == .ringMedian)
+                                            foodEnvelopeMm: 8, extentMm: 128) == .ringMedian)
     }
 
     @Test("support visibility below the bar rejects")
     func lowVisibilityRejects() {
         #expect(SupportRegion.admissibility(
             ring: healthyRing(visibility: SupportRegion.supportVisibilityMin / 2),
-            annulusMedianMm: 0, foodEnvelopeMm: 8, extentPx: 64
+            annulusMedianMm: 0, foodEnvelopeMm: 8, extentMm: 128
         ) == .visibility)
     }
 
