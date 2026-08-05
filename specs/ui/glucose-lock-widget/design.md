@@ -176,6 +176,8 @@ Status is a **non-colour** channel that survives the Lock Screen's monochrome vi
 - Staleness de-emphasis (Req 5.2) uses `.opacity(...)`, which survives monochrome; colour does not carry meaning.
 - Per-status `Color` is applied only under the full-colour StandBy day render (`@Environment(\.widgetRenderingMode) == .fullColor`) as an enhancement layered on the token (Req 4.3).
 
+**Arrow weight** (device pass, 2026-08-05). The arrow renders at the VALUE's font in `accessoryRectangular` and `systemSmall`, and at 15 pt in `accessoryCircular` — not at the status token's caption size, which is where it started. On the Lock Screen a caption-sized arrow read as a footnote to the number rather than as the second thing the eye lands on, and direction is the one thing the value alone cannot convey. The token stays small deliberately: it is a qualifier on the value, whereas the arrow is data in its own right. `accessoryCircular` is the exception because its ~40 pt disc cannot fit a full-size arrow beside a token.
+
 Per family (Req 2.3–2.5): `accessoryCircular` = value + status token + arrow (its only staleness cue is the opacity, since there is no room for age text — stated in Req 2.3/5.2); `accessoryRectangular` = value + token + arrow + age; `accessoryInline` = value + arrow glyph on one line, always monochrome. `systemSmall` = the same content as `accessoryRectangular` at the larger type its tile affords; it exists to reach StandBy, whose widget panel draws from the Home Screen pool and never shows accessory families (Req 2.2, Decision 3 as amended). All use `.containerBackground(for: .widget) { Color.clear }` (matches the existing `LauncherView`). Widget gallery/display copy is functional only (Req 2.1/8.2).
 
 ### Deep link (Req 7)
@@ -215,7 +217,7 @@ Only `GlucoseSnapshot` (above). No event-log schema change — `bsl` events are 
 | Snapshot missing / undecodable / version mismatch | `read` returns `.neverRecorded`; widget shows never-recorded | 1.7, 8.1 |
 | `mmolL` non-finite or outside 1.0–35.0 | `GlucoseSnapshot.make` emits `.neverRecorded` (no fabricated decimal) | 2.7 |
 | Torn read during write | Single-key blob ⇒ reader sees old-or-new, never partial | 1.5 |
-| Fewer than 2 in-window readings, or span < 10m, or latest > 15m old | `trend == nil`, no arrow | 3.3, 3.4 |
+| Fewer than 2 in-window readings, or span < 10m, or latest older than the 30m window (Decision 15) | `trend == nil`, no arrow | 3.3, 3.4 |
 | `readingDate` in the future (clock skew) | age clamps to 0, rendered fresh | 5.5 |
 | No bsl in 24h | never-recorded snapshot | 1.4, 8.1 |
 

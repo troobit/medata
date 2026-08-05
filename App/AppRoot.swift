@@ -32,6 +32,11 @@ struct AppRoot: View {
     // dismissal completes.
     @State private var showInsulinSheet = false
     @State private var pendingDeepLink: DeepLinkTarget?
+    // The home page's latest-reading header (Req 4). Owned here rather than by
+    // HomeView so the subscription survives every cover present/dismiss —
+    // HomeView is rebuilt on each of those, and a @State inside it would
+    // re-subscribe every time.
+    @State private var homeGlucose: HomeGlucoseModel
 
     // The deep links under the `medata` scheme — each a single-tap lock-screen
     // widget target (PRD amendment to App 10; glucose-lock-widget Req 7.1).
@@ -55,6 +60,7 @@ struct AppRoot: View {
         self.glucoseConnections = glucoseConnections
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
+        _homeGlucose = State(initialValue: HomeGlucoseModel(store: store))
     }
 
     // A single optional so the covers are mutually exclusive by construction —
@@ -73,6 +79,7 @@ struct AppRoot: View {
 
     var body: some View {
         HomeView(
+            glucose: homeGlucose,
             onCapture: {
                 // The benchmark tag must not survive into a non-benchmark
                 // capture — clear it here in case a deferred benchmark

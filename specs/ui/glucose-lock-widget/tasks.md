@@ -138,3 +138,14 @@ references:
   - Stream: 1
   - Requirements: [1.7](requirements.md#1.7), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2)
   - References: specs/ui/glucose-lock-widget/prerequisites.md
+
+## Follow-ups
+
+- [ ] 15. Tighten the trend derivation against the observed CGM cadence
+  - Deferred from Decision 15. MVP accepted a laggier, less certain arrow in exchange for it existing at all (33.5 % -> 99.1 % availability); these are the two things knowingly left approximate
+  - Re-derive the four rate thresholds (0.056 / 0.111 / 0.166 mmol/L per min) for a 30-minute regression baseline — they were chosen for a 15-minute one, so the band edges are currently approximate
+  - Make the window adapt to the observed cadence instead of being pinned at 30 min: measure the recent median gap and size the window at about twice it, so a true 5-minute feed gets a short responsive baseline and a 15-minute feed still qualifies
+  - Consider surfacing the arrow's confidence (e.g. withhold the fast bands when the baseline is long) rather than presenting a 30-minute average slope with the same authority as a 5-minute one
+  - Evidence to re-run: pull Documents/meals.sqlite per docs/agent-notes/device-build-and-test.md and redo the gap-distribution + availability simulation recorded in Decision 15
+  - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
+  - References: decision_log.md

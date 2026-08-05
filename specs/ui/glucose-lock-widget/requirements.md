@@ -51,10 +51,10 @@ A WidgetKit accessory widget that surfaces the current (or most-recent) blood-gl
 
 **Acceptance Criteria:**
 
-1. <a name="3.1"></a>The system SHALL derive the trend from `bsl` readings whose timestamps fall within the 15 minutes preceding the current time — the closed window `[now − 15m, now]`, both bounds inclusive — as a single rate of change in mmol/L per minute over those readings.  
+1. <a name="3.1"></a>The system SHALL derive the trend from `bsl` readings whose timestamps fall within the 30 minutes preceding the current time — the closed window `[now − 30m, now]`, both bounds inclusive — as a single rate of change in mmol/L per minute over those readings. *(Widened from 15 minutes by Decision 15 after the live LibreLinkUp cadence was measured at a modal 15-minute gap.)*  
 2. <a name="3.2"></a>The system SHALL classify the rate into one of seven states — steady, rising-slow, rising, rising-fast, falling-slow, falling, falling-fast — by fixed, non-overlapping thresholds (recorded in the decision log), each rendered as a corresponding arrow glyph.  
-3. <a name="3.3"></a>IF fewer than two readings fall within the preceding 15 minutes, OR the earliest and latest in-window readings span less than 10 minutes, THEN the system SHALL report no trend and the widget SHALL show the value without an arrow.  
-4. <a name="3.4"></a>WHEN the most-recent reading is itself older than 15 minutes, the system SHALL report no trend (no two readings can fall within the window).  
+3. <a name="3.3"></a>IF fewer than two readings fall within the window, OR the earliest and latest in-window readings span less than 10 minutes, THEN the system SHALL report no trend and the widget SHALL show the value without an arrow.  
+4. <a name="3.4"></a>WHEN the most-recent reading is itself older than the window, the system SHALL report no trend (no two readings can fall within it). Note that the staleness ladder (Req 5.2) withholds the arrow from 15 minutes regardless, so the window being wider than `staleAge` never surfaces an arrow beside a stale value.  
 5. <a name="3.5"></a>The trend derivation SHALL be a pure function in the app-side maths module (`TrendsMath`, in `Persistence` — not importable by the widget extension, which reads the already-derived trend from the snapshot), covered by unit tests including each threshold boundary, so the same computation is reusable by the in-app Graph screen.  
 
 ### 4. Target-band status

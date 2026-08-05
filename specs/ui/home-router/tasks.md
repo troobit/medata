@@ -82,12 +82,35 @@ references:
 
 ## Verify
 
-- [ ] 9. On-device verification of the home-router flow <!-- id:46pogp9 -->
+- [-] 9. On-device verification of the home-router flow <!-- id:46pogp9 -->
   - make deploy-device (or deploy-release-stub) + on device: HomeView root, no tab bar; six controls route, Capture prominent; each surface closes to home; AR session only during Capture; medata://capture and medata://insulin/add route and defer behind an open surface
   - Graph shows no entry-point controls and no delete; Records merges meals+insulin+glucose most-recent-first, a delete reflects live on Records and Graph, glucose not deletable, empty Records has no copy
   - make test stays green (MedataCore). No app-target unit/UI tests added — MVP test gate; all tasks are UI/wiring (TDD-exempt per the starwave-tasks rule + CLAUDE.md)
   - Intake route's full verification is gated on Track C's IntakeView landing (forward reference); the other five routes verify independently
+  - 2026-08-04 device pass: routing confirmed fine by the developer. Outstanding before this ticks — deep-link deferral, AR-session release timing, and the Records delete/add live-reflect items above; re-check alongside task 11 on the same build
   - Blocked-by: 46pogp8 (Demote Graph to visualisation-only in TrendsView)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [3.1](requirements.md#3.1), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [3.8](requirements.md#3.8)
+  - References: design.md
+
+## Latest-glucose header
+
+- [x] 10. Latest-glucose header on the home page
+  - GlucoseSnapshotSource in Persistence — lift the display-horizon read; the future-skew window bound and the snapshot derivation out of GlucoseWidgetPublisher; the publisher calls it and keeps only its write/reload plus the futureReading log (Req 4.7)
+  - App/HomeGlucoseModel.swift — @Observable @MainActor holding one GlucoseSnapshot; reloads on store.eventsDidChange (RecordsModel pattern). Reads the STORE not GlucoseSnapshotStore so the header does not depend on App Group provisioning
+  - HomeView.glucoseHeader — value + mmol/L + age above the route controls; TimelineView(.periodic by 60) so the age advances; arrow and band colour withheld past GlucoseTimeline.staleAge; em-dash placeholder with no copy when nothing is inside the horizon
+  - Owned as @State on AppRoot; not inside HomeView — HomeView is rebuilt on every cover present/dismiss and would otherwise re-subscribe each time
+  - Register HomeGlucoseModel.swift in project.pbxproj (four places — App/ is not a synchronised group)
+  - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.7](requirements.md#4.7), [4.8](requirements.md#4.8)
+  - References: design.md, decision_log.md
+
+- [ ] 11. STOP — on-device verification of the latest-glucose header
+  - make deploy-device + on device: the reading is the topmost content on home above Capture; value matches the newest bsl row and the lock-screen widget
+  - trend arrow present when readings support a rate; absent (not a placeholder) when they do not
+  - let a reading go past 15 min: arrow and band colour disappear; value and age remain; age advances while home is open
+  - no reading inside 24 h: em-dash placeholder with no copy
+  - a fresh CGM/HealthKit reading lands while home is visible and the header updates with no manual refresh
+  - make test stays green (MedataCore); no app-target tests added — MVP test gate
+  - 2026-08-04 build 470bb1b-20260804-225023 (Release + real segmenter): header renders a live reading on device — remaining items above still to check
+  - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.8](requirements.md#4.8)
   - References: design.md

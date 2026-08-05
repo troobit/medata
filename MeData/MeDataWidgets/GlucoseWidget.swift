@@ -111,11 +111,19 @@ struct GlucoseWidgetView: View {
                     .foregroundStyle(tint(status))
                 HStack(spacing: 2) {
                     if let token = token(status) {
-                        Text(token).fontWeight(.bold).foregroundStyle(tint(status))
+                        Text(token)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(tint(status))
                     }
-                    if let trend { Text(trend.arrow) }
+                    // Larger than the token but short of the value's 20 pt —
+                    // the circular family is a ~40 pt disc and a full-size
+                    // arrow beside a token overflows it.
+                    if let trend {
+                        Text(trend.arrow)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(tint(status))
+                    }
                 }
-                .font(.system(size: 11))
             }
         case let .stale(value, _):
             Text(value)
@@ -145,7 +153,15 @@ struct GlucoseWidgetView: View {
                     if let token = token(status) {
                         Text(token).font(.caption).fontWeight(.bold).foregroundStyle(tint(status))
                     }
-                    if let trend { Text(trend.arrow).font(.caption) }
+                    // Arrow at the VALUE's size, not the token's: on the Lock
+                    // Screen it was caption-sized and read as a footnote to the
+                    // number rather than as the second thing you look at. The
+                    // token stays small — it is a qualifier; the arrow is data.
+                    if let trend {
+                        Text(trend.arrow)
+                            .font(.system(.title2, design: .rounded).weight(.semibold))
+                            .foregroundStyle(tint(status))
+                    }
                 }
                 freshAge
             }
@@ -183,11 +199,17 @@ struct GlucoseWidgetView: View {
                     .foregroundStyle(tint(status))
                 HStack(spacing: 4) {
                     if let token = token(status) {
-                        Text(token).fontWeight(.bold).foregroundStyle(tint(status))
+                        Text(token)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(tint(status))
                     }
-                    if let trend { Text(trend.arrow) }
+                    // Matches `rectangular`'s treatment at this family's scale.
+                    if let trend {
+                        Text(trend.arrow)
+                            .font(.system(size: 30, weight: .semibold, design: .rounded))
+                            .foregroundStyle(tint(status))
+                    }
                 }
-                .font(.title3)
                 freshAge
             }
         case let .stale(value, age):

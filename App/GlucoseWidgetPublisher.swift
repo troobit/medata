@@ -35,26 +35,11 @@ import WidgetKit
 // it). Reloads are scoped to the glucose kind so glucose writes never spend
 // the shared WidgetKit reload budget on the co-hosted static launcher widgets.
 actor GlucoseWidgetPublisher {
-    // The display horizon (design: "Display-horizon read"). Bounded at ≤288
-    // rows a day, so no full-history scan and no new store accessor. A reading
-    // older than this is beyond any glance-useful horizon and is treated as
-    // never-recorded.
-    private static let displayHorizon: TimeInterval = 24 * 60 * 60
-
-    // The window's UPPER bound, and not cosmetic. It was `now`, which silently
-    // dropped any reading timestamped ahead of the device clock — and CGM rows
-    // routinely are, which is precisely why `GlucoseTimeline.render` clamps a
-    // future reading's age to zero ("clock skew, not a prediction", Req 5.5).
-    // With the bound at `now` the render layer's skew handling was unreachable
-    // and the widget sat one reading behind for as long as the skew lasted,
-    // while the Trends screen — which queries to the end of the calendar day —
-    // showed the row perfectly well.
-    //
-    // Bounded rather than open-ended: a future reading renders as fresh, so an
-    // unbounded window would let one corrupt far-future row pin the widget to a
-    // wrong value indefinitely. An hour absorbs real clock and timezone-rounding
-    // skew while capping that blast radius.
-    private static let futureSkewAllowance: TimeInterval = 60 * 60
+    // The display-horizon read and the snapshot derivation moved to
+    // `GlucoseSnapshotSource` (Persistence) when the home page grew a
+    // latest-reading header (home-router Req 4) — the horizon and the
+    // future-skew window bound are stated there. This actor keeps the
+    // write/reload side effects and the skew logging.
 
     // Every interpolation is `.public`: os_log redacts non-literals by default,
     // which would render the timestamps here as `<private>` — useless for the
@@ -118,32 +103,18 @@ actor GlucoseWidgetPublisher {
         date.map { ISO8601DateFormatter().string(from: $0) } ?? "none"
     }
 
-    // The last 24 hours of `bsl` rows condensed into the snapshot: the newest
-    // row is the reading, the trailing 15 minutes drive the trend. A throw
-    // (corrupt row) degrades to never-recorded rather than crashing the app.
+    // The last 24 hours of `bsl` rows condensed into the snapshot, shared with
+    // the home page's latest-reading header via `GlucoseSnapshotSource`.
     private func currentSnapshot(now: Date) async -> GlucoseSnapshot {
-        let oldest = now.addingTimeInterval(-Self.displayHorizon)
-        let newest = now.addingTimeInterval(Self.futureSkewAllowance)
-        let events = (try? await store.events(in: oldest...newest, type: EventType.bsl)) ?? []
-        let readings = events.compactMap { event in
-            event.value.map { GlucoseReading(timestamp: event.timestamp, mmolL: $0) }
-        }
-        // `events(in:type:)` is ordered `(timestamp ASC, id ASC)`, so the last
-        // row is the most recent one.
-        guard let latest = readings.last else { return .neverRecorded }
+        let snapshot = await GlucoseSnapshotSource.current(store: store, now: now)
         // Confirms or refutes the skew diagnosis from the field: if this fires,
-        // the old `...now` bound was hiding this row from the widget.
-        if latest.timestamp > now {
+        // the old `...now` window bound was hiding this row from the widget.
+        if let readingDate = snapshot.readingDate, readingDate > now {
             log.info("""
                 event=publish.futureReading \
-                skewSeconds=\(Int(latest.timestamp.timeIntervalSince(now)), privacy: .public)
+                skewSeconds=\(Int(readingDate.timeIntervalSince(now)), privacy: .public)
                 """)
         }
-        return GlucoseSnapshot.make(
-            mmolL: latest.mmolL,
-            readingDate: latest.timestamp,
-            trend: TrendsMath.trend(readings, now: now),
-            status: TrendsMath.bandStatus(latest.mmolL)
-        )
+        return snapshot
     }
 }

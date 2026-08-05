@@ -177,9 +177,20 @@ public enum TrendsMath {
     // amplify a millimole of noise into a spurious fast arrow. The ≥2-readings
     // guard also covers Req 3.4: a latest reading older than the window leaves
     // fewer than 2 readings in it.
+    //
+    // The window is 30 minutes, not the 15 the spec first assumed, because the
+    // LibreLinkUp feed does not deliver a reading every 5 minutes. Measured
+    // over 282 live rows on the primary device (2026-08-05), the gap between
+    // consecutive readings was 15 minutes in 152 cases, 5 in 96 and 10 in 31 —
+    // so a 15-minute window usually holds ONE reading and the arrow almost
+    // never appeared: derivable in 33.5 % of the minutes when the reading was
+    // fresh enough to display, against 99.1 % at 30 minutes. 30 is twice the
+    // modal cadence, which is what makes two consecutive readings always fit;
+    // 45 minutes adds 0.1 % and only lengthens the baseline. The cost is a
+    // slower arrow — see glucose-lock-widget Decision 15.
     public static func glucoseRate(
         _ readings: [GlucoseReading], now: Date,
-        window: TimeInterval = 15 * 60, minSpan: TimeInterval = 10 * 60
+        window: TimeInterval = 30 * 60, minSpan: TimeInterval = 10 * 60
     ) -> Double? {
         let windowStart = now.addingTimeInterval(-window)
         let inWindow = readings

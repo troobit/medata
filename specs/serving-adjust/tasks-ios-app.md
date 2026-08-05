@@ -45,6 +45,7 @@ references:
   - make build, make test (both totals), simulator app compile check with CODE_SIGNING_ALLOWED=NO
   - Blocked-by: p00c98k (Persist adjustments via appendCorrection, edit-by-exception), p00c98l (Retire ManualCorrectionView and the Adjust action)
 
-- [ ] 7. STOP — on-device looks-right pass on the iPhone 16 Pro <!-- id:p00c98n -->
+- [x] 7. STOP — on-device looks-right pass on the iPhone 16 Pro <!-- id:p00c98n -->
   - Serving stepper ergonomics, fraction control, gram reveal, no truncation — user's call after the build lands
+  - 2026-08-04: passed on the iPhone 16 Pro — developer verdict "looks OK"
   - Blocked-by: p00c98m (Design-system, copy, and truncation pass with full gates)

@@ -40,7 +40,8 @@ struct TrendsMathGlucoseTests {
 
     @Test("Collinear readings regress to the exact slope")
     func rateRegressesOverManyPoints() {
-        // Five points on a straight line across the full window.
+        // Five points on a straight line spanning 15 minutes — inside the
+        // window at either width, so the regression is what is under test.
         let series = (0...4).map { step in
             GlucoseReading(
                 timestamp: now.addingTimeInterval(-900 + Double(step) * 225),
@@ -81,11 +82,24 @@ struct TrendsMathGlucoseTests {
         #expect(TrendsMath.glucoseRate(readings(rate: 0.2, span: 600, endingAt: now), now: now) != nil)
     }
 
-    @Test("A latest reading older than fifteen minutes gives no rate")
+    @Test("A latest reading older than the window gives no rate")
     func rateNeedsARecentReading() {
-        // The whole series sits before the window, so nothing is in scope.
-        let stale = readings(rate: 0.1, endingAt: now.addingTimeInterval(-16 * 60))
+        // The whole series sits before the 30-minute window, so nothing is in
+        // scope (glucose-lock-widget Decision 15 widened it from 15 min).
+        let stale = readings(rate: 0.1, endingAt: now.addingTimeInterval(-31 * 60))
         #expect(TrendsMath.glucoseRate(stale, now: now) == nil)
+    }
+
+    // The case that drove glucose-lock-widget Decision 15: a 15-minute LibreLinkUp cadence with a
+    // fresh newest reading. Under the old 15-minute window the previous reading
+    // fell out the moment `now` advanced past the mark, so the arrow vanished.
+    @Test("A fifteen-minute feed still yields a rate once `now` has advanced")
+    func fifteenMinuteCadenceQualifies() {
+        let series = [
+            GlucoseReading(timestamp: now.addingTimeInterval(-17 * 60), mmolL: 5.0),
+            GlucoseReading(timestamp: now.addingTimeInterval(-2 * 60), mmolL: 6.5)
+        ]
+        #expect(TrendsMath.glucoseRate(series, now: now) != nil)
     }
 
     @Test("Readings outside the window are excluded from the fit")
@@ -101,15 +115,15 @@ struct TrendsMathGlucoseTests {
 
     @Test("The window is closed at both bounds")
     func windowBoundsAreInclusive() {
-        // Earliest exactly at now − 15m, latest exactly at now.
+        // Earliest exactly at now − 30m, latest exactly at now.
         let series = [
-            GlucoseReading(timestamp: now.addingTimeInterval(-900), mmolL: 5.0),
+            GlucoseReading(timestamp: now.addingTimeInterval(-1800), mmolL: 5.0),
             GlucoseReading(timestamp: now, mmolL: 6.0)
         ]
         #expect(TrendsMath.glucoseRate(series, now: now) != nil)
         // One second earlier and the older reading falls out, leaving one.
         let series2 = [
-            GlucoseReading(timestamp: now.addingTimeInterval(-901), mmolL: 5.0),
+            GlucoseReading(timestamp: now.addingTimeInterval(-1801), mmolL: 5.0),
             GlucoseReading(timestamp: now, mmolL: 6.0)
         ]
         #expect(TrendsMath.glucoseRate(series2, now: now) == nil)
@@ -171,8 +185,9 @@ struct TrendsMathGlucoseTests {
     func trendIsNilWithoutARate() {
         #expect(TrendsMath.trend([], now: now) == nil)
         #expect(TrendsMath.trend(readings(rate: 0.2, span: 540, endingAt: now), now: now) == nil)
+        // Wholly before the 30-minute window (glucose-lock-widget Decision 15).
         #expect(TrendsMath.trend(
-            readings(rate: 0.2, endingAt: now.addingTimeInterval(-16 * 60)), now: now) == nil)
+            readings(rate: 0.2, endingAt: now.addingTimeInterval(-31 * 60)), now: now) == nil)
     }
 
     // MARK: - Band status (Req 4.1)
