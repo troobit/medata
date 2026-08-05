@@ -8,6 +8,11 @@ import PortableContracts
 // Populated by the LiDAR fitter on both exits; the card-only path leaves the
 // defaults (its quality signal is `SupportPlane.residualMm`).
 public struct SupportPlaneFitStats: Sendable, Equatable {
+    // UNITS DEPEND ON `reference`: native depth samples on a `.foodSupport` row,
+    // colour-grid points on an `.edgeBand` one. The two differ by ~56x on a
+    // 1920x1440 capture and must never be compared across references — the
+    // persisted `reference` is what disambiguates them
+    // (`specs/estimation/support-plane-reference/` design, Stats semantics).
     public var candidatePointCount: Int
     public var inlierCount: Int
     // Inlier RMS residual (mm). -1 sentinel: the fit refused BEFORE residual
@@ -19,11 +24,27 @@ public struct SupportPlaneFitStats: Sendable, Equatable {
     public var foodBBoxY: Int
     public var foodBBoxW: Int
     public var foodBBoxH: Int
+    // Which surface the plane references (Req 4.4). nil on the card-only path:
+    // no depth map, so no depth-derived reference exists, and Req 6.3 wants the
+    // field absent rather than defaulted.
+    public var reference: SupportPlaneReference?
+    // The contact-ring measure for the plane actually returned, on BOTH paths —
+    // Req 6.1 requires it on every depth-derived attempt, and Req 6.2's
+    // before/after comparison is unexecutable otherwise. nil when a radial band
+    // was too thin to measure.
+    public var ring: RingStatistics?
+    // Candidate PLANES extracted by the restricted fit. A `.foodSupport`-only
+    // quantity: absent on the fallback path, where no candidate set was selected
+    // from.
+    public var candidatePlaneCount: Int?
 
     public init(candidatePointCount: Int = 0, inlierCount: Int = 0,
                 residualMm: Float = -1,
                 foodBBoxX: Int = -1, foodBBoxY: Int = -1,
-                foodBBoxW: Int = -1, foodBBoxH: Int = -1) {
+                foodBBoxW: Int = -1, foodBBoxH: Int = -1,
+                reference: SupportPlaneReference? = nil,
+                ring: RingStatistics? = nil,
+                candidatePlaneCount: Int? = nil) {
         self.candidatePointCount = candidatePointCount
         self.inlierCount = inlierCount
         self.residualMm = residualMm
@@ -31,6 +52,9 @@ public struct SupportPlaneFitStats: Sendable, Equatable {
         self.foodBBoxY = foodBBoxY
         self.foodBBoxW = foodBBoxW
         self.foodBBoxH = foodBBoxH
+        self.reference = reference
+        self.ring = ring
+        self.candidatePlaneCount = candidatePlaneCount
     }
 }
 
@@ -99,12 +123,10 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
         }
 
         if let depth = nadir.depth {
-            return LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
-                depth: depth,
-                colourIntrinsics: nadir.intrinsics,
-                foodRegionMask: mask,
-                gravityCamera: nadir.gravity
-            ))
+            return Self.fitFromDepth(
+                depth: depth, intrinsics: nadir.intrinsics,
+                mask: mask, gravity: nadir.gravity
+            )
         }
 
         // Card-only path mirrors the pre-existing inlined logic in
@@ -149,6 +171,59 @@ public struct LiDARSupportPlaneFitter: SupportPlaneFitter {
                 refusal: (error as? SupportPlaneError) ?? .iterationDiverged
             )
         }
+    }
+
+    // The fallback ladder of Req 4 in Decision 5's order: the food-support fit is
+    // attempted FIRST, and the edge-band fit runs only on the rejection path. The
+    // edge-band fit is genuinely lazy — nothing before it needs its plane, since
+    // the Req 3.3 escape guard compares against the annulus median rather than
+    // against the edge-band plane (Decision 22).
+    //
+    // On the fallback path the returned plane, stats and refusal are the edge-band
+    // fitter's own, unmodified (Reqs 4.2, 4.3); only the reference and the ring
+    // measure are added alongside them.
+    static func fitFromDepth(
+        depth: DepthMap, intrinsics: CameraIntrinsics,
+        mask: BinaryMask, gravity: Vec3
+    ) -> SupportPlaneFitOutcome {
+        if let fit = SupportRegion.fitFoodSupportPlane(
+            depth: depth, colourIntrinsics: intrinsics,
+            foodRegionMask: mask, gravityCamera: gravity
+        ) {
+            return SupportPlaneFitOutcome(
+                plane: fit.plane,
+                stats: SupportPlaneFitStats(
+                    candidatePointCount: fit.annulusSampleCount,
+                    inlierCount: fit.inlierCount,
+                    residualMm: fit.plane.residualMm,
+                    reference: .foodSupport,
+                    ring: fit.ring,
+                    candidatePlaneCount: fit.candidateCount
+                ),
+                refusal: nil
+            )
+        }
+
+        let outcome = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
+            depth: depth,
+            colourIntrinsics: intrinsics,
+            foodRegionMask: mask,
+            gravityCamera: gravity
+        ))
+        var stats = outcome.stats
+        stats.reference = .edgeBand
+        // Req 6.1: the ring measure lands on the fallback attempt too, which is what
+        // makes Req 6.2's before/after comparison executable. Measured against the
+        // plane that was actually returned, so there is nothing to measure on a
+        // refusal.
+        if let plane = outcome.plane {
+            stats.ring = SupportRegion.ringStatistics(
+                for: plane, depth: depth, foodMask: mask, intrinsics: intrinsics
+            )
+        }
+        return SupportPlaneFitOutcome(
+            plane: outcome.plane, stats: stats, refusal: outcome.refusal
+        )
     }
 
     private static func hasAnyOneBit(_ mask: BinaryMask) -> Bool {

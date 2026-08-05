@@ -916,3 +916,83 @@ Restoring the signed median costs one comparison against a value already persist
 Design guard table, constants block and the new "Three guards that did not do what their requirement says" section; tasks 3, 4, 7 and 8; prerequisites (the overhang query is now answered and its conclusion recorded here).
 
 ---
+
+## Decision 23: The new candidate-plane count is named apart from the pre-existing point count
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The design's Data Models table adds `planeCandidateCount: Int?` to `EstimationAttemptRecord`, meaning "candidates extracted" — the number of candidate PLANES the sequential CC-RANSAC passes produced. `EstimationAttemptRecord` already carries a field of exactly that name (`PipelineDiagnostics.swift`), populated from `SupportPlaneFitStats.candidatePointCount` and meaning the number of candidate POINTS the fit sampled. The collision was not visible when the table was written and surfaced while implementing task 12.
+
+The two quantities differ by three orders of magnitude on a real capture — a few thousand annulus samples against at most `maxCandidatePlanes = 3` planes. Reusing the name would silently redefine a field that pre-feature rows already carry, which is the failure Req 6.3 exists to prevent.
+
+### Decision
+
+Keep `planeCandidateCount` with its existing meaning (candidate points, units set by `planeReference`) and add the plane count as a separate optional field, `planeCandidatePlaneCount`.
+
+### Rationale
+
+Req 6.3 requires pre-feature rows to stay distinguishable from post-feature ones. A field whose meaning changes under a fixed name defeats that at the point it matters most: a stored row cannot say which definition it was written under, and the in-app browser and the accuracy report would silently mix a point count with a plane count across the schema boundary. A new name leaves every stored row exactly as recorded (Decision 6) and costs one extra optional.
+
+### Alternatives Considered
+
+- **Redefine `planeCandidateCount` as the plane count**: matches the design table verbatim - Rejected: pre-feature rows carry point counts under that key, so the field would mean two different things with no way to tell which, breaking Req 6.3 and requiring the migration Decision 6 forbids.
+- **Rename the existing field to `planePointCount` and take the freed name**: the clearest end state - Rejected: it is the same break in the other direction; every already-persisted row would decode the old key into nothing, and the field is a live diagnostic for three prior plane-fit bugfixes.
+- **Drop the plane count and infer it from the reference**: `.foodSupport` implies at least one candidate - Rejected: the count is the evidence that sequential extraction actually surfaced more than the table, which is the mechanism Decision 15's bound rests on; a boolean does not carry it.
+
+### Consequences
+
+**Positive:**
+- Stored meals are untouched and every row's fields keep one meaning for the life of the schema.
+- The two counts stay separately queryable, so a fallback-rate investigation can read sample starvation and candidate starvation apart.
+
+**Negative:**
+- The record's field name no longer matches the design's Data Models table, so the table is a stale reference until amended.
+- `planeCandidateCount` keeps a name that reads like a plane count and is not one; the units also depend on `planeReference`, so it now carries two footnotes.
+
+### Impact
+
+`EstimationAttemptRecord`, `PipelineDiagnostics.recordSupportPlane`, and the design's Data Models table. Task 19's fallback-rate reporting reads `planeReference`, not either count.
+
+---
+
+## Decision 24: `fitFoodSupportPlane` returns a struct carrying the two point counts
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The design declares `fitFoodSupportPlane` as returning `(plane, ring, candidateCount)?` and, separately, fixes the stats semantics of a `.foodSupport` row: `candidatePointCount` and `inlierCount` mean native depth samples there, against colour-grid points on an `.edgeBand` row. Task 10 requires the fitter to populate those two counters, and nothing outside `fitFoodSupportPlane` ever sees the annulus sample set or the winning inlier component — the declared tuple cannot supply them.
+
+### Decision
+
+Return a `FoodSupportFit` struct whose first three members keep the declared names and meanings, extended with `annulusSampleCount` and `inlierCount`.
+
+### Rationale
+
+The counts have to cross the boundary somehow, and every alternative either re-derives them (repeating the prepare/ring pass, the expensive part of the fit) or leaves the `.foodSupport` row's stats at their zero defaults, which contradicts the design's own stats semantics and leaves the snaq-parity diagnostics blank on the new primary path. A struct also names the members at the call site, where a five-element tuple would not.
+
+### Alternatives Considered
+
+- **Keep the tuple and recompute the counts in the fitter**: no signature change - Rejected: `prepare` plus `ringSamples` is the dominant non-RANSAC cost, and the recomputed inlier component would be a second labelling of the winner rather than the one that was actually selected.
+- **Leave `candidatePointCount` / `inlierCount` at zero on a `.foodSupport` row**: smallest change - Rejected: it discards the counters three prior plane-fit bugfixes were diagnosed with, exactly when the fit path changed underneath them.
+- **Return the counts through `RingStatistics`**: it already crosses the boundary - Rejected: they are candidate-extraction quantities, not ring measurements, and `RingStatistics` is computed per candidate including rejected ones.
+
+### Consequences
+
+**Positive:**
+- The `.foodSupport` row's stats carry the units the design specifies, so the fallback rate and the point counts can be read from the same record.
+- Named members make the ~56x unit difference legible at the call site rather than positional.
+
+**Negative:**
+- The design's Components signature is stale until amended.
+- Two more members to keep in step with the fit as the selection rules change.
+
+### Impact
+
+`SupportRegion.fitFoodSupportPlane`, `LiDARSupportPlaneFitter`, the `SupportRegionScenes` test helper, and the design's Components and Interfaces block.
+
+---

@@ -78,27 +78,27 @@ references:
 
 ## Wiring and persistence
 
-- [ ] 9. Write failing tests for fitter dispatch and the lazy fallback <!-- id:284ca5a -->
+- [x] 9. Write failing tests for fitter dispatch and the lazy fallback <!-- id:284ca5a -->
   - Restricted fit attempted FIRST (Decision 5 ordering); edge-band fit computed only on the rejection path
   - Assert the fallback plane is byte-identical to today's edge-band result, and that the refusal conditions of pipeline Req 4.5 are unchanged
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3)
 
-- [ ] 10. Implement LiDARSupportPlaneFitter dispatch and extend SupportPlaneFitStats <!-- id:284ca5b -->
+- [x] 10. Implement LiDARSupportPlaneFitter dispatch and extend SupportPlaneFitStats <!-- id:284ca5b -->
   - Stats gain reference, ring statistics and candidate count
   - candidatePointCount/inlierCount now mean NATIVE DEPTH SAMPLES on a .foodSupport row and colour-grid points on .edgeBand — they differ ~56x and must never be compared across references
   - Blocked-by: 284ca59 (Implement fitFoodSupportPlane), 284ca5a (Write failing tests for fitter dispatch and the lazy fallback)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4)
 
-- [ ] 11. Write failing tests for the persisted diagnostic fields <!-- id:284ca5c -->
+- [x] 11. Write failing tests for the persisted diagnostic fields <!-- id:284ca5c -->
   - Pre-feature rows decode with the fields absent — assert no default is supplied, since a default destroys the distinction the fields exist to provide
   - Ring statistics are computed and persisted on the FALLBACK path too; Req 6.2's before/after comparison is unexecutable otherwise
   - Assert the sector count is persisted on both paths (Req 6.4), and the band medians with it — the radial profile is what identifies a rim-borne ring after the fact (Decision 14)
   - Stream: 1
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4)
 
-- [ ] 12. Add the EstimationAttemptRecord fields and persist from both paths <!-- id:284ca5d -->
+- [x] 12. Add the EstimationAttemptRecord fields and persist from both paths <!-- id:284ca5d -->
   - planeReference, planeRingMedianMm, planeRingBandMediansMm, planeCandidateCount, planeSupportingSectors — all optional, no default. No planeRingMadMm: the MAD statistic is deleted with its guard (Decision 19)
   - Req 3.5 needs no new field: foodRegionCoveragePercent already persists on EstimationAttemptRecord (PipelineDiagnostics.swift:200)
   - planeSupportingSectors is what makes Req 6.4 executable: a ring median of ~0 alone cannot distinguish a correct fit from a ring that crossed the plate edge onto the table
@@ -107,12 +107,12 @@ references:
   - Stream: 1
   - Requirements: [6.1](requirements.md#6.1), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [7.9](requirements.md#7.9)
 
-- [ ] 13. Write a failing test for the fallback confidence penalty <!-- id:284ca5e -->
+- [x] 13. Write a failing test for the fallback confidence penalty <!-- id:284ca5e -->
   - sigmaPlane = exp(-r/5) * iter_penalty * fallbackPenalty; assert the persisted residual is unchanged by the penalty
   - Stream: 1
   - Requirements: [4.6](requirements.md#4.6)
 
-- [ ] 14. Implement fallbackPenalty on sigmaPlane <!-- id:284ca5f -->
+- [x] 14. Implement fallbackPenalty on sigmaPlane <!-- id:284ca5f -->
   - Multiplicative and separate so planeResidualMm stays the measured residual (Decision 12)
   - Blocked-by: 284ca5b (Implement LiDARSupportPlaneFitter dispatch and extend SupportPlaneFitStats), 284ca5e (Write a failing test for the fallback confidence penalty)
   - Stream: 1

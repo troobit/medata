@@ -729,12 +729,30 @@ public enum SupportRegion {
         return nil
     }
 
+    // The design gives `fitFoodSupportPlane` as returning
+    // `(plane, ring, candidateCount)`. It is a struct rather than that tuple because
+    // the design ALSO fixes the stats semantics of a `.foodSupport` row —
+    // "candidatePointCount / inlierCount mean native depth samples" — and those two
+    // counts exist nowhere else: only this function ever sees the annulus and the
+    // winning inlier component. The three declared members keep their names.
+    public struct FoodSupportFit: Sendable {
+        public let plane: SupportPlane
+        public let ring: RingStatistics
+        // Candidate PLANES extracted by the sequential passes, not points.
+        public let candidateCount: Int
+        // Native depth samples that competed, and the winner's largest 8-connected
+        // inlier component. ~56x smaller than the edge-band path's colour-grid
+        // counts, and never comparable across references.
+        public let annulusSampleCount: Int
+        public let inlierCount: Int
+    }
+
     // nil when no candidate is admissible — the caller then runs the edge-band fit.
     // NEVER throws: rejection is an expected outcome, not an error.
     public static func fitFoodSupportPlane(
         depth: DepthMap, colourIntrinsics: CameraIntrinsics,
         foodRegionMask: BinaryMask, gravityCamera: Vec3
-    ) -> (plane: SupportPlane, ring: RingStatistics, candidateCount: Int)? {
+    ) -> FoodSupportFit? {
         guard let g = prepare(depth: depth, colourIntrinsics: colourIntrinsics,
                               foodRegionMask: foodRegionMask) else { return nil }
         let samples = ringSamples(geometry: g)
@@ -779,11 +797,13 @@ public enum SupportRegion {
         }
 
         let winner = admissible[0]
-        return (
-            SupportPlane(normal: winner.candidate.normal, distanceMm: winner.candidate.d,
-                         residualMm: winner.candidate.residualMm, convergedIterations: nil),
-            winner.ring,
-            candidates.count
+        return FoodSupportFit(
+            plane: SupportPlane(normal: winner.candidate.normal, distanceMm: winner.candidate.d,
+                                residualMm: winner.candidate.residualMm, convergedIterations: nil),
+            ring: winner.ring,
+            candidateCount: candidates.count,
+            annulusSampleCount: samples.annulus.count,
+            inlierCount: winner.candidate.componentSize
         )
     }
 

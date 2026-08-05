@@ -1,6 +1,7 @@
 import Foundation
 import Persistence
 import Segmentation
+import SupportPlane
 import Volume
 
 // Estimation-attempt diagnostics (snaq-parity lane A, Req 2.1/2.6/3.1–3.4).
@@ -194,9 +195,34 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
     public let obliqueTiltDeg: Float?
     public let scaleSource: String?
     public let cardFallback: Bool?
+    // Support-plane point counts. UNITS DEPEND ON `planeReference`: native depth
+    // samples on a `foodSupport` row, colour-grid points on an `edgeBand` one —
+    // ~56x apart, and never comparable across references
+    // (`specs/estimation/support-plane-reference/` design, Stats semantics).
     public let planeCandidateCount: Int?
     public let planeInlierCount: Int?
     public let planeResidualMm: Float?
+    // `specs/estimation/support-plane-reference/` Reqs 6.1–6.4. All optional with
+    // no default: a pre-feature row must stay distinguishable from one this feature
+    // wrote (Req 6.3), and a default would erase exactly that distinction. Stored
+    // meals are left as recorded — no migration, no backfill (Decision 6).
+    //
+    // `foodSupport` / `edgeBand` — which surface the plane references (Req 4.4).
+    public let planeReference: String?
+    // Whole-ring median signed height above the plane: ~0 on a correct fit,
+    // +18…+26 mm when the plane is the table (Req 6.2). Recorded on the fallback
+    // path too, or that comparison has no "before".
+    public let planeRingMedianMm: Float?
+    // Inner/mid/outer band medians — the radial profile that identifies a
+    // rim-borne ring after the fact (Decision 14).
+    public let planeRingBandMediansMm: [Float]?
+    // Candidate PLANES extracted by the restricted fit; absent on the fallback
+    // path. Distinct from `planeCandidateCount`, which counts POINTS.
+    public let planeCandidatePlaneCount: Int?
+    // Req 6.4: a ring median of ~0 alone cannot distinguish a correct fit from a
+    // ring that crossed the plate edge onto the table — both read ~0. The sector
+    // count is what makes that check executable from the record alone.
+    public let planeSupportingSectors: Int?
     public let foodRegionCoveragePercent: Float?
     public let segmentationNadir: SegmentationMeasurements?
     public let segmentationOblique: SegmentationMeasurements?
@@ -219,6 +245,11 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
                 planeCandidateCount: Int? = nil,
                 planeInlierCount: Int? = nil,
                 planeResidualMm: Float? = nil,
+                planeReference: String? = nil,
+                planeRingMedianMm: Float? = nil,
+                planeRingBandMediansMm: [Float]? = nil,
+                planeCandidatePlaneCount: Int? = nil,
+                planeSupportingSectors: Int? = nil,
                 foodRegionCoveragePercent: Float? = nil,
                 segmentationNadir: SegmentationMeasurements? = nil,
                 segmentationOblique: SegmentationMeasurements? = nil,
@@ -240,6 +271,11 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
         self.planeCandidateCount = planeCandidateCount
         self.planeInlierCount = planeInlierCount
         self.planeResidualMm = planeResidualMm
+        self.planeReference = planeReference
+        self.planeRingMedianMm = planeRingMedianMm
+        self.planeRingBandMediansMm = planeRingBandMediansMm
+        self.planeCandidatePlaneCount = planeCandidatePlaneCount
+        self.planeSupportingSectors = planeSupportingSectors
         self.foodRegionCoveragePercent = foodRegionCoveragePercent
         self.segmentationNadir = segmentationNadir
         self.segmentationOblique = segmentationOblique
@@ -260,6 +296,11 @@ public struct EstimationAttemptRecord: Codable, Sendable, Equatable {
             scaleSource: scaleSource, cardFallback: cardFallback,
             planeCandidateCount: planeCandidateCount,
             planeInlierCount: planeInlierCount, planeResidualMm: planeResidualMm,
+            planeReference: planeReference,
+            planeRingMedianMm: planeRingMedianMm,
+            planeRingBandMediansMm: planeRingBandMediansMm,
+            planeCandidatePlaneCount: planeCandidatePlaneCount,
+            planeSupportingSectors: planeSupportingSectors,
             foodRegionCoveragePercent: foodRegionCoveragePercent,
             segmentationNadir: segmentationNadir,
             segmentationOblique: segmentationOblique,
@@ -291,6 +332,11 @@ public final class PipelineDiagnostics {
     private var planeCandidateCount: Int?
     private var planeInlierCount: Int?
     private var planeResidualMm: Float?
+    private var planeReference: String?
+    private var planeRingMedianMm: Float?
+    private var planeRingBandMediansMm: [Float]?
+    private var planeCandidatePlaneCount: Int?
+    private var planeSupportingSectors: Int?
     private var foodRegionCoveragePercent: Float?
     private var segmentationNadir: EstimationAttemptRecord.SegmentationMeasurements?
     private var segmentationOblique: EstimationAttemptRecord.SegmentationMeasurements?
@@ -333,10 +379,23 @@ public final class PipelineDiagnostics {
         cardFallback = true
     }
 
-    public func recordSupportPlane(candidateCount: Int, inlierCount: Int, residualMm: Float) {
+    // `reference`, `ring` and `candidatePlaneCount` arrive from the fit stats and
+    // are recorded on BOTH the restricted and the fallback path
+    // (`specs/estimation/support-plane-reference/` Reqs 6.1–6.4). They stay
+    // optional the whole way down: the card-only path derives no depth plane, so
+    // there is nothing to record and nothing to default.
+    public func recordSupportPlane(candidateCount: Int, inlierCount: Int, residualMm: Float,
+                                   reference: SupportPlaneReference? = nil,
+                                   ring: RingStatistics? = nil,
+                                   candidatePlaneCount: Int? = nil) {
         planeCandidateCount = candidateCount
         planeInlierCount = inlierCount
         planeResidualMm = residualMm
+        planeReference = reference?.rawValue
+        planeRingMedianMm = ring?.medianMm
+        planeRingBandMediansMm = ring?.bandMedianMm
+        planeSupportingSectors = ring?.supportingSectors
+        planeCandidatePlaneCount = candidatePlaneCount
     }
 
     public func recordFoodRegionCoverage(percent: Float) {
@@ -407,6 +466,11 @@ public final class PipelineDiagnostics {
             planeCandidateCount: planeCandidateCount,
             planeInlierCount: planeInlierCount,
             planeResidualMm: planeResidualMm,
+            planeReference: planeReference,
+            planeRingMedianMm: planeRingMedianMm,
+            planeRingBandMediansMm: planeRingBandMediansMm,
+            planeCandidatePlaneCount: planeCandidatePlaneCount,
+            planeSupportingSectors: planeSupportingSectors,
             foodRegionCoveragePercent: foodRegionCoveragePercent,
             segmentationNadir: segmentationNadir,
             segmentationOblique: segmentationOblique,
