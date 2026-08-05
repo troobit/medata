@@ -63,6 +63,13 @@ before it is written.
   promoted-path fallback rate only after model-production Bucket C lands and ingestion re-runs
   with `--checkpoint`.
 
+  **`fallbackPenalty` is now behind this same gate (Decision 36).** The penalty is denominated in
+  millimetres of plane error — σ_plane is exp(−r/5), so 0.9 charges 0.53 mm — and the corpus
+  measures the edge-band plane adding **18.37 mm** to the mean food pixel on `1785135663727`,
+  which prices it at 0.025. That is a ceiling and not a value: the fallback is the *correct* plane
+  whenever food rests directly on the surrounding surface, so one constant prices a mixture whose
+  weight is exactly this fallback rate. Deferring the rate defers the penalty with it.
+
   So the choice is now between deferring Req 4.5's rate until Bucket C, or measuring it on the
   device corpus, which is far too small for a percentage. The rest of the original reasoning
   still stands and still argues against a single threshold: N5k is a fixed overhead rig, so its
