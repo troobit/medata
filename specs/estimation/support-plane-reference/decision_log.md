@@ -1440,3 +1440,65 @@ Recording the extent bracket rather than the extent value follows the same line.
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringBandsAreFeasible`, the constant split, `PlaneCandidate.residueCount`), `SupportPlaneCorpusMeasurementTests` (three derivation tests), `SupportRegionSelectionTests` (a stale comment), `design.md` and task 26's detail. No plane moves and no persisted value changes on any capture in the corpus.
 
 ---
+
+## Decision 33: The plate margin is measured, and `ringOuterMm`'s derivation rule cannot be met
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+`ringOuterMm = 25` is `[owed]` against a rule its own comment states: it "must sit inside the smallest measured plate margin". Unlike the noise thresholds Decisions 29 and 32 could not settle, that rule asks for a property of the **capture geometry** — how far the plate extends beyond the food — and Decision 29's rationale is explicit that such properties are exactly what a two-capture corpus can answer, because they read the same on a clean capture as on a straddling one.
+
+Decision 29 also left a question open in its account of why both captures fall back. It attributes the fallback to rings that "demonstrably straddle the plate edge" and treats that as a property of the two captures. It does not measure how far the plate actually extends, so it cannot say whether the ring escapes because the captures are unlucky or because the ring is wider than the plates it is being asked to sit on.
+
+`SupportPlaneCorpusMeasurementTests` gains the instrument that answers both: the **support margin** per sector. For each of the eight arcs, the median height is profiled outward from the food boundary in 2 mm bins, referenced to the strip within 4 mm of the boundary — whatever the food rests on, that strip is on it — and the margin is the distance at which the profile departs from that reference by more than `ringBandMm`. Denominating the departure in `ringBandMm` means the margin bounds the guard it feeds rather than being a separate quantity. The winning candidate's normal is borrowed to remove camera tilt; its offset is not used, so the measure is valid on `1785901032716`, whose best candidate is the table.
+
+### Decision
+
+Record the measured margins, and restate what `ringOuterMm` owes rather than setting it. No code changes and no constant moves.
+
+**Measured.** Per-sector support margins are **16, 40, 10, 42, 6, 4, 6, 44 mm** on `1785135663727` and **34, 4, 46, 8, 30, 14, 12, 6 mm** on `1785901032716`. Every departure inside the ring is a **fall**, of 5.1 to 15.6 mm, so these are plate edges and not the raised rim of a vessel.
+
+**The rule is unsatisfiable.** The smallest margin is 4 mm on both captures — inside `ringInnerMm = 8`, where no ring can be placed. There is no value of `ringOuterMm`, including one below the ring's own inner edge, that sits inside the smallest measured plate margin. The rule as written cannot be met by any capture whose food reaches within 8 mm of the plate edge, which both of these do.
+
+**What it explains.** Only **3 of 8** sectors reach `ringOuterMm` on each capture, and only **4 of 8** reach the inner band's outer radius of 13.7 mm — the radius the sector measure is actually decided at. `minSupportingSectors = 6` therefore cannot be met on either capture *by geometry*, before `sectorSupportMin` or any noise threshold is consulted. The measured supporting counts of 5 (Decisions 29, 30) exceed the 4 fully-on-plate sectors only because a sector whose plate ends mid-band can still clear a 0.5 share.
+
+`ringOuterMm` stays `[owed]`, now against the margin the **sector measure** needs in **enough** sectors — a joint derivation with the trio, owed to the same captures.
+
+### Rationale
+
+The finding changes what the capture session has to establish. Decision 29 and Decision 30 both read the corpus as supplying no clean correct-fit case, and both treat that as a fact about the two captures. It is partly a fact about the ring: at 8–25 mm around the food, the ring extends past the plate in five of eight directions on captures whose food is ordinarily placed. A session that captures six new scenes without recording the margin would produce the same stalled derivation and attribute it, again, to the captures.
+
+Restating the rule rather than repairing it follows Decision 30's shape and for the same reason. A rule of the form "inside the smallest margin" presumes the ring can always be placed wholly on the support surface, and the measurement shows that presumption is false for real food on real plates — food is put in the middle of a plate, not concentrically inside a 25 mm collar. Tolerating a partial crossing is precisely the job Decisions 18 and 19 gave the **sector** measure, so the surviving question is how much margin the sector measure needs and in how many sectors, which is one derivation and not two.
+
+Leaving `ringOuterMm` at 25 while recording that it is too wide for the corpus's plates is deliberate. Shrinking it — to 13 mm, say, so more sectors stay on-plate — would narrow the ring towards the smear at `ringInnerMm`, collapse the three radial bands `bandStepMaxMm` reads, and be fitted to two captures' plate diameters. That is the circularity Req 3.7 forbids, and it would trade a measured, understood failure for an unmeasured one.
+
+### Alternatives Considered
+
+- **Set `ringOuterMm` to the smallest measured margin** - Take 4 mm as the corpus's answer and shrink the ring to fit - Rejected because 4 mm is inside `ringInnerMm`: the resulting ring is empty. The measurement disproves the rule rather than supplying a value for it.
+- **Set `ringOuterMm` to the median margin (≈ 13 mm)** - Size the ring so a majority of sectors stay on the plate - Rejected because it leaves 5 mm of radial width for three bands, roughly one depth pixel apiece at corpus range, which starves `ringMinSamples` and makes `bandStepMaxMm` unreadable. It also fits the constant to two plate diameters, which Req 3.7 forbids.
+- **Treat the margins as evidence that the captures are unusable** - Add a margin bar to the corpus-grade criteria, as Decision 31 did with depth confidence - Rejected because there is nothing wrong with these captures. Bread in the middle of a dinner plate is the modal case this feature exists for; a corpus admitting only food inside a 25 mm collar would be selected to make the ring work.
+- **Implement a sector-relative ring now** - Size the ring per sector from the measured margin so it always sits on the support surface - Rejected as out of scope and unevidenced. Task 26 determines constants; this changes what the ring is. It would also make the ring's radial extent scene-dependent, and the sector measure's whole premise is that arcs are comparable to one another.
+
+### Consequences
+
+**Positive:**
+
+- The reason both corpus captures fall back is now measured to the sector rather than described: the plate ends inside the ring in five of eight directions, and the supporting count is capped at 4–5 against a bar of 6 by geometry alone.
+- `ringOuterMm` has a rule that can be satisfied, so the capture session can derive it instead of discovering mid-session that it cannot.
+- The trio and `ringOuterMm` are now known to be one derivation, which removes a false independence from the session's plan.
+- The assertions break in the right direction: a capture whose plate reaches the inner band in six sectors fails `plateMarginCannotSetRingOuter`, forcing the derivation to be revisited rather than inherited.
+
+**Negative:**
+
+- `ringOuterMm` remains `[owed]` and the ring ships wider than the plates in the corpus, so the shipped guard's sector counts are depressed by geometry on ordinary captures — the feature falls back where it should fit, which is the safe direction but not the correct one.
+- The margin rests on the food mask's boundary, so a segmentation that leaks onto the plate shortens the margin it measures; the corpus cannot separate the two.
+- One more open design question — how much margin the sector measure needs — now waits on the same six captures as Decision 30's proposal, and the two interact.
+- The measure reports the margin at 2 mm resolution and censors at the annulus edge (50 mm), so the three wide sectors per capture are lower bounds rather than distances.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`SectorMargin`, `sectorMargins`, `plateMarginCannotSetRingOuter`), the `ringOuterMm` comment in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---

@@ -156,8 +156,9 @@ and adding their stems to its `captures` list. It runs with the guards **disable
 per-candidate `supportFraction`, `bandMedianMm`, `supportVisibility`, the **per-sector** support
 fractions, the **per-sector signed inner-band medians** (added for Decision 30 — the sign is what
 separates a correct plane whose ring escaped from a table plane, and the unsigned count cannot),
-and the raw signed heights (the noise distribution below is computed from these; there is no MAD
-statistic to dump — Decision 19 deleted it with its guard). Setting `ringSupportMin`,
+the raw signed heights (the noise distribution below is computed from these; there is no MAD
+statistic to dump — Decision 19 deleted it with its guard), and the **per-sector support margin**
+(added for Decision 33 — how far the plate extends beyond the food, per arc). Setting `ringSupportMin`,
 `ringSupportMarginMin`, `supportVisibilityMin` and the three sector constants from the observed
 separation is the point of the session; asserting them first and then measuring the fallback rate
 they cause is circular, and Req 3.7 now forbids it for the sector constants. Task 26 already
@@ -172,6 +173,17 @@ means `ringSupportMin` cannot be derived at all until the spread is characterise
 Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
 was never the same quantity — but the underlying worry it encodes is now measured and real. Take
 at least one of the six on a matte surface, and note the surface material for each.
+
+**Vary how much plate shows, and record it.** The measured support margin — the distance from the
+food boundary at which the surface falls away — is 16, 40, 10, 42, 6, 4, 6, 44 mm on
+`1785135663727` and 34, 4, 46, 8, 30, 14, 12, 6 mm on `1785901032716`. The plate therefore ends
+inside the 8–25 mm ring in five of eight directions on both, only four sectors reach the radius
+the sector measure is decided at, and `minSupportingSectors = 6` is unreachable on either capture
+by geometry alone (Decision 33). `ringOuterMm` and the sector trio are consequently **one**
+derivation, not two, and the session cannot make it unless the six captures span the range: at
+least one with the food well centred on a large plate, and at least one with the food close to the
+edge. Note the plate diameter and the food's placement for each — the pass measures the margin per
+sector, but only the session can arrange for the margins to differ.
 
 **A capture can succeed and still be empty.** The 208 g rice bundle returned a plausible
 603 cm³ at capture time and reads as well-formed everywhere except the confidence map, where

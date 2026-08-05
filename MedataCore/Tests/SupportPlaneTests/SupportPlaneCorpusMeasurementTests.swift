@@ -382,6 +382,75 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(margin >= 2, "\(tightened)")
     }
 
+    // `ringOuterMm = 25` is `[owed]` against a stated rule: it "must sit inside the
+    // smallest measured plate margin". That margin is a property of the capture
+    // geometry — how far the plate extends beyond the food — so unlike a noise
+    // threshold it does not need a clean correct-fit capture to measure, and the
+    // corpus can answer it (the Decision 29 line on what a two-capture corpus settles).
+    //
+    // The measure is the SUPPORT MARGIN per sector: the distance from the food boundary
+    // at which the surface immediately outside the food departs from itself by more than
+    // `ringBandMm`. It is denominated in the same window the sector test uses, so it
+    // bounds the guard it feeds rather than being a separate quantity.
+    //
+    // The answer is that the rule cannot be satisfied. Both captures fall off the plate
+    // inside `ringInnerMm` in at least one sector, so no `ringOuterMm` — not even one
+    // below the ring's inner edge — sits inside the smallest margin. What the corpus
+    // shows instead is that the plate GEOMETRY, on its own and before any noise
+    // threshold is consulted, caps the supporting-sector count below
+    // `minSupportingSectors` on both captures (Decision 33).
+    @Test("the corpus measures the plate margin and finds ringOuterMm's rule unsatisfiable")
+    func plateMarginCannotSetRingOuter() throws {
+        // The ring's inner band — the arc the sector measure actually reads — reaches
+        // only this far, so it is the radius the supporting count is decided at.
+        let innerBandOuterMm = SupportRegion.ringInnerMm
+            + (SupportRegion.ringOuterMm - SupportRegion.ringInnerMm)
+            / Float(SupportRegion.ringBandCount)
+
+        for name in Self.captures {
+            let margins = try #require(Self.sectorMargins(name))
+            let smallest = try #require(margins.map(\.departureMm).min())
+            let onPlateAtRingOuter = margins.filter { $0.departureMm >= SupportRegion.ringOuterMm }
+            let onPlateAtInnerBand = margins.filter { $0.departureMm >= innerBandOuterMm }
+            print("\(name): margins \(margins.map { fmt($0.departureMm) }),"
+                  + " steps \(margins.map { fmt($0.stepMm) }),"
+                  + " smallest \(fmt(smallest)),"
+                  + " sectors reaching ringOuterMm \(onPlateAtRingOuter.count)/\(margins.count),"
+                  + " reaching the inner band's \(fmt(innerBandOuterMm)) mm"
+                  + " \(onPlateAtInnerBand.count)/\(margins.count)")
+
+            // Every departure in the ring is a FALL — the plate ending and the table
+            // beginning — which is what says these margins are a plate edge rather than
+            // the far rim of a bowl or a neighbouring object.
+            for margin in margins where margin.departureMm <= SupportRegion.ringOuterMm {
+                let rise = "\(name) sector \(margin.sector) departs UPWARD by"
+                    + " \(margin.stepMm) mm at \(margin.departureMm) mm — the ring meets a"
+                    + " raised rim rather than a plate edge, and these margins measure"
+                    + " something other than the surface running out"
+                #expect(margin.stepMm < 0, "\(rise)")
+            }
+
+            // The finding. The rule in `ringOuterMm`'s comment asks for a value inside
+            // the smallest margin; the smallest margin is inside `ringInnerMm`, where no
+            // ring can be placed at all.
+            let satisfiable = "\(name) now has a smallest margin of \(smallest) mm, at or"
+                + " outside ringInnerMm \(SupportRegion.ringInnerMm) — ringOuterMm's stated"
+                + " rule is satisfiable on this capture and the constant can be set"
+            #expect(smallest < SupportRegion.ringInnerMm, "\(satisfiable)")
+
+            // And the consequence for the sector trio. Fewer sectors reach the inner
+            // band's outer radius than `minSupportingSectors` demands, so the supporting
+            // count is capped by where the plate ends before `sectorSupportMin` is
+            // consulted — the trio is being asked to separate surfaces on a ring the
+            // scene cannot fill.
+            let reachable = "\(name) has \(onPlateAtInnerBand.count) sectors whose plate"
+                + " reaches the inner band, at or above minSupportingSectors"
+                + " \(SupportRegion.minSupportingSectors) — the supporting count is no"
+                + " longer capped by plate geometry and the trio can be set against noise"
+            #expect(onPlateAtInnerBand.count < SupportRegion.minSupportingSectors, "\(reachable)")
+        }
+    }
+
     // Why the third committed slice is not in `captures`, measured rather than asserted.
     //
     // `1785054950406` is the 208 g mounded-rice capture — the shape the corpus most
@@ -594,6 +663,82 @@ struct SupportPlaneCorpusMeasurementTests {
     // not a disc; equal area is the least arbitrary choice.
     static func foodRadiusPx(_ g: SupportRegion.DepthGeometry) -> Float {
         (Float(g.foodSampleCount) / .pi).squareRoot()
+    }
+
+    // MARK: - The radial support profile
+
+    // How far the surface the food rests on extends outward, per sector, before
+    // something else takes over. `ringOuterMm` is `[owed]` against exactly this
+    // quantity — "must sit inside the smallest measured plate margin" — and it is a
+    // property of the capture geometry rather than of which plane is correct, so a
+    // two-capture corpus can measure it (the Decision 29 rationale for what a small
+    // corpus can and cannot settle).
+    struct SectorMargin {
+        let sector: Int
+        let referenceMm: Float   // median height over 0…referenceWidthMm: the surface under the food
+        let departureMm: Float   // distance at which the surface leaves that reference
+        let stepMm: Float        // signed height of the departure: - is a fall, + is a rise
+        let censored: Bool       // no departure anywhere inside the annulus
+        let samples: Int
+    }
+
+    static let profileBinMm: Float = 2
+    // A bin under this is read as coverage noise rather than a departure. At corpus
+    // range a 2 mm bin spans roughly one depth pixel of width around the whole arc.
+    static let profileBinMinSamples = 10
+    // The strip the reference is taken over. Narrow, because the question is what the
+    // food is resting on and the answer can change within `ringInnerMm` — it does, on
+    // one corpus sector — but not narrower than the ~4 px depth smear at corpus range.
+    static let referenceWidthMm: Float = 4
+
+    // Reference is taken PER SECTOR over 0…`referenceWidthMm`, the strip immediately
+    // outside the food boundary. Whatever the food rests on, that strip is on it. The
+    // plane's normal is borrowed only to remove camera tilt — its offset is not used,
+    // so a candidate that is the table rather than the plate still yields the right
+    // margins.
+    static func sectorMargins(_ name: String) -> [SectorMargin]? {
+        guard let g = geometry(name), let best = bestCandidate(name) else { return nil }
+        let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
+        let outerMm = SupportRegion.annulusOuterMultiple * SupportRegion.ringOuterMm
+        let binCount = Int((outerMm / profileBinMm).rounded(.up))
+        var heights = [[[Float]]](
+            repeating: [[Float]](repeating: [], count: binCount),
+            count: SupportRegion.ringSectorCount)
+
+        for y in 0..<g.height {
+            for x in 0..<g.width {
+                let idx = y * g.width + x
+                guard g.valid[idx], !g.foodMask.isFood(x: x, y: y) else { continue }
+                let distMm = distancePx[idx] * g.mmPerPx
+                guard distMm <= outerMm else { continue }
+                let bin = min(binCount - 1, Int(distMm / profileBinMm))
+                let sector = SupportRegion.sectorIndex(x: x, y: y, geometry: g)
+                heights[sector][bin].append(best.normal.dot(g.points[idx]) - best.d)
+            }
+        }
+
+        return (0..<SupportRegion.ringSectorCount).map { sector in
+            let bins = heights[sector]
+            let referenceBins = Int(referenceWidthMm / profileBinMm)
+            let near = bins.prefix(referenceBins).flatMap { $0 }
+            let total = bins.reduce(0) { $0 + $1.count }
+            guard !near.isEmpty else {
+                return SectorMargin(sector: sector, referenceMm: .nan, departureMm: .nan,
+                                    stepMm: .nan, censored: true, samples: total)
+            }
+            let reference = near.sorted()[near.count / 2]
+            for bin in referenceBins..<binCount where bins[bin].count >= profileBinMinSamples {
+                let median = bins[bin].sorted()[bins[bin].count / 2]
+                guard abs(median - reference) > SupportRegion.ringBandMm else { continue }
+                // The inner edge of the departing bin: the surface is intact up to here.
+                return SectorMargin(sector: sector, referenceMm: reference,
+                                    departureMm: Float(bin) * profileBinMm,
+                                    stepMm: median - reference,
+                                    censored: false, samples: total)
+            }
+            return SectorMargin(sector: sector, referenceMm: reference, departureMm: outerMm,
+                                stepMm: 0, censored: true, samples: total)
+        }
     }
 }
 
