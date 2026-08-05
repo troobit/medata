@@ -149,7 +149,7 @@ rimmed pair and the bowl are judged on *which surface was selected*, not on volu
 |---|---|---|---|
 | 1 | Flat food on a flat plate (bread) | yes | Req 7.8 on-device verification |
 | 2 | Mounded food, 20–40 mm tall (rice, mash, couscous) | yes | Req 7.3 non-flat anchor |
-| 3 | Rimmed plate, well ~30 % covered | no | inner-band selection on real depth |
+| 3 | Rimmed plate, well ~30 % covered | no | inner-band selection on real depth; the only source for Decision 40's rimmed-plate counter-case, which the suite does not cover (Decision 43) |
 | 4 | **Same** rimmed plate, well ~90 % covered | yes | `supportVisibilityMin` — nothing else can set it; also Req 7.10 |
 | 5 | Bowl, walls above the food, **in-palette food** (rice/pasta/cereal) | no | Req 7.4 fallback path |
 | 6 | Food filling a **small** plate to within ~10 mm of the edge | yes | Req 3.6 sector guard — the silent-failure case; sets `maxCrossedSectors` (Decision 40) |
@@ -244,6 +244,17 @@ and capture 6 is what closes it: a correct fit on a small plate is the only scen
 many crossed sectors a *right* plane can carry. Dump the crossed and escaped counts alongside the
 per-sector medians. Note that a rimmed plate is the counter-case, where a correct plane's ring can
 reach a rim genuinely above it, so captures 3 and 4 grade the rule as well as capture 6 sets it.
+
+**And the committed suite agrees with the corpus here, which it does nowhere else (Decision 43).**
+Read through the rule, the eight committed scenes bracket `maxCrossedSectors` at **0…2** — the
+same interval the corpus gives, on the same scenes where `minSupportingSectors` has an empty joint
+interval of 6…5. Two things follow for the sitting. This is the one `[owed]` constant that can be
+set from captures with no risk of turning the suite red, because there is no tighter suite bound
+to land outside. And the rimmed-plate counter-case above is confirmed **uncovered** by the suite:
+both committed rimmed-plate scenes read 8 of 8 supporting with no failing sector, because their
+rims never reach the inner band the sector median is computed over. Captures 3 and 4 are the only
+source for it, so shoot at least one of them with the food close enough to the rim that the ring
+reaches it, and record whether the rim falls in the inner band.
 
 **Vary how much plate shows, and record it.** The measured support margin — the distance from the
 food boundary at which the surface falls away — is 16, 40, 10, 42, 6, 4, 6, 44 mm on
@@ -349,6 +360,7 @@ is no way to recover it afterwards.
   | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
   | `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
   | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
+  | `maxCrossedSectors` | 0…2 | 0…2 — **they agree** (Decision 43) |
 
   **Two of these bind tighter than the corpus**, so a value set at the sitting against captures
   alone can land inside the corpus's bracket and outside the suite's: `foodEnvelopeMinMm` above
@@ -359,7 +371,10 @@ is no way to recover it afterwards.
   `minSupportingSectors` has to come down to 5 or below — but the silent-failure scene the guard
   exists to reject scores 5 as well, so the suite floors it at 6. No value satisfies both. This
   is not a session problem to solve at the table: it is Decision 30's finding, and it resolves
-  when Decision 40's crossed-sector rule replaces the unsigned count. The scene moves with it.
+  when Decision 40's crossed-sector rule replaces the unsigned count. ~~The scene moves with it.~~
+  **Superseded by Decision 43**: the scene does not move. Measured on the same eight scenes, the
+  rule brackets `maxCrossedSectors` at 0…2 where the count's joint interval is empty, so the
+  collision belongs to the count alone and every committed scene survives the replacement intact.
 
 ## Before testing
 
