@@ -2742,3 +2742,73 @@ Below the floor the plane a correct fit must admit is itself crossed, and at 25 
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`annulusOuterMultiple` → `annulusOuterMm`, its provenance block, the `ringSamples` derivation, and the superseded riders in `ringOuterMm`'s comment), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theCandidateBoundIsAConstantOfItsOwn`, a `ringSamples(geometry:outerMm:annulusOuterMm:)` taking the bound as an argument, and `coupledBoundMm` so Decision 46's sweep states the coupling it measures), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: `2 × ringOuterMm` is 50 mm, the constant's new value.
 
 ---
+
+## Decision 50: The removal band is what one pass hands the next, and its one stated rule is false
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decisions 46 to 49 worked through the constants that decide which planes *compete*. `ringOuterMm` re-rings a candidate set already chosen; `annulusOuterMm` fixes the sample set extraction draws from and is the one that moves the plane; `maxCandidatePlanes` fixes how many times that set may be drawn from. One constant in `SupportRegion` sits between the passes and was in none of those sweeps: `inlierRemovalMultiple = 2`, the shell a pass removes its polished inliers within before the next pass runs.
+
+It is the fourth constant that changes which planes compete, and the only one that decides what each draw *leaves*. It was also the last constant in the file carrying a claim in place of a provenance marker: "a pass removes its polished inliers within 2 × `inlierBandMm`; a 1× shell seeds near-duplicate planes on the next pass". That is a statement about what happens at 1×. Like `ringOuterMm`'s "inside the smallest measured plate margin" (Decision 33) and `ringBandCount`'s "structural: inner / mid / outer" (Decision 47), it had never been measured.
+
+### Decision
+
+`inlierRemovalMultiple` is `[owed]` and **bracketed 1…2.5×** by the corpus, with the shipped 2× strictly inside it. Its stated rule is measured and **false**, so the shipped value has no derivation at all; the floor is structural and the ceiling is the corpus's. It does **not** move the answer. `maxCandidatePlanes` is coupled to it with an order — the removal band is fixed before the residue floor, which Decision 48 already puts before the pass cap.
+
+### Rationale
+
+**The stated rule is false, and not marginally.** Read in the removal's own units — the largest gap between two planes' signed heights taken over the whole annulus, against one `inlierBandMm` — **no** adjacent pass pair anywhere in the sweep is a near-duplicate: 0 of 33 pairs across eight multiples. The closest pair at 1× diverges by **30.807 mm** and the closest at any multiple by **23.973 mm**, nearly five bands. CC-RANSAC is why. A pass keeps the largest *connected* component, so what a 1× shell leaves behind is a thin ring around a surface already taken and it does not form one. The shipped 2× therefore stands on nothing, and the floor cannot come from here.
+
+**It does not move the answer, exactly.** The selected plane at the food is unchanged to **0.000 mm** on both captures at every multiple, because removal happens *after* a pass — pass 1 is drawn from an annulus this constant has never touched — and the ranking picks pass 1 on both captures at every multiple. So it joins `ringSectorCount`, `sectorSupportMin`, `ringBandCount` and (since Decision 49) `ringOuterMm` as bracket-only, and `annulusOuterMm` remains the only owed constant that moves the plane.
+
+**The ceiling is where a shell wide enough to take the table takes the plate with it.** On `1785901032716` the plane a correct fit must select is pass 2, nearest Req 3.1's zero (Decision 48). Its ring median degrades over the sweep and then the candidate stops existing:
+
+| multiple | removal band | natural depth (plate / table capture) | intended ring median on `1785901032716` | corpus `maxCrossedSectors` |
+|---|---|---|---|---|
+| 1× | 5 mm | 7 / 5 | −2.203 mm | **2…2** |
+| 1.25× | 6.25 mm | 5 / 3 | −2.309 mm | **2…2** |
+| 1.5× | 7.5 mm | 4 / 3 | −2.377 mm | **2…2** |
+| **2× (shipped)** | 10 mm | 3 / 3 | −2.658 mm | **2…2** |
+| 2.5× | 12.5 mm | 2 / 3 | −3.011 mm | **2…2** |
+| 3× | 15 mm | 2 / 2 | +3.039 mm | 3…unbounded |
+| 4× | 20 mm | 2 / 2 | +3.039 mm | 3…unbounded |
+| 6× | 30 mm | 2 / 1 | +3.039 mm | 3…unbounded |
+
+At 3× the nearest-to-zero candidate is pass 1, the **table**, carrying 3 crossed sectors of its own, so the guard would have to admit the plane Decision 18 exists to reject. That is Decision 49's floor argument arriving on a second constant. The **floor of 1** is structural rather than measured: below 1× a pass leaves samples it selected within `inlierBandMm` and the next pass can re-find the same plane. The corpus does not raise it — at 1× the intended candidate is still admissible and still separable. Unlike Decision 46's radius the readings are monotone across the sweep, so nothing here forbids interpolating inside the bracket.
+
+**`maxCandidatePlanes` is coupled to it with an order.** Decision 48 lifted the cap to 8 and found extraction stopping at three passes on both captures, starved, and concluded that no value at or above 3 is distinguishable. That reading is at 2×. A narrower shell hands the next pass more residue and extraction runs deeper: at 1× it reaches 7 and 5 passes, so the cap truncates, and the shipped 2× is the **smallest multiple in the sweep at which it does not**. Decision 48's headline is a slice at this constant, and that decision's ordering — residue floor before pass cap — gains a member before both. Req 7.6's latency is denominated here for the same reason, since the RANSAC bound is `maxIterationsPerPass` times the passes actually run.
+
+**The committed suite cannot bound it, and here that is structural rather than measured.** Decision 49's bound reached the scenes through `visibility` and `escaped` and was found silent by measurement. This constant reaches them through nothing: no scene runs extraction — each asserts against a plane its own test states — so no suite reading is even definable. It is the only owed constant of which that is true. One positive comes with it: `maxCrossedSectors` reads **2…2 at every multiple this constant's own bracket admits**, so unlike the candidate bound it does not denominate Decision 48's determination and the sitting sets the two apart.
+
+### Alternatives Considered
+
+- **Leave the comment and record only the bracket** - The numbers stand either way, and the claim about 1× is a design note rather than a shipped bar - Rejected because the claim is the only thing standing where a derivation should be, and it is false. Leaving it means the next reader takes 2× as reasoned when it is not, which is the failure Decisions 33 and 47 both found and repaired.
+- **Set the multiple to 1×, since the rule that argued against it is false** - It is the structural floor, it keeps the most surface in play for later passes, and the corpus reads `maxCrossedSectors` 2…2 there - Rejected because it asserts an owed constant, which Req 3.7 forbids, and because it is the multiple at which extraction runs deepest — 7 passes on one capture against a cap of 3 — so it moves the pass cap from idle to load-bearing without any measurement of what the extra candidates are worth.
+- **Re-denominate it in millimetres as `inlierRemovalBandMm = 10`, on Decisions 37, 38 and 49's pattern** - Those three re-denominations each removed a dependence a measure parameter had no business carrying - Rejected because there is no dependence to remove. `inlierBandMm` is `[inherited]` from `LiDARPlaneFitter` and is itself in millimetres, so the multiple already transfers across depth grids; expressing removal as a multiple of the band a pass *selected* inliers within is the relation that makes the floor of 1 structural, and millimetres would hide it.
+- **Widen it toward 2.5×, the top of the bracket, to end extraction sooner and cut Req 7.6's cost** - Fewer passes is less RANSAC, and 2.5× still reads `maxCrossedSectors` 2…2 - Rejected because it buys latency with the margin on the plate candidate: its ring median is already degrading (−2.658 → −3.011 mm) and 3× is where it disappears. Choosing a value inside a bracket is asserting, and this one is asserting toward the failing end.
+
+### Consequences
+
+**Positive:**
+
+- Every constant in `SupportRegion` now carries a provenance marker; no comment stands in for a derivation anywhere in the file.
+- The claim that argued for the shipped value is measured and disposed of, so no future reader treats 2× as reasoned.
+- The constant is bracketed two-sidedly, and it is the first owed constant in this feature whose shipped value sits strictly inside its bracket rather than on an edge.
+- `maxCrossedSectors` is confirmed **not** denominated in it — 2…2 throughout the admissible range — so the capture session sets the two independently, which is true of no other constant that changes the candidate set.
+- No shipped value moves and no verdict changes.
+
+**Negative:**
+
+- The capture session has one more constant to set, and the corpus is its only source — the committed suite cannot express a reading on it at all.
+- Decision 48's "the pass cap never fires" is a reading at 2× and not a property of the corpus; the ordering the session must follow is now removal band, then residue floor, then pass cap.
+- The floor of 1 is structural, not measured, so the bracket is one-and-a-half-sided in the same way `maxCandidatePlanes`'s was before Decision 48.
+- Req 7.6's latency is denominated in a fourth constant, and the pass count over the bracket runs from 7 to 2 on one capture — a wider spread than any other owed constant produces.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`inlierRemovalMultiple`'s provenance block, and `maxCandidatePlanes`'s coupling note), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theRemovalBandIsWhatOnePassHandsTheNext`, and the removal multiple added as an argument to the parameterised extraction the pass-cap sweep already uses), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes.**
+
+---
