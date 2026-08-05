@@ -964,6 +964,14 @@ Output: π_sup = (n̂, d), residual_mm
    for confidence). For each pixel in food_region_mask's lower-edge band (within 30 mm of
    the food bbox lower edge in camera-1 image coords) where confidence/255 ≥ τ_conf (0.40, Decision 49)
    AND the pixel is OUTSIDE food_region_mask: back-project to 3D camera-space:
+
+   > **Superseded 2026-06-16** by `lidar-plane-fit-degenerate-on-clean-capture`, and the
+   > constant is now gone (support-plane-reference Decision 56). The scan is **four** bands —
+   > below, above, left, right of the food bbox — each as thick as the bbox dimension
+   > perpendicular to it, in **pixels**, clipped to image bounds. No millimetre bound is read:
+   > `LiDARPlaneFitter.lowerEdgeBandMm = 30` had no reader from that date and was deleted.
+   > `LiDARPlaneFitter.collectCandidatePoints` is the region's only definition.
+
        p := K_colour^{-1} · [u, v, 1] · z(u,v)        // mm
    Collect points P = {p_k}.
 

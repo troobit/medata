@@ -116,7 +116,8 @@ measured value against a constant flips as soon as the constant crosses it.
 | `minSupportingSectors` | 6…7 | ≤ 5 |
 | `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
 | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
-| `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) |
+| `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) — **both are readings at `foodEnvelopePercentile`** (Decision 56) |
+| `foodEnvelopePercentile` | floor **0.1** at the shipped bar | ceiling **0.92**, interpolable (Decision 56) |
 | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
 | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48) |
 | `maxCandidatePlanes` | ≥ 2 | ≥ 2, no ceiling — *at 2× removal* (Decisions 48, 50) |
@@ -1114,3 +1115,62 @@ Consequences worth not re-deriving:
   and gravity. The two 15s are a coincidence.
 - The 6.3° disagreement between the plate top and its own table is **unexplained** — it could
   be the plate, the fit, or the recorded gravity, and two captures cannot separate them.
+
+## The envelope percentile is a denominator, and it re-denominates the tightest bracket here (Decision 56)
+
+`SupportRegion.foodEnvelopePercentile = 0.90` was the last unswept constant on the promoted leg,
+and it survived eleven passes because of its **marker**. It reads `[derived] Decision 22`, and
+that derivation is real — it is why the guard is in millimetres rather than a sample-count
+fraction, and why `foodAboveFractionMax` was retired. It derives the guard's **kind**. Nothing
+derives the **0.90**. That is a third kind of provenance failure, after the missing markers of
+Decisions 47/48/51 and Decision 52's four markers pointing at an underived constant: a marker
+that reads correctly and covers a different quantity.
+
+**It is the denominator of `foodEnvelopeMinMm`.** The two are one measure — a bar in millimetres
+and the statistic compared against it — so every bound quoted on that constant is a reading at
+this one. The corpus ceiling runs **−19.415 mm at p = 0 to +26.038 mm at p = 1**: 45.453 mm of
+movement, more than three times the width of the bracket it caps.
+
+**Bracketed 0.1…0.92, and interpolable.** A percentile of a fixed multiset cannot fall as the
+percentile rises, so the readings are monotone *by construction*, not by measurement. (Asserted
+anyway: `SupportRegion.percentile` special-cases `p == 0.5` and averages the two middle samples
+where every other value takes a nearest-rank index, so the sweep crosses a code branch.)
+
+- **Floor 0.1** — the committed suite's, at the **shipped** `foodEnvelopeMinMm = 0`, so it
+  involves no owed value at all. `overhangingFood`'s test requires the envelope guard to pass and
+  its envelope goes negative below 0.1: −2.579 mm at 0.05, −4.968 at 0.02, −6.440 at 0. A
+  percentile that low reads the overhanging lobe rather than the loaf.
+- **Ceiling 0.92** — where the corpus floor rises past the suite ceiling: 8.171 vs 8.245 mm at
+  0.92, 9.366 vs 8.264 at 0.95. Decision 41's collision prediction on a fourth constant.
+
+**Decision 48's 1.079 mm joint window — "the narrowest in the feature" — is a slice at two
+constants that decision did not name.** The first is this percentile: the same window reads
+**8.779 mm at p = 0.5**, 8.1× wider, and 0.075 mm at 0.92. The second is `ringSupportMin`,
+because a candidate floors the envelope bar only if the envelope guard is what has to reject it
+(Decision 34's own rule for the suite, read on the corpus). The two above-surface candidates
+carry **0.183** and **0.304** inner-band support, both inside `ringSupportMin`'s (0, 0.362]
+bracket, so at the shipped percentile there are three live regimes:
+
+| `ringSupportMin` | corpus floor | joint window at p = 0.90 |
+|---|---|---|
+| ≤ 0.183 | 8.958 mm | **EMPTY** by 0.725 mm |
+| 0.183…0.304 | 7.154 mm (Decision 48's) | 1.079 mm |
+| > 0.304 | none — Decision 34's reading restored | 14.991 mm |
+
+**So the shipped 0.90 is admissible only where `ringSupportMin` exceeds 0.183.** Set the
+percentile and the support bar before the envelope bar.
+
+**It cannot move the candidate set** — extraction never reads it — which makes it the only
+constant swept since Decision 46 that cannot reorder or re-roll the candidates. Its one route to
+the answer is `admissibility`, and there it is live: 4 of 6 corpus candidates and 1 of 8
+committed scenes cross the shipped `foodEnvelopeMinMm = 0` over the sweep. Whether a crossing
+reaches the selected plane depends on bars that are themselves owed.
+
+**`lowerEdgeBandMm` is deleted, not measured.** `LiDARPlaneFitter.lowerEdgeBandMm = 30` had
+exactly one occurrence in the repository — its own declaration. The four-edge band scan added by
+`lidar-plane-fit-degenerate-on-clean-capture` on 2026-06-16 sizes each band from
+`bbox.heightPx` / `bbox.widthPx` and never reads a millimetre bound, so the constant has not
+defined the fallback's region since that date, and Decision 36 prices the fallback over a region
+it does not set. `collectCandidatePoints` is the region's only definition;
+`specs/estimation/pipeline/design.md` §6.2 still described it in the constant's terms and is
+marked superseded.

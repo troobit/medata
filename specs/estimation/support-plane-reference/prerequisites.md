@@ -240,7 +240,8 @@ guards are evaluated independently rather than short-circuited. Which capture fi
 
 | Guard | What the corpus reaches | The capture that fires it |
 |---|---|---|
-| `foodEnvelopeMinMm` | **bracketed 7.154…21.041 mm** — a plane above the surface reads a *positive* 7.154 mm (Decision 48) | 5, the bowl — still the only source of a *negative* envelope |
+| `foodEnvelopeMinMm` | **bracketed 7.154…21.041 mm** — a plane above the surface reads a *positive* 7.154 mm (Decision 48), and both ends are readings at `foodEnvelopePercentile` and at `ringSupportMin` (Decision 56) | 5, the bowl — still the only source of a *negative* envelope |
+| `foodEnvelopePercentile` | **bracketed 0.1…0.92** — the bar's own denominator, moving its corpus ceiling 45.453 mm across the domain (Decision 56) | none — the floor is the committed suite's at the shipped bar, the ceiling the corpus's |
 | `bandStepMaxMm` | every inner→mid step a **fall**, −0.5…−6.5 mm | 3 and 4, the rimmed plate — the only source of an outward rise |
 | `supportVisibilityMin` | floor 0.246 against a 0.15 bar | 4, the ~90 %-covered well |
 | `escapeBandMm` | annulus medians −36.6…**+5.7** mm against a 30 mm bar | **none of the six** — see below |
@@ -551,7 +552,8 @@ is no way to recover it afterwards.
   | `minSupportingSectors` | 6…7 | ≤ 5 |
   | `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
   | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
-  | `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) |
+  | `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) — **both intervals are readings at `foodEnvelopePercentile`**, and the corpus floor exists only for `ringSupportMin` ≤ 0.304 (Decision 56) |
+  | `foodEnvelopePercentile` | floor **0.1** at the shipped bar — `overhangingFood` fires below it, and no owed value enters that bound | ceiling **0.92**, where the corpus floor passes the suite's ceiling (Decision 56) |
   | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
   | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48; 0…2 in Decision 43) |
   | `maxCandidatePlanes` | ≥ 2 (`sequentialExtractionSurfacesThePlate`) | ≥ 2, no ceiling — the cap never fires *at 2× removal* (Decisions 48, 50) |
@@ -571,6 +573,13 @@ is no way to recover it afterwards.
   alone can land inside the corpus's bracket and outside the suite's: `foodEnvelopeMinMm` above
   8.233 mm breaks the overhanging-food scene, and `escapeBandMm` below 14.868 mm breaks the
   rim-in-the-outer-band scene. Check both against this table before writing a value down.
+
+  **And the envelope row is denominated in a constant that is not in this table's left
+  column** — `foodEnvelopePercentile`, `[owed]` since Decision 56. Both intervals move with it:
+  the corpus ceiling runs −19.415…26.038 mm over p ∈ [0, 1] and the suite's −6.440…8.299 mm, so
+  the 1.079 mm joint window is a reading at the shipped 0.90 and reads 8.779 mm at p = 0.5. Fix
+  the percentile **before** the bar, and note that the shipped 0.90 is admissible only where
+  `ringSupportMin` exceeds 0.183.
 
   **And one contradicts it.** A real intended candidate scores 5 of 8 sectors (Decision 33), so
   `minSupportingSectors` has to come down to 5 or below — but the silent-failure scene the guard

@@ -3170,3 +3170,84 @@ Not repaired.
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`gravityAngleMaxRad` provenance block), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the unenforced-cone note at `extractCandidates`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theGravityConeIsTheBarFourGatesReadAndTwoEnforce`, and the instrumented `ccRansac` / `extractCandidates` / `fallbackRansac` / `fallbackReading` helpers), `design.md` (the "correct and reused" claim about the cone, and the straddling section's second review, both marked superseded), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes.**
 
 ---
+
+## Decision 56: The envelope percentile is a denominator, and every bound on the envelope bar is a reading at it
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`SupportRegion.foodEnvelopePercentile = 0.90` is the only constant in the envelope guard that had never been varied, and the reason it survived eleven sweeps is its marker. Decisions 47, 48 and 51 each found a constant carrying `Structural:` or nothing at all in place of a provenance marker; Decision 52 found four markers pointing at a constant that had none. This one is different again: it reads `[derived] Decision 22`, and that derivation is **real** — it is why the guard is denominated in millimetres rather than as a sample-count fraction, and why `foodAboveFractionMax` was retired. It derives the guard's **kind**. Nothing anywhere derives the **0.90**.
+
+It is the **denominator** of `foodEnvelopeMinMm`. The two are one measure: a bar in millimetres and the statistic it is compared against. So every bound ever quoted on that constant is a reading at this one — Decision 34's ceiling of 25.8 mm, Decision 41's suite interval of −6.758…8.233 mm, Decision 48's corpus bracket of 7.154…21.041 mm, and Decision 48's headline that the joint window of **1.079 mm** is the narrowest any owed constant in the feature has.
+
+`lowerEdgeBandMm = 30` in `LiDARPlaneFitter` is the other constant the previous pass named as never measured, and it is not a measurement job.
+
+### Decision
+
+`foodEnvelopePercentile` is `[owed]`, bracketed **0.1…0.92** and **interpolable**, with the shipped 0.90 strictly inside.
+
+It is a **unit**, not a peer: the corpus ceiling on `foodEnvelopeMinMm` moves **45.453 mm** across its domain, so the bar's whole bracket travels further than the bracket is wide. Fix it **before** the bar.
+
+Decision 48's joint window of 1.079 mm is a **slice at two constants that decision did not name**. At the shipped percentile it reproduces exactly; at p = 0.5 the same window is **8.779 mm**, 8.1× wider. And whether the corpus floors the bar at all depends on `ringSupportMin`: three regimes, all admissible today.
+
+`lowerEdgeBandMm` is **deleted**, not measured.
+
+### Rationale
+
+**The bracket, and the floor is the only bound in this feature that needs nothing owed.** Below p = 0.1 the committed suite goes **red at the shipped `foodEnvelopeMinMm = 0`**: `overhangingFood`'s test requires the envelope guard to pass, and its envelope reads −6.440 mm at p = 0, −4.968 at 0.02 and −2.579 at 0.05, because a percentile that low reads the overhanging lobe rather than the loaf. No owed value enters that — the bar is the shipped 0, the scene is committed, the verdict flips. It is the fifth distinct way the suite has spoken to a constant here, after Decision 41's brackets, Decision 49's measured silence, Decision 50's structural silence and Decision 52's noise-limited identity. The **ceiling of 0.92** is where the corpus floor on `foodEnvelopeMinMm` rises past the suite's ceiling: 8.171 mm against 8.245 mm at 0.92, a window of 0.075 mm, and 9.366 against 8.264 at 0.95 — Decision 41's prediction of a collision on a **fourth** constant, after Decision 46's radius and Decision 47's band count.
+
+**It is a denominator, and the numbers move by more than the thing they bound.** The corpus ceiling — the intended candidate's own envelope, the quantity Decisions 34 and 48 both cap the bar with — runs **−19.415 mm at p = 0 to +26.038 mm at p = 1**. The suite ceiling runs −6.440 to +8.299 mm. Decision 48's bracket is 13.887 mm wide; the ceiling alone travels 45.453 mm across a constant nothing had varied. That is the same shape as Decision 44's `ringSectorCount`, which re-denominated three sector counts, and Decision 47's `ringBandCount`, which re-denominated `bandStepMaxMm` — but larger, because those two moved counts and this one moves millimetres against a bar measured in millimetres.
+
+**The shipped value is where the joint window is nearly minimal.** In Decision 48's own regime the window is non-empty over 0.02…0.92 and reads 2.057, 4.202, 6.286, 6.684, 8.056, **8.779**, 7.565, 5.961, 4.829, 3.203, **1.079**, 0.075 mm over the sweep. The shipped 0.90 is the second-narrowest non-empty reading, 8.1× below the widest. So "the narrowest joint window in the feature" is a property of the **denominator** and not of the constant it bounds, and 0.90 is very nearly the value that makes it narrowest without making it empty. Nothing chose it for that; it simply was never varied.
+
+**Whether the corpus floors the bar at all is a reading at `ringSupportMin`, which Decision 48 did not name.** A candidate floors the envelope bar only if the envelope guard is what has to reject it — Decision 34's own rule for the suite, read on the corpus. The two above-surface candidates carry **0.183** and **0.304** inner-band support, and both sit inside `ringSupportMin`'s (0, 0.362] bracket (Decision 52's ceiling). So at the shipped percentile there are three regimes and the session may still choose any of them:
+
+| `ringSupportMin` | corpus floor | joint window at p = 0.90 |
+| --- | --- | --- |
+| ≤ 0.183 | **8.958 mm** — both above-surface candidates reach the guard | **EMPTY** by 0.725 mm |
+| 0.183…0.304 | 7.154 mm — Decision 48's reading | 1.079 mm |
+| > 0.304 | **none** — Decision 34's original reading restored | 14.991 mm |
+
+Decision 48 quoted 7.154 mm from one capture; the other capture's above-surface pass reads 8.958 mm at the same percentile and was printed by that decision's own measurement. Taking the floor over both captures is what surfaces the regime, because the maximum is what a floor has to clear.
+
+**Interpolable, and for a reason no other constant here has.** A percentile of a fixed multiset cannot fall as the percentile rises, so the readings are monotone **by construction** rather than by measurement — asserted anyway, because `SupportRegion.percentile` special-cases p = 0.5 and averages the two middle samples where every other value takes a nearest-rank index, so the sweep crosses a code branch and not only a value. That makes this the fourth interpolable owed constant, after Decision 47's band count, Decision 49's radius and Decision 54's polish cap, and the only one where interpolability is a property of the function rather than of the corpus.
+
+**It cannot move the candidate set, and it is still live.** Extraction never reads it, so unlike the eight constants of Decisions 46–55 this one cannot reorder or re-roll the candidates. Its only route to the answer is `admissibility` — and there it is not idle: **4 of the 6 corpus candidates** (−18.503…31.914, −87.418…18.653, −19.415…26.038, −28.549…13.212 mm) and **1 of the 8 committed scenes** cross the shipped `foodEnvelopeMinMm = 0` over the sweep. Whether a crossing reaches the selected plane depends on bars that are themselves owed, which makes this the first owed constant whose effect on the answer is entirely mediated by another owed constant.
+
+**`lowerEdgeBandMm` is deleted rather than swept.** It has exactly one occurrence in the repository — its own declaration. The four-edge band scan that `lidar-plane-fit-degenerate-on-clean-capture` added on 2026-06-16 sizes each band from `bbox.heightPx` and `bbox.widthPx` and never reads a millimetre bound, so the constant has not defined the fallback's region since that date. Decision 36 prices the fallback at 18.37 mm of plane error over a region this constant does not set. `specs/estimation/pipeline/design.md` §6.2 still describes the region as "within 30 mm of the food bbox lower edge" and is marked superseded; `collectCandidatePoints` is the region's only definition.
+
+### Alternatives Considered
+
+- **Set it at 0.5, where the joint window on `foodEnvelopeMinMm` is widest at 8.779 mm** - It is the value that leaves the session the most room, it is inside the bracket, and the median is the least noise-sensitive statistic in the sweep - Rejected because widening the window is not the guard's purpose. At p = 0.5 the guard asks whether *half* the food is above the plane, which the bowl case fails only when the plane is above the food's midline rather than its top; Req 3.4 states an **upper** envelope and Decision 22's derivation is written about one. Choosing the percentile to widen a bracket is fitting the unit to the convenience of the bar.
+- **Keep 0.90 and record it as settled, since it is inside the bracket and reproduces every committed verdict** - It is the shipped value, it is strictly inside 0.1…0.92, and no committed test moves - Rejected because it is 0.02 from a ceiling in one `ringSupportMin` regime and **outside** the bracket in another, and Req 3.7 forbids asserting a constant the corpus can still see moving. The narrowness of Decision 48's window is the evidence: at 0.90 the two constraint sets are 1.079 mm apart, and one notch of a constant nothing measured puts them 0.075 mm apart.
+- **Retire the percentile and use the maximum (p = 1), since Req 3.4 says "upper envelope"** - It removes a constant rather than adding one, which Decision 32 did for `minCandidateSamples` - Rejected on measurement: at p = 1 the corpus floor is 18.653 mm against a suite ceiling of 8.299 mm and the joint window is **empty** in two of three regimes. A single-sample statistic is also the one reading in the sweep with no noise rejection at all, on a depth map whose per-sample σ is 3.44–6.98 mm (Decision 29).
+- **Sweep `lowerEdgeBandMm` as the fallback's region parameter, as the previous handoff proposed** - Decision 36 prices the fallback over a region, and a region parameter is the natural thing to sweep - Rejected because it is not the region's parameter and has not been since 2026-06-16. Sweeping it would produce a flat reading at every value and record a false derivation for a dead constant.
+- **Repair `SupportRegion.percentile`'s p = 0.5 branch so the function is one rule over its whole domain** - The special case makes the sweep cross a branch, and a percentile function with two rules is a latent surprise - Rejected on Decisions 52–55's precedent: the branch is only reachable at exactly 0.5, the shipped constant is 0.90, and changing `median` changes every ring and annulus median in the feature. Recorded, not repaired.
+
+### Consequences
+
+**Positive:**
+
+- The last unswept constant on the promoted leg is measured, and it turns out to denominate the constant with the narrowest bracket in the feature.
+- A **third** kind of provenance failure is identified: a marker that points at a real derivation of a different quantity. Decisions 47/48/51 found missing markers and Decision 52 found markers pointing at an underived constant; this one is a marker that reads correctly and covers nothing.
+- Decision 48's joint window of 1.079 mm gains its two denominators, so the feature's tightest constraint is no longer quoted unconditionally.
+- `ringSupportMin` gains a consequence it did not have — it decides whether `foodEnvelopeMinMm` has a corpus floor at all — and Decision 34's "no floor" is restored as one of three live regimes rather than withdrawn outright.
+- The committed suite bounds an owed constant with **no owed value in the bound**, for the first time in this pass.
+- The bracket is interpolable for a structural reason, so the sitting can choose inside it without a finer sweep.
+- One constant is **removed** rather than postponed — the second after Decision 32's `minCandidateSamples` — and a stale region description in another spec is corrected with it.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the sixth pass running, and this one is upstream of a constant already owed, so the sitting's ordering grows another edge.
+- The shipped 0.90 is admissible only if `ringSupportMin` exceeds 0.183, which is a joint constraint between two owed constants that no earlier decision recorded.
+- The ceiling of 0.92 rests on a 0.075 mm margin between two constraint sets, which is inside the noise of either.
+- `SupportRegion.percentile`'s p = 0.5 branch is documented and not repaired, so the feature carries a second known-unrepaired code path after the gravity cone.
+- Decision 48's headline sentence — "the narrowest joint window in the feature" — was true of a slice and read as unconditional for one pass.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `foodEnvelopePercentile` and `foodEnvelopeMinMm` provenance blocks), `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`lowerEdgeBandMm` deleted, replaced by the note recording why), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theEnvelopePercentileIsTheUnitTheEnvelopeBarIsDenominatedIn` and the parameterised `foodEnvelopeMm`), `specs/estimation/pipeline/design.md` (the §6.2 lower-edge band description, marked superseded), `prerequisites.md`, `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and the deleted constant had no reader.
+
+---

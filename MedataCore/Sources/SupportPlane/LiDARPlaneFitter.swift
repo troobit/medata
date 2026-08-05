@@ -9,7 +9,15 @@ import PortableContracts
 // same fixture produce identical inliers.
 public enum LiDARPlaneFitter {
     // Tunable parameters per design §6.2 ("Parameter justification").
-    static let lowerEdgeBandMm: Float = 30
+    //
+    // `lowerEdgeBandMm = 30` stood here and is DELETED rather than measured (Decision 56).
+    // It had exactly one occurrence in the repository — its own declaration. The four-edge
+    // band scan that `lidar-plane-fit-degenerate-on-clean-capture` added on 2026-06-16
+    // sizes each band from `bbox.heightPx` / `bbox.widthPx` and never reads a millimetre
+    // bound, so this constant has not defined the fallback's region since that date.
+    // Decision 36 prices the fallback at 18.37 mm of plane error over a region it does not
+    // set. `collectCandidatePoints` below is the region's only definition.
+    //
     // τ_conf: minimum normalised LiDAR confidence for a table pixel to seed the
     // fit. ARKit maps `ARConfidenceLevel.{low,medium,high}` → bytes `{0,127,255}`
     // (§6.0). Lowered from 0.66 (HIGH-only) to 0.40 per Decision 47 so MEDIUM
