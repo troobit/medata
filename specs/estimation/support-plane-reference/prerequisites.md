@@ -88,6 +88,21 @@ before it is written.
   until the device corpus can carry a percentage — and Req 4.5 names one threshold and cannot
   carry both.
 
+  **And the denominator is the SECOND blocker, not the first (Decision 42).** On the corpus that
+  exists the rate is a readout of the `[owed]` constants and of nothing else, so a threshold
+  stated before they are set grades the placeholders — Req 3.7's circularity reaching Req 4.5 by
+  another route. Measured: the shipped placeholders fall back on **2 of 2** captures (rate
+  **1.000**, Req 4.5's own "delivering nothing"); `minSupportingSectors` swept alone reads
+  `8-6 → 1.000`, then `5-0 → 0.500`; every owed bar at its loosest reads **0.000**. The rate
+  reaching zero costs **no wrong plane** — both captures then select the candidate nearest
+  Req 3.1's zero (−0.521 mm and −1.023 mm) — so nothing structural is wrong and the whole
+  distance from 100 % to 0 % is constants the committed suite contradicts (Decision 41). What
+  holds the wrong planes out there is `ringMedianMaxMm`, which is `[inherited]`, clearing the
+  table candidate by **0.338 mm** on a 5 mm bar. The 0.000 is a bound rather than a proposal:
+  on `1785901032716` the right plane is admissible only at support 0.362 over 2 of 8 sectors,
+  which is Decision 33's plate margin read from the rate's side, and it is another reason the
+  sitting must span plate sizes.
+
 ## Session attempted 2026-08-05 09:09–09:20 — four weighed truths, none usable
 
 Recorded so the next sitting does not repeat it. The session covered captures 2, 4 and 5 of the

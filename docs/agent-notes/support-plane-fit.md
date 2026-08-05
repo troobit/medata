@@ -325,6 +325,43 @@ genuinely mixed at 2 / 4, so the classification is not degenerate. Note the coun
 the corpus cannot supply: on a **rimmed** plate a correct plane's ring can reach a rim
 genuinely above it, which is captures 3 and 4, not capture 6.
 
+## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
+
+**Both committed captures fall back under the shipped constants.** That is a per-capture fact
+in `SupportPlaneRegressionSliceTests`; in aggregate it is a fallback rate of **1.000**, which
+is Req 4.5's own definition of the feature "delivering nothing".
+
+The rate is a readout of the `[owed]` constants and of nothing else, measured by
+`fallbackRateIsAFunctionOfTheOwedConstantsAlone`:
+
+| Setting | Rate | Plane selected |
+|---|---|---|
+| shipped placeholders | 1.000 | none |
+| `minSupportingSectors` ≤ 5, all else shipped | 0.500 | `1785135663727`'s plate top |
+| every owed bar at its loosest | 0.000 | both captures, nearest Req 3.1's zero |
+
+Three things follow, and the third is the one to remember.
+
+- **Do not set Req 4.5's threshold from this corpus.** Any value is satisfied or violated by the
+  placeholders alone; the captures never change. That is Req 3.7's circularity arriving at
+  Req 4.5. The denominator problem (`prerequisites.md`) is the *second* blocker, not the first.
+- **The geometry is sound.** At the loosest owed setting each capture selects the candidate whose
+  inner band is nearest zero — −0.521 mm and −1.023 mm — so the remaining work really is
+  constants. Note the honest limit: on `1785901032716` that plane is admitted only at support
+  0.362 over 2 of 8 sectors, because its plate ends inside the ring in five of eight directions
+  (Decision 33). The 0.000 is a bound, not a proposal.
+- **`ringMedianMaxMm` is the only thing rejecting the wrong planes there, and it clears the
+  closest by 0.338 mm.** The table candidate on `1785901032716` — Decision 40's crossed-sector
+  case, three sectors at +16.6…+19.8 mm — reads 5.338 mm on its inner band against a 5 mm bar.
+  That bar is `[inherited]` from `ringBandMm` and Decision 22 gave it the Req 3.2 signed-admission
+  job, not this one. **Do not widen it**, and do not read the margin as comfort: it is the
+  strongest argument for Decision 40's crossed-sector rule that does not need capture 6, because
+  the rule separates the same two candidates by 11.7 mm on each side instead of by a third of a
+  millimetre.
+
+Practical consequence for task 27: deploy today and a device capture of this kind records
+`.edgeBand`. The reference check fails for constant reasons, not implementation ones.
+
 ## Tests
 
 `MedataCore/Tests/SupportPlaneTests/SupportRegion*Tests.swift`, with the scene builders
