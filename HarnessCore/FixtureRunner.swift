@@ -65,27 +65,27 @@ public enum FixtureRunner {
 
         let perClassVolumesCm3: [String: Float]
         var supportPlaneResidualMm: Float?
+        var supportPlaneReference: SupportPlaneReference?
         switch capturePath {
         case .singleViewLidar:
             guard fixture.hasNadirDepth else {
                 throw Error.missingDepthForSingleView(fixture.fixtureID)
             }
             let depth = DepthMap(pb: fixture.nadirDepth)
-            // N5k fixtures (stamped with an estimator_path) restrict the plane
-            // fit to the flood-filled plate region so RANSAC lands on the plate
-            // top, not the surrounding table (Req 3.6, Decision 15 amendment).
-            let plane: SupportPlane
-            if fixture.estimatorPath.isEmpty {
-                plane = try fitPlaneFromDepth(depth: depth, intrinsics: nadirIntrinsics,
-                                              gravity: gravity, fixtureID: fixture.fixtureID)
-            } else {
-                plane = try fitPlateRegionPlane(depth: depth, intrinsics: nadirIntrinsics,
-                                                gravity: gravity, fixtureID: fixture.fixtureID)
-            }
-            supportPlaneResidualMm = plane.residualMm
+            // Req 5.1: one implementation for device and replay. Both the legacy
+            // whole-frame fit and the N5k plate-region flood fill are gone from this
+            // branch — the estimator_path stamp no longer selects a fitter here. The
+            // flood fill survives for the mixture path, which has no segmentation
+            // output to derive a mask from (Decision 17).
+            let fit = try fitSupportPlane(
+                depth: depth, intrinsics: nadirIntrinsics, gravity: gravity,
+                foodMask: foodRegionMask(argmax: nadirSeg.argmax, palette: palette),
+                fixtureID: fixture.fixtureID)
+            supportPlaneResidualMm = fit.plane.residualMm
+            supportPlaneReference = fit.reference
             let est = try runHeightField(
                 seg: nadirSeg, depth: depth,
-                intrinsics: nadirIntrinsics, plane: plane,
+                intrinsics: nadirIntrinsics, plane: fit.plane,
                 beta: unityBeta, palette: palette,
                 fixtureID: fixture.fixtureID
             )
@@ -145,11 +145,52 @@ public enum FixtureRunner {
             actualCarbsPerClass: actualCarbs,
             groundTruthTotalCarbsG: fixture.groundTruthTotalCarbsG,
             perClassVolumesCm3: perClassVolumesCm3,
-            supportPlaneResidualMm: supportPlaneResidualMm
+            supportPlaneResidualMm: supportPlaneResidualMm,
+            supportPlaneReference: supportPlaneReference
         )
     }
 
-    // MARK: - Plate-region support plane (N5k, Req 3.6)
+    // MARK: - Food-support plane (Req 5.1)
+
+    public struct SingleViewPlaneFit: Sendable {
+        public let plane: SupportPlane
+        // nil is unreachable on this path (the depth branch always records one) and
+        // is carried only because `SupportPlaneFitStats` must leave it absent on the
+        // card-only path, where no depth-derived reference exists (Req 6.3).
+        public let reference: SupportPlaneReference?
+    }
+
+    // The offline replay's support plane, derived by the SAME code the device runs
+    // (Req 5.1). Throws on a refusal so the caller skips and records the fixture,
+    // which is the pre-existing Req 3.4/3.8 skip path.
+    public static func fitSupportPlane(
+        depth: DepthMap,
+        intrinsics: CameraIntrinsics,
+        gravity: Vec3,
+        foodMask: BinaryMask,
+        fixtureID: String
+    ) throws -> SingleViewPlaneFit {
+        let outcome = LiDARSupportPlaneFitter.fitFromDepth(
+            depth: depth, intrinsics: intrinsics, mask: foodMask, gravity: gravity)
+        guard let plane = outcome.plane else {
+            throw Error.volumeEstimationFailed(
+                fixtureID, outcome.refusal ?? SupportPlaneError.noLidarPoints)
+        }
+        return SingleViewPlaneFit(plane: plane, reference: outcome.stats.reference)
+    }
+
+    // The food-region mask on the argmax grid. `fitFoodSupportPlane` needs one and
+    // this call site had none; argmax is the same source the device's segmenter
+    // produces, so the two paths see the same mask (Req 5.1).
+    public static func foodRegionMask(argmax: ArgmaxMap, palette: ClassPalette) -> BinaryMask {
+        BinaryMask(
+            pixels: argmax.pixels.map { palette.isFoodClass(Int($0)) ? UInt8(1) : UInt8(0) },
+            width: argmax.width,
+            height: argmax.height
+        )
+    }
+
+    // MARK: - Plate-region support plane (mixture calibration only, Decision 17)
 
     // Documented 4-neighbour depth-continuity threshold for the plate flood
     // fill: per-pixel steps on food/plate surfaces stay well below it, while
@@ -212,6 +253,14 @@ public enum FixtureRunner {
     // RANSAC lands on the plate top rather than the table. Throws when no
     // plate region can be resolved, the region yields no plane, or the fit
     // residual exceeds `residualMaxMm` (the Req 3.4/3.8 skip-and-record path).
+    //
+    // Scoped to the MIXTURE calibration path (Decision 17). Mixture fixtures carry
+    // neither `probs_hwc` nor `argmax_hw`, so no food mask can be derived at that
+    // site and `fitFoodSupportPlane` requires one — a data limitation, not a wiring
+    // gap. The mixture corpus is a fixed overhead rig where the frame-centre seed
+    // assumption Req 2.2 rejects for handheld capture does hold. Planes fitted here
+    // carry `SupportPlaneReference.plateRegion`, and Req 5.4 keeps β_c fitted within
+    // a reference: nothing may mix them.
     public static func fitPlateRegionPlane(
         depth: DepthMap,
         intrinsics: CameraIntrinsics,
@@ -276,29 +325,6 @@ public enum FixtureRunner {
         )
     }
 
-    private static func fitPlaneFromDepth(
-        depth: DepthMap,
-        intrinsics: CameraIntrinsics,
-        gravity: Vec3,
-        fixtureID: String
-    ) throws -> SupportPlane {
-        let mask = BinaryMask(
-            pixels: [UInt8](repeating: 1, count: intrinsics.imageWidth * intrinsics.imageHeight),
-            width: intrinsics.imageWidth,
-            height: intrinsics.imageHeight
-        )
-        do {
-            return try LiDARPlaneFitter.fit(LiDARPlaneFitter.Inputs(
-                depth: depth,
-                colourIntrinsics: intrinsics,
-                foodRegionMask: mask,
-                gravityCamera: gravity
-            ))
-        } catch {
-            throw Error.volumeEstimationFailed(fixtureID, error)
-        }
-    }
-
     // Gravity-aligned nominal support plane at -300 mm from camera.
     private static func nominalPlane(gravity: Vec3) -> SupportPlane {
         // Normal points opposite to gravity (upward).
@@ -352,13 +378,7 @@ public enum FixtureRunner {
             view2: obliqueSeg.argmax,
             palette: palette
         )
-        let foodMask = BinaryMask(
-            pixels: nadirSeg.argmax.pixels.map { b in
-                palette.isFoodClass(Int(b)) ? UInt8(1) : UInt8(0)
-            },
-            width: nadirSeg.argmax.width,
-            height: nadirSeg.argmax.height
-        )
+        let foodMask = foodRegionMask(argmax: nadirSeg.argmax, palette: palette)
         let grid: VoxelGrid
         do {
             grid = try VoxelGridSizer.size(VoxelGridSizer.Inputs(

@@ -19,8 +19,16 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
   `LiDARPlaneFitter.CandidateRegion.insideMask` (a new additive mode — the
   default band-scan mode samples *outside* the food mask and would land on
   the table). RANSAC then picks the plate annulus as the dominant plane.
-  `FixtureRunner.run` uses this path whenever `fixture.estimatorPath` is
-  non-empty; legacy fixtures keep the all-ones-mask fit.
+  **Scoped to the MIXTURE path since support-plane-reference task 16.**
+  `FixtureRunner.run` no longer branches on `estimatorPath` at all — both the
+  N5k single-dominant and legacy branches now go through
+  `FixtureRunner.fitSupportPlane`, which calls the same
+  `LiDARSupportPlaneFitter.fitFromDepth` the device runs (Req 5.1), with the
+  food mask derived from `nadirSeg`'s argmax. The flood fill survives only for
+  `CalibrateRun.mixtureObservation`, whose fixtures carry neither `probs_hwc`
+  nor `argmax_hw` and so have no mask to derive (Decision 17). Planes fitted
+  there record `SupportPlaneReference.plateRegion`, and β_c is fitted within one
+  reference (Req 5.4) — see `CalibrateRun.applyReferenceGate`.
 - `MixtureBetaCalibrator` — hand-rolled BVLS (Lawson–Hanson active set with
   bound interpolation) in Double, plus a cyclic-Jacobi symmetric eigensolver
   used both for the rank-deficiency-safe free-set LS solve and the SE /

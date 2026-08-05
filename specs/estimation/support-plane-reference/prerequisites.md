@@ -160,6 +160,23 @@ is no way to recover it afterwards.
   Nutrition5k corpus. Confirm the machine is free before starting, and do not launch it from a
   worktree (see `docs/ml-training.md` run hygiene).
 
+  **State as of 2026-08-05, checked while tasks 15–21 landed.** Task 16 is done, so the rebase
+  is now owed rather than pending. Two things it needs are not in place:
+
+  - The raw corpus is present (`data/n5k/realsense_overhead`, 3.0 GB; `data/dish_ids`,
+    `data/metadata`), but the **ingested fixtures are not** — `build/n5k_fixtures` does not
+    exist, so `tools/nutrition5k/ingest.py` has to run before `HarnessCLI calibrate-and-eval`
+    can. That is the segmenter pass over ~3,500 dishes, not a replay.
+  - The gate above is unticked and this work happened in a worktree, which it forbids.
+
+  The two committed artefacts this rebases —
+  `specs/estimation/nutrition5k-calibration/artifacts/calibrate.json` and
+  `accuracy_report.json` — record no `support_plane_reference`, so under the Req 5.3
+  fail-closed guard they can no longer bake. That is the intended behaviour (they were fitted
+  on the old basis), and it is also why the regeneration cannot be deferred indefinitely: until
+  it runs, the N5k corpus contributes no β at all. Nothing breaks today because every β is
+  `uncalibrated_unity` (Decision 10).
+
 - [ ] **Set the guard constants before task 8 hard-codes them.** `tasks.md` currently orders
   task 8 (`fitFoodSupportPlane`, which carries every threshold) before task 26 (determine the
   constants), so the numbers get baked into code and tests before anything measures them. Either

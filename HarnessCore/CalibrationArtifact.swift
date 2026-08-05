@@ -3,6 +3,7 @@ import CaptureKit
 import Foods
 import Foundation
 import PortableContracts
+import SupportPlane
 
 // Calibrate-run wiring (routing, split exclusion, τ_purity gate) and the
 // calibrate JSON artifact — the sole stream B↔C interface (design §DB bake
@@ -146,6 +147,38 @@ public enum CalibrateRun {
         return PurityGated(admitted: admitted, dropped: dropped)
     }
 
+    // The support-plane reference β_c is fitted and applied under. Every attempt
+    // the device produces on the LiDAR path records `.foodSupport` or falls back,
+    // so this is the reference a baked β will meet at inference.
+    public static let fittedSupportPlaneReference: SupportPlaneReference = .foodSupport
+
+    public struct ReferenceGated {
+        public let admitted: [MealCalibrationInput]
+        public let excluded: [String]
+    }
+
+    // Req 5.4: where the corpus spans more than one reference, β_c is fitted on
+    // the subset sharing the reference it will be applied under. An attempt
+    // recording NO reference is excluded rather than admitted — it derived no
+    // depth plane (two-view) or predates this feature, and in both cases its
+    // volumes rest on a different geometric basis. Absent blocks; it does not
+    // permit (Req 5.3).
+    public static func applyReferenceGate(
+        _ inputs: [MealCalibrationInput],
+        reference: SupportPlaneReference = fittedSupportPlaneReference
+    ) -> ReferenceGated {
+        var admitted: [MealCalibrationInput] = []
+        var excluded: [String] = []
+        for input in inputs {
+            if input.supportPlaneReference == reference {
+                admitted.append(input)
+            } else {
+                excluded.append(input.fixtureID)
+            }
+        }
+        return ReferenceGated(admitted: admitted, excluded: excluded)
+    }
+
     // Build a mixture PlateObservation from a fixture: plate-region plane fit
     // (Req 3.6) + depth-threshold total hull volume. Throws on a poor plate
     // plane so the CLI can skip and record the plate (Req 3.4/3.8).
@@ -215,11 +248,18 @@ public struct CalibrationArtifact: Encodable {
         public let standardError: Float?
         public let effectiveSample: Int
         public let clamped: Bool
+        // Which support-plane reference THIS β was fitted under (Req 5.4). Per
+        // class rather than per artifact because the corpus spans two references
+        // permanently, not just in transition: the mixture path keeps the flood
+        // fill (Decision 17), so a single artifact carries `plateRegion` and
+        // `foodSupport` β side by side and nothing may mix them.
+        public let supportPlaneReference: String
 
         enum CodingKeys: String, CodingKey {
             case beta, status, provenance, clamped
             case standardError = "standard_error"
             case effectiveSample = "effective_sample"
+            case supportPlaneReference = "support_plane_reference"
         }
 
         // Encode a null standard_error explicitly so the bake reads a stable
@@ -232,6 +272,7 @@ public struct CalibrationArtifact: Encodable {
             try c.encode(standardError, forKey: .standardError)
             try c.encode(effectiveSample, forKey: .effectiveSample)
             try c.encode(clamped, forKey: .clamped)
+            try c.encode(supportPlaneReference, forKey: .supportPlaneReference)
         }
     }
 
@@ -316,6 +357,11 @@ public struct CalibrationArtifact: Encodable {
         public let planeFitSkipped: [String]
         public let stackingExcluded: [String]
         public let liquidExcluded: [String]
+        // Plates whose support plane referenced a different surface from the one
+        // the fitted β will be applied under (Req 5.4). Recorded rather than
+        // merely dropped: a run where most plates land here is measuring the
+        // fallback rate, not calibrating.
+        public let supportPlaneReferenceExcluded: [String]
 
         enum CodingKeys: String, CodingKey {
             case depthTestSplitExcluded = "depth_test_split_excluded"
@@ -324,18 +370,21 @@ public struct CalibrationArtifact: Encodable {
             case planeFitSkipped = "plane_fit_skipped"
             case stackingExcluded = "stacking_excluded"
             case liquidExcluded = "liquid_excluded"
+            case supportPlaneReferenceExcluded = "support_plane_reference_excluded"
         }
 
         public init(depthTestSplitExcluded: [String], unmappedExcluded: [String] = [],
                     purityDropped: [String],
                     planeFitSkipped: [String], stackingExcluded: [String],
-                    liquidExcluded: [String]) {
+                    liquidExcluded: [String],
+                    supportPlaneReferenceExcluded: [String] = []) {
             self.depthTestSplitExcluded = depthTestSplitExcluded
             self.unmappedExcluded = unmappedExcluded
             self.purityDropped = purityDropped
             self.planeFitSkipped = planeFitSkipped
             self.stackingExcluded = stackingExcluded
             self.liquidExcluded = liquidExcluded
+            self.supportPlaneReferenceExcluded = supportPlaneReferenceExcluded
         }
     }
 
@@ -343,14 +392,36 @@ public struct CalibrationArtifact: Encodable {
     public let classes: [String: ClassEntry]
     public let lineage: Lineage?
     public let runSummary: RunSummary?
+    // The reference `betaPool` was fitted under, and the one that gates
+    // application (Req 5.3). The bake refuses an artifact that records none:
+    // every artifact produced before this feature records none, and those are
+    // precisely the ones calibrated on the old basis, so absent must BLOCK
+    // rather than permit.
+    public let supportPlaneReference: String?
 
     enum CodingKeys: String, CodingKey {
         case betaPool, classes, lineage
         case runSummary = "run_summary"
+        case supportPlaneReference = "support_plane_reference"
+    }
+
+    // Mixture β are fitted on the flood-filled plate region, single-dominant β on
+    // the food-support plane (Decision 17). Pooled/unity classes carry no fit of
+    // their own, so they ride the pool's reference — which is what `betaPool` is
+    // fitted under, and what a consumer applying them would be applying.
+    static func reference(for provenance: BetaProvenance,
+                          singleDominant: SupportPlaneReference?) -> String {
+        switch provenance {
+        case .n5kMixture: return SupportPlaneReference.plateRegion.rawValue
+        case .n5kSingleDominant, .gravimetric, .none:
+            return singleDominant?.rawValue ?? ""
+        }
     }
 
     public init(merged: [String: CalibrationMerge.ClassCalibration],
-                betaPool: Float, lineage: Lineage?,
+                betaPool: Float,
+                supportPlaneReference: SupportPlaneReference?,
+                lineage: Lineage?,
                 runSummary: RunSummary? = nil) {
         var classes: [String: ClassEntry] = [:]
         for (name, c) in merged {
@@ -360,12 +431,27 @@ public struct CalibrationArtifact: Encodable {
                 provenance: c.provenance.rawValue,
                 standardError: c.standardError,
                 effectiveSample: c.effectiveSample,
-                clamped: c.clamped)
+                clamped: c.clamped,
+                supportPlaneReference: Self.reference(
+                    for: c.provenance, singleDominant: supportPlaneReference))
         }
         self.betaPool = betaPool
         self.classes = classes
         self.lineage = lineage
         self.runSummary = runSummary
+        self.supportPlaneReference = supportPlaneReference?.rawValue
+    }
+
+    // Encode a null support_plane_reference explicitly. The bake distinguishes
+    // "recorded no reference" from "carries an unexpected shape", and a key that
+    // is sometimes missing collapses those two into one.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(betaPool, forKey: .betaPool)
+        try c.encode(classes, forKey: .classes)
+        try c.encode(lineage, forKey: .lineage)
+        try c.encode(runSummary, forKey: .runSummary)
+        try c.encode(supportPlaneReference, forKey: .supportPlaneReference)
     }
 
     public static func encoder() -> JSONEncoder {

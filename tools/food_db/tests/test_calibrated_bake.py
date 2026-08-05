@@ -39,14 +39,19 @@ LINEAGE = {
 
 
 def entry(beta, status="calibrated", provenance="n5k_mixture",
-          standard_error=0.05, effective_sample=44, clamped=False):
+          standard_error=0.05, effective_sample=44, clamped=False,
+          support_plane_reference=generate.SUPPORT_PLANE_REFERENCE_IN_USE):
     return {"beta": beta, "status": status, "provenance": provenance,
             "standard_error": standard_error,
-            "effective_sample": effective_sample, "clamped": clamped}
+            "effective_sample": effective_sample, "clamped": clamped,
+            "support_plane_reference": support_plane_reference}
 
 
-def artifact(classes, beta_pool=0.87, lineage=LINEAGE):
-    return {"betaPool": beta_pool, "classes": classes, "lineage": lineage}
+def artifact(classes, beta_pool=0.87, lineage=LINEAGE,
+             support_plane_reference=generate.SUPPORT_PLANE_REFERENCE_IN_USE):
+    art = {"betaPool": beta_pool, "classes": classes, "lineage": lineage}
+    art["support_plane_reference"] = support_plane_reference
+    return art
 
 
 @pytest.fixture()
@@ -116,6 +121,56 @@ def test_calibrated_rows_written_with_device_verified_zero(out_dir):
     chicken = fetch(db, "chicken")
     assert chicken["beta"] == pytest.approx(1.0)
     assert chicken["beta_status"] == "uncalibrated_unity"
+
+
+# --- support-plane reference guard (support-plane-reference Req 5.3/5.4) ---
+
+def test_absent_support_plane_reference_blocks_the_bake(out_dir):
+    # Absent must BLOCK, not permit. Every artifact produced before the
+    # support-plane-reference feature records none, and those are exactly the
+    # ones calibrated above the table — the basis that over-reads ~3x.
+    art = artifact({"white_rice": entry(0.82)})
+    del art["support_plane_reference"]
+    with pytest.raises(SystemExit, match="no 'support_plane_reference'"):
+        bake_with(out_dir, art)
+
+
+def test_null_support_plane_reference_blocks_the_bake(out_dir):
+    # The Swift writer encodes the absent case as an explicit null rather than
+    # omitting the key, so both spellings have to be refused.
+    with pytest.raises(SystemExit, match="no 'support_plane_reference'"):
+        bake_with(out_dir, artifact({"white_rice": entry(0.82)},
+                                    support_plane_reference=None))
+
+
+def test_mismatched_support_plane_reference_blocks_the_bake(out_dir):
+    with pytest.raises(SystemExit, match="support-plane reference"):
+        bake_with(out_dir, artifact({"white_rice": entry(0.82)},
+                                    support_plane_reference="edgeBand"))
+
+
+def test_class_fitted_under_another_reference_is_not_applied(out_dir, capsys):
+    # A single artifact spans two references by construction: the mixture path
+    # keeps the plate-region flood fill permanently (Decision 17). The
+    # off-reference class keeps its uncalibrated default and is reported.
+    db = bake_with(out_dir, artifact({
+        "white_rice": entry(0.82),
+        "pasta": entry(0.60, support_plane_reference="plateRegion"),
+    }))
+    assert fetch(db, "white_rice")["beta"] == pytest.approx(0.82)
+    pasta = fetch(db, "pasta")
+    assert pasta["beta"] == pytest.approx(1.0)
+    assert pasta["beta_status"] == "uncalibrated_unity"
+    assert "pasta" in capsys.readouterr().err
+    assert json.loads(
+        meta(db)["calibration_reference_skipped_classes"].replace("'", '"')
+    ) == ["pasta"]
+
+
+def test_support_plane_reference_recorded_in_meta(out_dir):
+    db = bake_with(out_dir, artifact({"white_rice": entry(0.82)}))
+    assert (meta(db)["calibration_support_plane_reference"]
+            == generate.SUPPORT_PLANE_REFERENCE_IN_USE)
 
 
 def test_unknown_class_in_json_aborts(out_dir):
