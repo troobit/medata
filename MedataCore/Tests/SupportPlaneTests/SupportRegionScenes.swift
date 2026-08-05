@@ -133,10 +133,31 @@ enum SPRScene {
                                             normal: p.normal, d: p.d)
     }
 
-    static func fit(_ grid: Grid) -> (plane: SupportPlane, ring: RingStatistics, candidateCount: Int)? {
+    static func fit(_ grid: Grid) -> SupportRegion.FoodSupportFit? {
         SupportRegion.fitFoodSupportPlane(
             depth: makeDepth(grid), colourIntrinsics: colourIntrinsics,
             foodRegionMask: makeColourMask(grid), gravityCamera: gravity
+        )
+    }
+
+    // A nadir `RawFrame` carrying the scene's depth map, for the suites that drive
+    // the whole `SupportPlaneFitter` dispatch rather than `SupportRegion` directly
+    // (tasks 9–10). `makeDepth` is deterministic, so a frame built here and a
+    // `DepthMap` built separately from the same grid are byte-identical — which is
+    // what lets the fallback plane be compared against a direct `LiDARPlaneFitter`
+    // fit for equality (Req 4.3).
+    static func makeFrame(_ grid: Grid) -> RawFrame {
+        RawFrame(
+            imageBytes: Data(count: colourWidth * colourHeight * 4),
+            pixelFormat: .bgra8,
+            colourSpace: .sRGB,
+            orientation: 1,
+            imageWidth: colourWidth, imageHeight: colourHeight,
+            timestampMonotonicNs: 1,
+            intrinsics: colourIntrinsics,
+            gravity: gravity,
+            worldFromCamera: .identity,
+            depth: makeDepth(grid)
         )
     }
 

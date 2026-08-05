@@ -319,10 +319,14 @@ public enum SupportRegion {
 
     // nil when no candidate is admissible — the caller then runs the edge-band
     // fit. Never throws: rejection is an expected outcome, not an error.
+    // Superseded by Decision 24: returns a `FoodSupportFit` struct whose first
+    // three members are these, plus `annulusSampleCount` and `inlierCount` —
+    // the native-depth-sample counts the Stats semantics below require, which
+    // nothing outside this function can see.
     public static func fitFoodSupportPlane(
         depth: DepthMap, colourIntrinsics: CameraIntrinsics,
         foodRegionMask: BinaryMask, gravityCamera: Vec3
-    ) -> (plane: SupportPlane, ring: RingStatistics, candidateCount: Int)?
+    ) -> FoodSupportFit?
 
     // Req 6.1 requires the ring measure on EVERY depth-derived attempt,
     // including fallbacks — Req 6.2's before/after comparison depends on it.
@@ -346,14 +350,14 @@ Both counts are **native depth samples**, so the ratio is dimensionless and grid
 
 ## Data Models
 
-`EstimationAttemptRecord` gains four optionals, absent (not defaulted) on pre-feature rows so Req 6.3's distinction survives:
+`EstimationAttemptRecord` gains five optionals, absent (not defaulted) on pre-feature rows so Req 6.3's distinction survives:
 
 | Field | Type | Meaning |
 |---|---|---|
 | `planeReference` | `String?` | `foodSupport` / `edgeBand` |
 | `planeRingMedianMm` | `Float?` | ≈ 0 on a correct fit |
 | `planeRingBandMediansMm` | `[Float]?` | inner/mid/outer medians — the persisted radial profile Decision 14's residual risk depends on; rising identifies a rim, falling a leaked ring |
-| `planeCandidateCount` | `Int?` | candidates extracted |
+| `planeCandidatePlaneCount` | `Int?` | candidate planes extracted. Superseded name (Decision 23): `planeCandidateCount` already exists and counts candidate POINTS, so reusing it would redefine a field pre-feature rows already carry |
 | `planeSupportingSectors` | `Int?` | inner-band sectors meeting the bar (Req 6.4) — distinguishes a correct fit from a ring that crossed the support's edge, which both read median ≈ 0 |
 
 Req 3.5's mask-coverage recording needs no new field: `foodRegionCoveragePercent` already persists on `EstimationAttemptRecord` (`PipelineDiagnostics.swift:200`) and lands on the same row as `planeReference`, so a reference flip is attributable to mask movement after the fact.
