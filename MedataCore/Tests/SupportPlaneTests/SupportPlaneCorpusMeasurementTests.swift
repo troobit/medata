@@ -75,6 +75,7 @@ struct SupportPlaneCorpusMeasurementTests {
                 print("  --- candidate \(i) ---")
                 print("    residual \(candidate.residualMm) mm, component \(candidate.componentSize),"
                       + " extent \(candidate.extentPx) px,"
+                      + " residue \(candidate.residueCount),"
                       + " residue inlier ratio \(candidate.residueInlierRatio)")
                 guard let ring = SupportRegion.ringStatistics(
                     samples: samples, geometry: g,
@@ -271,6 +272,114 @@ struct SupportPlaneCorpusMeasurementTests {
                 + " now separable on this corpus and can be set"
             #expect(meeting >= decision18Low && meeting <= decision18High, "\(separable)")
         }
+    }
+
+    // `minCandidateSamples` was one number answering two unrelated questions, and the
+    // whole-fit one it was asked at `fitFoodSupportPlane` had an exact answer sitting
+    // beside it. `ringStatistics` returns nil unless every radial band clears
+    // `ringMinSamples`, and that test reads `samples.band` alone — no plane — so it is
+    // knowable before extraction runs. An annulus floor is a proxy for it, and a loose
+    // one: 500 admits captures whose ring cannot fill three bands at 200 apiece.
+    //
+    // This asserts the substitution is exact rather than merely tighter, which is what
+    // lets an `[owed]` constant be retired instead of re-guessed (Decision 32).
+    @Test("ring-band feasibility subsumes the annulus floor it replaced")
+    func ringFeasibilitySubsumesTheAnnulusFloor() throws {
+        // The ring is built inside the annulus loop, from the same samples under a
+        // narrower radial test, so it is a strict subset by construction. Anything the
+        // retired floor rejected, the feasibility test rejects too: with fewer than 500
+        // annulus samples the ring holds fewer than 500 across three bands, so some
+        // band is under 167 and thus under `ringMinSamples`.
+        let retiredFloor = 500
+        let weaker = "the retired annulus floor of \(retiredFloor) is no longer weaker"
+            + " than ring feasibility — the substitution may not be outcome-preserving"
+        #expect(retiredFloor < SupportRegion.ringBandCount * SupportRegion.ringMinSamples,
+                "\(weaker)")
+
+        for name in Self.captures {
+            let (_, samples) = try #require(Self.prepared(name))
+            #expect(samples.ring.count <= samples.annulus.count,
+                    "\(name) ring is not a subset of its annulus")
+            print("\(name): annulus \(samples.annulus.count), ring \(samples.ring.count),"
+                  + " ring share \(Float(samples.ring.count) / Float(samples.annulus.count)),"
+                  + " feasible \(SupportRegion.ringBandsAreFeasible(samples: samples))")
+            // Both corpus captures clear it, so the substitution is exercised on the
+            // admitting side as well as argued on the rejecting one.
+            #expect(SupportRegion.ringBandsAreFeasible(samples: samples))
+        }
+    }
+
+    // `minResidueSamples` is what is left of `minCandidateSamples` once the whole-fit
+    // question is asked exactly. The corpus can bound it from above and not from below:
+    // it shows which passes a floor would cut, but nothing in it fails for want of
+    // residue, so there is no evidence for where the floor belongs (Decision 32).
+    @Test("the corpus bounds the residue floor from above only")
+    func residueFloorIsBoundedFromAboveOnly() throws {
+        var smallestResidue = Int.max
+        for name in Self.captures {
+            let candidates = try #require(Self.candidates(name))
+            let residues = candidates.map(\.residueCount)
+            print("\(name): residue per pass \(residues),"
+                  + " extents \(candidates.map(\.extentPx))")
+            // Every pass the corpus produces must survive the shipped floor, or the
+            // constant is silently discarding candidates — and `planeCandidateCount` is
+            // persisted, so a cut pass changes the record even when it changes no plane.
+            for residue in residues {
+                let cut = "\(name) runs a pass on \(residue) samples, below the"
+                    + " \(SupportRegion.minResidueSamples) floor — the floor would cut it"
+                #expect(residue >= SupportRegion.minResidueSamples, "\(cut)")
+            }
+            smallestResidue = min(smallestResidue, residues.min() ?? Int.max)
+        }
+        // The ceiling, stated as a number so a future session can see how little room
+        // there is between the shipped floor and the first pass it would cost.
+        print("corpus smallest residue \(smallestResidue),"
+              + " shipped floor \(SupportRegion.minResidueSamples)")
+        #expect(smallestResidue > SupportRegion.minResidueSamples)
+    }
+
+    // `minAcceptedExtentPx` rejects a badly conditioned normal (Req 2.3). The corpus
+    // supplies one clear sliver and no clear counter-example, so it brackets the
+    // constant rather than setting it — and the bracket is narrow above (Decision 32).
+    @Test("the corpus brackets minAcceptedExtentPx without setting it")
+    func extentFloorIsBracketedNotSet() throws {
+        var slivers: [Int] = [], survivors: [Int] = []
+        for name in Self.captures {
+            let (g, samples) = try #require(Self.prepared(name))
+            for candidate in try #require(Self.candidates(name)) {
+                guard let ring = SupportRegion.ringStatistics(
+                    samples: samples, geometry: g,
+                    normal: candidate.normal, d: candidate.d) else { continue }
+                let verdict = SupportRegion.admissibility(
+                    ring: ring,
+                    annulusMedianMm: SupportRegion.medianHeight(
+                        indices: samples.annulus, geometry: g,
+                        normal: candidate.normal, d: candidate.d),
+                    foodEnvelopeMm: SupportRegion.foodEnvelopeMm(
+                        geometry: g, normal: candidate.normal, d: candidate.d),
+                    extentPx: candidate.extentPx)
+                if verdict == .extent {
+                    slivers.append(candidate.extentPx)
+                } else {
+                    survivors.append(candidate.extentPx)
+                }
+            }
+        }
+        let sliverMax = try #require(slivers.max())
+        let survivorMin = try #require(survivors.min())
+        print("extent: slivers \(slivers.sorted()), reaching later guards"
+              + " \(survivors.sorted()), bracket \(sliverMax + 1)...\(survivorMin),"
+              + " shipped \(SupportRegion.minAcceptedExtentPx)")
+        // The shipped value must sit inside what the corpus brackets, or it is either
+        // admitting a sliver or rejecting a candidate the corpus judged on other grounds.
+        #expect(SupportRegion.minAcceptedExtentPx > sliverMax)
+        #expect(SupportRegion.minAcceptedExtentPx <= survivorMin)
+        // The margin above is 2 px. Recorded as an assertion so that a capture which
+        // narrows it further fails here rather than silently losing a candidate.
+        let margin = survivorMin - SupportRegion.minAcceptedExtentPx
+        let tightened = "the extent bracket has closed to \(margin) px —"
+            + " minAcceptedExtentPx now needs setting rather than bracketing"
+        #expect(margin >= 2, "\(tightened)")
     }
 
     // Why the third committed slice is not in `captures`, measured rather than asserted.

@@ -120,6 +120,27 @@ committed `.depthslice` fixtures. Adding a capture to it means cutting a slice w
   support strip thinner than `ringInnerMm` is counted. Ceilings measure 1.710 and 1.426
   against achieved 0.880 and 1.032. The value still needs prerequisites capture 4.
 
+And what Decision 32 retired — the only `[owed]` value this feature has removed rather
+than deferred:
+
+- `minCandidateSamples` was **two constants under one name**. `extractCandidates` used it
+  to stop the sequential passes; `fitFoodSupportPlane` used it to refuse the whole fit on a
+  starved annulus. The second has an exact answer: `ringStatistics` returns nil unless
+  every band clears `ringMinSamples`, and that test reads the radial banding alone, so it
+  is plane-independent and knowable before extraction. `ringBandsAreFeasible(samples:)`
+  now asks it directly. The substitution is outcome-identical *by construction* — the ring
+  is a strict subset of the annulus, so under 500 annulus samples some band is under 167
+  — not by measurement, which is why it is safe on a two-capture corpus.
+- What is left is `minResidueSamples`, same value 500, one job, still `[owed]`. The corpus
+  bounds it **above only**: per-pass residues are `[10469, 3310, 581]` and
+  `[12551, 2811, 932]`, so a floor over 581 starts cutting passes. Do not read that as a
+  derivation — 581 is where a floor begins costing something, not where a pass stops being
+  worth running, and a cut pass drops the persisted `planeCandidateCount`.
+- `minAcceptedExtentPx = 24` is **bracketed at 13…26**, not set. Above a 12 px, 153-sample
+  sliver it correctly rejects; at or below the 26 px smallest extent reaching the later
+  guards — and that candidate fails `supportFraction` anyway, so the ceiling is soft. The
+  2 px margin is asserted, so a capture that narrows it fails the test.
+
 Three traps for anyone measuring against this corpus:
 
 - **Adding a slice is not the same as adding evidence.** A third slice is committed and

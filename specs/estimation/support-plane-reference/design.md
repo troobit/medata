@@ -73,7 +73,7 @@ What actually rejects such a straddler is the ring guards. The aggregate bar sit
 
 Component scoring is retained for the case it genuinely handles — a co-height surface elsewhere in the annulus (a second plate, a board) forms a separate blob and is excluded on connectivity.
 
-**Extraction loop.** Up to `maxCandidatePlanes` passes; each removes the **polished** inlier set within `2 × inlierBandMm` (a thin shell left at 1× seeds near-duplicate planes on the next pass). Stops early when the residue falls below `minCandidateSamples`.
+**Extraction loop.** Up to `maxCandidatePlanes` passes; each removes the **polished** inlier set within `2 × inlierBandMm` (a thin shell left at 1× seeds near-duplicate planes on the next pass). Stops early when the residue falls below `minResidueSamples` — named for the one question it asks, since the whole-fit sufficiency question it also used to answer is now asked exactly (Decision 32, below).
 
 **Iteration budget.** `maxIterations = 256` was sized to find the *dominant* plane. `P(clean triple) = 1 − (1 − w³)^N` gives 98 % at w = 0.25 but 23 % at w = 0.10 and 3 % at w = 0.05. Bounding the sample set keeps the plate well above 0.25 in the common case, but the budget must not be inherited on faith: each pass uses **adaptive stopping** — recompute the required `N` from the best inlier ratio seen so far and stop when reached, capped at `maxIterationsPerPass`. Deterministic, because the ratio sequence is deterministic.
 
@@ -319,8 +319,11 @@ public enum SupportRegion {
     public static let foodEnvelopePercentile: Float = 0.90
     public static let foodEnvelopeMinMm: Float = 0    // [owed] Decision 22
     public static let maxCandidatePlanes = 3     // structural: table, support, one more
-    public static let minCandidateSamples = 500  // [owed]
-    public static let minAcceptedExtentPx = 24   // [owed]
+    public static let minResidueSamples = 500    // [owed] extraction-pass floor only
+                                                 // (Decision 32); corpus bounds it
+                                                 // above at 581, not below
+    public static let minAcceptedExtentPx = 24   // [owed] corpus brackets it at 13…26
+                                                 // (Decision 32)
     public static let maxIterationsPerPass = 2048 // [derived] adaptive stopping caps it;
                                                   // per-pass residue ratio is reported
 
@@ -339,6 +342,11 @@ public enum SupportRegion {
     static func ringStatistics(ring: [Int], annulus: [Int], foodSampleCount: Int,
                                plane: SupportPlane, depth: DepthMap,
                                intrinsics: CameraIntrinsics) -> RingStatistics?
+
+    // Whether `ringStatistics` can return anything for this capture, for ANY plane.
+    // The band counts read the radial banding alone, so the answer is a property of
+    // the capture and is knowable before extraction runs (Decision 32).
+    static func ringBandsAreFeasible(samples: RingSamples) -> Bool
 
     // nil when no candidate is admissible — the caller then runs the edge-band
     // fit. Never throws: rejection is an expected outcome, not an error.
@@ -397,8 +405,8 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 
 | Condition | Result |
 |---|---|
-| Any band has fewer than `ringMinSamples` valid samples | fallback |
-| Residue below `minCandidateSamples` before any candidate | fallback |
+| Any band has fewer than `ringMinSamples` valid samples | fallback, refused up front by `ringBandsAreFeasible` rather than after a full extraction (Decision 32) |
+| Residue below `minResidueSamples` before any candidate | fallback |
 | No candidate admissible | fallback |
 | Top two candidates within `ringSupportMarginMin` | fallback |
 | Edge-band fit itself fails | existing refusal (pipeline Req 4.5), unchanged |
