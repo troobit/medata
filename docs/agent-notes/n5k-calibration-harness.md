@@ -81,6 +81,9 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
 
 ## First full pre-checkpoint run (2026-07-03, task 39)
 
+**Its numbers are superseded by the 2026-08-05 rebase below** — kept because the
+command recipe and the pool-arithmetic shape are still the reference.
+
 - Committed artifacts:
   `specs/estimation/nutrition5k-calibration/artifacts/{calibrate.json,
   accuracy_report.json}` and the calibrated
@@ -104,6 +107,48 @@ Swift side of the nutrition5k-calibration spec (tasks 9–22). All files are
   effective).
 - The post-checkpoint single-dominant re-fit + supersession re-run stays a
   manual step gated on model-production Bucket C.
+
+## Rebase onto the promoted support plane (2026-08-05, support-plane-reference task 17)
+
+Both committed artifacts were regenerated with the same flags and the same seed.
+Ingestion re-ran from the raw corpus (`build/n5k_fixtures` / `tmp/n5k_fixtures`
+is gitignored and had been reaped), pre-checkpoint as before.
+
+**The promoted fitter never runs on this corpus.** Pre-checkpoint ingestion
+stamps every plate `mixture` — `run_summary.json` reports
+`estimator_paths: {mixture: 3485, single_dominant: 0}` — and mixture keeps the
+plate-region flood fill permanently (Decision 17). So `FixtureRunner.fitSupportPlane`,
+the branch task 16 promoted, is reached zero times here. N5k gains promoted-path
+coverage only when Bucket C lands and ingestion re-runs with `--checkpoint`.
+What the rebase actually buys is the `support_plane_reference` stamp: without it
+the Req 5.3 fail-closed guard aborts the bake, so until it ran the corpus
+contributed no β at all.
+
+Numbers did move, and **not because of the support plane**: the stacking guard
+divides mapped mass by `densityByClass` from the bundled DB, which was rebaked
+between the two runs (`c855042` food DB v2, `bcbe9bd` cereal row). Two more
+plates now fail `totalHullVolume < 0.6 × expectedMin`.
+
+| | 2026-07-03 | 2026-08-05 |
+|---|---|---|
+| Qualifying mixture plates | 181 | 179 |
+| Stacking excluded | 56 | 58 |
+| broccoli β (eff, SE) | 0.516 (35, 0.058) | 0.495 (34, 0.055) |
+| Carb MAPE baseline → calibrated | 105.8 → 81.9 | 66.7 → 67.5 |
+
+Depth-test split (507), unmapped-mass excluded (2,688), liquid (45) and
+plane-fit skips (8 of 290 mixture; 4 of 507 official-split) are all unchanged.
+
+Two things worth carrying forward. **Calibration no longer beats baseline on
+carbs** — 67.5 vs 66.7 MAPE, where it used to be 81.9 vs 105.8; the DB v2
+composition tables moved the baseline far more than β moves the estimate, and
+one class fitted at 0.495 is not enough to recover the difference. Protein and
+fat still improve. And the bake bakes **nothing**: broccoli is the only
+calibrated class, its per-class reference is `plateRegion`, and Req 5.4 skips
+any class not fitted under `foodSupport`, so every β stays
+`uncalibrated_unity` (Decision 10 holds). Re-running `generate.py` against the
+new artifact is therefore behaviour-neutral; it only writes the calibration
+lineage into `meta`, which the DB v2 rebake had dropped.
 
 ## Review fixes (2026-07-03)
 
