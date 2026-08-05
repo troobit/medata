@@ -93,19 +93,49 @@ whole-ring MAD bar and the inner-band MAD bar were each removed.
 
 ## Known-marginal constants (task 26)
 
-Every constant is annotated `[derived]`, `[inherited]` or `[owed]` in the source. The
-`[owed]` ones are corpus measurements and Req 3.7 forbids shipping the sector trio as
-asserted values. Two findings from implementing the geometry phase, recorded on task 26:
+Every constant is annotated `[derived]`, `[measured]`, `[inherited]` or `[owed]` in the
+source. The `[owed]` ones are corpus measurements and Req 3.7 forbids shipping the sector
+trio as asserted values.
 
-- `supportVisibilityMin = 0.15` looks unfirable at the stated formula. Visibility is
-  ~`2w/f` for a support strip `w` px wide around food of radius `f` px, so 0.15 needs
-  `w < 0.075f` — and a strip that thin sits inside the 8 mm ring inner radius, where the
-  ring never measures it. The fully-covered-well case falls back on `foodEnvelope`
-  instead, which is the right outcome by a different mechanism than the design predicted.
-- The window where the aggregate passes and the sectors fail is narrow. Supporting
-  sectors for a contiguous supported arc land within ±1 of `fraction × ringSectorCount`,
-  so `ringSupportMin = 0.6` against `minSupportingSectors = 6` of 8 leaves only
-  `fraction ∈ ~[0.60, 0.75]`. Decision 18's 0.65 case is inside it, but near the edge.
+**Run the measurement pass before touching any of them:**
+
+```bash
+swift test --filter SupportPlaneCorpusMeasurement
+```
+
+`SupportPlaneCorpusMeasurementTests` is the instrumented, guards-disabled pass over the
+committed `.depthslice` fixtures. Adding a capture to it means cutting a slice with
+`tools/fixture_slice.py` and appending the stem to its `captures` list. What it settled
+(Decision 29):
+
+- `ringInnerMm = 8` holds, and the **range envelope is ≈ 365 mm**. The 4 px smear measures
+  7.45 mm and 7.36 mm at 338.9 mm and 336.9 mm. Because the smear is a fixed pixel count,
+  `smear_mm = 4z/f_d` with `f_d ≈ 182 px` — beyond ~365 mm the constant must become
+  `max(ringInnerMm, 4 × mmPerPx)` or the ring sits inside the smear.
+- `ringMinSamples = 200` per band holds at 5.6–7.0× margin (`[1120, 1132, 1213]` and
+  `[1294, 1347, 1392]`), and inner-band sectors carry 102–184 samples apiece.
+- `supportVisibilityMin` **is firable**, and the earlier note here saying otherwise was
+  wrong about which region it measures. The ratio is computed over the **annulus**
+  (0–50 mm, which begins at the food boundary), not the contact ring (8–25 mm), so a
+  support strip thinner than `ringInnerMm` is counted. Ceilings measure 1.710 and 1.426
+  against achieved 0.880 and 1.032. The value still needs prerequisites capture 4.
+
+Two traps for anyone measuring against this corpus:
+
+- **Neither committed capture is a clean correct fit.** On `1785135663727` the plate-top
+  candidate's per-sector inner medians reach −32.6 mm over a contiguous arc — the ring
+  escapes onto the table over ~135°. On `1785901032716` the highest-support candidate is
+  the **table**, not the plate. Do not tune a bar until these pass; that fits the wrong side.
+- **Per-sample noise is surface-dependent, not range-dependent, at this range.** 3.44 mm
+  on one capture and 6.98 mm on the other, both at ~337 mm. `ringBandMm = 5` falls between
+  them, so `ringSupportMin` is underivable until a matte-surface capture exists.
+
+And one defect in the guard itself (Decision 30, proposed, not fixed): `ringStatistics`
+counts a supporting sector on `|height| ≤ ringBandMm`, so the count is **blind to sign**.
+A correct plane whose ring escaped downward (failing sectors −6.8…−32.6 mm) and a table
+plane with part of its ring on the plate (failing sectors +16.6…+19.8 mm) both score 5 of
+8. The whole-ring median kept the sign for exactly this reason (Req 3.1, Decision 22); the
+per-sector version lost it.
 
 ## Tests
 
