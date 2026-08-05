@@ -281,12 +281,17 @@ plane it must reject — are 6, 8, 10, 11 at a bar of 0.1–0.2; **all five** Re
 4, 6, 8, 10 at 0.4; and 4, 6, 8 from 0.5 up. So the pass-side erosion above eight sectors that
 gives 4…8 its top is itself a consequence of the bar sitting at 0.5.
 
-And the pair is a **triple** (Decision 46). `ringOuterMm` is upstream of both, because it moves the
+~~And the pair is a **triple** (Decision 46). `ringOuterMm` is upstream of both, because it moves the
 **annulus** — `2 × ringOuterMm` is the candidate bound — so extraction runs on a different sample
 set at every value and the radius selects *which plane* the count and the bar are then read on.
-Fix it first, then the pair. Choose all three and record them, with the reason, before the sitting.
+Fix it first, then the pair.~~ **Superseded (Decision 49.)** The candidate bound is now
+`annulusOuterMm`, a constant of its own, and it is what moved the plane: pin it and the radius
+moves the selected plane 0.000 mm at every value from 13 to 40 mm on both captures. The pair is a
+pair, the radius is fixed *beside* it, and the bound is a **fourth** constant to choose. Choose all
+four and record them, with the reason, before the sitting.
 
-The radius is bracketed **22…32 mm** and it **must not be interpolated inside** (Decision 46):
+The radius is bracketed **22…32 mm** (Decision 46), and Decision 49 removes the rider that it must
+not be interpolated:
 
 - **Floor, 22 mm, from Req 5.1.** A narrower ring holds fewer samples per radial band and the 2×
   grid halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses on a grid where the
@@ -296,14 +301,35 @@ The radius is bracketed **22…32 mm** and it **must not be interpolated inside*
   radii, so at 35 mm the ring reaches the rim a scene deliberately put outside it, every sector of
   a scene that must *pass* reads crossed, and both suite intervals go empty. Above 32 mm the
   committed suite goes red and the scenes have to move with the constant.
-- **No interpolation.** The pass side alternates at 1 mm steps: the corpus's only intended-correct
+- ~~**No interpolation.** The pass side alternates at 1 mm steps: the corpus's only intended-correct
   candidate reads 0 crossed sectors at 22, 23, 25, 26, 28, 29 and 31 mm and **2** at 24, 27, 30 and
-  32 mm. A radius between two clean radii is implied by neither, so a value must be *measured* at
-  the radius it is used at — read it off the sitting, do not derive it from neighbours.
-- **It moves the answer, not just the bracket.** Across the sweep the selected plane moves
-  **18.719 mm** at the food on `1785901032716` and 4.162 mm on `1785135663727`, against the 1 mm
-  Decision 35 measures Req 5.1's transfer at. This is the only owed constant of which that is true.
-  Record the plane at the food for every candidate on every capture, not just the winner.
+  32 mm.~~ **Superseded (Decision 49):** the alternation is the annulus resizing with the radius.
+  With the bound pinned the same candidate reads 0 crossed at every radius in the sweep, so the
+  bracket may be interpolated.
+- ~~**It moves the answer, not just the bracket.**~~ **Superseded (Decision 49):** it moves 0.000 mm
+  once the bound is pinned. The 18.719 mm and 4.162 mm belong to `annulusOuterMm`. Still record the
+  plane at the food for every candidate on every capture, not just the winner — that is what made
+  the decomposition readable.
+
+The candidate bound is bracketed **50…75 mm** by the corpus, and by the corpus alone:
+
+- **Floor, 50 mm — the shipped value sits on it.** Below it the plane a correct fit must admit is
+  itself crossed: `maxCrossedSectors` reads 3…unbounded at 31.25 mm and an empty interval at 25,
+  37.5 and 43.75 mm. At 25 mm the bound has collapsed onto the ring and extraction yields two
+  candidates rather than three.
+- **Ceiling, 75 mm.** At 100 mm the interval collapses the other way — the plate capture's intended
+  candidate reads **6** crossed sectors and a ring median of +1.793 mm, the annulus having reached
+  surfaces beyond the plate.
+- **The committed suite cannot see it.** The scenes never run extraction, so the bound reaches them
+  only through `visibility` and `escaped`, both of which never fire (Decision 34). Every scene keeps
+  its verdict from 25 mm to 100 mm, so this constant has no second source: the captures are it.
+- **It is what determines `maxCrossedSectors`.** Decision 48's determination at 2 holds at 50 mm and
+  nowhere else in the sweep; 62.5 and 75 mm widen it to 2…4. Read the two together.
+- **Req 7.6 is denominated here.** The annulus holds 10 469 and 12 551 samples at 50 mm against
+  19 427 and 25 659 at 100 mm, and RANSAC iterates over all of them. Measure latency at whatever
+  value the sitting sets, not at the shipped one.
+- **Keep the ring inside the bound.** Free while it was a multiple ≥ 1; an invariant now that the
+  two are independent.
 
 The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
 

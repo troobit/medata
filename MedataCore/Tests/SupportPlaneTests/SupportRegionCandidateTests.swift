@@ -10,7 +10,7 @@ struct SupportRegionCandidateTests {
 
     // MARK: – The bound (Decision 15)
 
-    // The candidate set is an ANNULUS of 2 x ringOuterMm around the food mask — not
+    // The candidate set is an ANNULUS of annulusOuterMm around the food mask — not
     // dilate(foodMask, 2 x foodRadius), which spans ~8.3 s^2 against the pre-feature
     // four-band scan's ~4 s^2 and is therefore looser than the code it replaces.
     @Test("clutter outside the food's neighbourhood cannot become a candidate")

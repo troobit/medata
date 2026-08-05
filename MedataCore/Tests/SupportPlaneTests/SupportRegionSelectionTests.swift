@@ -12,7 +12,7 @@ struct SupportRegionSelectionTests {
     // MARK: – The case the pre-feature fitter gets wrong
 
     // The table dominates the FRAME roughly 26:1 here. It cannot dominate the
-    // CANDIDATE SET: bounding to an annulus of 2 x ringOuterMm caps the table's share
+    // CANDIDATE SET: bounding to an annulus of annulusOuterMm caps the table's share
     // at parity whenever the ring itself lies on the plate, which is the bound doing
     // its job (Decision 15). The design's "table dominant ~9:1" describes the scene,
     // not the bounded sample set.
