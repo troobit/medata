@@ -63,6 +63,16 @@ public enum LiDARPlaneFitter {
     // on the RANSAC hypothesis and on every consensus-polish pass, but NOT on the first
     // refinement between them, and the committed corpus contains a candidate at 20.512°
     // as a result. The cone is an invariant of the hypotheses, not of the candidate set.
+    //
+    // SHARPENED (Decision 54), and it is worse than "not enforced". On that candidate the
+    // polish gate FIRES on the first re-selection, and its rejection path is `break`, which
+    // keeps the previous plane — the ungated refinement, itself outside the cone. So the
+    // conservative fallback the guard is documented with (a re-selection outside the cone
+    // keeps the previous pass's plane, so the polish can never fail a fit that previously
+    // succeeded) is exactly what preserves the plane the cone exists to exclude. The tilt it
+    // leaves standing is a reading at `consensusPolishMaxPasses` below: 26.573° at 2 passes,
+    // Decision 52's 20.512° at the shipped 3, 18.609° from 16 up. The ANGLE itself has still
+    // never been swept.
     static let gravityAngleMaxRad: Float = 15 * .pi / 180
     // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5. Residuals in (8, 20]
     // accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm,
@@ -72,7 +82,40 @@ public enum LiDARPlaneFitter {
     static let minPoints: Int = 3
     // Upper bound on the deterministic consensus-polish passes after the RANSAC
     // winner is refined (estimation-runtime-consistency, PRD estimation-quality).
-    // The loop usually exits earlier because the inlier set reaches a fixed point.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 54. The sentence that
+    // stood here — "the loop usually exits earlier because the inlier set reaches a fixed
+    // point" — is FALSE on the committed corpus, and false on both legs at once. Four things
+    // that decision measured and this comment must not lose:
+    //
+    // 1. The cap ALWAYS BINDS. At 3 the corpus reaches the stated fixed point on 1 of its 6
+    //    extraction passes and on NEITHER fallback fit; the depth it actually needs is 17 in
+    //    extraction and 11 in the fallback. The plane both paths ship is a truncated iterate
+    //    of the polish, not the fixed point every argument for the guard is stated about.
+    //    This is the mirror of `SupportRegion.maxIterationsPerPass`, which never fires at all
+    //    (Decision 51).
+    // 2. It decides WHICH PLANES COMPETE — the seventh constant that does, and one of the
+    //    three that can add a candidate. A shallower polish leaves a different plane, so a
+    //    different removal shell, so a different residue: `1785135663727` yields two
+    //    candidates at 0-1 passes and three from 2 up. The persisted `planeCandidateCount`
+    //    (Req 6.1) is denominated here as well.
+    // 3. It moves BOTH legs, and only the promoted one stays inside Req 5.1's 1 mm. Over
+    //    0…64 the promoted plane moves 0.490 and 0.106 mm at the food; the FALLBACK plane
+    //    moves 0.158 and 1.719 mm. Req 4.3 holds at every value because one constant moves
+    //    both — but the plane it names is the one Decision 36 prices `fallbackPenalty`
+    //    against and the one that feeds `lidarMmPerPx = |d| / f` on the legacy path.
+    // 4. Its DEPTH is not what removes the seed dependence the loop exists to remove. Over
+    //    eight seeds the spread at the food reads 2.123 / 2.095 / 2.067 mm at 0, 3 and 64
+    //    passes on `1785135663727` — 2.9 % for running the loop to its own fixed point. What
+    //    does remove it is `SupportRegion.ransacSuccessProbability` (2.095 → 0.194 mm,
+    //    Decision 51), because the residual spread is the seeds disagreeing about which
+    //    candidate WINS rather than about where one plane lies.
+    //
+    // Bracketed 1…unbounded. The floor is the corpus's: at 0 the candidate set is short a
+    // plane and `maxCrossedSectors` reads 2…3 rather than the 2…2 Decision 48 determined.
+    // There is no ceiling, and the corpus points ABOVE the shipped value rather than at it —
+    // what stops that being a proposal is Req 7.6, since this is the innermost loop in
+    // extraction and 17 quintuples it on a path that has already produced an OOM.
     static let consensusPolishMaxPasses: Int = 3
 
     // Where candidate points are sampled relative to `foodRegionMask`.

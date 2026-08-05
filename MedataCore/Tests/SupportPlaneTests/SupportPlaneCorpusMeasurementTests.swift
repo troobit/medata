@@ -5976,6 +5976,633 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // MARK: - The consensus polish, and the loop the gravity gate is missing from
+
+    // Why the loop stopped. Reported per pass, because the constant is a CAP and a cap that
+    // never binds is not what sets the answer — the same shape as `maxIterationsPerPass`
+    // (Decision 51), one loop further in.
+    enum PolishStop: String {
+        case fixedPoint          // the consensus set stopped changing — the stated exit
+        case underpopulated      // the re-selection fell below `minPoints`
+        case degenerate          // `refine` refused the re-selected set
+        case gravity             // the loop's OWN gate rejected the re-refined plane
+        case cap                 // `consensusPolishMaxPasses` truncated it
+    }
+
+    struct PolishTrace {
+        let passIndex: Int
+        let iterations: Int            // polish iterations actually APPLIED
+        let stop: PolishStop
+        // The ungated plane the loop starts from: `ccRansac`'s winner refined once. Decision
+        // 52's measured gap lives exactly here.
+        let refinementTiltDeg: Float
+        let finalTiltDeg: Float
+        var refinementOutsideCone: Bool {
+            refinementTiltDeg > LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi
+        }
+        var finalOutsideCone: Bool {
+            finalTiltDeg > LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi
+        }
+    }
+
+    // `SupportRegion.extractCandidates` with the polish cap as an argument, and with the
+    // loop instrumented. Every other line is the shipped path's — the same `ccRansac`, the
+    // same ungated first refinement, the same component-based re-selection, the same gate on
+    // the re-refined plane, the same removal — so at `consensusPolishMaxPasses` it
+    // reproduces the shipped call exactly, which the anchor below checks candidate by
+    // candidate.
+    //
+    // The polish is NOT a prefix chain the way the pass cap is (Decision 48). A shallower
+    // polish leaves a different plane, so it removes a different shell, so the next pass
+    // draws from a different residue and `uniformInt` reads a different n — the RNG stream
+    // diverges after pass 1. One run per depth, therefore, not one run at the top.
+    static func extractCandidates(
+        annulus: [Int], geometry g: SupportRegion.DepthGeometry,
+        gravity: Vec3, rng: inout SplitMix64, polishPasses: Int,
+        trace: inout [PolishTrace]
+    ) -> [SupportRegion.PlaneCandidate] {
+        var residue = annulus
+        var candidates: [SupportRegion.PlaneCandidate] = []
+        let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
+        let residueFloor = SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)
+
+        func tiltDeg(_ n: Vec3) -> Float {
+            acos(SupportRegion.clampedCosine(n.dot(gravity))) * 180 / .pi
+        }
+
+        for passIndex in 0..<SupportRegion.maxCandidatePlanes {
+            guard residue.count >= residueFloor else { break }
+            guard let hypothesis = SupportRegion.ccRansac(
+                indices: residue, geometry: g, gravity: gravity,
+                rng: &rng, scratch: scratch) else { break }
+
+            var inliers = hypothesis.members
+            guard let refined = try? LiDARPlaneFitter.refine(
+                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+            ) else { break }
+            var normal = refined.0
+            var d = refined.1
+            let refinementTilt = tiltDeg(normal)
+
+            var applied = 0
+            var stop = PolishStop.cap
+            for _ in 0..<polishPasses {
+                var reselected: [Int] = []
+                reselected.reserveCapacity(residue.count)
+                for idx in residue
+                where abs(normal.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                    reselected.append(idx)
+                }
+                let component = scratch.largestComponent(of: reselected)
+                let next = component.members
+                if next == inliers { stop = .fixedPoint; break }
+                if next.count < LiDARPlaneFitter.minPoints { stop = .underpopulated; break }
+                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                    inliers: next.map { g.points[$0] }, seedNormal: normal
+                ) else { stop = .degenerate; break }
+                if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity)))
+                    > LiDARPlaneFitter.gravityAngleMaxRad {
+                    stop = .gravity
+                    break
+                }
+                inliers = next
+                normal = nextNormal
+                d = nextD
+                applied += 1
+            }
+            trace.append(PolishTrace(passIndex: passIndex, iterations: applied, stop: stop,
+                                     refinementTiltDeg: refinementTilt,
+                                     finalTiltDeg: tiltDeg(normal)))
+
+            let component = scratch.largestComponent(of: inliers)
+            candidates.append(SupportRegion.PlaneCandidate(
+                normal: normal, d: d,
+                residualMm: LiDARPlaneFitter.computeResidual(
+                    points: inliers.map { g.points[$0] }, normal: normal, d: d
+                ),
+                componentSize: component.size,
+                extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count))
+
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
+        }
+        return candidates
+    }
+
+    // The OTHER call site. `LiDARPlaneFitter.fitOutcome` runs the same loop over the same
+    // constant, on a different sample set (colour-grid edge bands rather than the depth
+    // annulus) and with a plain inlier re-selection rather than a connected one. This is the
+    // plane Req 4.3 pins byte-identical and Req 4.6 prices, so a sweep of the constant has to
+    // report both legs or it is measuring half of it.
+    struct FallbackReading {
+        let planeAtFoodMm: Float
+        let tiltDeg: Float
+        let residualMm: Float
+        let inlierCount: Int
+        let iterations: Int
+        let stop: PolishStop
+    }
+
+    static func fallbackReading(_ slice: DepthSlice, polishPasses: Int,
+                                ray: Vec3) -> FallbackReading? {
+        let inputs = LiDARPlaneFitter.Inputs(
+            depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+            foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+        var stats = SupportPlaneFitStats()
+        let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+        guard points.count >= LiDARPlaneFitter.minPoints else { return nil }
+
+        var rng = SplitMix64(seed: Fnv1a64.hash(inputs.depth.depthBytesMm))
+        let gravity = inputs.gravityCamera.normalised()
+        let (bestNormal, _, bestInliers) = LiDARPlaneFitter.ransac(
+            points: points, gravity: gravity, rng: &rng)
+        guard bestInliers.count >= LiDARPlaneFitter.minPoints else { return nil }
+        guard let refined = try? LiDARPlaneFitter.refine(
+            inliers: bestInliers.map { points[$0] }, seedNormal: bestNormal) else { return nil }
+
+        var normal = refined.0
+        var d = refined.1
+        var polishedInliers = bestInliers
+        var applied = 0
+        var stop = PolishStop.cap
+        for _ in 0..<polishPasses {
+            var reselected: [Int] = []
+            reselected.reserveCapacity(points.count)
+            for idx in 0..<points.count
+            where abs(normal.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                reselected.append(idx)
+            }
+            if reselected == polishedInliers { stop = .fixedPoint; break }
+            if reselected.count < LiDARPlaneFitter.minPoints { stop = .underpopulated; break }
+            guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                inliers: reselected.map { points[$0] }, seedNormal: normal
+            ) else { stop = .degenerate; break }
+            if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity)))
+                > LiDARPlaneFitter.gravityAngleMaxRad { stop = .gravity; break }
+            polishedInliers = reselected
+            normal = nextNormal
+            d = nextD
+            applied += 1
+        }
+
+        return FallbackReading(
+            planeAtFoodMm: Self.planeDepthMm(normal: normal, d: d, ray: ray),
+            tiltDeg: acos(SupportRegion.clampedCosine(normal.dot(gravity))) * 180 / .pi,
+            residualMm: LiDARPlaneFitter.computeResidual(
+                points: polishedInliers.map { points[$0] }, normal: normal, d: d),
+            inlierCount: polishedInliers.count,
+            iterations: applied, stop: stop)
+    }
+
+    // 0 is the floor with a meaning: the pre-polish plane, which is `ccRansac`'s winner
+    // refined once and is exactly what `estimation-runtime-consistency` added the loop to
+    // replace. The top has to be wherever the loop actually reaches its stated fixed point,
+    // which the comment says is below 3 and which the corpus puts above 16.
+    static let polishPassSweep = [0, 1, 2, 3, 4, 6, 8, 16, 32, 64]
+
+    @Test("the polish cap is a cap on a loop that reaches its own fixed point, and both fitters read it")
+    func thePolishCapIsACapOnALoopThatFixedPointsFirst() throws {
+        struct Pass {
+            let index: Int
+            let normal: Vec3
+            let d: Float
+            let planeAtFoodMm: Float
+            let ringMedianMm: Float
+            let innerSupport: Float
+            let extentMm: Float
+            let tiltDeg: Float
+            let signs: SectorSigns
+        }
+        struct Reading {
+            let name: String
+            let passes: Int
+            let candidates: [Pass]
+            let trace: [PolishTrace]
+            let fallback: FallbackReading?
+            let selectedIndex: Int
+            let intendedIndex: Int
+            var selected: Pass { candidates[selectedIndex] }
+            var intended: Pass { candidates[intendedIndex] }
+        }
+        struct Capture {
+            let name: String
+            let slice: DepthSlice
+            let g: SupportRegion.DepthGeometry
+            let samples: SupportRegion.RingSamples
+            let ray: Vec3
+        }
+
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            corpus.append(Capture(name: name, slice: slice, g: g,
+                                  samples: SupportRegion.ringSamples(geometry: g),
+                                  ray: try #require(Self.foodCentroidRay(slice))))
+        }
+
+        func pass(_ index: Int, _ c: SupportRegion.PlaneCandidate,
+                  capture: Capture) -> Pass {
+            Pass(index: index, normal: c.normal, d: c.d,
+                 planeAtFoodMm: Self.planeDepthMm(normal: c.normal, d: c.d, ray: capture.ray),
+                 ringMedianMm: SupportRegion.medianHeight(
+                    indices: capture.samples.ring, geometry: capture.g,
+                    normal: c.normal, d: c.d),
+                 innerSupport: Self.innerSupportFraction(
+                    samples: capture.samples, geometry: capture.g,
+                    normal: c.normal, d: c.d),
+                 extentMm: c.extentMm,
+                 tiltDeg: Self.angleDeg(c.normal, capture.slice.gravity.normalised()),
+                 signs: Self.sectorSigns(samples: capture.samples, geometry: capture.g,
+                                         normal: c.normal, d: c.d))
+        }
+
+        func read(_ capture: Capture, passes: Int) throws -> Reading {
+            var rng = SplitMix64(seed: Fnv1a64.hash(capture.slice.depth.depthBytesMm))
+            var trace: [PolishTrace] = []
+            let extracted = Self.extractCandidates(
+                annulus: capture.samples.annulus, geometry: capture.g,
+                gravity: capture.slice.gravity.normalised(), rng: &rng,
+                polishPasses: passes, trace: &trace)
+            let candidates = extracted.enumerated().map {
+                pass($0.offset, $0.element, capture: capture)
+            }
+            let empty = "\(capture.name): no candidate survives extraction at"
+                + " \(passes) polish passes"
+            let selected = try #require(
+                (0..<candidates.count).max { candidates[$0].innerSupport < candidates[$1].innerSupport },
+                "\(empty)")
+            let intended = try #require(
+                (0..<candidates.count).min { abs(candidates[$0].ringMedianMm) < abs(candidates[$1].ringMedianMm) })
+            return Reading(name: capture.name, passes: passes, candidates: candidates,
+                           trace: trace,
+                           fallback: Self.fallbackReading(capture.slice, polishPasses: passes,
+                                                          ray: capture.ray),
+                           selectedIndex: selected, intendedIndex: intended)
+        }
+
+        var byPasses: [Int: [Reading]] = [:]
+        for passes in Self.polishPassSweep {
+            byPasses[passes] = try corpus.map { try read($0, passes: passes) }
+        }
+
+        // The anchor, both legs. At the shipped cap the instrumented chain must BE the
+        // shipped extraction, candidate for candidate, and the instrumented fallback must be
+        // the shipped `fitOutcome` plane — or the sweep is measuring a different polish and
+        // nothing below says anything about `consensusPolishMaxPasses`.
+        for c in corpus {
+            let shipped = try #require(Self.candidates(c.name))
+            let reading = try #require(
+                byPasses[LiDARPlaneFitter.consensusPolishMaxPasses]?.first { $0.name == c.name })
+            let drift = "\(c.name): the instrumented polish chain no longer reproduces"
+                + " SupportRegion.extractCandidates at consensusPolishMaxPasses"
+                + " (\(shipped.count) shipped candidates, \(reading.candidates.count) reproduced)"
+            #expect(shipped.count == reading.candidates.count, "\(drift)")
+            for (a, b) in zip(shipped, reading.candidates) {
+                #expect(a.d == b.d && a.normal == b.normal, "\(drift)")
+            }
+            let shippedFallback = try #require(Self.fallbackPlane(c.slice))
+            let reproduced = try #require(reading.fallback)
+            let fallbackDrift = "\(c.name): the instrumented polish chain no longer reproduces"
+                + " LiDARPlaneFitter.fitOutcome at consensusPolishMaxPasses"
+            #expect(reproduced.planeAtFoodMm
+                    == Self.planeDepthMm(normal: shippedFallback.normal,
+                                         d: shippedFallback.distanceMm, ray: c.ray),
+                    "\(fallbackDrift)")
+        }
+
+        for passes in Self.polishPassSweep {
+            print("consensusPolishMaxPasses=\(passes):")
+            for r in byPasses[passes] ?? [] {
+                let shippedRun = byPasses[LiDARPlaneFitter.consensusPolishMaxPasses]?
+                    .first { $0.name == r.name }
+                print("  \(r.name): \(r.candidates.count) candidates,"
+                      + " selected pass \(r.selectedIndex + 1),"
+                      + " PLANE AT FOOD \(fmt(r.selected.planeAtFoodMm)) mm"
+                      + " (\(fmt(r.selected.planeAtFoodMm - (shippedRun?.selected.planeAtFoodMm ?? r.selected.planeAtFoodMm))) vs shipped),"
+                      + " ring median \(fmt(r.selected.ringMedianMm)) mm,"
+                      + " support \(fmt(r.selected.innerSupport)),"
+                      + " crossed \(r.selected.signs.crossedFailing);"
+                      + " intended pass \(r.intendedIndex + 1)"
+                      + " (ring median \(fmt(r.intended.ringMedianMm)) mm,"
+                      + " support \(fmt(r.intended.innerSupport)),"
+                      + " crossed \(r.intended.signs.crossedFailing),"
+                      + " plane \(fmt(r.intended.planeAtFoodMm)) mm)")
+                for (t, p) in zip(r.trace, r.candidates) {
+                    print("    pass \(t.passIndex + 1): polish \(t.iterations)/\(passes)"
+                          + " stopped on \(t.stop.rawValue),"
+                          + " refinement tilt \(fmt(t.refinementTiltDeg))°"
+                          + "\(t.refinementOutsideCone ? " OUTSIDE THE CONE" : "")"
+                          + " → final \(fmt(t.finalTiltDeg))°"
+                          + "\(t.finalOutsideCone ? " OUTSIDE THE CONE" : ""),"
+                          + " plane \(fmt(p.planeAtFoodMm)) mm,"
+                          + " ring median \(fmt(p.ringMedianMm)) mm,"
+                          + " support \(fmt(p.innerSupport)),"
+                          + " extent \(fmt(p.extentMm)) mm")
+                }
+                if let f = r.fallback {
+                    print("    FALLBACK: polish \(f.iterations)/\(passes)"
+                          + " stopped on \(f.stop.rawValue),"
+                          + " plane \(fmt(f.planeAtFoodMm)) mm"
+                          + " (\(fmt(f.planeAtFoodMm - (shippedRun?.fallback?.planeAtFoodMm ?? f.planeAtFoodMm))) vs shipped),"
+                          + " tilt \(fmt(f.tiltDeg))°,"
+                          + " residual \(fmt(f.residualMm)) mm,"
+                          + " inliers \(f.inlierCount)")
+                }
+            }
+        }
+
+        // MARK: does the cap ever bind?
+
+        var truncatedAt: [Int] = []
+        for passes in Self.polishPassSweep {
+            let readings = byPasses[passes] ?? []
+            let capped = readings.flatMap(\.trace).filter { $0.stop == .cap }
+            let fallbackCapped = readings.compactMap(\.fallback).filter { $0.stop == .cap }
+            if !capped.isEmpty || !fallbackCapped.isEmpty { truncatedAt.append(passes) }
+            print("  at \(passes) passes: extraction stops"
+                  + " \(readings.flatMap(\.trace).map { "\($0.stop.rawValue)@\($0.iterations)" }),"
+                  + " fallback stops"
+                  + " \(readings.compactMap(\.fallback).map { "\($0.stop.rawValue)@\($0.iterations)" })")
+        }
+        let deepest = (byPasses[Self.polishPassSweep.max() ?? 16] ?? [])
+            .flatMap(\.trace).map(\.iterations).max() ?? 0
+        let deepestFallback = (byPasses[Self.polishPassSweep.max() ?? 16] ?? [])
+            .compactMap(\.fallback).map(\.iterations).max() ?? 0
+        print("polish iterations the corpus actually needs: \(deepest) in extraction,"
+              + " \(deepestFallback) in the fallback, against a cap of"
+              + " \(LiDARPlaneFitter.consensusPolishMaxPasses);"
+              + " the cap truncates at \(truncatedAt) passes")
+
+        // MARK: what it does to the answer
+
+        var spanByName: [String: (lo: Float, hi: Float)] = [:]
+        var fallbackSpanByName: [String: (lo: Float, hi: Float)] = [:]
+        for readings in byPasses.values {
+            for r in readings {
+                let existing = spanByName[r.name] ?? (r.selected.planeAtFoodMm, r.selected.planeAtFoodMm)
+                spanByName[r.name] = (min(existing.lo, r.selected.planeAtFoodMm),
+                                      max(existing.hi, r.selected.planeAtFoodMm))
+                if let f = r.fallback {
+                    let e = fallbackSpanByName[r.name] ?? (f.planeAtFoodMm, f.planeAtFoodMm)
+                    fallbackSpanByName[r.name] = (min(e.lo, f.planeAtFoodMm),
+                                                  max(e.hi, f.planeAtFoodMm))
+                }
+            }
+        }
+        let spans = spanByName.mapValues { $0.hi - $0.lo }
+        let fallbackSpans = fallbackSpanByName.mapValues { $0.hi - $0.lo }
+        print("plane movement at the food over the POLISH sweep:"
+              + " \(spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + "; fallback leg"
+              + " \(fallbackSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm transfer tolerance")
+
+        // MARK: the cone the loop is supposed to hold
+
+        for passes in Self.polishPassSweep {
+            let traces = (byPasses[passes] ?? []).flatMap(\.trace)
+            print("  at \(passes) passes: refinements outside the cone"
+                  + " \(traces.filter(\.refinementOutsideCone).count)/\(traces.count)"
+                  + " (worst \(fmt(traces.map(\.refinementTiltDeg).max() ?? 0))°),"
+                  + " CANDIDATES outside the cone"
+                  + " \(traces.filter(\.finalOutsideCone).count)/\(traces.count)"
+                  + " (worst \(fmt(traces.map(\.finalTiltDeg).max() ?? 0))°)")
+        }
+
+        // MARK: the bracket
+
+        var crossedByPasses: [Int: (floor: Int, ceiling: Int)] = [:]
+        for passes in Self.polishPassSweep {
+            var floor = 0, ceiling = Int.max
+            for r in byPasses[passes] ?? [] {
+                floor = max(floor, r.intended.signs.crossedFailing)
+                if r.selectedIndex != r.intendedIndex {
+                    ceiling = min(ceiling, r.selected.signs.crossedFailing - 1)
+                }
+            }
+            crossedByPasses[passes] = (floor, ceiling)
+            print("  \(passes) passes: maxCrossedSectors corpus \(floor)…"
+                  + "\(ceiling == Int.max ? "unbounded" : "\(ceiling)")"
+                  + " \(floor <= ceiling ? "" : "EMPTY")")
+        }
+
+        // MARK: what the sweep says
+
+        // THE FIRST FINDING, and it is the claim in the comment. "The loop usually exits
+        // earlier because the inlier set reaches a fixed point" is false on this corpus, and
+        // it is false on BOTH legs. At the shipped cap extraction is truncated on 4 of its 6
+        // passes and the fallback on both captures, and the depth the corpus actually needs
+        // to reach the stated fixed point is 17 in extraction and 11 in the fallback — five
+        // and nearly four times the cap. So the plane the pipeline ships is a truncated
+        // iterate of the polish, not the fixed point every argument for the guard is stated
+        // about. This is the mirror of Decision 51's `maxIterationsPerPass`, which never
+        // fires: that cap is idle, this one always binds.
+        let shippedTraces = (byPasses[LiDARPlaneFitter.consensusPolishMaxPasses] ?? [])
+        let shippedCapped = shippedTraces.flatMap(\.trace).filter { $0.stop == .cap }
+        let shippedFallbackCapped = shippedTraces.compactMap(\.fallback).filter { $0.stop == .cap }
+        let capIsIdle = "the polish loop reaches its fixed point inside"
+            + " consensusPolishMaxPasses on this corpus (deepest \(deepest) in extraction,"
+            + " \(deepestFallback) in the fallback) — the comment's \"the loop usually exits"
+            + " earlier\" holds and this constant is a bound rather than the thing that stops it"
+        #expect(!shippedCapped.isEmpty && !shippedFallbackCapped.isEmpty
+                && deepest > LiDARPlaneFitter.consensusPolishMaxPasses
+                && deepestFallback > LiDARPlaneFitter.consensusPolishMaxPasses, "\(capIsIdle)")
+
+        // THE SECOND FINDING: it decides which planes COMPETE, and it can ADD one. Extraction
+        // stops at the pass cap or at the residue floor, and a shallower polish leaves a
+        // different plane, hence a different removal shell, hence a different residue —
+        // `1785135663727` yields TWO candidates at 0 and 1 passes and THREE from 2 up, its
+        // third pass appearing only once the polish has run deep enough to leave it something
+        // to draw from. That puts this constant with `annulusOuterMm` (Decision 49) and
+        // `maxCandidatePlanes` (Decision 48) rather than with the bracket-only ones, and makes
+        // the persisted `planeCandidateCount` (Req 6.1) denominated in it as well.
+        func candidateCounts(_ passes: Int) -> [String: Int] {
+            Dictionary(uniqueKeysWithValues: (byPasses[passes] ?? []).map {
+                ($0.name, $0.candidates.count)
+            })
+        }
+        let shallow = candidateCounts(0)
+        let shippedCounts = candidateCounts(LiDARPlaneFitter.consensusPolishMaxPasses)
+        print("candidate counts: 0 passes \(shallow.sorted { $0.key < $1.key }),"
+              + " shipped \(shippedCounts.sorted { $0.key < $1.key })")
+        let setIsFixed = "the polish depth no longer changes the candidate SET"
+            + " (\(shallow.sorted { $0.key < $1.key }) at 0 passes against"
+            + " \(shippedCounts.sorted { $0.key < $1.key }) shipped) — it is a bracket-only"
+            + " constant after all and does not belong with the ones that decide which"
+            + " planes compete"
+        #expect(shallow != shippedCounts, "\(setIsFixed)")
+
+        // THE THIRD FINDING, and it sharpens Decision 52's. That decision recorded the gravity
+        // cone as un-enforced on the first refinement, and the corpus holding a candidate at
+        // 20.512° as a result. Traced through the loop, the gate is worse than absent: on that
+        // candidate it FIRES on the very first re-selection, and its rejection path is `break`,
+        // which keeps the previous plane — the ungated refinement, itself outside the cone. So
+        // the "conservative fallback" `estimation-runtime-consistency.md` documents (a
+        // re-selection outside the cone keeps the previous pass's plane, so the polish can
+        // never fail a fit that previously succeeded) is exactly what preserves the plane the
+        // cone exists to exclude. It reads `gravity` at 0 applied iterations at EVERY depth
+        // from 2 up, and the tilt it leaves standing moves with the cap — 26.573° at 2 passes,
+        // Decision 52's 20.512° at the shipped 3, 18.609° from 16 — so that figure is a
+        // reading at this constant too.
+        let gateFirings = shippedTraces.flatMap(\.trace).filter { $0.stop == .gravity }
+        print("polish passes stopped by the gravity gate at the shipped cap:"
+              + " \(gateFirings.count), of which"
+              + " \(gateFirings.filter(\.finalOutsideCone).count) keep a plane OUTSIDE the cone"
+              + " (\(gateFirings.map { fmt($0.finalTiltDeg) })°)")
+        let gateRemoves = "the polish loop's gravity gate no longer keeps an out-of-cone plane"
+            + " on this corpus — Decision 52's unenforced cone is enforced after all and the"
+            + " note at the call site can go"
+        #expect(gateFirings.contains { $0.finalOutsideCone && $0.iterations == 0 },
+                "\(gateRemoves)")
+
+        // THE FOURTH FINDING: the two legs move by different amounts and only one of them
+        // stays inside Req 5.1's tolerance. The promoted plane moves 0.490 and 0.106 mm over
+        // the sweep; the FALLBACK plane moves 0.158 and 1.719 mm, past the 1 mm Decision 35
+        // measures the transfer at. Req 4.3 makes the fallback identical to what
+        // `LiDARPlaneFitter` produces for the same capture, and it does at every value here
+        // because one constant moves both — but the plane both of them name moves, and it is
+        // the plane Decision 36 prices `fallbackPenalty` against and the one that feeds
+        // `lidarMmPerPx = |d| / f` on the legacy path. First owed constant whose fallback leg
+        // moves further than its promoted one.
+        let promoted = spans.values.max() ?? 0
+        let fallbackWidest = fallbackSpans.values.max() ?? 0
+        let legsAgree = "the fallback leg no longer moves further than the promoted one"
+            + " (promoted \(fmt(promoted)) mm, fallback \(fmt(fallbackWidest)) mm) — this"
+            + " constant can be read off the feature's own path alone"
+        #expect(fallbackWidest > Self.gridTransferToleranceMm
+                && promoted < Self.gridTransferToleranceMm, "\(legsAgree)")
+
+        // THE BRACKET. The FLOOR is 1 and it is the corpus's: at 0 the loop does not exist, the
+        // candidate set is short a plane on one capture, and `maxCrossedSectors` reads 2…3
+        // rather than the 2…2 Decision 48 determined — so the polish is what makes that
+        // determination tight, and turning it off costs the corpus its one determined constant.
+        // From 1 up the reading is 2…2 at every depth, so like Decision 50's removal band this
+        // constant does not otherwise denominate it. There is no CEILING: the readings are
+        // monotone in the sense that matters (each depth is one more iteration of the same
+        // map) and the corpus points ABOVE the shipped value rather than at it, because the
+        // constant's own derivation — reach the fixed point — is met only at 17. What stops
+        // that being a proposal is Req 7.6: the polish is the innermost loop in extraction and
+        // raising it to 17 quintuples it, on the path that has already produced an OOM.
+        let atZero = try #require(crossedByPasses[0])
+        let aboveZero = Self.polishPassSweep.filter { $0 > 0 }
+        let tightEverywhere = aboveZero.allSatisfy {
+            crossedByPasses[$0]?.floor == 2 && crossedByPasses[$0]?.ceiling == 2
+        }
+        print("maxCrossedSectors: \(atZero.floor)…\(atZero.ceiling) with no polish,"
+              + " 2…2 at every depth from 1 up: \(tightEverywhere)")
+        let floorIsNotThePolish = "the corpus reads maxCrossedSectors identically with the"
+            + " polish off (\(atZero.floor)…\(atZero.ceiling)) and on — the floor of 1 is not"
+            + " the corpus's and this constant has no bracket from below"
+        #expect(atZero.ceiling > 2 && tightEverywhere, "\(floorIsNotThePolish)")
+    }
+
+    // The polish loop was added for ONE stated reason: the RANSAC winner's inlier band is
+    // anchored to a 3-point candidate plane, so the refined plane depends on which minimal
+    // sample won, and re-selecting against the refined plane "converges to a fixed point that
+    // no longer depends on which minimal sample won". Decision 46 measured that dependence at
+    // the shipped settings — 2.095 mm at the food over eight seeds — and Decision 51 found it
+    // removable, by tightening `ransacSuccessProbability` rather than by anything the polish
+    // does. So the guard's own purpose has a number attached to it and has never been read
+    // against the constant that bounds the guard. Three depths: none, shipped, and past where
+    // the corpus's slowest pass reaches its fixed point.
+    static let polishSeedDepths = [0, 3, 64]
+
+    @Test("the polish is what the seed spread was added to remove, and depth alone does not remove it")
+    func thePolishDoesNotRemoveTheSeedSpreadItWasAddedFor() throws {
+        struct Roll {
+            let planeAtFoodMm: Float
+            let crossed: Int
+            let supporting: Int
+            let candidateCount: Int
+        }
+
+        var spreadByDepth: [Int: [String: Float]] = [:]
+        for depth in Self.polishSeedDepths {
+            var spreads: [String: Float] = [:]
+            for name in Self.captures {
+                let slice = try DepthSlice.load(name)
+                let g = try #require(Self.geometry(name))
+                let samples = SupportRegion.ringSamples(geometry: g)
+                let ray = try #require(Self.foodCentroidRay(slice))
+                let shippedSeed = Fnv1a64.hash(slice.depth.depthBytesMm)
+
+                var rolls: [Roll] = []
+                for i in 0..<Self.seedRolls {
+                    let seed = i == 0
+                        ? shippedSeed
+                        : shippedSeed &+ UInt64(i) &* 0x9E37_79B9_7F4A_7C15
+                    var rng = SplitMix64(seed: seed)
+                    var trace: [PolishTrace] = []
+                    let candidates = Self.extractCandidates(
+                        annulus: samples.annulus, geometry: g,
+                        gravity: slice.gravity.normalised(), rng: &rng,
+                        polishPasses: depth, trace: &trace)
+                    guard let best = candidates.max(by: {
+                        Self.innerSupportFraction(samples: samples, geometry: g,
+                                                  normal: $0.normal, d: $0.d)
+                        < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                    normal: $1.normal, d: $1.d)
+                    }) else { continue }
+                    let signs = Self.sectorSigns(samples: samples, geometry: g,
+                                                 normal: best.normal, d: best.d)
+                    rolls.append(Roll(
+                        planeAtFoodMm: Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray),
+                        crossed: signs.crossedFailing, supporting: signs.supporting,
+                        candidateCount: candidates.count))
+                }
+                #expect(rolls.count == Self.seedRolls,
+                        "extraction failed on some seed at \(depth) polish passes")
+                let planes = rolls.map(\.planeAtFoodMm)
+                let spread = (planes.max() ?? 0) - (planes.min() ?? 0)
+                spreads[name] = spread
+                print("\(name) at \(depth) polish passes, \(Self.seedRolls) seeds:"
+                      + " spread \(fmt(spread)) mm,"
+                      + " planes \(planes.map { fmt($0) }.sorted()),"
+                      + " crossed \(Set(rolls.map(\.crossed)).sorted()),"
+                      + " supporting \(Set(rolls.map(\.supporting)).sorted()),"
+                      + " candidates \(Set(rolls.map(\.candidateCount)).sorted())")
+            }
+            spreadByDepth[depth] = spreads
+            print("  seed spread at \(depth) polish passes:"
+                  + " \(spreads.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))")
+        }
+
+        let shipped = spreadByDepth[LiDARPlaneFitter.consensusPolishMaxPasses] ?? [:]
+        let deep = spreadByDepth[Self.polishSeedDepths.max() ?? 64] ?? [:]
+        let none = spreadByDepth[0] ?? [:]
+        print("seed spread against polish depth:"
+              + " none \(none.map { "\($0.key) \(fmt($0.value))" }.sorted()),"
+              + " shipped \(shipped.map { "\($0.key) \(fmt($0.value))" }.sorted()),"
+              + " deep \(deep.map { "\($0.key) \(fmt($0.value))" }.sorted())"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm")
+
+        // The guard does its job on one capture and not on the other, and the one it fails on
+        // is the one carrying the corpus's only intended-correct fit. On `1785901032716` the
+        // spread collapses 0.096 → 0.001 mm; on `1785135663727` it reads 2.123, 2.095 and
+        // 2.067 mm at none, shipped and convergence — a 2.6 % reduction for the shipped cap
+        // and 2.9 % for running the loop to its own fixed point. So the constant's DEPTH is
+        // not what removes the dependence the loop was added to remove: what does is
+        // `ransacSuccessProbability`, which Decision 51 measured taking the same 2.095 mm to
+        // 0.194 mm. The residual spread is a SELECTION difference the polish cannot reach —
+        // the seeds disagree about which candidate wins, not about where one plane lies.
+        let stubborn = Self.captures.filter { name in
+            let n = none[name] ?? 0, d = deep[name] ?? 0
+            return n > Self.gridTransferToleranceMm && d > 0.9 * n
+        }
+        print("captures whose seed spread survives the polish at any depth: \(stubborn)")
+        let polishFixesIt = "the polish now removes the seed spread it was added for on every"
+            + " capture (none \(none.map { "\($0.key) \(fmt($0.value))" }.sorted()), deep"
+            + " \(deep.map { "\($0.key) \(fmt($0.value))" }.sorted())) — the guard's stated"
+            + " purpose is met by its own depth and Decision 51's finding is not the only route"
+        #expect(!stubborn.isEmpty
+                && (shipped["1785135663727"] ?? 0) > 0.9 * (none["1785135663727"] ?? 0),
+                "\(polishFixesIt)")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a

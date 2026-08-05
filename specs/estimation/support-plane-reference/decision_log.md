@@ -3015,3 +3015,82 @@ Decision 31's exclusion **stands, on a different ground than it records**. Its s
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`confidenceThreshold` provenance block), `MedataCore/Sources/Volume/HeightFieldEstimator.swift` (`tauConfidence` cross-reference), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringSupportMin` provenance block and the τ_conf note in `prepare`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theConfidenceBarHasThreeStatesRatherThanABracket`, `theConfidenceBarIsTwoConstantsStraddlingTheMediumLevel`, and the `reconfidenced` / `tauReading` helpers), `Package.swift` (`SupportPlaneTests` gains `Volume`), task 26's detail. **No shipped behaviour changes.**
 
 ---
+
+## Decision 54: The consensus polish is a cap that always binds, and its depth is not what the loop was added for
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.consensusPolishMaxPasses = 3` is read by **both** fitters. `SupportRegion.extractCandidates` polishes every candidate with it; `LiDARPlaneFitter.fitOutcome` polishes its single winner with the same number. It had never been varied, and unlike the constants Decisions 47, 48 and 51 found unmarked it does not lack a derivation — it has one, written in two places. The source says "the loop usually exits earlier because the inlier set reaches a fixed point"; `docs/agent-notes/estimation-runtime-consistency.md` says the polish iterates "until the consensus set stops changing (cap `consensusPolishMaxPasses = 3`)" and that "clean fixtures reach the fixed point immediately".
+
+Both statements are claims about the corpus, and both are checkable. So is the guard's purpose: the polish was added because the RANSAC winner's inlier band is anchored to a 3-point candidate plane, and re-selecting against the refined plane is supposed to "converge to a fixed point that no longer depends on which minimal sample won". Decision 46 measured that dependence at 2.095 mm at the food over eight seeds and Decision 51 found it removable — by tightening `ransacSuccessProbability`, not by anything the polish does. Nobody had read the guard's own bound against the guard's own purpose.
+
+It is also the loop Decision 52 found the gravity cone missing from: the refinement *before* the loop is ungated, and the corpus holds a candidate at 20.512° as a result.
+
+### Decision
+
+`consensusPolishMaxPasses` is `[owed]`. It is the **seventh** constant that decides which planes compete and the third that can add one, and it is the first whose stated derivation is refuted by its own firing record: the cap **always binds**, on both legs, and the corpus needs 17 passes in extraction and 11 in the fallback to reach the fixed point every argument for the guard is stated about.
+
+It moves both legs, and only the promoted one stays inside Req 5.1's 1 mm — the **fallback** plane moves 1.719 mm. Readings are monotone, so unlike Decisions 46, 51 and 52 the bracket **may** be interpolated.
+
+Bracketed **1…unbounded**, with the shipped 3 inside and the corpus pointing **above** it rather than at it. Its depth is **not** what removes the seed dependence the loop exists to remove.
+
+Decision 52's unenforced gravity cone is sharpened: the gate's *firing* is what preserves the out-of-cone plane. Not repaired.
+
+### Rationale
+
+**The cap always binds, and that refutes the sentence it carries.** Traced per pass at the shipped value, extraction stops on the cap on **4 of its 6 passes**, reaches the stated fixed point on **1**, and is stopped by the gravity gate on the sixth; the fallback fit is truncated by the cap on **both** captures. Swept to 64, the depth the corpus actually needs is **17** in extraction (pass 1 of `1785135663727`) and **11** in the fallback. So the plane both paths ship is a truncated iterate of the polish map, not its fixed point, and "clean fixtures reach the fixed point immediately" is false on the only two real captures in hand. This is the exact mirror of Decision 51's `maxIterationsPerPass`, which never fires at any value the corpus reaches: that cap is idle everywhere, this one binds everywhere. Two caps, two `[derived]` arguments, opposite failures.
+
+**It decides which planes compete, and it can add one.** Extraction ends at the pass cap or at the residue floor, and the polish moves the plane, which moves the removal shell, which changes what the next pass draws from. `1785135663727` yields **two** candidates at 0 and 1 polish passes and **three** from 2 up: its third pass exists only once the polish has run deep enough to leave it something above `minResidueAreaMm2`. That puts this constant with `annulusOuterMm` (Decision 49) and `maxCandidatePlanes` (Decision 48) rather than with the eight bracket-only ones, and it makes the persisted `planeCandidateCount` (Req 6.1) denominated here as well — the third distinct constant of which that is true after Decision 38's residue floor and Decision 53's confidence bar.
+
+**It moves both legs, and the fallback further than the promoted one.** Over 0…64 the selected plane at the food moves **0.490 mm** on `1785135663727` and **0.106 mm** on `1785901032716`, both inside the 1 mm Decision 35 measures Req 5.1's transfer at. The **fallback** plane moves **0.158 mm** and **1.719 mm** — outside it. On `1785901032716` the fallback reads 357.506 mm unpolished, 359.096 mm at the shipped cap and 359.225 mm converged, so the shipped value sits 1.590 mm above the unpolished plane and 0.129 mm short of its own fixed point. Req 4.3 — the fallback plane identical to what the edge-band fit produces for the same capture — holds at *every* value here, because one constant moves both; what moves is the plane both of them name. That plane is what Decision 36 prices `fallbackPenalty` against (18.37 mm of plane error at the food) and what feeds `lidarMmPerPx = |d| / f` at Pipeline stage E on the legacy path. Decision 36's figure survives — its capture's fallback leg moves only 0.158 mm — but it is a reading at this constant, which nothing recorded.
+
+**Its depth is not what the loop was added for, and this is the finding that matters most.** Re-running Decision 46's eight-seed control at three polish depths:
+
+| Capture | no polish | shipped 3 | converged 64 |
+|---|---|---|---|
+| `1785135663727` | 2.123 mm | **2.095 mm** | 2.067 mm |
+| `1785901032716` | 0.096 mm | 0.001 mm | 0.000 mm |
+
+On the capture carrying the corpus's only intended-correct fit the polish removes **2.6 %** of the seed spread at the shipped cap and **2.9 %** run to its own fixed point. The guard works completely on the other capture — 0.096 → 0.001 mm — and that is the capture whose plane was nearly seed-stable to begin with. What *does* remove the dependence is `ransacSuccessProbability`, which Decision 51 measured taking the same 2.095 mm to 0.194 mm. The reason the polish cannot is visible in the rolls: the surviving spread is three distinct planes with the candidate count itself varying between 2 and 3, so the seeds disagree about **which candidate wins**, not about where one plane lies. The polish refines a plane; it does not reorder a set. So the guard's stated mechanism is sound and its stated benefit is delivered by a different constant, which is worth knowing before the sitting prices either.
+
+**Decision 52's unenforced cone is worse than "not enforced".** That decision recorded the gravity gate as absent from the first refinement, with a 20.512° candidate in the corpus as the consequence. Traced through the loop, the candidate is `1785135663727`'s third pass and its record reads **`gravity` at 0 applied iterations at every depth from 2 up**: the gate fires on the very first re-selection, and its rejection path is `break`, which keeps the previous plane — the ungated refinement, itself outside the cone. So the conservative fallback `estimation-runtime-consistency.md` documents ("a re-selection outside the 15° gravity cone keeps the previous pass's plane — the polish can never fail a fit that previously succeeded") is precisely what preserves the plane the cone exists to exclude. It is correct as written and inverted in effect. The tilt it leaves standing moves with this constant — **26.573°** at 2 passes, Decision 52's **20.512°** at the shipped 3, 18.771° at 4…8, **18.609°** from 16 — so that figure is a reading here too, and at 0 and 1 passes no candidate is outside the cone at all because the third candidate does not yet exist. Not repaired, on Decisions 52 and 53's precedent: adding the gate removes a candidate and moves the answer.
+
+**The bracket, and it is the corpus's alone.** The **floor is 1**, and it costs the feature something real: at 0 the candidate set is short a plane on one capture and `maxCrossedSectors` reads **2…3** rather than the **2…2** Decision 48 determined, so the polish is part of what makes that determination tight. From 1 up the reading is 2…2 at every depth, so like Decision 50's removal band this constant does not otherwise denominate it. There is **no ceiling**, and the corpus points *above* the shipped value: the constant's own derivation is met only at 17, and every quantity the feature ranks candidates by improves or holds as the depth rises. What stops that being a proposal is **Req 7.6** — this is the innermost loop in extraction, each iteration costs a full re-selection over the residue plus a connected-component labelling plus an SVD, and 17 quintuples it on the path that has already produced a 32 GB allocation failure. The committed suite is silent for the same structural reason Decision 50 recorded: no scene runs extraction, and no scene runs the fallback fit either.
+
+**Readings are monotone, so the bracket may be interpolated.** Each depth is one more iteration of the same map from a plane to its re-selected consensus, so the sequence converges rather than wanders: the promoted plane reads 350.934, 351.177, 351.281, 351.328, 351.345, 351.363, 351.374, 351.420 mm over 0…16 on `1785135663727`, and the fallback 357.506 … 359.225 mm on `1785901032716`. This is Decision 50's rider, not Decision 46's — the third owed constant that may be interpolated, against four that may not.
+
+### Alternatives Considered
+
+- **Raise it to 17, so the loop reaches the fixed point its own derivation names** - The derivation is written in two places and is currently false; satisfying it costs nothing in correctness and every quantity the corpus ranks by improves - Rejected on Req 7.6. The polish is the innermost loop in extraction and this multiplies it by 5.7 on a path with a recorded OOM, and the latency budget is task 27's measurement rather than this pass's. It also moves the fallback plane 0.129 mm and the promoted plane 0.092 mm, which task 26 measures rather than makes.
+- **Lower it to 1, since the polish delivers 2.6 % of its stated benefit on the capture that matters** - It would make the constant nearly free and the guard's cost proportional to what it buys - Rejected because 1 is where the corpus loses a candidate and `maxCrossedSectors` widens from Decision 48's determined 2…2 to 2…3 at 0; and because the benefit is 2.6 % on one capture and 99 % on the other, which is a two-capture reading and not a rate.
+- **Remove the polish outright and tighten `ransacSuccessProbability` instead, since that is what removes the seed spread** - Decision 51 measured 2.095 → 0.194 mm from the probability alone, a 10.8× fall this loop cannot approach at any depth - Rejected as a change rather than a measurement, and because the two are not substitutes: the probability decides which plane a pass *finds*, the polish decides where that plane *settles*, and the fallback leg moves 1.719 mm under the polish with the probability untouched. Recorded so the sitting can price them together.
+- **Split it into two constants, one per fitter** - The two legs move by very different amounts and the fallback's fixed point is 6 passes shallower than extraction's, so one number is serving two loops with different convergence - Rejected here for Decision 32's reason in reverse: splitting a constant is justified when the two halves have different *jobs*, and these have the same job on different sample sets. Recorded as a reading, because the fallback converging at 11 and extraction at 17 is what a per-leg value would be set from.
+- **Treat it as settled, since it carries a written derivation and a PRD reference** - It is better documented than `inlierBandMm` was and it is not a bare number - Rejected because the derivation is a claim about the corpus and the corpus refutes it. A constant whose comment says the loop exits early, on a corpus where the cap truncates 4 of 6 passes and both fallback fits, is not settled by that comment.
+
+### Consequences
+
+**Positive:**
+
+- The last of the four constants the previous pass named as never varied and measurable from the committed corpus is measured, and it turned out to be the one with a false derivation rather than a missing one.
+- The guard's stated purpose is read against the guard's own bound for the first time, and the constant that actually delivers it is identified.
+- The second call site is measured. This is the first owed constant read on the **fallback** leg, and the leg that moves further.
+- Decision 52's unenforced cone is sharpened from "absent" to "inverted", with the mechanism traced and the 20.512° located as a reading at this constant.
+- `planeCandidateCount`, persisted under Req 6.1, gains its third denominator.
+- The bracket is interpolable, which only Decisions 49 and 50 could say before.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the fourth pass running.
+- The shipped value is inside its bracket but on the wrong side of its own derivation, so either the constant or the two comments that describe it must move at the sitting, and the constant cannot move without Req 7.6's latency measurement from task 27.
+- Every plane figure this feature quotes for the **fallback** path is a reading at a truncated polish, including Decision 36's 18.37 mm — it survives, but its footing is narrower than recorded.
+- The gravity-cone defect is documented for the second decision running rather than fixed, and it is now known to be worse than Decision 52 described.
+- The seed-spread finding is a two-capture reading with the two captures disagreeing by a factor of 2000, so what the polish buys in general is not bounded by it.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`consensusPolishMaxPasses` and `gravityAngleMaxRad` provenance blocks), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`thePolishCapIsACapOnALoopThatFixedPointsFirst`, `thePolishDoesNotRemoveTheSeedSpreadItWasAddedFor`, and the instrumented `extractCandidates` / `fallbackReading` helpers), `docs/agent-notes/estimation-runtime-consistency.md` and `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes.**
+
+---
