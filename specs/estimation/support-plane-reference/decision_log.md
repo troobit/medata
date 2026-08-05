@@ -1958,3 +1958,86 @@ Not implementing follows from the same place. The rule needs one constant, that 
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`failingSectorSignSeparatesWhatTheCountCannot` and the `SectorSigns` helper), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md` (the owed-numbers section and the `SupportRegion` sketch), `prerequisites.md` (capture 6's second job), `decision_log.md` (Decision 30's status) and task 26's detail. **No shipped behaviour changes**: no constant's value moves and no guard is rewired.
 
 ---
+
+## Decision 41: The committed scenes bound six owed constants, and on one they contradict the corpus
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`prerequisites.md` has carried one open item since before task 8 that is explicitly **not** a hardware gate: "set the guard constants before task 8 hard-codes them", flagged because `tasks.md` orders task 8 — `fitFoodSupportPlane`, which carries every threshold — ahead of task 26, so "the numbers get baked into code and tests before anything measures them". Task 8 shipped long ago, so the item can no longer be answered by reordering. It is the last item on the list that no capture and no Bucket C run unblocks.
+
+What replaced the reorder was a provenance discipline: every `SupportRegion` constant is annotated `[derived]`, `[measured]`, `[inherited]` or `[owed]`, Req 3.7 bans shipping the sector constants asserted, and the regression slices were built to assert only *named* planes so that "nothing in it moves when task 26 sets the `[owed]` constants" (design, §Regression fixtures). That covers the slices. It says nothing about the twenty-eight references to owed constants in `SupportRegionSelectionTests`, `SupportRegionRingTests`, `SupportRegionCandidateTests` and `PlateTopSupportPlaneTests`.
+
+Those references are all **symbolic** — `SupportRegion.ringSupportMin`, never a literal — which looks like insulation and is not. Two shapes hide behind it. A test that expresses its *input* in terms of the constant (`extentMm: minAcceptedExtentMm - 1`) tracks it wherever it goes. A test that fixes a synthetic scene and asserts the scene's *measured* value against the constant flips the moment the constant crosses that value. `SupportRegionSelectionTests` says so in prose — "the window in which the aggregate passes and the sectors fail is therefore narrow, and this scene sits inside it by construction" — without ever measuring how narrow, or against what.
+
+### Decision
+
+The committed suite is recorded as a **second, independent source of bounds** on the owed constants, measured rather than assumed, and is now the binding constraint on three of them. `committedScenesBoundTheOwedConstants` computes, per constant, the interval over which every committed assertion keeps its verdict:
+
+| Constant | Suite interval | Corpus bracket | Which binds |
+|---|---|---|---|
+| `ringSupportMin` | ≤ **0.676** | none — needs a matte capture (Decision 29) | suite (the only ceiling that exists) |
+| `minSupportingSectors` | **6…7** | ≤ **5** (Decision 33) | **they contradict** |
+| `bandStepMaxMm` | **0.024…9.288** mm | no floor at all (Decision 34) | suite (the only floor that exists) |
+| `supportVisibilityMin` | ≤ **2.667** | ≥ 0.246 (Decision 34) | two-sided for the first time |
+| `foodEnvelopeMinMm` | **−6.758…8.233** mm | ≤ 25.793 mm (Decision 34) | **suite, 3.1× tighter** |
+| `escapeBandMm` | ≥ **14.868** mm | reaches +5.750 mm (Decision 34) | **suite, 2.6× higher** |
+
+No constant's value moves and no shipped code changes. What changes is that the capture session now has to satisfy two constraint sets rather than one, and one of the two owes a scene change.
+
+### Rationale
+
+A scene bounds a constant only where a committed assertion would change verdict, which is not the same as where the scene happens to satisfy the guard. The bowl fails almost every guard, but the only assertion made about it is on its inner→mid step, so it caps `bandStepMaxMm` and bounds nothing else. Encoding participation per assertion rather than per scene is what makes the intervals real; the first cut of this measurement tagged each scene with the one guard it exists to fire and produced nonsense — a ceiling of 0.000 on `ringSupportMin`, an empty sector interval — because the bowl and the covered well were counted as passing guards no test asks them to pass.
+
+The eight scenes and what each is required to do:
+
+| Scene | Fraction | Sectors | Inner→mid | Visibility | Envelope | Annulus | Required |
+|---|---|---|---|---|---|---|---|
+| plate above table | 1.000 | 8 | 0.021 | 4.016 | 8.242 | −19.753 | fit succeeds |
+| flat surface | 1.000 | 8 | 0.024 | 8.188 | 8.242 | 0.005 | fit succeeds |
+| rim in the outer band | 1.000 | 8 | 0.021 | 2.667 | 8.242 | 14.868 | fit succeeds |
+| overhanging food | 0.676 | 7 | −0.024 | 2.704 | 8.233 | −19.857 | fit succeeds |
+| food across the plate edge | 0.681 | **5** | 0.009 | 5.626 | 28.242 | 0.171 | every guard passes, verdict `.sectors` |
+| rim in the mid band | 0.770 | 8 | 14.923 | 1.309 | 8.242 | 14.950 | verdict `.bandStep` |
+| bowl | 0.000 | 0 | 9.288 | 0.376 | 8.242 | 48.539 | step exceeds the bar |
+| fully covered well | 1.000 | 8 | 0.018 | 3.835 | **−6.758** | −0.054 | envelope below the floor |
+
+**The contradiction.** Decision 33 measured that the plate ends inside the 8–25 mm ring in five of eight directions on both captures, so a real intended candidate scores **5 of 8** and `minSupportingSectors` has to come down to admit it — Decision 40 records the same figure and calls a floor of 6 "unreachable by plate geometry before support is consulted at all". The suite's floor is **6**, and it is 6 for a reason that is not arbitrary: the silent-failure scene the sector guard exists to reject *also* scores 5. Both the case the guard must admit and the case it must reject sit at the same count, which is precisely Decision 30's finding — the unsigned count cannot separate them — now showing up as a test-suite constraint rather than a corpus one. No value of `minSupportingSectors` satisfies both, so the session cannot set this constant without the scene moving with it.
+
+**The two the suite binds tighter.** `foodEnvelopeMinMm`'s corpus ceiling is 25.793 mm, from the intended candidate's own envelope; the suite's is **8.233 mm**, from the overhanging-food scene, 3.1× lower. `escapeBandMm`'s corpus evidence tops out at +5.750 mm; the suite floors it at **14.868 mm**, from the rim-in-the-outer-band scene whose annulus median sits on the rim. A session setting either against captures alone would land inside the corpus's bracket and outside the suite's, and would discover this only when the suite went red.
+
+**The two the suite bounds where the corpus could not.** Decision 29 concluded `ringSupportMin` "cannot be derived until a matte-surface capture characterises the spread" — the suite supplies a ceiling of 0.676 regardless, from the overhanging-food scene, which the shipped 0.6 clears by 0.076. Decision 34 found every corpus inner→mid step to be a fall, so the corpus gives `bandStepMaxMm` no floor at all — the suite gives 0.024 mm, and a ceiling of 9.288 mm from the bowl, making it two-sided for the first time.
+
+The measurement recomputes the corpus figures from `Self.measurements` rather than quoting Decisions 33 and 34, and reproduces 25.793 mm and +5.750 mm exactly, so the two constraint sets are compared on one run rather than across documents.
+
+### Alternatives Considered
+
+- **Loosen the silent-failure scene now so the sector interval admits 5** - Move `foodAcrossPlateEdge`'s `edgeOffsetPx` until the scene scores 4 or fewer, clearing room for `minSupportingSectors = 5` - Rejected because it fixes the symptom in the wrong place. Decision 40 already settled that the unsigned count is the wrong measure and the crossed-sector rule replaces it; re-tuning the scene to prop up a guard that is being retired spends effort on both and buys nothing the rule does not.
+- **Treat the suite bounds as advisory and let the session set constants from captures alone** - Record the intervals in the decision log and fix the tests afterwards if they break - Rejected because it inverts the evidence. A committed assertion that a correct fit is admitted is a claim about the feature, not scaffolding; discovering the conflict when the suite goes red would put the session under pressure to change whichever side is cheaper rather than whichever side is wrong.
+- **Delete the coupled assertions so the constants are free** - Strip the `>= SupportRegion.ringSupportMin`-style assertions from the scene tests, leaving only the verdict assertions - Rejected because those assertions are what makes the silent-failure test mean anything: "every guard except sectors reads healthy" is the whole content of Decision 18's case, and without them the test only says a scene is rejected, not that it is rejected for the reason that matters.
+- **Assert the intervals without comparing them to the corpus** - Report the suite's brackets and stop - Rejected as half the finding. Three of the six only matter because they sit on the other side of the corpus's bracket, and that is not visible from either source alone.
+
+### Consequences
+
+**Positive:**
+
+- The last non-hardware item on `prerequisites.md` is answered, and answered with a measurement rather than a reorder.
+- The capture session gains ceilings for two constants the corpus could not bound at all (`ringSupportMin`, `bandStepMaxMm`'s floor), so fewer constants arrive at the sitting completely unbounded.
+- The `minSupportingSectors` conflict is found **before** the sitting rather than after, when its resolution would compete with the session's own evidence.
+- The comparison is reproducible in one run: the corpus figures are recomputed, not quoted, so the two constraint sets cannot drift apart in the documents.
+- The measurement is written against the assertions rather than the scenes, so a test that stops asserting a guard automatically stops bounding its constant.
+
+**Negative:**
+
+- Six owed constants now carry two brackets each, and the documents have to keep both current — a maintenance surface that did not exist before.
+- The intervals are properties of eight synthetic scenes at one range on one grid, so they are not evidence about the world in the way the corpus is. They constrain what the session may set without also editing tests; they do not say what is correct.
+- The `minSupportingSectors` collision is recorded, not resolved. Task 26 gains a dependency — the scene must move when the crossed-sector rule lands — that Decision 40 did not anticipate.
+- `bandStepMaxMm`'s suite floor of 0.024 mm is nearly vacuous, being sensor noise on a flat scene; it is a floor in form more than in force.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`committedScenesBoundTheOwedConstants`, `SceneReading` and `sceneReadings`), `design.md` (the owed-numbers section), `prerequisites.md` (the "during implementation" item, now answered) and task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
+
+---

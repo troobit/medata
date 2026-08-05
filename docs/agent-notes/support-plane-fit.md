@@ -103,6 +103,31 @@ trio as asserted values.
 swift test --filter SupportPlaneCorpusMeasurement
 ```
 
+**Every owed constant has two brackets, not one (Decision 41).** The corpus is one. The
+committed scene suites are the other, and they reference owed constants twenty-eight times.
+All the references are symbolic — `SupportRegion.ringSupportMin`, never a literal — which
+looks like insulation and is not: a test that fixes a synthetic scene and asserts the scene's
+measured value against a constant flips as soon as the constant crosses it.
+`committedScenesBoundTheOwedConstants` computes the intervals:
+
+| Constant | Suite | Corpus |
+|---|---|---|
+| `ringSupportMin` | ≤ 0.676 | no ceiling at all |
+| `minSupportingSectors` | 6…7 | ≤ 5 |
+| `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
+| `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
+| `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
+| `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
+
+`foodEnvelopeMinMm` and `escapeBandMm` are bound **tighter by the suite than by the corpus**,
+so a value defensible against every capture can still turn the suite red.
+`minSupportingSectors` is worse than tight — the two brackets do not overlap. A real intended
+candidate scores 5 of 8 sectors, and the silent-failure scene the guard exists to reject
+scores 5 too, so the suite floors it at 6 and the corpus caps it at 5. Do not resolve that by
+retuning `foodAcrossPlateEdge`: it is Decision 30's finding (the unsigned count cannot
+separate the two cases), and it resolves when Decision 40's crossed-sector rule replaces the
+count, with the scene moving at the same time.
+
 `SupportPlaneCorpusMeasurementTests` is the instrumented, guards-disabled pass over the
 committed `.depthslice` fixtures. Adding a capture to it means cutting a slice with
 `tools/fixture_slice.py` and appending the stem to its `captures` list. What it settled
