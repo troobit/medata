@@ -1634,3 +1634,67 @@ The `minAcceptedExtentPx` finding is the reason this is worth a decision rather 
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`GridFit`, `decimated`, `foodCentroidRay`, `planeDepthMm`, `gridTransferToleranceMm` and three derivation tests), the `minAcceptedExtentPx` comment in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `requirements.md` Req 5.1, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
 
 ---
+
+## Decision 36: The fallback penalty is priced in millimetres, and the corpus measures 35× what it charges
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`Confidence.supportPlaneFallbackPenalty = 0.9` is the last `[owed]` figure in task 26 that no derivation has touched. Unlike every `SupportRegion` constant, it is not a bar a guard fires on — it is a price, and Req 4.6 states the only compliance test it has: when the fallback fires, the reported confidence must be "no higher than for a restricted fit of equal residual". At *equal* residual any value in (0, 1) satisfies that, so the criterion cannot choose the number and never could.
+
+The number's denomination comes from the curve it multiplies. `sigmaPlane` is exp(−r/5) with r in millimetres and r₀ = 5 mm, so a multiplicative penalty p asserts that the fallback carries −5·ln(p) millimetres of extra plane error. **0.9 prices the fallback at 0.53 mm.** That is a measurable quantity: it is the height the edge-band plane adds to a food pixel relative to the plane the design intends to select, which is exactly what volume integration adds.
+
+`SupportPlaneCorpusMeasurementTests` gains two tests that measure it on the committed slices. The measure is taken **per food sample and averaged**, not on the food-centroid ray Decision 35 uses: that ray is legitimate for Req 5.1, where the two planes are two fits of the *same* surface and are near-parallel, but here they are 7.18° apart on one capture and a single ray would stand for nothing.
+
+### Decision
+
+**The corpus bounds `supportPlaneFallbackPenalty` from above at 0.025 and cannot bound it from below. The constant does not move.** The over-report is recorded, with its three components measured.
+
+**The price.** On `1785135663727` the edge-band plane adds **18.370 mm** to the mean food pixel (p10 7.956, p90 28.606, centroid ray 18.352 mm), which prices the fallback at exp(−18.37/5) = **0.025**. The shipped 0.9 is **35.5× above** it. The figure is corroborated outside this pass: 18.37 mm over the capture's ≈ 212 cm² equivalent-disc food footprint is ≈ 390 cm³, against the **408 cm³** `SupportPlaneRegressionSliceTests` measures between the pre-feature and corrected volumes (714.8 → 306.8 cm³), the residue being the `max(0, ·)` clamp and off-axis pixel area.
+
+**The residual channel works against the penalty rather than with it.** The edge-band plane is a *good* fit to the wrong surface, so its residual is **lower** than the restricted fit's on both captures — 1.954 mm against 2.327 mm, and 1.928 against 2.365 — and exp(−r/5) rewards it for that. The advantages are 0.373 mm and 0.437 mm, i.e. **71 % and 83 %** of the 0.527 mm the penalty prices. The penalty is therefore mostly spent cancelling an advantage before it prices anything, and the net effect measured on the same capture is a **3.1 %** confidence reduction (σ_plane 0.609 against 0.628) for a plane 18 mm wrong and a 2.33× volume over-read.
+
+**Only one capture can price it, and the sign is what says so.** On `1785901032716` the same subtraction gives 2.787 mm, and that is not a fallback error: Decision 30 established that this capture's highest-support candidate is the **table**, so the two planes are two fits of one surface. The discriminator is Decision 30's proposed sign, used here as an analysis tool rather than a guard — the median signed inner-band height of the failing sectors is **−9.680 mm** on the first capture (the candidate is the raised support, the ring escaped downward) and **+18.021 mm** on the second (the candidate is what the ring escaped onto). The 2.787 mm is kept as what it is: a Req 4.3 agreement figure between two independent fitters on one surface, inside `ringBandMm`.
+
+**The obvious per-capture substitute is measured and rejected.** The fallback path already persists a ring measure (Req 6.1), so pricing each fallback from it looks free. It does not track the quantity: the ring median reads 4.244 mm against an 18.370 mm offset (**0.231×**) and 6.888 mm against 2.787 mm (**2.471×**) — low where the offset is real, high where it is not. The cause is Decision 33's: the ring sits 8–25 mm out and the plate ends inside it in five of eight directions, so the median averages support and surroundings instead of reading either. Wrong in both directions is worse than wrong in one, because no scale factor repairs it.
+
+### Rationale
+
+Setting the constant to the measured ceiling would be the same circularity Req 3.7 forbids for the sector trio, arriving from the other side. The fallback fires in two distinct situations: when a raised support exists and the restricted fit was rejected, where the error is the support height and the honest penalty is ≈ 0.025; and when the food rests directly on the surrounding surface, where the edge-band plane *is* the support plane and the honest penalty is 1. One multiplicative constant must price the mixture, and the mixture weight is precisely Req 4.5's fallback rate — which has no denominator until model-production Bucket C. The two owed figures are therefore one dependency, not two, and pricing the constant at 0.025 today would charge every capture for a plate that half of them do not have.
+
+Measuring per food sample rather than on one ray is not a refinement, it is the difference between a number and an artefact. The 7.18° tilt between the two planes spreads the offset from 7.96 mm to 28.61 mm across a single food region — a 3.6× range — so even a per-capture price is a single number for an error that is not uniform over the food it is charged against. That is worth recording against any future proposal to make the penalty adaptive.
+
+The residual finding is the part that changes how Req 4.6 should be read. The criterion compares against "a restricted fit of *equal* residual", and no such fit exists on either capture: the fallback's residual is lower, because a plane fitted to a large clean table is better conditioned than one fitted to a plate top. So the penalty's first 0.4 mm buys nothing, and Req 4.6 is satisfied on the real comparison by 3 % rather than by the 10 % the constant appears to give. Decision 12's argument for keeping the penalty multiplicative and separate from the residual is strengthened by this — the residual genuinely cannot carry the error — but its sufficiency at 0.9 is not.
+
+### Alternatives Considered
+
+- **Set the penalty to the measured ceiling of 0.025** - The corpus has priced it; charge what it costs - Rejected because the corpus contains one raised-support capture and no capture of the other leg. A fallback on food resting directly on the table is a *correct* plane, and 0.025 would report it at a fortieth of the confidence it earns. The mixture weight is Req 4.5's fallback rate, absent until Bucket C.
+- **Price each fallback from its persisted ring median** - The measurement is already recorded on the fallback path, so the constant could become a per-capture function at no storage cost - Rejected on measurement: the ratio of ring median to offset at the food is 0.231 on one capture and 2.471 on the other. It is the right *sign* (Req 3.1) and the wrong size, in both directions.
+- **Retire the penalty and let the residual carry the fallback's error** - One channel is simpler than two - Rejected, and the measurement is what rejects it: the fallback's residual is *lower* than the restricted fit's on both captures, so the residual channel would report the fallback as the better fit. This is Decision 12's argument, now with numbers.
+- **Record Req 4.6 as satisfied and close the figure** - The shipped 0.9 does make the fallback report lower confidence than the restricted fit on both captures - Rejected because "satisfied" and "correct" are different claims and the gap between them is 35×. A criterion any value in (0, 1) meets is not evidence for the value chosen, and task 26 exists to say where numbers come from.
+
+### Consequences
+
+**Positive:**
+
+- The last untouched figure in task 26 now has a derivation, a denomination, and a measured bound, rather than a value that mirrored an unrelated constant.
+- The over-report is attributable and reproducible: 35.5×, from one capture, with the volume cross-check agreeing to ≈ 5 %.
+- A plausible design change — pricing the fallback from the persisted ring median — is closed on evidence before anyone builds it.
+- Decision 12's separation of the penalty from the residual is confirmed by measurement rather than by argument, and the reason is the opposite of the intuitive one: the fallback's residual is *better*, not worse.
+- Decision 30's proposed sign earns a second use. It is what tells a priceable capture from an unpriceable one here, which is independent evidence that the sector measure should carry it.
+- `fallbackPenalty` is now known to depend on Req 4.5's fallback rate, so two owed figures collapse into one gate at Bucket C.
+
+**Negative:**
+
+- The shipped 0.9 is now known to be wrong on the only evidence in existence and is left in place, so the feature ships a confidence signal that under-reports the fallback's cost by a factor of 35 on a capture like `1785135663727`.
+- The ceiling rests on **one** capture; the second cannot price the fallback at all, and no planned capture supplies the other leg — food resting directly on the surrounding surface, where the honest penalty is 1.
+- The offset is not uniform over the food (7.96–28.61 mm across one capture), so a single multiplicative constant is a coarse instrument even once the mixture is known.
+- Task 26 stays open and task 27 stays blocked behind it; nothing here needs a capture, and nothing here closes a constant.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`fallbackPlane`, `foodOffsetsMm` and two derivation tests), the `supportPlaneFallbackPenalty` comment in `MedataCore/Sources/Confidence/Confidence.swift`, the `SupportPlaneTests` dependency list in `Package.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---

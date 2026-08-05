@@ -1,4 +1,5 @@
 import CaptureKit
+import Confidence
 import Foundation
 import PortableContracts
 @testable import SupportPlane
@@ -965,6 +966,220 @@ struct SupportPlaneCorpusMeasurementTests {
 
     static func angleDeg(_ a: Vec3, _ b: Vec3) -> Float {
         acos(SupportRegion.clampedCosine(a.normalised().dot(b.normalised()))) * 180 / .pi
+    }
+
+    // MARK: - Req 4.6: what the fallback costs
+
+    // `Confidence.supportPlaneFallbackPenalty = 0.9` is the last `[owed]` figure no
+    // derivation has touched, and it is not a bar a guard fires on — it is a price. Req
+    // 4.6 asks only that the fallback report "no higher than a restricted fit of equal
+    // residual", and every value in (0, 1) satisfies that, so compliance says nothing
+    // about the number.
+    //
+    // The number's denomination comes from the curve it multiplies. `sigmaPlane` is
+    // exp(−r/5) with r in millimetres, so a penalty p asserts that the fallback carries
+    // −5·ln(p) mm of extra plane error, and 0.9 prices it at 0.53 mm. That is a
+    // measurable quantity: it is the height the edge-band plane adds to a food pixel
+    // against the plane the design intends to select.
+    //
+    // Not every capture can price it. The offset is only a fallback ERROR where the
+    // candidate it is measured against is the raised support; where the best-support
+    // candidate is the surrounding surface itself (Decision 30 measured that on
+    // `1785901032716`), the same subtraction compares two fits of ONE surface and says
+    // nothing about what falling back costs. The two are told apart by the sign Decision
+    // 30 proposed the sector measure should carry: failing sectors read negative when the
+    // candidate is the raised support and the ring escaped downward, positive when the
+    // candidate is what the ring escaped ONTO.
+    @Test("the corpus prices the fallback far above the shipped penalty, on the one capture that can")
+    func fallbackPenaltyIsBoundedAboveByTheMeasuredPlaneError() throws {
+        let shippedEquivalentMm = -5 * Foundation.log(Confidence.supportPlaneFallbackPenalty)
+        var pricedByCapture: [(name: String, offsetMm: Float, implied: Float)] = []
+        var sameSurface: [(name: String, offsetMm: Float)] = []
+
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let (g, samples) = try #require(Self.prepared(name))
+            let fallback = try #require(Self.fallbackPlane(slice))
+            let intended = try #require(Self.bestCandidate(name))
+            let ray = try #require(Self.foodCentroidRay(slice))
+
+            let offsets = Self.foodOffsetsMm(
+                fallback: fallback, intended: intended, geometry: g)
+            let offsetMm = offsets.reduce(0, +) / Float(offsets.count)
+            let sortedOffsets = offsets.sorted()
+            let p10Mm = sortedOffsets[Int(0.10 * Float(sortedOffsets.count))]
+            let p90Mm = sortedOffsets[min(sortedOffsets.count - 1,
+                                          Int(0.90 * Float(sortedOffsets.count)))]
+            let implied = Foundation.exp(-offsetMm / 5)
+            let rayOffsetMm = Self.planeDepthMm(
+                normal: fallback.normal, d: fallback.distanceMm, ray: ray)
+                - Self.planeDepthMm(normal: intended.normal, d: intended.d, ray: ray)
+
+            // What the two paths report for the same capture, penalty included.
+            let sigmaFallback = Foundation.exp(-fallback.residualMm / 5)
+                * Confidence.supportPlaneFallbackPenalty
+            let sigmaIntended = Foundation.exp(-intended.residualMm / 5)
+
+            // Decision 30's sign, used as an analysis tool rather than a guard: the median
+            // signed inner-band height of the sectors that fail `sectorSupportMin`.
+            let fractions = Self.sectorFractions(
+                samples: samples, geometry: g, normal: intended.normal, d: intended.d)
+            let medians = Self.sectorMedianMm(
+                samples: samples, geometry: g, normal: intended.normal, d: intended.d)
+            let failing = zip(fractions, medians)
+                .filter { $0.0.total > 0 && $0.0.fraction < SupportRegion.sectorSupportMin }
+                .map(\.1).sorted()
+            let failingMedianMm = try #require(failing.isEmpty ? nil : failing[failing.count / 2])
+            let isRaisedSupport = failingMedianMm < 0
+
+            let tiltDeg = Self.angleDeg(fallback.normal, intended.normal)
+
+            print("\(name): fallback adds \(fmt(offsetMm)) mm to the mean food pixel"
+                  + " (p10 \(fmt(p10Mm)), p90 \(fmt(p90Mm)), tilt \(fmt(tiltDeg))°,"
+                  + " centroid ray \(fmt(rayOffsetMm)) mm);"
+                  + " failing-sector median \(fmt(failingMedianMm)) mm ->"
+                  + " \(isRaisedSupport ? "raised support" : "surrounding surface");"
+                  + " residuals \(fmt(fallback.residualMm)) vs \(fmt(intended.residualMm)) mm;"
+                  + " sigmaPlane \(fmt(sigmaFallback)) vs \(fmt(sigmaIntended));"
+                  + " implied penalty \(fmt(implied)) against shipped"
+                  + " \(fmt(Confidence.supportPlaneFallbackPenalty))"
+                  + " (\(fmt(shippedEquivalentMm)) mm)")
+
+            // The edge-band plane lies below the best candidate across the food, not merely
+            // on average — p10 is the assertion, so a tilt that put a tenth of the food on
+            // the other side would fail here rather than average away.
+            let reversed = "\(name) fallback plane sits nearer the camera than the best"
+                + " candidate over part of the food (p10 \(p10Mm) mm) — Req 3.3's premise"
+                + " fails on the fallback side"
+            #expect(p10Mm > 0, "\(reversed)")
+
+            // The residual channel does not carry the error; it works the other way. The
+            // edge-band plane is a GOOD fit to the wrong surface, so its residual is
+            // lower than the restricted fit's, and exp(−r/5) rewards it for that. This is
+            // why Decision 12 made the penalty a separate factor — and it means the
+            // penalty must first cancel a residual advantage before it prices anything.
+            let advantageMm = intended.residualMm - fallback.residualMm
+            let carried = "\(name) fallback residual \(fallback.residualMm) mm now exceeds"
+                + " the restricted fit's \(intended.residualMm) mm — the residual channel"
+                + " has started carrying part of the fallback's error"
+            #expect(advantageMm >= 0, "\(carried)")
+            let spent = "\(name) residual advantage \(advantageMm) mm is now under half the"
+                + " \(shippedEquivalentMm) mm the penalty prices — the penalty is no longer"
+                + " mostly spent cancelling it"
+            #expect(advantageMm > shippedEquivalentMm / 2, "\(spent)")
+            // Req 4.6's practical form does hold, and by very little: the fallback reports
+            // lower confidence than the restricted fit on the SAME capture, by 3 %.
+            #expect(sigmaFallback < sigmaIntended,
+                    "\(name) fallback reports \(sigmaFallback) against \(sigmaIntended)")
+            #expect(sigmaFallback / sigmaIntended > 0.95,
+                    "\(name) net confidence reduction is \(1 - sigmaFallback / sigmaIntended)")
+
+            if isRaisedSupport {
+                pricedByCapture.append((name, offsetMm, implied))
+            } else {
+                sameSurface.append((name, offsetMm))
+            }
+        }
+
+        // The corpus's shape, asserted so a capture that changes it is noticed: one
+        // capture whose best candidate is the plate top and can price the fallback, one
+        // whose best candidate is the table and cannot.
+        let shape = "the corpus no longer splits one raised-support capture against one"
+            + " surrounding-surface capture (\(pricedByCapture.count) and"
+            + " \(sameSurface.count)) — the ceiling below rests on a different sample"
+        #expect(pricedByCapture.count == 1 && sameSurface.count == 1, "\(shape)")
+
+        // What the capture that cannot price it does say: two independent fitters, one
+        // colour-grid and one depth-grid, land within `ringBandMm` of each other on the
+        // same surface. That is a Req 4.3 agreement figure, not a fallback cost.
+        for entry in sameSurface {
+            let apart = "\(entry.name) best candidate and edge-band plane are"
+                + " \(entry.offsetMm) mm apart on what the sign says is one surface —"
+                + " further than ringBandMm, so they are no longer the same surface"
+            #expect(entry.offsetMm < SupportRegion.ringBandMm, "\(apart)")
+        }
+
+        // The finding. On the one capture that can price it, the fallback carries an
+        // order of magnitude more plane error than the shipped penalty charges for.
+        let priced = try #require(pricedByCapture.first)
+        print("corpus ceiling on supportPlaneFallbackPenalty \(fmt(priced.implied)) from"
+              + " \(priced.name)'s \(fmt(priced.offsetMm)) mm, shipped"
+              + " \(fmt(Confidence.supportPlaneFallbackPenalty)) (\(fmt(shippedEquivalentMm)) mm),"
+              + " over-report \(fmt(Confidence.supportPlaneFallbackPenalty / priced.implied))x")
+        let inside = "the shipped penalty \(Confidence.supportPlaneFallbackPenalty) now sits"
+            + " inside the measured ceiling \(priced.implied) — the over-report is closed"
+            + " and the constant can be set rather than bounded"
+        #expect(Confidence.supportPlaneFallbackPenalty > priced.implied, "\(inside)")
+        #expect(Confidence.supportPlaneFallbackPenalty / priced.implied > 5)
+    }
+
+    // The obvious substitute for a constant, measured and rejected before anyone builds
+    // it. The fallback path already persists a ring measure (Req 6.1, task 12), so a
+    // penalty priced per capture from it looks free — read the ring median, charge for it.
+    //
+    // It does not track the quantity it would have to. The ring sits 8–25 mm out from the
+    // food and Decision 33 measured the plate ending inside it in five of eight
+    // directions, so the median averages support and surroundings rather than reading
+    // either. On the corpus it lands 4.3x LOW where the offset is real and 2.4x HIGH where
+    // the two planes are the same surface — wrong in both directions, which is worse than
+    // wrong in one, because no single scale factor repairs it.
+    @Test("the fallback's persisted ring median does not track its offset at the food")
+    func fallbackRingMedianDoesNotTrackTheOffsetAtTheFood() throws {
+        var ratios: [Float] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let fallback = try #require(Self.fallbackPlane(slice))
+            let intended = try #require(Self.bestCandidate(name))
+            let ring = try #require(SupportRegion.ringStatistics(
+                for: fallback, depth: slice.depth,
+                foodMask: slice.foodMask, intrinsics: slice.colourIntrinsics))
+
+            let offsets = Self.foodOffsetsMm(
+                fallback: fallback, intended: intended, geometry: g)
+            let offsetMm = offsets.reduce(0, +) / Float(offsets.count)
+            print("\(name): fallback ring median \(fmt(ring.medianMm)) mm against an offset"
+                  + " at the food of \(fmt(offsetMm)) mm"
+                  + " — ratio \(fmt(ring.medianMm / offsetMm))")
+
+            // The sign is right on both — the ring lies above the fallback plane, which is
+            // the Req 3.1 signature of a plane on the surrounding surface. It is the size
+            // that does not carry.
+            #expect(ring.medianMm > 0, "\(name) fallback ring median \(ring.medianMm) mm")
+            ratios.append(ring.medianMm / offsetMm)
+        }
+
+        let low = try #require(ratios.min()), high = try #require(ratios.max())
+        print("fallback ring median / offset at the food spans \(fmt(low))…\(fmt(high))")
+        let tracks = "the fallback ring median now tracks the offset at the food across the"
+            + " corpus (\(low)…\(high)) — the persisted measure may price the fallback per"
+            + " capture after all, and Decision 36's rejection of it should be rechecked"
+        #expect(low < 0.5 && high > 2, "\(tracks)")
+    }
+
+    // The height the edge-band plane adds to each food pixel against the plane the design
+    // intends to select — per sample, because the two planes are up to 7° apart and a
+    // single ray would stand for nothing. Volume is integrated per-pixel above the plane,
+    // so this is the quantity the fallback's error is denominated in, and its mean is what
+    // the confidence curve's millimetres refer to. (Req 5.1's tolerance can use one ray,
+    // Decision 35, because there the two fits are of the SAME surface.)
+    static func foodOffsetsMm(fallback: SupportPlane,
+                              intended: SupportRegion.PlaneCandidate,
+                              geometry g: SupportRegion.DepthGeometry) -> [Float] {
+        g.foodIndices.map { index in
+            let p = g.points[index]
+            return (fallback.normal.dot(p) - fallback.distanceMm)
+                - (intended.normal.dot(p) - intended.d)
+        }
+    }
+
+    // The edge-band plane — what Req 4.3 says the fallback returns unmodified. It runs
+    // over the colour grid rather than the depth one, so it is the expensive half of this
+    // pass; only the Req 4.6 derivation needs it.
+    static func fallbackPlane(_ slice: DepthSlice) -> SupportPlane? {
+        LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
+            depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+            foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)).plane
     }
 
     // MARK: - Helpers

@@ -165,6 +165,32 @@ And what Decision 35 settled — the two Req 5.1 figures, which are not constant
   and the bar is 3.4× stricter on device. Nothing has hit it because pre-checkpoint N5k
   ingestion carries no food mask; model-production Bucket C is when it will.
 
+And what Decision 36 measured — `fallbackPenalty`, which lives in `Confidence`, not
+`SupportRegion`, and is a price rather than a bar:
+
+- **It is denominated in millimetres of plane error.** σ_plane is exp(−r/5), so a penalty p
+  charges −5·ln(p) mm. The shipped **0.9 charges 0.53 mm**. Req 4.6 ("no higher than a
+  restricted fit of *equal* residual") is met by any value in (0, 1), so it never constrained
+  the number.
+- **The corpus measures 18.37 mm and the ceiling is 0.025** — a 35.5× over-report. Measured
+  as the mean over food *samples*, not on the centroid ray Decision 35 uses: the edge-band
+  and best-candidate planes are 7.18° apart, so the offset spans 7.96–28.61 mm across one
+  food region. Corroborated by the 408 cm³ `SupportPlaneRegressionSliceTests` measures
+  between the pre-feature and corrected volumes.
+- **The residual channel works against the penalty.** The edge-band plane is a *good* fit to
+  the wrong surface, so its residual is **lower** than the restricted fit's (1.95 vs 2.33 mm)
+  and exp(−r/5) rewards it. 71 % of the penalty is spent cancelling that; the net confidence
+  reduction on the same capture is **3.1 %**. This is Decision 12's argument for keeping the
+  penalty separate from the residual, now with numbers — and the reason is the opposite of
+  the intuitive one.
+- **The bound is one-sided and the value waits on Bucket C.** A fallback on food resting
+  directly on the surrounding surface is the *correct* plane, penalty 1, so one constant
+  prices a mixture whose weight is Req 4.5's fallback rate. Two owed figures, one gate.
+- **Do not price it from the persisted ring median.** Measured and rejected: the ratio of
+  fallback ring median to offset at the food is **0.231** on one capture and **2.471** on the
+  other — low where the offset is real, high where it is not, for the Decision 33 reason
+  (the ring sits 8–25 mm out, where the plate has already ended in five of eight directions).
+
 Three traps for anyone measuring against this corpus:
 
 - **Adding a slice is not the same as adding evidence.** A third slice is committed and

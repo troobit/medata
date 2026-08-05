@@ -232,7 +232,11 @@ let package = Package(
         ),
         .testTarget(
             name: "SupportPlaneTests",
-            dependencies: ["SupportPlane", "CaptureKit", "CardDetection", "PortableContracts"],
+            // `Confidence` is here for the task 26 corpus pass alone: Req 4.6's
+            // `supportPlaneFallbackPenalty` is priced in millimetres of plane error, and
+            // the millimetres are measured on these slices.
+            dependencies: ["SupportPlane", "CaptureKit", "CardDetection", "PortableContracts",
+                           "Confidence"],
             path: "MedataCore/Tests/SupportPlaneTests",
             // Depth-only slices of the two field captures Reqs 6.2/7.1 name, cut by
             // `tools/fixture_slice.py`. ~290 KB each against the 195 MB bundles they
