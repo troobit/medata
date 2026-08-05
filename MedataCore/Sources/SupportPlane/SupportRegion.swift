@@ -154,8 +154,23 @@ public enum SupportRegion {
     // Decision 30 records that the measure itself is blind where it matters: the count
     // takes |height|, so a correct plane whose ring escaped DOWNWARD onto the table
     // (failing sectors −6.8…−32.6 mm) and a table plane with part of its ring on the
-    // plate (failing sectors +16.6…+19.8 mm) both score 5 of 8. Setting the trio waits
-    // on that proposal as well as on the captures.
+    // plate (failing sectors +16.6…+19.8 mm) both score 5 of 8.
+    //
+    // The replacement rule is now stated (Decision 40): a FAILING sector whose signed
+    // inner-band median exceeds +ringBandMm is CROSSED — the support surface is still
+    // there and this plane is not on it — and a candidate is rejected when more than
+    // `maxCrossedSectors` sectors are crossed. Below −ringBandMm the sector has ESCAPED,
+    // which is the plate ending (Decision 33) and not grounds for rejection. The
+    // magnitude bar costs nothing: it is `ringBandMm`, already [inherited], and the
+    // separating window is −6.794…+16.603 mm, so it sits ~11.7 mm clear on both sides.
+    // Restricting to FAILING sectors is what earns that — over all sectors the window is
+    // +3.846…+5.974 mm, a tenth as wide, and the bar would be fitted rather than
+    // inherited.
+    //
+    // Nothing is rewired here. `maxCrossedSectors` is bracketed 0…2 by the corpus and
+    // [owed] to prerequisites capture 6; shipping the rule means asserting that count,
+    // which is what Req 3.7 forbids for exactly these constants. Setting the trio waits
+    // on the captures alone now, not on a proposal as well.
     public static let ringSectorCount = 8
     public static let sectorSupportMin: Float = 0.5
     public static let minSupportingSectors = 6

@@ -275,6 +275,118 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // Decision 30 recorded, as a PROPOSAL, that the sector count takes `|height|` and so
+    // reads the same 5 of 8 for two opposite scenes. It left the proposal unresolved on
+    // one ground: a rule that rejects on signed sectors "needs a threshold, and that
+    // threshold has the same evidence problem as every other `[owed]` constant".
+    //
+    // That ground is what this measures, and it does not hold. The threshold the rule
+    // needs on the MAGNITUDE axis is `ringBandMm`, which is `[inherited]` from
+    // `LiDARPlaneFitter.inlierBandMm` and already defines "supported" for the very
+    // sectors being classified — so the signed rule adds no new millimetre constant. What
+    // it does add is a COUNT, and that count the corpus brackets rather than sets.
+    //
+    // Restricting the sign test to sectors that already FAIL `sectorSupportMin` is what
+    // makes the bar inherited rather than fitted: across all sectors the separating bar
+    // has to sit in a 2 mm window, and across failing sectors it has a 23 mm one that
+    // contains both `ringBandMm` and zero. Both readings are recorded below.
+    @Test("the sign of a failing sector separates the two scenes its count cannot")
+    func failingSectorSignSeparatesWhatTheCountCannot() throws {
+        var byCapture: [String: SectorSigns] = [:]
+
+        for name in Self.captures {
+            let (g, samples) = try #require(Self.prepared(name))
+            let candidates = try #require(Self.candidates(name))
+            let best = try #require(Self.bestCandidate(name))
+            // Every candidate, not just the intended one: six planes of known character
+            // is the widest reading a two-capture corpus supports, and a rule that only
+            // works on the two rows it was written from is not a rule.
+            for (i, candidate) in candidates.enumerated() {
+                let signs = Self.sectorSigns(
+                    samples: samples, geometry: g, normal: candidate.normal, d: candidate.d)
+                print("\(name) candidate \(i): supporting \(signs.supporting)/"
+                      + "\(SupportRegion.ringSectorCount), failing \(signs.failing),"
+                      + " failing medians \(signs.failingMedians.map { fmt($0) }),"
+                      + " crossed(failing) \(signs.crossedFailing),"
+                      + " escaped(failing) \(signs.escapedFailing),"
+                      + " crossed(all) \(signs.crossedAll)")
+                if candidate.normal == best.normal, candidate.d == best.d {
+                    byCapture[name] = signs
+                }
+            }
+        }
+
+        let plate = try #require(byCapture["1785135663727"])   // ring median −0.93 mm
+        let table = try #require(byCapture["1785901032716"])   // ring median +3.04 mm
+
+        // The premise. Decision 30's two rows agree exactly in the statistic the guard
+        // reads, which is why no `minSupportingSectors` separates them.
+        let premise = "the two intended candidates no longer score the same supporting count"
+            + " (\(plate.supporting) vs \(table.supporting)) — Decision 30's premise has moved"
+            + " and the signed rule has to be re-derived"
+        #expect(plate.supporting == table.supporting, "\(premise)")
+
+        // The finding. The failing sectors of a candidate that IS the support surface all
+        // read below it — the ring ran off the plate onto the table. The failing sectors
+        // of a candidate that is the SURROUNDING surface all read above it — part of the
+        // ring is still on the plate. Neither capture mixes the two signs.
+        let escape = "1785135663727's failing sectors are no longer uniformly below its"
+            + " plane (\(plate.failingMedians.map { fmt($0) })) — the escape reading is not clean"
+        #expect(plate.crossedFailing == 0 && plate.escapedFailing == plate.failing.count,
+                "\(escape)")
+        let crossing = "1785901032716's failing sectors are no longer uniformly above its"
+            + " plane (\(table.failingMedians.map { fmt($0) })) — the crossing reading is not clean"
+        #expect(table.escapedFailing == 0 && table.crossedFailing == table.failing.count,
+                "\(crossing)")
+
+        // The magnitude bar is inherited, not owed. Any bar strictly between the two
+        // captures' extreme failing medians separates them, and `ringBandMm` is inside
+        // that window with room on both sides.
+        let plateWorst = try #require(plate.failingMedians.max())
+        let tableBest = try #require(table.failingMedians.min())
+        print("failing-sector window \(fmt(plateWorst))…\(fmt(tableBest)) mm,"
+              + " width \(fmt(tableBest - plateWorst)) mm,"
+              + " ringBandMm \(SupportRegion.ringBandMm) sits"
+              + " \(fmt(SupportRegion.ringBandMm - plateWorst)) mm above the floor and"
+              + " \(fmt(tableBest - SupportRegion.ringBandMm)) mm below the ceiling")
+        let window = "ringBandMm = \(SupportRegion.ringBandMm) no longer lies between the"
+            + " captures' extreme failing medians (\(fmt(plateWorst))…\(fmt(tableBest))) — the"
+            + " signed rule would need a bar of its own after all"
+        #expect(plateWorst < SupportRegion.ringBandMm
+                && SupportRegion.ringBandMm < tableBest, "\(window)")
+
+        // Why the rule is stated over FAILING sectors. Applied to every sector, the
+        // separating window is the plate's highest median against the table's lowest
+        // CROSSED one, and that collapses to a fraction of the width above. `ringBandMm`
+        // survives inside it, but by about a millimetre — a bar with that much headroom
+        // is being fitted to the corpus rather than inherited, which Req 3.7 forbids.
+        let plateHighest = try #require(plate.medians.max())
+        let tableCrossedLowest = try #require(
+            table.medians.filter { $0 > SupportRegion.ringBandMm }.min())
+        print("all-sector window \(fmt(plateHighest))…\(fmt(tableCrossedLowest)) mm,"
+              + " width \(fmt(tableCrossedLowest - plateHighest)) mm;"
+              + " crossed(all) plate \(plate.crossedAll), table \(table.crossedAll)")
+        let allSector = "the all-sector window is no longer the narrower of the two — the"
+            + " rule need not be restricted to failing sectors"
+        #expect(tableCrossedLowest - plateHighest < tableBest - plateWorst, "\(allSector)")
+
+        // The COUNT is what stays owed. The rule fires when more than `maxCrossedSectors`
+        // failing sectors read above the plane; the corpus says that ceiling is at least 0
+        // and at most one below the table candidate's count, and says nothing inside.
+        // Prerequisites capture 6 — food filling a small plate — is what sets it.
+        let ceilingHigh = table.crossedFailing - 1
+        print("maxCrossedSectors bracketed \(plate.crossedFailing)…\(ceilingHigh)"
+              + " (\(ceilingHigh - plate.crossedFailing + 1) admissible values)")
+        let bracket = "the corpus no longer brackets maxCrossedSectors — plate reads"
+            + " \(plate.crossedFailing) crossed and table reads \(table.crossedFailing),"
+            + " so there is no ceiling admitting one and rejecting the other"
+        #expect(plate.crossedFailing <= ceilingHigh, "\(bracket)")
+        // Bracketed, NOT set: more than one value survives, so this is not a derivation.
+        let collapsed = "the bracket has collapsed to a single value — maxCrossedSectors"
+            + " would be measured rather than owed, and the design must be updated to say so"
+        #expect(ceilingHigh - plate.crossedFailing >= 1, "\(collapsed)")
+    }
+
     // `minCandidateSamples` was one number answering two unrelated questions, and the
     // whole-fit one it was asked at `fitFoodSupportPlane` had an exact answer sitting
     // beside it. `ringStatistics` returns nil unless every radial band clears
@@ -1539,6 +1651,43 @@ struct SupportPlaneCorpusMeasurementTests {
             heights[s].append(normal.dot(g.points[idx]) - d)
         }
         return heights.map { $0.isEmpty ? .nan : $0.sorted()[$0.count / 2] }
+    }
+
+    // The sector measure with its sign put back (Decision 30's proposal). `supporting` is
+    // exactly what `ringStatistics` computes today; everything else is what the absolute
+    // value discards. A failing sector reading BELOW the plane means the ring left the
+    // support surface — the plate ended. One reading ABOVE it means the support surface
+    // is still there and the plane is not on it.
+    struct SectorSigns {
+        let supporting: Int          // the shipped unsigned count
+        let medians: [Float]         // signed inner-band median per sector
+        let failing: [Int]           // sector indices below `sectorSupportMin`
+        let failingMedians: [Float]
+        let crossedFailing: Int      // failing sectors reading above +ringBandMm
+        let escapedFailing: Int      // failing sectors reading below −ringBandMm
+        let crossedAll: Int          // any sector reading above +ringBandMm
+    }
+
+    static func sectorSigns(samples: SupportRegion.RingSamples,
+                            geometry g: SupportRegion.DepthGeometry,
+                            normal: Vec3, d: Float) -> SectorSigns {
+        let sectors = sectorFractions(samples: samples, geometry: g, normal: normal, d: d)
+        let medians = sectorMedianMm(samples: samples, geometry: g, normal: normal, d: d)
+        // Empty sectors count as neither supporting nor failing, as in `ringStatistics`.
+        let failing = sectors.indices.filter {
+            sectors[$0].total > 0 && sectors[$0].fraction < SupportRegion.sectorSupportMin
+        }
+        let failingMedians = failing.map { medians[$0] }
+        return SectorSigns(
+            supporting: sectors.filter {
+                $0.total > 0 && $0.fraction >= SupportRegion.sectorSupportMin
+            }.count,
+            medians: medians,
+            failing: failing,
+            failingMedians: failingMedians,
+            crossedFailing: failingMedians.filter { $0 > SupportRegion.ringBandMm }.count,
+            escapedFailing: failingMedians.filter { $0 < -SupportRegion.ringBandMm }.count,
+            crossedAll: medians.filter { $0 > SupportRegion.ringBandMm }.count)
     }
 
     struct NoiseSummary {
