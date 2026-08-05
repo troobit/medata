@@ -243,10 +243,23 @@ func loadFixtures(dir: String, sha256: String) throws -> [PbMealFixture] {
     try FixtureLoader.load(from: URL(fileURLWithPath: dir), checkpointSHA256: sha256)
 }
 
-func buildCalInputs(fixtures: [PbMealFixture], palette: ClassPalette,
-                    db: any FoodDatabase, edgeMm: Float) -> [MealCalibrationInput] {
+// The palette is resolved PER FIXTURE from its own `paletteVersion`, not taken
+// from the caller: a device bundle recorded against the promoted 36-channel v2
+// model was being run through a hard-coded v1 palette, so `C` was 35 while the
+// probability tensor held 36 channels and `ProbabilityTensor`'s size
+// precondition trapped the whole run (found replaying a real bundle,
+// capture-bundle-recorder task 4). `ClassPalette.standard(for:)` falls back to
+// v1 for an empty or unrecognised label, so N5k and legacy fixtures behave
+// exactly as before — only v2 bundles change, and today they cannot run at all.
+func paletteForFixture(_ fixture: PbMealFixture) -> ClassPalette {
+    ClassPalette.standard(for: fixture.paletteVersion)
+}
+
+func buildCalInputs(fixtures: [PbMealFixture], db: any FoodDatabase,
+                    edgeMm: Float) -> [MealCalibrationInput] {
     fixtures.compactMap { fx in
-        try? FixtureRunner.run(fixture: fx, palette: palette, database: db, voxelEdgeMm: edgeMm)
+        try? FixtureRunner.run(
+            fixture: fx, palette: paletteForFixture(fx), database: db, voxelEdgeMm: edgeMm)
     }
 }
 
@@ -278,10 +291,8 @@ func runAccuracy(args: Args) throws {
         fputs("accuracy requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
     let db = try GRDBFoodDatabase.bundled()
-    let palette = ClassPalette.v1Standard
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
-    let calInputs = buildCalInputs(fixtures: fixtures, palette: palette, db: db,
-                                   edgeMm: args.voxelEdgeMm)
+    let calInputs = buildCalInputs(fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm)
     let evalMeals: [MealEvalInput] = calInputs.map { m in
         MealEvalInput(
             fixtureID: m.fixtureID, capturePath: m.capturePath,
@@ -594,11 +605,15 @@ func runSegBench(args: Args) throws {
     guard !args.fixturesDir.isEmpty, !args.checkpointSHA256.isEmpty else {
         fputs("seg-bench requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
-    let palette = ClassPalette.v1Standard
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
+    // Same per-fixture resolution as buildCalInputs. This path already guarded
+    // the byte count and so degraded to silently dropping every v2 bundle
+    // rather than trapping — a quieter failure, equally wrong.
+    let palette = fixtures.first.map(paletteForFixture) ?? .v1Standard
     let samples: [SegBenchSample] = fixtures.compactMap { fx in
         let intr = CameraIntrinsics(pb: fx.nadirIntrinsics)
-        let W = intr.imageWidth; let H = intr.imageHeight; let C = palette.totalClasses
+        let fxPalette = paletteForFixture(fx)
+        let W = intr.imageWidth; let H = intr.imageHeight; let C = fxPalette.totalClasses
         guard fx.nadirProbs.count == H * W * C * 2 else { return nil }
         let predicted = argmaxFromFP16Probs(probsData: fx.nadirProbs,
                                             width: W, height: H, classes: C)

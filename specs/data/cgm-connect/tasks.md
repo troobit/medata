@@ -89,6 +89,22 @@ references:
   - Stream: 1
 
 - [ ] 14. On-device verify (iPhone 16 Pro): connect HealthKit against real Health glucose, confirm backfill + a live reading land as bsl events and the Graph refreshes; connection status shows in Settings <!-- id:oecpdn3 -->
-  - 2026-08-05 evidence: the device DB holds 282 librelinkup rows and ZERO healthkit rows, so this source has never produced. It is not a nice-to-have — HealthKit is the only path with OS-driven immediate wakes (enableBackgroundDelivery frequency: .immediate, entitlement already present), whereas LibreLinkUp is pinned to a 15-minute poll by the vendor's ban risk. See docs/agent-notes/glucose-ingestion.md 'Update cadence'
+  - 2026-08-05 evidence: the device DB holds 282 librelinkup rows and ZERO healthkit rows, so this source has never produced. Verify it for COMPLETENESS (second source, backfill, resilience if LibreLinkUp auth breaks) — NOT for latency: Abbott's Libre app does not write to Apple Health as readings are measured, so an immediate HKObserverQuery wake still carries stale data. See docs/agent-notes/glucose-ingestion.md 'HealthKit is NOT the real-time lever for Abbott'
   - Blocked-by: oecpdn2 (make test green Persistence parity, ingestion logic, firewall. make build, make spell)
   - Stream: 1
+
+- [x] 15. Adaptive LibreLinkUp poll interval (Decision 12)
+  - nextPollInterval(after:now:) — pure static on LibreLinkUpGlucoseSource: 5 min when the newest reading is below 5.0 mmol/L or the fetch is falling at/faster than TrendsMath.mediumRateThreshold, else the 15-min baseline
+  - currentPollInterval is set after each successful fetch and read before the loop sleeps, so the fetch that just landed governs the wait that follows it
+  - 9 XCTest cases pin every branch incl. the threshold boundary, rising-fast staying at baseline, order independence, and a floor assertion that the urgent interval never drops to the ~3-min ban rate (XCTest 515 -> 524)
+  - Background-fetch earliestBeginDate deliberately unchanged at 15 min — iOS does not honour it as a schedule, so tightening adds vendor exposure without freshness
+  - Prompted by the 2026-08-05 low-alarm event; see docs/agent-notes/glucose-ingestion.md
+  - Requirements: [3.2a](requirements.md#3.2a)
+  - References: decision_log.md
+
+- [ ] 16. STOP — on-device verification of the adaptive poll interval
+  - Confirm on device that a reading below 5.0 mmol/L is followed by a fetch within ~5 min rather than ~15 (Estimation-log-style check: compare consecutive bsl row native instants around a low in Documents/meals.sqlite)
+  - Confirm the interval returns to 15 min once glucose recovers above the threshold and is not falling
+  - Watch for a LibreLinkUp auth failure or rate-limit response during a sustained low — the ban risk this decision accepts; if one appears, raise the urgent interval before anything else
+  - Requirements: [3.2a](requirements.md#3.2a)
+  - References: decision_log.md

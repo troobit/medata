@@ -63,10 +63,10 @@ needs **root** on this machine (`log collect --device-name` refuses otherwise) �
 
 | Order | Spec | Task | What to observe |
 |---|---|---|---|
-| 0 | `myfoodrepo-bridge` | 6 `[-]` | **`sudo make logs-device LOG_LAST=10m`** — confirm `segmenterSource=coreml_ab812dc3aa9d` + `buildStamp=470bb1b-20260804-225023`. Closes task 6, unblocks 7 and 8 |
+| 0 | `myfoodrepo-bridge` | 6 `[-]` | **One capture on the current build** (its new estimation-log row carries the live lineage) **or `sudo make logs-device`**. The 2026-08-04 estimation-log reading was historical — rows show each attempt's own `modelVersion`, newest was 3 Aug — so it proved the 2–3 Aug builds, not this one. Closes task 6, unblocks 7 and 8 |
 | 1 | `estimation/model-production` | prerequisites Stage 7 | **ANE residency** in Xcode's Core ML performance report — the MVP gate; needs Xcode, not the phone |
 | 2 | `myfoodrepo-bridge` | 7, 8 | Point the phone at real meals including a cereal bowl; confirm overlay and carb readings. Tick both ledgers with the model-production prerequisites |
-| 3 | `capture-bundle-recorder` | 4 `[-]` | Pull one bundle to the Mac, replay through HarnessCLI — **do this early, §4 depends on the answer** |
+| 3 | `capture-bundle-recorder` | 4 `[-]` | **Replay half DONE 2026-08-05** — two harness defects found and fixed (palette v1/v2 trap; precondition → throw), device-vs-replay divergence measured at -4.6 %. Device half (Files app, timings, no OOM kill) outstanding |
 | 4 | `estimation-quality` | 7 | ~~Overlay speckle gone, readings stable~~ — **speckle confirmed gone 2026-08-04**, but from the shipped `PostProcessing` cleanup, not the retrain. Task 7 gates the *new recipe* and task 6 has not run, so it stays open (`agent-notes/field-truth-sessions.md`). Accuracy is "hugely improved, not yet as hoped" — an impression, not a measurement, until §4 lands |
 | 5 | `bugfixes/no-food-pixels-on-fruit-plate-mvp` | 8 | Single **and** Double mode (currently BLOCKED behind the next row) |
 | 6 | `bugfixes/lidar-plane-fit-degenerate-on-clean-capture` | 8 | Single and Double; unblocks the row above |
@@ -200,11 +200,19 @@ Overloading it would make the error log silently mix corrections with measuremen
 Until these are addressed, a replayed error figure is **not** the error the device produced. Fixing
 them is what makes §4's log trustworthy; they can follow the first log rows but should not lag far.
 
-1. **The plane-fit path is wrong for handheld captures.** `FixtureRunner.run` routes any fixture with
-   a non-empty `estimatorPath` to `fitPlateRegionPlane`, a centre-seeded flood fill written for the
-   Nutrition5k overhead rig where "the rig centres the plate under the camera". Device bundles always
-   stamp `single_dominant`, so every field capture takes that branch — and handheld captures are not
-   centred. Expect skips and `volumeEstimationFailed` on replay.
+1. **The plane-fit path is wrong for handheld captures — mechanism confirmed, prediction refuted
+   (measured 2026-08-05).** `FixtureRunner.run` routes any fixture with a non-empty `estimatorPath` to
+   `fitPlateRegionPlane`, a centre-seeded flood fill written for the Nutrition5k overhead rig where
+   "the rig centres the plate under the camera". A pulled device bundle does stamp
+   `estimator_path = 'single_dominant'`, so field captures do take that branch. But the predicted
+   consequence — "expect skips and `volumeEstimationFailed` on replay" — did **not** happen: the
+   flood fill found a plate region and the fit succeeded. The real failure mode is quieter and worse
+   for §4's purposes: the replay returned **98.92 g** carbs where the device recorded **103.71 g**
+   for the same attempt, a **-4.6 %** divergence with no error raised. A silent few-percent drift is
+   harder to catch than a crash and directly limits how finely a replayed error figure can be read.
+   One capture is one data point; the divergence needs attributing (plate-region plane vs the
+   device's own fit is the prime suspect — replay's `fitPlaneFromDepth` masks the whole frame) and
+   measuring across more bundles before §4's log can quote per-capture error to better than ~5 %.
 2. **β is pinned to 1.0 on replay** (`let unityBeta = BetaCorrection(entries: [:], defaultBeta: 1.0)`),
    so a replay measures the uncalibrated chain, not the calibrated β the app actually ships.
 3. **Bundles always claim `single_dominant`** even when oblique data is present, so a two-view field

@@ -218,10 +218,64 @@ exists, and why each does not apply here:
   Activities. The app has no Live Activity; it would be a real option if a
   during-the-day glucose Live Activity were ever wanted.
 
-### The actual lever
+### HealthKit is NOT the real-time lever for Abbott — corrected 2026-08-05
 
-**Connect the HealthKit source.** It is implemented, entitled, and producing zero rows —
-the Libre app writes to Apple Health, so connecting it would give OS-driven immediate
-wakes instead of a 15-minute poll, and a denser series than LibreLinkUp's graph endpoint
-returns. This is exactly `specs/data/cgm-connect` task 14, still unverified. Do that before
-considering any entitlement work.
+An earlier version of this note recommended connecting HealthKit to get OS-driven
+immediate wakes. **That is wrong for this sensor and is recorded here so it is not
+re-proposed.** Abbott's Libre app does not integrate with Apple Health in a way that
+delivers readings as they are measured — whatever reaches HealthKit arrives late and
+batched, so `HKObserverQuery` + `frequency: .immediate` fires promptly on a write that was
+itself already stale. The iOS mechanism is genuinely immediate; the vendor's write is not,
+and no entitlement or query configuration changes that.
+
+HealthKit remains worth connecting for **completeness** — a second source, backfill, and
+resilience if LibreLinkUp auth breaks — which is what `specs/data/cgm-connect` task 14
+verifies. It is not a latency fix.
+
+### So what actually bounds freshness
+
+`LibreLinkUpGlucoseSource.pollInterval`, and nothing else. Every other path is either
+slower (BGAppRefreshTask, unguaranteed) or not real-time at source (HealthKit, above).
+Reducing it is the only lever, and it is a **judgement call with account-ban risk, not an
+engineering decision**: the 15 minutes was chosen because ~3-minute polling has caused
+LibreLinkUp account bans. The middle ground (5–10 min) is untested against the vendor's
+tolerance. Do not change it without an explicit decision recorded — a ban costs the data
+stream entirely, which is strictly worse than a 15-minute lag.
+
+The sensor itself measures far more often than the app can safely ask, so the ceiling here
+is the vendor's rate limit, not the hardware.
+
+### Field event 2026-08-05 01:30 UTC — in-range value displayed during a low alarm
+
+The sharpest evidence yet of what the poll interval costs, and it is not a latency
+inconvenience — it is a wrong reading at the moment the reading matters most.
+
+| Time (UTC) | Event |
+|---|---|
+| 01:22:45 | Libre measures **4.2** (ingested, snapped to the 01:25 mark) |
+| ~01:28–01:30 | Sensor goes low; **the Abbott app alarms** |
+| 01:30:43 | Libre measures **3.7** |
+| ~01:31 | Developer opens the Abbott app to dismiss the alarm; MeData fetches within ~1 min and the Lock Screen widget updates immediately |
+
+At alarm time MeData held 4.2 from 01:22:45 — roughly 8 minutes old, therefore **inside**
+`GlucoseTimeline.staleAge` (15 min). So it rendered **fresh, in-range** (4.2 > the 3.9 target
+low), with no `LO` token and no warning colour, while the sensor was low enough to alarm. The
+staleness ladder did not misfire; the value genuinely was recent by ingestion age. The display
+was wrong because the *feed* was behind, and nothing in the render layer can detect that.
+
+**HealthKit was not the mechanism for the immediate update** — the DB still held zero
+`healthkit` rows afterwards, confirming the correction above. The likely trigger is the device
+unlock to dismiss the alarm prompting iOS to run the pending `BGAppRefreshTask`; the 01:30
+reading was already available from LibreLinkUp, MeData simply had not asked yet.
+
+**Structural limit, stated plainly:** the Abbott app alarms from a direct BLE link to the
+sensor. MeData reads LibreLinkUp, a cloud follower, on a 15-minute poll. MeData cannot match
+that latency by any configuration and must never be the surface relied on to catch a hypo.
+That is a property of the data path, not a bug to fix.
+
+**The one lever that would have helped here** is adaptive polling: keep the 15-minute interval
+while glucose is unremarkable, and tighten it when the last reading is low or falling fast —
+concentrating the vendor rate-limit budget on exactly the window where staleness does damage,
+while leaving the long-run average request rate near today's. Not implemented: it changes
+vendor-facing request behaviour and carries the account-ban risk that set the 15 minutes in the
+first place, so it needs an explicit decision rather than a quiet change.

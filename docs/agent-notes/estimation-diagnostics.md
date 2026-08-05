@@ -169,3 +169,63 @@ through `FixtureLoader` + `FixtureRunner` with no harness changes.
 - The simulator destination fails at codesigning `MedataCore_Pipeline.bundle`
   ("bundle format unrecognized") — pre-existing and unrelated; build for
   device (`generic/platform=iOS` compiles, `make build-app` needs the phone).
+
+## Replaying a device bundle through HarnessCLI (first done 2026-08-05)
+
+The recipe, and the traps it hit. `capture-bundle-recorder` task 4's close-out.
+
+```bash
+xcrun devicectl device info files --device <udid> \
+  --domain-type appDataContainer --domain-identifier rtob.MeData \
+  --subdirectory Documents/captures
+xcrun devicectl device copy from --device <udid> \
+  --domain-type appDataContainer --domain-identifier rtob.MeData \
+  --source Documents/captures/<stem>.fixture --destination <stem>.fixture
+make harness-accuracy FIXTURES=<dir> SHA=<stamp> OUT=<report.json>
+```
+
+**The `SHA` is the bare 12-hex, not the app's lineage string.** A bundle stamps
+`segmenter_checkpoint_sha256 = "ab812dc3aa9d"` while `EstimationOutcome.modelVersion` reads
+`"coreml_ab812dc3aa9d"`. Passing the app-facing form fails the load — usefully, since
+`FixtureLoader.Error.checkpointMismatch` prints `got:`, so the first failed run tells you the
+right value. Worth knowing that the same model carries two different identifiers across the
+two records; anything keying an error log on "segmenter sha" must pick one and normalise.
+
+**Two defects this exposed, both now fixed:**
+
+1. `HarnessCLI` hard-coded `ClassPalette.v1Standard`, so `C = 35` against a 36-channel palette-v2
+   bundle. `FixtureRunner` derives the probability tensor's shape as `H*W*C*2` with `H`/`W` from
+   the nadir intrinsics — those were right (1920×1440, matching the argmax byte-for-byte) — so
+   only `C` was wrong, and `ProbabilityTensor`'s `precondition` **trapped the process**. No
+   report, and every other bundle in the directory lost with it. The palette is now resolved per
+   fixture from its own `paletteVersion` (`ClassPalette.standard(for:)`, which already existed for
+   the app's v1/v2 display split). `seg-bench` carried the same bug behind a size guard, so it
+   silently dropped every v2 bundle rather than trapping — quieter, equally wrong.
+2. `FixtureRunner.run` now throws `probsSizeMismatch` rather than leaving that precondition to
+   fire. A batch tool over operator-supplied files must skip a bad bundle with a message.
+
+**Replay is not bit-exact — measured, not assumed.** Same attempt (`1785135663727`), device vs
+replay:
+
+| | Device (recorded `measurements`) | Replay |
+|---|---|---|
+| class | bread_wholemeal | bread_wholemeal |
+| carbs | **103.71 g** | **98.92 g** |
+| β | 1.0 | 1.0 (pinned) |
+
+**−4.79 g, −4.6 %**, with no error raised. β is not the cause — the device recorded β = 1 for this
+attempt too. The prime suspect is the support plane: the bundle stamps
+`estimator_path = 'single_dominant'`, which routes `FixtureRunner` to `fitPlateRegionPlane` (the
+centre-seeded flood fill written for the N5k overhead rig), whereas replay's other branch,
+`fitPlaneFromDepth`, masks the whole frame. The device's own fit recorded
+`planeResidualMm 1.94, candidates 1,065,089, inliers 639,569` for comparison. Note this
+**refutes** the standing roadmap §5 prediction that handheld captures would *skip* or throw
+`volumeEstimationFailed` on this branch: the flood fill succeeded. A silent few-percent drift is
+the actual failure mode, and it is harder to notice than a crash.
+
+**Untruthed bundles report UNSCORED and exit 1 — that is correct.** The recorder leaves
+`ground_truth_*` at proto3 defaults by design (truth is back-filled off-device), so a field
+bundle scores nothing: `scoredCount: 0`, `passesBar: false`, per-row `scored: false` with the
+error fields absent rather than zero, plus a stderr warning. Do not read the non-zero exit as a
+defect in the capture. `predictedCarbsG` is still on the row, which is the main reason to replay
+an untruthed bundle at all.

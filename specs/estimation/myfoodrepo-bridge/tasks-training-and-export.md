@@ -43,8 +43,10 @@ references:
   - If promoting while below the 0.48/0.45 gates: developer-phase override with attributable reason; export_eligible stays truthful
   - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
 
-- [x] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
-  - CLOSED 2026-08-04: Release redeployed to the iPhone 16 Pro (build stamp 470bb1b-20260804-225023) and the developer read `coreml_ab812dc3aa9d` off a live capture's row in Settings → Estimation log. Verified through `EstimationOutcome.modelVersion` rather than the launch line — `log collect --device-name` needs root on this host, and the log row is the stronger evidence anyway: it proves the estimation path BOUND that model, not merely that the app announced it at startup
+- [-] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
+  - STILL PARTIAL 2026-08-05 — an earlier note in this ledger closed this task and was WRONG; corrected here. The developer did read `coreml_ab812dc3aa9d` in Settings → Estimation log, but `EstimationLogView` renders each row's historical `EstimationOutcome.modelVersion`, and the newest attempt in the device DB is 2026-08-03. So the reading proves the 2-3 August builds bound the promoted model; it says nothing about the build now installed. There is no surface in the app that displays the CURRENT build's `captureLineage`
+  - What remains is one of: (a) one capture on the current build, whose new estimation-log row then carries the live lineage, or (b) `sudo make logs-device` for the `event=launch segmenterSource=… buildStamp=…` line this task actually specifies (`log collect --device-name` needs root on this host)
+  - Circumstantial but not sufficient: today's Release was built from the same unchanged `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`, so it almost certainly binds the same model — 'almost certainly' is not what this gate asks for
   - PARTIAL at closeout 2026-07-26: export gates passed (22,169,442 B, 36 channels, oracle argmax parity 0.9999), bundled segmenter.mlpackage swapped (medata.modelVersion=ab812dc3aa9d), make deploy-release INSTALLED the release build on the iPhone 16 Pro but the launch step failed with the device locked
   - Only on promotion; export.py gates: 24 MiB weight budget, 36 channels in palette order, oracle parity
   - make deploy-release; verify device launch log shows the new segmenterSource=coreml_<12-hex> with matching buildStamp via make logs-device

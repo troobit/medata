@@ -444,3 +444,64 @@ event log would also require a metadata-querying store API that exists for no ot
 **Negative:**
 - Nil after relaunch until the first ingest, even though readings exist in the log (the
   on-open catch-up repopulates it promptly).
+
+## Decision 12: Adaptive poll interval — tighten to 5 minutes while low or falling fast
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The LibreLinkUp poll interval was fixed at 15 minutes (Req 3.2), chosen because ~3-minute polling has caused LibreLinkUp account bans. A field event on 2026-08-05 showed what that costs at the worst possible moment.
+
+The Abbott app alarmed on a low. At that instant MeData was displaying **4.2 mmol/L, measured at 01:22:45** — about eight minutes old. Eight minutes is well inside `GlucoseTimeline.staleAge` (15 min), so the reading rendered as **fresh**, and 4.2 is above the 3.9 target low, so it rendered **in-range**: no `LO` token, no warning colour. The next measurement, 3.7 at 01:30:43, was already available from LibreLinkUp; the app simply had not asked. It arrived within a minute of the device being unlocked to dismiss the alarm, which appears to have prompted iOS to run the pending `BGAppRefreshTask`.
+
+So this was not a display bug. The staleness ladder behaved exactly as specified, and there is nothing the render layer can inspect to know the feed is behind — a reading's *age* is knowable, its *obsolescence* is not. Only fetching sooner helps.
+
+### Decision
+
+The poll interval is chosen after each successful fetch by a pure function of the readings it returned:
+
+- **5 minutes** when the newest reading is below **5.0 mmol/L**, or the fetched readings are falling at or faster than **0.111 mmol/L per minute** (`TrendsMath.mediumRateThreshold`).
+- **15 minutes** otherwise.
+
+The 15-minute baseline is unchanged, and 5 minutes is a floor.
+
+### Rationale
+
+The premise is that requests are a budget and staleness is not uniformly harmful. At 7 mmol/L and flat, a 15-minute-old reading costs nothing. Approaching 4, it is the difference between a number that describes the user and one that does not. Spending the budget only in the second case leaves the long-run average request rate close to today's — glucose is unremarkable the large majority of the time — so the ban exposure is a short burst during a hypo rather than a permanent tripling of traffic. That is what makes this acceptable where a uniform 5-minute poll is not.
+
+The threshold sits at 5.0 rather than at the 3.9 band edge deliberately: tightening *after* arriving at a low would reproduce the failure, because the poll is what makes the display late in the first place. 5.0 starts the tightening on the approach. The fall-rate trigger covers the case the level test cannot — a 9.0 falling hard is comfortable now and will not be in twenty minutes, and at 15-minute polling the display would show the comfortable number across the whole descent.
+
+Reusing `TrendsMath.glucoseRate` rather than writing a second rate calculation means "falling fast" means the same thing to the scheduler as to the arrow the user is looking at; a divergence between those two would be very hard to reason about in the field.
+
+5 minutes rather than 3: 3 is the rate known to have caused bans, so the urgent path stays clear of it even during a sustained hypo. A test asserts that floor, since this constant governs behaviour against a third party that can revoke access entirely.
+
+### Alternatives Considered
+
+- **Uniform 5-minute poll**: simplest, uniformly fresher — Rejected: triples the *sustained* request rate against a service that bans at ~3 minutes. A ban costs the entire data stream, which is strictly worse than a 15-minute lag.
+- **Leave it at 15 minutes and document the limitation**: no vendor exposure at all — Rejected after the field event. The failure is not a lag the user can mentally correct for; the app showed a confident in-range value during a hypo, and the user's decision was to fix it.
+- **Trigger only on the band status (`< 3.9`)**: reuses an existing concept, no new constant — Rejected: it tightens only after the low has arrived, which is exactly too late given the poll is the source of the delay.
+- **Push or webhook from LibreLinkUp**: no polling at all — Not available; LibreLinkUp is a pull-only follower API.
+- **Use HealthKit for low-latency delivery instead**: OS-driven immediate wakes, already entitled and implemented — Rejected on evidence: Abbott does not write to Apple Health as readings are measured, so an immediate `HKObserverQuery` wake still carries stale data. The device DB held zero `healthkit` rows before and after the event, confirming it was not the mechanism for the observed update either.
+
+### Consequences
+
+**Positive:**
+- During the window where staleness does harm, the display is at most ~5 minutes behind instead of ~15.
+- The long-run average request rate stays close to the 15-minute baseline, so ban exposure barely moves.
+- The trigger reuses the display's own rate maths, so scheduler and arrow cannot disagree.
+- Nine tests pin every branch, including a floor assertion on the urgent interval.
+
+**Negative:**
+- Request rate is now data-dependent, so vendor-facing traffic is harder to predict — a long hypo sustains 5-minute polling for its duration.
+- Two more tuned constants (5.0 mmol/L, 0.111 mmol/L/min) with no field validation behind the specific values yet.
+- A noisy sensor oscillating around 5.0 will flap between intervals. Harmless, but no hysteresis.
+- Battery and data use rise slightly during lows; not measured.
+- **This does not make MeData safe to rely on for hypo detection.** The Abbott app alarms from a direct BLE link to the sensor; MeData reads a cloud follower. Five minutes is better than fifteen and is still not real time.
+
+### Impact
+
+`LibreLinkUpGlucoseSource` (`pollInterval`, new `urgentPollInterval` / `urgentThresholdMmolL` / `urgentFallRateMmolLPerMin` / `nextPollInterval` / `currentPollInterval`, poll loop), Req 3.2a, and a new `GlucoseIngestion` → `Persistence` use of `TrendsMath`. The background-fetch `earliestBeginDate` is unchanged at 15 minutes — iOS governs that delivery and does not honour a request as a schedule, so tightening it would add vendor exposure without adding freshness.
+
+---
