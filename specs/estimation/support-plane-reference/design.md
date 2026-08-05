@@ -55,6 +55,8 @@ This subsumes the connected-component adjacency filter Decision 11 staged second
 | ring support fraction < `ringSupportMin` | ring not resting on this plane | 3.2 |
 | ring MAD > `ringMadMaxMm` | bimodal ring — straddling two surfaces | 2.3, 3.2 |
 | plane above > `foodAboveFractionMax` of food samples | vessel rim, or a plane on the food top | 3.4 |
+| radial band step > `bandStepMaxMm` rising outward | rim or bowl wall — inner band wins instead | 3.2 |
+| support visibility < `supportVisibilityMin` | support surface not observable under the food | 3.2 |
 | plane below the lowest admissible candidate | region escaped through a dropout | 3.3 |
 | fewer than `minAcceptedExtentPx` inlier bbox extent | badly conditioned normal | 2.3 |
 
@@ -78,9 +80,34 @@ This preserves Decision 5's stated sequence and has a second benefit: `lidar-pla
 
 ### The rimmed-plate case
 
-A depth pixel is 1.4–2.2 mm at 300–400 mm, so a ring 3–17 mm outside the food boundary can land on a dinner plate's **rim** rather than its well. The rim plane then reads high support, is selected, and food height is clipped — a silent under-read, and the inversion Decision 3's harm ordering assumes cannot happen. Rimmed plates are ordinary dinnerware.
+Food rests on a plate's **well**; the **rim** sits 10–28 mm above it. If the ring lands on the rim, the rim plane is selected and food height is clipped — a silent under-read, and the inversion Decision 3's harm ordering assumes cannot happen.
 
-Mitigations: ring radii expressed in millimetres and converted per capture from the median food-region depth (not fixed pixels, which vary 2× across working distance and do not transfer to the N5k grid at all); `ringInnerMm` set beyond the ~7 mm depth smear the sensor imposes; and the ambiguity margin, which fires when rim and well both score. Residual risk is accepted for MVP and stated in the limitations below — it is a *smaller* under-read than the 3.2× over-read being removed, and it is detectable in the persisted ring statistics.
+**Exposure, measured against ordinary dinnerware.** With the ring at 8–25 mm outside the food boundary, it lands wholly on the rim only once food covers **78–86 % of the well area** — a heaped plate, not a normal serving. Below that the ring is mostly on the well. But when it does hit, the error is large and in the dangerous direction:
+
+| Plate | Rim above well | Food 25 mm tall | Food 40 mm tall |
+|---|---|---|---|
+| Dinner, wide rim | 18 mm | −72 % | −45 % |
+| Dinner, narrow rim | 12 mm | −48 % | −30 % |
+| Pasta / deep plate | 28 mm | — | −70 % |
+
+Today's table reference over-reads by +26 mm; a rim reference under-reads by 12–28 mm. Comparable magnitude, opposite sign — so for this case alone the correction could move the error the wrong way.
+
+**Radial ring profile.** The ring is resolved into inner / mid / outer bands rather than reduced to one median. The profile is diagnostic, and it distinguishes the cases a single median conflates:
+
+| Radial profile | Scene |
+|---|---|
+| flat across bands | plate well, board, or table — one surface |
+| **rises outward** | **rimmed plate with the well partly visible** |
+| rises steeply outward | bowl wall |
+| falls outward | ring has leaked past the plate edge onto the table |
+
+Selection then uses the **inner band** as authoritative — the support surface is by definition the one immediately adjacent to the food — with the outer bands as shape detection. This resolves the partial-fill case *correctly* rather than merely rejecting it: the well plane is already in the candidate set, it was simply not being preferred. It also subsumes the leaked-ring detection, which the earlier single-median design needed MAD to catch.
+
+**Support visibility, for the case that cannot be solved.** When food fills the well, the well surface produces **no depth samples at all** — nothing in the frame touches it. No candidate plane can be fitted to an unobserved surface, and no ring geometry recovers one; this is a sensing limit, not an algorithm choice. It is however detectable: when the visible support region is too thin relative to the food region (`supportVisibilityMin`), the support surface cannot be verified and the fit falls back. That routes the unobservable case to the edge-band over-read, which is the direction a human catches.
+
+This is the `region area ÷ food-mask area` check Decision 9 kept as a secondary guard and an earlier draft dropped. It returns with a job it is suited to — an observability test, not a selection score, which is what it was rejected as.
+
+**Residual risk, stated.** A fully-filled rimmed plate whose food mounds well above the rim can still pass the visibility test with the ring flat on the rim, and will under-read by the rim height. The radial profile is persisted, so the case is identifiable in the accuracy log rather than invisible.
 
 ### Stated limits (Req 2.5)
 
@@ -121,9 +148,11 @@ public enum SupportPlaneReference: String, Sendable, Codable {
 }
 
 public struct RingStatistics: Sendable, Equatable {
-    public let medianMm: Float       // ≈ 0 on a correct fit; +18…+26 on the table
-    public let madMm: Float          // bimodality detector; ~2 mm clean, large when straddling
-    public let supportFraction: Float // share within ±ringBandMm — the selection score
+    public let medianMm: Float        // ≈ 0 on a correct fit; +18…+26 on the table
+    public let madMm: Float           // bimodality detector; ~2 mm clean, large when straddling
+    public let supportFraction: Float // share within ±ringBandMm, INNER band — the score
+    public let bandMedianMm: [Float]  // inner/mid/outer; rises outward on a rimmed plate
+    public let supportVisibility: Float // visible support area ÷ food area
     public let sampleCount: Int
 }
 
@@ -131,6 +160,9 @@ public enum SupportRegion {
     // Radii in MILLIMETRES, converted per capture from median food depth.
     public static let ringInnerMm: Float = 8   // beyond the ~7 mm depth smear
     public static let ringOuterMm: Float = 25
+    public static let ringBandCount = 3        // radial resolution: inner/mid/outer
+    public static let bandStepMaxMm: Float = 6 // outward rise above this = rim or bowl
+    public static let supportVisibilityMin: Float = 0.15
     public static let ringBandMm: Float = 5
     public static let ringSupportMin: Float = 0.6
     public static let ringSupportMarginMin: Float = 0.15
@@ -206,7 +238,8 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 |---|---|
 | Plate 20 mm above table, table dominant ~9:1 | selects the plate; the case today's fitter fails |
 | Ring straddling plate and table ~50/50 | rejected on MAD — the silent-failure case |
-| Rimmed plate, food in the well | documented outcome, whichever way it resolves |
+| Rimmed plate, well partly visible | inner band selects the well, not the rim |
+| Rimmed plate, well fully covered | support visibility fails → fallback, not a rim under-read |
 | Bowl, walls above the food | rejected; `reference == .edgeBand` |
 | Co-height board elsewhere in frame | component scoring excludes it |
 | Overhanging food below the plane | accepted — guards must not fire (Req 1.3) |

@@ -485,3 +485,51 @@ Ring MAD replaces the residual bar because it measures the actual failure — a 
 - Adaptive stopping makes per-capture iteration count data-dependent, so latency varies with scene complexity — which Req 7.6's budget must be measured against, not asserted.
 
 ---
+
+## Decision 14: Radial ring profile plus a support-visibility test for rimmed plates
+
+**Date**: 2026-08-05
+**Status**: accepted (closes the residual risk Decision 13 left open)
+
+### Context
+
+Food rests on a plate's well; the rim sits 10–28 mm above it. Review flagged that a ring drawn 8–25 mm outside the food boundary can land on the rim rather than the well, selecting a plane above the surface the food rests on and clipping food height — the inversion Decision 3's harm ordering assumes cannot happen.
+
+Measured against ordinary dinnerware, the exposure is narrower than feared but sharper when it lands. The ring falls wholly on the rim only once food covers **78–86 % of the well area** — a heaped plate, not a normal serving. When it does, the under-read is −30 % to −72 % depending on rim depth and food height. Today's table reference over-reads by +26 mm; a rim reference under-reads by 12–28 mm. Comparable magnitude, opposite sign, and the under-read is the direction a human does not catch.
+
+The case also splits in two, and the halves need different answers. When the well is *partly* visible the correct plane is in the candidate set and is simply not being preferred. When food fills the well the surface produces **no depth samples at all**, and no algorithm can fit a plane to a surface nothing observes.
+
+### Decision
+
+Resolve the ring into `ringBandCount` radial bands rather than reducing it to a single median. Treat the **inner band as authoritative** for selection, and use the outward profile as shape detection: flat means one surface, rising means a rim or bowl wall, falling means the ring has leaked past the plate edge onto the table.
+
+Separately, reject to the fallback when the visible support region is too thin relative to the food region (`supportVisibilityMin`) — the observability test for the half that cannot be solved.
+
+### Rationale
+
+The support surface is by definition the one immediately adjacent to the food, so the innermost samples are the ones that carry the answer; averaging them with samples 25 mm out was discarding that ordering. Resolving radially costs nothing new — the same samples, bucketed by distance — and it *resolves* the partial-fill case rather than merely rejecting it, which a bimodality guard alone would have done.
+
+The profile also subsumes work the previous design split across two measures: a ring leaking onto the table falls outward, which the band step detects directly, so MAD becomes corroboration rather than the primary detector.
+
+For the unobservable half, falling back is the only honest answer. It routes the capture to the edge-band over-read — wrong, but wrong in the direction a person notices, which is the same asymmetry Decision 3 rests on. The visibility ratio is the `region area ÷ food-mask area` check Decision 9 kept as a secondary guard and the first design draft dropped; it returns here with a job it actually fits — an observability test rather than the scene-dependent selection score it was rejected as.
+
+### Alternatives Considered
+
+- **Keep the single ring median and accept the rimmed-plate risk**: no new mechanism — Rejected: a −30 % to −72 % under-read is worse than the defect being fixed for the affected captures, and it is silent.
+- **Shrink `ringInnerMm` so the ring stays on the well**: directly targets the geometry — Rejected: the inner radius is already at the ~7 mm depth smear floor, below which samples blend food and support. It cannot shrink further, and it would not help once food fills the well.
+- **Infer the well depth from the rim and the table**: the plate's rim height above the table is measurable — Rejected: well depth varies 5–30 mm across ordinary dinnerware and is not derivable from rim height, so this would substitute an assumed constant for an unobserved measurement.
+- **Refuse the capture when support visibility fails**: never returns a number from an unverifiable reference — Rejected: breaks the Decision 5 invariant that nothing completing today may start failing.
+
+### Consequences
+
+**Positive:**
+- The partial-fill rimmed plate — the larger half of the exposure — resolves to the correct surface rather than being rejected.
+- One measure now distinguishes four scene types (flat, rim, bowl, leaked) where the previous design needed the median plus MAD and still conflated rim with well.
+- The unobservable case is detected and routed to the error direction a human catches.
+
+**Negative:**
+- Two more constants (`bandStepMaxMm`, `supportVisibilityMin`), neither with field evidence.
+- Radial banding divides the ring's samples among bands, so each band is noisier; `ringMinSamples` now has to hold per band, not just overall.
+- A fully-filled rimmed plate with food mounded high can still pass the visibility test with a flat rim-borne ring and under-read by the rim height. Detectable in the persisted profile, not prevented.
+
+---
