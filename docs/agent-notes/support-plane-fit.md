@@ -120,7 +120,18 @@ committed `.depthslice` fixtures. Adding a capture to it means cutting a slice w
   support strip thinner than `ringInnerMm` is counted. Ceilings measure 1.710 and 1.426
   against achieved 0.880 and 1.032. The value still needs prerequisites capture 4.
 
-Two traps for anyone measuring against this corpus:
+Three traps for anyone measuring against this corpus:
+
+- **Adding a slice is not the same as adding evidence.** A third slice is committed and
+  deliberately excluded, in `rejectedCaptures` rather than `captures` (Decision 31):
+  `1785054950406`, the 208 g mounded-rice bundle. It slices cleanly, fills all three bands,
+  and its confident food sits 15.1 mm above its confident surroundings — everything looks
+  right until you read the confidence map, where **43.2 % of its food mask is ARKit-low
+  against 0.0 % on both admitted captures**, and the discarded samples are the near ones
+  (247.9 mm against the surviving 277.8 mm). τ_conf removes the mound; the best candidate
+  reports the food as 9.0 mm *below* its own plane. Admit it and the sector test flips to
+  "the trio is separable" on a capture with no food in it. Check
+  `lowConfidenceFoodShare` before adding any capture.
 
 - **Neither committed capture is a clean correct fit.** On `1785135663727` the plate-top
   candidate's per-sector inner medians reach −32.6 mm over a contiguous arc — the ring

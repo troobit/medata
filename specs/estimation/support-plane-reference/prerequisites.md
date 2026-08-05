@@ -131,9 +131,19 @@ table. Use a genuinely small plate; a dinner plate with a normal serving will no
 **Why capture 2 exists.** The defect adds a roughly constant *height* to every food pixel, so the
 relative over-read scales inversely with food height — 3.57× on flat bread, 2.1× on mounded rice.
 The bread bundle already holds the flat end. Without a non-flat anchor, a fix that overcorrects
-tall food passes every criterion in the spec. The 208 g rice bundle cannot serve: it is still on
-the device and was pulled, but `FixtureLoader` loads zero meals from it, and repairing a July
-bundle is dearer than plating rice once on the current build.
+tall food passes every criterion in the spec.
+
+**The 208 g rice bundle cannot serve, and the reason is now measured (Decision 31).** It was
+tried: `tools/fixture_slice.py` cuts `1785054950406-success.fixture` cleanly, so the
+`FixtureLoader` failure is not a slice-level one and the capture runs through the whole
+measurement pass. It is disqualified on the depth confidence map. **43.2 %** of its food-mask
+samples carry ARKit's low confidence and are discarded at τ_conf — against **0.0 %** on both
+committed captures — and the discarded ones are the *near* samples, median 247.9 mm against
+the 277.8 mm of those that survive. τ_conf removes the mound. What reaches the fit is the flat
+remnant around the pile, and the best candidate reports a food envelope of **−9.0 mm**, so
+there is no mound left to anchor against. The slice is committed as `rejectedCaptures` with
+that measurement asserted, because admitting it flips the sector derivation to a spurious
+"separable" result. Capture 2 must still be taken.
 
 **Why capture 1 is not the bundle we already have.** `1785901032716-success` covers the *replay*
 criterion (Req 7.2). Req 7.8 is on-device verification, which by definition must run against the
@@ -162,6 +172,14 @@ means `ringSupportMin` cannot be derived at all until the spread is characterise
 Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
 was never the same quantity — but the underlying worry it encodes is now measured and real. Take
 at least one of the six on a matte surface, and note the surface material for each.
+
+**A capture can succeed and still be empty.** The 208 g rice bundle returned a plausible
+603 cm³ at capture time and reads as well-formed everywhere except the confidence map, where
+41 % of the frame is ARKit-low and the mound is entirely inside that share (Decision 31). Two
+captures in this corpus read 22.7 % and 0.1 % frame-wide, so the spread between a good frame
+and a lost one is wide and invisible from the estimate. Take each of the six twice if the
+sitting allows, and treat `foodRegionCoveragePercent` — already persisted on every attempt —
+as the field-side reading of the same quantity.
 
 ### Recording a capture
 

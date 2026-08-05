@@ -1322,3 +1322,59 @@ Leaving it as `proposed` rather than accepted reflects that the corpus is two ca
 No code changes. `SupportPlaneCorpusMeasurementTests` records the measurement; `prerequisites.md` adds the sign to the session's dump list. If accepted, it would touch `SupportRegion.ringStatistics`, `RingStatistics`, `SupportRegion.admissibility` and the Req 6.4 persisted fields.
 
 ---
+
+## Decision 31: The third capture bundle is sliceable but not corpus-grade
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Decision 29 recorded that task 26 stalls on a two-capture corpus, both of them flat bread on a white plate, and that the constants still `[owed]` need scenes the corpus does not contain. The most acute gap is a non-flat capture: `prerequisites.md` calls it capture 2 and states why it matters — the defect adds a roughly constant *height* to every food pixel, so a fix that overcorrects tall food passes every criterion the flat corpus can express.
+
+A third bundle was already in hand. `1785054950406-success.fixture` is the 208 g mounded-rice capture from the 2026-07-26 session, pulled from the device and sitting in `tmp/device_captures/`. `field-truth-sessions.md` records it as unusable because `FixtureLoader` loads zero meals from it, and adds "not diagnosed — a fresh weighed capture is cheaper than repairing a July bundle". That verdict was reached through the replay path, which is not the path this feature's measurement pass uses: `tools/fixture_slice.py` reads the capture proto directly and needs only the depth map and the argmax mask.
+
+Sliced, it produces a well-formed 295 KB `.depthslice` and runs through the whole pass. So the loader's failure is not a slice-level one, and the question of whether the bundle can serve as the non-flat anchor had to be answered on the depth data rather than inherited from the loader.
+
+### Decision
+
+The slice is committed and **excluded from the measurement corpus**, in a named `rejectedCaptures` list with the disqualifying measurement asserted in `rejectedCaptureIsNotCorpusGrade`. It is not the capture 2 anchor and does not reduce the capture session's scope; the session still needs all six.
+
+The exclusion rests on the depth confidence map. **43.2 %** of the capture's food-mask samples carry ARKit's low confidence and are discarded by `SupportRegion.prepare` at τ_conf, against **0.0 %** on both admitted captures, and frame-wide it is 41.1 % against 22.7 % and 0.1 %. The discarded samples are the **near** ones — median 247.9 mm against the 277.8 mm of those that survive — which is to say the mound itself. What reaches the fit is the flat remnant around the pile, spanning 13.4 mm from p10 to p90, and the best candidate consequently reports a food envelope of **−9.0 mm**: the surviving food sits *below* the plane fitted around it. After filtering, the capture no longer contains a mound to anchor anything against.
+
+### Rationale
+
+Every check that does not read the confidence map passes, which is precisely why the exclusion is worth committing a fixture for. The capture fills all three ring bands at `[1391, 1405, 1541]`, comfortably clear of `ringMinSamples`; its 4 px smear is 6.06 mm at 277.8 mm range, inside `ringInnerMm`; and its confident food median sits 15.1 mm above its confident surroundings, which is a plate. A future session re-running the pass over `tmp/device_captures/` would find nothing wrong with it short of the confidence map.
+
+And admitting it does not merely weaken the corpus, it produces a wrong answer. Its best candidate scores **3** supporting sectors, outside the 4…7 band Decision 18's geometry produces — so `sectorTrioDoesNotSeparateTheDecision18Case` flips from failing-as-designed to passing, reporting that the corpus can now separate a correct fit from the silent-failure case. It cannot. The count is 3 because the mound is missing, not because the ring is clean, and the sector trio would then be derived from a capture whose food is absent. That is the same circularity Req 3.7 forbids, arriving by a route Decision 29 did not anticipate: not a bar fitted to the failure side, but a bar fitted to a capture that no longer contains the thing being measured.
+
+The finding also closes a question `field-truth-sessions.md` left open. The 208 g bundle's unusability is now attributed — depth confidence collapsed across the frame during that capture — rather than merely observed at the loader.
+
+### Alternatives Considered
+
+- **Admit it to `captures` as the third corpus capture** - Take the non-flat anchor the session is missing, on the grounds that three captures beat two - Rejected on the measurement: τ_conf removes 43 % of its food region including the whole mound, so it is not a non-flat capture by the time the fit sees it, and admitting it silently converts the sector derivation into a false positive.
+- **Admit it with a τ_conf exemption for this capture** - Lower the confidence bar so the mound's samples survive and the capture becomes the anchor - Rejected because the low-confidence returns are what `lidar-plane-fit-matte-table-confidence` exists to exclude (Req 7.5), and their depth spread — p10 158.8 mm against a 277.8 mm surface — shows them to be wrong rather than merely uncertain. Deriving the noise constants from samples the shipped path discards would set bars the shipped path can never meet.
+- **Leave the slice out of the repository entirely** - Record the finding in the decision log and delete the fixture - Rejected because the exclusion is not self-evident: the capture is well-formed at every level a reader would check, and the next session to notice an unused mounded-rice bundle would repeat this work. 295 KB buys a reproducible answer and a trap for the false positive.
+- **Repair the bundle so `FixtureLoader` reads it** - Fix the loader path and recover the capture properly - Rejected as beside the point. The slice already bypasses the loader and reaches the pass; the defect is in the captured depth, which no loader fix recovers.
+
+### Consequences
+
+**Positive:**
+
+- The one remaining "maybe we already have this capture" question is answered on measurement, so the capture session's scope is settled at six rather than argued.
+- A false positive that would have set the sector trio from an empty mound is trapped by an assertion rather than left to a future reader's care.
+- `field-truth-sessions.md`'s undiagnosed bundle is diagnosed, and the diagnosis — frame-wide confidence collapse — is a capture-technique lesson for the session rather than a code defect.
+- The pass now records what makes a capture corpus-grade, which the six new captures will be measured against on arrival.
+
+**Negative:**
+
+- A third 295 KB fixture is committed that no derivation reads.
+- The corpus is still two captures and every `[owed]` constant from Decision 29 stays owed; this changes none of them.
+- The low-confidence share bar is asserted at 0.4 against a 0.0/0.43 split with nothing in between, so it separates the captures in hand but is not a calibrated admission threshold.
+- Task 26 remains open, and task 27 remains blocked behind it.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/Fixtures/1785054950406.depthslice` (new, not read by any derivation), `SupportPlaneCorpusMeasurementTests` (`rejectedCaptures` and `rejectedCaptureIsNotCorpusGrade`), `prerequisites.md`, `docs/agent-notes/field-truth-sessions.md` and task 26's detail. No shipped code changes and no constant's value moves.
+
+---
