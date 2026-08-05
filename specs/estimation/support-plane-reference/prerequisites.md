@@ -287,8 +287,9 @@ set at every value and the radius selects *which plane* the count and the bar ar
 Fix it first, then the pair.~~ **Superseded (Decision 49.)** The candidate bound is now
 `annulusOuterMm`, a constant of its own, and it is what moved the plane: pin it and the radius
 moves the selected plane 0.000 mm at every value from 13 to 40 mm on both captures. The pair is a
-pair, the radius is fixed *beside* it, and the bound is a **fourth** constant to choose. Choose all
-four and record them, with the reason, before the sitting.
+pair, the radius is fixed *beside* it, and the bound is a **fourth** constant to choose. Decision 50
+adds a **fifth**, `inlierRemovalMultiple`, and puts it before the residue floor and the pass cap.
+Choose all five and record them, with the reason, before the sitting.
 
 The radius is bracketed **22…32 mm** (Decision 46), and Decision 49 removes the rider that it must
 not be interpolated:
@@ -330,6 +331,34 @@ The candidate bound is bracketed **50…75 mm** by the corpus, and by the corpus
   value the sitting sets, not at the shipped one.
 - **Keep the ring inside the bound.** Free while it was a multiple ≥ 1; an invariant now that the
   two are independent.
+
+The removal band is bracketed **1…2.5×** by the corpus (Decision 50), and the shipped 2× sits
+strictly inside it — the only owed constant in this feature that does:
+
+- **Its stated rule is false, so there is nothing to inherit.** "A 1× shell seeds near-duplicate
+  planes on the next pass" is wrong on this corpus: no adjacent pass pair at any multiple is a
+  near-duplicate, the closest at 1× diverging by 30.807 mm across the annulus against a 5 mm inlier
+  band. CC-RANSAC keeps the largest *connected* component, so what a 1× shell leaves is a thin ring
+  around a surface already taken. Do not carry the claim into the sitting.
+- **Floor, 1×, and it is structural rather than measured.** Below it a pass leaves samples it
+  selected within `inlierBandMm` and the next pass can re-find the same plane. The corpus does not
+  raise it: at 1× the intended candidate is still admissible and still separable.
+- **Ceiling, 2.5×, from the corpus.** A shell wide enough to take the table takes the plate with it.
+  On `1785901032716` the intended plane's ring median degrades −2.203, −2.309, −2.377, −2.658,
+  −3.011 mm over 1…2.5× and at 3× the candidate is gone — the nearest-to-zero plane is the **table**
+  at +3.039 mm with 3 crossed sectors, so `maxCrossedSectors` reads 3…unbounded.
+- **Interpolable.** Unlike the radius (Decision 46), the readings are monotone across the sweep.
+- **It does not move the plane.** 0.000 mm at the food on both captures at every multiple, because
+  removal happens *after* a pass and the ranking picks pass 1 throughout. Bracket-only.
+- **Fix it before `minResidueAreaMm2` and `maxCandidatePlanes`.** Natural extraction depth runs
+  [7, 5] passes at 1×, [5, 3] at 1.25×, [4, 3] at 1.5×, [3, 3] at 2× and [2, 1] at 6×, so the cap
+  truncates below the shipped value — Decision 48's "the cap never fires" is a reading at 2×.
+  Req 7.6's latency follows the same chain.
+- **The committed suite cannot express a reading on it at all.** Not silent by measurement, as the
+  candidate bound was, but structurally: no scene runs extraction. The captures are the only source.
+- **`maxCrossedSectors` is *not* denominated in it.** It reads 2…2 at every multiple the bracket
+  admits, so the two may be set independently — true of no other constant that changes the
+  candidate set.
 
 The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
 
@@ -476,7 +505,8 @@ is no way to recover it afterwards.
   | `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) |
   | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
   | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48; 0…2 in Decision 43) |
-  | `maxCandidatePlanes` | ≥ 2 (`sequentialExtractionSurfacesThePlate`) | ≥ 2, no ceiling — the cap never fires (Decision 48) |
+  | `maxCandidatePlanes` | ≥ 2 (`sequentialExtractionSurfacesThePlate`) | ≥ 2, no ceiling — the cap never fires *at 2× removal* (Decisions 48, 50) |
+  | `inlierRemovalMultiple` | none — no scene runs extraction | 1…2.5× (Decision 50) |
 
   **Both sector rows are denominated in `ringSectorCount`, which is `[owed]` too
   (Decision 44), and in `sectorSupportMin`, which is `[owed]` as well (Decision 45).**

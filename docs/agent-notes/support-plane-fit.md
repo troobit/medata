@@ -119,7 +119,8 @@ measured value against a constant flips as soon as the constant crosses it.
 | `foodEnvelopeMinMm` | −6.758…8.233 mm | 7.154…21.041 mm (Decision 48) |
 | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
 | `maxCrossedSectors` | 0…2 | **2…2** at full pass depth (Decision 48) |
-| `maxCandidatePlanes` | ≥ 2 | ≥ 2, no ceiling (Decision 48) |
+| `maxCandidatePlanes` | ≥ 2 | ≥ 2, no ceiling — *at 2× removal* (Decisions 48, 50) |
+| `inlierRemovalMultiple` | none — no scene runs extraction | 1…2.5× (Decision 50) |
 
 **Every row of the sector part of that table is denominated in `ringSectorCount` *and*
 `sectorSupportMin`, both of which are themselves `[owed]` (Decisions 44, 45).** Read
@@ -705,3 +706,56 @@ straight down, so a gravity-aligned plane has normal (0,0,1) and a point's signe
 above a plane at depth Z is `Z − depth`. The colour grid is an exact 4× multiple of the
 depth grid so the mask round trip is lossless — pick a non-multiple and the food mask
 dilates by a pixel and every knife-edge scene shifts under you.
+
+## The removal band, and what one pass hands the next (Decision 50)
+
+`SupportRegion.inlierRemovalMultiple = 2` is the **fourth** constant that decides which planes
+*compete*, and the only one that acts *between* passes. The other three each own a different part
+of the candidate set:
+
+| constant | what it decides |
+|---|---|
+| `annulusOuterMm` | the sample set extraction draws from |
+| `maxCandidatePlanes` | how many times it may draw |
+| `ringOuterMm` | how a set already chosen is re-ringed (bracket-only since Decision 49) |
+| `inlierRemovalMultiple` | what each draw **leaves** for the next |
+
+It was the last constant in the file carrying a claim in place of a provenance marker, and the
+claim was **false**. "A 1× shell seeds near-duplicate planes on the next pass": read in the
+removal's own units — the largest gap between two planes' signed heights over the annulus, against
+one `inlierBandMm` — **0 of 33** adjacent pass pairs across eight multiples is a near-duplicate.
+The closest at 1× diverges by **30.807 mm**; the closest anywhere by **23.973 mm**, nearly five
+bands. CC-RANSAC is why: a pass keeps the largest *connected* component, so what a 1× shell leaves
+behind is a thin ring around a surface already taken and it does not form one.
+
+**It does not move the plane** — 0.000 mm at the food on both captures at every multiple, exactly.
+Removal happens *after* a pass, so pass 1 is drawn from an annulus this constant never touched, and
+the ranking picks pass 1 on both captures throughout. Bracket-only, like the count, the bar, the
+band count and the radius.
+
+**Bracketed 1…2.5×** (`theRemovalBandIsWhatOnePassHandsTheNext`), with the shipped 2× strictly
+inside — the first owed constant in this feature that is not on an edge:
+
+| multiple | 1× | 1.25× | 1.5× | **2×** | 2.5× | 3× | 4× | 6× |
+|---|---|---|---|---|---|---|---|---|
+| natural depth (plate / table capture) | 7 / 5 | 5 / 3 | 4 / 3 | **3 / 3** | 2 / 3 | 2 / 2 | 2 / 2 | 2 / 1 |
+| intended ring median, `1785901032716` | −2.203 | −2.309 | −2.377 | **−2.658** | −3.011 | +3.039 | +3.039 | +3.039 |
+| corpus `maxCrossedSectors` | 2…2 | 2…2 | 2…2 | **2…2** | 2…2 | 3…∞ | 3…∞ | 3…∞ |
+
+The **ceiling** is where a shell wide enough to take the table takes the plate with it: at 3× the
+nearest-to-zero candidate *is* the table, carrying 3 crossed sectors of its own. The **floor of 1**
+is structural, not measured — below it a pass leaves samples it selected within `inlierBandMm` and
+the next pass can re-find the same plane. Readings are monotone, so unlike Decision 46's radius the
+bracket may be interpolated.
+
+**Fix it before `minResidueAreaMm2` and `maxCandidatePlanes`.** Decision 48's "the cap never fires"
+is a reading at 2×: below it extraction runs deeper than the cap allows and the cap truncates. 2×
+is the smallest multiple at which it does not. Req 7.6's latency follows the same chain, since the
+RANSAC bound is `maxIterationsPerPass` times the passes actually run.
+
+**The committed suite cannot express a reading on it at all** — structurally, not by measurement.
+Decision 49's bound at least reached the scenes through `visibility` and `escaped`; no scene runs
+extraction, so there is nothing to read. The only owed constant of which that is true.
+
+One positive: `maxCrossedSectors` reads **2…2 at every multiple the bracket admits**, so unlike the
+candidate bound this constant does not denominate Decision 48's determination.

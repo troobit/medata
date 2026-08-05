@@ -527,8 +527,58 @@ public enum SupportRegion {
     // annulus sample, so a bound below `ringOuterMm` would silently empty the ring;
     // `SupportRegionRingTests` is what holds the two together at whatever values ship.
     static let annulusOuterMm: Float = 50
-    // A pass removes its polished inliers within 2 × inlierBandMm; a 1× shell seeds
-    // near-duplicate planes on the next pass.
+    // A pass removes its polished inliers within this multiple of `inlierBandMm`.
+    //
+    // [owed], BRACKETED 1…2.5×, and its stated rule is MEASURED AND FALSE (Decision 50).
+    // This is the FOURTH constant in this file that decides which planes COMPETE, and the
+    // only one that acts BETWEEN passes: `annulusOuterMm` fixes the set extraction draws
+    // from, `maxCandidatePlanes` fixes how many times it may draw, `ringOuterMm` re-rings a
+    // set already chosen — this one decides what each draw LEAVES for the next. It was the
+    // last constant here carrying a claim in place of a provenance marker.
+    //
+    // The claim was "a 1× shell seeds near-duplicate planes on the next pass", and no
+    // adjacent pass pair anywhere in the sweep is a near-duplicate: read in the removal's
+    // own units — the largest gap between two planes' signed heights over the annulus,
+    // against one `inlierBandMm` — the closest pair at 1× diverges by 30.807 mm and the
+    // closest at any multiple by 23.973 mm, nearly five bands. CC-RANSAC is why. A pass
+    // keeps the largest CONNECTED component, so what a 1× shell leaves behind is a thin
+    // ring around a surface already taken and it does not form one. So the shipped value
+    // has no derivation at all, as `ringOuterMm` had none once Decision 33 measured its
+    // stated rule, and the floor cannot come from here.
+    //
+    // It does NOT move the answer — 0.000 mm at the food on both captures at every
+    // multiple, exactly. Removal happens AFTER a pass, so pass 1 is drawn from an annulus
+    // this constant has never touched, and the ranking picks pass 1 on both captures at
+    // every multiple. Bracket-only, like the count, the bar, the band count and (since
+    // Decision 49) the radius; `annulusOuterMm` stays the only owed constant that moves
+    // the plane.
+    //
+    // The CEILING is where a shell wide enough to take the table takes the plate with it.
+    // On `1785901032716` the plane a correct fit must select is pass 2 (Decision 48), and
+    // its ring median degrades −2.203, −2.309, −2.377, −2.658, −3.011 mm over 1…2.5× before
+    // the candidate stops existing: at 3× the nearest-to-zero candidate is pass 1, the
+    // TABLE at +3.039 mm carrying 3 crossed sectors of its own, so `maxCrossedSectors`
+    // reads 3…unbounded and the guard would have to admit the plane Decision 18 exists to
+    // reject. Decision 49's floor argument on a second constant. The FLOOR of 1 is
+    // structural — below it a pass leaves samples it selected within `inlierBandMm` and the
+    // next pass can re-find the same plane — and the corpus does not raise it.
+    //
+    // Two riders. `maxCandidatePlanes` is COUPLED to it with an order: natural extraction
+    // depth runs [7, 5] passes at 1×, [5, 3] at 1.25×, [4, 3] at 1.5×, [3, 3] at 2× and
+    // down to [2, 1] at 6×, so the cap truncates below the shipped value and the shipped 2×
+    // is the SMALLEST multiple at which it does not. Decision 48's "the cap never fires,
+    // so no value at or above 3 is distinguishable" is a reading at 2×, and that decision's
+    // ordering — residue floor before pass cap — gains a member before both. And Req 7.6's
+    // latency is denominated here for the same reason, since the RANSAC bound is
+    // `maxIterationsPerPass` times the passes actually run.
+    //
+    // The committed SUITE cannot bound it, and here that is structural rather than measured:
+    // Decision 49's bound reached the scenes through `visibility` and `escaped` and was
+    // found silent by measurement, but no scene runs extraction at all — each asserts
+    // against a plane its own test states — so no suite reading is even definable. The only
+    // owed constant of which that is true. One positive: `maxCrossedSectors` reads 2…2 at
+    // EVERY multiple this constant's own bracket admits, so unlike the candidate bound it
+    // does not denominate Decision 48's determination and the sitting sets the two apart.
     static let inlierRemovalMultiple: Float = 2
 
     // MARK: – Depth intrinsics (design §Native depth grid, and the intrinsics trap)

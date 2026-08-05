@@ -3237,9 +3237,17 @@ struct SupportPlaneCorpusMeasurementTests {
     // rng state it left, so a run at a higher cap contains a run at a lower one verbatim.
     // That is why one run at the sweep's top measures every cap below it, and why a cap
     // can only ever truncate — it can never change a candidate the shorter run produced.
-    static func extractCandidates(annulus: [Int], geometry g: SupportRegion.DepthGeometry,
-                                  gravity: Vec3, rng: inout SplitMix64,
-                                  maxPasses: Int) -> [SupportRegion.PlaneCandidate] {
+    //
+    // The removal multiple is an argument too, since Decision 50. It is the only shipped
+    // constant that acts BETWEEN passes, so a sweep of it needs the same chain replayed at
+    // a different shell width; at `SupportRegion.inlierRemovalMultiple` this reproduces the
+    // shipped call exactly, which both anchors below check candidate by candidate.
+    static func extractCandidates(
+        annulus: [Int], geometry g: SupportRegion.DepthGeometry,
+        gravity: Vec3, rng: inout SplitMix64,
+        maxPasses: Int,
+        removalMultiple: Float = SupportRegion.inlierRemovalMultiple
+    ) -> [SupportRegion.PlaneCandidate] {
         var residue = annulus
         var candidates: [SupportRegion.PlaneCandidate] = []
         let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
@@ -3292,7 +3300,7 @@ struct SupportPlaneCorpusMeasurementTests {
                 residueInlierRatio: Float(inliers.count) / Float(residue.count),
                 residueCount: residue.count))
 
-            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            let removalBandMm = removalMultiple * LiDARPlaneFitter.inlierBandMm
             residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
         }
         return candidates
@@ -4045,6 +4053,394 @@ struct SupportPlaneCorpusMeasurementTests {
             + " candidate bound (span \(fmt(escapeSpan)) mm) — Decision 41's ≥ 14.868 mm is"
             + " not a reading at the shipped bound and this side finding can be retired"
         #expect(escapeSpan > SupportRegion.ringBandMm, "\(escapeIndependent)")
+    }
+
+    // MARK: - The removal band, and what one pass hands the next
+
+    // The fourth constant that decides which planes COMPETE, and the only one that acts
+    // BETWEEN passes. `annulusOuterMm` fixes the sample set extraction draws from
+    // (Decision 49); `maxCandidatePlanes` fixes how many times it may draw (Decision 48);
+    // `ringOuterMm` re-rings a set already chosen (Decisions 46, 49). This one decides what
+    // each draw LEAVES for the next, and it is the last unmarked constant in the file.
+    //
+    // Its comment is not a provenance marker but a claim: "a pass removes its polished
+    // inliers within 2 × inlierBandMm; a 1× shell seeds near-duplicate planes on the next
+    // pass". That is a statement about what happens at 1×, and like `ringOuterMm`'s
+    // "inside the smallest measured plate margin" (Decision 33) and `ringBandCount`'s
+    // "structural" (Decision 47) it has never been measured. It is measured here.
+    //
+    // The sweep runs from the structural floor to well past the shipped value. 1× is the
+    // narrowest shell that can remove a pass's own inliers at all — the pass selected them
+    // within `inlierBandMm`, so below 1× a pass leaves samples it just consumed and the
+    // next pass can re-find the same plane exactly. 6× is 30 mm, wide enough to reach a
+    // plate from a table.
+    static let inlierRemovalSweep: [Float] = [1, 1.25, 1.5, 2, 2.5, 3, 4, 6]
+
+    @Test("the removal band is what one pass hands the next, and its stated rule is measurable")
+    func theRemovalBandIsWhatOnePassHandsTheNext() throws {
+        struct Pass {
+            let index: Int
+            let normal: Vec3
+            let d: Float
+            let residueCount: Int
+            let planeAtFoodMm: Float
+            let ringMedianMm: Float
+            let innerSupport: Float
+            let extentMm: Float
+            let signs: SectorSigns
+        }
+        struct Reading {
+            let name: String
+            let multiple: Float
+            let removalBandMm: Float
+            let pixelAreaMm2: Float
+            let residueFloor: Int
+            // The run with the cap LIFTED, so the depth extraction reaches on its own is
+            // readable beside the depth it ships at. Decision 48 read this at the shipped
+            // multiple alone.
+            let natural: [Pass]
+            let residueAfterNatural: Int
+            // The shipped depth: a prefix of the same chain, since a pass reads only what
+            // the previous left (Decision 48's prefix property).
+            let shipped: [Pass]
+            let selectedIndex: Int
+            let intendedIndex: Int
+            var starved: Bool { residueAfterNatural < residueFloor }
+            var selected: Pass { shipped[selectedIndex] }
+            var intended: Pass { shipped[intendedIndex] }
+        }
+
+        struct Capture {
+            let name: String
+            let slice: DepthSlice
+            let g: SupportRegion.DepthGeometry
+            let samples: SupportRegion.RingSamples
+            let ray: Vec3
+        }
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            corpus.append(Capture(name: name, slice: slice, g: g,
+                                  samples: SupportRegion.ringSamples(geometry: g),
+                                  ray: try #require(Self.foodCentroidRay(slice))))
+        }
+
+        let sweepTop = try #require(Self.maxCandidatePlanesSweep.max())
+
+        func pass(_ index: Int, _ c: SupportRegion.PlaneCandidate,
+                  capture: Capture) -> Pass {
+            Pass(index: index, normal: c.normal, d: c.d,
+                 residueCount: c.residueCount,
+                 planeAtFoodMm: Self.planeDepthMm(normal: c.normal, d: c.d, ray: capture.ray),
+                 ringMedianMm: SupportRegion.medianHeight(
+                    indices: capture.samples.ring, geometry: capture.g,
+                    normal: c.normal, d: c.d),
+                 innerSupport: Self.innerSupportFraction(
+                    samples: capture.samples, geometry: capture.g,
+                    normal: c.normal, d: c.d),
+                 extentMm: c.extentMm,
+                 signs: Self.sectorSigns(samples: capture.samples, geometry: capture.g,
+                                         normal: c.normal, d: c.d))
+        }
+
+        func read(_ capture: Capture, multiple: Float) throws -> Reading {
+            var rng = SplitMix64(seed: Fnv1a64.hash(capture.slice.depth.depthBytesMm))
+            let deep = Self.extractCandidates(
+                annulus: capture.samples.annulus, geometry: capture.g,
+                gravity: capture.slice.gravity.normalised(), rng: &rng,
+                maxPasses: sweepTop, removalMultiple: multiple)
+            let natural = deep.enumerated().map { pass($0.offset, $0.element, capture: capture) }
+            let shipped = Array(natural.prefix(SupportRegion.maxCandidatePlanes))
+
+            // The removal chain replayed to the end, so what the pass AFTER the last one
+            // would have drawn from is a number rather than an inference — Decision 48's
+            // reading, at this multiple.
+            let removalBandMm = multiple * LiDARPlaneFitter.inlierBandMm
+            var residue = capture.samples.annulus
+            for p in natural {
+                residue = residue.filter {
+                    abs(p.normal.dot(capture.g.points[$0]) - p.d) >= removalBandMm
+                }
+            }
+
+            let empty = "\(capture.name): no candidate survives extraction at a removal band"
+                + " of \(fmt(removalBandMm)) mm"
+            let selected = try #require(
+                (0..<shipped.count).max { shipped[$0].innerSupport < shipped[$1].innerSupport },
+                "\(empty)")
+            let intended = try #require(
+                (0..<shipped.count).min { abs(shipped[$0].ringMedianMm) < abs(shipped[$1].ringMedianMm) })
+
+            return Reading(
+                name: capture.name, multiple: multiple, removalBandMm: removalBandMm,
+                pixelAreaMm2: capture.g.mmPerPx * capture.g.mmPerPx,
+                residueFloor: SupportRegion.minResidueSamples(mmPerPx: capture.g.mmPerPx),
+                natural: natural, residueAfterNatural: residue.count,
+                shipped: shipped, selectedIndex: selected, intendedIndex: intended)
+        }
+
+        var byMultiple: [Float: [Reading]] = [:]
+        for multiple in Self.inlierRemovalSweep {
+            byMultiple[multiple] = try corpus.map { try read($0, multiple: multiple) }
+        }
+
+        // The anchor. At the shipped multiple the parameterised chain must BE the shipped
+        // extraction — candidate for candidate — or the sweep is measuring a different
+        // removal and nothing below says anything about `inlierRemovalMultiple`.
+        for c in corpus {
+            let shipped = try #require(Self.candidates(c.name))
+            let reading = try #require(
+                byMultiple[SupportRegion.inlierRemovalMultiple]?.first { $0.name == c.name })
+            let drift = "\(c.name): the parameterised removal chain no longer reproduces"
+                + " SupportRegion.extractCandidates at inlierRemovalMultiple"
+                + " (\(shipped.count) shipped candidates, \(reading.shipped.count) reproduced)"
+                + " — the removal sweep is not measuring the shipped path"
+            #expect(shipped.count == reading.shipped.count, "\(drift)")
+            for (a, b) in zip(shipped, reading.shipped) {
+                #expect(a.d == b.d && a.normal == b.normal
+                        && a.residueCount == b.residueCount, "\(drift)")
+            }
+        }
+
+        for multiple in Self.inlierRemovalSweep {
+            let readings = byMultiple[multiple] ?? []
+            print("inlierRemovalMultiple=\(fmt(multiple))"
+                  + " (removal band \(fmt(multiple * LiDARPlaneFitter.inlierBandMm)) mm):")
+            for r in readings {
+                let shippedPlane = byMultiple[SupportRegion.inlierRemovalMultiple]?
+                    .first { $0.name == r.name }
+                print("  \(r.name): natural depth \(r.natural.count) passes"
+                      + " (cap \(SupportRegion.maxCandidatePlanes)),"
+                      + " residue after the last \(r.residueAfterNatural) samples"
+                      + " = \(fmt(Float(r.residueAfterNatural) * r.pixelAreaMm2)) mm²"
+                      + " \(r.starved ? "STARVED" : "the CAP stopped it"),"
+                      + " selected pass \(r.selectedIndex + 1),"
+                      + " PLANE AT FOOD \(fmt(r.selected.planeAtFoodMm)) mm"
+                      + " (\(fmt(r.selected.planeAtFoodMm - (shippedPlane?.selected.planeAtFoodMm ?? r.selected.planeAtFoodMm)))"
+                      + " vs shipped, tilt"
+                      + " \(fmt(Self.angleDeg(r.selected.normal, shippedPlane?.selected.normal ?? r.selected.normal)))°),"
+                      + " ring median \(fmt(r.selected.ringMedianMm)) mm,"
+                      + " support \(fmt(r.selected.innerSupport)),"
+                      + " crossed \(r.selected.signs.crossedFailing),"
+                      + " escaped \(r.selected.signs.escapedFailing);"
+                      + " intended pass \(r.intendedIndex + 1)"
+                      + " (ring median \(fmt(r.intended.ringMedianMm)) mm,"
+                      + " crossed \(r.intended.signs.crossedFailing),"
+                      + " plane \(fmt(r.intended.planeAtFoodMm)) mm)")
+                for p in r.natural {
+                    print("    pass \(p.index + 1): residue \(p.residueCount) samples"
+                          + " = \(fmt(Float(p.residueCount) * r.pixelAreaMm2)) mm²,"
+                          + " plane \(fmt(p.planeAtFoodMm)) mm,"
+                          + " ring median \(fmt(p.ringMedianMm)) mm,"
+                          + " support \(fmt(p.innerSupport)),"
+                          + " extent \(fmt(p.extentMm)) mm")
+                }
+            }
+        }
+
+        // MARK: the one stated rule
+
+        // "A 1× shell seeds near-duplicate planes on the next pass." The bar for
+        // "near-duplicate" is `inlierBandMm` itself, not a number chosen here: two planes
+        // are near-duplicates when no sample in the candidate set can tell them apart —
+        // when the largest gap between their signed heights, taken over the whole annulus,
+        // is under one inlier band. That is exactly the condition under which the second
+        // plane's inliers would have been the first's, so the claim is read in the units
+        // the removal itself is written in.
+        struct Adjacent {
+            let name: String
+            let multiple: Float
+            let from: Int
+            let separationMm: Float
+            let tiltDeg: Float
+            let maxDivergenceMm: Float
+            var duplicate: Bool { maxDivergenceMm < LiDARPlaneFitter.inlierBandMm }
+        }
+        func divergenceMm(_ a: Pass, _ b: Pass, capture: Capture) -> Float {
+            var worst: Float = 0
+            for idx in capture.samples.annulus {
+                let p = capture.g.points[idx]
+                worst = max(worst, abs((a.normal.dot(p) - a.d) - (b.normal.dot(p) - b.d)))
+            }
+            return worst
+        }
+        var adjacents: [Adjacent] = []
+        for multiple in Self.inlierRemovalSweep {
+            for r in byMultiple[multiple] ?? [] {
+                guard let capture = corpus.first(where: { $0.name == r.name }) else { continue }
+                for (a, b) in zip(r.natural, r.natural.dropFirst()) {
+                    adjacents.append(Adjacent(
+                        name: r.name, multiple: multiple, from: a.index,
+                        separationMm: abs(a.planeAtFoodMm - b.planeAtFoodMm),
+                        tiltDeg: Self.angleDeg(a.normal, b.normal),
+                        maxDivergenceMm: divergenceMm(a, b, capture: capture)))
+                }
+            }
+        }
+        for multiple in Self.inlierRemovalSweep {
+            let atMultiple = adjacents.filter { $0.multiple == multiple }
+            print("adjacent-pass separation at \(fmt(multiple))×:"
+                  + " \(atMultiple.map { "\($0.name) pass \($0.from + 1)→\($0.from + 2)" + " \(fmt($0.separationMm)) mm at the food / \(fmt($0.tiltDeg))° / divergence \(fmt($0.maxDivergenceMm)) mm\($0.duplicate ? " DUPLICATE" : "")" })")
+        }
+        let duplicatesAtOne = adjacents.filter { $0.multiple == 1 && $0.duplicate }
+        let duplicatesAbove = adjacents.filter { $0.multiple > 1 && $0.duplicate }
+        print("near-duplicate adjacent passes: \(duplicatesAtOne.count) at 1×,"
+              + " \(duplicatesAbove.count) above 1×,"
+              + " of \(adjacents.count) adjacent pairs in the sweep")
+
+        // MARK: what the removal band does to the answer
+
+        var spanByName: [String: (lo: Float, hi: Float)] = [:]
+        for readings in byMultiple.values {
+            for r in readings {
+                let existing = spanByName[r.name] ?? (r.selected.planeAtFoodMm, r.selected.planeAtFoodMm)
+                spanByName[r.name] = (min(existing.lo, r.selected.planeAtFoodMm),
+                                      max(existing.hi, r.selected.planeAtFoodMm))
+            }
+        }
+        let spans = spanByName.mapValues { $0.hi - $0.lo }
+        print("plane movement at the food over the REMOVAL sweep:"
+              + " \(spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm transfer tolerance")
+
+        // And what it does to the plane a correct fit must SELECT, which on `1785901032716`
+        // is pass 2 and not the ranking's winner (Decision 48). If a wide shell removes the
+        // plate along with the table, that plane leaves the candidate set entirely — the
+        // failure mode Decision 48 measured at a cap below 2, arriving by another route.
+        for multiple in Self.inlierRemovalSweep {
+            let readings = byMultiple[multiple] ?? []
+            print("  at \(fmt(multiple))×: intended ring medians"
+                  + " \(readings.map { "\($0.name) \(fmt($0.intended.ringMedianMm)) mm" }.sorted())")
+        }
+
+        // `maxCrossedSectors` per multiple, read exactly as Decisions 48 and 49 read it:
+        // the floor off the plane a correct fit must ADMIT, the ceiling off the ranking's
+        // winner where that is a different plane.
+        var crossedByMultiple: [Float: (floor: Int, ceiling: Int)] = [:]
+        for multiple in Self.inlierRemovalSweep {
+            var floor = 0, ceiling = Int.max
+            for r in byMultiple[multiple] ?? [] {
+                floor = max(floor, r.intended.signs.crossedFailing)
+                if r.selectedIndex != r.intendedIndex {
+                    ceiling = min(ceiling, r.selected.signs.crossedFailing - 1)
+                }
+            }
+            crossedByMultiple[multiple] = (floor, ceiling)
+            print("  multiple \(fmt(multiple))×: maxCrossedSectors corpus \(floor)…"
+                  + "\(ceiling == Int.max ? "unbounded" : "\(ceiling)")"
+                  + " \(floor <= ceiling ? "" : "EMPTY")")
+        }
+
+        // MARK: what the sweep says
+
+        // THE FIRST FINDING, and it is the claim in the comment. "A 1× shell seeds
+        // near-duplicate planes on the next pass" is false on this corpus, and not
+        // marginally: the closest adjacent pair anywhere in the sweep diverges by 23.973 mm
+        // across the annulus, nearly five inlier bands, and the closest at 1× by 30.807 mm.
+        // CC-RANSAC is why — a pass keeps the largest CONNECTED component, so the samples a
+        // 1× shell leaves behind sit in a thin ring around a surface already taken and do
+        // not form one. So the shipped value has no derivation at all, as `ringOuterMm` had
+        // none once Decision 33 measured its stated rule. The floor cannot come from here.
+        let closestAtOne = adjacents.filter { $0.multiple == 1 }.map(\.maxDivergenceMm).min() ?? 0
+        let closestAnywhere = adjacents.map(\.maxDivergenceMm).min() ?? 0
+        print("closest adjacent pass pair: \(fmt(closestAtOne)) mm at 1×,"
+              + " \(fmt(closestAnywhere)) mm over the whole sweep"
+              + " — against an inlier band of \(fmt(LiDARPlaneFitter.inlierBandMm)) mm")
+        let ruleHolds = "a 1× shell does seed near-duplicate planes after all"
+            + " (\(duplicatesAtOne.count) of \(adjacents.filter { $0.multiple == 1 }.count)"
+            + " adjacent pairs, closest \(fmt(closestAtOne)) mm) — the comment's stated"
+            + " reason for 2× is a derivation and this constant is not unmarked"
+        #expect(duplicatesAtOne.isEmpty && duplicatesAbove.isEmpty, "\(ruleHolds)")
+
+        // THE SECOND FINDING: the shell decides whether the pass cap is a cap at all.
+        // Decision 48 lifted `maxCandidatePlanes` to 8 and found extraction stopping at
+        // three passes on both captures, starved — so no value at or above 3 was
+        // distinguishable and the cap's ceiling was open. That reading is at 2×. A narrower
+        // shell hands the next pass more residue, extraction runs deeper, and the cap starts
+        // truncating: the shipped 2× is the SMALLEST multiple in the sweep at which it does
+        // not. Decision 48's headline is a slice at this constant, and the ordering it
+        // states — residue floor before pass cap — gains a member before both.
+        let naturalDepths = Self.inlierRemovalSweep.map { multiple in
+            (multiple, (byMultiple[multiple] ?? []).map(\.natural.count))
+        }
+        let truncatedAt = Self.inlierRemovalSweep.filter { multiple in
+            (byMultiple[multiple] ?? []).contains { $0.natural.count > SupportRegion.maxCandidatePlanes }
+        }
+        print("natural extraction depth per multiple:"
+              + " \(naturalDepths.map { "\(fmt($0.0))× \($0.1)" });"
+              + " the cap truncates at \(truncatedAt.map { fmt($0) })×")
+        let capIsIdleThroughout = "the pass cap truncates at no removal multiple in the sweep"
+            + " (natural depths \(naturalDepths.map { "\(fmt($0.0))× \($0.1)" })) — Decision"
+            + " 48's \"the cap never fires\" is not denominated in this constant after all"
+        #expect(!truncatedAt.isEmpty
+                && !truncatedAt.contains(SupportRegion.inlierRemovalMultiple),
+                "\(capIsIdleThroughout)")
+
+        // THE THIRD FINDING: it does NOT move the answer, exactly. This is the constant that
+        // decides what each pass hands the next, and the selected plane is unchanged to
+        // 0.000 mm at every multiple on both captures — because removal happens AFTER a pass
+        // and pass 1 is therefore drawn from an annulus this constant has never touched, and
+        // because the ranking picks pass 1 on both captures at every multiple. So it joins
+        // the count, the bar, the band count and (since Decision 49) the radius as
+        // bracket-only, and `annulusOuterMm` remains the only owed constant that moves the
+        // plane.
+        let widest = spans.values.max() ?? 0
+        let rankedFirstAlways = byMultiple.values.flatMap { $0 }.allSatisfy { $0.selectedIndex == 0 }
+        print("the removal band's own share of the movement: \(fmt(widest)) mm;"
+              + " the ranking picks pass 1 everywhere: \(rankedFirstAlways)")
+        let removalMovesThePlane = "the removal band moves the selected plane"
+            + " (\(spans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted())) — it is a second"
+            + " owed constant that moves the answer and not a bracket-only one"
+        #expect(widest == 0 && rankedFirstAlways, "\(removalMovesThePlane)")
+
+        // THE BRACKET, and it is the corpus's alone. The committed suite cannot see this
+        // constant at all, and here that is STRUCTURAL rather than measured: Decision 49's
+        // bound reached the scenes through `visibility` and `escaped` and was found silent
+        // by measurement, but no scene runs extraction — each asserts against a plane its
+        // own test states — and the removal chain exists nowhere else. So no suite reading
+        // is even definable, which no other owed constant can say.
+        //
+        // The CEILING is where a shell wide enough to take the table takes the plate with
+        // it. On `1785901032716` the plane a correct fit must select is pass 2 (Decision 48),
+        // and its ring median degrades −2.203, −2.309, −2.377, −2.658, −3.011 mm over
+        // 1…2.5× before the candidate stops existing: at 3× the nearest-to-zero candidate is
+        // pass 1, the TABLE at +3.039 mm with 3 crossed sectors of its own, so
+        // `maxCrossedSectors` reads 3…unbounded — the guard would have to admit the plane
+        // Decision 18 exists to reject. That is Decision 49's floor argument arriving on a
+        // second constant. The FLOOR is structural at 1× and the corpus does not raise it:
+        // at 1× the intended candidate is still admissible and still separable.
+        let shippedBracket = try #require(crossedByMultiple[SupportRegion.inlierRemovalMultiple])
+        let determinedAt = Self.inlierRemovalSweep.filter {
+            (crossedByMultiple[$0]?.floor ?? 0) == 2 && (crossedByMultiple[$0]?.ceiling ?? 0) == 2
+        }
+        let brokenAt = Self.inlierRemovalSweep.filter {
+            (crossedByMultiple[$0]?.floor ?? 0) > 2
+        }
+        print("multiples at which the corpus determines maxCrossedSectors at 2:"
+              + " \(determinedAt.map { fmt($0) })×;"
+              + " multiples at which the intended plane is gone: \(brokenAt.map { fmt($0) })×")
+        let noCeiling = "the intended candidate survives at every removal multiple in the"
+            + " sweep (maxCrossedSectors determined at 2 at \(determinedAt.map { fmt($0) }))"
+            + " — the corpus does not bracket this constant from above and the ceiling is open"
+        #expect(shippedBracket.floor == 2 && shippedBracket.ceiling == 2
+                && !brokenAt.isEmpty
+                && determinedAt.allSatisfy { $0 < (brokenAt.min() ?? 0) }, "\(noCeiling)")
+
+        // And what the bracket says about Decision 48's determination. Unlike the candidate
+        // bound — where only 50 mm of eight values read 2…2 (Decision 49) — this constant
+        // reads 2…2 at EVERY value its own bracket admits. So `maxCrossedSectors` is not
+        // denominated in it, and the sitting sets the two independently: the first time
+        // since Decision 43 that two sources of a bracket agree throughout rather than at a
+        // point.
+        let agreesThroughout = determinedAt.count
+            == Self.inlierRemovalSweep.filter { $0 <= (determinedAt.max() ?? 0) }.count
+        print("maxCrossedSectors reads 2…2 at every admissible multiple: \(agreesThroughout)")
+        let determinationIsASlice = "the corpus determines maxCrossedSectors at 2 at only"
+            + " some of the removal multiples its own bracket admits"
+            + " (\(determinedAt.map { fmt($0) })) — Decision 48's determination is a slice at"
+            + " this constant too and the sitting must fix the removal band first"
+        #expect(agreesThroughout, "\(determinationIsASlice)")
     }
 
     // MARK: - Req 4.5: what the fallback rate is a function of
