@@ -1502,3 +1502,72 @@ Leaving `ringOuterMm` at 25 while recording that it is too wide for the corpus's
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`SectorMargin`, `sectorMargins`, `plateMarginCannotSetRingOuter`), the `ringOuterMm` comment in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
 
 ---
+
+## Decision 34: Five of the nine rejection reasons never fire on the corpus
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Decisions 29, 32 and 33 each took one `[owed]` constant, measured what the two committed captures can say about it, and recorded the bound rather than inventing a value. Each treated the constant in isolation. Reading them together raises a question none of them asks: of the guards these constants gate, which does the corpus ever *reach*?
+
+`admissibility` applies nine rejection reasons in a fixed order and short-circuits at the first that fires, so the reason it returns says which guard came first, not which guards would have fired. Nothing observable depends on that order — the reason is not persisted, and a rejected candidate is rejected either way — but it bounds what a measurement pass can see. A constant behind a guard the corpus never reaches is in a weaker position than one the corpus bounds from a single side: nothing in the corpus says it is even correctly oriented.
+
+`SupportPlaneCorpusMeasurementTests` gains `allRejections`, which restates the shipped conditions and evaluates all of them independently. The restatement is pinned against drift by asserting that its first entry equals what `admissibility` returns for the same candidate.
+
+### Decision
+
+Record what the corpus exercises, and bound the four constants behind the guards it does not. No constant moves and no shipped behaviour changes.
+
+**Under the shipped order, three reasons fire**: `extent`, `supportFraction`, `sectors`. Evaluated independently a fourth does — `ringMedian`, on four of the six candidates. **Five never fire**: `ringUnavailable`, `foodEnvelope`, `bandStep`, `visibility`, `escaped`.
+
+**`foodEnvelopeMinMm = 0` is bounded from above at 25.8 mm** — the envelope of the candidate the design intends to select on `1785901032716`, and 26.6 mm on `1785135663727`. Above that the guard rejects the fit this feature exists to produce. Every envelope in the corpus is positive (7.2 to 39.6 mm), so the negative-envelope cases the guard is written for — a bowl, a plane on the food top — are absent and there is no floor. The design's illustrative "bread p90 ≈ +8 mm" is measured at **+26.6 mm**, low by 3×; the figure is corrected, the argument it supports is unaffected.
+
+**`bandStepMaxMm = 6` is approached from the wrong side.** It fires on an outward *rise*; every inner→mid step in the corpus is a *fall*, from −0.5 to −6.5 mm, because a flat plate ends and the table begins. The corpus is 6.5 mm from the bar on the side that cannot reach it, and its ceiling still waits on the ruler measurement `prerequisites.md` carries.
+
+**`escapeBandMm = 30` is correctly one-sided.** Req 3.3 rejects a plane lying *below* the surrounding surface, which reads a **positive** annulus median, and that is the comparison shipped. Corpus annulus medians span −36.6 to +5.7 mm: the largest positive is a fifth of the bar, and the one candidate far from its surroundings is far *above* them — a plane on the food top, which `ringMedianMaxMm` rejects and Req 3.3 makes no claim about.
+
+**`supportVisibilityMin = 0.15` is firable (Decision 29) but never fired**: the lowest visibility any corpus candidate reaches is 0.246, 1.6× the bar.
+
+**`ringSupportMarginMin = 0.15` is not reachable at all.** It compares the top two *admissible* candidates and neither capture produces even one. The gaps real candidates open are **0.312 and 0.117**, so 0.15 falls between them and would call one capture's pair distinct and the other's ambiguous — with no known-correct winner on either to say which verdict is right.
+
+### Rationale
+
+The finding changes what the capture session has to do, in the same way Decision 33 did. Its brief so far is "produce the scenes that set the values". For these four it is "produce the scenes that *fire the guards*", which is a stronger requirement and maps onto specific captures: capture 5, the bowl, is the only source of a negative food envelope; captures 3 and 4, the rimmed plate, are the only source of an outward band rise and of a visibility below 0.246; and no planned capture produces a positive annulus median anywhere near 30 mm, so `escapeBandMm` will still be unexercised after the session unless one is arranged.
+
+Stating that as a measurement rather than a worry is what the pass is for. "These constants are owed" and "these guards have never run" read alike in a task list, and they are different problems: the first needs a value, the second needs evidence that the guard does anything at all. Decision 22 retired two guards on exactly this ground — a bar positioned where it cannot fire — and the only reason `escapeBandMm` and `ringSupportMarginMin` are not in the same position is that the corpus is too small to tell.
+
+`ringSupportMarginMin`'s straddle is the same shape as `ringBandMm`'s in Decision 29, and gets the same treatment. A corpus that brackets a constant from both sides at once is a corpus that cannot set it, and asserting the straddle is what makes a future capture that closes it fail the test rather than pass unnoticed.
+
+The guard-order note is recorded because it is a live trap rather than a defect. A future reader measuring "why was this candidate rejected" from `admissibility` alone would conclude the corpus exercises three guards and that the rest are fine; the independent evaluation says a fourth fires and five do not. Reordering the guards would change every such reading while changing no behaviour.
+
+### Alternatives Considered
+
+- **Set `foodEnvelopeMinMm` to a positive value inside the measured ceiling** - The corpus shows envelopes from 7.2 to 39.6 mm, so a floor at, say, 5 mm sits below all of them and would reject a plane on the food top - Rejected because it fits the bar to the pass side alone, which Req 3.7 forbids. The guard exists to catch bowls and food-top planes; the corpus contains neither, so a value chosen inside it is calibrated against the cases the guard is *not* for.
+- **Reorder `admissibility` so the cheap, always-computable guards run last** - Put `extent` and `supportFraction` after the geometric ones so a measurement pass sees more reasons fire - Rejected because it treats the pass's convenience as a reason to change shipped code, and it does not help: the guards that never fire are never fired by these captures at any position in the order. `allRejections` gets the same information without touching the shipped path.
+- **Retire `escapeBandMm` and `ringSupportMarginMin` as unfirable, following Decision 22** - Two guards no capture has ever fired look exactly like the residual bar and the MAD bar that were deleted - Rejected because the evidence is not the same. Those two were shown unfirable by *arithmetic* — a bar below a floor the algorithm enforces elsewhere. These two are firable in principle and merely unreached by a two-capture corpus, and deleting a guard on absence of evidence from two captures is how the Decision 18 silent failure got in.
+- **Record the finding in the task detail and add no assertions** - The numbers are in the dump already - Rejected because the value of the finding is that it *breaks* when the corpus improves. A capture that fires `bandStep` or produces two admissible candidates should fail a test and force the derivation, not pass quietly into a dump nobody re-reads.
+
+### Consequences
+
+**Positive:**
+
+- The capture session's brief for four constants changes from "set a value" to "fire the guard", and each is now mapped to the specific planned capture that can do it.
+- `escapeBandMm`'s orientation is verified against Req 3.3 rather than assumed, which is the one thing about it the corpus *can* settle.
+- The design's bread envelope figure is a measurement instead of an estimate that was 3× low.
+- Every finding is an assertion that fails when the corpus improves, so the next session is told what changed rather than having to re-derive it.
+- The restatement of the guard conditions is pinned to `admissibility`, so the two cannot drift apart silently.
+
+**Negative:**
+
+- Five findings, no values: this narrows what four constants owe without paying any of them, and `ringSupportMarginMin` is now known to be untestable on anything the corpus contains.
+- `escapeBandMm` will likely still be unexercised after the six planned captures, so a constant on the shipped path may ship having never been demonstrated to do anything.
+- The guard conditions are now written twice — once in `SupportRegion.admissibility`, once in the pass's `allRejections` — and only the first entry of the second is pinned; a drift in a later condition would show up as a wrong count rather than a failed pin.
+- Task 26 stays open and task 27 stays blocked behind it.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`CandidateMeasurement`, `measurements`, `allRejections` and five derivation tests), the constant comments and the `admissibility` order note in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---

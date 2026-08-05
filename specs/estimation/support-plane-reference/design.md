@@ -161,7 +161,7 @@ Found by adversarial review; all three are stated in the requirements and were m
 
 The root cause is one constant serving two opposed purposes. Decision 3 uses "plane above a share of food points" to route **bowls** to fallback, where it must fire; Req 3.4 uses the same test to tolerate **overhang**, where it must not. Bowls want the bar low, overhang needs it above 11 %. No value serves both.
 
-Replaced by an **upper-envelope test**: reject when the food's `foodEnvelopePercentile` signed height above the plane falls below `foodEnvelopeMinMm`. Bread — p90 ≈ +8 mm above the plate plane, accepted, and the overhanging slice's samples simply sit in the lower decile where they belong. Bowl — all food lies below the rim plane, so p90 is negative, rejected. Plane on the food top — p90 ≈ 0, rejected. One constant, three cases, and it is denominated in millimetres, which is what Req 3.4 asks for and what the fraction quietly substituted away.
+Replaced by an **upper-envelope test**: reject when the food's `foodEnvelopePercentile` signed height above the plane falls below `foodEnvelopeMinMm`. Bread — p90 **measured at +26.6 mm** above the plate plane (the +8 mm first written here was an estimate, low by 3× — Decision 34), accepted, and the overhanging slice's samples simply sit in the lower decile where they belong. Bowl — all food lies below the rim plane, so p90 is negative, rejected. Plane on the food top — p90 ≈ 0, rejected. One constant, three cases, and it is denominated in millimetres, which is what Req 3.4 asks for and what the fraction quietly substituted away.
 
 **Req 3.3's guard could not fire.** "Plane below the lowest admissible candidate" compares the minimum of a set against itself, and is circular besides, since admissibility is defined partly by this test. Req 3.3 names the *edge-band* plane as the comparator; the substitution existed only to keep the edge-band fit lazy, which is an optimisation preference, not a comparator. Replaced by the **annulus median height**, already computed and free, with `escapeBandMm` as the band. A plane that escaped through a depth dropout lands far below the surrounding surface and is caught; the edge-band fit stays lazy.
 
@@ -287,10 +287,13 @@ public enum SupportRegion {
                                                // measured margins reach 4 mm, inside
                                                // ringInnerMm (Decision 33)
     public static let ringBandCount = 3        // structural: inner/mid/outer
-    public static let bandStepMaxMm: Float = 6 // [owed] below the smallest measured rim step
+    public static let bandStepMaxMm: Float = 6 // [owed] below the smallest measured rim
+                                               // step; UNEXERCISED — every corpus step is
+                                               // a fall, −0.5…−6.5 mm (Decision 34)
     public static let supportVisibilityMin: Float = 0.15 // [owed] capture 4 sets the value;
                                                // firable — the ratio is over the annulus,
-                                               // ceilings 1.710/1.426 (Decision 29)
+                                               // ceilings 1.710/1.426 (Decision 29) — but
+                                               // never fired; corpus floor 0.246 (Dec. 34)
     public static let ringBandMm: Float = 5    // [inherited] inlierBandMm = 5
     public static let ringSupportMin: Float = 0.6 // [owed] measured per-sample σ is
                                                   // 3.44 and 6.98 mm at the same range —
@@ -303,10 +306,16 @@ public enum SupportRegion {
     public static let sectorSupportMin: Float = 0.5  // the count takes |height|, so a
     public static let minSupportingSectors = 6       // correct plane whose ring escaped
                                                      // and a table plane both score 5 of 8
-    public static let ringSupportMarginMin: Float = 0.15 // [owed]
+    public static let ringSupportMarginMin: Float = 0.15 // [owed] unreachable on the
+                                                     // corpus — no capture yields two
+                                                     // admissible candidates; the gaps
+                                                     // real ones open, 0.312 and 0.117,
+                                                     // straddle it (Decision 34)
     public static let escapeBandMm: Float = 30       // [owed] Decision 22 — the Req 3.3
                                                      // comparator; "below the lowest
-                                                     // admissible candidate" cannot fire
+                                                     // admissible candidate" cannot fire.
+                                                     // One-sidedness confirmed correct;
+                                                     // corpus reaches +5.7 mm (Dec. 34)
     // [measured] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has
     // binomial σ ≈ 0.10; at the old floor of 60, sectors averaged 7 samples
     // (σ ≈ 0.19) and the guard was noise (Decision 20). Holds per radial band;
@@ -319,7 +328,10 @@ public enum SupportRegion {
     // food's upper envelope: percentile of signed food height, in MILLIMETRES
     // as Req 3.4 states, not a sample-count fraction.
     public static let foodEnvelopePercentile: Float = 0.90
-    public static let foodEnvelopeMinMm: Float = 0    // [owed] Decision 22
+    public static let foodEnvelopeMinMm: Float = 0    // [owed] Decision 22; bounded above
+                                                 // at 25.8 mm by the intended candidate,
+                                                 // not below — every corpus envelope is
+                                                 // positive (Decision 34)
     public static let maxCandidatePlanes = 3     // structural: table, support, one more
     public static let minResidueSamples = 500    // [owed] extraction-pass floor only
                                                  // (Decision 32); corpus bounds it
@@ -445,6 +457,8 @@ Three figures the criteria state do **not** reproduce and are superseded by Deci
 **Numbers this design owes the requirements** — to be fixed during implementation against the fixture corpus, not asserted now. Every `SupportRegion` constant is annotated `[derived]`, `[measured]`, `[inherited]`, or `[owed]`; the `[owed]` ones are task 26 corpus measurements, with the sector trio under Req 3.7's explicit ban on shipping asserted values, and each measured value lands with its derivation recorded in `decision_log.md` (Req 3.7). Beyond the constants: the Req 4.5 fallback-rate defect threshold, Req 5.1's device/replay plane tolerance and named fixture, Req 7.6's latency and memory budget, and `fallbackPenalty`. Each is a measurement, and stating a value here would be inventing evidence.
 
 **What the corpus pass settled (Decision 29).** `SupportPlaneCorpusMeasurementTests` is the instrumented, guards-disabled pass over the committed slices. It confirms `ringInnerMm = 8` with a stated ≈ 365 mm range envelope, confirms `ringMinSamples = 200` per band at 5.6–7.0× margin, and establishes that `supportVisibilityMin` is firable — the ratio is computed over the annulus, not the ring, so it does see a thin support strip. It cannot settle the rest, for two measured reasons: neither committed capture is a clean correct fit (both rings cross the plate edge — per-sector inner medians reach −32.6 mm on one and +19.8 mm on the other), and per-sample noise on a flat surface measures 3.44 mm on one and 6.98 mm on the other at the same range, straddling `ringBandMm`. Decision 30 records that the sector count is additionally blind to the sign that distinguishes the two cases.
+
+**How much of the guard table the corpus reaches (Decision 34).** Three of the nine rejection reasons ever fire on it — `extent`, `supportFraction`, `sectors` — and a fourth, `ringMedian`, only when the guards are evaluated independently rather than short-circuited. The other five never fire, and four `[owed]` constants sit behind them: `foodEnvelopeMinMm` (bounded above at 25.8 mm by the intended candidate's envelope, not below, since every corpus envelope is positive), `bandStepMaxMm` (the guard reads an outward rise; every corpus step is a fall of −0.5 to −6.5 mm), `supportVisibilityMin` (firable, never fired — the corpus floor is 0.246 against a 0.15 bar), and `escapeBandMm` (one-sidedness confirmed correct against Req 3.3, but the corpus reaches +5.7 mm against a 30 mm bar). `ringSupportMarginMin` is not reachable at all: it compares the top two **admissible** candidates and neither capture produces one. These four are therefore not merely unset — nothing in the corpus exercises the guards they gate, so the capture session has to produce the scenes that fire them, not just the scenes that set their values.
 
 **Why both rings cross the plate edge (Decision 33).** The same pass measures the **support margin** per sector — the distance from the food boundary at which the surface departs from itself by more than `ringBandMm`. Measured margins are 16, 40, 10, 42, 6, 4, 6, 44 mm and 34, 4, 46, 8, 30, 14, 12, 6 mm, every in-ring departure a fall of 5.1–15.6 mm, so they are plate edges rather than rims. Three consequences. `ringOuterMm`'s stated rule — inside the smallest measured plate margin — is **unsatisfiable**, because that margin is 4 mm on both captures, inside `ringInnerMm`. Only 3 of 8 sectors reach `ringOuterMm` and only 4 of 8 reach the inner band's 13.7 mm, which is below `minSupportingSectors = 6`, so plate geometry caps the supporting count before `sectorSupportMin` is consulted. And the crossings Decision 29 attributes to the captures are therefore in part a property of the ring's radial extent, which the capture session must record per sector so the trio and `ringOuterMm` are derived together.
 

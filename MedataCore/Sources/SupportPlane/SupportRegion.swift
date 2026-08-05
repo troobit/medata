@@ -106,7 +106,11 @@ public enum SupportRegion {
     public static let ringOuterMm: Float = 25
     // Structural: inner / mid / outer.
     public static let ringBandCount = 3
-    // [owed] below the smallest measured rim step.
+    // [owed] below the smallest measured rim step — and UNEXERCISED (Decision 34). The
+    // guard fires on an outward RISE; every inner→mid step in the corpus is a FALL, of
+    // −0.5 to −6.5 mm, because a flat plate ends and the table begins. The corpus is
+    // therefore 6.5 mm from the bar on the wrong side and supplies no floor either. The
+    // ceiling still waits on the ruler measurement in `prerequisites.md`.
     public static let bandStepMaxMm: Float = 6
     // [owed] prerequisites capture 4 is the only source for the VALUE. Its firability
     // is settled (Decision 29): the ratio is computed over the ANNULUS, which begins at
@@ -114,6 +118,10 @@ public enum SupportRegion {
     // Measured ceilings — every annulus sample an inlier — are 1.710 and 1.426, and the
     // highest-support candidate reaches 0.880 and 1.032, so 0.15 is roughly a tenth of
     // the achievable range rather than unreachable.
+    //
+    // Firable but never FIRED (Decision 34): the lowest visibility any corpus candidate
+    // reaches is 0.246, 1.6x the bar, so the corpus cannot distinguish 0.15 from any
+    // value below that.
     public static let supportVisibilityMin: Float = 0.15
     // [inherited] LiDARPlaneFitter.inlierBandMm = 5.
     public static let ringBandMm: Float = 5
@@ -140,9 +148,21 @@ public enum SupportRegion {
     public static let minSupportingSectors = 6
     // [owed] two candidates 26 mm apart scoring near-equally is the straddling-ring
     // case, and a coin flip between them moves the carb number 3×.
+    //
+    // STRADDLED, and never reachable on the corpus (Decision 34). The margin compares the
+    // top two ADMISSIBLE candidates and neither capture produces even one, so it has never
+    // run on real data. The gaps real candidates open are 0.312 and 0.117 — 0.15 falls
+    // between them, so it would call one capture's pair distinct and the other's
+    // ambiguous, and neither capture has a known-correct winner to say which is right.
     public static let ringSupportMarginMin: Float = 0.15
     // [owed] Decision 22 — the Req 3.3 comparator. "Below the lowest admissible
     // candidate" compares a set minimum against itself and cannot fire.
+    //
+    // The one-sidedness is CORRECT (Decision 34): Req 3.3 rejects a plane lying below the
+    // surrounding surface, and such a plane reads a POSITIVE annulus median. The corpus
+    // confirms the orientation and nothing else — annulus medians span −36.6 to +5.7 mm,
+    // so the largest positive is a fifth of the bar, and the one candidate far from its
+    // surroundings is far ABOVE them, which is `ringMedianMaxMm`'s case and not this one.
     public static let escapeBandMm: Float = 30
     // [measured] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has binomial
     // σ ≈ 0.10 and separates a supported sector (p ≈ 0.9) from a crossed one
@@ -164,7 +184,12 @@ public enum SupportRegion {
     // overhang below the plate plane, against a 5 % bar). Denominated in millimetres
     // as Req 3.4 states, not as a sample-count fraction.
     public static let foodEnvelopePercentile: Float = 0.90
-    // [owed] Decision 22.
+    // [owed] Decision 22, bounded from ABOVE only (Decision 34). The corpus's intended
+    // candidate — highest ring support, taken before admissibility — reports an envelope
+    // of 26.6 mm and 25.8 mm, so any floor at or above 25.8 rejects the fit this feature
+    // exists to produce. Every envelope the corpus measures is positive (7.2 to 39.6 mm),
+    // so the negative-envelope cases the guard is written for — a bowl, a plane on the
+    // food top — are scenes it does not contain and there is no floor.
     public static let foodEnvelopeMinMm: Float = 0
     // Structural: table, support, one more.
     public static let maxCandidatePlanes = 3
@@ -779,6 +804,11 @@ public enum SupportRegion {
         case escaped           // region escaped through a depth dropout (Req 3.3)
     }
 
+    // The order short-circuits, so the reason returned is the FIRST guard to fire rather
+    // than the only one. Nothing observable depends on it — the reason is not persisted
+    // and a rejected candidate is rejected — but it does bound what a measurement pass can
+    // see, which is why `SupportPlaneCorpusMeasurementTests` evaluates every guard
+    // independently. On the corpus only three of these reasons ever fire (Decision 34).
     static func admissibility(ring: RingStatistics, annulusMedianMm: Float,
                               foodEnvelopeMm: Float, extentPx: Int) -> CandidateRejection? {
         if extentPx < minAcceptedExtentPx { return .extent }
@@ -791,9 +821,10 @@ public enum SupportRegion {
         // the value this design otherwise treats as proof of correctness.
         if ring.supportingSectors < minSupportingSectors { return .sectors }
         // Decision 22: an upper-envelope test in millimetres, NOT a count fraction.
-        // Bread p90 ≈ +8 mm → accepted, with the overhanging slice's samples in the
-        // lower decile where they belong. Bowl → all food below the rim plane, p90
-        // negative, rejected. Plane on the food top → p90 ≈ 0, rejected.
+        // Bread p90 is measured at +26.6 mm → accepted, with the overhanging slice's
+        // samples in the lower decile where they belong (the +8 mm this comment carried
+        // before was an estimate, low by 3× — Decision 34). Bowl → all food below the rim
+        // plane, p90 negative, rejected. Plane on the food top → p90 ≈ 0, rejected.
         if foodEnvelopeMm < foodEnvelopeMinMm { return .foodEnvelope }
         if abs(ring.bandMedianMm[0]) > ringMedianMaxMm { return .ringMedian }
         // Decision 21: inner→mid ONLY. A well plane's own profile rises outward

@@ -515,7 +515,228 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // Which guards the corpus actually exercises. `admissibility` short-circuits at the
+    // first rejection, so the reason it returns says which guard came first, not which
+    // guards would have fired. The order has no observable effect — the reason is not
+    // persisted, and a rejected candidate is rejected — but it does decide what a
+    // measurement pass can see, and a constant behind a guard that is never reached is
+    // not merely unset: nothing in the corpus says it is even correctly oriented.
+    //
+    // This evaluates every guard independently. Under the shipped order only THREE
+    // reasons ever fire on the corpus; evaluated independently a fourth does, and five
+    // never fire at all — among them four of the `[owed]` constants (Decision 34).
+    @Test("five of the nine rejection reasons never fire on the corpus")
+    func laterGuardsAreUnexercisedOnTheCorpus() throws {
+        var shipped: Set<SupportRegion.CandidateRejection> = []
+        var independent: Set<SupportRegion.CandidateRejection> = []
+
+        for name in Self.captures {
+            for m in try #require(Self.measurements(name)) {
+                let all = Self.allRejections(m)
+                let verdict = SupportRegion.admissibility(
+                    ring: m.ring, annulusMedianMm: m.annulusMedianMm,
+                    foodEnvelopeMm: m.envelopeMm, extentPx: m.candidate.extentPx)
+                print("\(name): candidate at \(fmt(m.ring.medianMm)) mm — shipped verdict"
+                      + " \(verdict?.rawValue ?? "ADMITTED"), all guards \(all.map(\.rawValue))")
+                // Pins the duplication: `allRejections` restates the shipped conditions,
+                // so its first entry must be exactly what `admissibility` returns, or the
+                // two have drifted and every count below is measuring the wrong thing.
+                #expect(all.first == verdict,
+                        "\(name) guard restatement has drifted from `admissibility`")
+                if let verdict { shipped.insert(verdict) }
+                independent.formUnion(all)
+            }
+        }
+
+        // No candidate reaches the ring-unavailable path either — `bandsClearTheSampleFloor`
+        // is why — so the unexercised set is these five.
+        let unexercised: Set<SupportRegion.CandidateRejection> =
+            [.ringUnavailable, .foodEnvelope, .bandStep, .visibility, .escaped]
+        print("corpus fires \(shipped.map(\.rawValue).sorted()) under the shipped order,"
+              + " \(independent.map(\.rawValue).sorted()) with every guard evaluated")
+
+        for reason in unexercised {
+            let fired = "\(reason.rawValue) now fires somewhere in the corpus — the guard"
+                + " behind it is exercised and its constant can be measured rather than"
+                + " merely bounded"
+            #expect(!independent.contains(reason), "\(fired)")
+        }
+        // And the converse, so a capture that stops exercising a guard is caught too.
+        #expect(independent == [.extent, .supportFraction, .sectors, .ringMedian])
+        #expect(shipped == [.extent, .supportFraction, .sectors])
+    }
+
+    // `foodEnvelopeMinMm = 0` is the Decision 22 replacement for `foodAboveFractionMax`,
+    // which rejected this feature's own acceptance capture. The corpus bounds it from
+    // ABOVE — above the envelope of the candidate the design intends to select, the guard
+    // rejects the fit this feature exists to produce — and not from below, because the
+    // negative-envelope cases it is written for (a bowl, a plane on the food top) are
+    // scenes the corpus does not contain.
+    @Test("the corpus bounds foodEnvelopeMinMm from above only")
+    func foodEnvelopeFloorIsBoundedFromAboveOnly() throws {
+        var ceiling = Float.greatestFiniteMagnitude
+        for name in Self.captures {
+            let measurements = try #require(Self.measurements(name))
+            let best = try #require(Self.bestCandidate(name))
+            let intended = try #require(measurements.first { $0.candidate.d == best.d })
+            print("\(name): envelopes \(measurements.map { fmt($0.envelopeMm) }),"
+                  + " intended candidate \(fmt(intended.envelopeMm)) mm,"
+                  + " shipped floor \(SupportRegion.foodEnvelopeMinMm) mm")
+            // Every envelope in the corpus is positive, so nothing here approaches the
+            // guard from the side it is written to catch.
+            for m in measurements {
+                let bounded = "\(name) now produces a negative food envelope"
+                    + " (\(m.envelopeMm) mm) — the corpus can bound foodEnvelopeMinMm from below"
+                #expect(m.envelopeMm > 0, "\(bounded)")
+            }
+            ceiling = min(ceiling, intended.envelopeMm)
+        }
+        print("corpus ceiling on foodEnvelopeMinMm \(fmt(ceiling)) mm,"
+              + " shipped \(SupportRegion.foodEnvelopeMinMm) mm")
+        #expect(SupportRegion.foodEnvelopeMinMm < ceiling)
+    }
+
+    // `bandStepMaxMm = 6` fires on an outward RISE across the inner→mid step (Decision 21):
+    // a rim beginning inside the ring, or a bowl wall. Every step the corpus produces is a
+    // FALL — the plate ending and the table beginning — so the corpus supplies no floor for
+    // the constant, and its ceiling ("below the smallest measured rim step") is owed to the
+    // ruler measurement `prerequisites.md` still carries.
+    @Test("no candidate on the corpus produces the outward rise bandStepMaxMm reads")
+    func bandStepIsUnapproachedOnTheCorpus() throws {
+        var largestRise = -Float.greatestFiniteMagnitude
+        for name in Self.captures {
+            let measurements = try #require(Self.measurements(name))
+            let steps = measurements.map { $0.ring.bandMedianMm[1] - $0.ring.bandMedianMm[0] }
+            print("\(name): inner→mid steps \(steps.map { fmt($0) }) mm,"
+                  + " shipped bar \(SupportRegion.bandStepMaxMm) mm")
+            for step in steps {
+                let rise = "\(name) now steps UP by \(step) mm across inner→mid — the corpus"
+                    + " contains a rise and bandStepMaxMm can be bounded against it"
+                #expect(step < 0, "\(rise)")
+            }
+            largestRise = max(largestRise, steps.max() ?? largestRise)
+        }
+        print("corpus largest inner→mid step \(fmt(largestRise)) mm,"
+              + " \(fmt(SupportRegion.bandStepMaxMm - largestRise)) mm below the bar")
+        #expect(largestRise < SupportRegion.bandStepMaxMm)
+    }
+
+    // Req 3.3 rejects a plane lying BELOW the surrounding surface, so the comparator is
+    // correctly one-sided: a plane the surroundings sit above reads a POSITIVE annulus
+    // median. The corpus confirms the orientation and nothing else — its largest positive
+    // annulus median is a fifth of the bar, and its largest magnitude is on the other sign
+    // entirely, where Req 3.3 makes no claim and `ringMedianMaxMm` is the guard that fires.
+    @Test("escapeBandMm is oriented for Req 3.3 and unapproached by the corpus")
+    func escapeBandIsOrientedAndUnapproached() throws {
+        var highest = -Float.greatestFiniteMagnitude, lowest = Float.greatestFiniteMagnitude
+        for name in Self.captures {
+            let measurements = try #require(Self.measurements(name))
+            let medians = measurements.map(\.annulusMedianMm)
+            print("\(name): annulus medians \(medians.map { fmt($0) }) mm,"
+                  + " shipped bar \(SupportRegion.escapeBandMm) mm")
+            for m in measurements {
+                // The sign check that says the orientation is right: the one candidate far
+                // from its surroundings is far ABOVE them (−36.6 mm), which is a plane on
+                // the food top, not an escape, and it is `ringMedian` that rejects it.
+                if m.annulusMedianMm < -SupportRegion.escapeBandMm {
+                    let unguarded = "\(name) has a candidate \(m.annulusMedianMm) mm above"
+                        + " its surroundings that ringMedian does not reject — the escape"
+                        + " guard's one-sidedness now leaves a candidate unguarded"
+                    #expect(abs(m.ring.bandMedianMm[0]) > SupportRegion.ringMedianMaxMm,
+                            "\(unguarded)")
+                }
+            }
+            highest = max(highest, medians.max() ?? highest)
+            lowest = min(lowest, medians.min() ?? lowest)
+        }
+        print("corpus annulus medians span \(fmt(lowest))…\(fmt(highest)) mm"
+              + " against escapeBandMm \(SupportRegion.escapeBandMm) mm")
+        let approached = "the corpus now reaches \(fmt(highest)) mm, within reach of"
+            + " escapeBandMm \(SupportRegion.escapeBandMm) — the constant can be bounded"
+        #expect(highest < SupportRegion.escapeBandMm / 2, "\(approached)")
+    }
+
+    // The ambiguity margin cannot fire on this corpus: it compares the top TWO admissible
+    // candidates and neither capture produces one. What the corpus can show is where the
+    // constant sits relative to the gaps real candidates open — and 0.15 falls BETWEEN the
+    // two captures' gaps, so it would call one pair distinct and the other ambiguous while
+    // neither capture supplies a known-correct winner to say which verdict is right.
+    @Test("ringSupportMarginMin falls between the corpus's two candidate gaps")
+    func ambiguityMarginFallsBetweenTheCorpusGaps() throws {
+        var gaps: [Float] = []
+        for name in Self.captures {
+            let measurements = try #require(Self.measurements(name))
+            let admissible = measurements.filter { Self.allRejections($0).isEmpty }
+            let fractions = measurements.map(\.ring.supportFraction).sorted(by: >)
+            let gap = fractions[0] - fractions[1]
+            print("\(name): support fractions \(fractions.map { fmt($0) }),"
+                  + " top-two gap \(fmt(gap)), admissible \(admissible.count),"
+                  + " shipped margin \(SupportRegion.ringSupportMarginMin)")
+            // The guard needs two admissible candidates. Both captures produce none, so
+            // it has never run on real data — this is the assertion that says so.
+            let reachable = "\(name) now produces \(admissible.count) admissible candidates"
+                + " — ringSupportMarginMin is reachable and can be measured"
+            #expect(admissible.count < 2, "\(reachable)")
+            gaps.append(gap)
+        }
+        let low = try #require(gaps.min()), high = try #require(gaps.max())
+        print("corpus top-two gaps span \(fmt(low))…\(fmt(high))"
+              + " around ringSupportMarginMin \(SupportRegion.ringSupportMarginMin)")
+        // Straddled, in the same shape as `ringBandMm` and the noise figures (Decision 29):
+        // a constant a corpus brackets from both sides at once is a constant the corpus
+        // cannot set.
+        let settled = "the corpus no longer straddles ringSupportMarginMin"
+            + " (\(fmt(low))…\(fmt(high))) — the margin can be derived"
+        #expect(low < SupportRegion.ringSupportMarginMin
+                && high > SupportRegion.ringSupportMarginMin, "\(settled)")
+    }
+
     // MARK: - Helpers
+
+    // Everything `admissibility` reads, per candidate, computed once.
+    struct CandidateMeasurement {
+        let candidate: SupportRegion.PlaneCandidate
+        let ring: RingStatistics
+        let annulusMedianMm: Float
+        let envelopeMm: Float
+    }
+
+    static func measurements(_ name: String) -> [CandidateMeasurement]? {
+        guard let (g, samples) = prepared(name), let candidates = candidates(name) else {
+            return nil
+        }
+        return candidates.compactMap { candidate -> CandidateMeasurement? in
+            guard let ring = SupportRegion.ringStatistics(
+                samples: samples, geometry: g,
+                normal: candidate.normal, d: candidate.d) else { return nil }
+            return CandidateMeasurement(
+                candidate: candidate, ring: ring,
+                annulusMedianMm: SupportRegion.medianHeight(
+                    indices: samples.annulus, geometry: g,
+                    normal: candidate.normal, d: candidate.d),
+                envelopeMm: SupportRegion.foodEnvelopeMm(
+                    geometry: g, normal: candidate.normal, d: candidate.d))
+        }
+    }
+
+    // Every guard `admissibility` applies, evaluated independently and returned in the
+    // shipped order rather than short-circuited. `laterGuardsAreUnexercisedOnTheCorpus`
+    // pins `first` against `admissibility` so this restatement cannot drift from it.
+    static func allRejections(_ m: CandidateMeasurement) -> [SupportRegion.CandidateRejection] {
+        var fired: [SupportRegion.CandidateRejection] = []
+        if m.candidate.extentPx < SupportRegion.minAcceptedExtentPx { fired.append(.extent) }
+        if m.ring.supportFraction < SupportRegion.ringSupportMin { fired.append(.supportFraction) }
+        if m.ring.supportingSectors < SupportRegion.minSupportingSectors { fired.append(.sectors) }
+        if m.envelopeMm < SupportRegion.foodEnvelopeMinMm { fired.append(.foodEnvelope) }
+        if abs(m.ring.bandMedianMm[0]) > SupportRegion.ringMedianMaxMm { fired.append(.ringMedian) }
+        if m.ring.bandMedianMm.count > 1,
+           m.ring.bandMedianMm[1] - m.ring.bandMedianMm[0] > SupportRegion.bandStepMaxMm {
+            fired.append(.bandStep)
+        }
+        if m.ring.supportVisibility < SupportRegion.supportVisibilityMin { fired.append(.visibility) }
+        if m.annulusMedianMm > SupportRegion.escapeBandMm { fired.append(.escaped) }
+        return fired
+    }
 
     // Share of food-mask samples ARKit marked low-confidence, which `SupportRegion.prepare`
     // drops at τ_conf before any plane is fitted. Confidence bytes are the three ARKit
