@@ -7,23 +7,26 @@
       "effective_sample" : 27,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "beef" : {
       "beta" : 1,
       "clamped" : false,
-      "effective_sample" : 7,
+      "effective_sample" : 6,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "broccoli" : {
-      "beta" : 0.515968,
+      "beta" : 0.49546206,
       "clamped" : false,
-      "effective_sample" : 35,
+      "effective_sample" : 34,
       "provenance" : "n5k_mixture",
-      "standard_error" : 0.05777963,
-      "status" : "calibrated"
+      "standard_error" : 0.05500755,
+      "status" : "calibrated",
+      "support_plane_reference" : "plateRegion"
     },
     "brown_rice" : {
       "beta" : 1,
@@ -31,7 +34,8 @@
       "effective_sample" : 2,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "carrot" : {
       "beta" : 1,
@@ -39,15 +43,17 @@
       "effective_sample" : 48,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "chicken" : {
       "beta" : 1,
       "clamped" : false,
-      "effective_sample" : 12,
+      "effective_sample" : 11,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "egg" : {
       "beta" : 1,
@@ -55,7 +61,8 @@
       "effective_sample" : 7,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "lentils" : {
       "beta" : 1,
@@ -63,7 +70,8 @@
       "effective_sample" : 1,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "pasta" : {
       "beta" : 1,
@@ -71,7 +79,8 @@
       "effective_sample" : 1,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "pork" : {
       "beta" : 1,
@@ -79,7 +88,8 @@
       "effective_sample" : 9,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "salad_leaves" : {
       "beta" : 1,
@@ -87,7 +97,8 @@
       "effective_sample" : 16,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "tomato" : {
       "beta" : 1,
@@ -95,7 +106,8 @@
       "effective_sample" : 29,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     },
     "white_rice" : {
       "beta" : 1,
@@ -103,19 +115,20 @@
       "effective_sample" : 10,
       "provenance" : "none",
       "standard_error" : null,
-      "status" : "uncalibrated_unity"
+      "status" : "uncalibrated_unity",
+      "support_plane_reference" : "foodSupport"
     }
   },
   "lineage" : {
-    "condition_number" : 1.3381308,
+    "condition_number" : 1.3277205,
     "effective_sample_min" : 30,
     "effective_sample_per_class" : {
       "apple" : 27,
-      "beef" : 7,
-      "broccoli" : 35,
+      "beef" : 6,
+      "broccoli" : 34,
       "brown_rice" : 2,
       "carrot" : 48,
-      "chicken" : 12,
+      "chicken" : 11,
       "egg" : 7,
       "lentils" : 1,
       "pasta" : 1,
@@ -742,6 +755,7 @@
       "dish_1558462228",
       "dish_1558462531",
       "dish_1558463362",
+      "dish_1558468285",
       "dish_1558629878",
       "dish_1558630600",
       "dish_1558638844",
@@ -760,7 +774,6 @@
       "dish_1565640772",
       "dish_1565987015",
       "dish_1565987054",
-      "dish_1566332040",
       "dish_1566413321",
       "dish_1566413356",
       "dish_1566413388",
@@ -768,6 +781,7 @@
       "dish_1566500988",
       "dish_1566849208",
       "dish_1566931482",
+      "dish_1567537212",
       "dish_1567537252",
       "dish_1568318316",
       "dish_1568318361",
@@ -778,8 +792,12 @@
       "dish_1568666184",
       "dish_1568666230",
       "dish_1572552638",
+      "dish_1573506378",
       "dish_1574111587",
       "dish_1575923893"
+    ],
+    "support_plane_reference_excluded" : [
+
     ],
     "unmapped_excluded" : [
       "dish_1556575014",
@@ -3471,5 +3489,6 @@
       "dish_1576259732",
       "dish_1576259776"
     ]
-  }
+  },
+  "support_plane_reference" : "foodSupport"
 }

@@ -53,12 +53,21 @@ before it is written.
   matters is one cupboard, so this replaces an assumption with a measurement in minutes. It also
   sets whether `bandStepMaxMm = 6` sits safely below your smallest real rim step.
 
-- [ ] **Decide which corpus Req 4.5's fallback rate is measured on.** After task 17 regenerates,
-  ~3,500 N5k dishes run through the same fitter — a real denominator at zero capture cost, but a
-  fixed overhead rig, so its rate does not transfer to handheld ARKit with domestic clutter. The
-  defensible form is two figures: an N5k **rate** that gates the algorithm, and a device **count**
-  until the device corpus is large enough for a percentage to mean anything. Req 4.5 currently
-  names one threshold and cannot carry both.
+- [ ] **Decide which corpus Req 4.5's fallback rate is measured on.** **The cheap denominator
+  this item assumed does not exist.** It read: "after task 17 regenerates, ~3,500 N5k dishes run
+  through the same fitter". Task 17 ran, and **none** of them do — pre-checkpoint ingestion
+  stamps every plate `mixture`, mixture keeps the plate-region flood fill permanently
+  (Decision 17), and `run_summary.json` records `single_dominant: 0`. N5k yields a
+  promoted-path fallback rate only after model-production Bucket C lands and ingestion re-runs
+  with `--checkpoint`.
+
+  So the choice is now between deferring Req 4.5's rate until Bucket C, or measuring it on the
+  device corpus, which is far too small for a percentage. The rest of the original reasoning
+  still stands and still argues against a single threshold: N5k is a fixed overhead rig, so its
+  rate would not transfer to handheld ARKit with domestic clutter even once it exists. The
+  defensible form remains two figures — an N5k **rate** gating the algorithm, a device **count**
+  until the device corpus can carry a percentage — and Req 4.5 names one threshold and cannot
+  carry both.
 
 ## Session attempted 2026-08-05 09:09–09:20 — four weighed truths, none usable
 
@@ -155,27 +164,34 @@ is no way to recover it afterwards.
 
 ## During implementation
 
-- [ ] **Compute time for task 17.** Regenerating the N5k calibration results after the
-  single-dominant branch moves off `fitPlateRegionPlane` re-runs the harness over the
-  Nutrition5k corpus. Confirm the machine is free before starting, and do not launch it from a
-  worktree (see `docs/ml-training.md` run hygiene).
+- [x] **Compute time for task 17.** **Done 2026-08-05 — and the gate was mis-costed.** The
+  run is ~4 minutes end to end on an idle 18-core Mac: ~90 s to ingest 3,490 dish folders,
+  then two HarnessCLI passes under a minute each. It needs no scale rationing, so it ran from
+  the worktree.
 
-  **State as of 2026-08-05, checked while tasks 15–21 landed.** Task 16 is done, so the rebase
-  is now owed rather than pending. Two things it needs are not in place:
+  The "segmenter pass over ~3,500 dishes" this gate warned about is **`--checkpoint` mode
+  only**. Pre-checkpoint ingestion — which is what both committed artefacts used, and what
+  the corpus still needs until model-production Bucket C lands — runs no model at all: it
+  reads PNG pairs and writes fixtures. The expensive regeneration is the *post*-checkpoint
+  one, and this was not it.
 
-  - The raw corpus is present (`data/n5k/realsense_overhead`, 3.0 GB; `data/dish_ids`,
-    `data/metadata`), but the **ingested fixtures are not** — `build/n5k_fixtures` does not
-    exist, so `tools/nutrition5k/ingest.py` has to run before `HarnessCLI calibrate-and-eval`
-    can. That is the segmenter pass over ~3,500 dishes, not a replay.
-  - The gate above is unticked and this work happened in a worktree, which it forbids.
+  What ran:
 
-  The two committed artefacts this rebases —
+  ```bash
+  python3 tools/nutrition5k/ingest.py --n5k-dir data --out tmp/n5k_fixtures
+  .build/release/HarnessCLI calibrate[-and-eval] --fixtures-dir tmp/n5k_fixtures \
+    --depth-test-split data/dish_ids/splits/depth_test_ids.txt \
+    --ingest-summary tmp/n5k_fixtures/run_summary.json \
+    --mapping-version 909f19f575a6 --seed 42 --output <artefact>
+  ```
+
+  The two committed artefacts —
   `specs/estimation/nutrition5k-calibration/artifacts/calibrate.json` and
-  `accuracy_report.json` — record no `support_plane_reference`, so under the Req 5.3
-  fail-closed guard they can no longer bake. That is the intended behaviour (they were fitted
-  on the old basis), and it is also why the regeneration cannot be deferred indefinitely: until
-  it runs, the N5k corpus contributes no β at all. Nothing breaks today because every β is
-  `uncalibrated_unity` (Decision 10).
+  `accuracy_report.json` — recorded no `support_plane_reference`, so under the Req 5.3
+  fail-closed guard they could no longer bake. They now do. Results, and why the numbers moved
+  for a reason that is not the support plane, are in
+  `docs/agent-notes/n5k-calibration-harness.md`. Every β is still `uncalibrated_unity`
+  (Decision 10), so nothing downstream changed.
 
 - [ ] **Set the guard constants before task 8 hard-codes them.** `tasks.md` currently orders
   task 8 (`fitFoodSupportPlane`, which carries every threshold) before task 26 (determine the

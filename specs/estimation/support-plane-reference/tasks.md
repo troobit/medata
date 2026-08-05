@@ -135,11 +135,15 @@ references:
   - Stream: 1
   - Requirements: [5.1](requirements.md#5.1), [2.2](requirements.md#2.2)
 
-- [ ] 17. Regenerate the N5k calibration results against the promoted path <!-- id:284ca5i -->
-  - Moving the single-dominant branch off fitPlateRegionPlane changes those N5k outputs, so the previously recorded nutrition5k-calibration results are rebased
+- [x] 17. Regenerate the N5k calibration results against the promoted path <!-- id:284ca5i -->
+  - SUPERSEDED premise: "moving the single-dominant branch off fitPlateRegionPlane changes those N5k outputs". It does not, on this corpus. Pre-checkpoint ingestion stamps every plate mixture (run_summary estimator_paths: mixture 3485, single_dominant 0), so FixtureRunner.fitSupportPlane is reached zero times and the promoted path has NO N5k coverage until Bucket C lands and ingestion re-runs with --checkpoint
   - Mixture fixtures do NOT move (Decision 17), so the corpus spans two references permanently, not just in transition — Req 5.4's within-reference rule is a standing constraint
   - This restores validity of existing artefacts against the corrected geometry; it is NOT new beta_c gravimetric calibration, which stays a Non-Goal
-  - May need compute time; see prerequisites.md
+  - DONE 2026-08-05. Both artefacts regenerated, same flags and seed 42. The real deliverable is the support_plane_reference stamp: without it the Req 5.3 fail-closed guard aborts the bake, so until this ran the N5k corpus contributed no beta at all
+  - MEASURED movement, attributable to the food DB v2 rebake (c855042, bcbe9bd) and NOT to the support plane — the stacking guard divides mapped mass by densityByClass from the bundled DB. Qualifying plates 181 -> 179, stacking excluded 56 -> 58, broccoli beta 0.516 (eff 35) -> 0.495 (eff 34). Split/unmapped/liquid/plane-fit-skip counts all unchanged
+  - Calibration no longer beats baseline on carbs: MAPE 66.7 baseline -> 67.5 calibrated, where it was 105.8 -> 81.9. The DB v2 composition tables moved the baseline far more than one class at beta 0.495 can recover. Protein and fat still improve
+  - The bake bakes nothing: broccoli is plateRegion, Req 5.4 skips it, every beta stays uncalibrated_unity (Decision 10 holds). generate.py was re-run to prove the Req 5.3 guard now admits the artefact; it only writes calibration lineage into the sqlite meta, which the DB v2 rebake had dropped
+  - Compute cost was ~4 minutes total, not the segmenter pass prerequisites.md assumed — that cost applies to --checkpoint ingestion only, which this corpus does not use. prerequisites.md corrected
   - Blocked-by: 284ca5h (Wire FixtureRunner's single-dominant branch to the promoted path; KEEP the flood fill for the mixture path)
   - Stream: 1
   - Requirements: [5.4](requirements.md#5.4)
