@@ -15,7 +15,8 @@ MeData currently opens on the Graph screen and hangs every entry point — Captu
 - The `intake` route's content — the carb-entry sheet and quick-add presets are owned by `manual-carb-intake`; this spec provides only the route and its home-page control.
 - Changes to the capture/estimation pipeline, the insulin dose-entry sheet's internals, or the meal-correction flow — only where they are launched from changes.
 - Changes to the Graph chart's data, series, or ranges — Graph keeps its existing visualisation; only its role as root and its toolbar entry points change.
-- At-a-glance summary data on the home page (e.g. today's carb total, latest glucose) — the home page is a pure router; a summary is deferred.
+- At-a-glance summary data on the home page beyond the latest glucose reading (§4) — today's carb total, insulin-on-board, and any other roll-up stay deferred. *(Narrowed by Decision 15: the latest glucose reading was promoted out of this non-goal after the device pass; everything else remains out.)*
+- A chart, history, or any second reading on the home page — the header is the current value only; Graph owns the time series.
 - Search, filtering, grouping, or per-type sectioning on the Records timeline.
 
 ## Requirements
@@ -58,4 +59,19 @@ MeData currently opens on the Graph screen and hangs every entry point — Captu
 6. <a name="3.6"></a>WHEN a record is deleted, THEN the system SHALL persist the deletion, and the Graph, the Records list itself, and any other dependent view SHALL reflect the change without a manual refresh.  
 7. <a name="3.7"></a>WHEN a record is added elsewhere in the app, THEN the Records surface SHALL reflect it without a manual refresh.  
 8. <a name="3.8"></a>WHEN there are no records, THEN the Records surface SHALL present an empty timeline with no reassurance or explanatory copy (developer-phase no-disclaimer rule).  
-9. <a name="3.9"></a>The Records surface SHALL replace the meal-only Data screen; the home page SHALL route to Records rather than to a separate meal-only Data screen.  
+9. <a name="3.9"></a>The Records surface SHALL replace the meal-only Data screen; the home page SHALL route to Records rather than to a separate meal-only Data screen.
+
+### 4. Latest glucose reading on the home page
+
+**User Story:** As a user, I want my most recent blood-sugar reading to be the first thing I see when I open the app, so that the number I check most often needs no navigation.
+
+**Acceptance Criteria:**
+
+1. <a name="4.1"></a>The home page SHALL present the most recent recorded glucose reading, in mmol/L, as its topmost and most visually prominent content — above the route controls, including the Capture control (which remains the primary *action*, Req 1.3).  
+2. <a name="4.2"></a>The reading SHALL be shown together with its age, and SHALL be shown regardless of that age within the display horizon — a reading that is hours old is still displayed, labelled with how old it is (this differs deliberately from `glucose-lock-widget` Req 5.3, which withholds the number past 30 minutes; see Decision 15).  
+3. <a name="4.3"></a>WHEN two or more readings within the trend window support a rate, THEN the home page SHALL show a trend arrow beside the reading; WHEN they do not, THEN it SHALL show the reading with no arrow rather than a placeholder or a fabricated direction.  
+4. <a name="4.4"></a>WHEN the reading is older than the freshness threshold (`GlucoseTimeline.staleAge`), THEN the trend arrow and the target-band colour SHALL both be withheld, because neither describes the present; the value and its age SHALL still be shown.  
+5. <a name="4.5"></a>WHEN no glucose reading exists within the display horizon, THEN the home page SHALL present a neutral placeholder in the reading's position, with no explanatory or reassurance copy (developer-phase no-disclaimer rule).  
+6. <a name="4.6"></a>WHEN a new glucose reading is recorded while the home page is the visible root, THEN the home page SHALL reflect it without a manual refresh, and the displayed age SHALL advance while the page remains open.  
+7. <a name="4.7"></a>The home page's reading SHALL be derived from the same stored `bsl` rows and the same derivation as the lock-screen widget's snapshot, so the two surfaces cannot disagree about the latest reading; it SHALL NOT depend on the App Group container being provisioned.  
+8. <a name="4.8"></a>The reading SHALL be display-only — not tappable, not editable, and not a route (Records and Graph remain the surfaces for history).    

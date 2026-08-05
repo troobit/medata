@@ -46,3 +46,29 @@ Follow-ups seeded by this session:
 - These weighed plates are benchmark-meal material (BenchmarkView →
   weighed fidelity); logging them there scores every future model/β change
   against today's truth.
+
+## 2026-08-04 — device session, speckle verdict (no weighed truth)
+
+Qualitative pass during the roadmap §2 device session; no scale truth taken, so
+nothing here is a calibration datum.
+
+- **Overlay speckle is gone.** Developer verdict on device: "speckles
+  DEFINITELY gone". Attributable to the shipped deterministic
+  connected-component cleanup in `Segmentation/PostProcessing.swift`
+  (`estimation-quality` → `tasks-mask-post-processing-cleanup`, all ticked)
+  running against the promoted `coreml_ab812dc3aa9d` model — **not** to the new
+  training recipe, which has not been run
+  (`tasks-segmenter-training-pipeline` task 6 is still open). So
+  `tasks-segmenter-training-pipeline` task 7 stays open: it is the acceptance
+  gate for the *retrained* model, and ticking it on this evidence would credit a
+  run that never happened.
+- **Estimation quality improved substantially but is not yet at target.**
+  Developer verdict: "improved HUGELY since this bugfix, albeit is not yet as
+  accurate as hoped". No numbers — this session took no weighed truth, so the
+  gap is an impression, not a measurement.
+- **Follow-up:** the only way to move that verdict from impression to number is
+  the accuracy loop in `docs/roadmap.md` §4 — a truth manifest joined at
+  evaluation time plus the append-only per-fixture error log keyed on
+  `(fixture_id, segmenter_sha)`. Until that lands, "not as accurate as hoped"
+  cannot be attributed between the segmenter, β = 1.0, the carve, or the
+  support-plane offset. Weigh the next session's plates.

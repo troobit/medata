@@ -1,14 +1,19 @@
+import GlucoseWidgetShared
+import Persistence
 import SwiftUI
 
-// The home page — launch root and the app's router (home-router Req 1). A pure
-// router (Decision 2): six controls, no summary data, and no presentation
-// state of its own — each control fires a closure injected by AppRoot, which
-// owns the cover/sheet state (Decision 9). Capture is the primary action
-// (Req 1.3), accent-prominent per the established capture treatment.
+// The home page — launch root and the app's router (home-router Req 1). It
+// carries exactly one piece of data, the latest glucose reading (Req 4,
+// Decision 15, narrowing Decision 2's pure-router rule); everything else is a
+// route. No presentation state of its own — each control fires a closure
+// injected by AppRoot, which owns the cover/sheet state (Decision 9). Capture
+// is the primary action (Req 1.3), accent-prominent per the established
+// capture treatment.
 // NOTE: sizing/`contentShape` live INSIDE each Button label — a Button's tap
 // gesture covers only its label, so outside modifiers draw a dead surface
 // (ui-capture-flow.md gotcha).
 struct HomeView: View {
+    let glucose: HomeGlucoseModel
     let onCapture: () -> Void
     let onIntake: () -> Void
     let onDose: () -> Void
@@ -22,6 +27,7 @@ struct HomeView: View {
                 .font(.largeTitle.weight(.bold))
                 .foregroundStyle(Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            glucoseHeader
             Spacer()
             captureButton
             routeButton("Intake", systemImage: "fork.knife", identifier: "home.intake", action: onIntake)
@@ -33,6 +39,102 @@ struct HomeView: View {
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)
+        .task { await glucose.start() }
+    }
+
+    // The most recent reading, the one thing on home that is not a route
+    // (Req 4.1). `TimelineView(.periodic)` re-evaluates once a minute so the
+    // age label ages while the page is open — the snapshot itself only changes
+    // when a `bsl` row lands, which the model handles.
+    private var glucoseHeader: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            glucoseReadout(at: context.date)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .accessibilityIdentifier("home.glucose")
+    }
+
+    // Unlike the lock-screen widget — which drops the number past 30 minutes
+    // because a glanceable surface carries no context — home always shows the
+    // most recent value and states its age beside it (Req 4.2, Decision 15).
+    // The freshness ladder still governs the two *derived* signals: past
+    // `staleAge` neither the trend arrow nor the band colour is shown, because
+    // neither describes the present any more (Req 4.4).
+    @ViewBuilder
+    private func glucoseReadout(at date: Date) -> some View {
+        if let mmolL = glucose.snapshot.mmolL, let readingDate = glucose.snapshot.readingDate {
+            // A reading timestamped ahead of the device clock is skew, not a
+            // prediction — clamp to zero, as GlucoseTimeline.render does.
+            let age = max(0, date.timeIntervalSince(readingDate))
+            let isFresh = age <= GlucoseTimeline.staleAge
+            // Value, arrow and unit share ONE baseline; the age is a quiet
+            // second line under all three. The unit and age were previously a
+            // VStack baselined against the 44 pt number, which pushed the age
+            // below the number's block and read as vertically offset.
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(String(format: "%.1f", mmolL))
+                        .font(.system(size: 44, weight: .semibold, design: .rounded))
+                        .foregroundStyle(isFresh ? tint(glucose.snapshot.status) : Color.textSecondary)
+                        .contentTransition(.numericText())
+                    if isFresh, let trend = glucose.snapshot.trend {
+                        Text(trend.arrow)
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(tint(glucose.snapshot.status))
+                            .accessibilityLabel(trendLabel(trend))
+                    }
+                    Text("mmol/L")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer(minLength: 0)
+                }
+                Text(ageLabel(age))
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
+            }
+        } else {
+            // Never recorded, or nothing inside the 24-hour horizon. A dash,
+            // no explanatory copy (developer-phase no-disclaimer rule).
+            Text("—")
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.textSecondary)
+                .accessibilityLabel("No glucose reading")
+        }
+    }
+
+    // Whole minutes for the first hour, whole hours beyond — the widget's
+    // wording (GlucoseTimeline.ageString), spelled out for an in-app surface
+    // that has the width for it.
+    private func ageLabel(_ age: TimeInterval) -> String {
+        if age < 60 { return "just now" }
+        if age < 3600 { return "\(Int(age / 60)) min ago" }
+        let hours = Int(age / 3600)
+        return "\(hours) h ago"
+    }
+
+    // Colour is a secondary channel here as on the widget: the number carries
+    // the reading, the tint only flags an out-of-band value.
+    private func tint(_ status: GlucoseBandStatus?) -> Color {
+        switch status {
+        case .low: return Color(uiColor: .systemRed)
+        case .high: return Color(uiColor: .systemOrange)
+        case .inRange, nil: return Color.textPrimary
+        }
+    }
+
+    private func trendLabel(_ trend: GlucoseTrend) -> String {
+        switch trend {
+        case .fallingFast: return "falling fast"
+        case .falling: return "falling"
+        case .fallingSlow: return "falling slowly"
+        case .steady: return "steady"
+        case .risingSlow: return "rising slowly"
+        case .rising: return "rising"
+        case .risingFast: return "rising fast"
+        }
     }
 
     // The primary action (Req 1.3): the largest control, accent-filled via the

@@ -55,24 +55,30 @@ Start with the launch-log check described in §1 — the Release build is alread
 costs minutes and unblocks the gate. If the build stamp is stale, redeploy with
 `make deploy-release` and re-check. Then work the list below without redeploying again.
 
+**Session log — 2026-08-04.** Release + real segmenter deployed to the iPhone 16 Pro,
+build stamp **`470bb1b-20260804-225023`**, and launched. This build also carries the new
+home-page glucose header (§2a), so one build serves the whole list below. `make logs-device`
+needs **root** on this machine (`log collect --device-name` refuses otherwise) — run
+`sudo make logs-device LOG_LAST=10m` to complete order 0.
+
 | Order | Spec | Task | What to observe |
 |---|---|---|---|
-| 0 | `myfoodrepo-bridge` | 6 `[-]` | **Unlock the phone, open MeData, `make logs-device`** — confirm `segmenterSource=coreml_ab812dc3aa9d` + matching `buildStamp`. Closes task 6, unblocks 7 and 8 |
+| 0 | `myfoodrepo-bridge` | 6 `[-]` | **`sudo make logs-device LOG_LAST=10m`** — confirm `segmenterSource=coreml_ab812dc3aa9d` + `buildStamp=470bb1b-20260804-225023`. Closes task 6, unblocks 7 and 8 |
 | 1 | `estimation/model-production` | prerequisites Stage 7 | **ANE residency** in Xcode's Core ML performance report — the MVP gate; needs Xcode, not the phone |
 | 2 | `myfoodrepo-bridge` | 7, 8 | Point the phone at real meals including a cereal bowl; confirm overlay and carb readings. Tick both ledgers with the model-production prerequisites |
 | 3 | `capture-bundle-recorder` | 4 `[-]` | Pull one bundle to the Mac, replay through HarnessCLI — **do this early, §4 depends on the answer** |
-| 4 | `estimation-quality` | 7 | Overlay speckle gone, readings stable |
+| 4 | `estimation-quality` | 7 | ~~Overlay speckle gone, readings stable~~ — **speckle confirmed gone 2026-08-04**, but from the shipped `PostProcessing` cleanup, not the retrain. Task 7 gates the *new recipe* and task 6 has not run, so it stays open (`agent-notes/field-truth-sessions.md`). Accuracy is "hugely improved, not yet as hoped" — an impression, not a measurement, until §4 lands |
 | 5 | `bugfixes/no-food-pixels-on-fruit-plate-mvp` | 8 | Single **and** Double mode (currently BLOCKED behind the next row) |
 | 6 | `bugfixes/lidar-plane-fit-degenerate-on-clean-capture` | 8 | Single and Double; unblocks the row above |
 | 7 | `bugfixes/lidar-plane-fit-oom-on-device-1920x1440` | 3 | Clean run at 1920×1440 |
 | 8 | `bugfixes/closeout-trail-mvp-cleanup` | 6 | Single + Double final pass |
-| 9 | `ui/home-router` | 9 | Home-router flow |
+| 9 | `ui/home-router` | 9 `[-]`, 11 | Routing confirmed fine 2026-08-04; deep-link deferral, AR-session release and Records live-delete still to check. **New task 11**: the latest-glucose header (§2a) |
 | 10 | `ui/shutter-blocked-feedback` | 5 | Tap fires, estimation completes, result view appears |
 | 11 | `ui/records-deletion` | 4 | Build, device look, docs |
 | 12 | `ui/loading-symbol-animation` | 5 | Loader look |
 | 13 | `ui/glucose-lock-widget` | 14 | App Group round-trip, gallery kind, StandBy render, staleness ladder, tap-to-Graph |
 | 14 | `data/cgm-connect` | 14 | HealthKit backfill + live reading land as bsl events |
-| 15 | `serving-adjust` | 7 | Looks-right pass |
+| 15 | ~~`serving-adjust`~~ | ~~7~~ | **DONE 2026-08-04** — looks-right pass passed on the iPhone 16 Pro |
 | 16 | `snaqui` | 8 | Portion ergonomics, no portrait truncation |
 
 **Two things to settle before starting.** The four bugfix verifications were written against an
@@ -81,6 +87,23 @@ re-target them to the iPhone 16 Pro or log why the older device still counts. An
 `bugfixes/capture-log-flood-evicts-plane-fit-diagnostics` is only *half* fixed: the diagnostic
 blindness is resolved but the matte-table plane-fit refusal is not, and it needs one capture on a
 matte surface to root-cause. Add that capture to the session.
+
+### 2a. Landed during the session — the home page's latest glucose reading
+
+The device pass on `ui/home-router` task 9 produced one change rather than a defect: the router
+itself is fine, but the number the developer checks most often — current blood sugar — needed a
+trip to Graph. It is now the topmost content on the home page, with a trend arrow when the
+readings support a rate.
+
+This narrows home-router Decision 2 (pure router, no summary data) rather than reversing it:
+one live measurement is promoted, every roll-up stays out. Requirements §4 and Decision 15
+carry the reasoning; the load-bearing part is that the derivation moved into a shared
+`GlucoseSnapshotSource` in `Persistence`, called by both the home model and
+`GlucoseWidgetPublisher`, so home and the lock-screen widget cannot drift apart — and it reads
+the **store**, not the App Group container, so it is correct on a build whose App Group is still
+unverified (`glucose-lock-widget` task 14). The two surfaces differ deliberately past 30
+minutes: the widget withholds the number, home shows it with its age. Verification is
+`ui/home-router` task 11.
 
 **Storage warning.** The recorder writes ~200 MB per attempt (full-resolution FP16 probability
 tensor). A sixteen-item session is ~3 GB and a field day is ~6 GB. Clear

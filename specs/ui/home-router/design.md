@@ -12,6 +12,18 @@ Re-root the SwiftUI shell on a new `HomeView` router, demote `TrendsView` (Graph
 
 `HomeView` (new, `App/HomeView.swift`) is the root content: six controls, no presentation state of its own. It triggers routes through closures/bindings injected by `AppRoot` (the same wiring pattern `AppRoot` uses today to inject `onOpen*` into `TrendsView`, `App.swift`/`AppRoot.swift:64-78`). Capture is the primary action — accent-prominent, matching the established primary-capture treatment (`.buttonStyle(.borderedProminent).tint(.medataAccent)`, currently `TrendsView.swift:118-121`); the `ShutterButton` is capture-surface chrome and is not reused here.
 
+### Latest-glucose header (Req 4)
+
+`HomeView` carries exactly one piece of data above the route controls: the most recent `bsl` reading. Three pieces:
+
+- **`GlucoseSnapshotSource`** (`MedataCore/Sources/Persistence/GlucoseSnapshotSource.swift`, new) — the read-and-derive step lifted verbatim out of `GlucoseWidgetPublisher.currentSnapshot`: the 24-hour `displayHorizon`, the one-hour `futureSkewAllowance` upper bound (the fix from `glucose-widget-lagged-a-reading-behind`), and `readings → GlucoseSnapshot` via `TrendsMath.trend`/`bandStatus`. Both the publisher and the home model call it, which is what makes Req 4.7 structural rather than a convention. The publisher keeps its write/reload side effects and its `futureReading` log line.
+- **`HomeGlucoseModel`** (`App/HomeGlucoseModel.swift`, new) — `@Observable @MainActor`; holds one `GlucoseSnapshot`, reloads on every `store.eventsDidChange` tick (the `RecordsModel`/`MealHistoryModel` mechanism, Req 4.6). It reads the **store**, not `GlucoseSnapshotStore` (the App Group defaults the widget reads): the header must be correct on a build whose App Group is not yet provisioned — `glucose-lock-widget` task 14 is still open — and the app already has the rows to hand (Req 4.7).
+- **`HomeView.glucoseHeader`** — a `TimelineView(.periodic(by: 60))` so the age label advances while the page is open (Req 4.6) without the model re-querying; the snapshot itself only changes when a row lands.
+
+Ownership: the model is `@State` on `AppRoot`, not on `HomeView`. `HomeView` is rebuilt on every cover present/dismiss, so a `@State` inside it would tear down and re-subscribe on each one.
+
+Freshness handling reuses `GlucoseTimeline.staleAge` rather than a second threshold, but **not** `GlucoseTimeline.render`: that ladder's third rung withholds the number past 30 minutes, which is right for a context-free lock-screen glance and wrong for the surface whose stated job is "show me my most recent reading" (Req 4.2, Decision 15). Home shows the value at any age with the age beside it; past `staleAge` it withholds the two *derived* signals — trend arrow and band colour — because those describe a rate and a position that are no longer current (Req 4.4).
+
 ### Cover vocabulary (`ActiveSheet`)
 
 `ActiveSheet` (`AppRoot.swift:55-61`) changes from `capture, data, settings` to:
@@ -98,12 +110,29 @@ The design assumes `manual-carb-intake`'s intake surface already exists (paralle
 ```swift
 // App/HomeView.swift — launch-root router (Req 1.2, 1.3). No presentation state.
 struct HomeView: View {
+    let glucose: HomeGlucoseModel   // the latest-reading header (Req 4)
     let onCapture: () -> Void   // primary
     let onIntake:  () -> Void
     let onDose:    () -> Void   // sets showInsulinSheet in AppRoot
     let onRecords: () -> Void
     let onGraph:   () -> Void
     let onSettings:() -> Void
+}
+
+// App/HomeGlucoseModel.swift — the home header's one value (Req 4).
+@Observable @MainActor final class HomeGlucoseModel {
+    private(set) var snapshot: GlucoseSnapshot   // .neverRecorded until the first load
+    func start() async      // reload(), then subscribe to store.eventsDidChange
+    func cancel()
+    func reload() async     // GlucoseSnapshotSource.current(store:now:)
+}
+
+// MedataCore/Sources/Persistence/GlucoseSnapshotSource.swift — shared derivation (Req 4.7).
+public enum GlucoseSnapshotSource {
+    public static let displayHorizon: TimeInterval        // 24 h
+    public static let futureSkewAllowance: TimeInterval   // 1 h, the window's upper bound
+    public static func current(store: any PersistenceStore, now: Date) async -> GlucoseSnapshot
+    public static func snapshot(from readings: [GlucoseReading], now: Date) -> GlucoseSnapshot
 }
 
 // App/RecordsModel.swift — merged, live, most-recent-first.

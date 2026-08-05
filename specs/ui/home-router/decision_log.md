@@ -447,3 +447,54 @@ One case with the subtype in the payload keeps `RecordRow`'s `timestamp`/`id`/re
 - Intake-row rendering depends on `IntakeRecord` exposing a display value + label; that contract must be agreed with Track C.
 
 ---
+
+## Decision 15: Home shows the latest glucose reading, narrowing the pure-router rule
+
+**Date**: 2026-08-04
+**Status**: accepted (narrows Decision 2)
+
+### Context
+
+Decision 2 made the home page a pure router with no summary data, on the reasoning that a summary duplicates Graph and Records and had no demonstrated need. The on-device pass of task 9 supplied that demonstration: the router itself was judged fine, but the reading the developer checks most often — current blood sugar — required opening Graph every time, and the app's whole reason to exist sits downstream of that number.
+
+Two mechanisms already existed to serve it: the lock-screen widget's `GlucoseSnapshot` pipeline (`GlucoseWidgetPublisher` → App Group defaults → `GlucoseTimeline.render`), and the store rows both it and Graph read. The choice was which to reuse, and how much of the widget's staleness ladder applies to an in-app surface.
+
+### Decision
+
+The home page shows the most recent glucose reading, in mmol/L, as its topmost and most prominent content, with a trend arrow when the readings support a rate. It is display-only and not a route. Everything else stays out of Decision 2's non-goal — no carb total, no insulin-on-board, no chart.
+
+The reading is derived by a new shared `GlucoseSnapshotSource` in `Persistence`, called by both the home model and the widget publisher, and read from the **store** rather than from the App Group container. Freshness reuses `GlucoseTimeline.staleAge` to gate the arrow and the band colour, but home shows the *value* at any age with its age beside it — it does not adopt the widget's 30-minute number-withholding rung.
+
+### Rationale
+
+Promoting one value is not the "router + summary" alternative Decision 2 rejected: that was a roll-up of derived totals duplicating Graph. This is the single live measurement the app is built around, and it is not derived from anything else on the home page.
+
+Sharing the derivation is the load-bearing part. Two surfaces independently computing "the latest reading and its trend" is exactly how they drift, and this derivation already carries a field-learned rule — the one-hour future-skew window bound from `glucose-widget-lagged-a-reading-behind` — that a second implementation would have to re-learn the same painful way. Extracting it makes agreement structural (Req 4.7) rather than a convention.
+
+Reading the store rather than the App Group snapshot matters right now: `glucose-lock-widget` task 14 (the App Group round-trip) is still unverified on device, and a nil-suite `UserDefaults(suiteName:)` hands back a *private* store rather than failing, so a misprovisioned App Group would silently render home as "never recorded". The app has the rows; there is no reason to route them through a container it does not need.
+
+Withholding the number past 30 minutes is right for the lock screen — a glance with no context, where a stale number reads as current — and wrong here. Home is entered deliberately, the age sits beside the value, and "show me my most recent reading" is the stated requirement; a surface that answers it with "1 h ago" and no number has not answered it. The arrow and the band colour are withheld because they are statements about *now* (a rate, a position against target), not about the reading.
+
+### Alternatives Considered
+
+- **Keep Decision 2 unchanged; route to Graph for glucose**: No new surface, no new code — Rejected: the device pass identified this as the gap, and one tap per glance for the app's central number is the cost Decision 2 accepted before that evidence existed.
+- **Read `GlucoseSnapshotStore` (the App Group defaults) instead of the store**: Zero query cost, exactly what the widget shows — Rejected: it makes an in-app surface depend on unverified App Group provisioning, and a missing entitlement degrades silently to "never recorded" rather than failing loudly.
+- **Reuse `GlucoseTimeline.render` wholesale**: One ladder, no divergence to explain — Rejected: its `.lastReading` rung structurally drops the value, contradicting Req 4.2. Adding a fourth case for home would push a home-page rule into the widget's contract.
+- **Duplicate the derivation in `HomeGlucoseModel`**: No change to shipped widget code — Rejected: guarantees the two surfaces drift, and would have shipped without the future-skew window bound.
+- **Make the reading tappable, routing to Graph**: Natural affordance, matches the widget's `medata://graph` tap target — Rejected for now as scope beyond the ask; the reading stays display-only (Req 4.8) and this is the obvious first extension if the device pass wants it.
+
+### Consequences
+
+**Positive:**
+- The number the app is built around is visible at launch with no navigation.
+- Home and the lock-screen widget cannot disagree about the latest reading — one derivation, one set of window rules.
+- The future-skew bound and the display horizon now have a single stated home instead of living in an App-target actor.
+- Home works correctly on a build whose App Group is not provisioned.
+
+**Negative:**
+- Home is no longer a pure router; the next "just one more number" request has a precedent to point at, and Decision 2's line now needs defending case by case.
+- One more `eventsDidChange` subscriber rebuilding on every tick — bounded (a 24-hour `bsl` read, ~288 rows) but no longer zero, and it runs while home is the visible root.
+- Home and the widget deliberately differ past 30 minutes, so "what does the app show for a stale reading" now has two correct answers depending on the surface.
+- `Persistence` gained a small public surface (`GlucoseSnapshotSource`) that exists for two callers.
+
+---

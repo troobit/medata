@@ -167,3 +167,61 @@ as the screenshot-import row).
   with HealthKit enabled.
 - LibreLinkUp UI calls `setCredentials(email:password:)` BEFORE `connect` (the model's
   `connectLibreLinkUp(email:password:)` sequences this).
+
+## Update cadence — what actually limits it (investigated 2026-08-05)
+
+Prompted by the device question "is the app updating in real time, and is there a
+medical-priority claim we can make in Xcode that would help?". Short answer: **the
+mechanism that entitlement question is reaching for already exists, is already claimed,
+and is not the bottleneck.** The bottleneck is a vendor rate limit and which source is
+connected.
+
+### Measured reality on the primary device
+
+`Documents/meals.sqlite` pulled 2026-08-05 (see `device-build-and-test.md` for the
+`devicectl copy from` recipe): **396 `bsl` rows — 282 `librelinkup`, 114 screenshot-import,
+`healthkit` ZERO.** Gaps between consecutive live rows: 15 min ×152, 5 min ×96, 10 min ×31,
+25 min ×1, 515 min ×1 (a sensor outage).
+
+The modal 15-minute gap is **the app's own poll interval**, not the sensor's:
+`LibreLinkUpGlucoseSource.pollInterval = 15 * 60`, chosen because 3-minute polling has
+caused LibreLinkUp account bans. That is a **vendor-side** limit; no iOS entitlement
+touches it. (This is also what forced the trend window from 15 to 30 minutes —
+`glucose-lock-widget` Decision 15.)
+
+### The three delivery paths, and what governs each
+
+| Path | Mechanism | Governed by |
+|---|---|---|
+| Foreground LibreLinkUp | `pollTask` every 15 min while foregrounded | Vendor rate limit (ban risk below ~3 min) |
+| Background LibreLinkUp | `BGAppRefreshTaskRequest`, `earliestBeginDate` +15 min | iOS, best-effort. `earliestBeginDate` is a floor, not a schedule — Apple's own forum guidance is that BackgroundTasks offers no frequency guarantee and is driven by device conditions and app-usage patterns |
+| HealthKit | `HKObserverQuery` + `enableBackgroundDelivery(frequency: .immediate)` | The OS wakes the app when a sample is written — the closest thing iOS has to push |
+
+### On "declare it medical for priority"
+
+There is no entitlement that raises background-refresh priority for medical apps. What
+exists, and why each does not apply here:
+
+- **`com.apple.developer.healthkit.background-delivery`** — the real mechanism, and it is
+  **already in `MeData.entitlements`**, already paired with `frequency: .immediate` in
+  `HealthKitGlucoseSource`. Nothing to add.
+- **Critical Alerts** (`com.apple.developer.usernotifications.critical-alerts`) — Apple
+  approval required; lets a notification break through silent/Focus. It governs *alerting*,
+  not data-refresh cadence. Irrelevant until the app has glucose alarms.
+- **Bluetooth background entitlements** (`com.apple.developer.bluetooth-central-background`
+  and the screen-off scanning pair) — for apps talking to a CGM **directly over BLE**. Not
+  self-service; special approval. This app talks to LibreLinkUp's cloud API, never to the
+  sensor, so they do not apply.
+- **Regulated-medical-device declaration** (App Store Connect) — a disclosure for review,
+  not a runtime capability. Confers no scheduling priority.
+- **`NSSupportsLiveActivitiesFrequentUpdates`** — raises the push budget for Live
+  Activities. The app has no Live Activity; it would be a real option if a
+  during-the-day glucose Live Activity were ever wanted.
+
+### The actual lever
+
+**Connect the HealthKit source.** It is implemented, entitled, and producing zero rows —
+the Libre app writes to Apple Health, so connecting it would give OS-driven immediate
+wakes instead of a 15-minute poll, and a denser series than LibreLinkUp's graph endpoint
+returns. This is exactly `specs/data/cgm-connect` task 14, still unverified. Do that before
+considering any entitlement work.

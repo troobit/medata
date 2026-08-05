@@ -567,3 +567,73 @@ Replacing it with `.relative` everywhere would make the specified format unteste
 
 `GlucoseEntry` in `MeData/MeDataWidgets/GlucoseWidget.swift`; the design's Decision 12 entry
 snippet (marked superseded there); task 11.
+
+## Decision 15: Trend window widened to 30 minutes to match the real LibreLinkUp cadence
+
+**Date**: 2026-08-05
+**Status**: accepted (supersedes the 15-minute window in Req 3.1)
+
+### Context
+
+Req 3.1 derived the trend over `[now − 15m, now]`, with Req 3.3 requiring at least two in-window readings spanning at least 10 minutes. That was written against the assumption of a CGM delivering a reading every 5 minutes, which makes three marks fall inside any 15-minute window.
+
+The device session on 2026-08-05 falsified the assumption. The home page showed a fresh reading — 3.4 mmol/L, "just now", red for a low — with no arrow. Pulling `Documents/meals.sqlite` off the iPhone 16 Pro and measuring the 282 live `librelinkup` rows gave the gap distribution between consecutive readings:
+
+| Gap | Count |
+|---|---|
+| 5 min | 96 |
+| 10 min | 31 |
+| **15 min** | **152** |
+| 25 min | 1 |
+| 515 min (one sensor outage) | 1 |
+
+The modal gap is 15 minutes, not 5. A 15-minute window therefore usually holds exactly one reading, and one reading can never yield a rate. Simulating the rule once a minute across the whole record, restricted to the minutes when the reading was fresh enough to display an arrow at all:
+
+| Window | minSpan | Arrow derivable |
+|---|---|---|
+| 15 min (as specified) | 10 min | **33.5 %** |
+| 30 min | 10 min | **99.1 %** |
+| 45 min | 10 min | 99.2 % |
+
+### Decision
+
+Widen the trend window from 15 minutes to 30, keeping `minSpan` at 10 minutes and the four rate thresholds unchanged. `TrendsMath.glucoseRate`'s `window` default carries the change, so the widget, the home-page header and any future Graph consumer move together.
+
+The staleness ladder is **not** touched: `staleAge` stays at 15 minutes.
+
+### Rationale
+
+30 minutes is twice the modal cadence, which is exactly what guarantees two consecutive readings fall inside it regardless of where `now` lands between marks. That is the property that fails at 15 minutes, and it is a property of the feed rather than a tuning constant — hence 30 rather than a rounder-sounding 20 or 60.
+
+Widening further buys nothing measurable: 45 minutes adds 0.1 percentage points, because the remaining ~1 % is genuine sensor gaps (the 515-minute outage, warm-up periods) that no window closes. Every extra minute of window only lengthens the regression baseline and slows the arrow, so 30 is where the curve flattens.
+
+The cost is real and was measured rather than assumed. Over the 1,233 minutes where both windows yield an arrow, the two agree on 1,007 (81.7 %). Of the 226 disagreements, 212 are one band apart — a longer baseline averages a swing into a gentler slope — and 14 (1.1 % of the co-derivable minutes) cross `steady` and so differ in sign. That is the trade: an arrow that is slightly laggy and occasionally one band gentle, roughly three times as often as no arrow at all. For MVP an arrow that is usually present and directionally right beats one that is absent two thirds of the time; a 15-minute-resolution arrow is not achievable from a 15-minute feed by any windowing choice.
+
+Leaving `staleAge` at 15 minutes is deliberate and independently evidenced: the newest reading is 15 minutes old or less 87.9 % of the time, so the ladder is not the thing suppressing the arrow, and loosening it would let a genuinely old value render as current. It also means the window being wider than `staleAge` never surfaces an arrow beside a value the ladder already calls stale — the stale rung carries no trend by construction.
+
+### Alternatives Considered
+
+- **Leave the window at 15 minutes**: no change, arrow stays maximally responsive when it appears — Rejected: it appears in only a third of the eligible minutes on the actual feed, which is indistinguishable from a broken feature.
+- **Lower `minSpan` below 10 minutes instead of widening the window**: keeps the short baseline — Rejected: it does not address the failure. The problem is one reading in the window, not a short span; and it reinstates exactly the noise amplification `minSpan` exists to prevent.
+- **45- or 60-minute window**: marginally more coverage — Rejected: +0.1 pp for a baseline half again as long. The residual is sensor outage, not window width.
+- **Interpolate or resample the feed onto a 5-minute grid before fitting**: would restore a short-baseline fit — Rejected as fabrication: it invents readings the sensor never produced and would feed the same fictitious points to the arrow that the user reads as measurement.
+- **Different windows for the widget and the home page**: tune each to its surface — Rejected: two derivations of the same quantity is precisely what home-router Decision 15 collapsed into one shared `GlucoseSnapshotSource`.
+
+### Consequences
+
+**Positive:**
+- The arrow is present in 99.1 % of eligible minutes on the measured feed, against 33.5 %.
+- The window is now derived from an observed cadence rather than an assumed one, and the evidence is recorded here for the next time it is questioned.
+- Widget, home header and any future Graph consumer stay in lockstep — one default, one change.
+
+**Negative:**
+- The arrow lags: it describes up to 30 minutes of history, so a sharp turn shows up later and gentler than it would on a 5-minute feed.
+- 1.1 % of the time it points the opposite way to the 15-minute fit, which is a real if rare wrong direction near a turning point.
+- The rate thresholds were chosen for a 15-minute baseline and have not been re-derived for a 30-minute one; the band edges are now approximate.
+- The window is pinned to one device's feed. Another sensor or account with a true 5-minute cadence gets an unnecessarily long baseline.
+
+### Impact
+
+`TrendsMath.glucoseRate` default `window`, its tests, `glucose-lock-widget` Reqs 3.1/3.3/3.4, and both consumers of `GlucoseSnapshotSource` (the widget publisher and the home-page header). **Follow-up, deliberately deferred:** re-derive the rate thresholds for the 30-minute baseline, and make the window adapt to the observed cadence rather than being pinned — recorded as `glucose-lock-widget` task 15.
+
+---

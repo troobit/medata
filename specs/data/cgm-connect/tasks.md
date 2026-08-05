@@ -89,5 +89,6 @@ references:
   - Stream: 1
 
 - [ ] 14. On-device verify (iPhone 16 Pro): connect HealthKit against real Health glucose, confirm backfill + a live reading land as bsl events and the Graph refreshes; connection status shows in Settings <!-- id:oecpdn3 -->
+  - 2026-08-05 evidence: the device DB holds 282 librelinkup rows and ZERO healthkit rows, so this source has never produced. It is not a nice-to-have — HealthKit is the only path with OS-driven immediate wakes (enableBackgroundDelivery frequency: .immediate, entitlement already present), whereas LibreLinkUp is pinned to a 15-minute poll by the vendor's ban risk. See docs/agent-notes/glucose-ingestion.md 'Update cadence'
   - Blocked-by: oecpdn2 (make test green Persistence parity, ingestion logic, firewall. make build, make spell)
   - Stream: 1
