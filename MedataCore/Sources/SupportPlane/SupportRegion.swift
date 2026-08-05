@@ -10,7 +10,7 @@ import PortableContracts
 // offset is added to every food pixel. This file replaces "largest plane in the
 // frame" with "the plane the food is resting on" by changing three things:
 //
-//   1. WHICH SAMPLES COMPETE — a mm-denominated annulus of `2 × ringOuterMm` around
+//   1. WHICH SAMPLES COMPETE — a mm-denominated annulus of `annulusOuterMm` around
 //      the food mask, enumerated on the NATIVE depth grid (Req 2.4). The band scan
 //      enumerated 1920×1440 colour pixels against a 256×192 depth map, replicating
 //      each measurement ~56×.
@@ -117,13 +117,20 @@ public enum SupportRegion {
     // What is owed is the margin the SECTOR measure needs in enough sectors, which is a
     // joint derivation with the trio and waits on the same captures.
     //
-    // BRACKETED 22…32 mm, and it is the first owed constant that MOVES THE ANSWER
-    // (Decision 46). The other two sector constants re-read a fixed candidate set, so the
-    // most they can move is a verdict. This one moves the ANNULUS — the candidate bound is
-    // `2 × ringOuterMm` — so extraction runs on a different sample set at every value. Over
-    // a 13…40 mm sweep the SELECTED plane moves 18.719 mm at the food on `1785901032716`
-    // and 4.162 mm on `1785135663727`, against the 1 mm Decision 35 measures Req 5.1's grid
-    // transfer at. Decisions 44 and 45 both closed with "no value moves"; that stops here.
+    // BRACKETED 22…32 mm, and it MOVED THE ANSWER only through the annulus (Decisions 46,
+    // 49). The other two sector constants re-read a fixed candidate set, so the most they
+    // can move is a verdict. This one moved the candidate bound with it, `2 × ringOuterMm`
+    // as the bound was then written, so extraction ran on a different sample set at every
+    // value: over a 13…40 mm sweep the SELECTED plane moved 18.719 mm at the food on
+    // `1785901032716` and 4.162 mm on `1785135663727`, against the 1 mm Decision 35 measures
+    // Req 5.1's grid transfer at.
+    //
+    // SUPERSEDED by Decision 49, which pinned the bound and re-ran the same sweep: the
+    // movement is 0.000 mm at every radius on both captures, exactly, because extraction
+    // reads the annulus and nothing else. The bound is now `annulusOuterMm` and owns that
+    // movement; this constant is bracket-only, like `ringSectorCount` and `sectorSupportMin`.
+    // Everything below that follows from the coupling is superseded with it and marked
+    // where it stands.
     //
     // Both ends of the bracket are new. The FLOOR is Req 5.1's, the mirror of the ceiling
     // Decision 44 read off the same halving: a narrower ring holds fewer samples per band
@@ -134,20 +141,23 @@ public enum SupportRegion {
     // 35 mm the ring reaches the rim a scene put outside it, every sector of a scene that
     // must PASS reads crossed, and both suite intervals go empty.
     //
-    // DO NOT INTERPOLATE INSIDE THE BRACKET. The pass side alternates at 1 mm steps: the
-    // corpus's only intended-correct candidate reads 0 crossed sectors at 22, 23, 25, 26,
-    // 28, 29 and 31 mm and 2 at 24, 27, 30 and 32 mm, its plane oscillating over 4.162 mm
-    // with them. A radius between two clean radii is not implied by either. This is not
-    // extraction noise — held at the shipped radius over eight RANSAC seeds the plane moves
-    // 2.095 mm but the sector verdict never does, so the radius is REORDERING the
-    // candidates rather than re-rolling them.
+    // DO NOT INTERPOLATE INSIDE THE BRACKET — SUPERSEDED (Decision 49). The pass side
+    // alternated at 1 mm steps: the corpus's only intended-correct candidate read 0 crossed
+    // sectors at 22, 23, 25, 26, 28, 29 and 31 mm and 2 at 24, 27, 30 and 32 mm, its plane
+    // oscillating over 4.162 mm with them. With the bound pinned it reads 0 crossed at every
+    // radius in the sweep, so the alternation was the annulus re-selecting the candidates.
+    // The bracket may be interpolated. (The seed control still stands on its own terms: held
+    // at the shipped radius over eight RANSAC seeds the plane moves 2.095 mm while the
+    // sector verdict does not, so selection is verdict-stable under the draw.)
     //
-    // FIX IT FIRST, and fix all three together. Decision 45's joint (count, bar) pair is a
-    // TRIPLE: the radius selects the candidates the other two are read on, so it is fixed
-    // before them. `maxCrossedSectors` is denominated in all three — the joint bracket
-    // reads 0…0, 0…1, 0…2 and 2…2 over the sweep with no ordering in the radius, and at
-    // 22 and 24 mm the two constraint sets admit no common value at all. Decision 45's
-    // collision-free (count × bar) grid is therefore a slice at the shipped radius.
+    // FIX IT FIRST — SUPERSEDED (Decision 49). Decision 45's joint (count, bar) pair was a
+    // TRIPLE only because the radius selected the candidates the other two were read on. It
+    // no longer does, so the pair is a pair again and this constant is fixed beside them
+    // rather than before them. `maxCrossedSectors` is still denominated in it as a COUNT
+    // read at a radius — the joint bracket read 0…0, 0…1, 0…2 and 2…2 over the coupled
+    // sweep — but those readings are coupled ones and the sitting re-reads them with the
+    // bound fixed. What the coupling produced instead is a fifth denomination: the corpus
+    // determines `maxCrossedSectors` at 2 only at `annulusOuterMm` = 50 mm.
     public static let ringOuterMm: Float = 25
     // [owed], and BRACKETED 2…3 — two values, the tightest bracket in this feature, with
     // the shipped one ON the ceiling (Decision 47). This said "Structural: inner / mid /
@@ -471,10 +481,52 @@ public enum SupportRegion {
     public static let maxIterationsPerPass = 2048
     // Target probability of drawing one outlier-free triple, for adaptive stopping.
     static let ransacSuccessProbability = 0.99
-    // The candidate set is an annulus of 2 × ringOuterMm around the food mask
-    // (Decision 15). NOT dilate(foodMask, 2 × foodRadius), which spans ~8.3 s²
-    // against the pre-feature bands' ~4 s² — looser than the code it replaces.
-    static let annulusOuterMultiple: Float = 2
+    // The candidate set is an annulus of this radius around the food mask (Decision 15).
+    // NOT dilate(foodMask, 2 × foodRadius), which spans ~8.3 s² against the pre-feature
+    // bands' ~4 s² — looser than the code it replaces.
+    //
+    // [owed], and RE-DENOMINATED (Decision 49). This was `annulusOuterMultiple = 2`, a
+    // multiple of `ringOuterMm`, and it is the third constant in this file that changes
+    // which planes COMPETE — the one the other two were measured through. Decision 46 swept
+    // the radius and found the selected plane moving 18.719 mm at the food; Decision 47
+    // attributed that to the annulus by elimination; Decision 48 varied how many times the
+    // annulus may be drawn from. None of the three could vary the annulus itself, because
+    // expressing it as a multiple of the radius meant every radius carried a different one.
+    //
+    // Pin the bound and the attribution is exact. Over the same 13…40 mm radius sweep, with
+    // the bound held at 50 mm, the selected plane moves 0.000 mm at the food on BOTH
+    // captures — not within a tolerance, exactly, because extraction reads the annulus and
+    // nothing else. The ring still changes with the radius, so the RANKING could still pick
+    // a different candidate; it does not. Swept itself at a fixed ring, this constant moves
+    // the plane 18.843 mm and 1.978 mm — Decision 46's number rather than a fraction of it.
+    //
+    // The VALUE does not move: `annulusOuterMultiple × ringOuterMm` is 2 × 25 = 50 mm, so
+    // every corpus candidate, every committed scene and every persisted field is unchanged
+    // by construction, as Decisions 37 and 38 were when they re-denominated the extent bar
+    // and the residue floor. What changes is that `ringOuterMm` stops resizing the candidate
+    // set, which is what made it the one owed constant that moved the answer.
+    //
+    // Bracketed 50…75 mm by the CORPUS and by nothing else. Below the floor the plane a
+    // correct fit must admit is itself crossed — `maxCrossedSectors` reads 3…unbounded at
+    // 31.25 mm and an EMPTY interval at 25, 37.5 and 43.75 mm — and at 100 mm the interval
+    // collapses the other way, the plate capture's intended candidate reading 6 crossed
+    // sectors as the annulus reaches surfaces beyond the plate. The shipped 50 is ON the
+    // floor, and it is the only value in the sweep at which the corpus DETERMINES
+    // `maxCrossedSectors` at 2 (Decision 48's reading); 62.5 and 75 mm both widen it to 2…4.
+    //
+    // The committed SUITE cannot bound it at all — the first constant since Decision 41 for
+    // which that is true. The scenes never run extraction, so the bound reaches them through
+    // exactly two guards, `visibility` and `escaped`, and both are among the five Decision 34
+    // found never fire. Every scene keeps its verdict at 25 mm and at 100 mm alike.
+    //
+    // Two riders. Req 7.6's latency is denominated here as well as in `maxCandidatePlanes`:
+    // the annulus holds 10 469 and 12 551 samples at the shipped bound and 19 427 and 25 659
+    // at 100 mm, and RANSAC iterates over all of them. And the ring must sit INSIDE the
+    // bound — guaranteed by construction while this was a multiple ≥ 1, an invariant to keep
+    // now that it is not. `ringSamples` collects a ring sample only if it is already an
+    // annulus sample, so a bound below `ringOuterMm` would silently empty the ring;
+    // `SupportRegionRingTests` is what holds the two together at whatever values ship.
+    static let annulusOuterMm: Float = 50
     // A pass removes its polished inliers within 2 × inlierBandMm; a 1× shell seeds
     // near-duplicate planes on the next pass.
     static let inlierRemovalMultiple: Float = 2
@@ -626,7 +678,7 @@ public enum SupportRegion {
     // MARK: – Contact ring (Req 3.1, 3.6, 3.8)
 
     // The ring is the 8–25 mm sub-annulus outside the food boundary, resolved into
-    // radial bands and angular sectors. The annulus is the wider 2 × ringOuterMm
+    // radial bands and angular sectors. The annulus is the wider `annulusOuterMm`
     // candidate bound. Both are needed: `supportVisibility` counts plane inliers
     // across the whole annulus, which ring indices alone cannot supply.
     struct RingSamples {
@@ -639,7 +691,6 @@ public enum SupportRegion {
     static func ringSamples(geometry g: DepthGeometry) -> RingSamples {
         let distancePx = distanceToFoodPx(mask: g.foodMask)
         let bandWidthMm = (ringOuterMm - ringInnerMm) / Float(ringBandCount)
-        let annulusOuterMm = annulusOuterMultiple * ringOuterMm
 
         var ring: [Int] = [], band: [Int] = [], sector: [Int] = [], annulus: [Int] = []
         for y in 0..<g.height {

@@ -158,7 +158,7 @@ struct SupportPlaneCorpusMeasurementTests {
         for name in Self.captures {
             let (g, samples) = try #require(Self.prepared(name))
             let f = Self.foodRadiusPx(g)
-            let annulusWidthPx = (SupportRegion.annulusOuterMultiple * SupportRegion.ringOuterMm)
+            let annulusWidthPx = (SupportRegion.annulusOuterMm)
                 / g.mmPerPx
             print("\(name): food radius \(f) px, annulus width \(annulusWidthPx) px,"
                   + " 2w/f \(2 * annulusWidthPx / f), annulus/food samples"
@@ -2331,8 +2331,10 @@ struct SupportPlaneCorpusMeasurementTests {
     // = 13.667 mm at the shipped value — so Decision 33's "only 4 of 8 sectors reach the
     // inner band" and Decision 43's rimmed-plate blind spot ("their rims never reach the
     // inner band the sector median is computed over") are both readings of this constant.
-    // And unlike the count and the bar, it moves the ANNULUS with it, `2 × ringOuterMm`,
-    // so it changes which planes compete rather than only how a fixed set is read.
+    // And unlike the count and the bar, it moved the ANNULUS with it — the bound was
+    // `2 × ringOuterMm` when this sweep was written — so it changed which planes compete
+    // rather than only how a fixed set is read. Decision 49 severed that; this sweep passes
+    // the coupled bound explicitly and remains a measurement of the coupling.
     // Coarse outside the bracket, 1 mm inside it: the floor and the ceiling below are
     // read off this grid, so a spacing of 5 mm there would report a precision the sweep
     // does not have.
@@ -2416,9 +2418,12 @@ struct SupportPlaneCorpusMeasurementTests {
                 var halvedCounts = [Int](repeating: 0, count: SupportRegion.ringBandCount)
                 for band in halved.band { halvedCounts[band] += 1 }
                 halvedBands[name] = halvedCounts
-                let samples = Self.ringSamples(geometry: g, outerMm: outerMm)
-                // Re-extracted, not re-read: the annulus is `2 × outerMm`, so the
-                // candidate set is a function of the radius too.
+                let samples = Self.ringSamples(geometry: g, outerMm: outerMm,
+                                               annulusOuterMm: Self.coupledBoundMm(outerMm))
+                // Re-extracted, not re-read: under the coupling this sweep measures, the
+                // annulus is `2 × outerMm`, so the candidate set is a function of the
+                // radius too. Decision 49 severed that; the coupled bound is passed
+                // explicitly here so this stays the measurement Decision 46 recorded.
                 var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
                 let candidates = SupportRegion.extractCandidates(
                     annulus: samples.annulus, geometry: g,
@@ -2522,8 +2527,9 @@ struct SupportPlaneCorpusMeasurementTests {
         // THE FINDING, and it is not the one Decisions 44 and 45 make. Those two swept a
         // constant and closed with "no value moves": the count and the bar re-READ a fixed
         // candidate set, so they can only move a bracket. This one moves the ANSWER. The
-        // annulus is `2 × ringOuterMm`, so extraction runs on a different sample set at
-        // every radius and the plane it selects lands somewhere else at the food.
+        // annulus was `2 × ringOuterMm` when this was measured, so extraction runs on a
+        // different sample set at every radius and the plane it selects lands somewhere else
+        // at the food. Decision 49 shows the movement is the annulus's alone.
         //
         // The units are Decision 35's — millimetres of range along the food-centroid ray,
         // added to every food pixel — so the span is directly comparable with Req 5.1's
@@ -2852,7 +2858,7 @@ struct SupportPlaneCorpusMeasurementTests {
                                      bandCount: count),
                     bandCount: count)
                 let samples = Self.ringSamples(geometry: g, bandCount: count)
-                // Re-read, not re-extracted. The annulus is `2 × ringOuterMm` and does
+                // Re-read, not re-extracted. The annulus is `annulusOuterMm` and does
                 // not move with the band count, so the candidate set is the shipped
                 // one — but selection ranks on inner-band support, and that is what
                 // this constant divides.
@@ -2954,7 +2960,7 @@ struct SupportPlaneCorpusMeasurementTests {
         // THE NEGATIVE FIRST, because it is what places this constant among the other
         // three. Decision 46 found the radius moves the SELECTED plane, 18.719 mm at the
         // food, and attributed it to the annulus moving with it. That attribution is now
-        // tested rather than argued: the band count leaves the annulus at 2 × ringOuterMm,
+        // tested rather than argued: the band count leaves the annulus at annulusOuterMm,
         // so the candidate SET is fixed — but selection ranks on inner-band support and
         // this constant is what divides the inner band, so the ranking could still have
         // moved. It does not, anywhere in the sweep, on either capture. Decision 46's
@@ -3108,11 +3114,11 @@ struct SupportPlaneCorpusMeasurementTests {
     }
 
     // `ringSamples`'s radial banding with the BAND COUNT as a parameter. Everything else —
-    // the distance transform, `ringInnerMm`, `ringOuterMm`, `annulusOuterMultiple`, the
+    // the distance transform, `ringInnerMm`, `ringOuterMm`, `annulusOuterMm`, the
     // validity and food-mask exclusions, the sector bucketing — is the shipped path's, so
     // at `ringBandCount` it reproduces `ringSamples` exactly.
     //
-    // Note what does NOT move with it. The annulus is `2 × ringOuterMm`, so the candidate
+    // Note what does NOT move with it. The annulus is `annulusOuterMm`, so the candidate
     // set is untouched: this constant divides the ring it is given rather than resizing it.
     // What does move is the inner band, `ringInnerMm …  ringInnerMm + (ringOuterMm −
     // ringInnerMm) / bandCount`, which is both what the sector rule reads and what
@@ -3121,7 +3127,7 @@ struct SupportPlaneCorpusMeasurementTests {
                             bandCount: Int) -> SupportRegion.RingSamples {
         let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
         let bandWidthMm = (SupportRegion.ringOuterMm - SupportRegion.ringInnerMm) / Float(bandCount)
-        let annulusOuterMm = SupportRegion.annulusOuterMultiple * SupportRegion.ringOuterMm
+        let annulusOuterMm = SupportRegion.annulusOuterMm
         var ring: [Int] = [], band: [Int] = [], sector: [Int] = [], annulus: [Int] = []
         guard bandWidthMm > 0 else {
             return SupportRegion.RingSamples(ring: ring, band: band, sector: sector,
@@ -3614,6 +3620,433 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // MARK: - The candidate bound, and what it is the bound OF
+
+    // The candidate bound is the last constant in this file that decides which planes
+    // COMPETE, and the only one of the three that had never been varied. Decision 46 found
+    // the radius moves the selected plane 18.719 mm at the food and concluded the movement
+    // belongs to the annulus; Decision 47 supported that by moving radial geometry without
+    // moving the annulus and watching the plane stand still; Decision 48 varied how many
+    // times the annulus may be drawn from. None of the three could vary the annulus ITSELF,
+    // because it was written as `annulusOuterMultiple × ringOuterMm` and the radius carried
+    // it: the ring and the bound moved together at every value.
+    //
+    // The sweep is that former multiple's range in millimetres. 25 mm is the degenerate end
+    // — the candidate set collapses onto the ring — and 100 mm is wide enough to reach a
+    // second surface on a table capture. The shipped 50 mm sits in the middle.
+    static let annulusOuterSweep: [Float] = [25, 31.25, 37.5, 43.75, 50, 62.5, 75, 100]
+
+    @Test("the candidate bound is a constant of its own, and it carries the radius's movement")
+    func theCandidateBoundIsAConstantOfItsOwn() throws {
+        struct Reading {
+            let name: String
+            let annulusOuterMm: Float
+            let annulusSampleCount: Int
+            let candidateCount: Int
+            let planeAtFoodMm: Float
+            let normal: Vec3
+            let ringMedianMm: Float
+            let supportFraction: Float
+            let signs: SectorSigns
+            // The candidate a correct fit must select, by Req 3.1's own quantity — the
+            // identification Decisions 42, 46 and 48 make.
+            let intendedIndex: Int
+            let intendedRingMedianMm: Float
+            let intendedCrossed: Int
+            let selectedIndex: Int
+        }
+
+        // Everything a candidate set is read for, at one ring geometry and one bound.
+        func read(name: String, slice: DepthSlice, g: SupportRegion.DepthGeometry,
+                  ray: Vec3, outerMm: Float, annulusOuterMm: Float) throws -> Reading {
+            let samples = Self.ringSamples(geometry: g, outerMm: outerMm,
+                                           annulusOuterMm: annulusOuterMm)
+            var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let candidates = SupportRegion.extractCandidates(
+                annulus: samples.annulus, geometry: g,
+                gravity: slice.gravity.normalised(), rng: &rng)
+            let ringMedians = candidates.map {
+                SupportRegion.medianHeight(indices: samples.ring, geometry: g,
+                                           normal: $0.normal, d: $0.d)
+            }
+            let supports = candidates.map {
+                Self.innerSupportFraction(samples: samples, geometry: g,
+                                          normal: $0.normal, d: $0.d)
+            }
+            let selected = try #require(
+                (0..<candidates.count).max { supports[$0] < supports[$1] },
+                "no candidate survives extraction at an annulus of \(fmt(annulusOuterMm)) mm")
+            let intended = try #require(
+                (0..<candidates.count).min { abs(ringMedians[$0]) < abs(ringMedians[$1]) })
+            let best = candidates[selected]
+            return Reading(
+                name: name,
+                annulusOuterMm: annulusOuterMm,
+                annulusSampleCount: samples.annulus.count,
+                candidateCount: candidates.count,
+                planeAtFoodMm: Self.planeDepthMm(normal: best.normal, d: best.d, ray: ray),
+                normal: best.normal,
+                ringMedianMm: ringMedians[selected],
+                supportFraction: supports[selected],
+                signs: Self.sectorSigns(samples: samples, geometry: g,
+                                        normal: best.normal, d: best.d),
+                intendedIndex: intended,
+                intendedRingMedianMm: ringMedians[intended],
+                intendedCrossed: Self.sectorSigns(
+                    samples: samples, geometry: g,
+                    normal: candidates[intended].normal,
+                    d: candidates[intended].d).crossedFailing,
+                selectedIndex: selected)
+        }
+
+        struct Capture {
+            let name: String
+            let slice: DepthSlice
+            let g: SupportRegion.DepthGeometry
+            let ray: Vec3
+        }
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            corpus.append(Capture(name: name, slice: slice,
+                                  g: try #require(Self.geometry(name)),
+                                  ray: try #require(Self.foodCentroidRay(slice))))
+        }
+
+        // MARK: the bound swept at the shipped ring
+
+        var byBound: [Float: [Reading]] = [:]
+        for boundMm in Self.annulusOuterSweep {
+            var readings: [Reading] = []
+            for c in corpus {
+                readings.append(try read(name: c.name, slice: c.slice, g: c.g, ray: c.ray,
+                                         outerMm: SupportRegion.ringOuterMm,
+                                         annulusOuterMm: boundMm))
+            }
+            byBound[boundMm] = readings
+        }
+
+        // The anchor. At the shipped bound this must BE the shipped extraction — candidate
+        // for candidate — or the sweep is measuring a different annulus and nothing below
+        // says anything about `annulusOuterMm`.
+        for c in corpus {
+            let shipped = try #require(Self.candidates(c.name))
+            let samples = Self.ringSamples(geometry: c.g,
+                                           outerMm: SupportRegion.ringOuterMm,
+                                           annulusOuterMm: SupportRegion.annulusOuterMm)
+            var rng = SplitMix64(seed: Fnv1a64.hash(c.slice.depth.depthBytesMm))
+            let reproduced = SupportRegion.extractCandidates(
+                annulus: samples.annulus, geometry: c.g,
+                gravity: c.slice.gravity.normalised(), rng: &rng)
+            let drift = "\(c.name): re-ringing with the bound as an argument no longer"
+                + " reproduces SupportRegion.ringSamples at annulusOuterMm"
+                + " (\(shipped.count) shipped candidates, \(reproduced.count) reproduced)"
+                + " — the bound sweep is not measuring the shipped path"
+            #expect(shipped.count == reproduced.count, "\(drift)")
+            for (a, b) in zip(shipped, reproduced) {
+                #expect(a.d == b.d && a.normal == b.normal
+                        && a.componentSize == b.componentSize
+                        && a.residueCount == b.residueCount, "\(drift)")
+            }
+        }
+
+        for boundMm in Self.annulusOuterSweep {
+            let readings = byBound[boundMm] ?? []
+            print("annulusOuterMm=\(fmt(boundMm))"
+                  + " (ring fixed at \(fmt(SupportRegion.ringOuterMm)) mm):")
+            for r in readings {
+                let shippedPlane = byBound[SupportRegion.annulusOuterMm]?
+                    .first { $0.name == r.name }
+                print("  \(r.name): annulus \(r.annulusSampleCount) samples,"
+                      + " candidates \(r.candidateCount),"
+                      + " selected pass \(r.selectedIndex + 1),"
+                      + " PLANE AT FOOD \(fmt(r.planeAtFoodMm)) mm"
+                      + " (\(fmt(r.planeAtFoodMm - (shippedPlane?.planeAtFoodMm ?? r.planeAtFoodMm)))"
+                      + " vs shipped, tilt"
+                      + " \(fmt(Self.angleDeg(r.normal, shippedPlane?.normal ?? r.normal)))°),"
+                      + " ring median \(fmt(r.ringMedianMm)) mm,"
+                      + " support \(fmt(r.supportFraction)),"
+                      + " supporting \(r.signs.supporting), crossed \(r.signs.crossedFailing),"
+                      + " escaped \(r.signs.escapedFailing);"
+                      + " intended pass \(r.intendedIndex + 1)"
+                      + " (ring median \(fmt(r.intendedRingMedianMm)) mm,"
+                      + " crossed \(r.intendedCrossed))")
+            }
+        }
+
+        // What the bound does to the plane, in Decision 35's units — millimetres of range
+        // along the food-centroid ray, the quantity Req 5.1's 1 mm transfer tolerance is
+        // stated in and the one volume is integrated in.
+        var boundSpan: [String: (lo: Float, hi: Float)] = [:]
+        for readings in byBound.values {
+            for r in readings {
+                let existing = boundSpan[r.name] ?? (r.planeAtFoodMm, r.planeAtFoodMm)
+                boundSpan[r.name] = (min(existing.lo, r.planeAtFoodMm),
+                                     max(existing.hi, r.planeAtFoodMm))
+            }
+        }
+        let boundSpans = boundSpan.mapValues { $0.hi - $0.lo }
+        print("plane movement at the food over the BOUND sweep, ring held fixed:"
+              + " \(boundSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " — against Req 5.1's \(fmt(Self.gridTransferToleranceMm)) mm transfer tolerance")
+
+        // `maxCrossedSectors` per bound, read as Decision 48 reads it — the floor off the
+        // plane a correct fit must ADMIT (nearest Req 3.1's zero), the ceiling off the
+        // ranking's winner where that is a different plane. Decision 48 determined it at 2;
+        // this says at which bound.
+        var crossedByBound: [Float: (floor: Int, ceiling: Int)] = [:]
+        for boundMm in Self.annulusOuterSweep {
+            let readings = byBound[boundMm] ?? []
+            var floor = 0, ceiling = Int.max
+            for r in readings {
+                floor = max(floor, r.intendedCrossed)
+                if r.selectedIndex != r.intendedIndex {
+                    ceiling = min(ceiling, r.signs.crossedFailing - 1)
+                }
+            }
+            crossedByBound[boundMm] = (floor, ceiling)
+            print("  bound \(fmt(boundMm)) mm:"
+                  + " maxCrossedSectors corpus \(floor)…"
+                  + " \(ceiling == Int.max ? "unbounded" : "\(ceiling)")"
+                  + " \(floor <= ceiling ? "" : "EMPTY")")
+        }
+
+        // The committed suite's leg. The scenes never run extraction — each asserts against
+        // a plane its own test states — so the bound reaches them through exactly two
+        // guards, `visibility` and `escaped`, both of which read the ANNULUS. That is where
+        // a suite bound on this constant can come from, and the only place.
+        struct SceneBound {
+            let label: String
+            let boundMm: Float
+            let visibility: Float
+            let annulusMedianMm: Float
+            let requiresVisibilityPass: Bool
+            let requiresEscapePass: Bool
+            var holds: Bool {
+                (!requiresVisibilityPass || visibility >= SupportRegion.supportVisibilityMin)
+                    && (!requiresEscapePass || annulusMedianMm <= SupportRegion.escapeBandMm)
+            }
+        }
+        var sceneBounds: [SceneBound] = []
+        for spec in Self.sceneSpecs() {
+            guard spec.requiresPass.contains(.visibility)
+                    || spec.requiresPass.contains(.escaped) else { continue }
+            guard let measured = SPRScene.measure(spec.grid) else { continue }
+            let p = SPRScene.plane(atHeightMm: spec.planeHeightMm)
+            for boundMm in Self.annulusOuterSweep {
+                let samples = Self.ringSamples(geometry: measured.geometry,
+                                               outerMm: SupportRegion.ringOuterMm,
+                                               annulusOuterMm: boundMm)
+                var visible = 0
+                for idx in samples.annulus
+                where abs(p.normal.dot(measured.geometry.points[idx]) - p.d)
+                    <= LiDARPlaneFitter.inlierBandMm {
+                    visible += 1
+                }
+                sceneBounds.append(SceneBound(
+                    label: spec.label,
+                    boundMm: boundMm,
+                    visibility: Float(visible)
+                        / Float(max(1, measured.geometry.foodSampleCount)),
+                    annulusMedianMm: SupportRegion.medianHeight(
+                        indices: samples.annulus, geometry: measured.geometry,
+                        normal: p.normal, d: p.d),
+                    requiresVisibilityPass: spec.requiresPass.contains(.visibility),
+                    requiresEscapePass: spec.requiresPass.contains(.escaped)))
+            }
+        }
+        let suiteHolds = Self.annulusOuterSweep.filter { boundMm in
+            sceneBounds.filter { $0.boundMm == boundMm }.allSatisfy(\.holds)
+        }
+        for boundMm in Self.annulusOuterSweep {
+            let atBound = sceneBounds.filter { $0.boundMm == boundMm }
+            print("  suite at bound \(fmt(boundMm)) mm:"
+                  + " \(atBound.map { "\($0.label) visibility \(fmt($0.visibility))," + " annulus median \(fmt($0.annulusMedianMm)) mm\($0.holds ? "" : " FAILS")" })")
+        }
+        print("bounds at which every committed scene keeps its verdict:"
+              + " \(suiteHolds.map { fmt($0) }) mm")
+
+        // And what the suite's silence costs another owed constant. `escapeBandMm`'s suite
+        // floor is the largest annulus median any must-pass scene reads (Decision 41's
+        // ≥ 14.868 mm) — an annulus median, so it is a reading at the shipped bound.
+        for boundMm in Self.annulusOuterSweep {
+            let floor = sceneBounds.filter { $0.boundMm == boundMm && $0.requiresEscapePass }
+                .map(\.annulusMedianMm).max() ?? 0
+            print("  escapeBandMm suite floor at bound \(fmt(boundMm)) mm: \(fmt(floor)) mm")
+        }
+
+        // MARK: the radius swept with the bound PINNED
+
+        // The decomposition. Decision 46 swept `ringOuterMm` and the annulus moved with it,
+        // so its 18.719 mm is the two together. Re-running the same sweep twice — once
+        // coupled as the shipped path couples them, once with the bound pinned at the
+        // shipped 50 mm — splits that movement into the ring's share and the bound's.
+        struct RadiusPair {
+            let outerMm: Float
+            let coupled: [Reading]
+            let pinned: [Reading]
+        }
+        let pinnedAnnulusMm = SupportRegion.annulusOuterMm
+        var pairs: [RadiusPair] = []
+        for outerMm in Self.ringOuterSweep {
+            var coupled: [Reading] = [], pinned: [Reading] = []
+            for c in corpus {
+                coupled.append(try read(name: c.name, slice: c.slice, g: c.g, ray: c.ray,
+                                        outerMm: outerMm,
+                                        annulusOuterMm: Self.coupledBoundMm(outerMm)))
+                pinned.append(try read(name: c.name, slice: c.slice, g: c.g, ray: c.ray,
+                                       outerMm: outerMm, annulusOuterMm: pinnedAnnulusMm))
+            }
+            pairs.append(RadiusPair(outerMm: outerMm, coupled: coupled, pinned: pinned))
+        }
+
+        for p in pairs {
+            print("ringOuterMm=\(fmt(p.outerMm)):")
+            for c in corpus {
+                guard let coupled = p.coupled.first(where: { $0.name == c.name }),
+                      let pinned = p.pinned.first(where: { $0.name == c.name }) else { continue }
+                print("  \(c.name): coupled (annulus \(fmt(coupled.annulusOuterMm)) mm)"
+                      + " plane \(fmt(coupled.planeAtFoodMm)) mm,"
+                      + " candidates \(coupled.candidateCount),"
+                      + " selected pass \(coupled.selectedIndex + 1),"
+                      + " crossed \(coupled.signs.crossedFailing),"
+                      + " intended pass \(coupled.intendedIndex + 1) crossed \(coupled.intendedCrossed)"
+                      + " | pinned (annulus \(fmt(pinnedAnnulusMm)) mm)"
+                      + " plane \(fmt(pinned.planeAtFoodMm)) mm,"
+                      + " candidates \(pinned.candidateCount),"
+                      + " selected pass \(pinned.selectedIndex + 1),"
+                      + " crossed \(pinned.signs.crossedFailing),"
+                      + " intended pass \(pinned.intendedIndex + 1) crossed \(pinned.intendedCrossed)")
+            }
+        }
+
+        func span(_ readings: [[Reading]]) -> [String: Float] {
+            var byName: [String: (lo: Float, hi: Float)] = [:]
+            for group in readings {
+                for r in group {
+                    let existing = byName[r.name] ?? (r.planeAtFoodMm, r.planeAtFoodMm)
+                    byName[r.name] = (min(existing.lo, r.planeAtFoodMm),
+                                      max(existing.hi, r.planeAtFoodMm))
+                }
+            }
+            return byName.mapValues { $0.hi - $0.lo }
+        }
+        let coupledSpans = span(pairs.map(\.coupled))
+        let pinnedSpans = span(pairs.map(\.pinned))
+        print("plane movement over the RADIUS sweep — coupled"
+              + " \(coupledSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))"
+              + " | bound pinned"
+              + " \(pinnedSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))")
+
+        // Decision 46's other finding: the pass side ALTERNATES at 1 mm steps, which is why
+        // that decision forbids interpolating inside the bracket. If the alternation is the
+        // annulus re-selecting the candidates, pinning the bound removes it.
+        var coupledDirty: [Float] = [], pinnedDirty: [Float] = []
+        for p in pairs {
+            if p.coupled.contains(where: { $0.name == "1785135663727" && $0.intendedCrossed > 0 }) {
+                coupledDirty.append(p.outerMm)
+            }
+            if p.pinned.contains(where: { $0.name == "1785135663727" && $0.intendedCrossed > 0 }) {
+                pinnedDirty.append(p.outerMm)
+            }
+        }
+        print("radii at which the intended plate candidate reads a crossed sector —"
+              + " coupled \(coupledDirty.map { fmt($0) }),"
+              + " bound pinned \(pinnedDirty.map { fmt($0) })")
+
+        // MARK: what the two legs say
+
+        // The anchor for the coupled leg: it must reproduce Decision 46 — plane movement
+        // beyond Req 5.1's tolerance on both captures and an alternating pass side — or the
+        // comparison below is against something other than what that decision measured.
+        let coupledAnchor = "the coupled radius sweep no longer reproduces Decision 46"
+            + " (movement \(coupledSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted()),"
+            + " dirty radii \(coupledDirty.map { fmt($0) })) — the decomposition below is"
+            + " not a decomposition of that decision's finding"
+        #expect(coupledSpans.values.allSatisfy { $0 > Self.gridTransferToleranceMm }
+                && !coupledDirty.isEmpty, "\(coupledAnchor)")
+
+        // THE FINDING. Pin the bound and the radius stops moving the plane — not within a
+        // tolerance, exactly. Extraction reads the annulus and nothing else, so a pinned
+        // bound hands every radius the same candidates; the ring still changes, so the
+        // RANKING could still pick a different one, and it does not. Decision 46's 18.719 mm
+        // is the annulus's, and `ringOuterMm` is a bracket-only constant like the count and
+        // the bar after all.
+        print("the radius's own share of Decision 46's movement:"
+              + " \(pinnedSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted().joined(separator: ", "))")
+        let radiusCarriesIt = "the radius still moves the selected plane with the candidate"
+            + " bound pinned (\(pinnedSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted()))"
+            + " — the movement is not the annulus's alone and decoupling the bound does not"
+            + " make ringOuterMm interpolable"
+        #expect(pinnedSpans.values.allSatisfy { $0 == 0 }, "\(radiusCarriesIt)")
+
+        // And the alternation goes with it. Decision 46 forbids interpolating inside
+        // 22…32 mm because the intended plate candidate reads crossed sectors at 24, 27, 30,
+        // 32 and 35 mm; with the bound pinned it reads none at any radius in the sweep, so
+        // the alternation was the annulus re-selecting the candidates, not the ring.
+        let alternationRemains = "the intended plate candidate still alternates with the"
+            + " radius under a pinned bound (\(pinnedDirty.map { fmt($0) })) — Decision 46's"
+            + " DO NOT INTERPOLATE stands and the bound is not what carries it"
+        #expect(pinnedDirty.isEmpty, "\(alternationRemains)")
+
+        // The bound's own movement, at a fixed ring — the same quantity, and it is
+        // Decision 46's number rather than a fraction of it.
+        let inertBound = "the candidate bound no longer moves the selected plane beyond Req"
+            + " 5.1's transfer tolerance (\(boundSpans.map { "\($0.key) \(fmt($0.value)) mm" }.sorted()))"
+            + " — it is a bracket-only constant and this decision's headline is gone"
+        #expect(boundSpans.values.contains { $0 > Self.gridTransferToleranceMm }, "\(inertBound)")
+
+        // The corpus's bracket, and the shipped bound is the only value in the sweep that
+        // DETERMINES `maxCrossedSectors`. Below it the floor rises to 3 or the interval goes
+        // empty — the plane a correct fit must admit is itself crossed — and above it the
+        // ceiling opens to 4 before the whole interval collapses at 100 mm. So Decision 48's
+        // "determined at 2" is a slice at this constant as much as at the other four.
+        let shippedBracket = try #require(crossedByBound[SupportRegion.annulusOuterMm])
+        let determinedAt = Self.annulusOuterSweep.filter {
+            (crossedByBound[$0]?.floor ?? 0) == 2 && (crossedByBound[$0]?.ceiling ?? 0) == 2
+        }
+        let feasibleAt = Self.annulusOuterSweep.filter {
+            (crossedByBound[$0].map { $0.floor <= $0.ceiling }) == true
+        }
+        print("bounds at which the corpus determines maxCrossedSectors at 2:"
+              + " \(determinedAt.map { fmt($0) }) mm;"
+              + " feasible at \(feasibleAt.map { fmt($0) }) mm")
+        let boundInvariant = "the corpus reads the same maxCrossedSectors bracket at every"
+            + " candidate bound — Decision 48's determination is not denominated in this"
+            + " constant and the sitting may set the two independently"
+        #expect(shippedBracket.floor == 2 && shippedBracket.ceiling == 2
+                && determinedAt.count == 1, "\(boundInvariant)")
+
+        // The suite's leg, and it is the first constant since Decision 41 the committed
+        // scenes cannot bound at all. They never run extraction, so the bound reaches them
+        // only through `visibility` and `escaped` — which are two of the five guards
+        // Decision 34 found never fire. Every scene keeps its verdict at 25 mm and at
+        // 100 mm alike, so the ceiling and the floor are the corpus's alone.
+        let suiteBinds = "the committed suite now changes verdict somewhere in the bound"
+            + " sweep (holds at \(suiteHolds.map { fmt($0) }) of"
+            + " \(Self.annulusOuterSweep.count) values) — it bounds annulusOuterMm after"
+            + " all, and this decision's \"the corpus alone\" is wrong"
+        #expect(suiteHolds.count == Self.annulusOuterSweep.count, "\(suiteBinds)")
+
+        // One side finding, and it belongs to `escapeBandMm`. Decision 41 read that
+        // constant's suite floor as ≥ 14.868 mm — an ANNULUS median, so a reading at the
+        // shipped bound. Over the sweep the same scenes read 0.131 mm to 14.868 mm, because
+        // a wider annulus reaches past the plate a scene sits on and the median goes
+        // negative. So an owed constant that never fires is denominated in one that moves
+        // the answer.
+        let escapeFloors = Self.annulusOuterSweep.map { boundMm -> Float in
+            sceneBounds.filter { $0.boundMm == boundMm && $0.requiresEscapePass }
+                .map(\.annulusMedianMm).max() ?? 0
+        }
+        let escapeSpan = (escapeFloors.max() ?? 0) - (escapeFloors.min() ?? 0)
+        print("escapeBandMm's suite floor over the bound sweep:"
+              + " \(escapeFloors.map { fmt($0) }) mm — span \(fmt(escapeSpan)) mm")
+        let escapeIndependent = "escapeBandMm's suite floor no longer moves with the"
+            + " candidate bound (span \(fmt(escapeSpan)) mm) — Decision 41's ≥ 14.868 mm is"
+            + " not a reading at the shipped bound and this side finding can be retired"
+        #expect(escapeSpan > SupportRegion.ringBandMm, "\(escapeIndependent)")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
@@ -3914,7 +4347,7 @@ struct SupportPlaneCorpusMeasurementTests {
     }
 
     // `SupportRegion.ringSamples` with the OUTER radius as a parameter. Everything else —
-    // the distance transform, `ringInnerMm`, `ringBandCount`, `annulusOuterMultiple`, the
+    // the distance transform, `ringInnerMm`, `ringBandCount`, `annulusOuterMm`, the
     // validity and food-mask exclusions, the sector bucketing — is the shipped path's, so
     // at `ringOuterMm` it reproduces `ringSamples` exactly and the sweep below is
     // measuring the radius alone.
@@ -3922,14 +4355,30 @@ struct SupportPlaneCorpusMeasurementTests {
     // Note what moves with it and what does not. The inner edge is `ringInnerMm`, fixed
     // by the depth smear (Decision 39), so the radius sets the ring's WIDTH; the band
     // width is that width over `ringBandCount`, so the inner band the sector rule reads
-    // ends at `ringInnerMm + (outerMm − ringInnerMm) / 3`. And the annulus is
-    // `2 × outerMm`, so this is the first swept constant that changes which planes
-    // COMPETE rather than only how a fixed set is read.
+    // ends at `ringInnerMm + (outerMm − ringInnerMm) / 3`. The candidate bound does NOT
+    // move with it — `annulusOuterMm` is a constant of its own since Decision 49 — so this
+    // re-rings a fixed candidate set.
     static func ringSamples(geometry g: SupportRegion.DepthGeometry,
                             outerMm: Float) -> SupportRegion.RingSamples {
+        ringSamples(geometry: g, outerMm: outerMm,
+                    annulusOuterMm: SupportRegion.annulusOuterMm)
+    }
+
+    // The bound as `annulusOuterMultiple × ringOuterMm` expressed it, which is how every
+    // reading of the radius between Decisions 46 and 49 took it. Kept because Decision 46's
+    // sweep is a measurement OF that coupling and Decision 49's decomposition compares
+    // against it; it is not the shipped path any more.
+    static func coupledBoundMm(_ outerMm: Float) -> Float { 2 * outerMm }
+
+    // The same re-ringing with the CANDIDATE BOUND as a second argument. The two were tied
+    // until Decision 49 — the annulus was `annulusOuterMultiple × ringOuterMm`, so every
+    // reading of the radius moved the ring and the candidate set together. Separating them
+    // is what said which of the two the movement belonged to.
+    static func ringSamples(geometry g: SupportRegion.DepthGeometry,
+                            outerMm: Float,
+                            annulusOuterMm: Float) -> SupportRegion.RingSamples {
         let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
         let bandWidthMm = (outerMm - SupportRegion.ringInnerMm) / Float(SupportRegion.ringBandCount)
-        let annulusOuterMm = SupportRegion.annulusOuterMultiple * outerMm
         var ring: [Int] = [], band: [Int] = [], sector: [Int] = [], annulus: [Int] = []
         guard bandWidthMm > 0 else {
             return SupportRegion.RingSamples(ring: ring, band: band, sector: sector,
@@ -4200,7 +4649,7 @@ struct SupportPlaneCorpusMeasurementTests {
     static func sectorMargins(_ name: String) -> [SectorMargin]? {
         guard let g = geometry(name), let best = bestCandidate(name) else { return nil }
         let distancePx = SupportRegion.distanceToFoodPx(mask: g.foodMask)
-        let outerMm = SupportRegion.annulusOuterMultiple * SupportRegion.ringOuterMm
+        let outerMm = SupportRegion.annulusOuterMm
         let binCount = Int((outerMm / profileBinMm).rounded(.up))
         var heights = [[[Float]]](
             repeating: [[Float]](repeating: [], count: binCount),

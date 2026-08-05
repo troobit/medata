@@ -119,10 +119,17 @@ struct SupportRegionRingTests {
             #expect(mm >= SupportRegion.ringInnerMm - 1e-3 && mm <= SupportRegion.ringOuterMm + 1e-3,
                     "ring sample at \(mm) mm is outside [\(SupportRegion.ringInnerMm), \(SupportRegion.ringOuterMm)]")
         }
+        // The ring must sit INSIDE the candidate bound. Free while the bound was
+        // annulusOuterMultiple x ringOuterMm; an invariant since Decision 49 made the two
+        // independent, and a bound below the ring would silently empty the ring.
+        let outsideBound = "ringOuterMm \(SupportRegion.ringOuterMm) is outside the candidate"
+            + " bound \(SupportRegion.annulusOuterMm) — ringSamples collects a ring sample"
+            + " only if it is already an annulus sample, so the ring is empty"
+        #expect(SupportRegion.ringOuterMm <= SupportRegion.annulusOuterMm, "\(outsideBound)")
         for index in measured.samples.annulus {
             let mm = distances[index] * measured.geometry.mmPerPx
-            #expect(mm <= 2 * SupportRegion.ringOuterMm + 1e-3,
-                    "annulus sample at \(mm) mm is outside the 2 x ringOuterMm bound")
+            #expect(mm <= SupportRegion.annulusOuterMm + 1e-3,
+                    "annulus sample at \(mm) mm is outside the annulusOuterMm bound")
         }
     }
 

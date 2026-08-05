@@ -453,16 +453,24 @@ One positive, and it is the strongest statement the feature has about the rule: 
 common `maxCrossedSectors`, so Decision 43's agreement is a property of the rule rather than of
 the shipped pair.
 
-## The ring radius moves the answer, not just the bracket (Decision 46)
+## The ring radius moves the answer, not just the bracket (Decision 46 — and it was the annulus, Decision 49)
 
 `ringOuterMm = 25` is the third free constant in the sector measure and the one that behaves
 differently from the other two. **Read this before changing it, and before trusting any plane
 figure in this feature to better than ~2 mm.**
 
 `ringSectorCount` re-cuts a fixed ring. `sectorSupportMin` re-classifies a fixed set of sectors.
-Both can only move a *verdict*. `ringOuterMm` moves the **annulus** — the candidate bound is
-`2 × ringOuterMm` (`SupportRegion.annulusOuterMultiple`) — so `extractCandidates` runs on a
-different sample set at every value and the constant can change **which plane wins**.
+Both can only move a *verdict*. `ringOuterMm` moved the **annulus** — the candidate bound was
+`2 × ringOuterMm` — so `extractCandidates` ran on a different sample set at every value and the
+constant changed **which plane wins**.
+
+**That coupling is gone (Decision 49).** The bound is `SupportRegion.annulusOuterMm = 50`, a
+constant of its own at the same value, and it is what carries the movement: pin it and the radius
+moves the selected plane **0.000 mm** at every value from 13 to 40 mm on both captures, exactly,
+because `extractCandidates` reads the annulus and nothing else. Everything below is a measurement
+of the **coupled** sweep — still true of that sweep, and no longer true of the shipped path.
+`ringRadiusIsTheRadialUnitOfTheSectorRule` therefore passes the coupled bound explicitly, via
+`coupledBoundMm`. Read the annulus section below before changing either constant.
 
 Measured over seventeen radii, re-extracting at each (`ringRadiusIsTheRadialUnitOfTheSectorRule`):
 
@@ -480,10 +488,10 @@ Measured over seventeen radii, re-extracting at each (`ringRadiusIsTheRadialUnit
   the ring past 32 mm and the committed suite goes red** — that is the scenes moving with the
   constant, exactly as Decision 41 predicted.
 
-**Do not interpolate inside the bracket.** The pass side alternates at 1 mm steps: the corpus's
-only intended-correct candidate reads 0 crossed sectors at 22, 23, 25, 26, 28, 29, 31 mm and
-**2** at 24, 27, 30, 32 mm, its plane oscillating over 4.162 mm with them. A radius between two
-clean radii is implied by neither.
+~~**Do not interpolate inside the bracket.**~~ **Superseded (Decision 49).** The pass side
+alternates at 1 mm steps under the *coupled* bound — 0 crossed sectors at 22, 23, 25, 26, 28, 29,
+31 mm and **2** at 24, 27, 30, 32 mm — and reads 0 at every radius once the bound is pinned. The
+alternation was the annulus re-selecting the candidates, so the bracket may be interpolated.
 
 **The control that makes that claim safe** (`candidateSelectionIsSeedUnstableAtTheShippedRadius`).
 The alternation could have been extraction noise re-rolled by a moving annulus. Held at the
@@ -604,6 +612,52 @@ plate with 6 escaped sectors and its envelope is **positive at 7.154 mm** — a 
 surface still has food above *it* wherever the food is taller than the gap. Bracketed
 7.154…21.041 mm by the corpus; against Decision 41's suite ceiling of 8.233 mm the joint window
 is **1.079 mm**, the narrowest in the feature.
+
+## The candidate bound, and what carried the radius's movement (Decision 49)
+
+`SupportRegion.annulusOuterMm = 50` was `annulusOuterMultiple = 2` — a multiple of `ringOuterMm`,
+with no provenance marker, never swept. It could not be swept: with the bound written as a
+multiple of the radius there is no radius at which the bound is held still and no bound at which
+the radius is. Decisions 46, 47 and 48 all read *through* it.
+
+Pin it and re-run Decision 46's own 13…40 mm radius sweep
+(`theCandidateBoundIsAConstantOfItsOwn`):
+
+| sweep | `1785135663727` | `1785901032716` |
+|---|---|---|
+| radius 13…40 mm, bound coupled (Decision 46) | 4.162 mm | 18.719 mm |
+| radius 13…40 mm, bound pinned at 50 mm | **0.000 mm** | **0.000 mm** |
+| bound 25…100 mm, ring pinned at 25 mm | 1.978 mm | **18.843 mm** |
+
+The zero is exact, not a tolerance: `extractCandidates` takes the annulus and nothing else, so a
+pinned bound hands every radius the same candidates — and the ranking, which *does* move with the
+ring, picks the same one anyway. The re-denomination is Decisions 37 and 38's pattern: the value
+does not move (`2 × 25` = 50), so every corpus candidate and committed scene is unchanged, and
+what changes is that a measure parameter stops resizing the candidate set.
+
+**Bracketed 50…75 mm, by the corpus alone.** `maxCrossedSectors` per bound, read as Decision 48
+reads it:
+
+| bound | 25 | 31.25 | 37.5 | 43.75 | **50** | 62.5 | 75 | 100 |
+|---|---|---|---|---|---|---|---|---|
+| corpus `maxCrossedSectors` | empty | 3…∞ | empty | empty | **2…2** | 2…4 | 2…4 | empty |
+
+Below 50 mm the plane a correct fit must admit is itself crossed (and at 25 mm the bound has
+collapsed onto the ring — two candidates, not three); at 100 mm the plate capture's intended
+candidate reads 6 crossed as the annulus reaches past the plate. The shipped value is **on the
+floor**, and it is the only value in the sweep at which Decision 48's determination at 2 holds.
+
+**The committed suite cannot see this constant.** The scenes never run extraction, so the bound
+reaches them only through `visibility` and `escaped` — two of the five guards Decision 34 found
+never fire — and every scene keeps its verdict from 25 mm to 100 mm. First constant since
+Decision 41 with no second source.
+
+Two riders. `escapeBandMm`'s suite floor is an *annulus* median, so Decision 41's ≥ 14.868 mm is a
+reading at the shipped bound: over the sweep the same scenes read 0.131…14.868 mm. And Req 7.6's
+latency is denominated here — the annulus holds 10 469 and 12 551 samples at 50 mm against 19 427
+and 25 659 at 100 mm.
+
+**Keep the ring inside the bound.** Free while this was a multiple ≥ 1; an invariant now.
 
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 

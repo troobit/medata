@@ -872,7 +872,7 @@ Output: π_sup = (n̂, d), residual_mm, ring statistics    — or NOTHING (fall 
    pixel it covers is food, so ambiguity resolves towards EXCLUSION (Req 2.1).
 
 2. Candidate samples := depth pixels with confidence/255 ≥ τ_conf (0.40) lying in a
-   millimetre-denominated ANNULUS of 2 × ringOuterMm around the food mask, and outside it.
+   millimetre-denominated ANNULUS of annulusOuterMm (50 mm) around the food mask, and outside it.
    Bounding the neighbourhood in millimetres — not by dilating the mask by a multiple of the
    food radius — is what keeps clutter beyond the plate from ever competing.
 

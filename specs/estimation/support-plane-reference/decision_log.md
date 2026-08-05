@@ -2650,3 +2650,95 @@ Against the suite that leaves a **1.079 mm** joint window, the narrowest any owe
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`thePassCapIsWhatStopsExtractionOnTheCorpus`, and an `extractCandidates(annulus:geometry:gravity:rng:maxPasses:)` mirroring the shipped extraction with the cap as an argument), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `maxCandidatePlanes`, `maxCrossedSectors` and `foodEnvelopeMinMm` comments), `design.md`, task 26's detail, `prerequisites.md` and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
 
 ---
+
+## Decision 49: The candidate bound is a constant of its own, and it carried the radius's movement
+
+**Date**: 2026-08-06
+**Status**: accepted (supersedes Decision 46's "do not interpolate" and "fix it first"; re-denominates the bound as Decisions 37 and 38 re-denominated the extent bar and the residue floor; qualifies Decisions 41 and 48)
+
+### Context
+
+Three decisions in a row have been readings *through* the annulus. Decision 46 swept `ringOuterMm`, found the selected plane moving 18.719 mm at the food on `1785901032716`, and attributed the movement to the annulus — the candidate bound, written as `annulusOuterMultiple × ringOuterMm`, which the radius therefore moved with it. Decision 47 supported that attribution by elimination: `ringBandCount` re-cuts the ring without touching the annulus, and the plane does not move at all. Decision 48 varied how many times the annulus may be drawn from.
+
+None of the three could vary the annulus **itself**. The shipped path did not let them: with the bound expressed as a multiple of the radius, there is no radius at which the bound is held still, and no bound at which the radius is. `annulusOuterMultiple` carried no provenance marker — it read "The candidate set is an annulus of 2 × ringOuterMm around the food mask (Decision 15)", which is Decision 15's *comparison against the pre-feature band scan*, not a derivation of the 2 — and it had never been swept.
+
+Decision 46 also left the capture session its hardest instruction: the radius must be fixed **first** and its 22…32 mm bracket **must not be interpolated**, because the intended plate candidate reads 0 crossed sectors at 22, 23, 25, 26, 28, 29 and 31 mm and 2 at 24, 27, 30 and 32 mm. That instruction is only justified if the alternation belongs to the radius.
+
+### Decision
+
+`annulusOuterMultiple = 2` becomes **`annulusOuterMm = 50`**, `[owed]`, bracketed **50…75 mm** by the corpus and by nothing else. The value does not move — `2 × 25` is 50 — so every corpus candidate, every committed scene and every persisted field is unchanged by construction.
+
+**The radius does not move the plane. The bound does.** Over the same 13…40 mm radius sweep with the bound pinned at 50 mm, the selected plane moves **0.000 mm** at the food on both captures — not within a tolerance, exactly. Swept itself at a fixed ring, the bound moves it **18.843 mm** and 1.978 mm, which is Decision 46's number rather than a fraction of it.
+
+Two of Decision 46's riders are **superseded**. The bracket **may** be interpolated: with the bound pinned, the intended plate candidate reads 0 crossed sectors at every radius in the sweep, so the alternation was the annulus re-selecting the candidates. And the radius is **not** fixed first: Decision 45's joint `(ringSectorCount, sectorSupportMin)` pair is a pair again, not a triple, because the radius no longer selects the candidates the other two are read on.
+
+`maxCrossedSectors` acquires a fifth denomination. Decision 48 determined it at 2; that determination holds at `annulusOuterMm` = 50 mm and at no other value in the sweep.
+
+### Rationale
+
+**The decomposition is exact, and it is exact for a structural reason.** `extractCandidates` takes the annulus and nothing else. Pin the bound and every radius is handed the same candidates; the ring still moves, so the *ranking* could still pick a different one — and it does not, at any radius from 13 to 40 mm on either capture.
+
+| sweep | `1785135663727` | `1785901032716` |
+|---|---|---|
+| radius 13…40 mm, bound coupled (Decision 46) | 4.162 mm | 18.719 mm |
+| radius 13…40 mm, bound pinned at 50 mm | **0.000 mm** | **0.000 mm** |
+| bound 25…100 mm, ring pinned at 25 mm | 1.978 mm | **18.843 mm** |
+
+Against Req 5.1's 1 mm grid-transfer tolerance, the constant that moves the answer is the bound, and the radius is a bracket-only constant like `ringSectorCount` and `sectorSupportMin`.
+
+**The alternation goes with it.** Decision 46's interior exceptions — 24, 27, 30, 32 mm, and 35 mm above the bracket — are radii at which the intended plate candidate reads crossed sectors. With the bound pinned there are none. A radius between two clean radii is implied by both after all, once the candidate set stops resizing underneath it.
+
+**The value does not move, which is what makes this a re-denomination rather than a change.** Decision 37 converted `minAcceptedExtentPx` to millimetres and Decision 38 converted `minResidueSamples` to mm², both without moving the bar, because the *unit* was wrong: a pixel count and a sample count both track the sensor grid where the surface they stand for does not. Here the unit is a length and it is correct; what is wrong is the **denominator**. Expressing the candidate bound as a multiple of a ring radius makes a measure parameter resize the candidate set, and the measurements above are what that costs.
+
+**The corpus brackets it 50…75 mm, reading `maxCrossedSectors` as Decision 48 reads it** — floor from the plane a correct fit must admit (nearest Req 3.1's zero), ceiling from the ranking's winner where that is a different plane.
+
+| bound | candidates (plate / table capture) | corpus `maxCrossedSectors` |
+|---|---|---|
+| 25 mm | 2 / 2 | 4…−1 **empty** |
+| 31.25 mm | 2 / 3 | 3…unbounded |
+| 37.5 mm | 2 / 3 | 3…1 **empty** |
+| 43.75 mm | 2 / 3 | 3…−1 **empty** |
+| **50 mm (shipped)** | 3 / 3 | **2…2** |
+| 62.5 mm | 3 / 3 | 2…4 |
+| 75 mm | 3 / 3 | 2…4 |
+| 100 mm | 3 / 3 | 6…−1 **empty** |
+
+Below the floor the plane a correct fit must admit is itself crossed, and at 25 mm — where the bound collapses onto the ring — extraction produces two candidates on both captures. At 100 mm the interval collapses the other way: the plate capture's intended candidate reads **6** crossed sectors and a ring median of +1.793 mm as the annulus reaches surfaces beyond the plate. The shipped 50 mm is **on the floor** of that window, as `sectorSupportMin` sits on its ceiling (Decision 45) and `ringBandCount` on its (Decision 47), and it is the only value in the sweep at which the corpus determines `maxCrossedSectors` at 2.
+
+**The committed suite cannot bound it at all**, which is the first time since Decision 41 that a constraint set has been silent. The scenes never run extraction — each asserts against a plane its own test states — so the bound reaches them through exactly two guards, `visibility` and `escaped`, and both are among the five Decision 34 found never fire. Every scene keeps its verdict at 25 mm and at 100 mm alike. Decision 41 predicted the suite would cap constants and it capped three (`ringSectorCount`, `ringOuterMm`, `ringBandCount`); this one it leaves entirely to the captures.
+
+**One side finding, and it belongs to `escapeBandMm`.** Decision 41 read that constant's suite floor as ≥ 14.868 mm. That is an *annulus* median, so it is a reading at the shipped bound: over the sweep the same scenes read 0.131, 0.189, 14.743, 14.821, **14.868**, 14.865, 14.719 and 0.214 mm — a 14.737 mm span, because a wider annulus reaches past the plate a scene sits on and the median goes negative. An owed constant that never fires is denominated in one that moves the answer.
+
+**Req 7.6's latency is denominated here too.** The annulus holds 10 469 and 12 551 samples at the shipped bound and 19 427 and 25 659 at 100 mm, and RANSAC iterates over all of them — so the cost bound is `maxIterationsPerPass × maxCandidatePlanes` over a sample count this constant sets. Task 27 measures that at the shipped value only.
+
+### Alternatives Considered
+
+- **Record the measurement and leave `annulusOuterMultiple` as a multiple** - The finding is the decomposition, not the denomination; the numbers stand either way, and a multiple keeps the ring inside the bound by construction, which becomes an invariant to maintain once the two are independent - Rejected because the coupling is what produced Decision 46's headline and its two instructions to the capture session, both of which are wrong. Leaving it would mean the session fixes `ringOuterMm` first, refuses to interpolate a bracket that is interpolable, and re-reads the count and the bar at each radius — work the measurement shows is unnecessary. The invariant is cheap to keep: `SupportRegionRingTests` already asserts every ring sample is inside the bound.
+- **Set `annulusOuterMm = 50` as settled, since the corpus brackets it and the shipped value is inside** - It is on the corpus floor with a measured window above it, and it is the only value at which `maxCrossedSectors` is determined - Rejected because "on the floor" is where Decision 45 found `sectorSupportMin` and Decision 47 found `ringBandCount`, and both stayed owed. The floor is read from two captures of flat bread on a white plate, and the failure at 25…43.75 mm is that the *intended* plane is crossed — a property of the plate-size-to-food-size ratio the corpus fixes and the capture session varies.
+- **Widen the bound to 62.5 or 75 mm, where the corpus still holds and the candidate set is larger** - More surface competes, `maxCrossedSectors` stays feasible, and a wider annulus is what a large plate needs - Rejected because it asserts an owed constant to buy a wider bracket on another owed constant, and because it costs Decision 48's determination: at 62.5 and 75 mm `maxCrossedSectors` reads 2…4 rather than 2…2. Req 7.6's cost also rises with it and has not been measured on device.
+- **Rewrite Decision 46's test to sweep the radius at the pinned bound** - It would then measure the shipped path rather than a coupling that no longer exists - Rejected because that decision's measurement is the coupled one and this decision's comparison is against it. The test now passes the coupled bound explicitly and says why, which keeps the record and stops the coupling being implied by a helper's default.
+- **Derive the bound from the food mask instead — `k × foodRadius`, as the design's rejected alternative had it** - It would scale with the scene rather than being a fixed length, and a small food item would not drag in a metre of table - Rejected on Decision 15's own measurement: `dilate(foodMask, 2 × foodRadius)` spans ~8.3 s² against the pre-feature bands' ~4 s², looser than the code this feature replaces. Nothing here reopens that.
+
+### Consequences
+
+**Positive:**
+
+- The one owed constant that moved the answer is identified, and it is not the one three decisions attributed the movement to. `ringOuterMm` is bracket-only, so `ringSectorCount`, `sectorSupportMin`, `ringOuterMm` and `ringBandCount` are now all constants that move verdicts and not planes.
+- Decision 46's two instructions to the capture session are withdrawn: the 22…32 mm bracket may be interpolated, and the radius is fixed beside the count and the bar rather than before them.
+- The last constant in `SupportRegion` whose comment stood in for a derivation now carries a marker and a two-sided corpus bracket.
+- No shipped value moves and no verdict changes, so the repair costs nothing to verify: 537 XCTest and 312 swift-testing cases pass unchanged.
+- `escapeBandMm`'s suite floor is known to be a reading at one bound rather than a property of the scenes, which Decision 41 recorded without qualification.
+
+**Negative:**
+
+- The capture session has one more constant to set, and it is one the committed suite cannot help with — the corpus is its only source, and the corpus is two captures of the same food on the same plate.
+- The ring-inside-the-bound invariant was free under a multiple ≥ 1 and is now a constraint the session must respect between two owed constants.
+- Decision 48's determination of `maxCrossedSectors` at 2 is now a slice at **five** constants rather than four, and the fifth is the one that changes which planes compete.
+- Every plane figure quoted by Decisions 44 to 48 is a reading at `annulusOuterMm` = 50 mm. Those decisions swept constants that do not move the plane, so their verdict brackets stand, but their candidate *sets* were never varied.
+- Req 7.6's latency bound is denominated in a constant with an open cost profile, and the corpus's 50…75 mm window spans a 1.5× difference in annulus samples.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`annulusOuterMultiple` → `annulusOuterMm`, its provenance block, the `ringSamples` derivation, and the superseded riders in `ringOuterMm`'s comment), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theCandidateBoundIsAConstantOfItsOwn`, a `ringSamples(geometry:outerMm:annulusOuterMm:)` taking the bound as an argument, and `coupledBoundMm` so Decision 46's sweep states the coupling it measures), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: `2 × ringOuterMm` is 50 mm, the constant's new value.
+
+---
