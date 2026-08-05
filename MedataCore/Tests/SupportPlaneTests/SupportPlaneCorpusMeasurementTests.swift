@@ -1530,10 +1530,28 @@ struct SupportPlaneCorpusMeasurementTests {
         let planeD: Float
 
         func signs(at count: Int,
-                   supportMin: Float = SupportRegion.sectorSupportMin) -> SectorSigns {
+                   supportMin: Float = SupportRegion.sectorSupportMin,
+                   bandMm: Float = SupportRegion.ringBandMm) -> SectorSigns {
             SupportPlaneCorpusMeasurementTests.sectorSigns(
                 samples: samples, geometry: geometry, normal: normal, d: planeD,
-                count: count, supportMin: supportMin)
+                count: count, supportMin: supportMin, bandMm: bandMm)
+        }
+
+        // The inner-band support share at a band other than the shipped one. The scene's
+        // own plane and ring, so only the tolerance moves.
+        func supportFraction(bandMm: Float) -> Float {
+            SupportPlaneCorpusMeasurementTests.innerSupportFraction(
+                samples: samples, geometry: geometry, normal: normal, d: planeD,
+                bandMm: bandMm)
+        }
+
+        // `|bandMedianMm[0]|`, the quantity `ringMedianMaxMm` is compared against. Band
+        // medians do not move with the tolerance — only the bar they are read against
+        // does — so this is taken once and re-read at every band.
+        var innerBandMedianMm: Float {
+            SupportPlaneCorpusMeasurementTests.bandMediansMm(
+                samples: samples, geometry: geometry, normal: normal, d: planeD,
+                bandCount: SupportRegion.ringBandCount)[0]
         }
     }
 
@@ -4929,6 +4947,668 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // MARK: - The inlier band, and the four markers that terminate in it
+
+    // `SupportRegion.ccRansac` with the inlier band as an argument. Every other line is
+    // the shipped path's — the same unconditional three draws, the same gravity gate, the
+    // same amortised component labelling, the same adaptive stopping — so at
+    // `LiDARPlaneFitter.inlierBandMm` it reproduces the shipped hypothesis exactly, which
+    // the anchor below checks candidate by candidate.
+    static func ccRansac(indices: [Int], geometry g: SupportRegion.DepthGeometry,
+                         gravity: Vec3, rng: inout SplitMix64,
+                         scratch: SupportRegion.ComponentScratch,
+                         bandMm: Float) -> SupportRegion.RansacHypothesis? {
+        let n = indices.count
+        guard n >= LiDARPlaneFitter.minPoints else { return nil }
+        var best: SupportRegion.RansacHypothesis?
+        var bestComponent = 0
+        var required = SupportRegion.maxIterationsPerPass
+        var iteration = 0
+
+        while iteration < required && iteration < SupportRegion.maxIterationsPerPass {
+            iteration += 1
+            let i = rng.uniformInt(n)
+            var j = rng.uniformInt(n); if j == i { j = (j + 1) % n }
+            var k = rng.uniformInt(n)
+            if k == i || k == j { k = (k + 1) % n }
+            if k == i || k == j { k = (k + 2) % n }
+            if k == i || k == j { continue }
+
+            let p1 = g.points[indices[i]], p2 = g.points[indices[j]], p3 = g.points[indices[k]]
+            var nHat = (p2 - p1).cross(p3 - p1)
+            if nHat.lengthSquared < 1e-12 { continue }
+            nHat = nHat.normalised()
+            if nHat.dot(gravity) < 0 { nHat = -nHat }
+            if acos(SupportRegion.clampedCosine(nHat.dot(gravity)))
+                > LiDARPlaneFitter.gravityAngleMaxRad { continue }
+
+            let d = nHat.dot(p1)
+            var inliers: [Int] = []
+            inliers.reserveCapacity(n)
+            for idx in indices where abs(nHat.dot(g.points[idx]) - d) < bandMm {
+                inliers.append(idx)
+            }
+            if inliers.count <= bestComponent { continue }
+
+            let component = scratch.largestComponent(of: inliers)
+            guard component.size > bestComponent else { continue }
+            bestComponent = component.size
+            best = SupportRegion.RansacHypothesis(normal: nHat, d: d, members: component.members)
+            required = SupportRegion.requiredIterations(
+                inlierRatio: Float(bestComponent) / Float(n))
+        }
+        return best
+    }
+
+    // The pass chain with the band parameterised. It reaches THREE places at once, which
+    // is the point: the RANSAC inlier test above, the consensus polish's re-selection, and
+    // the removal band `inlierRemovalMultiple` is a multiple OF. Decision 50 swept the
+    // multiple at a fixed band; this sweeps the band the multiple is denominated in.
+    static func extractCandidates(
+        annulus: [Int], geometry g: SupportRegion.DepthGeometry,
+        gravity: Vec3, rng: inout SplitMix64, bandMm: Float
+    ) -> [SupportRegion.PlaneCandidate] {
+        var residue = annulus
+        var candidates: [SupportRegion.PlaneCandidate] = []
+        let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
+        let residueFloor = SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)
+
+        for _ in 0..<SupportRegion.maxCandidatePlanes {
+            guard residue.count >= residueFloor else { break }
+            guard let hypothesis = Self.ccRansac(indices: residue, geometry: g,
+                                                 gravity: gravity, rng: &rng,
+                                                 scratch: scratch, bandMm: bandMm) else { break }
+
+            var inliers = hypothesis.members
+            guard let refined = try? LiDARPlaneFitter.refine(
+                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+            ) else { break }
+            var normal = refined.0
+            var d = refined.1
+
+            for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+                var reselected: [Int] = []
+                reselected.reserveCapacity(residue.count)
+                for idx in residue where abs(normal.dot(g.points[idx]) - d) < bandMm {
+                    reselected.append(idx)
+                }
+                let component = scratch.largestComponent(of: reselected)
+                let next = component.members
+                if next == inliers || next.count < LiDARPlaneFitter.minPoints { break }
+                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                    inliers: next.map { g.points[$0] }, seedNormal: normal
+                ) else { break }
+                if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity)))
+                    > LiDARPlaneFitter.gravityAngleMaxRad {
+                    break
+                }
+                inliers = next
+                normal = nextNormal
+                d = nextD
+            }
+
+            let component = scratch.largestComponent(of: inliers)
+            candidates.append(SupportRegion.PlaneCandidate(
+                normal: normal, d: d,
+                residualMm: LiDARPlaneFitter.computeResidual(
+                    points: inliers.map { g.points[$0] }, normal: normal, d: d
+                ),
+                componentSize: component.size,
+                extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count))
+
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * bandMm
+            residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
+        }
+        return candidates
+    }
+
+    // Whether a plane's inlier component spans more than one of the scene's SURFACES —
+    // Gallo et al.'s straddler, in the paper's own terms. The surfaces are the shipped
+    // extraction's own planes, read once per capture at the shipped band, so this is a
+    // measurement against the scene rather than against the sweep.
+    //
+    // A member is assigned to the reference plane it lies nearest, and only if it lies
+    // within one shipped band of it; the plate and the table are ~26 mm apart, so the
+    // assignment is unambiguous wherever it is made at all. A component holding at least
+    // `bridgeMinShare` of its members on each of two references has BRIDGED them.
+    struct BridgeReading {
+        let componentSize: Int
+        let shares: [Float]        // share of the component on each reference surface
+        let unassigned: Float
+        let tiltDeg: Float
+        var span: Int { shares.filter { $0 >= bridgeMinShare }.count }
+        var spanned: [Int] {
+            shares.enumerated().filter { $0.element >= bridgeMinShare }.map(\.offset)
+        }
+    }
+
+    // The step between two reference surfaces, in the units Gallo et al.'s envelope is
+    // stated in: `h` is the separation of the two planes over the annulus, and the
+    // envelope is `epsilon / h`. Taken as the median absolute height difference so a
+    // relative tilt between the two does not read as a single number it is not.
+    static func separationMm(_ a: (normal: Vec3, d: Float), _ b: (normal: Vec3, d: Float),
+                             geometry g: SupportRegion.DepthGeometry,
+                             annulus: [Int]) -> Float {
+        SupportRegion.median(annulus.map {
+            abs((a.normal.dot(g.points[$0]) - a.d) - (b.normal.dot(g.points[$0]) - b.d))
+        })
+    }
+
+    // A tenth of the component. Small enough that a genuine bridge — the paper's "large
+    // number of connected inliers" across the step — is caught, large enough that a
+    // handful of samples straying over a reference plane's own noise is not.
+    static let bridgeMinShare: Float = 0.10
+
+    static func bridgeReading(normal: Vec3, d: Float, bandMm: Float,
+                              geometry g: SupportRegion.DepthGeometry,
+                              annulus: [Int], gravity: Vec3,
+                              references: [(normal: Vec3, d: Float)],
+                              scratch: SupportRegion.ComponentScratch) -> BridgeReading {
+        var inliers: [Int] = []
+        inliers.reserveCapacity(annulus.count)
+        for idx in annulus where abs(normal.dot(g.points[idx]) - d) < bandMm {
+            inliers.append(idx)
+        }
+        let component = scratch.largestComponent(of: inliers)
+        var counts = [Int](repeating: 0, count: references.count)
+        var unassigned = 0
+        for idx in component.members {
+            let p = g.points[idx]
+            var bestIndex = -1
+            var bestDistance = LiDARPlaneFitter.inlierBandMm
+            for (i, reference) in references.enumerated() {
+                let distance = abs(reference.normal.dot(p) - reference.d)
+                if distance < bestDistance { bestDistance = distance; bestIndex = i }
+            }
+            if bestIndex >= 0 { counts[bestIndex] += 1 } else { unassigned += 1 }
+        }
+        let total = Float(max(1, component.size))
+        return BridgeReading(
+            componentSize: component.size,
+            shares: counts.map { Float($0) / total },
+            unassigned: Float(unassigned) / total,
+            tiltDeg: acos(SupportRegion.clampedCosine(normal.dot(gravity))) * 180 / .pi)
+    }
+
+    // Halvings and doublings around the shipped 5 mm, with the ends set by what the
+    // measurement has to be able to see. 1 mm is below the 3.44 mm per-sample sigma
+    // Decision 29 measured, where the paper's own warning — CC-RANSAC is WORSE than plain
+    // RANSAC at very small epsilon, because components stop being large enough to support
+    // the correct plane — should bite. 12.5 mm is half the 26 mm plate step, an
+    // epsilon/h of 0.48 and well outside the 0.25-0.35 envelope design.md quotes, where
+    // the straddler is supposed to appear.
+    static let inlierBandSweep: [Float] = [1, 2, 3, 4, 5, 6, 8, 10, 12.5]
+
+    @Test("the inlier band is the unit four provenance markers terminate in, and it moves the plane")
+    func theInlierBandIsWhatTheInheritedMarkersTerminateIn() throws {
+        // The chain, asserted rather than described. Three constants are one number, and
+        // the number is `LiDARPlaneFitter.inlierBandMm` — which is where every `[inherited]`
+        // marker in `SupportRegion` ends and where the provenance ends with it.
+        #expect(SupportRegion.ringBandMm == LiDARPlaneFitter.inlierBandMm,
+                "ringBandMm stopped being inherited from inlierBandMm")
+        #expect(SupportRegion.ringMedianMaxMm == SupportRegion.ringBandMm,
+                "ringMedianMaxMm stopped being inherited from ringBandMm")
+
+        struct Reading {
+            let bandMm: Float
+            let candidateCount: Int
+            // The ranked winner with the ring read at the SHIPPED band: the extraction
+            // half of the constant alone.
+            let planeAtFoodMm: Float
+            // The ranked winner with the ring read at the SWEPT band: the inheritance
+            // honoured, which is what actually happens if the root moves.
+            let coupledPlaneAtFoodMm: Float
+            // The candidate nearest Req 3.1's zero — Decision 48's identification of the
+            // plane a correct fit must select, which is not always the ranking's winner.
+            let intendedRingMedianMm: Float
+            let intendedCrossed: Int
+            let intendedSupporting: Int
+            let intendedSupportFraction: Float
+            let intendedInnerBandMedianMm: Float
+            let ringMedianGuardFires: Bool
+            let maxSpan: Int
+            let maxTiltDeg: Float
+            let ringFeasible: Bool
+        }
+
+        var byCapture: [String: [Reading]] = [:]
+        // The step between the two surfaces the plate capture's competition is between,
+        // which is `h` in design.md's envelope table, and the widest tilt the SHIPPED run
+        // produces against the fitter's stated gravity cone.
+        var stepBetweenCompetingSurfacesMm: [String: Float] = [:]
+        var shippedMaxTiltDeg: [String: Float] = [:]
+
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let ray = try #require(Self.foodCentroidRay(slice))
+            let gravity = slice.gravity.normalised()
+            let seed = Fnv1a64.hash(slice.depth.depthBytesMm)
+            let scratch = SupportRegion.ComponentScratch(width: g.width, height: g.height)
+
+            // The anchor. At the shipped band this mirror must reproduce the shipped call
+            // candidate for candidate, or nothing below is a reading on the shipped path.
+            var anchorRng = SplitMix64(seed: seed)
+            let anchor = Self.extractCandidates(annulus: samples.annulus, geometry: g,
+                                                gravity: gravity, rng: &anchorRng,
+                                                bandMm: LiDARPlaneFitter.inlierBandMm)
+            var shippedRng = SplitMix64(seed: seed)
+            let shipped = SupportRegion.extractCandidates(annulus: samples.annulus, geometry: g,
+                                                          gravity: gravity, rng: &shippedRng)
+            #expect(anchor.count == shipped.count,
+                    "the band mirror stopped reproducing the shipped pass count")
+            for (a, s) in zip(anchor, shipped) {
+                #expect(a.d == s.d && a.componentSize == s.componentSize,
+                        "the band mirror diverged from SupportRegion.extractCandidates")
+            }
+
+            // The scene's surfaces, taken once at the shipped band from the shipped run.
+            let references = shipped.map { (normal: $0.normal, d: $0.d) }
+
+            // Which surface is which, and how far apart they sit — `h` in the envelope
+            // design.md quotes. The shipped candidates' own tilts come from the shipped
+            // call, not the mirror, so the cone reading below is a reading on shipped code.
+            print("=== \(name): the scene's surfaces, from the shipped run ===")
+            for (i, candidate) in shipped.enumerated() {
+                let tilt = acos(SupportRegion.clampedCosine(candidate.normal.dot(gravity)))
+                    * 180 / .pi
+                print("  surface \(i + 1): ring median"
+                      + " \(fmt(SupportRegion.medianHeight(indices: samples.ring, geometry: g, normal: candidate.normal, d: candidate.d))) mm,"
+                      + " annulus median"
+                      + " \(fmt(SupportRegion.medianHeight(indices: samples.annulus, geometry: g, normal: candidate.normal, d: candidate.d))) mm,"
+                      + " tilt \(fmt(tilt))° against a"
+                      + " \(fmt(LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi))° cone"
+                      + (tilt > LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi
+                         ? " — OUTSIDE THE CONE" : ""))
+            }
+            shippedMaxTiltDeg[name] = shipped.map {
+                acos(SupportRegion.clampedCosine($0.normal.dot(gravity))) * 180 / .pi
+            }.max() ?? 0
+            var steps: [Float] = []
+            for i in shipped.indices {
+                for j in shipped.indices where j > i {
+                    let h = Self.separationMm(references[i], references[j],
+                                              geometry: g, annulus: samples.annulus)
+                    steps.append(h)
+                    print("  surfaces \(i + 1)/\(j + 1): h = \(fmt(h)) mm,"
+                          + " shipped ε/h = \(fmt(LiDARPlaneFitter.inlierBandMm / max(h, 1e-6)))")
+                }
+            }
+            // The competition design.md's first table row prices — the two surfaces the
+            // ranking actually chooses between — is the CLOSEST pair, since that is the
+            // step CC-RANSAC has the least room to resolve.
+            stepBetweenCompetingSurfacesMm[name] = steps.min() ?? 0
+
+            var readings: [Reading] = []
+            for bandMm in Self.inlierBandSweep {
+                var rng = SplitMix64(seed: seed)
+                let candidates = Self.extractCandidates(annulus: samples.annulus, geometry: g,
+                                                        gravity: gravity, rng: &rng,
+                                                        bandMm: bandMm)
+                guard !candidates.isEmpty else {
+                    print("\(name) at band \(fmt(bandMm)) mm: extraction produced NO candidate")
+                    continue
+                }
+                func rank(_ c: SupportRegion.PlaneCandidate, at band: Float) -> Float {
+                    Self.innerSupportFraction(samples: samples, geometry: g,
+                                              normal: c.normal, d: c.d, bandMm: band)
+                }
+                let winner = try #require(candidates.max {
+                    rank($0, at: LiDARPlaneFitter.inlierBandMm)
+                    < rank($1, at: LiDARPlaneFitter.inlierBandMm)
+                })
+                let coupledWinner = try #require(candidates.max {
+                    rank($0, at: bandMm) < rank($1, at: bandMm)
+                })
+                let intended = try #require(candidates.min {
+                    abs(SupportRegion.medianHeight(indices: samples.ring, geometry: g,
+                                                   normal: $0.normal, d: $0.d))
+                    < abs(SupportRegion.medianHeight(indices: samples.ring, geometry: g,
+                                                     normal: $1.normal, d: $1.d))
+                })
+                let signs = Self.sectorSigns(samples: samples, geometry: g,
+                                             normal: intended.normal, d: intended.d,
+                                             count: SupportRegion.ringSectorCount,
+                                             bandMm: bandMm)
+                let innerMedian = Self.bandMediansMm(samples: samples, geometry: g,
+                                                     normal: intended.normal, d: intended.d,
+                                                     bandCount: SupportRegion.ringBandCount)[0]
+                let bridges = candidates.map {
+                    Self.bridgeReading(normal: $0.normal, d: $0.d, bandMm: bandMm,
+                                       geometry: g, annulus: samples.annulus, gravity: gravity,
+                                       references: references, scratch: scratch)
+                }
+                readings.append(Reading(
+                    bandMm: bandMm,
+                    candidateCount: candidates.count,
+                    planeAtFoodMm: Self.planeDepthMm(normal: winner.normal, d: winner.d, ray: ray),
+                    coupledPlaneAtFoodMm: Self.planeDepthMm(normal: coupledWinner.normal,
+                                                            d: coupledWinner.d, ray: ray),
+                    intendedRingMedianMm: SupportRegion.medianHeight(
+                        indices: samples.ring, geometry: g,
+                        normal: intended.normal, d: intended.d),
+                    intendedCrossed: signs.crossedFailing,
+                    intendedSupporting: signs.supporting,
+                    intendedSupportFraction: rank(intended, at: bandMm),
+                    intendedInnerBandMedianMm: innerMedian,
+                    ringMedianGuardFires: abs(innerMedian) > bandMm,
+                    maxSpan: bridges.map(\.span).max() ?? 0,
+                    maxTiltDeg: bridges.map(\.tiltDeg).max() ?? 0,
+                    ringFeasible: SupportRegion.ringBandsAreFeasible(samples: samples)))
+
+                print("\(name) band \(fmt(bandMm)) mm: candidates \(candidates.count),"
+                      + " plane at food \(fmt(readings[readings.count - 1].planeAtFoodMm))"
+                      + " (coupled \(fmt(readings[readings.count - 1].coupledPlaneAtFoodMm))),"
+                      + " intended ring median \(fmt(readings[readings.count - 1].intendedRingMedianMm)) mm,"
+                      + " support \(fmt(readings[readings.count - 1].intendedSupportFraction)),"
+                      + " supporting \(signs.supporting), crossed \(signs.crossedFailing),"
+                      + " inner band median \(fmt(innerMedian)) mm"
+                      + " (ringMedian guard fires: \(abs(innerMedian) > bandMm)),"
+                      + " widest span \(bridges.map(\.span).max() ?? 0),"
+                      + " max tilt \(fmt(bridges.map(\.tiltDeg).max() ?? 0))°")
+                for (i, bridge) in bridges.enumerated() {
+                    var envelope = ""
+                    if bridge.span > 1 {
+                        let pairs = bridge.spanned.flatMap { a in
+                            bridge.spanned.filter { $0 > a }.map { b -> String in
+                                let h = Self.separationMm(references[a], references[b],
+                                                          geometry: g, annulus: samples.annulus)
+                                return "\(a + 1)/\(b + 1) h = \(fmt(h)) mm,"
+                                    + " ε/h = \(fmt(bandMm / max(h, 1e-6)))"
+                            }
+                        }
+                        envelope = " — BRIDGES \(pairs.joined(separator: "; "))"
+                    }
+                    print("    pass \(i + 1): component \(bridge.componentSize),"
+                          + " shares \(bridge.shares.map { fmt($0) }),"
+                          + " unassigned \(fmt(bridge.unassigned)),"
+                          + " tilt \(fmt(bridge.tiltDeg))°, span \(bridge.span)\(envelope)")
+                }
+            }
+            byCapture[name] = readings
+        }
+
+        // FINDING 1. It moves the answer, and by more than any constant swept so far. Both
+        // captures move ~18-19 mm at the food against the 1 mm Decision 35 measures Req 5.1's
+        // transfer at — where `annulusOuterMm`, the only other owed constant that moves the
+        // plane, moves 18.843 mm on one capture and 1.978 mm on the other (Decision 49), and
+        // `ransacSuccessProbability` moves 3.704 mm on one (Decision 51). This is the first
+        // to move BOTH by more than the grid transfer's whole budget, which is what a
+        // constant that decides what an INLIER IS should be expected to do.
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            let extraction = readings.map(\.planeAtFoodMm)
+            let coupled = readings.map(\.coupledPlaneAtFoodMm)
+            print("\(name): plane at the food over the band sweep —"
+                  + " extraction only \(fmt((extraction.max() ?? 0) - (extraction.min() ?? 0))) mm,"
+                  + " coupled \(fmt((coupled.max() ?? 0) - (coupled.min() ?? 0))) mm")
+        }
+        let narrowestMovement = Self.captures.map { name -> Float in
+            let v = byCapture[name]?.map(\.planeAtFoodMm) ?? []
+            return (v.max() ?? 0) - (v.min() ?? 0)
+        }.min() ?? 0
+        print("smallest movement of the selected plane over the band sweep,"
+              + " across both captures: \(fmt(narrowestMovement)) mm")
+        let bandIsInert = "the inlier band moves the selected plane by at most"
+            + " \(fmt(narrowestMovement)) mm on some capture — it is bracket-only like the"
+            + " count, the bar, the band count and the removal band, not a constant that"
+            + " moves the answer"
+        #expect(narrowestMovement > Self.gridTransferToleranceMm, "\(bandIsInert)")
+
+        // FINDING 2. design.md's envelope table is measured, and the row it rests on is
+        // outside the envelope. The table prices "plate above table" at h = 26 mm and
+        // ε/h = 0.19, "inside the validated envelope", and concludes component scoring is
+        // validated for the defect this feature fixes. The 26 mm is pipeline Decision 6's
+        // plane ERROR at the food, not the step between the two surfaces over the annulus.
+        // Measured, the closest competing pair is 19.464 mm and 11.706 mm, so the shipped
+        // ε/h is 0.257 and 0.427 — the second outside Gallo's 0.25…0.35 envelope entirely
+        // and in the same band as the table's own two "outside" rows (0.42 and 0.50).
+        let quotedStepMm: Float = 26
+        var worstRatio: Float = 0
+        for name in Self.captures {
+            let h = try #require(stepBetweenCompetingSurfacesMm[name])
+            let ratio = LiDARPlaneFitter.inlierBandMm / h
+            worstRatio = Swift.max(worstRatio, ratio)
+            print("\(name): closest competing surfaces are \(fmt(h)) mm apart against the"
+                  + " \(fmt(quotedStepMm)) mm design.md prices the row at — shipped ε/h ="
+                  + " \(fmt(ratio)) against the envelope's 0.25…0.35")
+        }
+        let envelopeHolds = "every competing pair on the corpus is at least"
+            + " \(fmt(LiDARPlaneFitter.inlierBandMm / worstRatio)) mm apart, so the shipped"
+            + " ε/h stays at \(fmt(worstRatio)) and design.md's table row is measured as"
+            + " written"
+        #expect(worstRatio > 0.35, "\(envelopeHolds)")
+
+        // FINDING 3. So the straddler is REAL, and design.md's open question — "whether the
+        // smeared ramp bridges the two inlier sets is contested and unresolved… task 26
+        // settles it by measurement; neither reading may be assumed" — resolves for the
+        // first reading. At the SHIPPED band a candidate's largest connected component
+        // holds at least a tenth of its members on each of two surfaces, on BOTH captures.
+        //
+        // Neither review predicted the mechanism. It is not that the ramp is crossable
+        // (the first reading) and the cone does not prevent it (the second): the step is
+        // less than half what the design priced, so the envelope was never satisfied.
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            let spanning = readings.filter { $0.maxSpan > 1 }.map(\.bandMm)
+            print("\(name): bands at which a candidate's component spans two surfaces:"
+                  + " \(spanning.map { fmt($0) })")
+            let shippedReading = try #require(
+                readings.first { $0.bandMm == LiDARPlaneFitter.inlierBandMm })
+            let noBridge = "no candidate on \(name) bridges two surfaces at the shipped"
+                + " band — design.md's second reading holds and component scoring is not"
+                + " straddling on this corpus"
+            #expect(shippedReading.maxSpan > 1, "\(noBridge)")
+        }
+
+        // FINDING 4. And the cone the second reading's refutation rests on is not enforced.
+        // That refutation is "the ramp's own slope is ~73°, a 15°-capped plane rises only
+        // ~2.1 mm across its whole width, so the plane cannot TRACK the ramp". Measured, the
+        // shipped candidate set on `1785135663727` contains a plane at 20.512° — and at a
+        // 4 mm band the same slot reads 25.422°, against a stated cone of 15°.
+        //
+        // `extractCandidates` gates gravity on the RANSAC hypothesis and on every consensus
+        // polish iteration, but NOT on the first refinement between them: `refine` is called
+        // on the hypothesis's members and its result is assigned unchecked, and a polish that
+        // reaches its fixed point on the first iteration leaves that plane standing. The cone
+        // is an invariant of the hypotheses, not of the candidate set.
+        //
+        // Nothing shipped changes today — that candidate is rejected downstream on `extent`
+        // and `supportFraction` — but it is one of the two surfaces the bridging above
+        // happens across, so the two findings are the same finding. Repairing the gate would
+        // remove a candidate and therefore MOVE the answer, which is a change this pass
+        // measures rather than makes.
+        let coneDeg = LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi
+        for name in Self.captures {
+            let tilt = try #require(shippedMaxTiltDeg[name])
+            print("\(name): widest shipped candidate tilt \(fmt(tilt))°"
+                  + " against a \(fmt(coneDeg))° cone")
+        }
+        let widestTilt = Self.captures.compactMap { shippedMaxTiltDeg[$0] }.max() ?? 0
+        let coneIsAnInvariant = "every shipped candidate sits inside the \(fmt(coneDeg))°"
+            + " gravity cone (widest \(fmt(widestTilt))°) — the first refinement's missing"
+            + " gate is unreachable on this corpus and the cone is an invariant of the"
+            + " candidate set after all"
+        #expect(widestTilt > coneDeg, "\(coneIsAnInvariant)")
+
+        // FINDING 5. The corpus interval is EMPTY at the shipped bars, and the two that
+        // empty it are both owed and both denominated in this constant.
+        //
+        // Three constraints bound the band, all read on the plane a correct fit must select
+        // (Decision 48's identification, the candidate nearest Req 3.1's zero). `ringMedian`
+        // is a bar that IS the band, so below 4 mm the intended candidate fails it on both
+        // captures (inner-band medians 6.117 and 4.685). `maxCrossedSectors` caps it from
+        // above: at 6 mm the intended candidate on `1785901032716` reads 3 crossed against
+        // the 2 Decision 48 determines. And `ringSupportMin` floors it: the intended
+        // candidate's inner-band support rises with the band, since the band is the
+        // tolerance the share is counted within.
+        //
+        // On `1785901032716` those last two are DISJOINT. Support reaches 0.6 only at 10 mm
+        // and above; the crossed count stays at or below 2 only at 5 mm and below. No band
+        // satisfies both, so the corpus interval is empty — Decision 41's "one constant
+        // contradicts" and Decision 30's straddle, arriving on a constant one file over.
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            let admissible = readings.filter {
+                $0.intendedSupportFraction >= SupportRegion.ringSupportMin
+                && !$0.ringMedianGuardFires
+            }.map(\.bandMm)
+            let withinCrossed = readings.filter { $0.intendedCrossed <= 2 }.map(\.bandMm)
+            print("\(name): bands at which the intended candidate clears ringSupportMin and"
+                  + " ringMedian: \(admissible.map { fmt($0) }); bands at which it reads at"
+                  + " most 2 crossed sectors: \(withinCrossed.map { fmt($0) });"
+                  + " candidate counts \(readings.map { "\(fmt($0.bandMm)):\($0.candidateCount)" })")
+        }
+        func feasibleBands(supportMin: Float) -> [Float] {
+            Self.inlierBandSweep.filter { band in
+                Self.captures.allSatisfy { name in
+                    guard let r = byCapture[name]?.first(where: { $0.bandMm == band }) else {
+                        return false
+                    }
+                    return r.intendedSupportFraction >= supportMin
+                        && !r.ringMedianGuardFires && r.intendedCrossed <= 2
+                }
+            }
+        }
+        let atShippedBar = feasibleBands(supportMin: SupportRegion.ringSupportMin)
+        print("bands satisfying every corpus constraint at the shipped ringSupportMin"
+              + " (\(fmt(SupportRegion.ringSupportMin))): \(atShippedBar.map { fmt($0) })")
+        let barsHaveARoom = "the corpus admits \(atShippedBar.map { fmt($0) }) at the shipped"
+            + " ringSupportMin — the band has a non-empty interval and the two owed bars do"
+            + " not collide on it"
+        #expect(atShippedBar.isEmpty, "\(barsHaveARoom)")
+
+        // What it takes to make it non-empty, which hands `ringSupportMin` a bound this pass
+        // did not set out to measure. The largest support the intended candidate reaches at
+        // ANY band the sector rule still admits is 0.362, at 5 mm — so `ringSupportMin` must
+        // be at or below 0.362 for the corpus to admit any band at all, and at that bar the
+        // interval is exactly the shipped 5 mm. Decision 42 measured 0.362 as the value at
+        // the shipped band; over the whole sweep it is the CEILING, and the corpus's only
+        // ceiling on a constant Decision 29 recorded as having none.
+        let barSweep: [Float] = [0.2, 0.25, 0.281, 0.3, 0.362, 0.4, 0.5, 0.6]
+        for bar in barSweep {
+            print("  ringSupportMin \(fmt(bar)) → bands \(feasibleBands(supportMin: bar).map { fmt($0) })")
+        }
+        let ceiling = Self.captures.compactMap { name -> Float? in
+            byCapture[name]?.filter { $0.intendedCrossed <= 2 && !$0.ringMedianGuardFires }
+                .map(\.intendedSupportFraction).max()
+        }.min() ?? 0
+        print("largest inner-band support the intended candidate reaches at any band the"
+              + " sector rule admits, on the tightest capture: \(fmt(ceiling))")
+        let noNewCeiling = "the intended candidate reaches \(fmt(ceiling)) support at some"
+            + " admissible band on every capture — the shipped ringSupportMin of"
+            + " \(fmt(SupportRegion.ringSupportMin)) is reachable and this pass sets no"
+            + " ceiling on it"
+        #expect(ceiling < SupportRegion.ringSupportMin, "\(noNewCeiling)")
+        #expect(feasibleBands(supportMin: ceiling) == [LiDARPlaneFitter.inlierBandMm],
+                "the band the corpus admits at its own ringSupportMin ceiling moved off 5 mm")
+
+        // And the readings WANDER rather than climb, so like Decision 46's radius and
+        // Decision 51's target — and unlike Decision 50's removal band — the bracket must
+        // not be interpolated. The support share would rise monotonically at a FIXED plane,
+        // since a wider tolerance can only admit more samples; it does not, because
+        // extraction re-runs at every band and the candidate is re-selected under it
+        // (0.312 at 3 mm falling to 0.281 at 4 mm on `1785901032716`).
+        var wanders = false
+        for name in Self.captures {
+            let readings = try #require(byCapture[name])
+            print("\(name): intended candidate's inner-band support against the band:"
+                  + " \(readings.map { "\(fmt($0.bandMm)) → \(fmt($0.intendedSupportFraction))" }.joined(separator: ", "))")
+            let fractions = readings.map(\.intendedSupportFraction)
+            let climbs = zip(fractions, fractions.dropFirst()).allSatisfy { $0 <= $1 + 1e-6 }
+            print("  monotone in the band: \(climbs)")
+            if !climbs { wanders = true }
+        }
+        let readingsClimb = "the intended candidate's support climbs monotonically with the"
+            + " band on both captures — the plane is not re-selected under the sweep and the"
+            + " bracket may be interpolated"
+        #expect(wanders, "\(readingsClimb)")
+    }
+
+    // The committed suite's silence on this constant is a THIRD kind. Decision 49's bound
+    // reached the scenes through two guards and was found silent by measurement; Decision
+    // 50's removal band could not be read at all, because no scene runs extraction. This
+    // constant DOES reach the scenes — as `ringBandMm` it is the tolerance every sector is
+    // classified within and the magnitude bar Decision 40's rule inherits — and the suite
+    // still reads the same verdict at every band from 1 to 12.5 mm.
+    //
+    // The reason is measurable rather than structural: `SPRScene.makeDepth` adds ±0.3 mm of
+    // synthetic sensor noise, so every scene sample sits within a third of a millimetre of
+    // its own surface and any tolerance across the whole sweep classifies it identically.
+    // The scenes validate the LOGIC of every guard and no tolerance in any of them.
+    @Test("the committed suite reads the inherited half of the inlier band and is silent on the other")
+    func theCommittedSuiteReadsOnlyTheInheritedHalfOfTheBand() throws {
+        let readings = Self.sceneReadings()
+        #expect(readings.count == 8, "a scene stopped producing ring statistics")
+
+        var intervals: Set<String> = []
+        for bandMm in Self.inlierBandSweep {
+            // `supportFraction` at the swept band, against the scenes whose committed
+            // assertions require that guard to pass or to fire.
+            let supportBroken = readings.filter { reading in
+                let fraction = reading.supportFraction(bandMm: bandMm)
+                if reading.requiresPass.contains(.supportFraction) {
+                    return fraction < SupportRegion.ringSupportMin
+                }
+                if reading.requiresFire.contains(.supportFraction) {
+                    return fraction >= SupportRegion.ringSupportMin
+                }
+                return false
+            }.map(\.label)
+
+            // `ringMedianMaxMm` moves with the band, so the scenes that must pass every
+            // guard must keep clearing it.
+            let medianBroken = readings.filter { reading in
+                reading.requiresPass.contains(.supportFraction)
+                && abs(reading.innerBandMedianMm) > bandMm
+            }.map(\.label)
+
+            // Decision 40's rule at the swept band: the magnitude bar IS `ringBandMm`.
+            let mustPass = readings.filter { $0.requiresPass.contains(.sectors) }
+            let mustFire = readings.filter { $0.requiresFire.contains(.sectors) }
+            let crossedFloor = mustPass.map {
+                $0.signs(at: SupportRegion.ringSectorCount, bandMm: bandMm).crossedFailing
+            }.max() ?? 0
+            let crossedCeiling = mustFire.map {
+                $0.signs(at: SupportRegion.ringSectorCount, bandMm: bandMm).crossedFailing - 1
+            }.min() ?? Int.max
+            let supportingFloor = mustFire.map {
+                $0.signs(at: SupportRegion.ringSectorCount, bandMm: bandMm).supporting + 1
+            }.max() ?? 0
+            let supportingCeiling = mustPass.map {
+                $0.signs(at: SupportRegion.ringSectorCount, bandMm: bandMm).supporting
+            }.min() ?? Int.max
+
+            print("band \(fmt(bandMm)) mm: maxCrossedSectors \(crossedFloor)…\(crossedCeiling),"
+                  + " minSupportingSectors \(supportingFloor)…\(supportingCeiling),"
+                  + " supportFraction verdicts broken on \(supportBroken),"
+                  + " ringMedian verdicts broken on \(medianBroken)")
+            intervals.insert("\(crossedFloor)…\(crossedCeiling)/"
+                             + "\(supportingFloor)…\(supportingCeiling)/"
+                             + "\(supportBroken.count)/\(medianBroken.count)")
+        }
+
+        // One reading across an order of magnitude of tolerance. The suite gives this
+        // constant no floor and no ceiling, so the corpus is its only source — as it was
+        // `annulusOuterMm`'s (Decision 49) and `inlierRemovalMultiple`'s (Decision 50).
+        print("distinct suite readings across the whole band sweep: \(intervals.count)")
+        let suiteBoundsTheBand = "the committed suite reads \(intervals.count) different"
+            + " verdict sets across the band sweep — it does bound this constant and the"
+            + " sitting has a second source to track"
+        #expect(intervals.count == 1, "\(suiteBoundsTheBand)")
+
+        // And the reason, asserted where it lives: the scenes' noise is an order of
+        // magnitude below the smallest band swept, so the tolerance is never the binding
+        // quantity in any of them.
+        let sceneNoiseMm: Float = 0.3
+        #expect(sceneNoiseMm * 3 < Self.inlierBandSweep.min() ?? 0,
+                "SPRScene's noise reached the band sweep — the suite's silence needs re-reading")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
@@ -5288,13 +5968,17 @@ struct SupportPlaneCorpusMeasurementTests {
     // The inner-band share within ±`ringBandMm`, computed without `ringStatistics`'s
     // `ringMinSamples` guard so a radius that refuses the floor can still be read. This
     // is the quantity `bestCandidate` ranks on.
+    // `bandMm` is an argument because `ringBandMm` is `[inherited]` from
+    // `LiDARPlaneFitter.inlierBandMm` and Decision 52 sweeps the constant it inherits
+    // from; at the shipped value this is the shipped quantity.
     static func innerSupportFraction(samples: SupportRegion.RingSamples,
                                      geometry g: SupportRegion.DepthGeometry,
-                                     normal: Vec3, d: Float) -> Float {
+                                     normal: Vec3, d: Float,
+                                     bandMm: Float = SupportRegion.ringBandMm) -> Float {
         var total = 0, supported = 0
         for (i, idx) in samples.ring.enumerated() where samples.band[i] == 0 {
             total += 1
-            if abs(normal.dot(g.points[idx]) - d) <= SupportRegion.ringBandMm { supported += 1 }
+            if abs(normal.dot(g.points[idx]) - d) <= bandMm { supported += 1 }
         }
         return total == 0 ? 0 : Float(supported) / Float(total)
     }
@@ -5406,10 +6090,17 @@ struct SupportPlaneCorpusMeasurementTests {
     // and the bar says which of the resulting sectors Decision 40's rule may read.
     // `samples.sector` is only ever populated for band 0, so the band test is what selects
     // the inner band here too.
+    //
+    // `bandMm` is a third argument for the same reason (Decision 52): it is BOTH the
+    // tolerance a sector is supported within and — as `ringBandMm` — the magnitude bar
+    // Decision 40's rule inherits, so a sweep of `LiDARPlaneFitter.inlierBandMm` moves the
+    // classification and the crossing bar together. At the shipped value it reproduces
+    // the shipped reading.
     static func sectorSigns(samples: SupportRegion.RingSamples,
                             geometry g: SupportRegion.DepthGeometry,
                             normal: Vec3, d: Float, count: Int,
-                            supportMin: Float = SupportRegion.sectorSupportMin) -> SectorSigns {
+                            supportMin: Float = SupportRegion.sectorSupportMin,
+                            bandMm: Float = SupportRegion.ringBandMm) -> SectorSigns {
         var total = [Int](repeating: 0, count: count)
         var supported = [Int](repeating: 0, count: count)
         var heights = [[Float]](repeating: [], count: count)
@@ -5418,7 +6109,7 @@ struct SupportPlaneCorpusMeasurementTests {
             let height = normal.dot(g.points[idx]) - d
             total[s] += 1
             heights[s].append(height)
-            if abs(height) <= SupportRegion.ringBandMm { supported[s] += 1 }
+            if abs(height) <= bandMm { supported[s] += 1 }
         }
         let medians = heights.map { $0.isEmpty ? Float.nan : $0.sorted()[$0.count / 2] }
         func fraction(_ s: Int) -> Float {
@@ -5436,9 +6127,9 @@ struct SupportPlaneCorpusMeasurementTests {
             medians: medians,
             failing: failing,
             failingMedians: failingMedians,
-            crossedFailing: failingMedians.filter { $0 > SupportRegion.ringBandMm }.count,
-            escapedFailing: failingMedians.filter { $0 < -SupportRegion.ringBandMm }.count,
-            crossedAll: medians.filter { $0 > SupportRegion.ringBandMm }.count,
+            crossedFailing: failingMedians.filter { $0 > bandMm }.count,
+            escapedFailing: failingMedians.filter { $0 < -bandMm }.count,
+            crossedAll: medians.filter { $0 > bandMm }.count,
             sectorSampleCounts: total)
     }
 

@@ -22,7 +22,24 @@ public enum LiDARPlaneFitter {
     // Bug `lidar-plane-fit-matte-table-confidence` 2026-07-06.
     static let confidenceThreshold: Float = 0.40
     static let maxIterations: Int = 256
+    // ε, the RANSAC inlier band. `[owed]` to support-plane-reference task 26 as of its
+    // Decision 52 — this was a bare number with no derivation anywhere, and it is where
+    // FOUR of that feature's `[inherited]` provenance markers terminate: `ringBandMm`
+    // reads "[inherited] inlierBandMm", `ringMedianMaxMm` reads "[inherited] ringBandMm",
+    // `inlierRemovalMultiple` is a multiple OF it, and `supportVisibility` is counted
+    // within it. A marker is only as good as the constant it points at, and the chain
+    // ended here, one file outside the file whose provenance that feature audits.
+    //
+    // Measured on the committed corpus it MOVES THE PLANE 18.132 mm and 19.389 mm at the
+    // food over a 1…12.5 mm sweep — more than any constant that feature has swept — and
+    // its corpus interval is EMPTY at the shipped `ringSupportMin`, because the support
+    // bar and `maxCrossedSectors` pull it in opposite directions. Do not treat the 5 as
+    // settled; `SupportRegion.ringBandMm` carries the full reading.
     static let inlierBandMm: Float = 5
+    // The gravity cone. NOTE (Decision 52): `SupportRegion.extractCandidates` gates this
+    // on the RANSAC hypothesis and on every consensus-polish pass, but NOT on the first
+    // refinement between them, and the committed corpus contains a candidate at 20.512°
+    // as a result. The cone is an invariant of the hypotheses, not of the candidate set.
     static let gravityAngleMaxRad: Float = 15 * .pi / 180
     // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5. Residuals in (8, 20]
     // accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm,

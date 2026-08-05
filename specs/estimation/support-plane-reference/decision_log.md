@@ -2868,3 +2868,71 @@ The brackets follow. The cap's floor is 128: at 64 the sector verdict on `178513
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`maxIterationsPerPass` and `ransacSuccessProbability` provenance blocks, and `ringOuterMm`'s seed-control note), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theIterationBudgetIsWhatTheSeedSpreadIsDenominatedIn`, with `ccRansac` and the pass chain parameterised on the budget pair), task 26's detail. **No shipped behaviour changes.**
 
 ---
+
+## Decision 52: The inlier band is where four provenance markers terminate
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 51 closed with "every constant in `SupportRegion` now carries a provenance marker, and none rests on a quantity the corpus contradicts". That was true, and it was not sufficient. Four of those markers read `[inherited]`, and an `[inherited]` marker is a pointer: it is only as good as the constant it points at. All four resolve, directly or in one hop, to `LiDARPlaneFitter.inlierBandMm = 5` — `ringBandMm` is "[inherited] `inlierBandMm`", `ringMedianMaxMm` is "[inherited] `ringBandMm`", `inlierRemovalMultiple` is a multiple *of* it, and `supportVisibility` is a count *within* it. In its own file it was a bare `static let` with no comment at all, in a block headed "Tunable parameters per design §6.2". The provenance chain ended one file outside the file this feature audits.
+
+It had never been varied. It is the **fifth** constant that decides which planes *compete*, and the most upstream of them: `annulusOuterMm` fixes the set extraction draws from (Decision 49), `maxCandidatePlanes` how many times it may draw (Decision 48), `inlierRemovalMultiple` what each draw leaves (Decision 50), `ringOuterMm` re-rings a set already chosen (Decision 46) — this one decides what an *inlier is*, in three places at once: the RANSAC inlier test, the consensus polish's re-selection, and the removal band the multiple is denominated in.
+
+design.md also left it a debt by name. Its CC-RANSAC section records that "whether the smeared ramp bridges the two inlier sets is contested and unresolved", gives two reviews that reach opposite conclusions, and ends **"Task 26 settles it by measurement; neither reading may be assumed."** That question is a question about this constant: ε is what decides whether the two inlier sets touch.
+
+### Decision
+
+`LiDARPlaneFitter.inlierBandMm` is `[owed]`. Its corpus interval is **empty at the shipped bars**, and it is non-empty — and exactly the shipped 5 mm — only once `ringSupportMin` falls to 0.362 or below. The band, `ringSupportMin` and `maxCrossedSectors` are one joint set and are set together, not in sequence. `ringSupportMin` gains a corpus ceiling of **0.362**. The removal band's ordering (Decision 50) gains a member at its head: the band is set before `inlierRemovalMultiple`, which is a multiple of it.
+
+design.md's contested question is answered: **the straddler is real and it is in the shipped candidate set on both captures.** design.md's ε/h table is superseded — its "plate above table, h = 26 mm" row is measured at 11.706 mm.
+
+### Rationale
+
+**It moves the answer, by more than anything swept so far.** Over a 1…12.5 mm sweep at the shipped seed the selected plane at the food moves **18.132 mm** on `1785135663727` and **19.389 mm** on `1785901032716`, against the 1 mm Decision 35 measures Req 5.1's transfer at. It is the first owed constant to move *both* captures past that bar — `annulusOuterMm` moved 18.843 mm and 1.978 mm (Decision 49), `ransacSuccessProbability` 3.704 mm on one (Decision 51). Readings **wander rather than climb**, because extraction re-runs and the candidate is re-selected under the sweep (the intended candidate's support reads 0.312 at 3 mm and 0.281 at 4 mm), so like Decision 46's radius and Decision 51's target, and unlike Decision 50's removal band, **the bracket must not be interpolated**.
+
+**design.md's envelope table is measured, and the row it rests on is outside the envelope.** The table prices "plate above table" at h = 26 mm, giving ε/h = 0.19 and the conclusion that component scoring is "validated for the defect this feature fixes". The 26 mm is pipeline Decision 6's plane *error at the food*, not the step between the two competing surfaces over the annulus. Measured from the shipped run, the two surfaces the ranking chooses between on `1785901032716` — the table at a ring median of +3.039 mm and the plate at −2.658 mm — are **11.706 mm** apart, so the shipped ε/h is **0.427**, outside Gallo et al.'s 0.25…0.35 envelope and in the same band as the table's own two rows marked "outside" (0.42 and 0.50). On `1785135663727` the closest pair is 19.464 mm and ε/h is 0.257, at the lower edge of the envelope rather than the 0.19 the table quotes.
+
+**So the straddler is real, and it is present at the shipped band.** On `1785901032716`, where all three candidate planes sit within 5.4° of gravity and their pairwise separations are 11.594…20.892 mm, so surface assignment is unambiguous, the plate candidate's largest connected component holds **22.1 %** of its members within one band of the surface *below* it, at ε/h = 0.431. That is Gallo's "for large enough ε, an incorrect plane straddling across the two patches will produce a large number of connected inliers", measured on the feature's own corpus. The reading on `1785135663727` is weaker evidence and is not relied on: its third candidate is tilted 20.512°, so it crosses the others inside the annulus and part of the spanning share there is a crossing artefact rather than a straddle.
+
+**And the cone the opposing review's refutation rests on is not enforced.** That refutation is "the ramp's own slope is ~73°, a 15°-capped plane rises only ~2.1 mm across its whole width, so the plane cannot *track* the ramp". `SupportRegion.extractCandidates` gates gravity on the RANSAC hypothesis and on every consensus-polish iteration, but **not on the first refinement between them** — `refine` is called on the hypothesis's members and its result is assigned unchecked, and a polish that reaches its fixed point on the first iteration leaves that plane standing. The shipped candidate set on `1785135663727` contains a plane at **20.512°**, and at a 4 mm band the same slot reads **25.422°**. The cone is an invariant of the hypotheses, not of the candidate set. Nothing observable changes today — that candidate is rejected on `extent` and `supportFraction` — but the refutation's premise does not hold on the shipped path.
+
+**The corpus interval is empty, and both constants that empty it are owed and denominated in this one.** Three constraints bound the band, all read on the plane a correct fit must select (Decision 48's identification, the candidate nearest Req 3.1's zero). `ringMedian` is a bar that *is* the band, so below 4 mm the intended candidate fails it on both captures (inner-band medians 6.117 mm and 4.685 mm). `maxCrossedSectors` caps it: at 6 mm the intended candidate on `1785901032716` reads 3 crossed sectors against the 2 Decision 48 determines. `ringSupportMin` floors it: support reaches 0.6 only at 10 mm and above on that capture. The last two are **disjoint** — support ≥ 0.6 needs ≥ 10 mm, crossed ≤ 2 needs ≤ 5 mm — so no band satisfies both and the interval is empty. This is Decision 41's "one constant contradicts" and Decision 30's straddle arriving on a constant one file over.
+
+**Which hands `ringSupportMin` a ceiling.** Its stated derivation, "a ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm", is written in terms of the band, and the constant *is* a share counted within it — so sweeping the band sweeps the achievable support. The largest support the intended candidate reaches at any band the crossed-sector rule still admits is **0.362**, at 5 mm. Any bar above that leaves the band with an empty interval. Decision 42 measured the same 0.362 as the value at the shipped band; over the whole sweep it is the maximum, and it is the corpus's first ceiling on a constant Decision 29 recorded as having none — Decision 41's suite ceiling of 0.676 was the only bound in existence. Below ~0.28 the interval widens to {4, 5} mm.
+
+**The committed suite gives it nothing, for a third distinct reason.** Decision 49's bound reached the scenes through two guards and was silent by measurement; Decision 50's removal band could not be read at all, since no scene runs extraction. This one *does* reach them — as `ringBandMm` it is the tolerance every sector is classified within and the magnitude bar Decision 40's rule inherits — and every reading from 1 mm to 12.5 mm is identical: `maxCrossedSectors` 0…2, `minSupportingSectors` 6…7, no scene's `supportFraction` or `ringMedian` verdict broken. `SPRScene.makeDepth` adds ±0.3 mm of synthetic noise, an order of magnitude below the smallest band swept, so the tolerance is never the binding quantity. **The committed scenes validate every guard's logic and no tolerance in any of them** — a limitation of the suite worth recording independently of this constant.
+
+**Two riders on other constants.** Extraction falls from three passes to two on both captures at 6 mm, and to one on `1785901032716` at 12.5 mm, so Decision 48's "the cap never fires" and Decision 50's [7,5]/[5,3]/[4,3]/[3,3] pass-depth table are readings at this band as much as at that multiple. And Decision 50's ordering — removal band before `minResidueAreaMm2` before `maxCandidatePlanes` — gains a member at its head, since the removal band is `inlierRemovalMultiple × inlierBandMm`; Req 7.6's latency follows all four.
+
+### Alternatives Considered
+
+- **Treat the `[inherited]` markers as discharged, since they name a real constant in a real file** - The audit Decisions 29 to 51 performed is of `SupportRegion`, and every marker in it now resolves - Rejected because a pointer is not a derivation. Following all four to their target found a bare number, unvaried, that moves the plane further than any constant the feature has swept. The previous halt's claim was scoped to one file and the constant that mattered most was outside it.
+- **Repair the missing gravity gate at the first refinement in this pass** - It is a one-line change and the cone is stated in the design - Rejected because it removes a candidate and therefore moves the answer, which is exactly what task 26 measures rather than makes. It is priced at the sitting alongside the constants it interacts with, and recorded at the call site meanwhile.
+- **Bracket the band from `1785135663727` alone, where the interval is 5…12.5 mm** - That capture gives a clean floor and no ceiling, so a bracket exists - Rejected because it is the pass side only, which is the circularity Req 3.7 forbids. The capture that contains the silent-failure geometry is the one whose interval is empty, and reporting the easy capture's bracket would hide the collision.
+- **Re-denominate the band, on Decisions 37, 38 and 49's pattern** - Those three removed a dependence a measure parameter had no business carrying - Rejected because there is no dependence to remove. The band is already in millimetres and already transfers across depth grids; what it carries is four inheritances and no derivation, which is a provenance problem rather than a denomination one.
+- **Widen the sweep below 1 mm to find the floor Gallo's small-ε warning predicts** - The paper warns CC-RANSAC is *worse* than plain RANSAC at very small ε, and this design's sample set is ~4× smaller - Rejected as unreadable on this corpus: at 1 mm the intended candidate already fails `ringMedian` and `ringSupportMin` on both captures, so every constraint is violated before the paper's mechanism becomes the binding one.
+
+### Consequences
+
+**Positive:**
+
+- The `[inherited]` chain is followed to its end, and the constant it terminates in is bracketed and marked for the first time.
+- design.md's one explicitly deferred question — "task 26 settles it by measurement; neither reading may be assumed" — is answered, and answered against the reading the design's own table implies.
+- `ringSupportMin` gains a corpus ceiling of 0.362, on a constant Decision 29 recorded as having none.
+- The committed suite's blind spot is measured: ±0.3 mm of scene noise means the scenes bound no tolerance anywhere, which is a finding about every guard rather than about this constant.
+- An unenforced gravity cone is found and recorded at its call site before a capture session reads brackets off the candidate set it admits.
+
+**Negative:**
+
+- Task 26 gains an owed constant again, and this one has an empty corpus interval rather than a bracket — it cannot be set before two others that cannot be set before it.
+- Every bracket in Decisions 40 to 51 is a reading at ε = 5, which is now known to be a value the corpus cannot confirm independently.
+- The straddling finding means CC-RANSAC's component score is not doing the job design.md's table claims for it on this corpus, and what that costs is not measured here.
+- The corpus is still two captures of flat bread on a plate, so the small-ε end of the sweep is unreadable and the rimmed-plate rows of the envelope table remain unmeasured.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`inlierBandMm` and `gravityAngleMaxRad` provenance blocks), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringBandMm` and `ringSupportMin` provenance blocks, and the unenforced-cone note at `extractCandidates`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theInlierBandIsWhatTheInheritedMarkersTerminateIn` and `theCommittedSuiteReadsOnlyTheInheritedHalfOfTheBand`, with `ccRansac`, the pass chain, `sectorSigns` and `innerSupportFraction` parameterised on the band), design.md's CC-RANSAC section, task 26's detail. **No shipped behaviour changes.**
+
+---

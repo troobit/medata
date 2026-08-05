@@ -215,7 +215,52 @@ public enum SupportRegion {
     // reaches is 0.246, 1.6x the bar, so the corpus cannot distinguish 0.15 from any
     // value below that.
     public static let supportVisibilityMin: Float = 0.15
-    // [inherited] LiDARPlaneFitter.inlierBandMm = 5.
+    // [inherited] LiDARPlaneFitter.inlierBandMm = 5 — and that constant is [owed], so this
+    // marker is too (Decision 52). `inlierBandMm` was a bare number with no derivation in
+    // its own file, and it is where FOUR markers here terminate: this one, `ringMedianMaxMm`
+    // ([inherited] from this), `inlierRemovalMultiple` (a multiple OF it) and
+    // `supportVisibility` (counted within it). An [inherited] marker is only as good as the
+    // constant it points at, and the chain ended outside the file this feature audits — the
+    // reason Decision 51's closing claim, "every constant in SupportRegion now carries a
+    // provenance marker", was true and not sufficient.
+    //
+    // It is the FIFTH constant that decides which planes COMPETE, and the most upstream of
+    // them: `annulusOuterMm` fixes the set extraction draws from, `maxCandidatePlanes` how
+    // many times it may draw, `inlierRemovalMultiple` what each draw leaves, `ringOuterMm`
+    // re-rings a set already chosen — this one decides what an INLIER IS, in three places at
+    // once (the RANSAC inlier test, the consensus polish's re-selection, and the removal band
+    // the multiple is denominated in).
+    //
+    // It MOVES THE ANSWER, by more than anything swept so far. Over 1…12.5 mm the selected
+    // plane at the food moves 18.132 mm on `1785135663727` and 19.389 mm on `1785901032716`,
+    // against the 1 mm Decision 35 measures Req 5.1's transfer at — the first owed constant
+    // to move BOTH captures past it, where `annulusOuterMm` moved 18.843 and 1.978 mm
+    // (Decision 49) and `ransacSuccessProbability` 3.704 mm on one (Decision 51). Readings
+    // WANDER rather than climb, because extraction re-runs and the candidate is re-selected
+    // under the sweep, so the bracket must NOT be interpolated.
+    //
+    // ITS CORPUS INTERVAL IS EMPTY at the shipped bars, and both that empty it are [owed] and
+    // both denominated in it. On `1785901032716` the plane a correct fit must select clears
+    // `ringSupportMin` only at 10 mm and above, and reads at most `maxCrossedSectors` = 2
+    // only at 5 mm and below. No band satisfies both. The interval is non-empty only once
+    // `ringSupportMin` falls to 0.362 or below, and there it is exactly the shipped 5 mm —
+    // so the corpus determines the band CONDITIONALLY and hands `ringSupportMin` a ceiling
+    // in the same reading (see that constant below).
+    //
+    // The committed SUITE gives it nothing, and for a third distinct reason. Decision 49's
+    // bound reached the scenes and was silent by measurement; Decision 50's removal band
+    // could not be read at all, since no scene runs extraction. This one DOES reach them —
+    // it is the tolerance every sector is classified within — and every reading from 1 to
+    // 12.5 mm is identical, because `SPRScene.makeDepth` adds ±0.3 mm of synthetic noise and
+    // the tolerance is never the binding quantity. The scenes validate every guard's LOGIC
+    // and no tolerance in any of them.
+    //
+    // SET IT BEFORE `inlierRemovalMultiple`, which is a multiple of it — so Decision 50's
+    // ordering (removal band → `minResidueAreaMm2` → `maxCandidatePlanes`) gains a member at
+    // its head, and Req 7.6's latency follows all four. But it cannot be set in sequence with
+    // `ringSupportMin` and `maxCrossedSectors`: those are a share counted within it and a
+    // count of sectors exceeding it, so all three are one joint set — the feature's first
+    // three-way one, after Decision 45's pair.
     public static let ringBandMm: Float = 5
     // [owed] must be measured against the support-surface noise distribution: a
     // ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm. The pipeline Decision 46 tension is
@@ -225,6 +270,23 @@ public enum SupportRegion {
     // 338.9 mm and 336.9 mm respectively. A 2× spread at the same range is a surface
     // difference, and ringBandMm = 5 falls between the two. A matte-surface capture is
     // required before this can be set (prerequisites, capture session).
+    //
+    // AND IT NOW HAS A CEILING, from the constant its own derivation is written in terms of
+    // (Decision 52). "A ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm" is denominated in
+    // `ringBandMm`, and this constant IS a share counted within that band — so a sweep of
+    // the band is a sweep of the achievable support. Over 1…12.5 mm the largest inner-band
+    // support the plane a correct fit must select ever reaches, at any band the
+    // crossed-sector rule still admits, is 0.362 on `1785901032716`. Any bar above that
+    // leaves the band with an EMPTY corpus interval, so 0.362 is a ceiling here — the
+    // corpus's first, where Decision 29 recorded that it had none and Decision 41's suite
+    // ceiling of 0.676 was the only bound in existence. Decision 42 measured the same 0.362
+    // as the value at the shipped band; over the whole sweep it is the maximum.
+    //
+    // Which makes this and the band ONE mechanism, as `maxIterationsPerPass` and
+    // `ransacSuccessProbability` were (Decision 51). Setting this from a capture taken at
+    // some band and then reading the band's floor off it is Req 3.7's circularity between
+    // two constants rather than within one. The two are set jointly, with
+    // `maxCrossedSectors` as the third member.
     public static let ringSupportMin: Float = 0.6
     // Sector measure (Req 3.6, Decisions 18–20). Equal arcs about the food-mask
     // centroid; empty sectors count as neither supporting nor failing, and the bar is
@@ -996,6 +1058,17 @@ public enum SupportRegion {
                                             rng: &rng, scratch: scratch) else { break }
 
             var inliers = hypothesis.members
+            // MEASURED GAP (Decision 52): this refinement is NOT gravity-gated, and the
+            // polish below returns before its own gate whenever the consensus set is already
+            // a fixed point — so a plane that leaves the 15° cone here stays in the candidate
+            // set. The corpus contains one, at 20.512° on `1785135663727` (25.422° at a 4 mm
+            // inlier band). It is rejected downstream on `extent` and `supportFraction`, so
+            // nothing observable changes today, but it is one of the two surfaces the
+            // straddling measurement below reads across, and design.md's refutation of the
+            // bridging argument is stated in terms of a cone this does not enforce.
+            //
+            // NOT repaired here. Adding the gate removes a candidate and therefore moves the
+            // answer, which is a change task 26 measures and the sitting prices.
             guard let refined = try? LiDARPlaneFitter.refine(
                 inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
             ) else { break }
