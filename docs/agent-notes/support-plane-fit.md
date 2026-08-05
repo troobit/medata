@@ -120,6 +120,11 @@ measured value against a constant flips as soon as the constant crosses it.
 | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
 | `maxCrossedSectors` | 0…2 | 0…2 (Decision 43) |
 
+**Every row of the sector part of that table is denominated in `ringSectorCount`, which is
+itself `[owed]` (Decision 44).** Read `maxCrossedSectors` 0…2 as "0…2 *at eight sectors*" —
+re-cut the same rings at nine counts and you get eight distinct joint intervals. See the
+sector-count section below before setting anything with "sector" in its name.
+
 `foodEnvelopeMinMm` and `escapeBandMm` are bound **tighter by the suite than by the corpus**,
 so a value defensible against every capture can still turn the suite red.
 `minSupportingSectors` is worse than tight — the two brackets do not overlap. A real intended
@@ -350,6 +355,46 @@ Three things that fall out and are worth not re-deriving:
 Against Decision 42's 0.338 mm: the rule rejects the table candidate by 3 crossed sectors
 against a ceiling of at most 2 — a one-sector margin at the loosest admissible value, three
 at the tightest — where `ringMedianMaxMm` clears it by 6.8 % of an inherited bar.
+
+## The sector count is the unit, not a peer (Decision 44)
+
+`ringSectorCount = 8` had never been varied until `sectorCountIsTheUnitOfTheSectorTrio`
+re-cut both corpus rings and all eight committed scenes at nine counts. Three things fall
+out, and the first invalidates how the other sector brackets read.
+
+| N | plate crossed | table crossed | joint `maxCrossedSectors` | min sector samples | `ringMinSamples` | halved grid |
+|---|---|---|---|---|---|---|
+| 4 | 0 | 2 | **0…0** | 248 | 100 | feasible |
+| 6 | 0 | 3 | 0…1 | 137 | 150 | feasible |
+| **8** | **0** | **3** | **0…2** | 102 | 200 | feasible |
+| 10 | **1** | 5 | 1…2 | 80 | 250 | feasible |
+| 11 | 1 | 6 | 1…2 | 73 | 275 | feasible |
+| 12 | 1 | 7 | 1…3 | 66 | 300 | **refused** |
+| 16–32 | 1 | 7–18 | 1…4 … 1…9 | 45–21 | 400–800 | refused |
+
+- **The ceiling is Req 5.1's, and it is self-tightening.** `ringMinSamples` *is*
+  `ringSectorCount × 25`, so finer arcs raise the floor the ring must clear. The native
+  corpus would carry 44 sectors (thinnest band 1120); the 2× halved grid carries **11**
+  (thinnest band 292). Above 11 the plane still transfers within a millimetre and the ring
+  measure refuses — the same asymmetry Decision 39 refused to paper over with `mmPerPx`.
+  So `ringMinSamples` is `[measured]` on an `[owed]` input, which no annotation showed.
+- **No floor from the rule.** Decision 40's crossed-sector rule separates the plate-top
+  candidate from the table candidate at **every** count 4…32. A coarse cut does not average
+  the crossing away inside one sector. The 4…8 bracket's top comes from the *pass* side
+  instead: the plane a correct fit must admit reads 0 crossed sectors at 4, 6 and 8 and 1
+  from 10 up, because narrow arcs resolve the direction its own ring ran off the plate
+  (Decision 33's margin, read a third way).
+- **The trade runs backwards, and it undercuts Decision 43.** A *coarser* cut leaves *less*
+  freedom in the constant it denominates — joint widths 1, 2, 3 at counts 4, 6, 8. At four
+  sectors `maxCrossedSectors` is **determined at 0** by evidence already committed. So
+  "0…2 and nothing in hand narrows it" is partly an artefact of the count, which happens to
+  be the count where the freedom is widest. Do not read that as an argument for four: it
+  asserts `ringSectorCount` to avoid asserting `maxCrossedSectors`, and whether a 90° arc
+  resolves Decision 18's straddle is a property of scenes the corpus does not have.
+
+**Practical rule: fix the count before the capture session, not from it.** Capture 6 reads
+`maxCrossedSectors` in whatever unit the count fixed, so taking the captures first and
+choosing the count afterwards measures nothing.
 
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 

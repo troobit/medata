@@ -1522,6 +1522,17 @@ struct SupportPlaneCorpusMeasurementTests {
         // suite can be measured against the REPLACEMENT sector guard on exactly the
         // scenes it is measured against the shipped one.
         let signs: SectorSigns
+        // The ring and the plane the reading was taken at, kept so the scene can be
+        // re-sectored at a count other than the shipped one without rebuilding it.
+        let samples: SupportRegion.RingSamples
+        let geometry: SupportRegion.DepthGeometry
+        let normal: Vec3
+        let planeD: Float
+
+        func signs(at count: Int) -> SectorSigns {
+            SupportPlaneCorpusMeasurementTests.sectorSigns(
+                samples: samples, geometry: geometry, normal: normal, d: planeD, count: count)
+        }
     }
 
     // Every guard, for the four scenes whose committed test requires the whole fit to
@@ -1576,7 +1587,9 @@ struct SupportPlaneCorpusMeasurementTests {
                     indices: measured.samples.annulus, geometry: measured.geometry,
                     normal: p.normal, d: p.d),
                 signs: sectorSigns(samples: measured.samples, geometry: measured.geometry,
-                                   normal: p.normal, d: p.d))
+                                   normal: p.normal, d: p.d),
+                samples: measured.samples, geometry: measured.geometry,
+                normal: p.normal, planeD: p.d)
         }
     }
 
@@ -1795,6 +1808,216 @@ struct SupportPlaneCorpusMeasurementTests {
               + " \(table.crossedFailing - jointCeiling) sectors, where ringMedianMaxMm's"
               + " margin on the same candidate is 0.338 mm on a"
               + " \(SupportRegion.ringMedianMaxMm) mm bar")
+    }
+
+    // MARK: - The sector count, and what it is the unit of
+
+    // Every bracket this feature has recorded for the sector measure — Decision 40's
+    // 0…2 on `maxCrossedSectors`, Decision 41's 6…7 and Decision 43's empty 6…5 on
+    // `minSupportingSectors` — is a COUNT OF SECTORS, read at `ringSectorCount = 8`. So
+    // is `ringMinSamples`, whose whole derivation is `ringSectorCount × 25`. The three
+    // sector constants have been treated as peers of one another and of the count; they
+    // are not. The count is the unit the other three are denominated in, and Req 3.7
+    // leaves it `[owed]` alongside them.
+    //
+    // What that means for the capture session is the question here, and it is answerable
+    // without a capture: re-cut the same rings into N equal arcs and read what moves.
+    // 10 and 11 are in the sweep so the ceiling below is exercised rather than
+    // interpolated — 11 is the last count the Req 5.1 grid halving supports.
+    static let sectorCountSweep = [4, 6, 8, 10, 11, 12, 16, 24, 32]
+
+    // The derivation `ringMinSamples` carries: 25 inner-band samples per sector, so a
+    // 0.5 support bar has binomial σ ≈ 0.10 (Decision 20). Applied per RADIAL band.
+    static let samplesPerSectorTarget = 25
+
+    @Test("the sector count is the unit the other three sector constants are denominated in")
+    func sectorCountIsTheUnitOfTheSectorTrio() throws {
+        // The two corpus candidates Decisions 40 and 43 are read from: the plate top a
+        // correct fit must admit, and the table plane the guard exists to reject.
+        var rings: [String: (SupportRegion.DepthGeometry, SupportRegion.RingSamples,
+                             SupportRegion.PlaneCandidate)] = [:]
+        var nativeBandCounts: [String: [Int]] = [:]
+        var halvedBandCounts: [String: [Int]] = [:]
+        for name in Self.captures {
+            let (g, samples) = try #require(Self.prepared(name))
+            rings[name] = (g, samples, try #require(Self.bestCandidate(name)))
+            var counts = [Int](repeating: 0, count: SupportRegion.ringBandCount)
+            for band in samples.band { counts[band] += 1 }
+            nativeBandCounts[name] = counts
+            let slice = try DepthSlice.load(name)
+            halvedBandCounts[name] = try #require(Self.gridFit(slice, decimation: 2)).bandCounts
+        }
+        let readings = Self.sceneReadings()
+        #expect(readings.count == 8, "a scene stopped producing ring statistics")
+        let mustPass = readings.filter { $0.requiresPass.contains(.sectors) }
+        let mustFire = readings.filter { $0.requiresFire.contains(.sectors) }
+
+        struct Sweep {
+            let count: Int
+            let plate: SectorSigns
+            let table: SectorSigns
+            let corpusFloor: Int
+            let corpusCeiling: Int
+            let suiteFloor: Int
+            let suiteCeiling: Int
+            var jointFloor: Int { max(corpusFloor, suiteFloor) }
+            var jointCeiling: Int { min(corpusCeiling, suiteCeiling) }
+            var jointFeasible: Bool { jointFloor <= jointCeiling }
+            let minSectorSamples: Int
+            let occupied: [Int]
+            // `ringMinSamples` at this count, and whether the corpus's radial bands
+            // clear it — natively, and across the Req 5.1 grid halving.
+            let impliedRingMinSamples: Int
+            let nativeFeasible: Bool
+            let halvedFeasible: Bool
+        }
+
+        var sweeps: [Sweep] = []
+        for count in Self.sectorCountSweep {
+            var signs: [String: SectorSigns] = [:]
+            for (name, r) in rings {
+                signs[name] = Self.sectorSigns(samples: r.1, geometry: r.0,
+                                               normal: r.2.normal, d: r.2.d, count: count)
+            }
+            let plate = try #require(signs["1785135663727"])
+            let table = try #require(signs["1785901032716"])
+            let passCrossed = mustPass.map { $0.signs(at: count).crossedFailing }
+            let fireCrossed = mustFire.map { $0.signs(at: count).crossedFailing }
+            let implied = count * Self.samplesPerSectorTarget
+            sweeps.append(Sweep(
+                count: count, plate: plate, table: table,
+                corpusFloor: plate.crossedFailing,
+                corpusCeiling: table.crossedFailing - 1,
+                suiteFloor: passCrossed.max() ?? 0,
+                suiteCeiling: (fireCrossed.min() ?? 0) - 1,
+                minSectorSamples: [plate, table]
+                    .flatMap(\.sectorSampleCounts).filter { $0 > 0 }.min() ?? 0,
+                occupied: [plate, table].map { $0.sectorSampleCounts.filter { $0 > 0 }.count },
+                impliedRingMinSamples: implied,
+                nativeFeasible: nativeBandCounts.values.allSatisfy {
+                    $0.allSatisfy { $0 >= implied }
+                },
+                halvedFeasible: halvedBandCounts.values.allSatisfy {
+                    $0.allSatisfy { $0 >= implied }
+                }))
+        }
+
+        for s in sweeps {
+            print("N=\(s.count): occupied \(s.occupied), min sector samples \(s.minSectorSamples)"
+                  + " (target \(Self.samplesPerSectorTarget));"
+                  + " plate supporting \(s.plate.supporting) crossed \(s.plate.crossedFailing),"
+                  + " table supporting \(s.table.supporting) crossed \(s.table.crossedFailing);"
+                  + " maxCrossedSectors corpus \(s.corpusFloor)…\(s.corpusCeiling),"
+                  + " suite \(s.suiteFloor)…\(s.suiteCeiling),"
+                  + " joint \(s.jointFloor)…\(s.jointCeiling)"
+                  + " (\(max(0, s.jointCeiling - s.jointFloor + 1)) values);"
+                  + " ringMinSamples \(s.impliedRingMinSamples)"
+                  + " native \(s.nativeFeasible ? "feasible" : "REFUSED")"
+                  + " halved \(s.halvedFeasible ? "feasible" : "REFUSED")")
+        }
+        print("native band counts \(nativeBandCounts), halved \(halvedBandCounts)")
+
+        let shipped = try #require(sweeps.first { $0.count == SupportRegion.ringSectorCount })
+
+        // Anchor. At the shipped count this reproduces Decisions 40 and 43 exactly — if
+        // it does not, the re-sectoring arithmetic has diverged from `sectorIndex` and
+        // nothing below is a measurement of the count.
+        let anchor = "re-sectoring at ringSectorCount no longer reproduces the recorded"
+            + " reading (plate crossed \(shipped.plate.crossedFailing),"
+            + " table crossed \(shipped.table.crossedFailing), joint"
+            + " \(shipped.jointFloor)…\(shipped.jointCeiling)) — the sweep is not measuring"
+            + " the same rule Decision 43 measured"
+        #expect(shipped.plate.crossedFailing == 0 && shipped.table.crossedFailing == 3
+                && shipped.jointFloor == 0 && shipped.jointCeiling == 2, "\(anchor)")
+
+        // THE FINDING. The bracket both constraint sets agree on is not a property of the
+        // rule; it is a property of the rule AT EIGHT SECTORS. Recorded as 0…2 it reads
+        // like a number the session may pick from, and it is not — pick a different count
+        // and it is a different interval.
+        let brackets = Set(sweeps.map { "\($0.jointFloor)…\($0.jointCeiling)" })
+        print("joint brackets over the sweep: \(brackets.sorted())")
+        let invariant = "maxCrossedSectors reads the same bracket at every sector count"
+            + " (\(brackets.sorted())) — it is not denominated in ringSectorCount after all"
+        #expect(brackets.count > 1, "\(invariant)")
+
+        // THE CEILING, and it is not the one the corpus's own sample margin suggests.
+        // `ringMinSamples = ringSectorCount × 25` rises WITH the count, so raising the
+        // count tightens the very floor the ring has to clear. The native corpus clears
+        // it far past any plausible count; the Req 5.1 grid halving does not, so the
+        // transfer claim is what binds — and the exact ceiling is the halved grid's
+        // thinnest radial band divided by the 25 the derivation targets.
+        let nativeCeiling = sweeps.filter(\.nativeFeasible).map(\.count).max() ?? 0
+        let halvedCeiling = sweeps.filter(\.halvedFeasible).map(\.count).max() ?? 0
+        let thinnestHalvedBand = halvedBandCounts.values.flatMap { $0 }.min() ?? 0
+        let exactCeiling = thinnestHalvedBand / Self.samplesPerSectorTarget
+        print("sample-floor ceiling on ringSectorCount: native \(nativeCeiling),"
+              + " across the Req 5.1 halving \(halvedCeiling);"
+              + " exact halved ceiling \(thinnestHalvedBand)/\(Self.samplesPerSectorTarget)"
+              + " = \(exactCeiling), shipped \(SupportRegion.ringSectorCount)")
+        let binding = "the grid halving no longer binds ringSectorCount before the native"
+            + " grid does (native \(nativeCeiling), halved \(halvedCeiling)) — Req 5.1's"
+            + " transfer floor has stopped being the tighter constraint"
+        #expect(halvedCeiling < nativeCeiling, "\(binding)")
+        let exact = "the swept halved ceiling \(halvedCeiling) no longer agrees with the"
+            + " arithmetic one \(exactCeiling) — the sweep has stopped bracketing it"
+        #expect(halvedCeiling == exactCeiling, "\(exact)")
+        let shippedTransfers = "the shipped ringSectorCount no longer survives the Req 5.1"
+            + " halving — ringMinSamples \(shipped.impliedRingMinSamples) against halved"
+            + " band counts \(halvedBandCounts)"
+        #expect(shipped.halvedFeasible, "\(shippedTransfers)")
+
+        // And NO floor, which is the negative worth recording. Decision 40's rule works by
+        // finding an arc of the ring above the candidate plane while the rest supports it,
+        // so a coarse cut might have averaged the crossing away inside one sector. It does
+        // not: the corpus separates its two candidates at every count in the sweep. The
+        // rule's SEPARATION is robust to the count; only its bracket is not.
+        let separating = sweeps.filter { $0.corpusFloor <= $0.corpusCeiling }.map(\.count)
+        print("counts at which the corpus still separates the two candidates: \(separating)")
+        let floorAppeared = "the crossed-sector rule has stopped separating the corpus at"
+            + " some count (separating at \(separating) of \(Self.sectorCountSweep)) — the"
+            + " count now has a floor from the rule as well as a ceiling from Req 5.1"
+        #expect(separating == Self.sectorCountSweep, "\(floorAppeared)")
+
+        // What the count buys, over the range Req 5.1 leaves open. It runs the opposite way
+        // to intuition: a COARSER cut leaves LESS freedom in the constant it denominates.
+        // At the smallest count the joint bracket is a single value, so `maxCrossedSectors`
+        // would be determined by what is already committed rather than owed to capture 6 —
+        // and the shipped count is where the freedom is WIDEST. Decision 43's "nothing in
+        // hand narrows 0…2" is therefore partly a consequence of the count.
+        let feasible = sweeps.filter { $0.count <= exactCeiling }
+        let widths = feasible.map { (count: $0.count, width: $0.jointCeiling - $0.jointFloor + 1) }
+        print("joint bracket width over the Req 5.1-feasible range:"
+              + " \(widths.map { "\($0.count):\($0.width)" })")
+        let smallest = try #require(widths.first)
+        let determined = "the smallest count in the sweep no longer determines"
+            + " maxCrossedSectors (width \(smallest.width)) — choosing the count no longer"
+            + " discharges the constant and capture 6 is its only source at every count"
+        #expect(smallest.width == 1, "\(determined)")
+        let widest = try #require(widths.max { $0.width < $1.width })
+        let peak = "the shipped count is no longer where maxCrossedSectors is least"
+            + " determined (\(widest.count) is, at width \(widest.width)) — Decision 43's"
+            + " bracket width has stopped being a property of the shipped count"
+        #expect(widest.count == SupportRegion.ringSectorCount, "\(peak)")
+
+        // The other side of the trade, and why a finer cut is not free either: the plane a
+        // correct fit must ADMIT starts reading a crossed sector of its own once the arcs
+        // are narrow enough to resolve where its ring left the plate onto the table. So the
+        // shipped 8 is the LARGEST count at which the rule's floor is still zero, inside the
+        // Req 5.1 ceiling above — bracketing the count 4…8 rather than setting it.
+        let cleanFloor = sweeps.filter { $0.plate.crossedFailing == 0 }.map(\.count)
+        print("counts at which the intended plate candidate reads no crossed sector:"
+              + " \(cleanFloor) — ringSectorCount bracketed \(cleanFloor.min() ?? 0)…"
+              + "\(cleanFloor.max() ?? 0) against a Req 5.1 ceiling of \(exactCeiling)")
+        let eroded = "the intended candidate's crossed count no longer separates the sweep"
+            + " at the shipped value (clean at \(cleanFloor)) — the pass-side erosion this"
+            + " records has moved"
+        #expect(cleanFloor.allSatisfy { $0 <= SupportRegion.ringSectorCount }
+                && cleanFloor.contains(SupportRegion.ringSectorCount), "\(eroded)")
+        // Bracketed, not set: more than one count survives both sides, so this is not a
+        // derivation either.
+        let collapsed = "the count bracket has collapsed to a single value — ringSectorCount"
+            + " would be measured rather than owed, and the design must be updated to say so"
+        #expect(cleanFloor.count > 1, "\(collapsed)")
     }
 
     // MARK: - Req 4.5: what the fallback rate is a function of
@@ -2175,28 +2398,64 @@ struct SupportPlaneCorpusMeasurementTests {
         let crossedFailing: Int      // failing sectors reading above +ringBandMm
         let escapedFailing: Int      // failing sectors reading below −ringBandMm
         let crossedAll: Int          // any sector reading above +ringBandMm
+        // Inner-band samples per sector. The sector measure's statistical footing, and
+        // the quantity `ringMinSamples = ringSectorCount × 25` exists to floor.
+        let sectorSampleCounts: [Int]
     }
 
     static func sectorSigns(samples: SupportRegion.RingSamples,
                             geometry g: SupportRegion.DepthGeometry,
                             normal: Vec3, d: Float) -> SectorSigns {
-        let sectors = sectorFractions(samples: samples, geometry: g, normal: normal, d: d)
-        let medians = sectorMedianMm(samples: samples, geometry: g, normal: normal, d: d)
+        sectorSigns(samples: samples, geometry: g, normal: normal, d: d,
+                    count: SupportRegion.ringSectorCount)
+    }
+
+    // `SupportRegion.sectorIndex` with the count as an argument rather than read from the
+    // shipped constant. Same arithmetic — equal arcs about the food-mask centroid — so at
+    // `ringSectorCount` it reproduces `samples.sector` exactly, which is what lets the
+    // reading above delegate here and the sweep below re-sector the same ring.
+    static func sectorIndex(x: Int, y: Int, geometry g: SupportRegion.DepthGeometry,
+                            count: Int) -> Int {
+        let angle = atan2(Float(y) - g.centroidY, Float(x) - g.centroidX)
+        let normalised = (angle + .pi) / (2 * .pi)
+        return min(count - 1, max(0, Int(normalised * Float(count))))
+    }
+
+    // The inner band re-cut into `count` equal arcs. `samples.sector` is only ever
+    // populated for band 0, so the band test is what selects the inner band here too.
+    static func sectorSigns(samples: SupportRegion.RingSamples,
+                            geometry g: SupportRegion.DepthGeometry,
+                            normal: Vec3, d: Float, count: Int) -> SectorSigns {
+        var total = [Int](repeating: 0, count: count)
+        var supported = [Int](repeating: 0, count: count)
+        var heights = [[Float]](repeating: [], count: count)
+        for (i, idx) in samples.ring.enumerated() where samples.band[i] == 0 {
+            let s = sectorIndex(x: idx % g.width, y: idx / g.width, geometry: g, count: count)
+            let height = normal.dot(g.points[idx]) - d
+            total[s] += 1
+            heights[s].append(height)
+            if abs(height) <= SupportRegion.ringBandMm { supported[s] += 1 }
+        }
+        let medians = heights.map { $0.isEmpty ? Float.nan : $0.sorted()[$0.count / 2] }
+        func fraction(_ s: Int) -> Float {
+            total[s] == 0 ? 0 : Float(supported[s]) / Float(total[s])
+        }
         // Empty sectors count as neither supporting nor failing, as in `ringStatistics`.
-        let failing = sectors.indices.filter {
-            sectors[$0].total > 0 && sectors[$0].fraction < SupportRegion.sectorSupportMin
+        let failing = (0..<count).filter {
+            total[$0] > 0 && fraction($0) < SupportRegion.sectorSupportMin
         }
         let failingMedians = failing.map { medians[$0] }
         return SectorSigns(
-            supporting: sectors.filter {
-                $0.total > 0 && $0.fraction >= SupportRegion.sectorSupportMin
+            supporting: (0..<count).filter {
+                total[$0] > 0 && fraction($0) >= SupportRegion.sectorSupportMin
             }.count,
             medians: medians,
             failing: failing,
             failingMedians: failingMedians,
             crossedFailing: failingMedians.filter { $0 > SupportRegion.ringBandMm }.count,
             escapedFailing: failingMedians.filter { $0 < -SupportRegion.ringBandMm }.count,
-            crossedAll: medians.filter { $0 > SupportRegion.ringBandMm }.count)
+            crossedAll: medians.filter { $0 > SupportRegion.ringBandMm }.count,
+            sectorSampleCounts: total)
     }
 
     struct NoiseSummary {

@@ -256,6 +256,33 @@ rims never reach the inner band the sector median is computed over. Captures 3 a
 source for it, so shoot at least one of them with the food close enough to the rim that the ring
 reaches it, and record whether the rim falls in the inner band.
 
+**Fix `ringSectorCount` BEFORE the sitting — it is the unit capture 6 reports in (Decision 44).**
+Every sector bracket in this document is a count of sectors read at eight of them. Re-cut the same
+rings at nine counts and the joint bracket on `maxCrossedSectors` takes eight distinct values:
+**0…0** at four sectors, 0…1 at six, **0…2** at eight, 1…2 at ten and eleven. Take the captures
+first and choose the count afterwards and capture 6 measures nothing, because the number it
+produces is denominated in a constant that was still moving.
+
+The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
+
+- **No floor.** The crossed-sector rule separates the corpus's plate-top candidate from its table
+  candidate at every count from 4 to 32, so a coarse cut does not average the crossing away.
+- **Top of the bracket, 8.** The plate-top candidate — the plane a correct fit must admit — reads
+  0 crossed sectors at 4, 6 and 8 and **1** from 10 upward: narrow arcs resolve the direction its
+  own ring ran off the plate onto the table, and the rule's floor stops being zero.
+- **Hard ceiling, 11.** `ringMinSamples` *is* `ringSectorCount × 25`, so finer arcs raise the floor
+  the ring must clear. Req 5.1's 2× grid halving leaves the thinnest radial band at 292 samples,
+  and 292/25 = 11. Above that the plane still transfers within a millimetre and the ring measure
+  refuses — the native grid would have carried 44.
+
+One trap, because it looks like a shortcut. A *coarser* cut leaves *less* freedom in the constant
+it denominates: at four sectors `maxCrossedSectors` is **determined at 0** by the corpus and the
+committed suite together, so choosing four would close it without capture 6 at all. Do not. It
+asserts `ringSectorCount` in order to avoid asserting `maxCrossedSectors`, and whether a 90° arc
+resolves Req 3.6's straddle is a property of scenes the corpus does not contain — which is what
+capture 6 is for. Note the choice and its reason before the sitting, and record every sector figure
+with the count it was read at.
+
 **Vary how much plate shows, and record it.** The measured support margin — the distance from the
 food boundary at which the surface falls away — is 16, 40, 10, 42, 6, 4, 6, 44 mm on
 `1785135663727` and 34, 4, 46, 8, 30, 14, 12, 6 mm on `1785901032716`. The plate therefore ends
@@ -361,6 +388,11 @@ is no way to recover it afterwards.
   | `foodEnvelopeMinMm` | −6.758…8.233 mm | ≤ 25.793 mm |
   | `escapeBandMm` | ≥ 14.868 mm | reaches +5.750 mm |
   | `maxCrossedSectors` | 0…2 | 0…2 — **they agree** (Decision 43) |
+
+  **Both sector rows are denominated in `ringSectorCount`, which is `[owed]` too
+  (Decision 44).** `minSupportingSectors` 6…7 and `maxCrossedSectors` 0…2 hold at eight sectors
+  and nowhere else; at four the latter is 0…0. Fix the count before reading either — see the
+  capture-session section above.
 
   **Two of these bind tighter than the corpus**, so a value set at the sitting against captures
   alone can land inside the corpus's bracket and outside the suite's: `foodEnvelopeMinMm` above
