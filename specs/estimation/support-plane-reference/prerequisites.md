@@ -177,6 +177,19 @@ there is no mound left to anchor against. The slice is committed as `rejectedCap
 that measurement asserted, because admitting it flips the sector derivation to a spurious
 "separable" result. Capture 2 must still be taken.
 
+**And the exclusion has been re-grounded, because τ_conf is itself owed (Decision 53).** Sweeping
+the confidence bar shows the second reason above is a restatement of the first: at τ_conf = 0 the
+same slice reads a food envelope of **+58.4 mm**. The mound is in the data and it is τ_conf that
+removes it. The third reason reverses too — the spurious separable count needs 4 supporting
+sectors, and the capture reads 2 at τ_conf = 0 and 3 at the shipped bar, reaching 4 only in the
+HIGH-only state. What the exclusion actually rests on is that admitting the LOW samples the mound
+is made of wrecks the ring fit the capture would have to anchor: its intended candidate's ring
+median goes from a near-exact **−0.018 mm** to **−4.589 mm**. The capture's mound and its usable
+support surface cannot both be present at any one setting, so capture 2 is still required and no
+threshold recovers it. The 43.2 % is also the *support plane's* bar; at
+`HeightFieldEstimator.tauConfidence = 0.66`, which is what consumes the food samples, the share is
+**60.3 %**, and the "0.0 % on both committed captures" reads 2.7 % and 1.9 % there.
+
 **Why capture 1 is not the bundle we already have.** `1785901032716-success` covers the *replay*
 criterion (Req 7.2). Req 7.8 is on-device verification, which by definition must run against the
 built feature and cannot be satisfied by a stored bundle.
@@ -207,6 +220,17 @@ means `ringSupportMin` cannot be derived at all until the spread is characterise
 Pipeline Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
 was never the same quantity — but the underlying worry it encodes is now measured and real. Take
 at least one of the six on a matte surface, and note the surface material for each.
+
+**And that capture now bounds two constants, not one (Decision 53).** The matte-table bug was
+fixed by *lowering τ_conf* so MEDIUM-confidence returns survive, and MEDIUM-confidence returns are
+the noisier ones — so `ringSupportMin` and `τ_conf` are the same question asked twice. On the
+committed corpus, discarding MEDIUM raises the achievable support on both captures (0.629 → 0.690
+and 0.362 → 0.379) and raises `ringSupportMin`'s corpus ceiling from 0.362 to 0.497, while
+reproducing **no** starvation — every ring band still clears `ringMinSamples` and the fitter's own
+band scan still returns a plane. So the corpus mildly prefers the state the shipped value rejects
+and cannot justify either. The matte capture is what decides both. Record the ARKit confidence
+histogram for each of the six alongside the surface material: the whole domain of τ_conf is which
+of the three levels survives, so the level mix per surface *is* the measurement.
 
 **Four guards have never fired, so four captures have a second job (Decision 34).** Setting a
 constant and *exercising* the guard it gates are different asks, and for these four only the
@@ -523,7 +547,7 @@ is no way to recover it afterwards.
 
   | Constant | Suite interval | Corpus bracket |
   |---|---|---|
-  | `ringSupportMin` | ≤ 0.676 | none — needs the matte capture |
+  | `ringSupportMin` | ≤ 0.676 | ≤ 0.362, the corpus's first ceiling (Decision 52) — and itself a reading at τ_conf: ≤ 0.497 with HIGH-confidence samples only (Decision 53). The **value** still needs the matte capture |
   | `minSupportingSectors` | 6…7 | ≤ 5 |
   | `bandStepMaxMm` | 0.024…9.288 mm | no floor at all |
   | `supportVisibilityMin` | ≤ 2.667 | ≥ 0.246 |
@@ -534,6 +558,8 @@ is no way to recover it afterwards.
   | `inlierRemovalMultiple` | none — no scene runs extraction | 1…2.5× (Decision 50) |
   | `ransacSuccessProbability` | none — no scene runs extraction | 0.9…unbounded (Decision 51) |
   | `maxIterationsPerPass` | none — no scene runs extraction | 128…unbounded (Decision 51) |
+  | `inlierBandMm` | none — every reading from 1 to 12.5 mm is identical, because scene noise is ±0.3 mm | **empty** at the shipped bars; 5 mm at `ringSupportMin` ≤ 0.362, 6 mm with HIGH-confidence samples only (Decisions 52, 53) |
+  | `confidenceThreshold` (τ_conf) | none — scenes carry no confidence map | **three states**, not an interval; accept-LOW ruled out, the other two undecidable without a matte capture (Decision 53) |
 
   **Both sector rows are denominated in `ringSectorCount`, which is `[owed]` too
   (Decision 44), and in `sectorSupportMin`, which is `[owed]` as well (Decision 45).**

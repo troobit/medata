@@ -27,6 +27,16 @@ public struct HeightFieldEstimate: Sendable {
 
 public enum HeightFieldEstimator {
     public static let tauSilhouette: Float = 0.5
+    // The FOOD half of τ_conf, and the support plane's half is a different number:
+    // `LiDARPlaneFitter.confidenceThreshold` is 0.40. ARKit's confidence bytes are three
+    // levels (0/127/255), so the two fall on opposite sides of the only boundary in the
+    // domain — MEDIUM at 127/255 = 0.498 — and one pipeline reads one confidence surface at
+    // two levels: the plane is fitted to MEDIUM and HIGH samples, the volume above it is
+    // integrated over HIGH alone. Measured on the support-plane corpus, this bar discards
+    // 2.7 % and 1.9 % of the food on the two captures where the plane's bar discards 0 %
+    // (support-plane-reference Decision 53). Not a defect with a known sign — the volume
+    // path wanting the stricter bar is defensible — but the divergence is undocumented and
+    // any change to either value must be made against the other.
     public static let tauConfidence: Float = 0.66
     // Lowered from 0.5 to 0.3 per Decision 47 / Req §13.2. Coverages in
     // [0.30, 0.50) accept and produce σ_view = 0.30 via the singleViewMinimal

@@ -178,6 +178,8 @@ The sector guard is the answer (Req 3.6, Decision 18), and its constants are cor
 
 **`ringSupportMin = 0.6` is in tension with the matte-table evidence and must be measured against it.** A ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm on the support surface. `lidar-plane-fit-matte-table-confidence` and pipeline Decision 46 exist because matte tables produce genuine single-surface noise large enough to justify a 20 mm residual bar. If that noise exceeds ~6 mm in practice, every matte-table capture falls back and Req 4.5's fallback-rate defect fires for a reason unrelated to plane selection. Task 26 must measure the support-surface noise distribution before this constant is fixed.
 
+The tension is now measured, and it runs through `τ_conf` rather than through the residual bar (Decision 53). `lidar-plane-fit-matte-table-confidence` was fixed by *lowering the confidence bar* so MEDIUM-confidence returns survive, and MEDIUM-confidence returns are exactly the noisier ones — so the bar and this constant are the same question asked twice. Measured on the corpus, discarding MEDIUM raises the achievable support on both captures (0.629 → 0.690 and 0.362 → 0.379) and raises `ringSupportMin`'s own corpus ceiling from 0.362 to 0.497. The corpus cannot settle either: at HIGH only it reproduces no starvation, so the scene that justifies the shipped bar is not in it. **A matte-surface capture now bounds two constants rather than one**, and until it exists neither `ringSupportMin` nor `τ_conf` can be set.
+
 ### Stated limits (Req 2.5)
 
 **The limit is on food *width*, not food height — an earlier draft had this the wrong way round.** It read "minimum resolvable food height ≈ 8 mm", derived from "~4 depth pixels of smoothing, so a step spreads to 4–6 mm/px". That conflates a lateral extent with a vertical one: 4–6 mm/px is the gradient of one particular plate step, and ~8 mm is the smear's *lateral* footprint.
@@ -425,6 +427,13 @@ public enum SupportRegion {
     // Depth-grid indices in the annulus, excluding food and low-confidence
     // samples. τ_conf = 0.40 applies here as it does in the band scan, so
     // `lidar-plane-fit-matte-table-confidence` is not bypassed (Req 7.5).
+    // τ_conf is [owed] and it is the most upstream constant this component
+    // reads — it decides what a SAMPLE is, so every bar below is denominated
+    // in it. THREE states, not a range: ARKit reports three confidence levels,
+    // so the whole domain is accept-LOW / accept-MEDIUM / accept-HIGH-only and
+    // the shipped 0.40 selects the middle one. It moves the selected plane
+    // 2.098 mm and the extraction pass count. Set it FIRST, ahead of
+    // inlierBandMm (Decision 53)
     static func contactRing(foodMask: BinaryMask, depth: DepthMap,
                             intrinsics: CameraIntrinsics) -> [Int]
 
