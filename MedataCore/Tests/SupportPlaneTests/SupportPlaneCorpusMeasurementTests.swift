@@ -7254,6 +7254,384 @@ struct SupportPlaneCorpusMeasurementTests {
                 "\(noCeiling)")
     }
 
+    // MARK: - The envelope percentile, and what the envelope bar is denominated in
+
+    // `SupportRegion.foodEnvelopeMm` with the percentile as an argument. Everything else is
+    // the shipped path's — the food indices `prepare` admitted at τ_conf, the signed height
+    // against the candidate plane, `SupportRegion.percentile`'s own nearest-rank rule — so
+    // at `foodEnvelopePercentile` it reproduces the shipped reading exactly.
+    static func foodEnvelopeMm(geometry g: SupportRegion.DepthGeometry,
+                               normal: Vec3, d: Float, percentile p: Float) -> Float {
+        SupportRegion.percentile(g.foodIndices.map { normal.dot(g.points[$0]) - d }, p)
+    }
+
+    // The whole domain, [0, 1], because a percentile has one, and dense at BOTH ends
+    // because that is where the two constraint sets close on it. 0.5 is in the sweep for a
+    // reason beyond spacing: `SupportRegion.percentile` special-cases it, averaging the two
+    // middle samples where every other value takes a nearest-rank index, so the sweep
+    // crosses a BRANCH there and not only a value.
+    static let envelopePercentileSweep: [Float] =
+        [0, 0.02, 0.05, 0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.8, 0.85, 0.9, 0.92, 0.95, 0.99, 1]
+
+    @Test("the envelope percentile is the unit the envelope bar is denominated in")
+    func theEnvelopePercentileIsTheUnitTheEnvelopeBarIsDenominatedIn() throws {
+        struct Pass {
+            let index: Int
+            let ringMedianMm: Float
+            let innerSupport: Float
+            let envelopeByP: [Float: Float]
+            // Whether the ENVELOPE guard is the one that has to reject this plane, which is
+            // Decision 34's rule for the suite — "a scene bounds a constant only where a
+            // committed test would change verdict" — read on the corpus. A candidate
+            // `supportFraction` already rejects floors nothing here, and THAT depends on
+            // `ringSupportMin`, which is itself `[owed]`.
+            func floorsTheEnvelopeBar(supportBar: Float) -> Bool { innerSupport >= supportBar }
+        }
+        struct Capture {
+            let name: String
+            let foodSamples: Int
+            let passes: [Pass]
+            var intended: Pass? { passes.min { abs($0.ringMedianMm) < abs($1.ringMedianMm) } }
+        }
+
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let (g, samples) = try #require(Self.prepared(name))
+            let candidates = try #require(Self.candidates(name))
+            let passes = candidates.enumerated().map { index, c -> Pass in
+                var byP: [Float: Float] = [:]
+                for p in Self.envelopePercentileSweep {
+                    byP[p] = Self.foodEnvelopeMm(geometry: g, normal: c.normal, d: c.d,
+                                                 percentile: p)
+                }
+                return Pass(index: index,
+                            ringMedianMm: SupportRegion.medianHeight(
+                                indices: samples.ring, geometry: g, normal: c.normal, d: c.d),
+                            innerSupport: Self.innerSupportFraction(
+                                samples: samples, geometry: g, normal: c.normal, d: c.d),
+                            envelopeByP: byP)
+            }
+            corpus.append(Capture(name: name, foodSamples: g.foodSampleCount, passes: passes))
+        }
+
+        // The suite's own reading of the same guard, re-taken at every percentile. The
+        // scenes carry their geometry and their plane, so only the percentile moves.
+        struct Scene {
+            let label: String
+            let requiresPass: Bool
+            let requiresFire: Bool
+            let foodSamples: Int
+            let envelopeByP: [Float: Float]
+        }
+        let scenes = Self.sceneReadings().map { r -> Scene in
+            var byP: [Float: Float] = [:]
+            for p in Self.envelopePercentileSweep {
+                byP[p] = Self.foodEnvelopeMm(geometry: r.geometry, normal: r.normal,
+                                             d: r.planeD, percentile: p)
+            }
+            return Scene(label: r.label,
+                         requiresPass: r.requiresPass.contains(.foodEnvelope),
+                         requiresFire: r.requiresFire.contains(.foodEnvelope),
+                         foodSamples: r.geometry.foodSampleCount,
+                         envelopeByP: byP)
+        }
+        #expect(scenes.count == 8, "a scene stopped producing ring statistics")
+
+        // THE ANCHOR. At the shipped percentile the parameterised reading must BE
+        // `SupportRegion.foodEnvelopeMm`, on every corpus candidate and every scene, or the
+        // sweep is measuring a different quantity.
+        let shippedP = try #require(Self.envelopePercentileSweep.first {
+            $0 == SupportRegion.foodEnvelopePercentile
+        }, "the percentile sweep no longer contains the shipped foodEnvelopePercentile")
+        for name in Self.captures {
+            let measured = try #require(Self.measurements(name))
+            let here = try #require(corpus.first { $0.name == name })
+            #expect(measured.count == here.passes.count)
+            let drift = "\(name): the parameterised envelope no longer reproduces"
+                + " SupportRegion.foodEnvelopeMm at foodEnvelopePercentile"
+            for (a, b) in zip(measured, here.passes) {
+                #expect(a.envelopeMm == b.envelopeByP[shippedP], "\(drift)")
+            }
+        }
+        for (r, s) in zip(Self.sceneReadings(), scenes) {
+            let sceneDrift = "\(s.label): the parameterised envelope no longer reproduces"
+                + " the scene's own reading at foodEnvelopePercentile"
+            #expect(r.envelopeMm == s.envelopeByP[shippedP], "\(sceneDrift)")
+        }
+
+        print("food samples the percentile is taken over:"
+              + " \(corpus.map { "\($0.name) \($0.foodSamples)" }.joined(separator: ", "))"
+              + "; scenes \(scenes.map { "\($0.label) \($0.foodSamples)" }.joined(separator: ", "))")
+
+        // MARK: the two brackets, re-denominated
+
+        struct Bracket {
+            let corpusFloor: Float
+            let corpusCeiling: Float
+            let suiteFloor: Float
+            let suiteCeiling: Float
+            var jointFloor: Float { max(corpusFloor, suiteFloor) }
+            var jointCeiling: Float { min(corpusCeiling, suiteCeiling) }
+            var jointWidth: Float { jointCeiling - jointFloor }
+            var empty: Bool { jointFloor >= jointCeiling }
+            var hasCorpusFloor: Bool { corpusFloor > -Float.greatestFiniteMagnitude }
+        }
+
+        // The above-surface candidates' inner-band support, which is what decides whether
+        // each of them reaches the envelope guard at all. It does NOT move with the
+        // percentile, so these are fixed regime boundaries rather than a second sweep — and
+        // every one of them sits inside `ringSupportMin`'s own bracket of (0, 0.362]
+        // (Decision 52), so all three regimes are settings the session may still choose.
+        let aboveSurfaceSupports = corpus.flatMap { c -> [Float] in
+            guard let intended = c.intended else { return [] }
+            return c.passes.filter { $0.index != intended.index && $0.ringMedianMm < 0 }
+                .map(\.innerSupport)
+        }.sorted()
+        print("above-surface candidates' inner support:"
+              + " \(aboveSurfaceSupports.map { fmt($0) }.joined(separator: ", "))"
+              + " — against ringSupportMin's corpus ceiling of 0.362 (Decision 52)")
+        // One bar per regime: below every above-surface support, between the two, above both.
+        let supportBars: [Float] = [0.15, 0.25, 0.35]
+
+        func bracket(at p: Float, supportBar: Float) -> Bracket {
+            // Decision 48's rule, re-read at this percentile. The CEILING is the intended
+            // candidate's own envelope — above it the guard rejects the fit this feature
+            // exists to produce. The FLOOR is the highest above-surface candidate's, the
+            // plane the guard is written to reject, counting only the ones that reach it.
+            var corpusCeiling = Float.greatestFiniteMagnitude
+            var corpusFloor = -Float.greatestFiniteMagnitude
+            for c in corpus {
+                guard let intended = c.intended, let ceiling = intended.envelopeByP[p] else { continue }
+                corpusCeiling = min(corpusCeiling, ceiling)
+                let above = c.passes.filter {
+                    $0.index != intended.index && $0.ringMedianMm < 0
+                        && $0.floorsTheEnvelopeBar(supportBar: supportBar)
+                }
+                if let floor = above.compactMap({ $0.envelopeByP[p] }).min() {
+                    corpusFloor = max(corpusFloor, floor)
+                }
+            }
+            let suiteCeiling = scenes.filter(\.requiresPass)
+                .compactMap { $0.envelopeByP[p] }.min() ?? Float.greatestFiniteMagnitude
+            let suiteFloor = scenes.filter(\.requiresFire)
+                .compactMap { $0.envelopeByP[p] }.max() ?? -Float.greatestFiniteMagnitude
+            return Bracket(corpusFloor: corpusFloor, corpusCeiling: corpusCeiling,
+                           suiteFloor: suiteFloor, suiteCeiling: suiteCeiling)
+        }
+
+        var brackets: [Float: [Float: Bracket]] = [:]
+        for p in Self.envelopePercentileSweep {
+            var row: [Float: Bracket] = [:]
+            for bar in supportBars { row[bar] = bracket(at: p, supportBar: bar) }
+            brackets[p] = row
+        }
+        // Decision 48's own reading is the middle regime: `ringSupportMin` above the first
+        // above-surface candidate's support and below the second's.
+        let decision48Bar: Float = 0.25
+
+        for p in Self.envelopePercentileSweep {
+            let b = try #require(brackets[p]?[decision48Bar])
+            print("p=\(fmt(p)):")
+            for c in corpus {
+                let intendedIndex = c.intended?.index
+                print("  \(c.name): "
+                      + c.passes.map {
+                          "pass \($0.index + 1)"
+                          + ($0.index == intendedIndex ? " INTENDED" : "")
+                          + " \(fmt($0.envelopeByP[p] ?? 0)) mm"
+                          + " (ring median \(fmt($0.ringMedianMm)) mm,"
+                          + " support \(fmt($0.innerSupport)))"
+                      }.joined(separator: ", "))
+            }
+            print("  scenes: " + scenes.map {
+                "\($0.label) \(fmt($0.envelopeByP[p] ?? 0)) mm"
+                + ($0.requiresPass ? " [pass]" : "") + ($0.requiresFire ? " [fire]" : "")
+            }.joined(separator: ", "))
+            print("  foodEnvelopeMinMm at ringSupportMin \(fmt(decision48Bar)):"
+                  + " corpus \(b.hasCorpusFloor ? fmt(b.corpusFloor) : "no floor")"
+                  + "…\(fmt(b.corpusCeiling)) mm,"
+                  + " suite \(fmt(b.suiteFloor))…\(fmt(b.suiteCeiling)) mm,"
+                  + " JOINT \(fmt(b.jointFloor))…\(fmt(b.jointCeiling)) mm"
+                  + " = \(fmt(b.jointWidth)) mm\(b.empty ? " EMPTY" : "")")
+            for bar in supportBars {
+                let r = try #require(brackets[p]?[bar])
+                print("    ringSupportMin \(fmt(bar)):"
+                      + " corpus floor \(r.hasCorpusFloor ? fmt(r.corpusFloor) : "none"),"
+                      + " joint \(fmt(r.jointWidth)) mm\(r.empty ? " EMPTY" : "")")
+            }
+        }
+
+        // MARK: what the percentile moves
+
+        // It cannot move the plane by moving the candidate SET — extraction never reads it —
+        // so the only route is `admissibility`, and at the shipped `foodEnvelopeMinMm = 0`
+        // that needs an envelope to cross zero. Report which candidates and scenes do.
+        let crossers = corpus.flatMap { c in
+            c.passes.compactMap { p -> String? in
+                let values = Self.envelopePercentileSweep.compactMap { p.envelopeByP[$0] }
+                guard let lo = values.min(), let hi = values.max(), lo < 0, hi >= 0 else { return nil }
+                return "\(c.name) pass \(p.index + 1) (\(fmt(lo))…\(fmt(hi)) mm)"
+            }
+        }
+        print("corpus candidates whose envelope crosses the shipped foodEnvelopeMinMm of"
+              + " \(fmt(SupportRegion.foodEnvelopeMinMm)) mm over the sweep:"
+              + " \(crossers.isEmpty ? ["none"] : crossers)")
+
+        let sceneCrossers = scenes.compactMap { s -> String? in
+            let values = Self.envelopePercentileSweep.compactMap { s.envelopeByP[$0] }
+            guard let lo = values.min(), let hi = values.max(), lo < 0, hi >= 0 else { return nil }
+            return "\(s.label) (\(fmt(lo))…\(fmt(hi)) mm)"
+        }
+        print("committed scenes whose envelope crosses it: "
+              + "\(sceneCrossers.isEmpty ? ["none"] : sceneCrossers)")
+
+        // The suite's reading of THIS constant at the SHIPPED bar, which is the one bound
+        // here that involves no owed value at all: a scene whose committed assertion
+        // requires the envelope guard to pass and whose envelope goes negative turns the
+        // suite red at `foodEnvelopeMinMm = 0`, whatever the session later sets.
+        func suiteRedAt(_ p: Float) -> [String] {
+            scenes.compactMap { s -> String? in
+                guard let e = s.envelopeByP[p] else { return nil }
+                let fires = e < SupportRegion.foodEnvelopeMinMm
+                if s.requiresPass && fires { return "\(s.label) fires (\(fmt(e)) mm)" }
+                if s.requiresFire && !fires { return "\(s.label) passes (\(fmt(e)) mm)" }
+                return nil
+            }
+        }
+        let suiteFloorP = Self.envelopePercentileSweep.filter { suiteRedAt($0).isEmpty }.min()
+        print("committed suite at the shipped foodEnvelopeMinMm of"
+              + " \(fmt(SupportRegion.foodEnvelopeMinMm)) mm:"
+              + Self.envelopePercentileSweep.map {
+                  let red = suiteRedAt($0)
+                  return " \(fmt($0)) \(red.isEmpty ? "green" : "RED — \(red.joined(separator: "; "))")"
+              }.joined(separator: ","))
+        print("suite-only floor on the percentile: \(fmt(suiteFloorP ?? 0))")
+
+        // MARK: the bracket on the percentile itself
+
+        // Monotone BY CONSTRUCTION — a percentile of a fixed multiset cannot fall as the
+        // percentile rises — which is what makes this bracket interpolable where Decision
+        // 46's radius and Decisions 51 and 52's wandering readings are not. Asserted rather
+        // than assumed, because `SupportRegion.percentile`'s 0.5 branch is a different
+        // function from the nearest-rank one either side of it.
+        var monotone = true
+        for c in corpus {
+            for pass in c.passes {
+                let values = Self.envelopePercentileSweep.compactMap { pass.envelopeByP[$0] }
+                for (a, b) in zip(values, values.dropFirst()) where b < a { monotone = false }
+            }
+        }
+        for s in scenes {
+            let values = Self.envelopePercentileSweep.compactMap { s.envelopeByP[$0] }
+            for (a, b) in zip(values, values.dropFirst()) where b < a { monotone = false }
+        }
+        print("every reading monotone in the percentile: \(monotone)")
+        let notMonotone = "the envelope readings are no longer monotone in the percentile —"
+            + " the bracket below may not be interpolated"
+        #expect(monotone, "\(notMonotone)")
+
+        func width(_ p: Float, _ bar: Float) -> Float { brackets[p]?[bar]?.jointWidth ?? 0 }
+        func empty(_ p: Float, _ bar: Float) -> Bool { brackets[p]?[bar]?.empty ?? true }
+
+        for bar in supportBars {
+            let live = Self.envelopePercentileSweep.filter { !empty($0, bar) }
+            let widest = live.max { width($0, bar) < width($1, bar) }
+            print("at ringSupportMin \(fmt(bar)), joint window by percentile: "
+                  + Self.envelopePercentileSweep.map {
+                      "\(fmt($0)) → \(fmt(width($0, bar))) mm" + (empty($0, bar) ? " EMPTY" : "")
+                  }.joined(separator: ", ")
+                  + "; NON-EMPTY over \(fmt(live.min() ?? 0))…\(fmt(live.max() ?? 0)),"
+                  + " widest \(fmt(width(widest ?? 0, bar))) mm at \(fmt(widest ?? 0)),"
+                  + " shipped \(fmt(shippedP)) \(empty(shippedP, bar) ? "OUTSIDE" : "inside")")
+        }
+
+        // MARK: what the sweep says
+
+        // THE ANCHOR ON THE FINDING, not just on the code. At the shipped percentile, in the
+        // `ringSupportMin` regime Decision 48 read it in, the corpus bracket is that
+        // decision's 7.154…21.041 mm and the joint window against the suite is its 1.079 mm.
+        // Everything below is a statement about how far that reading travels.
+        let shipped48 = try #require(brackets[shippedP]?[decision48Bar])
+        print("Decision 48 reproduced: corpus \(fmt(shipped48.corpusFloor))…"
+              + "\(fmt(shipped48.corpusCeiling)) mm, joint \(fmt(shipped48.jointWidth)) mm")
+        let reproduced = "Decision 48's foodEnvelopeMinMm bracket no longer reads"
+            + " 7.154…21.041 mm with a 1.079 mm joint window at the shipped percentile"
+            + " (\(fmt(shipped48.corpusFloor))…\(fmt(shipped48.corpusCeiling)),"
+            + " \(fmt(shipped48.jointWidth)) mm)"
+        #expect(abs(shipped48.corpusFloor - 7.154) < 0.01
+                && abs(shipped48.corpusCeiling - 21.041) < 0.01
+                && abs(shipped48.jointWidth - 1.079) < 0.01, "\(reproduced)")
+
+        // THE FIRST FINDING: the percentile is a UNIT and not a peer, and it re-denominates
+        // every bound ever quoted on `foodEnvelopeMinMm`. The corpus ceiling — the intended
+        // candidate's own envelope, the number Decisions 34 and 48 both bound the constant
+        // above by — runs from −19.415 mm at p = 0 to +26.038 mm at p = 1, so the constant's
+        // whole two-sided bracket moves 45 mm across a constant that was never varied.
+        let ceilings = Self.envelopePercentileSweep.compactMap {
+            brackets[$0]?[decision48Bar]?.corpusCeiling
+        }
+        let ceilingSpan = (ceilings.max() ?? 0) - (ceilings.min() ?? 0)
+        print("corpus ceiling on foodEnvelopeMinMm over the percentile:"
+              + " \(fmt(ceilings.min() ?? 0))…\(fmt(ceilings.max() ?? 0)) mm"
+              + " = \(fmt(ceilingSpan)) mm of movement")
+        let unitMoved = "the envelope bar's corpus ceiling no longer moves with the"
+            + " percentile (\(fmt(ceilingSpan)) mm) — it is not the unit this records"
+        #expect(ceilingSpan > 40, "\(unitMoved)")
+
+        // THE SECOND FINDING, and it is where the shipped value sits. In Decision 48's own
+        // regime the joint window is non-empty over 0.02…0.92 and the shipped 0.90 is the
+        // second-narrowest reading in it — 1.079 mm against 8.779 mm at p = 0.5, an 8.1×
+        // collapse, with only 0.92's 0.075 mm below it. So "the narrowest joint window in
+        // the feature" is a property of the DENOMINATOR and not of the constant it bounds,
+        // and the shipped percentile is very nearly the value that makes it narrowest
+        // without making it empty.
+        let widestWidth = Self.envelopePercentileSweep.filter { !empty($0, decision48Bar) }
+            .map { width($0, decision48Bar) }.max() ?? 0
+        print("joint window at the shipped percentile \(fmt(width(shippedP, decision48Bar))) mm"
+              + " against \(fmt(widestWidth)) mm at its widest"
+              + " — \(fmt(widestWidth / max(width(shippedP, decision48Bar), 1e-6)))×")
+        let notNarrow = "the shipped percentile no longer sits at a near-minimal joint"
+            + " window (\(fmt(width(shippedP, decision48Bar))) mm against"
+            + " \(fmt(widestWidth)) mm) — Decision 48's 1.079 mm is not the denominator's doing"
+        #expect(widestWidth > 4 * width(shippedP, decision48Bar), "\(notNarrow)")
+
+        // THE THIRD FINDING, and it is the one that moves another decision. Whether the
+        // corpus floors `foodEnvelopeMinMm` AT ALL depends on `ringSupportMin`, which
+        // Decision 48 never named: the two above-surface candidates carry 0.183 and 0.304
+        // inner-band support, both inside that constant's (0, 0.362] bracket. Below 0.183
+        // both reach the envelope guard and the floor is 8.958 mm — ABOVE the suite's
+        // ceiling, so the joint window is EMPTY at the shipped percentile. Between them the
+        // floor is Decision 48's 7.154 mm. Above 0.304 neither reaches it and there is NO
+        // floor, which is Decision 34's original reading restored. One constant, three
+        // regimes, all three admissible today.
+        let regimes = supportBars.map { bar -> String in
+            let b = brackets[shippedP]?[bar]
+            return "\(fmt(bar)) → \(b?.hasCorpusFloor == true ? "\(fmt(b?.corpusFloor ?? 0)) mm" : "no floor")"
+                + ", joint \(fmt(width(shippedP, bar))) mm\(empty(shippedP, bar) ? " EMPTY" : "")"
+        }
+        print("corpus floor at the shipped percentile by ringSupportMin: "
+              + regimes.joined(separator: "; "))
+        let conditional = "the corpus floor on foodEnvelopeMinMm no longer depends on"
+            + " ringSupportMin — Decision 48's floor is unconditional after all and this"
+            + " finding can be retired"
+        #expect(empty(shippedP, 0.15) && !empty(shippedP, 0.25)
+                && brackets[shippedP]?[0.35]?.hasCorpusFloor == false, "\(conditional)")
+
+        // THE FOURTH FINDING, and it is the only bound on this constant that needs nothing
+        // owed. At the SHIPPED `foodEnvelopeMinMm = 0` the committed suite is RED below
+        // p = 0.1: `overhangingFood` requires the envelope guard to pass and its envelope is
+        // negative at 0.05 and below, because a percentile that low reads the overhanging
+        // lobe rather than the loaf. That is a floor stated in no owed value at all — the
+        // fifth distinct way the suite has spoken to a constant here, after Decision 41's
+        // brackets, Decision 49's measured silence, Decision 50's structural silence and
+        // Decision 52's noise-limited identity.
+        let suiteFloorOnP = try #require(suiteFloorP)
+        let suiteFloorMoved = "the committed suite is no longer red below p = 0.1 at the"
+            + " shipped foodEnvelopeMinMm (floor \(fmt(suiteFloorOnP))) — the one bound on"
+            + " this constant that needs no owed value has moved"
+        #expect(suiteFloorOnP == 0.1, "\(suiteFloorMoved)")
+    }
+
     // MARK: - Req 4.5: what the fallback rate is a function of
 
     // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a

@@ -430,6 +430,30 @@ public enum SupportRegion {
     // feature's own acceptance capture (~11 % of the weighed bread's samples
     // overhang below the plate plane, against a 5 % bar). Denominated in millimetres
     // as Req 3.4 states, not as a sample-count fraction.
+    //
+    // [owed] (Decision 56), and the marker above is why it took this long to notice: it
+    // points at a REAL derivation, of the guard's KIND. Nothing derives the 0.90. This is
+    // the DENOMINATOR of `foodEnvelopeMinMm` below — the two are one measure, and every
+    // bound ever quoted on that constant is a reading at this one. Swept over its whole
+    // domain the corpus ceiling moves 45.453 mm (−19.415 mm at p = 0 to +26.038 mm at
+    // p = 1), so the bar's bracket travels further than the bar's own bracket is wide.
+    //
+    // Bracketed 0.1…0.92 and INTERPOLABLE — a percentile of a fixed multiset cannot fall as
+    // the percentile rises, so unlike Decision 46's radius or Decisions 51 and 52's
+    // wandering readings this one is monotone by construction. The FLOOR of 0.1 is the
+    // committed suite's at the SHIPPED bar and needs no owed value: below it
+    // `overhangingFood`'s envelope goes negative (−2.579 mm at 0.05) and a scene whose test
+    // requires this guard to pass fires. The CEILING of 0.92 is where the corpus floor on
+    // `foodEnvelopeMinMm` rises past the suite's ceiling.
+    //
+    // The shipped 0.90 is strictly inside, and it is where the joint corpus/suite window on
+    // `foodEnvelopeMinMm` is 1.079 mm — Decision 48's "narrowest in the feature", 8.1×
+    // narrower than the 8.779 mm the same window reads at p = 0.5. That narrowness is a
+    // property of THIS constant, not of the one it bounds.
+    //
+    // It cannot move the candidate SET — extraction never reads it — so the only route to
+    // the answer is `admissibility`, and there it is live: 4 of the 6 corpus candidates and
+    // 1 of the 8 committed scenes cross the shipped `foodEnvelopeMinMm = 0` over the sweep.
     public static let foodEnvelopePercentile: Float = 0.90
     // [owed] Decision 22, bounded from ABOVE only (Decision 34). The corpus's intended
     // candidate — highest ring support, taken before admissibility — reports an envelope
@@ -451,6 +475,17 @@ public enum SupportRegion {
     // top. Bracketed 7.154…21.041 mm by the corpus, and against Decision 41's suite
     // ceiling of 8.233 mm the joint window is 1.079 mm — the narrowest any owed constant
     // in this feature has. Still `[owed]` to the capture session, no longer floorless.
+    //
+    // BOTH OF THOSE ARE SLICES (Decision 56), at two constants that decision did not name.
+    // The first is `foodEnvelopePercentile` above, this bar's own denominator: the ceiling
+    // runs −19.415…26.038 mm over p ∈ [0, 1] and the joint window 8.779 mm at p = 0.5
+    // against 1.079 mm at the shipped 0.90. The second is `ringSupportMin`, because a floor
+    // is only a floor if the envelope guard is what has to reject the plane. The two
+    // above-surface candidates carry 0.183 and 0.304 inner-band support, both inside that
+    // constant's (0, 0.362] bracket, so at the shipped percentile there are THREE regimes:
+    // below 0.183 the floor is 8.958 mm and the joint window is EMPTY, between them it is
+    // Decision 48's 7.154 mm, and above 0.304 there is NO floor and Decision 34's original
+    // reading is restored. Set the percentile and `ringSupportMin` BEFORE this constant.
     public static let foodEnvelopeMinMm: Float = 0
     // [owed] from BELOW at 2, and UNBOUNDED above — the corpus cannot see this constant at
     // all (Decision 48). This said "Structural: table, support, one more", the second
