@@ -1190,3 +1190,135 @@ Asserting reductions and separations rather than absolute figures is the honest 
 `tools/fixture_slice.py`, `MedataCore/Tests/SupportPlaneTests/{DepthSlice.swift,SupportPlaneRegressionSliceTests.swift,Fixtures/}`, `Package.swift`, and the Reqs 6.2/7.1/7.2 notes in `requirements.md`. Task 26 gains its first real corpus measurements; task 27 gains a specific figure to check on device.
 
 ---
+
+## Decision 29: The corpus measurement pass settles four constants and cannot settle the rest
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Task 26 commits to determining the constants the design deliberately left unstated — every value marked `[owed]` in `SupportRegion`, plus Req 4.5's fallback-rate threshold, Req 5.1's device/replay tolerance and `fallbackPenalty` — by measurement against the fixture corpus rather than by assertion. Req 3.7 makes this binding for the sector trio in particular: the sector count, the per-sector support bar and the number of failing sectors that constitutes a rejection MUST be derived from measurement, and the derivation recorded.
+
+Two things narrowed the available corpus after the task was written. Task 17 established that the promoted fitter never runs on Nutrition5k: pre-checkpoint ingestion stamps every plate `mixture`, `run_summary.json` records `single_dominant: 0`, and — decisively — pre-checkpoint ingestion runs no segmenter at all, so those 3,490 fixtures carry no food mask and `fitFoodSupportPlane` has no input on them. N5k becomes available only after model-production Bucket C lands and ingestion re-runs with `--checkpoint`. And the 2026-08-05 device session produced no usable capture: all 22 single-view attempts refused and all three successes were two-view, which Req 7.11 excludes as evidence.
+
+What remains is the two committed depth slices from task 22 — `1785135663727` and `1785901032716`, both flat bread on a plate at ~337 mm. `SupportPlaneCorpusMeasurementTests` is the instrumented pass `prerequisites.md` asks for, run over them with the guards disabled: per-candidate `supportFraction`, `bandMedianMm`, `supportVisibility`, per-sector support fractions, per-sector inner-band medians, and the raw signed-height distribution.
+
+### Decision
+
+Four constants are settled by the pass and their provenance markers change; the rest stay `[owed]` on named captures.
+
+**Settled.**
+
+- `ringInnerMm = 8` — confirmed, with a stated range envelope. Measured `mmPerPx` is 1.862 and 1.839 at median food depths of 338.9 mm and 336.9 mm, so the ~4 px depth smear spans **7.45 mm and 7.36 mm** — inside 8 mm on both. Because the smear is a fixed pixel count, `smear_mm = 4z/f_d` with `f_d ≈ 182 px`, so 8 mm covers capture range up to **≈ 365 mm** and no further. The constant is correct for the corpus and for ordinary handheld range; beyond ~365 mm it must become `max(ringInnerMm, 4 × mmPerPx)`.
+- `ringMinSamples = 200`, per band — confirmed with large margin. Measured band counts are `[1120, 1132, 1213]` and `[1294, 1347, 1392]`, **5.6× to 7.0×** the floor. Decision 20's derivation (`ringSectorCount × 25`) is validated from the other end too: inner-band sectors carry **102–184** samples apiece against the 25 the derivation targets, so a 0.5 sector bar has binomial σ ≈ 0.042 rather than the σ ≈ 0.19 that made the guard noise at the old floor of 60.
+- `supportVisibilityMin` is **firable**, and task 26's argument that it is not was based on the wrong region. That argument computes the ratio over the contact ring (8–25 mm), where a support strip thinner than `ringInnerMm` is indeed invisible. The implementation computes it over the **annulus** (0–50 mm), which begins at the food boundary and therefore does see a thin strip. Measured ceilings — every annulus sample an inlier — are **1.710 and 1.426**, and the highest-support candidate achieves **0.880 and 1.032**, so 0.15 sits at roughly a tenth of the achievable range. The guard is live; its *value* is still owed to prerequisites capture 4.
+- The **Decision 46 tension is resolved in kind, not in value**. Decision 46's 20 mm bar is a whole-plane residual over a matte table; `ringBandMm = 5` is a per-sample window. They are not the same quantity and were never in conflict. The per-sample figure is measured below and is what `ringSupportMin` actually rests on.
+
+**Not settled, and why.** `ringSupportMin`, `sectorSupportMin`, `ringSectorCount`, `minSupportingSectors`, `ringSupportMarginMin`, `ringOuterMm`, `bandStepMaxMm`, `foodEnvelopeMinMm`, `minCandidateSamples`, `minAcceptedExtentPx`, `supportVisibilityMin`, Req 4.5's fallback-rate threshold, Req 5.1's tolerance and `fallbackPenalty` all stay `[owed]`. The corpus cannot set them for two measured reasons.
+
+*The corpus contains no clean correct-fit case.* On `1785135663727` the plate-top candidate reads a ring median of −0.93 mm and a support fraction of 0.629, but its per-sector inner-band medians are `[+3.7, −0.4, +0.8, +1.4, −6.8, −32.6, −9.7, +3.8]`: sectors 4–6 form a contiguous arc sitting up to 32.6 mm below the plate, so the ring genuinely escapes onto the table over ~135°. On `1785901032716` the highest-support candidate is **the table, not the plate** — its per-sector medians are `[+16.6, +4.4, +3.0, +6.0, +19.8, +18.0, +4.7, +0.4]`, with three sectors a plate-height above it. Both captures are near-instances of the Req 3.6 silent-failure geometry rather than clean successes, so a bar fitted to make them pass would be fitted to the wrong side.
+
+*Per-sample noise on a flat surface straddles `ringBandMm`.* The tightest inner-band mode — robust σ over samples within 15 mm of the band median, taken across every candidate so a contaminated winner cannot set it — measures **3.44 mm** on `1785135663727` (over 75.5 % of the band) and **6.98 mm** on `1785901032716` (over 92.0 %). At essentially the same range, 338.9 mm against 336.9 mm, that is a 2× disagreement, so it is a *surface* difference and not a range one — which is what Decision 46's matte-table evidence predicts. `ringBandMm = 5` falls between the two, and `ringSupportMin = 0.6` is a statement about exactly this distribution.
+
+`prerequisites.md`'s suggestion to "capture at least one on a matte surface" is therefore promoted to a requirement of the capture session.
+
+### Rationale
+
+The alternative to recording a partial result is to set the numbers anyway, and the corpus actively argues against that. A bar tuned until both committed captures pass would be tuned on two captures whose rings demonstrably straddle the plate edge — it would encode "admit a ring that has escaped onto the table" as the definition of a correct fit, which is the precise defect Req 3.6 exists to prevent and the circularity Req 3.7 forbids.
+
+The four settled constants are settled because each rests on a measurement whose answer does not depend on which plane is correct. Sample counts, millimetres per depth pixel, and the ratio of annulus samples to food samples are properties of the capture geometry. They would read the same on a clean capture, so a two-capture corpus is enough for them, where it is not enough for a threshold that must separate two populations the corpus only supplies one side of.
+
+Promoting the matte-surface capture from suggestion to requirement follows directly from the 2× noise spread. Before the measurement it was a hypothesis that surface material dominates depth noise at this range; the two captures are now a demonstration, and `ringSupportMin` cannot be derived until the spread is characterised rather than merely observed.
+
+### Alternatives Considered
+
+- **Set every constant from the two committed slices** - Fit each bar until both captures admit their plate-top candidate, and record that as the corpus derivation - Rejected under Req 3.7. Both captures' rings cross the plate edge, so the fit would be to the failure side; it would also make `minSupportingSectors ≤ 5`, which admits the Decision 18 case outright (see Decision 30).
+- **Run the pass over Nutrition5k for a larger corpus** - Call `FixtureRunner.fitSupportPlane` directly on the 3,490 ingested fixtures, bypassing the `mixture` estimator-path stamp - Rejected because it is not merely blocked by routing: pre-checkpoint ingestion runs no segmenter, N5k ships no ground-truth mask, and `fitFoodSupportPlane` requires a food mask. There is no input to give it until Bucket C.
+- **Defer the whole of task 26 to the capture session** - Record nothing until captures 1–6 exist - Rejected because four constants are answerable now, two open `prerequisites.md` items are closed by the same pass, and the pass itself is the instrument the session needs. Deferring would mean building it twice.
+- **Relax `ringSupportMin` to admit the measured 0.480** - Take the corpus's best support fraction as the achievable ceiling and set the bar below it - Rejected because 0.480 was scored by the **table** plane on `1785901032716`. Setting the bar below it admits precisely the wrong surface.
+
+### Consequences
+
+**Positive:**
+
+- Four constants move from asserted to measured, and two `prerequisites.md` items — the `ringInnerMm` smear envelope and the Decision 46 tension — are closed without a capture session.
+- The instrumented pass exists, is committed, and runs from a clean checkout, so the capture session feeds an instrument rather than starting one.
+- The reason both committed captures fall back is now attributed to a measured geometry — rings crossing the plate edge — rather than left as an unexplained placeholder effect.
+- The assertions are written so that new evidence breaks them: if a future capture stops straddling `ringBandMm`, `supportSurfaceNoiseStraddlesTheBand` fails and forces the derivation to be revisited rather than silently inherited.
+
+**Negative:**
+
+- Task 26 cannot be completed, and the remaining `[owed]` constants are now known to need specific captures rather than merely more data.
+- The measurement pass lives in the test target because `SupportRegion`'s internals are not public; anyone wanting the numbers must run `swift test`, not a CLI.
+- `1785901032716` yields no usable support-surface noise figure at all — its tightest mode spans plate and table — so the 3.44 mm figure rests on a single capture.
+- The `ringInnerMm` range envelope of ~365 mm is stated but not enforced; a capture beyond it silently uses a ring inside the smear until the adaptive form lands.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (new), the provenance markers in `MedataCore/Sources/SupportPlane/SupportRegion.swift` and `design.md`, `prerequisites.md`, and task 26's detail in `tasks.md`. No shipped behaviour changes: no constant's value moves.
+
+---
+
+## Decision 30: The sector guard discards the sign that separates its two failure modes
+
+**Date**: 2026-08-05
+**Status**: proposed
+
+### Context
+
+Req 3.6 adds the sector measure because an aggregate support fraction cannot distinguish a ring lying wholly on the surface the food rests on from one that has crossed onto the surrounding surface. Decision 18 states the case: a ring 65 % on the table is 100 % table across roughly 235° and 0 % across the remainder, scores 0.65 in aggregate, and reproduces the defect this feature exists to remove while recording a ring median of approximately zero.
+
+Decision 29's measurement pass ran that guard against the two committed captures and found it does not separate the case it was written for. `SupportRegion.ringStatistics` counts an inner-band sector as supporting when the share of its samples with `|height| ≤ ringBandMm` reaches `sectorSupportMin`. The absolute value is taken, so the count is blind to whether a failing sector sits above the candidate plane or below it.
+
+Measured, at the shipped trio of `ringSectorCount = 8`, `sectorSupportMin = 0.5`, `minSupportingSectors = 6`:
+
+| Capture | Candidate | Supporting sectors | Failing-sector inner medians |
+|---|---|---|---|
+| `1785135663727` | plate top (ring median −0.93 mm) | 5 of 8 | −6.8, −32.6, −9.7 mm |
+| `1785901032716` | table (ring median +3.04 mm) | 5 of 8 | +16.6, +19.8, +18.0 mm |
+
+Both score 5. Decision 18's geometry produces a supporting count within ±1 of `0.65 × ringSectorCount`, i.e. 4 to 7, and 5 sits inside it. No value of `minSupportingSectors` admits the first row and rejects the second.
+
+The sign does separate them, and it separates them cleanly. Where the candidate is the raised support and the ring has escaped downward, failing sectors read strongly **negative** — the surrounding surface is below. Where the candidate is the surrounding surface and part of the ring lies on the support, failing sectors read strongly **positive**. The two rows differ by ~36 mm in the failing sectors while agreeing exactly in the count the guard uses.
+
+### Decision
+
+Record the finding and propose, without implementing, that the per-sector measure carry the signed median alongside the unsigned support fraction, and that the guard reject on *negative* failing sectors — a support surface whose ring has left it — separately from *positive* ones, which indicate the candidate is below the support rather than on it.
+
+The change is not made here. Task 26 is scoped to determining constants, and this alters what the sector measure computes, which is a design change. It is recorded as proposed so that the capture session measures the signed quantity — `prerequisites.md` already asks for per-sector support fractions, and the sign costs nothing to record alongside them — and so that the sector trio is not set against a measure that is about to change.
+
+### Rationale
+
+Setting `ringSectorCount`, `sectorSupportMin` and `minSupportingSectors` against the current unsigned measure would spend the capture session deriving constants for a guard the same session's data would then show needs replacing. The measurement that reveals the problem is already in hand; deriving the trio first and discovering the blindness afterwards is the more expensive order.
+
+The signed form is also what the rest of the design already relies on. Req 3.1 defines the ring measure as a *signed* median precisely because "the table plane reads strongly positive; a plane on a vessel rim reads negative", and Decision 22 restored the signed `|median|` admission guard on the grounds that "the support fraction is unsigned and cannot separate a plane above the ring from one below it". The sector measure is the same statistic computed per arc, and it lost the sign the whole-ring version was careful to keep.
+
+Leaving it as `proposed` rather than accepted reflects that the corpus is two captures. The sign separation is 36 mm and unambiguous on both, but a rule for rejecting on signed sectors needs a threshold, and that threshold has the same evidence problem as every other `[owed]` constant.
+
+### Alternatives Considered
+
+- **Raise `minSupportingSectors` to 7 or 8** - Demand near-total sector support so the Decision 18 case at 4–7 is excluded - Rejected because it excludes the correct plate plane too: `1785135663727` scores 5 with a genuinely escaped ring, and a clean capture has not been measured, so there is no evidence any real capture reaches 7. It trades a false accept for a guaranteed false reject.
+- **Increase `ringSectorCount` for finer angular resolution** - More arcs make a contiguous 235° failure more visible - Rejected because it does not address the blindness. Decision 18's case scales with the count: at 16 sectors it produces ~10 supporting, and a correct-but-escaped ring produces ~10 as well. It also halves the samples per sector, from ~140 towards the noise floor Decision 20 set the 200 sample floor to avoid.
+- **Require contiguity of the failing arc rather than a count** - Reject when failing sectors form one contiguous run - Rejected as insufficient on the measured data: both rows have contiguous failing runs (sectors 4–6 in the first, 4–5 plus 0 wrapping in the second). Contiguity describes both failure modes; only the sign distinguishes them.
+- **Implement the signed measure now** - Change `ringStatistics` in this task and set the trio against it - Rejected as out of scope and premature. It changes a persisted diagnostic (Req 6.4), and the threshold it needs is owed to the same captures as the constants it would replace.
+
+### Consequences
+
+**Positive:**
+
+- The capture session will record the signed per-sector medians, so the evidence for or against this proposal arrives with the same six captures rather than requiring a further sitting.
+- The sector trio is not set against a measure with a known blind spot.
+- The finding is attributable: a supporting-sector count of 5 currently means two opposite things, and the record says which captures show each.
+
+**Negative:**
+
+- Req 3.6's guard remains, in its shipped form, unable to separate the case it cites — and the feature ships with that gap open until the proposal is decided.
+- A proposed decision that the capture session does not resolve leaves the sector trio blocked on a design question as well as on evidence.
+- Persisting a signed per-sector statistic would widen `RingStatistics` and the `EstimationAttemptRecord` fields task 12 added, after those were settled.
+
+### Impact
+
+No code changes. `SupportPlaneCorpusMeasurementTests` records the measurement; `prerequisites.md` adds the sign to the session's dump list. If accepted, it would touch `SupportRegion.ringStatistics`, `RingStatistics`, `SupportRegion.admissibility` and the Req 6.4 persisted fields.
+
+---

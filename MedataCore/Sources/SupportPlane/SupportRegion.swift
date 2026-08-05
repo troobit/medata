@@ -77,11 +77,16 @@ public enum SupportRegion {
     //
     // Provenance markers, per the design's Components section:
     //   [derived]   derivation recorded in design.md
+    //   [measured]  derivation confirmed against the committed corpus (Decision 29)
     //   [inherited] from a named, already-tested constant
     //   [owed]      a task 26 corpus measurement — shipping an [owed] value
     //               as-asserted is a defect, and Req 3.7 says so for the sector trio.
 
-    // [derived] ~4 px of depth smoothing ≈ 8 mm at 350 mm range.
+    // [measured] Decision 29. The ~4 px depth smear spans 7.45 mm and 7.36 mm on the
+    // two committed slices, at median food depths of 338.9 mm and 336.9 mm — inside
+    // 8 mm on both. The smear is a fixed PIXEL count, so `smear_mm = 4z/f_d` with
+    // f_d ≈ 182 px: 8 mm covers capture range to ≈ 365 mm and no further. Beyond that
+    // this must become `max(ringInnerMm, 4 × mmPerPx)`.
     public static let ringInnerMm: Float = 8
     // [owed] must sit inside the smallest measured plate margin.
     public static let ringOuterMm: Float = 25
@@ -89,19 +94,33 @@ public enum SupportRegion {
     public static let ringBandCount = 3
     // [owed] below the smallest measured rim step.
     public static let bandStepMaxMm: Float = 6
-    // [owed] prerequisites capture 4 is the only source.
+    // [owed] prerequisites capture 4 is the only source for the VALUE. Its firability
+    // is settled (Decision 29): the ratio is computed over the ANNULUS, which begins at
+    // the food boundary and so does see a support strip thinner than `ringInnerMm`.
+    // Measured ceilings — every annulus sample an inlier — are 1.710 and 1.426, and the
+    // highest-support candidate reaches 0.880 and 1.032, so 0.15 is roughly a tenth of
+    // the achievable range rather than unreachable.
     public static let supportVisibilityMin: Float = 0.15
     // [inherited] LiDARPlaneFitter.inlierBandMm = 5.
     public static let ringBandMm: Float = 5
     // [owed] must be measured against the support-surface noise distribution: a
-    // ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm, which is in tension with the
-    // matte-table evidence behind Decision 46's 20 mm bar (design §The ring crossing
-    // the support's edge).
+    // ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm. The Decision 46 tension is
+    // resolved in KIND (Decision 29) — that 20 mm bar is a whole-plane residual over a
+    // matte table, not a per-sample σ — but not in VALUE: the measured per-sample σ on
+    // a flat surface is 3.44 mm on one committed slice and 6.98 mm on the other, at
+    // 338.9 mm and 336.9 mm respectively. A 2× spread at the same range is a surface
+    // difference, and ringBandMm = 5 falls between the two. A matte-surface capture is
+    // required before this can be set (prerequisites, capture session).
     public static let ringSupportMin: Float = 0.6
     // Sector measure (Req 3.6, Decisions 18–20). Equal arcs about the food-mask
     // centroid; empty sectors count as neither supporting nor failing, and the bar is
     // absolute, so a ring heavily clipped by the frame edge fails towards fallback.
-    // [owed] Req 3.7 explicitly forbids shipping these as asserted values.
+    // [owed] Req 3.7 explicitly forbids shipping these as asserted values — and
+    // Decision 30 records that the measure itself is blind where it matters: the count
+    // takes |height|, so a correct plane whose ring escaped DOWNWARD onto the table
+    // (failing sectors −6.8…−32.6 mm) and a table plane with part of its ring on the
+    // plate (failing sectors +16.6…+19.8 mm) both score 5 of 8. Setting the trio waits
+    // on that proposal as well as on the captures.
     public static let ringSectorCount = 8
     public static let sectorSupportMin: Float = 0.5
     public static let minSupportingSectors = 6
@@ -111,10 +130,15 @@ public enum SupportRegion {
     // [owed] Decision 22 — the Req 3.3 comparator. "Below the lowest admissible
     // candidate" compares a set minimum against itself and cannot fire.
     public static let escapeBandMm: Float = 30
-    // [derived] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has binomial
+    // [measured] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has binomial
     // σ ≈ 0.10 and separates a supported sector (p ≈ 0.9) from a crossed one
     // (p ≈ 0.3) by > 4σ. At the old floor of 60, sectors averaged 7 samples
     // (σ ≈ 0.19) and the guard was noise (Decision 20). Holds PER radial band.
+    //
+    // Confirmed against the corpus with large margin (Decision 29): measured band
+    // counts are [1120, 1132, 1213] and [1294, 1347, 1392], 5.6× to 7.0× the floor,
+    // and inner-band sectors carry 102–184 samples apiece against the 25 the
+    // derivation targets — binomial σ ≈ 0.042 at the 0.5 bar.
     public static let ringMinSamples = 200
     // [inherited] ringBandMm. The SIGNED admission guard of Req 3.2 — the support
     // fraction is unsigned and cannot separate a plane above the ring (table, +)

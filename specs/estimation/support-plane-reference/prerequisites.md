@@ -39,13 +39,15 @@ before it is written.
   fall back and fail Req 7.2. The guard is replaced by a millimetre-denominated upper-envelope
   test (Decision 22); the fraction is gone.
 
-- [ ] **Is `ringInnerMm = 8` inside the depth smear at real capture distance?** The smear is a
-  fixed count of depth *pixels* (~4), so its size in millimetres scales with range — about
-  6 mm at 300 mm but about 10 mm at 500 mm. Read the median food depth off both pulled bundles
-  and state the capture-distance envelope. If 8 mm sits inside the smear at ordinary handheld
-  range, the radius has to become `max(ringInnerMm, kSmearPx × mmPerDepthPixel)`. This also
-  bears on Decision 14, which rejected shrinking `ringInnerMm` on the grounds it was "already at
-  the ~7 mm depth smear floor" — true at one distance only.
+- [x] **Is `ringInnerMm = 8` inside the depth smear at real capture distance?**
+  **Answered 2026-08-05 by the task 26 measurement pass (Decision 29) — no, and the envelope
+  is ≈ 365 mm.** Measured on both committed slices: `mmPerPx` 1.862 and 1.839 at median food
+  depths of 338.9 mm and 336.9 mm, so the ~4 px smear spans **7.45 mm and 7.36 mm** — inside
+  8 mm on both, but with under 8 % to spare. Since `smear_mm = 4z/f_d` and `f_d ≈ 182 px`,
+  8 mm covers range to **≈ 365 mm** and no further; at 500 mm the smear is ~11 mm. The
+  radius must become `max(ringInnerMm, 4 × mmPerPx)` before any capture beyond ~365 mm is
+  trusted. Decision 14's "already at the ~7 mm depth smear floor" is confirmed at this
+  corpus's range and only there.
 
 - [ ] **Measure your own plates with a ruler.** Rim height above the well, and well diameter,
   for the plates you actually eat off. The design's rimmed-plate exposure table uses assumed
@@ -137,22 +139,29 @@ bundle is dearer than plating rice once on the current build.
 criterion (Req 7.2). Req 7.8 is on-device verification, which by definition must run against the
 built feature and cannot be satisfied by a stored bundle.
 
-**Dump ring statistics, not just volumes.** Run all six through an instrumented pass with the
-guards **disabled**, recording per-candidate `supportFraction`, `bandMedianMm`,
-`supportVisibility`, the **per-sector** support fractions, and the raw signed heights (the
-noise distribution below is computed from these; there is no MAD statistic to dump —
-Decision 19 deleted it with its guard). Setting `ringSupportMin`,
+**Dump ring statistics, not just volumes.** The instrumented pass exists —
+`SupportPlaneCorpusMeasurementTests`, run by `swift test --filter SupportPlaneCorpusMeasurement`
+— so this is now a matter of cutting slices for the six captures with `tools/fixture_slice.py`
+and adding their stems to its `captures` list. It runs with the guards **disabled** and records
+per-candidate `supportFraction`, `bandMedianMm`, `supportVisibility`, the **per-sector** support
+fractions, the **per-sector signed inner-band medians** (added for Decision 30 — the sign is what
+separates a correct plane whose ring escaped from a table plane, and the unsigned count cannot),
+and the raw signed heights (the noise distribution below is computed from these; there is no MAD
+statistic to dump — Decision 19 deleted it with its guard). Setting `ringSupportMin`,
 `ringSupportMarginMin`, `supportVisibilityMin` and the three sector constants from the observed
 separation is the point of the session; asserting them first and then measuring the fallback rate
 they cause is circular, and Req 3.7 now forbids it for the sector constants. Task 26 already
 commits to a corpus measurement pass — this feeds six inputs into the pass that exists for four
 outputs.
 
-Record the support-surface **depth-noise distribution** in the same pass. `ringSupportMin = 0.6`
-over a ±5 mm band implies σ_z ≲ 5.9 mm, which is in tension with the matte-table evidence behind
-Decision 46's 20 mm residual bar. If your table's real noise exceeds ~6 mm, every capture on it
-falls back for a reason that has nothing to do with plane selection — capture at least one on a
-matte surface to find out.
+**A matte-surface capture is now REQUIRED, not suggested.** `ringSupportMin = 0.6` over a ±5 mm
+band implies σ_z ≲ 5.9 mm. The measurement pass put per-sample σ on a flat surface at **3.44 mm**
+on `1785135663727` and **6.98 mm** on `1785901032716` — at 338.9 mm and 336.9 mm, so the same
+range, and a 2× spread that can only be the surface. `ringBandMm = 5` falls between them, which
+means `ringSupportMin` cannot be derived at all until the spread is characterised (Decision 29).
+Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
+was never the same quantity — but the underlying worry it encodes is now measured and real. Take
+at least one of the six on a matte surface, and note the surface material for each.
 
 ### Recording a capture
 

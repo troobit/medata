@@ -275,33 +275,42 @@ public struct RingStatistics: Sendable, Equatable {
 
 public enum SupportRegion {
     // Radii in MILLIMETRES, converted per capture from median food depth.
-    // Provenance: [derived] derivation in this document; [inherited] from a named
+    // Provenance: [derived] derivation in this document; [measured] derivation
+    // confirmed against the committed corpus (Decision 29); [inherited] from a named
     // tested constant; [owed] a task 26 corpus measurement — shipping an [owed]
     // value as-asserted is a defect, and for the sector trio Req 3.7 says so.
-    public static let ringInnerMm: Float = 8   // [derived] ~4 px smear ≈ 8 mm at 350 mm;
-                                               // range envelope owed (prerequisites)
+    public static let ringInnerMm: Float = 8   // [measured] 4 px smear is 7.45 and
+                                               // 7.36 mm at 338.9 and 336.9 mm; the
+                                               // envelope is ≈ 365 mm (Decision 29)
     public static let ringOuterMm: Float = 25  // [owed] must sit inside the smallest
                                                // measured plate margin
     public static let ringBandCount = 3        // structural: inner/mid/outer
     public static let bandStepMaxMm: Float = 6 // [owed] below the smallest measured rim step
-    public static let supportVisibilityMin: Float = 0.15 // [owed] capture 4 is the only source
+    public static let supportVisibilityMin: Float = 0.15 // [owed] capture 4 sets the value;
+                                               // firable — the ratio is over the annulus,
+                                               // ceilings 1.710/1.426 (Decision 29)
     public static let ringBandMm: Float = 5    // [inherited] inlierBandMm = 5
-    public static let ringSupportMin: Float = 0.6 // [owed] vs support-surface noise
-                                                  // (Decision 46 tension; task 26)
+    public static let ringSupportMin: Float = 0.6 // [owed] measured per-sample σ is
+                                                  // 3.44 and 6.98 mm at the same range —
+                                                  // the corpus straddles ringBandMm and
+                                                  // a matte capture is needed (Decision 29)
     // Sector measure (Req 3.6, Decisions 18–20). Sectors are equal arcs about the
     // food-mask centroid; empty sectors count as neither supporting nor failing,
     // and the bar is absolute, so heavy frame clipping fails towards fallback.
-    public static let ringSectorCount = 8            // [owed] Req 3.7
-    public static let sectorSupportMin: Float = 0.5  // [owed] Req 3.7
-    public static let minSupportingSectors = 6       // [owed] Req 3.7
+    public static let ringSectorCount = 8            // [owed] Req 3.7; and Decision 30 —
+    public static let sectorSupportMin: Float = 0.5  // the count takes |height|, so a
+    public static let minSupportingSectors = 6       // correct plane whose ring escaped
+                                                     // and a table plane both score 5 of 8
     public static let ringSupportMarginMin: Float = 0.15 // [owed]
     public static let escapeBandMm: Float = 30       // [owed] Decision 22 — the Req 3.3
                                                      // comparator; "below the lowest
                                                      // admissible candidate" cannot fire
-    // [derived] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has
+    // [measured] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has
     // binomial σ ≈ 0.10; at the old floor of 60, sectors averaged 7 samples
     // (σ ≈ 0.19) and the guard was noise (Decision 20). Holds per radial band;
     // outer bands always exceed the inner, so one constant covers all three.
+    // Corpus bands hold [1120, 1132, 1213] and [1294, 1347, 1392] — 5.6–7.0× the
+    // floor — and inner-band sectors carry 102–184 apiece (Decision 29).
     public static let ringMinSamples = 200
     // [derived] Decision 22 — replaces foodAboveFractionMax, which rejected this
     // feature's own acceptance capture. Reject when the plane lies above the
@@ -423,6 +432,8 @@ No new refusals — every rejection resolves to the fallback, which is pre-featu
 
 Three figures the criteria state do **not** reproduce and are superseded by Decision 28 — Req 6.2's +18…+26 mm, Req 7.1's 235.96 cm³ and Req 7.2's ~200 cm³. Reqs 7.3 and 7.4 stay blocked on captures that do not exist rather than on code.
 
-**Numbers this design owes the requirements** — to be fixed during implementation against the fixture corpus, not asserted now. Every `SupportRegion` constant is annotated `[derived]`, `[inherited]`, or `[owed]`; the `[owed]` ones are task 26 corpus measurements, with the sector trio under Req 3.7's explicit ban on shipping asserted values, and each measured value lands with its derivation recorded in `decision_log.md` (Req 3.7). Beyond the constants: the Req 4.5 fallback-rate defect threshold, Req 5.1's device/replay plane tolerance and named fixture, Req 7.6's latency and memory budget, and `fallbackPenalty`. Each is a measurement, and stating a value here would be inventing evidence.
+**Numbers this design owes the requirements** — to be fixed during implementation against the fixture corpus, not asserted now. Every `SupportRegion` constant is annotated `[derived]`, `[measured]`, `[inherited]`, or `[owed]`; the `[owed]` ones are task 26 corpus measurements, with the sector trio under Req 3.7's explicit ban on shipping asserted values, and each measured value lands with its derivation recorded in `decision_log.md` (Req 3.7). Beyond the constants: the Req 4.5 fallback-rate defect threshold, Req 5.1's device/replay plane tolerance and named fixture, Req 7.6's latency and memory budget, and `fallbackPenalty`. Each is a measurement, and stating a value here would be inventing evidence.
+
+**What the corpus pass settled (Decision 29).** `SupportPlaneCorpusMeasurementTests` is the instrumented, guards-disabled pass over the committed slices. It confirms `ringInnerMm = 8` with a stated ≈ 365 mm range envelope, confirms `ringMinSamples = 200` per band at 5.6–7.0× margin, and establishes that `supportVisibilityMin` is firable — the ratio is computed over the annulus, not the ring, so it does see a thin support strip. It cannot settle the rest, for two measured reasons: neither committed capture is a clean correct fit (both rings cross the plate edge — per-sector inner medians reach −32.6 mm on one and +19.8 mm on the other), and per-sample noise on a flat surface measures 3.44 mm on one and 6.98 mm on the other at the same range, straddling `ringBandMm`. Decision 30 records that the sector count is additionally blind to the sign that distinguishes the two cases.
 
 **Device-gated:** Req 7.6's budget, Req 7.8's weighed on-device verification, and Req 7.10's weighed single-view rimmed-plate capture — no such capture exists yet (the 2026-08-05 session's lipped-plate capture landed on the two-view path; prerequisites capture 4 is the retake). Per Req 7.11, a weighed capture counts as evidence only where it completed on the single-view LiDAR path — check `capturePath` before grading anything against it.
