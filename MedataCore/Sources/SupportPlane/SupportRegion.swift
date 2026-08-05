@@ -209,26 +209,33 @@ public enum SupportRegion {
     // in the corpus fails for want of residue, so there is no measured floor and the
     // lower end stays owed to the capture session.
     public static let minResidueSamples = 500
-    // [owed] minimum bbox extent of the winning inlier component, in depth pixels —
+    // [owed] minimum bbox extent of the winning inlier component, in MILLIMETRES —
     // a sliver gives a badly conditioned normal (Req 2.3).
     //
-    // Bracketed by the corpus at 13…26 and no tighter (Decision 32). Measured extents
-    // are 123, 76, 12 px and 155, 44, 26 px: the 12 px candidate is a 153-sample sliver
-    // sitting 32.9 mm off the ring and is rejected here, which is the guard working, so
-    // the floor is above 12. The ceiling is soft — 26 px is the smallest extent on a
-    // candidate that reaches the later guards, and that candidate is rejected on
-    // `supportFraction` anyway, so the corpus never shows a 26 px candidate deserving
-    // admission. 24 sits inside the bracket with 2 px to spare, which is thin enough
-    // that a capture with smaller surfaces could lose a legitimate candidate here.
+    // Denominated in millimetres, not pixels, since Decision 37. It was `24 px`, and
+    // that was the only bar in `admissibility` measured in pixels while every other one
+    // is millimetres or a dimensionless fraction — which is precisely what Req 5.1's
+    // transfer across depth grids rests on. Halve the grid and pixel extents halve with
+    // it, so a surface admitted at 44 px was rejected as a sliver at 22 px by the same
+    // bar (Decision 35). Converting through `mmPerPx`, the conversion the ring radii
+    // already use, removes the dependence: the same physical surface measures the same
+    // millimetres on any grid, and the corpus confirms it holds to 0.5 mm across a 2×
+    // halving where the pixel count halves exactly.
     //
-    // And that bracket is a 256×192 bracket (Decision 35). This is the ONLY bar in
-    // `admissibility` denominated in pixels — every other one is millimetres or a
-    // dimensionless fraction, which is what Req 5.1's transfer across depth grids rests
-    // on. Halve the grid and extents halve with it: a surface measuring 44 px natively
-    // measures 22 px and is rejected as a sliver by the same 24. Re-derive it against
-    // `mmPerPx`, or state the grid it is denominated on, before any capture at another
-    // depth resolution is admitted to the corpus.
-    public static let minAcceptedExtentPx = 24
+    // The VALUE does not move — nothing measured justifies moving it. 24 px at the
+    // corpus's `mmPerPx` of 1.8616 and 1.8393 is 44.68 and 44.14 mm, so 44 mm is the
+    // largest whole millimetre at or below both and every corpus verdict is unchanged.
+    //
+    // Bracketed by the corpus at 22.3…47.8 mm and no tighter (Decisions 32, 37).
+    // Measured extents are 229, 141, 22 mm and 285, 81, 48 mm: the 22 mm candidate is a
+    // 153-sample sliver sitting 32.9 mm off the ring and is rejected here, which is the
+    // guard working, so the floor is above 22.3. The ceiling is soft — 47.8 mm is the
+    // smallest extent on a candidate that reaches the later guards, and that candidate
+    // is rejected on `supportFraction` anyway, so the corpus never shows a 47.8 mm
+    // candidate deserving admission. Unlike the pixel bracket this one is a physical
+    // bracket rather than a 256×192 one, so a capture at another depth resolution can
+    // now be admitted to the corpus without restating it.
+    public static let minAcceptedExtentMm: Float = 44
     // [derived] adaptive stopping caps it; the per-pass residue inlier ratio is
     // reported so the budget holds as a measurement. The budget is sufficient
     // because extraction is SEQUENTIAL — pass 1 removes the table — not because the
@@ -578,7 +585,11 @@ public enum SupportRegion {
         let d: Float
         let residualMm: Float
         let componentSize: Int
+        // The raw pixel extent, kept because it is what the component scan produces and
+        // what a grid-dependence measurement needs to see; `extentMm` is what the guard
+        // reads (Decision 37).
         let extentPx: Int
+        let extentMm: Float
         // The budget is sufficient because pass 1 removes the table, not because the
         // pass-1 ratio is high. Reported so that holds as a measurement.
         let residueInlierRatio: Float
@@ -642,6 +653,7 @@ public enum SupportRegion {
                 ),
                 componentSize: component.size,
                 extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
                 residueInlierRatio: Float(inliers.count) / Float(residue.count),
                 residueCount: residue.count
             ))
@@ -818,8 +830,8 @@ public enum SupportRegion {
     // see, which is why `SupportPlaneCorpusMeasurementTests` evaluates every guard
     // independently. On the corpus only three of these reasons ever fire (Decision 34).
     static func admissibility(ring: RingStatistics, annulusMedianMm: Float,
-                              foodEnvelopeMm: Float, extentPx: Int) -> CandidateRejection? {
-        if extentPx < minAcceptedExtentPx { return .extent }
+                              foodEnvelopeMm: Float, extentMm: Float) -> CandidateRejection? {
+        if extentMm < minAcceptedExtentMm { return .extent }
         // The score is the inner-band support fraction, not |median|: a median has a
         // 50 % cliff, and just past it the TABLE plane reads ~0, passes every other
         // guard, and is persisted with a textbook-perfect diagnostic.
@@ -900,7 +912,7 @@ public enum SupportRegion {
                                              normal: candidate.normal, d: candidate.d)
             let envelope = foodEnvelopeMm(geometry: g, normal: candidate.normal, d: candidate.d)
             guard admissibility(ring: ring, annulusMedianMm: annulusMedian,
-                                foodEnvelopeMm: envelope, extentPx: candidate.extentPx) == nil
+                                foodEnvelopeMm: envelope, extentMm: candidate.extentMm) == nil
             else { continue }
             admissible.append((candidate, ring))
         }

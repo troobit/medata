@@ -250,7 +250,7 @@ struct SupportPlaneRegressionSliceTests {
                     indices: samples.annulus, geometry: g, normal: candidate.normal, d: candidate.d),
                 foodEnvelopeMm: SupportRegion.foodEnvelopeMm(
                     geometry: g, normal: candidate.normal, d: candidate.d),
-                extentPx: candidate.extentPx
+                extentMm: candidate.extentMm
             )
         }
     }

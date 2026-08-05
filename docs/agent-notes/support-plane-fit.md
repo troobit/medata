@@ -136,11 +136,13 @@ than deferred:
   `[12551, 2811, 932]`, so a floor over 581 starts cutting passes. Do not read that as a
   derivation — 581 is where a floor begins costing something, not where a pass stops being
   worth running, and a cut pass drops the persisted `planeCandidateCount`.
-- `minAcceptedExtentPx = 24` is **bracketed at 13…26**, not set. Above a 12 px, 153-sample
-  sliver it correctly rejects; at or below the 26 px smallest extent reaching the later
-  guards — and that candidate fails `supportFraction` anyway, so the ceiling is soft. The
-  2 px margin is asserted, so a capture that narrows it fails the test. That bracket is a
-  **256×192** bracket: see the grid note below.
+- `minAcceptedExtentMm = 44` is **bracketed at 22.3…47.8 mm**, not set. Above a 22.3 mm
+  (12 px), 153-sample sliver it correctly rejects; at or below the 47.8 mm smallest extent
+  reaching the later guards — and that candidate fails `supportFraction` anyway, so the
+  ceiling is soft. The 3.8 mm margin is asserted, so a capture that narrows it fails the
+  test. It was `minAcceptedExtentPx = 24` bracketed at 13…26 px, which was a **256×192**
+  bracket; Decision 37 re-denominated it, and the value did not move (24 px is 44.68 and
+  44.14 mm at the two captures' `mmPerPx`). See the grid note below.
 
 And what Decision 35 settled — the two Req 5.1 figures, which are not constants:
 
@@ -158,12 +160,16 @@ And what Decision 35 settled — the two Req 5.1 figures, which are not constant
 - **`planeCandidateCount` is grid-dependent where the plane is not** — three passes natively,
   two at half resolution, because each pass leaves a smaller residue. It is persisted, so do
   not read a resolution change as a scene change.
-- **`minAcceptedExtentPx` is the only bar denominated in pixels.** Extents halve with the
-  grid (123→61, 155→77, 44→22) and the last of those crosses the 24 px bar: same scene, same
-  plane, opposite verdict. `tools/nutrition5k/ingest.py` pins N5k at f = 617 px against the
-  device's measured f_d = 182 px, so the same physical extent spans 3.4× more pixels there
-  and the bar is 3.4× stricter on device. Nothing has hit it because pre-checkpoint N5k
-  ingestion carries no food mask; model-production Bucket C is when it will.
+- **The extent bar was the only one denominated in pixels — Decision 37 fixed that.** Pixel
+  extents halve with the grid (123→61, 76→38, 155→77, 44→22) and the last of those crossed
+  the old 24 px bar: same scene, same plane, opposite verdict. `minAcceptedExtentMm = 44`
+  converts through the `mmPerPx` the ring radii already use, so the same four surfaces now
+  drift 1.698, 0.102, 1.839 and 0.000 mm across the halving — at most half a halved-grid
+  pixel — and **zero** verdicts flip. `tools/nutrition5k/ingest.py` pins N5k at f = 617 px
+  against the device's measured f_d = 182.033 px, so the same physical extent spans 3.389×
+  more pixels there; a pixel bar would have been 3.4× stricter on device, and a millimetre
+  bar is the same bar on both. Nothing had hit it because pre-checkpoint N5k ingestion
+  carries no food mask; model-production Bucket C is when it would have.
 
 And what Decision 36 measured — `fallbackPenalty`, which lives in `Confidence`, not
 `SupportRegion`, and is a price rather than a bar:
