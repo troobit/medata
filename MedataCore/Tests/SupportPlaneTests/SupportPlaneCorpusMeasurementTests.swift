@@ -1671,6 +1671,202 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(sectorFloor > corpusIntendedSectors, "\(resolved)")
     }
 
+    // MARK: - Req 4.5: what the fallback rate is a function of
+
+    // Every `[owed]` bar `admissibility` applies, so the rate can be measured as a
+    // function of them. The bars NOT here are the ones that are not owed:
+    // `ringMedianMaxMm` is `[inherited]` from `ringBandMm`, and `ringMinSamples` is
+    // `[measured]`. Keeping them fixed is the whole point of the sweep — it asks what
+    // the corpus does when everything still to be set is set as permissively as it can be.
+    struct OwedBars {
+        var sectors: Int
+        var supportMin: Float
+        var extentMm: Float
+        var envelopeMinMm: Float
+        var stepMaxMm: Float
+        var visibilityMin: Float
+        var escapeMm: Float
+        var marginMin: Float
+
+        static let shipped = OwedBars(
+            sectors: SupportRegion.minSupportingSectors,
+            supportMin: SupportRegion.ringSupportMin,
+            extentMm: SupportRegion.minAcceptedExtentMm,
+            envelopeMinMm: SupportRegion.foodEnvelopeMinMm,
+            stepMaxMm: SupportRegion.bandStepMaxMm,
+            visibilityMin: SupportRegion.supportVisibilityMin,
+            escapeMm: SupportRegion.escapeBandMm,
+            marginMin: SupportRegion.ringSupportMarginMin)
+
+        // Every owed bar at the most permissive value it could ever be given. Not a
+        // proposal — the point of evaluating here is that no setting of the owed
+        // constants can admit more than this does.
+        static let loosest = OwedBars(
+            sectors: 0, supportMin: 0, extentMm: 0,
+            envelopeMinMm: -.greatestFiniteMagnitude,
+            stepMaxMm: .greatestFiniteMagnitude,
+            visibilityMin: 0, escapeMm: .greatestFiniteMagnitude,
+            marginMin: 0)
+
+        func with(sectors: Int? = nil, supportMin: Float? = nil) -> OwedBars {
+            var copy = self
+            if let sectors { copy.sectors = sectors }
+            if let supportMin { copy.supportMin = supportMin }
+            return copy
+        }
+    }
+
+    // `SupportRegion.admissibility` with the owed bars parameterised. Pinned against the
+    // shipped function inside the test below, so this restatement cannot drift from it.
+    static func admissible(_ m: CandidateMeasurement, bars: OwedBars) -> Bool {
+        if m.candidate.extentMm < bars.extentMm { return false }
+        if m.ring.supportFraction < bars.supportMin { return false }
+        if m.ring.supportingSectors < bars.sectors { return false }
+        if m.envelopeMm < bars.envelopeMinMm { return false }
+        if abs(m.ring.bandMedianMm[0]) > SupportRegion.ringMedianMaxMm { return false }
+        if m.ring.bandMedianMm.count > 1,
+           m.ring.bandMedianMm[1] - m.ring.bandMedianMm[0] > bars.stepMaxMm { return false }
+        if m.ring.supportVisibility < bars.visibilityMin { return false }
+        if m.annulusMedianMm > bars.escapeMm { return false }
+        return true
+    }
+
+    // `fitFoodSupportPlane`'s whole selection, including the ambiguity margin that can
+    // send a capture back to the fallback even when two candidates were admitted. nil
+    // means this capture falls back.
+    static func selection(_ measurements: [CandidateMeasurement],
+                          bars: OwedBars) -> CandidateMeasurement? {
+        let admitted = measurements.filter { admissible($0, bars: bars) }
+            .sorted { $0.ring.supportFraction > $1.ring.supportFraction }
+        guard let best = admitted.first else { return nil }
+        if admitted.count >= 2,
+           best.ring.supportFraction - admitted[1].ring.supportFraction < bars.marginMin {
+            return nil
+        }
+        return best
+    }
+
+    // Req 4.5 wants a fallback rate above which the feature is a defect, and
+    // `prerequisites.md` has been treating the open question as WHICH corpus to measure
+    // it on. On the corpus that exists there is a prior question: the rate is a function
+    // of the `[owed]` constants and of nothing else, so a threshold stated now would
+    // grade the placeholders rather than the algorithm — the circularity Req 3.7 forbids
+    // for the sector trio, arriving at Req 4.5 by another route.
+    //
+    // `SupportPlaneRegressionSliceTests` already records that both captures fall back.
+    // What is measured here is the SHAPE of that: where the rate moves as the owed bars
+    // move, which plane each capture lands on when it stops falling back, and what holds
+    // the wrong planes out once every owed bar is as permissive as it could ever be.
+    @Test("the corpus fallback rate spans 100 %…0 % on the owed constants alone")
+    func fallbackRateIsAFunctionOfTheOwedConstantsAlone() throws {
+        var byCapture: [String: [CandidateMeasurement]] = [:]
+        for name in Self.captures {
+            byCapture[name] = Self.measurements(name)
+            #expect(byCapture[name]?.isEmpty == false, "\(name) produced no candidates")
+        }
+
+        // The restatement above is `admissibility` with the owed bars pulled out. At the
+        // shipped bars it must agree with the shipped function on every candidate, or the
+        // sweep below is measuring a different guard set.
+        for (name, measurements) in byCapture {
+            for (i, m) in measurements.enumerated() {
+                let shipped = SupportRegion.admissibility(
+                    ring: m.ring, annulusMedianMm: m.annulusMedianMm,
+                    foodEnvelopeMm: m.envelopeMm, extentMm: m.candidate.extentMm) == nil
+                let drifted = "\(name) candidate \(i): the parameterised guards disagree"
+                    + " with SupportRegion.admissibility at the shipped bars"
+                #expect(Self.admissible(m, bars: .shipped) == shipped, "\(drifted)")
+            }
+        }
+
+        func rate(_ bars: OwedBars) -> Float {
+            let fallbacks = Self.captures.filter {
+                Self.selection(byCapture[$0] ?? [], bars: bars) == nil
+            }.count
+            return Float(fallbacks) / Float(Self.captures.count)
+        }
+
+        // The rate the shipped placeholders produce. Req 4.5's own words for this state
+        // are "delivering nothing".
+        let shippedRate = rate(.shipped)
+        print("shipped fallback rate \(fmt(shippedRate)) over \(Self.captures.count) captures")
+        let moved = "the corpus no longer falls back on every capture at the shipped bars —"
+            + " Req 4.5's rate has a real reading now and this derivation must be redone"
+        #expect(shippedRate == 1, "\(moved)")
+
+        // One owed bar, swept alone. `minSupportingSectors` is the guard the shipped
+        // short-circuit returns on the parity capture's intended candidate.
+        var curve: [(Int, Float)] = []
+        for sectors in stride(from: SupportRegion.ringSectorCount, through: 0, by: -1) {
+            curve.append((sectors, rate(OwedBars.shipped.with(sectors: sectors))))
+        }
+        print("rate vs minSupportingSectors: "
+              + curve.map { "\($0.0)→\(fmt($0.1))" }.joined(separator: " "))
+        // Above the corpus's intended score the rate is total; at or below it, one capture
+        // is recovered and the other is not, because a second owed bar is in front of it.
+        for (sectors, r) in curve {
+            let step = "the rate at minSupportingSectors = \(sectors) is \(fmt(r)),"
+                + " not what the corpus measured when this was derived"
+            #expect(r == (sectors > 5 ? 1 : 0.5), "\(step)")
+        }
+
+        // Every owed bar at once, as permissive as each could ever be set. No setting of
+        // the owed constants admits more than this, so whatever is still rejected here is
+        // rejected by something that is NOT owed.
+        let loosestRate = rate(.loosest)
+        print("loosest-owed fallback rate \(fmt(loosestRate))")
+        let stuck = "the corpus still falls back somewhere with every owed bar at its most"
+            + " permissive value — something not owed is now refusing the fit, and Req 4.5's"
+            + " rate is no longer a function of the owed constants alone"
+        #expect(loosestRate == 0, "\(stuck)")
+
+        // And the plane each capture lands on there is the one Req 3.1 names: inner-band
+        // median nearest zero. The rate reaching 0 is therefore not bought by admitting a
+        // wrong plane — which is the claim a rate threshold would otherwise be guarding.
+        for name in Self.captures {
+            let measurements = try #require(byCapture[name])
+            let selected = try #require(Self.selection(measurements, bars: .loosest))
+            let nearestZero = try #require(
+                measurements.min { abs($0.ring.bandMedianMm[0]) < abs($1.ring.bandMedianMm[0]) })
+            print("\(name) at the loosest owed bars: inner band"
+                  + " \(fmt(selected.ring.bandMedianMm[0])) mm,"
+                  + " support \(fmt(selected.ring.supportFraction)),"
+                  + " sectors \(selected.ring.supportingSectors)")
+            let wrong = "\(name) selects a plane whose inner band is"
+                + " \(fmt(selected.ring.bandMedianMm[0])) mm while a candidate at"
+                + " \(fmt(nearestZero.ring.bandMedianMm[0])) mm exists — driving the rate to"
+                + " zero now costs a wrong plane, which changes what Req 4.5's threshold is for"
+            #expect(selected.candidate.d == nearestZero.candidate.d, "\(wrong)")
+        }
+
+        // What rejects the rest. `ringMedianMaxMm` is `[inherited]` from `ringBandMm`, so
+        // the separation that survives the loosest owed setting is not owed to the capture
+        // session at all — and the margin it holds it by is worth knowing.
+        var closestMarginMm = Float.greatestFiniteMagnitude
+        for name in Self.captures {
+            let measurements = try #require(byCapture[name])
+            let selected = try #require(Self.selection(measurements, bars: .loosest))
+            for m in measurements where m.candidate.d != selected.candidate.d {
+                let excess = abs(m.ring.bandMedianMm[0]) - SupportRegion.ringMedianMaxMm
+                let held = "\(name) has a candidate at inner band"
+                    + " \(fmt(m.ring.bandMedianMm[0])) mm that the inherited ringMedianMaxMm"
+                    + " does not reject, so it survives the loosest owed setting on the owed"
+                    + " bars alone"
+                #expect(excess > 0, "\(held)")
+                closestMarginMm = min(closestMarginMm, excess)
+            }
+        }
+        print("closest rejected candidate clears ringMedianMaxMm"
+              + " (\(SupportRegion.ringMedianMaxMm) mm) by \(fmt(closestMarginMm)) mm")
+        // Stated as a bound rather than an equality so a third capture narrowing it fails
+        // here rather than silently: this is the whole margin the corpus's wrong planes are
+        // held out by once the owed bars stop contributing.
+        let widened = "the inherited ring-median bar now clears every rejected candidate"
+            + " by \(fmt(closestMarginMm)) mm — the sub-millimetre margin Decision 42"
+            + " records has widened and the finding should be restated"
+        #expect(closestMarginMm < 1, "\(widened)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.

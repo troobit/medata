@@ -2041,3 +2041,68 @@ The measurement recomputes the corpus figures from `Self.measurements` rather th
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`committedScenesBoundTheOwedConstants`, `SceneReading` and `sceneReadings`), `design.md` (the owed-numbers section), `prerequisites.md` (the "during implementation" item, now answered) and task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
 
 ---
+
+## Decision 42: The fallback rate is a readout of the owed constants, and an inherited bar is the only thing between a 0 % rate and Decision 18's failure
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Req 4.5 asks for a fallback rate above which this feature counts as a defect rather than a success, "since a change where every capture falls back satisfies 4.1–4.3 while delivering nothing". `prerequisites.md` has carried the open question as a choice of **denominator**: N5k has none until model-production Bucket C (pre-checkpoint ingestion stamps every plate `mixture`, so `single_dominant: 0` and `fitFoodSupportPlane` never runs), and the device corpus is two captures, far too small for a percentage. Decision 36 put `fallbackPenalty` behind the same gate, because a penalty prices a mixture whose weight is this rate.
+
+`SupportPlaneRegressionSliceTests` already records that both committed captures fall back today, and that every candidate rejection on both is on a constant marked `[owed]`. What nobody had measured is what the rate is a function OF. If it moves with the owed constants and with nothing else, then the denominator is not the first problem with Req 4.5 — a threshold stated before the constants are set grades the placeholders, which is exactly the circularity Req 3.7 forbids for the sector trio, arriving at Req 4.5 by another route.
+
+### Decision
+
+Req 4.5's threshold stays deferred, and the recorded reason is now the stronger one. On the corpus that exists the fallback rate takes **every value it can take** as the owed constants move, so it is recorded as a function rather than as a number, with two figures pinned: the rate the shipped placeholders produce, and the rate at the most permissive setting the owed constants could ever be given.
+
+| Setting | Fallback rate | Plane selected |
+|---|---|---|
+| shipped placeholders | **1.000** (2 of 2) | none — both captures fall back |
+| `minSupportingSectors` ≤ 5, all else shipped | **0.500** | `1785135663727` selects its plate top |
+| every owed bar at its loosest | **0.000** | both captures select the candidate nearest Req 3.1's zero |
+
+`ringMedianMaxMm` — `[inherited]` from `ringBandMm`, not owed — is what rejects every remaining candidate at the loosest setting, and it clears the closest of them by **0.338 mm**. No constant's value moves and no shipped code changes.
+
+### Rationale
+
+**The rate is a readout of the placeholders, not of the algorithm.** Swept alone with everything else shipped, `minSupportingSectors` produces `8→1.000 7→1.000 6→1.000 5→0.500 4→0.500 3→0.500 2→0.500 1→0.500 0→0.500`: one owed bar, crossing the 5 of 8 sectors Decision 33 measured as what a real intended candidate scores, halves the rate on its own, and nothing below 5 moves it again because a second owed bar (`ringSupportMin`) stands in front of the other capture. Set every owed bar as permissive as it could ever be and the rate is 0. A threshold asserted today would therefore be satisfied or violated by the placeholders alone, on captures that never changed.
+
+**And the rate reaching zero does not cost a wrong plane.** At the loosest owed setting each capture selects the candidate whose inner-band median is nearest zero — **−0.521 mm** on `1785135663727` and **−1.023 mm** on `1785901032716` — which is Req 3.1's own signature of the surface the food rests on. So the geometry finds the right surface on both captures, nothing structural is wrong, and the whole distance between a 100 % fallback rate and a 0 % one is constants the committed suite currently contradicts (Decision 41).
+
+**What holds the wrong planes out is not owed, and its margin is 0.338 mm.** Every candidate rejected at the loosest setting is rejected by `ringMedianMaxMm`, and the closest is the table candidate on `1785901032716` — Decision 40's crossed-sector case, three of its sectors reading +16.6 to +19.8 mm — whose inner band reads **5.338 mm against a 5 mm bar**, 6.8 % of it. That is the entire separation between this corpus at a 0 % fallback rate and the Decision 18 silent failure the feature exists to prevent. `ringMedianMaxMm` was never sized for that job: Decision 22 gave it the Req 3.2 signed-admission role, and it is `ringBandMm` reused. It is standing in for the sector guard by accident of arithmetic.
+
+**The 0.000 is a bound, not a proposal.** On `1785901032716` the correct plane is selected there with support **0.362 over 2 of 8 sectors** — thinner than any bar the design would plausibly set, and rejected by the shipped 0.6 and 6 with room to spare. That capture's plate ends inside the 8–25 mm ring in five of eight directions (Decision 33), so its right plane is admissible only when the guards are effectively off. Read from the rate's side, this is the same finding: the corpus cannot simultaneously have a low fallback rate and meaningful guards, and only a capture whose plate extends further past the food can. That is what the session's plate-size variation is for.
+
+**So Req 4.5's own denominator problem is real but second.** Both blockers now stand: there is no corpus that can carry a percentage until Bucket C, and the rate on the corpus that exists is not yet a measurement of anything. The `prerequisites.md` item stays open with both reasons rather than being closed on one.
+
+### Alternatives Considered
+
+- **Set the threshold from the device corpus now** - Take "below 100 %" or "below 50 %" as Req 4.5's bar, since both figures are measured - Rejected because either is met by lowering one owed bar and says nothing about correctness. A rate of 0.500 is reachable by setting `minSupportingSectors` to 5, which Decision 41 records the committed suite as forbidding; a bar that a forbidden setting satisfies is not grading the feature.
+- **Close the prerequisites item by splitting Req 4.5 into an N5k rate and a device count** - The two-figure form that item has been carrying - Rejected as premature rather than wrong. It is still the defensible shape, but this measurement says the denominator is not the only blocker, and closing the item on half the reason would lose the other half.
+- **Widen `ringMedianMaxMm` so the 0.338 mm margin is comfortable** - Raise the bar, or re-derive it against the table candidate - Rejected because nothing measured supports moving it and the direction is wrong besides. It is `[inherited]`, the corpus's per-sample σ straddles `ringBandMm` at 3.44 and 6.98 mm (Decision 29), and widening it would *weaken* the only guard currently doing this work. The correct repair is Decision 40's crossed-sector rule, which rejects that candidate on three crossed sectors rather than on a third of a millimetre.
+- **Map the rate over all owed constants jointly as a feasible region** - Sweep the full product rather than one bar at a time - Rejected as more than two captures can carry: a two-capture corpus has exactly three possible rates, so a joint map would report structure the corpus does not contain.
+
+### Consequences
+
+**Positive:**
+
+- Req 4.5's deferral now rests on a measurement rather than on the absence of a denominator, and the measurement is reproducible in one run.
+- The feature is shown to be sound where it matters: at every owed setting that admits anything, both captures select the plane Req 3.1 identifies, so the remaining work is constants and not geometry.
+- The 0.338 mm margin is on record. It is a concrete argument for implementing Decision 40's crossed-sector rule that does not depend on capture 6 — the rule replaces an accidental sub-millimetre separation with a signed one holding 11.7 mm on each side.
+- Task 27's likely failure mode is stated in advance: under shipped constants a device capture of this kind records `.edgeBand`, so "confirm the reference recorded is `.foodSupport`" fails for constant reasons, not implementation ones.
+- The parameterised guards are pinned against `SupportRegion.admissibility` at the shipped bars, so the sweep cannot drift into measuring a different guard set.
+
+**Negative:**
+
+- The corpus's headline figure is that the shipped feature falls back on 100 % of the captures it was built from — true, previously recorded only as a per-capture fact, and now unavoidable in the aggregate.
+- A rate over two captures has three possible values, so the curve above is coarse by construction and the 0.500 step is one capture changing its mind.
+- The 0.338 mm finding creates pressure to implement Decision 40's rule before capture 6 sets `maxCrossedSectors`, which Req 3.7 forbids. The tension is recorded, not resolved.
+- `prerequisites.md` gains a second reason on an item that was already blocked, without moving it any closer to being answerable.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`OwedBars`, `admissible(_:bars:)`, `selection(_:bars:)` and `fallbackRateIsAFunctionOfTheOwedConstantsAlone`), `prerequisites.md` (the Req 4.5 denominator item, still open with a second reason), task 26's detail and task 27's, and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
+
+---
