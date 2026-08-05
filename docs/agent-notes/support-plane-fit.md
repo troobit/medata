@@ -450,6 +450,68 @@ One positive, and it is the strongest statement the feature has about the rule: 
 common `maxCrossedSectors`, so Decision 43's agreement is a property of the rule rather than of
 the shipped pair.
 
+## The ring radius moves the answer, not just the bracket (Decision 46)
+
+`ringOuterMm = 25` is the third free constant in the sector measure and the one that behaves
+differently from the other two. **Read this before changing it, and before trusting any plane
+figure in this feature to better than ~2 mm.**
+
+`ringSectorCount` re-cuts a fixed ring. `sectorSupportMin` re-classifies a fixed set of sectors.
+Both can only move a *verdict*. `ringOuterMm` moves the **annulus** — the candidate bound is
+`2 × ringOuterMm` (`SupportRegion.annulusOuterMultiple`) — so `extractCandidates` runs on a
+different sample set at every value and the constant can change **which plane wins**.
+
+Measured over seventeen radii, re-extracting at each (`ringRadiusIsTheRadialUnitOfTheSectorRule`):
+
+- The **selected plane moves 18.719 mm** at the food on `1785901032716` and 4.162 mm on
+  `1785135663727`. Req 5.1's transfer tolerance is **1 mm**. Decisions 44 and 45 both closed
+  with "no value moves"; this one does.
+- **Bracketed 22…32 mm.** Floor from Req 5.1's 2× grid halving — a narrower ring holds fewer
+  samples per band and the halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses
+  (halved bands [78, 111, 48] at 13 mm against the 200 floor). This is the *mirror* of
+  Decision 44's ceiling of 11 on the count: same halving, other axis.
+- **Ceiling from the committed suite, not from geometry.** The scenes place their features at
+  fixed pixel radii, so at 35 mm the ring reaches the rim `rimmedPlate` deliberately put outside
+  it. Every sector of a scene that must *pass* reads crossed, the suite's floor on
+  `maxCrossedSectors` jumps to 8 and its ceiling on `minSupportingSectors` falls to 0. **Widen
+  the ring past 32 mm and the committed suite goes red** — that is the scenes moving with the
+  constant, exactly as Decision 41 predicted.
+
+**Do not interpolate inside the bracket.** The pass side alternates at 1 mm steps: the corpus's
+only intended-correct candidate reads 0 crossed sectors at 22, 23, 25, 26, 28, 29, 31 mm and
+**2** at 24, 27, 30, 32 mm, its plane oscillating over 4.162 mm with them. A radius between two
+clean radii is implied by neither.
+
+**The control that makes that claim safe** (`candidateSelectionIsSeedUnstableAtTheShippedRadius`).
+The alternation could have been extraction noise re-rolled by a moving annulus. Held at the
+shipped radius with only the RANSAC seed varied over eight draws:
+
+| capture | distinct planes at the food | spread | supporting | crossed |
+|---|---|---|---|---|
+| `1785135663727` | 349.232 / 350.948 / 351.328 | **2.095 mm** | 5 | 0 |
+| `1785901032716` | 356.280 | 0.001 mm | 5 | 3 |
+
+Two things follow, and they pull in opposite directions.
+
+- **The plane is a draw.** 2.095 mm of seed dependence on the capture carrying the corpus's one
+  intended-correct fit — twice the figure Decision 35 measures the grid transfer at. This is
+  **not** a Req 5.1 failure: the seed is `Fnv1a64.hash(depthBytesMm)`, so identical bytes draw
+  identically and replay reproduces device exactly. But every plane-at-the-food figure this
+  feature quotes — Decision 35's 0.835 mm, Decision 36's 18.370 mm — is one draw, and their
+  error bars are wider than recorded. **Do not read a sub-2 mm difference in these numbers as
+  signal.**
+- **The verdict is not.** Across eight draws the supporting and crossed counts are single-valued,
+  so the brackets in Decisions 40–45 are properties of the captures. Nothing had checked this
+  before. It is also what separates the control from the sweep: the seed never moves the crossed
+  count, the radius moves it four times in eleven millimetres.
+
+**Consequences for the sitting.** Decision 45's joint (count, bar) pair is a **triple**, and the
+radius is fixed **first**, because it selects the candidates the other two are read on.
+`maxCrossedSectors` is denominated in all three — the joint bracket reads 0…0, 0…1, 0…2 and 2…2
+over the sweep with *no ordering in the radius* — and at 22 and 24 mm the corpus and the suite
+admit no common value at all. So Decision 45's collision-free 5 × 11 grid is a slice taken at the
+shipped radius, not a property of the rule outright.
+
 ## The fallback rate, and the 0.3 mm holding the corpus together (Decision 42)
 
 **Both committed captures fall back under the shipped constants.** That is a per-capture fact

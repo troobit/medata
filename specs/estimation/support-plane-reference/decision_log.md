@@ -463,7 +463,7 @@ Component scoring addresses the straddle *inside* the loop by changing which pla
 
 Bounding the sample set is five lines and fixes three things at once: clutter stops consuming candidate slots, the plate's inlier ratio rises out of the region where 256 iterations is a coin flip, and the point count drops enough to pay for the extra passes.
 
-Ring MAD replaces the residual bar because it measures the actual failure — a ring resting on two surfaces is bimodal, and MAD is large exactly then. The residual could not measure it, and setting the bar to 8 mm would additionally have pushed matte-table captures onto the fallback, regressing `lidar-plane-fit-matte-table-confidence` (Decision 46 raised that bar to 20 mm for genuine single-surface depth noise).
+Ring MAD replaces the residual bar because it measures the actual failure — a ring resting on two surfaces is bimodal, and MAD is large exactly then. The residual could not measure it, and setting the bar to 8 mm would additionally have pushed matte-table captures onto the fallback, regressing `lidar-plane-fit-matte-table-confidence` (pipeline Decision 46 raised that bar to 20 mm for genuine single-surface depth noise).
 
 ### Alternatives Considered
 
@@ -1213,7 +1213,7 @@ Four constants are settled by the pass and their provenance markers change; the 
 - `ringInnerMm = 8` — confirmed, with a stated range envelope. Measured `mmPerPx` is 1.862 and 1.839 at median food depths of 338.9 mm and 336.9 mm, so the ~4 px depth smear spans **7.45 mm and 7.36 mm** — inside 8 mm on both. Because the smear is a fixed pixel count, `smear_mm = 4z/f_d` with `f_d ≈ 182 px`, so 8 mm covers capture range up to **≈ 365 mm** and no further. The constant is correct for the corpus and for ordinary handheld range; beyond ~365 mm it must become `max(ringInnerMm, 4 × mmPerPx)`.
 - `ringMinSamples = 200`, per band — confirmed with large margin. Measured band counts are `[1120, 1132, 1213]` and `[1294, 1347, 1392]`, **5.6× to 7.0×** the floor. Decision 20's derivation (`ringSectorCount × 25`) is validated from the other end too: inner-band sectors carry **102–184** samples apiece against the 25 the derivation targets, so a 0.5 sector bar has binomial σ ≈ 0.042 rather than the σ ≈ 0.19 that made the guard noise at the old floor of 60.
 - `supportVisibilityMin` is **firable**, and task 26's argument that it is not was based on the wrong region. That argument computes the ratio over the contact ring (8–25 mm), where a support strip thinner than `ringInnerMm` is indeed invisible. The implementation computes it over the **annulus** (0–50 mm), which begins at the food boundary and therefore does see a thin strip. Measured ceilings — every annulus sample an inlier — are **1.710 and 1.426**, and the highest-support candidate achieves **0.880 and 1.032**, so 0.15 sits at roughly a tenth of the achievable range. The guard is live; its *value* is still owed to prerequisites capture 4.
-- The **Decision 46 tension is resolved in kind, not in value**. Decision 46's 20 mm bar is a whole-plane residual over a matte table; `ringBandMm = 5` is a per-sample window. They are not the same quantity and were never in conflict. The per-sample figure is measured below and is what `ringSupportMin` actually rests on.
+- The **pipeline Decision 46 tension is resolved in kind, not in value**. Pipeline Decision 46's 20 mm bar is a whole-plane residual over a matte table; `ringBandMm = 5` is a per-sample window. They are not the same quantity and were never in conflict. The per-sample figure is measured below and is what `ringSupportMin` actually rests on.
 
 **Not settled, and why.** `ringSupportMin`, `sectorSupportMin`, `ringSectorCount`, `minSupportingSectors`, `ringSupportMarginMin`, `ringOuterMm`, `bandStepMaxMm`, `foodEnvelopeMinMm`, `minCandidateSamples`, `minAcceptedExtentPx`, `supportVisibilityMin`, Req 4.5's fallback-rate threshold, Req 5.1's tolerance and `fallbackPenalty` all stay `[owed]`. The corpus cannot set them for two measured reasons.
 
@@ -1221,7 +1221,7 @@ Four constants are settled by the pass and their provenance markers change; the 
 
 *The corpus contains no clean correct-fit case.* On `1785135663727` the plate-top candidate reads a ring median of −0.93 mm and a support fraction of 0.629, but its per-sector inner-band medians are `[+3.7, −0.4, +0.8, +1.4, −6.8, −32.6, −9.7, +3.8]`: sectors 4–6 form a contiguous arc sitting up to 32.6 mm below the plate, so the ring genuinely escapes onto the table over ~135°. On `1785901032716` the highest-support candidate is **the table, not the plate** — its per-sector medians are `[+16.6, +4.4, +3.0, +6.0, +19.8, +18.0, +4.7, +0.4]`, with three sectors a plate-height above it. Both captures are near-instances of the Req 3.6 silent-failure geometry rather than clean successes, so a bar fitted to make them pass would be fitted to the wrong side.
 
-*Per-sample noise on a flat surface straddles `ringBandMm`.* The tightest inner-band mode — robust σ over samples within 15 mm of the band median, taken across every candidate so a contaminated winner cannot set it — measures **3.44 mm** on `1785135663727` (over 75.5 % of the band) and **6.98 mm** on `1785901032716` (over 92.0 %). At essentially the same range, 338.9 mm against 336.9 mm, that is a 2× disagreement, so it is a *surface* difference and not a range one — which is what Decision 46's matte-table evidence predicts. `ringBandMm = 5` falls between the two, and `ringSupportMin = 0.6` is a statement about exactly this distribution.
+*Per-sample noise on a flat surface straddles `ringBandMm`.* The tightest inner-band mode — robust σ over samples within 15 mm of the band median, taken across every candidate so a contaminated winner cannot set it — measures **3.44 mm** on `1785135663727` (over 75.5 % of the band) and **6.98 mm** on `1785901032716` (over 92.0 %). At essentially the same range, 338.9 mm against 336.9 mm, that is a 2× disagreement, so it is a *surface* difference and not a range one — which is what pipeline Decision 46's matte-table evidence predicts. `ringBandMm = 5` falls between the two, and `ringSupportMin = 0.6` is a statement about exactly this distribution.
 
 `prerequisites.md`'s suggestion to "capture at least one on a matte surface" is therefore promoted to a requirement of the capture session.
 
@@ -1244,7 +1244,7 @@ Promoting the matte-surface capture from suggestion to requirement follows direc
 
 **Positive:**
 
-- Four constants move from asserted to measured, and two `prerequisites.md` items — the `ringInnerMm` smear envelope and the Decision 46 tension — are closed without a capture session.
+- Four constants move from asserted to measured, and two `prerequisites.md` items — the `ringInnerMm` smear envelope and the pipeline Decision 46 tension — are closed without a capture session.
 - The instrumented pass exists, is committed, and runs from a clean checkout, so the capture session feeds an instrument rather than starting one.
 - The reason both committed captures fall back is now attributed to a measured geometry — rings crossing the plate edge — rather than left as an unexplained placeholder effect.
 - The assertions are written so that new evidence breaks them: if a future capture stops straddling `ringBandMm`, `supportSurfaceNoiseStraddlesTheBand` fails and forces the derivation to be revisited rather than silently inherited.
@@ -2350,5 +2350,109 @@ Decision 44's 4…8 is a reading at 0.5. Lower the bar and the fine end opens up
 ### Impact
 
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`supportBarSelectsThePopulationTheRuleReads`; `sectorSigns` and `SceneReading.signs(at:)` gain a `supportMin` parameter), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
+
+## Decision 46: The ring radius re-selects the candidates, and it is the first owed constant that moves the answer
+
+**Date**: 2026-08-06
+**Status**: accepted (replaces the rule Decision 33 found unsatisfiable; extends Decisions 44 and 45's joint pair to a triple; qualifies Decisions 43 and 45)
+
+> Not to be confused with **pipeline Decision 46**, the 20 mm LiDAR residual bar, which several
+> documents in this feature cite. Every reference to that one is qualified as "pipeline
+> Decision 46" from this entry onward.
+
+### Context
+
+`ringOuterMm` is `[owed]` and has no derivation at all. Decision 33 measured its stated rule — "inside the smallest measured plate margin" — and found it **unsatisfiable**, because the tightest margin is 4 mm and `ringInnerMm` is 8, so no ring can be placed inside it. Nothing replaced the rule. It has sat since as the one owed constant with neither a bracket nor a criterion.
+
+Decisions 44 and 45 measured the sector measure's other two free constants and concluded they must be fixed **jointly**. `ringOuterMm` is upstream of both. The crossed-sector rule reads the **inner band**, whose outer edge is `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount` = 13.667 mm at the shipped value — so Decision 33's "only 4 of 8 sectors reach the inner band" and Decision 43's rimmed-plate blind spot ("their rims never reach the inner band the sector median is computed over") are both readings of this constant, taken at 25 mm and recorded without saying so.
+
+And it differs in kind from the other two. The count re-cuts a fixed ring; the bar re-classifies a fixed set of sectors. The radius moves the **annulus**, `2 × ringOuterMm`, which is the candidate bound — so extraction runs on a different sample set at every value and the constant can change **which plane is selected**, not only how a fixed selection is read.
+
+### Decision
+
+`ringOuterMm` is recorded as **bracketed 22…32 mm**, floor from Req 5.1's grid halving and ceiling from the committed suite, with the shipped 25 inside rather than on an edge. It stays `[owed]`.
+
+It is the **first owed constant that moves the answer**: across the sweep the selected plane moves **18.719 mm** at the food on `1785901032716` and **4.162 mm** on `1785135663727`, against the **1 mm** Decision 35 measures Req 5.1's grid transfer at. Decisions 44 and 45 both closed with "no value moves"; that does not extend here.
+
+Decision 45's instruction to fix `ringSectorCount` and `sectorSupportMin` jointly becomes a **triple** — the radius joins them, and it is fixed first, because it selects the candidates the other two are read on.
+
+Nothing is rewired and no shipped value moves.
+
+### Rationale
+
+The same two corpus captures and the same eight committed scenes, re-ringed at seventeen radii. Extraction is **re-run** at each, not re-read. "Best" is the highest inner-band support, as `bestCandidate` computes it. "Plane at food" is where the selected plane cuts the food-centroid ray, the instrument Decision 35 measures Req 5.1's tolerance with.
+
+| `ringOuterMm` | inner band ends | best on `…3727` supporting / crossed | best on `…2716` ring median | `…2716` plane at food | joint `maxCrossedSectors` | Req 5.1 halving | committed suite |
+|---|---|---|---|---|---|---|---|
+| 13 | 9.667 | 5 / 0 | −1.757 | 342.372 | 0…1 | **refused** | holds |
+| 15 | 10.333 | 5 / 0 | −1.142 | 346.249 | 0…2 | **refused** | holds |
+| 17 | 11.000 | 5 / 0 | −2.461 | 342.053 | 0…0 | **refused** | holds |
+| 20 | 12.000 | 5 / 0 | −1.796 | 344.484 | 0…1 | **refused** | holds |
+| **22** | 12.667 | 5 / 0 | −12.231 | 338.413 | **empty** | feasible | holds |
+| 23 | 13.000 | 5 / 0 | −2.706 | 344.194 | 0…1 | feasible | holds |
+| 24 | 13.333 | **3 / 2** | −4.897 | 343.378 | **empty** | feasible | holds |
+| **25** | **13.667** | **5 / 0** | **+3.039** | **356.280** | **0…2** | feasible | holds |
+| 26 | 14.000 | 5 / 0 | +2.938 | 356.341 | 0…2 | feasible | holds |
+| 27 | 14.333 | **3 / 2** | +2.867 | 356.394 | 2…2 | feasible | holds |
+| 28 | 14.667 | 5 / 0 | +2.652 | 356.300 | 0…2 | feasible | holds |
+| 29 | 15.000 | 5 / 0 | +2.753 | 356.533 | 0…2 | feasible | holds |
+| 30 | 15.333 | **3 / 2** | +2.610 | 356.545 | 2…2 | feasible | holds |
+| 31 | 15.667 | 5 / 0 | +2.555 | 356.600 | 0…2 | feasible | holds |
+| **32** | 16.000 | **3 / 2** | +2.552 | 356.738 | 2…2 | feasible | holds |
+| 35 | 17.000 | 5 / 0 | +2.290 | 356.823 | 0…2 | feasible | **red** |
+| 40 | 18.667 | 5 / 0 | +2.022 | 357.132 | 0…3 | feasible | **red** |
+
+**The bracket is two-sided, and neither side existed before.** The **floor is Req 5.1's**, and it is the mirror of the ceiling Decision 44 read off the same transfer. A narrower ring holds fewer samples per radial band and the 2× halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses on a grid where the plane still transfers within a millimetre — halved bands read [78, 111, 48] and [65, 148, 45] at 13 mm against the 200 floor, and [237, 242, 248] and [258, 264, 272] at 22 mm. The **ceiling is the committed suite's**, and it arrives exactly as Decision 41 warned: the scenes place their features at fixed pixel radii, so a wide enough ring reaches the rim a scene deliberately put outside it. At 35 mm and 40 mm every sector of a scene the suite requires to **pass** reads crossed, the suite's floor on `maxCrossedSectors` jumps to 8 and its ceiling on `minSupportingSectors` falls to 0, and both intervals go empty together. Between 32 and 35 mm the committed suite goes red.
+
+**The radius denominates `maxCrossedSectors` too, and it reorders it rather than scaling it.** Decision 44 recorded the constant as a count of sectors and Decision 45 as a count read at a bar. It is also a count read at a radius: the joint bracket reads 0…0, 0…1, 0…2 and 2…2 over the sweep, with no ordering in the radius at all. Where Decision 44's counts gave eight *monotonically widening* intervals, these interleave.
+
+**And the pass side alternates at 1 mm steps.** The best candidate on `1785135663727` — the corpus's only intended-correct plane — reads **0** crossed sectors at 22, 23, 25, 26, 28, 29 and 31 mm and **2** at 24, 27, 30 and 32 mm. Clean and dirty alternate inside the bracket at the sweep's own resolution, and its plane at the food oscillates over 4.162 mm with them. A radius between two clean radii is therefore not implied by either, so this constant **cannot be bracketed by interpolation** the way the count and the bar were. That is the direct consequence of it re-running extraction: the other two constants could only move a verdict, this one moves the input the verdict is computed on.
+
+**The separation Decision 44 found robust is not robust to this.** Decision 44 measured that the crossed-sector rule separates the two corpus candidates at every sector count from 4 to 32 — "a coarse cut does not average the crossing away". The radius breaks it: at 22 and 24 mm the two constraint sets admit **no common `maxCrossedSectors`**. Decision 45's headline — no cell collides over its 55-cell (count × bar) grid — therefore holds *at the shipped radius* and not outright. Wherever the rule fires the agreement is real; the radius decides whether it fires on the planes the rule was measured against.
+
+**The bifurcation, and what it is not.** On `1785901032716` the selection changes sign at 24/25 mm: at 13…24 mm the best-support candidate reads a **negative** ring median and sits ~10 mm nearer the camera; from 25 mm up it reads **positive** and is the plane Decision 30 identified as the table. Which surface this capture selects is a function of an owed constant. This is *not* a claim that the narrow radii find the correct plate plane — those readings are not clean either (2–3 supporting sectors, 1–3 crossed, and at 22 mm a plane 12.2 mm above its own ring), and the corpus still has no clean correct fit. What it establishes is narrower and firmer: Decision 42's finding that only `ringMedianMaxMm`'s 0.338 mm holds the wrong plane out is a statement about the shipped radius, because at a smaller one the wrong plane is not the one selected.
+
+**The control, and it changes what the sweep means.** The 1 mm-step alternation admits a second reading: extraction is unstable and moving the annulus merely re-rolls it. Held at the shipped radius with only the RANSAC seed varied over eight draws:
+
+| capture | distinct planes at the food | spread | supporting | crossed |
+|---|---|---|---|---|
+| `1785135663727` | 349.232 / 350.948 / 351.328 | **2.095 mm** | 5 | 0 |
+| `1785901032716` | 356.280 | **0.001 mm** | 5 | 3 |
+
+Both halves matter. The **plane** is seed-dependent by 2.095 mm on the capture that carries the corpus's intended-correct fit — twice the figure Decision 35 measures the grid transfer at, and a quantity nothing had recorded. This is **not** a Req 5.1 failure: the seed is `Fnv1a64.hash(depthBytesMm)`, so identical bytes draw identically and replay reproduces device exactly, which is what the requirement asks. What it bounds is how much of any plane figure this feature quotes is the capture and how much is the draw.
+
+The **verdict** is not. Across eight draws per capture the supporting and crossed counts are single-valued, so the brackets Decisions 40–45 read off one draw each are properties of the captures. And that is what separates the control from the sweep: the seed never moves the crossed count, the radius moves it four times in eleven millimetres. The alternation is the radius reordering the candidates, not extraction re-rolling them.
+
+### Alternatives Considered
+
+- **Set `ringOuterMm = 25` now, since it is inside a measured two-sided bracket and no other value is better supported** - The bracket exists for the first time and the shipped value is comfortably inside it, away from both edges - Rejected because "inside a bracket" is what the other ten values in 22…32 also are, and four of them read a dirty pass side. Choosing among them on the corpus's two captures is fitting, and the constant is `[owed]` for that reason. The bracket says where the session may look, not what it should pick.
+- **Set `ringOuterMm = 22`, the smallest radius that survives Req 5.1** - It maximises the plate margin available in each sector, which is the pressure Decision 33 measured, and it is a principled end rather than an arbitrary interior point - Rejected because 22 mm is the one radius in the bracket where the two constraint sets **collide** — the rule stops separating the corpus's candidates entirely. Picking the end of a bracket because it is an end is what Decision 44 rejected for the count and Decision 45 for the bar; here the end is also measurably worse.
+- **Re-denominate the inner band so the sector rule stops moving with `ringOuterMm`** - Fix the inner band at a stated width rather than `(ringOuterMm − ringInnerMm) / ringBandCount`, and the radius would then bound only the annulus - Rejected because it does not touch the finding. The annulus is `2 × ringOuterMm` and the annulus is what re-selects the candidates, so decoupling the band leaves the 18.719 mm of plane movement exactly where it is while adding a fourth radial constant to own. Decisions 37 and 38 re-denominated constants whose *unit* was wrong; this one's unit is correct and its *value* is unset.
+- **Treat the alternating pass side as extraction noise and report the bracket without it** - Simpler, and the seed control does show 2.095 mm of instability on the same capture - Rejected by the control itself: the seed moves the plane and never the verdict, the radius moves the verdict four times. Reporting the bracket alone would let a session interpolate inside it, which is the one thing this measurement says it may not do.
+- **Sweep `ringInnerMm` in the same pass** - It is the ring's other radial edge and would complete the geometry - Deferred rather than rejected: `ringInnerMm` is `[measured]` against the depth smear (Decisions 29, 39) and is not owed, so sweeping it would measure a settled constant. Recorded so the omission is deliberate.
+
+### Consequences
+
+**Positive:**
+
+- `ringOuterMm` gets a bracket at all — 22…32 mm, two-sided — where Decision 33 left it with an unsatisfiable rule and nothing else. It is the last owed constant that had no criterion.
+- Req 5.1's grid transfer now bounds the ring from **both** ends: Decision 44's ceiling of 11 on `ringSectorCount` and this floor of 22 mm on the radius come off the same halving, so the transfer claim constrains the ring's angular and radial resolution alike.
+- The committed suite acquires a stated ceiling on the radius, so a later session cannot widen the ring past 32 mm without re-authoring scenes — the dependency Decision 41 predicted, now measured on a second constant.
+- The capture session's ordering is corrected again before the sitting: three constants are fixed together, and the radius is fixed first because it selects the candidates the other two are read on.
+- Selection is confirmed **verdict-stable under the RANSAC seed**, which is the first evidence that any bracket in Decisions 40–45 is a property of the captures rather than of one draw. Nothing had checked.
+
+**Negative:**
+
+- Another bracket rather than a value, and this one cannot be interpolated inside — so it constrains the session more tightly than it reduces what the session owes.
+- `maxCrossedSectors` is now denominated in **three** owed constants. Decision 43's "the two sources agree exactly" holds per (radius, count, bar) triple, and Decision 45's collision-free grid is a slice of a larger one that does collide.
+- The plane at the food is seed-dependent by 2.095 mm on the corpus's one intended-correct capture. Req 5.1 is satisfied by determinism, but every plane figure this feature quotes — Decision 35's 0.835 mm transfer, Decision 36's 18.370 mm fallback price — is one draw, and their error bars are wider than recorded.
+- The bracket rests on two captures whose plates end inside the ring in five of eight directions (Decision 33). The ceiling in particular is a property of the committed **scenes**, so it moves if they are re-authored, and the corpus cannot say whether 32 mm is physically right.
+- The sweep costs ~87 s. It re-runs extraction seventeen times per capture, and the measurement suite is now the slowest thing in `make test`.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`ringRadiusIsTheRadialUnitOfTheSectorRule` and `candidateSelectionIsSeedUnstableAtTheShippedRadius`; a `ringSamples(geometry:outerMm:)` mirroring the shipped builder, an `innerSupportFraction` that reads below the `ringMinSamples` floor, and the eight committed scenes lifted into a `SceneSpec` list so they can be re-ringed), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringOuterMm` comment), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
 
 ---

@@ -204,7 +204,7 @@ band implies σ_z ≲ 5.9 mm. The measurement pass put per-sample σ on a flat s
 on `1785135663727` and **6.98 mm** on `1785901032716` — at 338.9 mm and 336.9 mm, so the same
 range, and a 2× spread that can only be the surface. `ringBandMm = 5` falls between them, which
 means `ringSupportMin` cannot be derived at all until the spread is characterised (Decision 29).
-Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
+Pipeline Decision 46's 20 mm bar is a *whole-plane residual over a matte table*, not a per-sample σ, so it
 was never the same quantity — but the underlying worry it encodes is now measured and real. Take
 at least one of the six on a matte surface, and note the surface material for each.
 
@@ -256,9 +256,9 @@ rims never reach the inner band the sector median is computed over. Captures 3 a
 source for it, so shoot at least one of them with the food close enough to the rim that the ring
 reaches it, and record whether the rim falls in the inner band.
 
-**Fix `ringSectorCount` AND `sectorSupportMin` BEFORE the sitting, and fix them TOGETHER
-(Decisions 44, 45).** Every sector bracket in this document is a count of sectors read at eight of
-them, at a support bar of 0.5. Re-cut the same rings at nine counts and the joint bracket on
+**Fix `ringOuterMm`, `ringSectorCount` AND `sectorSupportMin` BEFORE the sitting, and fix all three
+TOGETHER (Decisions 44, 45, 46).** Every sector bracket in this document is a count of sectors read
+at eight of them, at a support bar of 0.5, **on a ring 25 mm wide**. Re-cut the same rings at nine counts and the joint bracket on
 `maxCrossedSectors` takes eight distinct values: **0…0** at four sectors, 0…1 at six, **0…2** at
 eight, 1…2 at ten and eleven. Take the captures first and choose the count afterwards and capture 6
 measures nothing, because the number it produces is denominated in a constant that was still moving.
@@ -268,8 +268,31 @@ Decision 44 said to fix the count first and read the rest in the unit it set. Th
 the plane a correct fit must admit reading no crossed sector, and the rule still firing on the
 plane it must reject — are 6, 8, 10, 11 at a bar of 0.1–0.2; **all five** Req 5.1 permits at 0.3;
 4, 6, 8, 10 at 0.4; and 4, 6, 8 from 0.5 up. So the pass-side erosion above eight sectors that
-gives 4…8 its top is itself a consequence of the bar sitting at 0.5. Choose the **pair** and record
-both, with the reason, before the sitting.
+gives 4…8 its top is itself a consequence of the bar sitting at 0.5.
+
+And the pair is a **triple** (Decision 46). `ringOuterMm` is upstream of both, because it moves the
+**annulus** — `2 × ringOuterMm` is the candidate bound — so extraction runs on a different sample
+set at every value and the radius selects *which plane* the count and the bar are then read on.
+Fix it first, then the pair. Choose all three and record them, with the reason, before the sitting.
+
+The radius is bracketed **22…32 mm** and it **must not be interpolated inside** (Decision 46):
+
+- **Floor, 22 mm, from Req 5.1.** A narrower ring holds fewer samples per radial band and the 2×
+  grid halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses on a grid where the
+  plane still transfers within a millimetre — halved bands read [78, 111, 48] at 13 mm against the
+  200 floor. This is the mirror of the count's ceiling of 11: both come off the same halving.
+- **Ceiling, 32 mm, from the committed suite.** The scenes place their features at fixed pixel
+  radii, so at 35 mm the ring reaches the rim a scene deliberately put outside it, every sector of
+  a scene that must *pass* reads crossed, and both suite intervals go empty. Above 32 mm the
+  committed suite goes red and the scenes have to move with the constant.
+- **No interpolation.** The pass side alternates at 1 mm steps: the corpus's only intended-correct
+  candidate reads 0 crossed sectors at 22, 23, 25, 26, 28, 29 and 31 mm and **2** at 24, 27, 30 and
+  32 mm. A radius between two clean radii is implied by neither, so a value must be *measured* at
+  the radius it is used at — read it off the sitting, do not derive it from neighbours.
+- **It moves the answer, not just the bracket.** Across the sweep the selected plane moves
+  **18.719 mm** at the food on `1785901032716` and 4.162 mm on `1785135663727`, against the 1 mm
+  Decision 35 measures Req 5.1's transfer at. This is the only owed constant of which that is true.
+  Record the plane at the food for every candidate on every capture, not just the winner.
 
 The count is bracketed **4…8** by what is in hand, with a hard ceiling of **11**:
 
