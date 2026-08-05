@@ -88,7 +88,21 @@ public enum SupportRegion {
     // f_d ≈ 182 px: 8 mm covers capture range to ≈ 365 mm and no further. Beyond that
     // this must become `max(ringInnerMm, 4 × mmPerPx)`.
     public static let ringInnerMm: Float = 8
-    // [owed] must sit inside the smallest measured plate margin.
+    // [owed] against a RESTATED rule (Decision 33). The old rule — "must sit inside the
+    // smallest measured plate margin" — is measured and unsatisfiable: the support
+    // margin, the distance from the food boundary at which the surface departs by more
+    // than `ringBandMm`, is 4 mm in the tightest sector of BOTH committed captures,
+    // inside `ringInnerMm`. No ring can be placed inside it.
+    //
+    // Measured per-sector margins are [16, 40, 10, 42, 6, 4, 6, 44] mm and
+    // [34, 4, 46, 8, 30, 14, 12, 6] mm — every departure inside the ring is a FALL of
+    // 5.1 to 15.6 mm, so these are plate edges. 3 of 8 sectors reach `ringOuterMm` on
+    // each capture, and only 4 of 8 reach the inner band's 13.7 mm, which is BELOW
+    // `minSupportingSectors`. The supporting count is therefore capped by where the
+    // plate ends before `sectorSupportMin` is consulted at all.
+    //
+    // What is owed is the margin the SECTOR measure needs in enough sectors, which is a
+    // joint derivation with the trio and waits on the same captures.
     public static let ringOuterMm: Float = 25
     // Structural: inner / mid / outer.
     public static let ringBandCount = 3
