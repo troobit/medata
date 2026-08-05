@@ -215,8 +215,30 @@ them is what makes §4's log trustworthy; they can follow the first log rows but
    measuring across more bundles before §4's log can quote per-capture error to better than ~5 %.
 2. **β is pinned to 1.0 on replay** (`let unityBeta = BetaCorrection(entries: [:], defaultBeta: 1.0)`),
    so a replay measures the uncalibrated chain, not the calibrated β the app actually ships.
-3. **Bundles always claim `single_dominant`** even when oblique data is present, so a two-view field
-   capture can never be replayed on the `twoViewSfS` branch.
+3. ~~**Bundles always claim `single_dominant`** even when oblique data is present, so a two-view field
+   capture can never be replayed on the `twoViewSfS` branch.~~ **Wrong — corrected 2026-08-05.** This
+   conflated two proto fields. A pulled two-view bundle records
+   `capture_path_canonical = 'two_view_sfs'`, and that is the field `FixtureRunner.run` switches on,
+   so a two-view capture replays on the `twoViewSfS` branch as intended. `estimator_path` is the one
+   pinned at `single_dominant`, and it only selects the plane-fit method *within* the single-view
+   branch (§5.1). No defect here.
+
+### 5a. What a refused bundle actually contains (measured 2026-08-05)
+
+A refusal that fires **before** segmentation records no probability tensor and no argmax — the
+support plane is fitted from the pre-shutter mask at Stage D, ahead of the segmenter, so an
+`emptyFoodMask` refusal short-circuits the pipeline. Two consequences pull in opposite directions:
+
+- **Bad for diagnosis.** Such a bundle cannot be replayed through `FixtureRunner` at all (it needs
+  probs), and the refusal was decided by the *pre-shutter preview* segmenter whose mask is not
+  recorded anywhere. So the one thing you would want to inspect — was that mask right? — is exactly
+  what is missing. Recording the pre-shutter mask on an `emptyFoodMask` refusal would cost a few KB
+  and is the single highest-value addition to the recorder.
+- **Good news for §5's corpus trade.** Those bundles are **3.6 MB** and already carry PNG nadir +
+  oblique, depth, both intrinsics, `t_1_to_2` and gravity — precisely the promote-to-corpus payload
+  §5 proposes, minus the probs, and at 1.8 % of the 200 MB full-probs size. The format is therefore
+  already proven recordable; what is missing is only the harness's ability to re-segment on replay
+  instead of requiring cached probs.
 
 ### The corpus-size decision this forces
 
