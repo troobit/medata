@@ -2812,3 +2812,59 @@ At 3× the nearest-to-zero candidate is pass 1, the **table**, carrying 3 crosse
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`inlierRemovalMultiple`'s provenance block, and `maxCandidatePlanes`'s coupling note), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theRemovalBandIsWhatOnePassHandsTheNext`, and the removal multiple added as an argument to the parameterised extraction the pass-cap sweep already uses), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes.**
 
 ---
+
+## Decision 51: The iteration budget is set by the constant that carries no marker
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`SupportRegion` reaches task 26 with every constant carrying a provenance marker except one. `ransacSuccessProbability = 0.99` says only "Target probability of drawing one outlier-free triple, for adaptive stopping" — a description of what it is, not a record of why it is that. It had never been varied. Its neighbour `maxIterationsPerPass = 2048` is marked `[derived]` and carries a paragraph: "the budget is sufficient because extraction is SEQUENTIAL — pass 1 removes the table — not because the pass-1 inlier ratio is high (it is ~6 %, where 2048 iterations reach ~36 %)".
+
+The two are one mechanism. `requiredIterations` returns `min(maxIterationsPerPass, log(1 − p) / log(1 − w³))`, so whichever end of that clamp is smaller is the constant that actually sets a pass's budget, and the shipped code never reports which. Decision 46 gave the question weight: held at the shipped radius over eight RANSAC seeds the selected plane moves 2.095 mm at the food, so every plane figure Decisions 40 to 50 quote carries about 2 mm of draw dependence. That decision recorded the caveat and could not say what it was denominated in — the budget was the one input never swept.
+
+### Decision
+
+Mark `maxIterationsPerPass` `[measured]` with its stated derivation withdrawn and replaced: it never fires on this corpus, and it is bracketed 128…unbounded from below. Mark `ransacSuccessProbability` `[owed]`, bracketed 0.9…unbounded, and record that it is the constant that sets every pass's budget and the one Decision 46's draw dependence is denominated in. Do not choose a value inside either bracket.
+
+### Rationale
+
+The clamp is measured at both ends, per pass, on both captures. The passes spend 72, 11, 250 and 12, 41, 5 iterations against a cap of 2048: the target is always the smaller, so **`maxIterationsPerPass` never fires**, the third thing in the file of which that is true after Decision 48's pass cap and Decision 34's five guards. The largest draw the corpus ever needs is 250, so the cap truncates nothing at or above 256.
+
+That makes the `[derived]` argument checkable, and its own quantity refutes it. The pass-1 inlier ratio is measured at **0.402 and 0.698**, six to twelve times the ~6 % the comment quotes; at those ratios a 0.99 target is met in 69 and 12 iterations. The budget is sufficient because the dominant plane is easy, not because extraction is sequential.
+
+The target is the live half, and it moves the answer — which only `annulusOuterMm` otherwise does. Swept 0.5…0.99999 at the shipped cap the selected plane at the food moves **3.704 mm** on `1785135663727` (351.620, 349.473, 353.130, 351.328, 349.426, 349.426 mm), past the 1 mm Decision 35 measures Req 5.1's transfer at. The readings wander rather than climb, so like Decision 46's radius and unlike Decision 50's removal band **the bracket must not be interpolated**.
+
+And it is what Decision 46's caveat is denominated in, measured rather than inferred by elimination: that decision's eight-seed control was re-run against each end of the clamp. Against the **cap** the spread does not move at all — 1.992 mm at 64 and 2.095 mm at 256, 2048 and 8192 — because the cap is not what ends a pass. Against the **target** it collapses **2.095 → 0.194 mm** from 0.99 to 0.99999, a 10.8x fall that takes it under the Req 5.1 bar. So the draw dependence every bracket in Decisions 40 to 50 carries is neither a property of the captures nor a price of the cap: it is this constant, and it is removable.
+
+The brackets follow. The cap's floor is 128: at 64 the sector verdict on `1785135663727` flips from 5 supporting / 0 crossed to 3 / 2 — the guard every one of those brackets is read from — and at 32 the plane moves 1.9 mm, while at 128 and above it is the shipped plane to 0.000 mm. Its ceiling stays open because above the largest required draw there is nothing to distinguish; what sets it is Req 7.6's worst-case latency, and the scene where it would fire is a low-inlier-ratio one the corpus does not contain. The target's floor is 0.9: `1785901032716` is draw-stable at 0.001 mm at every value from 0.9 up and jumps to 2.376 mm at 0.5. Tightening it is paid for out of the cap's 8x headroom, so the two do not compete.
+
+### Alternatives Considered
+
+- **Leave the pair as shipped and record only the missing marker**: Annotate `ransacSuccessProbability` as `[derived]` from the cap's paragraph and move on - Rejected because the paragraph is about the wrong constant. Attaching the cap's sufficiency argument to the target would document a value that moves the plane 3.704 mm as though it were settled, which is the circularity Req 3.7 forbids.
+- **Set `ransacSuccessProbability` to 0.99999 now**: The corpus shows draw dependence falling under the Req 5.1 bar there, and the cap has the headroom to pay for it - Rejected because it is choosing a value inside a bracket, which Req 3.7 forbids for exactly these constants, and because the readings wander rather than climb, so 0.99999 being the best of six sampled values is not evidence that it is the right one.
+- **Retire the cap, since it never fires**: Decision 32 retired `minCandidateSamples` on similar grounds - Rejected because the two cases differ. That constant was provably outcome-identical to a bar already measured; this one is a worst-case latency bound for a scene the corpus lacks, and removing it would leave `ccRansac` unbounded on exactly the low-inlier-ratio input it exists to survive.
+- **Re-read Decisions 40 to 50's brackets at a tighter target**: The draw dependence they carry is now known to be removable - Rejected as premature. The target is bracketed, not set; re-reading every bracket at a value that has not been chosen would produce a second set of readings owed to the same sitting.
+
+### Consequences
+
+**Positive:**
+
+- Every constant in `SupportRegion` now carries a provenance marker, and none rests on a quantity the corpus contradicts.
+- Decision 46's caveat on the whole feature — about 2 mm of draw dependence in every plane figure Decisions 40 to 50 quote — is denominated for the first time, and shown to be removable rather than intrinsic.
+- The first owed constant that the committed corpus alone can bracket and set, needing no capture session. Every other one waits on the sitting or on Bucket C.
+- The cap's `[derived]` marker no longer rests on a pass-1 inlier ratio that is wrong by an order of magnitude.
+
+**Negative:**
+
+- Task 26 gains an owed constant rather than losing one, and it is one that moves the answer.
+- The brackets Decisions 40 to 50 read are now known to be quoted at a draw dependence that a different target would remove, so some of them may need re-reading once the target is fixed.
+- The corpus is two captures of flat bread on a plate, so the cap's ceiling and the scene in which it would fire are both outside what can be measured here.
+- The measurement is the slowest in the suite (about 70 s), because the eight-seed control now runs against both ends of the clamp.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`maxIterationsPerPass` and `ransacSuccessProbability` provenance blocks, and `ringOuterMm`'s seed-control note), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theIterationBudgetIsWhatTheSeedSpreadIsDenominatedIn`, with `ccRansac` and the pass chain parameterised on the budget pair), task 26's detail. **No shipped behaviour changes.**
+
+---
