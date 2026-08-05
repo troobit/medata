@@ -137,7 +137,7 @@ rimmed pair and the bowl are judged on *which surface was selected*, not on volu
 | 3 | Rimmed plate, well ~30 % covered | no | inner-band selection on real depth |
 | 4 | **Same** rimmed plate, well ~90 % covered | yes | `supportVisibilityMin` — nothing else can set it; also Req 7.10 |
 | 5 | Bowl, walls above the food, **in-palette food** (rice/pasta/cereal) | no | Req 7.4 fallback path |
-| 6 | Food filling a **small** plate to within ~10 mm of the edge | yes | Req 3.6 sector guard — the silent-failure case |
+| 6 | Food filling a **small** plate to within ~10 mm of the edge | yes | Req 3.6 sector guard — the silent-failure case; sets `maxCrossedSectors` (Decision 40) |
 
 Captures 3 and 4 must be the **same plate** at two fill levels: the pair is what separates
 "well partly visible, inner band should win" from "well unobservable, must fall back", and a
@@ -216,6 +216,19 @@ adversarial capture rather than a normal meal.
 `ringSupportMarginMin` is not on the table at all: it compares the top two **admissible**
 candidates, and until some capture yields two, it cannot run. The gaps real candidates open are
 0.312 and 0.117, straddling the shipped 0.15.
+
+**Capture 6 now sets a named count, not just a scene (Decision 40).** The sector rule that replaces
+the unsigned count is stated: a **failing** sector — below `sectorSupportMin` — whose signed
+inner-band median exceeds `+ringBandMm` is **crossed**, and a candidate is rejected when more than
+`maxCrossedSectors` sectors are crossed; below `−ringBandMm` the sector has **escaped**, which is
+the plate ending and not grounds for rejection. Its magnitude bar is inherited (`ringBandMm`, with
+an 11.7 mm margin on each side of a 23.4 mm separating window), so the session has **one** number
+to set here rather than a threshold and a count. The corpus brackets `maxCrossedSectors` at
+**0…2** — the plate-top candidate carries 0 crossed sectors and the table candidate carries 3 —
+and capture 6 is what closes it: a correct fit on a small plate is the only scene that shows how
+many crossed sectors a *right* plane can carry. Dump the crossed and escaped counts alongside the
+per-sector medians. Note that a rimmed plate is the counter-case, where a correct plane's ring can
+reach a rim genuinely above it, so captures 3 and 4 grade the rule as well as capture 6 sets it.
 
 **Vary how much plate shows, and record it.** The measured support margin — the distance from the
 food boundary at which the surface falls away — is 16, 40, 10, 42, 6, 4, 6, 44 mm on

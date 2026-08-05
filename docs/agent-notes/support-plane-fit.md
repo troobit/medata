@@ -269,12 +269,36 @@ median; the −36.6 mm candidate is a plane above them, and `ringMedianMaxMm` is
 neither capture produces one, so it cannot run; the gaps real candidates open (0.312 and 0.117)
 straddle the shipped 0.15.
 
-And one defect in the guard itself (Decision 30, proposed, not fixed): `ringStatistics`
-counts a supporting sector on `|height| ≤ ringBandMm`, so the count is **blind to sign**.
-A correct plane whose ring escaped downward (failing sectors −6.8…−32.6 mm) and a table
-plane with part of its ring on the plate (failing sectors +16.6…+19.8 mm) both score 5 of
-8. The whole-ring median kept the sign for exactly this reason (Req 3.1, Decision 22); the
-per-sector version lost it.
+And one defect in the guard itself (Decision 30, superseded by Decision 40; still not
+fixed in code): `ringStatistics` counts a supporting sector on `|height| ≤ ringBandMm`, so
+the count is **blind to sign**. A correct plane whose ring escaped downward (failing
+sectors −6.8…−32.6 mm) and a table plane with part of its ring on the plate (failing
+sectors +16.6…+19.8 mm) both score 5 of 8. The whole-ring median kept the sign for exactly
+this reason (Req 3.1, Decision 22); the per-sector version lost it.
+
+**The replacement rule is stated, and it costs no new millimetre constant (Decision 40).**
+A **failing** sector — below `sectorSupportMin` — whose signed inner-band median exceeds
+`+ringBandMm` is **crossed**: the support surface is still there and this plane is not on
+it. Below `−ringBandMm` it has **escaped**, which is the plate ending (Decision 33) and
+*not* grounds for rejection. Reject above `maxCrossedSectors` crossed sectors.
+
+Two things to know before touching this. The bar is `ringBandMm` and it is **inherited,
+not fitted** — the plate candidate's highest failing median is −6.794 mm and the table
+candidate's lowest is +16.603 mm, so 5 sits ~11.7 mm clear on both sides of a 23.4 mm
+window. That only holds because the rule is restricted to *failing* sectors: over **all**
+sectors the window is +3.846…+5.974 mm, a tenth as wide, and `ringBandMm` surviving inside
+it would be luck. If you are tempted to drop the `sectorSupportMin` gate as redundant, this
+is why it is not.
+
+And it is **deliberately not implemented**. `maxCrossedSectors` is bracketed 0…2 by the
+corpus (0 crossed on the plate candidate, 3 on the table one) and owed to prerequisites
+capture 6; shipping the rule means asserting that count, which Req 3.7 forbids for exactly
+these constants. Implementing it later widens `RingStatistics` and the Req 6.4 persisted
+fields. The measurement lives in `failingSectorSignSeparatesWhatTheCountCannot`, which runs
+it over all six corpus candidates — one reads 6 crossed / 0 escaped, one 0 / 7, one is
+genuinely mixed at 2 / 4, so the classification is not degenerate. Note the counter-case
+the corpus cannot supply: on a **rimmed** plate a correct plane's ring can reach a rim
+genuinely above it, which is captures 3 and 4, not capture 6.
 
 ## Tests
 

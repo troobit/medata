@@ -1265,7 +1265,9 @@ Promoting the matte-surface capture from suggestion to requirement follows direc
 ## Decision 30: The sector guard discards the sign that separates its two failure modes
 
 **Date**: 2026-08-05
-**Status**: proposed
+**Status**: superseded by Decision 40
+
+**Superseded in part.** The finding — that the count takes `|height|` and so reads the same 5 of 8 for two opposite scenes — stands and is unchanged. What Decision 40 supersedes is this entry's *disposition*: the reason given below for leaving the proposal open, that "a rule for rejecting on signed sectors needs a threshold, and that threshold has the same evidence problem as every other `[owed]` constant", is measured and holds on only one of the rule's two axes. The magnitude bar is `ringBandMm`, already `[inherited]`; only a sector count is owed, and the corpus brackets it. Decision 40 states the rule precisely and carries the remaining owing forward. The **Decision** section below, which declines to state a rule, is the part that no longer applies.
 
 ### Context
 
@@ -1882,5 +1884,77 @@ This also draws the line the previous two decisions did not have to. Decision 38
 ### Impact
 
 `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringInnerMm` comment, which stated the repair as required), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`smearTrackingInnerRadiusCollapsesTheRing`, `smearEnvelopeIsARangeBoundTheCorpusNearlyReaches`, and the `geometry(_:decimation:)` and `bandCounts(geometry:innerMm:)` helpers), `prerequisites.md` (the `ringInnerMm` item and the capture-recording list), `design.md` (Stated limits, Req 2.5) and task 26's detail. **No shipped behaviour changes at any grid or range** — the decision is to leave a constant alone, and the measurement is what says that is the right thing to do.
+
+---
+## Decision 40: The sector rule is stated over failing sectors, and its bar is inherited rather than owed
+
+**Date**: 2026-08-06
+**Status**: accepted (settles Decision 30's proposal; supersedes its disposition, not its finding)
+
+### Context
+
+Task 26's sector trio — `ringSectorCount`, `sectorSupportMin`, `minSupportingSectors` — is blocked on two things at once. Captures 1–6 are one. Decision 30 is the other: it measured that the supporting-sector count takes `|height|`, so a correct plane whose ring has run off the plate and a table plane with part of its ring still on the plate both score **5 of 8**, and no `minSupportingSectors` separates them. It proposed carrying the sign, declined to state a rule, and gave one reason for declining — "a rule for rejecting on signed sectors needs a threshold, and that threshold has the same evidence problem as every other `[owed]` constant".
+
+Every other remaining item in task 26 waits on the capture session or on model-production Bucket C. This proposal is the one blocker that is a design question rather than a missing scene, and the corpus already holds both of the failure modes it is about — which is how Decision 30 found them. So the question of whether a signed rule needs a threshold of its own is answerable now.
+
+Decision 33 also arrived after Decision 30 and bears on it. The support margin is 4 mm in the tightest sector of both captures, the plate ends inside the ring in five of eight directions, and only 4 of 8 sectors reach the inner band's 13.7 mm. A low supporting count is therefore in part a statement about plate size, which is exactly the reading the sign is needed to separate from a wrong plane.
+
+### Decision
+
+The sector rule is: **a failing sector — one below `sectorSupportMin` — whose signed inner-band median exceeds `+ringBandMm` is a *crossed* sector, and a candidate is rejected when more than `maxCrossedSectors` of its sectors are crossed.** A failing sector reading below `−ringBandMm` is an *escaped* sector and is not grounds for rejection: the support surface ended, which is plate geometry, not a wrong plane.
+
+The magnitude bar is `ringBandMm`, `[inherited]` from `LiDARPlaneFitter.inlierBandMm` and already the bar that decides which samples in those same sectors count as supported. **No new millimetre constant is created.** `maxCrossedSectors` is a new `[owed]` count, bracketed **0…2** by the corpus and set by prerequisites capture 6.
+
+Shipped code is unchanged. `SupportRegion.ringStatistics` still computes the unsigned count and `admissibility` still reads `minSupportingSectors`; the rule above is recorded with its measured basis and lands with the capture that sets its count, because shipping it now would mean asserting `maxCrossedSectors`, which is what Req 3.7 forbids for exactly these constants.
+
+### Rationale
+
+Measured over all six candidate planes on the two committed captures, the sign classifies cleanly and the two intended candidates are pure:
+
+| Capture | Candidate | Supporting | Failing-sector medians | Crossed | Escaped |
+|---|---|---|---|---|---|
+| `1785135663727` | plate top (ring median −0.93 mm) | 5 of 8 | −6.79, −32.56, −9.68 mm | 0 | 3 |
+| `1785901032716` | table (ring median +3.04 mm) | 5 of 8 | +16.60, +19.80, +18.02 mm | 3 | 0 |
+
+The supporting counts agree exactly, which is Decision 30's premise; the crossed counts are 0 and 3. Neither capture's intended candidate mixes signs.
+
+The threshold objection fails on the magnitude axis because the separating window is wide and the design already owns a bar inside it. The plate candidate's highest failing median is **−6.794 mm** and the table candidate's lowest is **+16.603 mm**: any bar in that **23.397 mm** window separates them, and `ringBandMm = 5` sits 11.794 mm above the floor and 11.603 mm below the ceiling — near the centre, and not chosen to be there.
+
+Restricting the rule to *failing* sectors is what earns that. Applied to every sector, the window is the plate candidate's highest median of +3.846 mm against the table candidate's lowest crossed median of +5.974 mm — **2.128 mm** wide, a tenth of the other, with `ringBandMm` inside it by about a millimetre on each side. A bar surviving in a 2 mm window on two captures is being fitted to the corpus; one surviving in a 23 mm window is being inherited. The `sectorSupportMin` gate is therefore doing real work in the rule and is not redundant.
+
+The rule is also the per-arc form of a guard the design already has and already justifies. `ringMedianMaxMm = 5` is the signed whole-ring admission bar Decision 22 restored precisely because "the support fraction is unsigned and cannot separate a plane above the ring from one below it". On the table candidate that whole-ring guard reads **+3.04 mm** and does not fire — inside ±5 — while the same statistic at the same bar, computed per arc, reads +16.6, +19.8 and +18.0 in three sectors. This is Decision 18's silent-failure case measured rather than argued: an aggregate median of approximately zero over a ring that has crossed.
+
+The count stays owed because the corpus bounds it two-sidedly but loosely — 0 admits the plate candidate, and anything above 2 admits the table one, so 0, 1 and 2 all survive. Three values is a bracket, not a derivation. Capture 6, food filling a small plate to within ~10 mm of the edge, is the scene that produces a correct fit with several genuinely escaped sectors, and it is what says how many crossed sectors a correct fit can carry.
+
+Not implementing follows from the same place. The rule needs one constant, that constant is owed, and Req 3.7 bans shipping it asserted. What the session needs in order to set it — the signed per-sector medians — the measurement pass already dumps, so nothing is gained by moving the statistic into `RingStatistics` before there is a count to compare it against, and Decision 30's cost note stands: it would widen a persisted Req 6.4 field.
+
+### Alternatives Considered
+
+- **Accept Decision 30 and implement the guard now, choosing `maxCrossedSectors`** - Replace `minSupportingSectors` with the crossed-sector ceiling in this task, since the corpus shows the direction is right - Rejected because choosing among 0, 1 and 2 is inventing evidence, and Req 3.7 names the sector constants specifically. It would also make the plate candidate admissible on a capture with no weighed ground truth, which is the false positive Decision 31 committed a fixture to trap.
+- **State the rule over all sectors rather than failing ones** - Simpler: drop `sectorSupportMin` from the rule and count any sector whose median exceeds `+ringBandMm` - Rejected on the measured window. It separates the corpus (0 against 4) but only within 2.128 mm, so `ringBandMm` would be surviving by luck rather than by inheritance and the bar would become owed after all.
+- **Reject on sign alone, with no magnitude bar** - A failing sector reading positive is crossed, whatever its size - Rejected because it has no noise floor. Per-sample σ on a flat surface measures 3.44 mm and 6.98 mm (Decision 29), so a sector median a millimetre above zero is not evidence of anything, and the rule would fire on noise wherever a sector fails for coverage reasons.
+- **Leave Decision 30 proposed until the captures arrive** - Change nothing; let the session settle the design question and the constants together - Rejected because it spends the session's evidence twice. The session would arrive at a measure whose shape was still unfixed, and the magnitude question it would then answer is one the corpus in hand answers already.
+- **Keep `minSupportingSectors` and add the crossed-sector ceiling beside it** - Two sector guards, one floor and one ceiling - Rejected as unreachable rather than wrong: Decision 33 measured that only 4 of 8 sectors reach the inner band's 13.7 mm on either capture, so a floor of 6 cannot be met by plate geometry before support is consulted at all. Retaining it would keep a bar no capture can clear.
+
+### Consequences
+
+**Positive:**
+
+- The sector trio's non-capture blocker is removed. Task 26's detail said the trio waits on captures 1–6 *and* on Decision 30's proposal; it now waits on captures only.
+- One axis of the rule costs no new constant. The magnitude bar is inherited from `ringBandMm` with 11.6 mm of headroom on each side, so the capture session has one count to set rather than a count and a threshold.
+- The rule is stated, so capture 6 has a defined quantity to produce rather than a proposal to adjudicate, and the measurement pass already dumps the statistic it needs.
+- Decision 18's silent-failure case is measured end to end for the first time: an aggregate ring median of +3.04 mm — inside `ringMedianMaxMm` — over three sectors reading +16.6 to +19.8 mm.
+- Applying the rule across all six corpus candidates rather than the two intended ones shows it is not degenerate: one plane reads 6 crossed and 0 escaped, one reads 0 and 7, and one is genuinely mixed at 2 and 4.
+
+**Negative:**
+
+- Req 3.6's guard still ships in its blind form. The shipped `minSupportingSectors = 6` is both asserted and, per Decision 33, unreachable, and this decision does not change that — it records what will replace it.
+- One `[owed]` constant is traded for another. `minSupportingSectors` and `sectorSupportMin` do not leave the list, and `maxCrossedSectors` joins it; the net count of owed sector constants rises until capture 6 arrives.
+- The classification rests on two captures and six planes, both captures flat bread on a white plate. The sign separation is 23 mm and unambiguous, but "no correct fit carries a crossed sector" is asserted of scenes the corpus does not contain — a rimmed plate is the obvious counter-case, where a correct plane's ring reaches a rim that is genuinely above it, and that is capture 3/4's scene rather than capture 6's.
+- Implementing later means `RingStatistics` and the Req 6.4 persisted fields widen after task 12 settled them, as Decision 30 noted.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`failingSectorSignSeparatesWhatTheCountCannot` and the `SectorSigns` helper), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md` (the owed-numbers section and the `SupportRegion` sketch), `prerequisites.md` (capture 6's second job), `decision_log.md` (Decision 30's status) and task 26's detail. **No shipped behaviour changes**: no constant's value moves and no guard is rewired.
 
 ---
