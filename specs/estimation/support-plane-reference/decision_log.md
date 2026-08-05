@@ -1571,3 +1571,66 @@ The guard-order note is recorded because it is a live trap rather than a defect.
 `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`CandidateMeasurement`, `measurements`, `allRejections` and five derivation tests), the constant comments and the `admissibility` order note in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
 
 ---
+
+## Decision 35: Req 5.1's tolerance is a grid-transfer measurement, and one bar does not transfer
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Req 5.1 asks for support-plane coefficients "equal within a documented tolerance, verified on a named fixture", and `design.md` lists that tolerance and that fixture among the numbers the design owes. Decisions 29 to 34 each took an `[owed]` constant; this one takes the two owed figures that are not constants at all.
+
+Half the question was answered by construction and has been since task 16. Device and offline replay run **one** implementation, so on identical bytes the arithmetic is identical — `fitIsDeterministic` asserts it for Req 7.7 — and a tolerance over that measures nothing. What legitimately differs between a device capture and a replay is the **depth grid**: `design.md`'s own transfer table names the N5k identity grid as the case the millimetre-denominated radii exist to survive. Until now that claim was tested only on a synthetic scene built to satisfy it (`fitTransfersAcrossDepthGrids`), where the geometry is exact by construction and the answer is the premise.
+
+`SupportPlaneCorpusMeasurementTests` gains three tests that measure it on the committed captures instead: decimate the depth grid, refit, and compare where the plane cuts the food-mask centroid ray. That comparison point is chosen because volume is integrated per-pixel above the plane, so a millimetre of movement there is a millimetre added to every food pixel — the units the tolerance has to be in to constrain anything.
+
+### Decision
+
+**The tolerance is 1 mm, and the named fixture is `1785135663727`.** Across a 2× depth-grid halving — 256×192 to 128×96, a different RANSAC seed, and a quarter of the samples — the plane moves **0.835 mm** on `1785135663727` and **0.037 mm** on `1785901032716`, with normals tilting 0.945° and 0.063° and the ring measure moving 0.52 mm and 0.06 mm. One millimetre is the wider of those rounded up; the corpus meets it at 84 %, so it is a measured bar rather than a comfortable one. The fixture named is the wider capture, which is already the fixture Reqs 6.2 and 7.1 name.
+
+Two things this bounds and two it does not.
+
+**The transfer has a resolution floor, and the floor is the ring's.** Halving again refuses the fit outright: at 64×48 the inner band holds **37** and **32** samples against `ringMinSamples = 200`, so `ringBandsAreFeasible` returns false before any plane is fitted. The inner band is the narrowest in millimetres and therefore the first to fall under a pixel of width. Both bounds that decide this are the same quantity — `mmPerPx = z / f_d` — so coarsening the grid divides `f_d` exactly as increasing the range multiplies `z`, and this is Decision 29's ~365 mm range envelope reached from the other direction. Note also that at 128×96 the 4 px smear is already **14.9 mm** against `ringInnerMm = 8` and the plane still transfers within a millimetre: the smear bound governs how clean the ring *measure* is, not where the plane lands.
+
+**`planeCandidateCount` is grid-dependent where the plane is not.** Both captures extract three candidates natively and two at half resolution, because each pass leaves a smaller residue. That field is persisted (Req 6.1, task 12), so a device/replay comparison must read it as a property of the capture's resolution rather than of the scene.
+
+**`minAcceptedExtentPx` does not transfer at all.** It is the only bar in `admissibility` denominated in pixels; every other one is millimetres or a dimensionless fraction, which is precisely what Req 5.1's transfer rests on. Extents halve with the grid — 123→61, 155→77, 44→22 — and the third of those crosses the bar: a surface the guard admits at 44 px is rejected as a sliver at 22 px, same scene, same plane, same 24. Decision 32's 13…26 bracket is therefore a **256×192** bracket, and nothing said so where the constant is defined.
+
+### Rationale
+
+The tolerance had to be denominated in something the requirement cares about. Plane coefficients are not comparable in the abstract — `d` is in millimetres but the normal is dimensionless, and a small tilt on a distant plane moves the surface more than a large tilt on a near one. Evaluating both planes on one fixed camera ray through the food gives a single number in millimetres that is exactly the per-pixel volume error, which is the quantity Req 5.1 exists to protect.
+
+Decimation was chosen over interpolation or synthetic rescaling because it is the only resampling that invents no depth values. It subsamples one sensor's output, and that is also its limit: it models a coarser **grid**, not a different sensor, so it carries this sensor's smoothing with it. The device leg of Req 5.1 — the same capture fitted on the phone and in replay — stays task 27's, and this measurement does not pre-empt it. What it does is give task 27 a bar to report against instead of a blank.
+
+The `minAcceptedExtentPx` finding is the reason this is worth a decision rather than a line in the dump. Req 5.1's transfer argument is stated as a property of the design — "everything downstream is millimetre-denominated off `mmPerPx`" — and it is true of every constant but one. The exception is not hypothetical: `tools/nutrition5k/ingest.py` pins N5k at f = 617 px against the device's measured f_d = 182 px, so the same physical extent spans **3.4×** more pixels on the N5k grid, and 24 px is a materially stricter bar on the device than on the corpus the calibration will be fitted against. Nothing has hit it yet only because pre-checkpoint N5k ingestion runs no segmenter, so those fixtures carry no food mask and never reach the guard. Model-production Bucket C is when they do.
+
+### Alternatives Considered
+
+- **Document the tolerance as exact equality** - One implementation, same bytes, same plane; state 0 mm and cite `fitIsDeterministic` - Rejected because it answers a question nobody is at risk from. Req 5.1 exists so that a β_c fitted offline is valid on device, and the two corpora differ in depth resolution, not in arithmetic. A tolerance of zero would be true and would license nothing.
+- **Derive the tolerance from the ~5 % device-to-replay volume divergence Req 7.2 quotes** - There is already a figure in the spec; convert it to millimetres - Rejected because that figure is a *volume* divergence measured on the pre-feature path, and it bundles segmentation, class, and density with the plane. Converting it back into a plane tolerance would attribute all of it to geometry.
+- **Test the transfer by upsampling instead of decimating** - Replicate each depth pixel 2×2 to reach a finer grid, closer to the N5k direction - Rejected because it adds no information: a nearest-neighbour upsample is the same surface sampled redundantly, so the RANSAC draws land on duplicated points and the fit is bounded to agree. Decimation removes information, which is the direction that can fail.
+- **Re-denominate `minAcceptedExtentPx` in millimetres now** - Replace the pixel bar with `extentMm ≥ k` and set k from the corpus - Rejected as out of scope and premature in the same way Decision 30's sector fix is. It changes what `admissibility` computes, the constant is `[owed]` and bracketed rather than set, and the capture session is what settles the bracket. Recorded here and in the constant's comment so the session sets it in the right units.
+
+### Consequences
+
+**Positive:**
+
+- Two of the four figures `design.md` lists as owed beyond the constants are now measured, and one of the four gates on task 27's device leg rather than on a capture session.
+- Req 5.1's transfer claim is verified on real captures for the first time; it was previously verified only on a scene constructed to satisfy it.
+- The resolution floor is a number — 128×96 holds, 64×48 refuses — and it is shown to be the same `mmPerPx` bound as Decision 29's range envelope, so two envelopes become one.
+- A live defect in the calibration path is identified before it can fire: `minAcceptedExtentPx` is 3.4× stricter on the device than on the N5k grid it will be fitted against, and Bucket C is when that starts to matter.
+- `planeCandidateCount`'s grid dependence is recorded before someone compares it across references and reads a resolution change as a scene change.
+
+**Negative:**
+
+- The tolerance is derived from decimation, which models a coarser grid rather than a different sensor, so it does not bound sensor-to-sensor divergence — and the device/replay pair Req 5.1 literally names is still unmeasured until task 27.
+- Two captures, one halving: 0.835 mm and 0.037 mm differ by 20×, so the corpus says little about what governs the spread, and a third capture could exceed 1 mm.
+- `minAcceptedExtentPx` is now known to be wrongly denominated and is not fixed, so the feature ships a guard whose verdict depends on the sensor grid.
+- Task 26 stays open and task 27 stays blocked behind it; nothing here needs a capture, and nothing here closes a constant.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`GridFit`, `decimated`, `foodCentroidRay`, `planeDepthMm`, `gridTransferToleranceMm` and three derivation tests), the `minAcceptedExtentPx` comment in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `requirements.md` Req 5.1, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---
