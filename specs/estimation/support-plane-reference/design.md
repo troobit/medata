@@ -56,18 +56,22 @@ Score a candidate by **the size of its largest 8-connected inlier component**, n
 
 It cannot prefer the plate over the table: the table is a genuine single surface with a far *larger* connected component, so component scoring makes the table win a pass more decisively, not less. What surfaces the plate is sequential extraction removing the table in pass 1, and then ring-based selection choosing among the residue.
 
-**Whether the smeared ramp bridges the two inlier sets is contested and unresolved.** One review argued it does: the rim descends ~26 mm over ~5–6 depth pixels, so a plane tilted 6.7° (inside the 15° cone) crosses it and joins plate-side to table-side inliers through a stripe ~1–2 px wide, which 8-connectivity needs only 1 px to use. A second review refuted that from the cone: the ramp's own slope is ~73°, a 15°-capped plane rises only ~2.1 mm across its whole width, so the plane cannot *track* the ramp and any bridge is local to a single crossing rather than an annular seam. Both are right about their own claim — a plane cannot follow the ramp, but it does not need to if one crossing suffices. **Task 26 settles it by measurement; neither reading may be assumed.**
+**Whether the smeared ramp bridges the two inlier sets was contested — SETTLED, and it does (Decision 52).** One review argued it does: the rim descends ~26 mm over ~5–6 depth pixels, so a plane tilted 6.7° (inside the 15° cone) crosses it and joins plate-side to table-side inliers through a stripe ~1–2 px wide, which 8-connectivity needs only 1 px to use. A second review refuted that from the cone: the ramp's own slope is ~73°, a 15°-capped plane rises only ~2.1 mm across its whole width, so the plane cannot *track* the ramp and any bridge is local to a single crossing rather than an annular seam. Task 26 has now measured it, and the first reading holds: at the **shipped** band, on `1785901032716` — where all three candidate planes sit within 5.4° of gravity and their pairwise separations are 11.594…20.892 mm, so surface assignment is unambiguous — the plate candidate's largest connected component holds **22.1 %** of its members within one band of the surface below it. The second reading's premise also fails independently: the 15° cone is *not enforced* on the candidate set (below).
 
-**What the source paper does settle, and it is more useful.** Gallo et al. state outright that *"for large enough values of ε, an incorrect plane straddling across the two patches will produce a large number of connected inliers"*, and their Fig. 4 gives the operating envelope: reliable while **ε/h ≲ 0.25–0.35** (h = 5 reliable to ε = 1.25; h = 10 reliable to ε = 3.5). With `inlierBandMm = 5`:
+**What the source paper settles, restated from the corpus (Decision 52 supersedes the table below).** Gallo et al. state outright that *"for large enough values of ε, an incorrect plane straddling across the two patches will produce a large number of connected inliers"*, and their Fig. 4 gives the operating envelope: reliable while **ε/h ≲ 0.25–0.35** (h = 5 reliable to ε = 1.25; h = 10 reliable to ε = 3.5). With `inlierBandMm = 5`:
 
 | Step | h | ε/h | |
 |---|---|---|---|
-| Plate above table | 26 mm | 0.19 | inside the validated envelope |
-| Rim above well, deep plate | 28 mm | 0.18 | inside |
+| Plate above table | ~~26 mm~~ → **11.706 mm measured** | ~~0.19~~ → **0.427** | ~~inside the validated envelope~~ → **outside** |
+| Rim above well, deep plate | 28 mm | 0.18 | inside (unmeasured — needs a rimmed-plate capture) |
 | Rim above well, narrow rim | 12 mm | 0.42 | **outside** |
 | Rim above well, minimum | 10 mm | 0.50 | **outside** |
 
-So component scoring is validated for the defect this feature fixes and **not** validated for the rimmed-plate case Req 3.8 and Decision 14 exist to handle. Three further transfer gaps: the paper's model is orthographic with a hard step and vertically-i.i.d. noise — no ramp, no perspective, no spatially-correlated smoothing; the paper warns CC-RANSAC is *worse* than plain RANSAC at very small ε, because components become too small to support the correct plane, which bears on this design's ~4× smaller sample set; and the rim measurement the envelope depends on is one of the ruler measurements prerequisites asks for.
+**The first row is superseded.** Its 26 mm is pipeline Decision 6's plane *error at the food*, not the step between the two competing surfaces over the annulus. Measured from the shipped run, the table (ring median +3.039 mm) and the plate (−2.658 mm) on `1785901032716` are **11.706 mm** apart, so ε/h is **0.427** — outside the envelope and in the same band as the two rows this table already marked outside. On `1785135663727` the closest competing pair is 19.464 mm, ε/h 0.257, at the envelope's lower edge rather than at 0.19. So component scoring is **not** validated for the defect this feature fixes either, and the conclusion the paragraph below drew from this table no longer follows.
+
+Three further transfer gaps stand, and two of them are now load-bearing rather than caveats: the paper's model is orthographic with a hard step and vertically-i.i.d. noise — no ramp, no perspective, no spatially-correlated smoothing; the paper warns CC-RANSAC is *worse* than plain RANSAC at very small ε, because components become too small to support the correct plane, which bears on this design's ~4× smaller sample set (unreadable on the corpus — at 1 mm every other constraint is already violated); and the rim measurement the envelope depends on is one of the ruler measurements prerequisites asks for.
+
+**The gravity cone is not an invariant of the candidate set (Decision 52).** `SupportRegion.extractCandidates` gates gravity on the RANSAC hypothesis and on every consensus-polish iteration, but not on the first refinement between them, and a polish that reaches its fixed point immediately leaves that plane standing. The committed corpus contains a candidate at **20.512°** against a stated 15° cone, and at a 4 mm band the same slot reads 25.422°. It is rejected downstream on `extent` and `supportFraction`, so nothing observable changes, but any argument stated in terms of the cone — including the refutation above — is stated about a bound the candidate set does not respect. Repairing the gate removes a candidate and moves the answer, so it is priced at the capture sitting rather than applied here.
 
 What actually rejects such a straddler is the ring guards. The aggregate bar sits close to its threshold — for a 6.7° tilt over the inner ring, support fraction ≈ 0.56 against a 0.60 minimum — but the sector guard does not: a tilted plane's in-band samples concentrate in the arcs near its zero-crossings, so its supporting sectors fall well short of the bar. The aggregate margin is a measurement to confirm on the corpus, not one to rely on.
 
@@ -271,7 +275,12 @@ public enum SupportRegion {
     public static let ringBandCount = 3        // structural: inner/mid/outer
     public static let bandStepMaxMm: Float = 6 // [owed] below the smallest measured rim step
     public static let supportVisibilityMin: Float = 0.15 // [owed] capture 4 is the only source
-    public static let ringBandMm: Float = 5    // [inherited] inlierBandMm = 5
+    public static let ringBandMm: Float = 5    // [inherited] inlierBandMm = 5 — and
+                                               // THAT is [owed]: it carried no
+                                               // derivation and four markers here
+                                               // terminate in it. Corpus interval
+                                               // EMPTY at the shipped bars; moves the
+                                               // plane 18.1/19.4 mm (Decision 52)
     public static let ringSupportMin: Float = 0.6 // [owed] vs support-surface noise
                                                   // (Decision 46 tension; task 26)
     // Sector measure (Req 3.6, Decisions 18–20). Sectors are equal arcs about the
