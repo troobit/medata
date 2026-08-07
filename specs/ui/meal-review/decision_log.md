@@ -731,4 +731,4 @@ The eligible universe is 25 solid classes. A five-item shortlist already covers 
 **Negative:**
 - The shortlist is worse until the estimation spec lands: recency cannot suggest a food the user has never chosen.
 - Early corpus rows carry recency-ordered ranks, so shortlist-quality analysis must partition on `shortlist_source`.
-- A second spec is now owed, and until it exists Decision 13's finding sits recorded but unremedied.
+- A second spec is now owed, and until it exists Decision 13's finding sits recorded but unremedied. Filed 2026-08-07 as [`estimation/alternative-class-candidates`](../../estimation/alternative-class-candidates/requirements.md), at its requirements gate; its Decision 3 corrects two figures used above — the tensor is 36 channels, not 33 (~99.5 M reads at 1920 × 1440), and the loop this decision proposed extending is serial, not parallelised.
