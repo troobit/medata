@@ -24,8 +24,8 @@ Following the requirements diff dated 2026-05-28, the following design deltas ap
 | MAE bar | Relaxed from ≤ 10 g to ≤ 25 g per meal. Informational only — the harness that measures it is feature-flagged off. | Req §21.3 |
 | §21 harness + §6.9 β_c calibration + §6.13 calibration round-trip + §7.3 integration tests + §7.5 mIoU bench | **Feature-flagged off in v1** via the `HARNESS_ENABLED` Swift compile flag. All harness source (`AccuracyHarness`, `BetaCalibrator`, `FixtureLoader`, `FixtureRunner`, `SegBench`, `HarnessCLI/main.swift`, and the `HarnessCLITests` target) is wrapped in `#if HARNESS_ENABLED`. The flag is defined only in the `HarnessCLI` SPM target's `swiftSettings`; the iOS app target never defines it, so the shipping app binary contains zero harness code. No CI gate on harness output. Developer runs the harness locally for pipeline validation. | Decision 41 (supersedes 34), Req §21 |
 | Class palette size | 24–40 food classes (inclusive range), not exactly 24. | Req §8.4 |
-| Localisation scope | `ifcdbOverlay`-driven Irish-specific path is removed; primary market assumption is "English-speaking" via CoFID + AFCD. | Req §19 |
-| Phase 1 segmenter | Phase 1 (RUNNING DEVICE) ships with `StubInferenceEngine` instead of a trained `.mlpackage`. Selected at compile time by the `DEV_STUB_SEGMENTER` Swift flag (defined in the iOS app target's Debug config in `Package.swift`; undefined in Release). Stub emits deterministic per-pixel argmax to a single non-background class. Result view shows a high-contrast Irish-English placeholder banner so dev-stub estimates cannot be confused for real ones. Removed when Phase 3 bundles the trained model. | Decision 42, Req §23 |
+| Localisation scope | `ifcdbOverlay`-driven region-specific path is removed; primary market assumption is "English-speaking" via CoFID + AFCD. | Req §19 |
+| Phase 1 segmenter | Phase 1 (RUNNING DEVICE) ships with `StubInferenceEngine` instead of a trained `.mlpackage`. Selected at compile time by the `DEV_STUB_SEGMENTER` Swift flag (defined in the iOS app target's Debug config in `Package.swift`; undefined in Release). Stub emits deterministic per-pixel argmax to a single non-background class. Result view shows a high-contrast placeholder banner so dev-stub estimates cannot be confused for real ones. Removed when Phase 3 bundles the trained model. | Decision 42, Req §23 |
 | Pipeline wiring | `App.swift`'s `PendingPipeline` stand-in is replaced with `Pipeline.makeForDevice(store:)`, a factory that constructs the real `Pipeline` instance backed by `StubInferenceEngine` (Phase 1) or `CoreMLInferenceEngine` (Phase 3). `PipelineEstimator` protocol signature aligned: `estimate(captureResult:mode:)` — fixes the Xcode-only build error where the protocol declared no `mode:` and the call site / stand-in passed one. | Decision 42, Req §23.1 |
 | Delivery phasing | Numeric accuracy (Req §21.3) and segmenter mIoU (Req §8.9) targets apply to Phase 3 only. Phase 1 success is "tap shutter on device, see placeholder carb value on result view, meal persists." Phase 2 is UI/UX iteration on device. | Req "Delivery phases", Req §23 |
 
@@ -115,7 +115,7 @@ public enum CaptureMode: String, Sendable, Codable, CaseIterable {
 // Pipeline.estimate(_:mode:) takes the active mode explicitly; no inference from LiDAR coverage.
 ```
 
-The path *capability* check still runs (Single mode requires LiDAR-supported hardware), but the threshold-based auto-fallback from prior revisions is gone — Single mode is either selectable (LiDAR present) or refused at capture time with an Irish-English message directing the user to switch to Double. The recorded `capturePath` on the `MealRecord` is the path actually executed, copied from `mode`. Confidence sub-confidences still differ per path per [13.2].
+The path *capability* check still runs (Single mode requires LiDAR-supported hardware), but the threshold-based auto-fallback from prior revisions is gone — Single mode is either selectable (LiDAR present) or refused at capture time with a message directing the user to switch to Double. The recorded `capturePath` on the `MealRecord` is the path actually executed, copied from `mode`. Confidence sub-confidences still differ per path per [13.2].
 
 ### 2.4 Integration points
 
@@ -748,7 +748,7 @@ The Swift types in §3 are typealiases or thin wrappers over the generated proto
 | All food pixels are `unknown_food` | [8.6] | Compute volume; report 0-confidence "unknown carbs" |
 | `mealsDbCorrupt` | new | Quarantine to `meals.sqlite.corrupt-{ts}` and start fresh; alert user that historical meals are unavailable but capture continues |
 
-`Pipeline.estimate(_:)` is `async throws -> MealRecord`; refusal cases throw a `EstimationFailure` enum value mapped one-to-one with the table above. The UI catches and dispatches a localised Irish-English message per case. Throwing rather than returning `Result` keeps the call-site shape consistent with other `async throws` APIs (Core ML inference, GRDB writes) used inside `Pipeline.estimate`.
+`Pipeline.estimate(_:)` is `async throws -> MealRecord`; refusal cases throw a `EstimationFailure` enum value mapped one-to-one with the table above. The UI catches and dispatches a message per case. Throwing rather than returning `Result` keeps the call-site shape consistent with other `async throws` APIs (Core ML inference, GRDB writes) used inside `Pipeline.estimate`.
 
 ---
 

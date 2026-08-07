@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-// Tests for tools/check_spelling.sh — the Irish/British English linter (Req 19.2).
+// Tests for tools/check_spelling.sh — the spelling linter behind `make spell`.
 // Each test creates a temporary Swift file, runs the shell script against it, and
 // verifies the exit code. These tests run on macOS (the linter is a shell script).
 final class SpellingLinterTests: XCTestCase {
@@ -61,7 +61,7 @@ final class SpellingLinterTests: XCTestCase {
         try assertLinterFails(source: #"let org: Organization"#)
     }
 
-    // MARK: – Correct Irish/British English (must be accepted)
+    // MARK: – Correct spellings (must be accepted)
 
     func testAllowsRecognised() throws {
         try assertLinterPasses(source: #"let x = "recognised""#)

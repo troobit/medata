@@ -48,7 +48,7 @@ Covers the SwiftUI surfaces in `App/` (result and history screens, Graph, Record
    - Acceptance: the Graph metric-chip row (`Carbs / Glucose / Insulin / Protein · Fat`, `TrendsView.metricChips`) renders all chips fully legible in portrait — wrapping, resizing, or scrolling are all acceptable; truncation is not.
    - Acceptance: the result screen's banners, pills, and the new portion control render without ellipsis truncation in portrait at default Dynamic Type.
 6. All new and changed UI SHOULD follow the existing design system (`Colors.swift` palette, capture-chrome treatment on result surfaces, the label-wrapped Button pattern from `docs/agent-notes/ui-capture-flow.md`).
-   - Acceptance: new buttons place sizing/`contentShape` inside the Button label (the dead-pill trap); result-surface additions use the capture palette; `make spell` passes (Irish/British English, no reassurance/disclaimer copy).
+   - Acceptance: new buttons place sizing/`contentShape` inside the Button label (the dead-pill trap); result-surface additions use the capture palette; `make spell` passes; no reassurance/disclaimer copy.
 
 ## Execution notes
 

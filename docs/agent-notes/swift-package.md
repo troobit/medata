@@ -339,7 +339,7 @@ Tasks 49–54 are done. Test count: 207 (was 189 after Persistence).
   Lives in the CardDetection module so Vision-based implementations stay in the App
   target (MedataCore is platform-agnostic).
 - `Pipeline/EstimationFailure.swift` — closed enum with 13 cases, one-to-one with
-  design §5 table. Each case has an Irish-English `.localisedMessage` (task 52).
+  design §5 table. Each case has a `.localisedMessage` (task 52).
   `lidarCoverageTooLow([String])` carries the affected class names.
 - `Pipeline/CaptureResult.swift` — input bundle: capturePath, lidar status, nadir +
   oblique frames, databaseEdition, paletteVersion.

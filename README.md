@@ -91,7 +91,7 @@ The **Makefile** is where to make things.
 ```sh
 make build     # swift build — the MedataCore SwiftPM core + Harness targets
 make test      # swift test; prints BOTH totals (XCTest AND swift-testing)
-make spell     # Irish spelling linter (Req 19.2)
+make spell     # Spelling linter
 ```
 
 The on-device loop drives the Xcode app target on a connected iPhone:

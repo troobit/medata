@@ -14,7 +14,7 @@ The root technical finding this PRD acts on: `tools/segmenter/train.py` trains D
 - Land a class-imbalance-aware training recipe in `tools/segmenter/` as **configurable, off-by-default** options (weighted CE / focal / dice / combined loss; photometric augmentation), fully covered by the existing torch-free unit-test approach, so the next training run is a single command away.
 - Add a **deterministic, offline** mask post-processing cleanup step that removes isolated-pixel speckle and consolidates the food silhouette, directly reducing the "stripes of spots" on the overlay independent of model quality — with the existing MedataCore math tests kept green.
 - Reduce carb-reading run-to-run variance in the deterministic volume/plane-fit/β application path via conservative, additive robustness (outlier rejection / guards), with the change reviewable in the diff and existing tests green.
-- Preserve every hard invariant: no LLM and no network anywhere in the estimation path; fully deterministic and offline; Irish/British English spelling.
+- Preserve every hard invariant: no LLM and no network anywhere in the estimation path; fully deterministic and offline.
 
 ## Non-goals
 
@@ -83,9 +83,9 @@ Covers the deterministic geometry/β chain in `MedataCore/Sources/` — `Support
 
 ## Execution notes
 
-- Quality gates (root `Makefile`): `make build` (SwiftPM core), `make test` (reports TWO totals — XCTest and swift-testing; report both), `make spell` (Irish/British English via `tools/check_spelling.sh`). Python tools use their existing pytest suites under `tools/*/tests/` and must stay torch-free-passing. App/device targets (`make build-app`, `make deploy-release`, `make logs-device`) are human/device-gated — do not invoke autonomously.
+- Quality gates (root `Makefile`): `make build` (SwiftPM core), `make test` (reports TWO totals — XCTest and swift-testing; report both), `make spell` (via `tools/check_spelling.sh`). Python tools use their existing pytest suites under `tools/*/tests/` and must stay torch-free-passing. App/device targets (`make build-app`, `make deploy-release`, `make logs-device`) are human/device-gated — do not invoke autonomously.
 - Ordering: **Segmentation approach research** is authored first; its ranked recommendations refine the priorities of the **Segmenter training pipeline** context. The two contexts are still independently implementable — the training-pipeline direction (class-imbalance-aware loss + photometric augmentation as opt-in flags) is well-justified on its own, and the research validates/reprioritises rather than blocks it. **Mask post-processing cleanup** and **Estimation runtime consistency** are independent of both and of each other.
-- Every landed code change must keep the estimation path deterministic and offline (hard invariant) and preserve Irish/British spelling.
+- Every landed code change must keep the estimation path deterministic and offline (hard invariant) and pass `make spell`.
 - STOP — actually running a segmenter training job (multi-hour local MPS / GPU), exporting to Core ML, and swapping the bundled `segmenter.mlpackage` is human/compute-gated. Autonomous work stops at "the improved recipe is landed, tested, and the run command is documented".
 - STOP — on-device verification (deploy a rebuilt model, capture a plate, confirm the overlay speckle is gone and readings are stable) requires a physical iPhone and a human; it is the real acceptance gate for the model-quality half and cannot be automated.
 - STOP — β_c coverage improvement that needs gravimetric measurements or the full Nutrition5k download is data-gated; it stays a recommendation routed to `nutrition5k-calibration` / `cross-dataset-calibration`, not executed here.

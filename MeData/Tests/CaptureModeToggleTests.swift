@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import MeData
 
 // Task 47 / Req §20.5 / Decision 16. Behavioural assertions for the
@@ -48,17 +49,16 @@ struct CaptureModeToggleTests {
         #expect(CaptureModeStorage.key == SettingsKeys.captureMode)
     }
 
-    @Test("no-LiDAR refusal copy is Irish-English (Req §4.2 / §12.1)")
+    @Test("no-LiDAR refusal copy is surfaced verbatim (Req §4.2 / §12.2)")
     func noLiDARRefusalCopy() {
-        // British/Irish spelling: "sensor" is the same in both; key word here
-        // is "LiDAR-equipped" + product-line phrasing matches existing
-        // EstimationFailure.noLidarDevice (which uses "depth sensor").
+        // Key words are "depth sensor" + "LiDAR": the copy must match
+        // EstimationFailure.noLidarDevice verbatim (Req §12.2).
         let copy = CaptureModeStorage.noLiDARRefusal
         #expect(copy.contains("depth sensor"))
         #expect(copy.contains("LiDAR"))
     }
 
-    @Test("label values are Irish-English")
+    @Test("mode labels match the copy inventory")
     func labels() {
         #expect(CaptureMode.single.label == "Single")
         #expect(CaptureMode.double.label == "Double")

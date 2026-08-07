@@ -418,7 +418,7 @@ Soup, smoothies, milk, yoghurt, custard, gravy and clear liquids (water, tea, fr
 
 ### Decision
 
-Liquids and semi-liquids are out of scope for v1. The segmenter palette includes an `unsupported_liquid` class that catches them; pixels assigned to that class are excluded from volume estimation and the meal is flagged with an Irish-English message stating that liquids are not estimated in v1.
+Liquids and semi-liquids are out of scope for v1. The segmenter palette includes an `unsupported_liquid` class that catches them; pixels assigned to that class are excluded from volume estimation and the meal is flagged with a message stating that liquids are not estimated in v1.
 
 ### Rationale
 
@@ -1426,7 +1426,7 @@ There is also an active build error: `PipelineEstimator.estimate` declares `(cap
 
 Phase 1 of v1 (RUNNING DEVICE) ships a `StubInferenceEngine` in `MedataCore/Sources/Segmentation/` that conforms to `SegmenterInferenceEngine` and emits a deterministic per-pixel argmax to a single non-background class. It is selected at compile time by a new Swift flag, `DEV_STUB_SEGMENTER`, defined in the iOS app target's Debug `swiftSettings` in `Package.swift`. The flag is not defined in Release.
 
-`App.swift` constructs the real `Pipeline` via a new `Pipeline.makeForDevice(store:)` factory that branches on `#if DEV_STUB_SEGMENTER`. `PendingPipeline` is deleted. The factory stamps each `MealRecord` with a `segmenterSource: String` field (`"dev_stub"` or `"coreml_<modelVersion>"`); the result view shows a high-contrast Irish-English placeholder banner when the value is `"dev_stub"`, so a dev-stub estimate cannot be confused for a real one. The banner reads from the persisted field, not from the build flag, so Phase 1 records remain marked as placeholders when viewed under a later Phase 3 build.
+`App.swift` constructs the real `Pipeline` via a new `Pipeline.makeForDevice(store:)` factory that branches on `#if DEV_STUB_SEGMENTER`. `PendingPipeline` is deleted. The factory stamps each `MealRecord` with a `segmenterSource: String` field (`"dev_stub"` or `"coreml_<modelVersion>"`); the result view shows a high-contrast placeholder banner when the value is `"dev_stub"`, so a dev-stub estimate cannot be confused for a real one. The banner reads from the persisted field, not from the build flag, so Phase 1 records remain marked as placeholders when viewed under a later Phase 3 build.
 
 The `PipelineEstimator` protocol gains the `mode:` parameter so the protocol matches its call sites. The Xcode build error is resolved.
 

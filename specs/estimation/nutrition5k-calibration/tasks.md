@@ -313,7 +313,7 @@ references:
 
 - [x] 36. Implement the three-state banner and additive liquid flag in ResultView <!-- id:i3we69t -->
   - App/ResultView.swift: showsUncalibratedBanner's boolean becomes the three-state calibration-confidence signal plus the independent additive liquid flag; softened copy "population-calibrated — not yet verified on this device"; reuse the existing banner styling — presentation stays model-production-owned (8.3).
-  - British English; run bash tools/check_spelling.sh.
+  - Run bash tools/check_spelling.sh.
   - Blocked-by: i3we69s (Extend the showsUncalibratedBanner tests to the three-state matrix)
   - Stream: 5
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3)

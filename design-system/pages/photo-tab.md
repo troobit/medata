@@ -71,10 +71,10 @@ Whole chip uses `captureChromeBG` background, 14pt corner radius, `padding(.hori
 Replaces the v1.0 segmented control with a capsule-pill design that fits the slim chrome above the shutter:
 
 - Pill background: `captureChromeBG`, 22pt corner radius (fully rounded), 44pt tall.
-- Two text labels inside: "Single" / "Double" (Irish-English), `body` weight 600.
+- Two text labels inside: "Single" / "Double", `body` weight 600.
 - Active label: solid `medataAccent`-on-`captureBackground` inner pill (8pt margin inside the outer pill). Inactive label: white text, no inner pill.
 - Tap inactive label: spring (`.bouncy 200ms`) slide of the inner pill to the new position; UserDefaults write.
-- Disabled state for "Single" when `!supportsLiDAR`: label opacity 0.4, no inner pill on tap; trying to tap it emits the existing Irish-English no-LiDAR refusal.
+- Disabled state for "Single" when `!supportsLiDAR`: label opacity 0.4, no inner pill on tap; trying to tap it emits the existing no-LiDAR refusal.
 - Positioned 24pt above the shutter, horizontally centred.
 
 ### Shutter — `ShutterButton`
@@ -129,7 +129,7 @@ Specifics:
 Replaces the v1.0 top banner with a bottom sheet so the refusal copy is anchored near the user's thumb on the shutter:
 
 - Presented via `.presentationDetents([.fraction(0.35)])` with `.presentationDragIndicator(.visible)`.
-- Sheet content: SF Symbol matching the failure (e.g. `nosign` for `noScaleAvailable`), large title (Irish-English), one-line explanation, single primary CTA "Try again" (matches `primary-action` rule).
+- Sheet content: SF Symbol matching the failure (e.g. `nosign` for `noScaleAvailable`), large title, one-line explanation, single primary CTA "Try again" (matches `primary-action` rule).
 - Background: `surfacePrimary` (system grouped). Dismiss by swipe-down or "Try again" tap returns the model to `.capturing(retryStage, ...)`.
 
 ---

@@ -228,7 +228,7 @@ reading_note: |
   - Make the tests from task 20 pass
   - Blocked-by: 7pbwp47 (Add App/Colors.swift with brand colour tokens), 7pbwp4m (Write tests for ResultView confidence pill thresholds)
   - Stream: 1
-  - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [12.1](requirements.md#12.1)
+  - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5), [12.2](requirements.md#12.2)
 
 - [x] 22. Extend App/SettingsView.swift with Export archive control <!-- id:7pbwp4o -->
   - **Note:** the retention-period picker and IFCDB toggle were since **removed** (research §0 / Decision 39, research task 74). The live settings are the `captureMode` toggle (Decision 35) plus the Export archive control below.
@@ -277,12 +277,12 @@ reading_note: |
 - [x] 26. Write XCUITest for refusal flow <!-- id:7pbwp4s -->
   - MeData/UITests/RefusalFlowUITests.swift
   - Inject fixture that trips EstimationFailure.noScaleAvailable
-  - Assert refusal banner appears with the localised Irish-English message
+  - Assert refusal banner appears with the message
   - Tap Try Again
   - Assert banner dismisses and state returns to .capturing at the right stage
   - Blocked-by: 7pbwp4p (Rewrite App/CaptureFlowView.swift root view), 7pbwp4q (Update App/App.swift for scenePhase forwarding to CaptureFlowModel)
   - Stream: 1
-  - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [12.1](requirements.md#12.1), [12.2](requirements.md#12.2)
+  - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [12.2](requirements.md#12.2)
 
 - [x] 27. Write XCUITest for backgrounding behaviour (best-effort §8.3) <!-- id:7pbwp4t -->
   - MeData/UITests/BackgroundingUITests.swift
@@ -370,7 +370,7 @@ reading_note: |
 - [x] 37. Implement MealsTabView (list, empty state, swipe delete, navigation destination) <!-- id:7pbwp53 -->
   - `App/MealsTabView.swift` wraps `MealListView` in its own `NavigationStack` with `.navigationDestination(for: MealRecord.self) { ResultView(record: $0, mode: .historyDetail) }`.
   - `App/MealListView.swift` is a `List(model.meals) { MealRow(record: $0) }` with `swipeActions(edge: .trailing)` providing a single Delete action wired to `await model.delete(record)`.
-  - Empty state: when `model.meals.isEmpty`, render the Irish-English copy and `fork.knife` SF Symbol per Req §19.5 in place of the list.
+  - Empty state: when `model.meals.isEmpty`, render the empty-state copy and `fork.knife` SF Symbol per Req §19.5 in place of the list.
   - No `.searchable`, no `EditButton`, no selection binding (Req §19.8).
   - Blocked-by: 7pbwp4y (Implement MealHistoryModel), 7pbwp50 (Implement MealRow view), 7pbwp52 (Add ResultPresentation parameter to ResultView; extract shared ConfidencePill)
   - Stream: 2
@@ -393,7 +393,7 @@ reading_note: |
 - [x] 40. Implement AppRoot TabView + wire from App.swift; add NSPhotoLibraryUsageDescription <!-- id:7pbwp56 -->
   - Create `App/AppRoot.swift` per design §"Tab shell (`AppRoot`)".
   - `MedataApp.body` returns `AppRoot(engine:, store:)` instead of the v1.0 direct `CaptureFlowView` presentation.
-  - Add `NSPhotoLibraryUsageDescription` Info.plist string in Irish-English ("MeData reads thumbnails of your captured meal photos to show them in your meal history.").
+  - Add `NSPhotoLibraryUsageDescription` Info.plist string ("MeData reads thumbnails of your captured meal photos to show them in your meal history.").
   - Do NOT set a custom tab-bar appearance — the system Liquid Glass material on iOS 26.5 is required (Req §18.4).
   - Decision: 15
   - Blocked-by: 7pbwp53 (Implement MealsTabView (list, empty state, swipe delete, navigation destination)), 7pbwp55 (Add tabSelectionChanged(to:) method to CaptureFlowModel)
@@ -453,7 +453,7 @@ reading_note: |
   - Create `App/CaptureTopBar.swift` per `design-system/pages/photo-tab.md` §"Top chrome".
   - Close (`xmark`) button: SF Symbol, 24pt, white, in a 40pt `captureChromeBG` capsule. Action: pop the navigation stack if any view is presented above the capture view; otherwise no-op.
   - Flash/torch toggle: SF Symbol `bolt.fill` / `bolt.slash.fill`, same capsule. Bound to `AVCaptureDevice.torchMode`. Hidden when the AR session is off or the device has no torch.
-  - Tests: close action behaviour with and without a presented sheet; torch toggle updates `AVCaptureDevice.torchMode`; both buttons announce VoiceOver labels in Irish-English.
+  - Tests: close action behaviour with and without a presented sheet; torch toggle updates `AVCaptureDevice.torchMode`; both buttons announce VoiceOver labels.
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3)
 
@@ -461,7 +461,7 @@ reading_note: |
   - Replace the v1.0 segmented control rendering with the pill design per `design-system/pages/photo-tab.md` §"Capture-mode pill".
   - Animated inner accent pill slides between Single and Double positions with spring `.bouncy(duration: 0.2)`.
   - Same `@AppStorage(SettingsKeys.captureMode)` binding (the namespaced key, not a bare `"captureMode"` literal — see single-mode-toggle-key-mismatch bugfix); no model changes.
-  - Disabled state for "Single" when `!supportsLiDAR`: label opacity 0.4, tap emits the existing Irish-English no-LiDAR refusal.
+  - Disabled state for "Single" when `!supportsLiDAR`: label opacity 0.4, tap emits the existing no-LiDAR refusal.
   - Tests: tap toggles UserDefaults; disabled-Single tap emits refusal; reduced-motion replaces the slide with a crossfade.
   - Stream: 2
   - Requirements: [20.3](requirements.md#20.3), [20.5](requirements.md#20.5)
@@ -478,7 +478,7 @@ reading_note: |
 
 - [x] 49. Replace RefusalBanner with RefusalSheet bottom sheet <!-- id:7pbwp5f -->
   - Create `App/RefusalSheet.swift` per `design-system/pages/photo-tab.md` §"Refusal banner". Bottom sheet via `.sheet(item: $model.refusal)` with `.presentationDetents([.fraction(0.35)])` and `.presentationDragIndicator(.visible)`.
-  - Content: SF Symbol matching the failure, large title (Irish-English), one-line copy, single "Try again" primary CTA.
+  - Content: SF Symbol matching the failure, large title, one-line copy, single "Try again" primary CTA.
   - Dismiss by swipe-down or "Try again" tap → `state = .capturing(retryStage, ...)`.
   - Delete `App/RefusalBanner.swift` and its references in `CaptureFlowView`.
   - Tests: each `EstimationFailure` case maps to a distinct symbol + copy; "Try again" returns to the right `retryStage`; swipe-down dismisses without state change.
@@ -543,7 +543,7 @@ reading_note: |
 - [x] 56. Remove tilt clause from shutter-enable gate; add oblique hard cap message <!-- id:7pbwp5m -->
   - In `CaptureFlowModel.GatingSnapshot` and `ShutterButton`'s enable predicate, remove the tilt-in-range condition.
   - Add the oblique-stage hard cap predicate: when `activeStage == .oblique` and `|Δθ_oblique − 25°| > 30°`, disable the shutter and show an inline "tilt closer to 25°" message above the shutter (or in the existing refusal sheet path — UX choice for the implementer; the requirement only says it must be surfaced).
-  - Map the new research `EstimationFailure.obliqueTiltOutOfRange` case to the Irish-English string "Tilt the camera closer to 25° for the angled view."
+  - Map the new research `EstimationFailure.obliqueTiltOutOfRange` case to the string "Tilt the camera closer to 25° for the angled view."
   - Tests: nadir-stage shutter is enabled at Δθ = 0°, 15°, 30°, 60° (no tilt gate); oblique-stage shutter is disabled at |Δθ−25°| = 31°+.
   - Decision: 18; research Decision 43
   - Requirements: [2.3](requirements.md#2.3), [7.2](requirements.md#7.2)

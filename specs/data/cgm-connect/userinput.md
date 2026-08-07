@@ -39,5 +39,5 @@ The app is for one person at this testing stage — excessive handholding in the
 - No LLM and no network in the estimation path; a LibreLinkUp sync is ingestion, firewalled.
 - Metric only — mmol/L, never mg/dL (convert on ingest).
 - Developer-phase: no reassurance/disclaimer/consent copy.
-- Irish/British spelling; verify with `make spell`.
+- Verify copy with `make spell`.
 </content>

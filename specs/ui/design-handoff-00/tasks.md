@@ -203,8 +203,8 @@ references:
 
 - [x] 27. Integration gate: build + test + spell + copy audit <!-- id:xi3gpnp -->
   - Clean xcodebuild of MeData.xcodeproj (all stubs filled, pbxproj resolves); make test green — report BOTH totals (XCTest + swift-testing); make spell clean
-  - Copy audit: every user-facing string in App/ matches copy-inventory.md verbatim (Req 14.2 compliance definition); Irish/British spelling (14.3)
+  - Copy audit: every user-facing string in App/ matches copy-inventory.md verbatim (Req 14.2 compliance definition)
   - Device verification is human-gated — see prerequisites.md
   - Blocked-by: xi3gpnf (SegmentationReviewView + MaskOverlayLoader + segmentation-review.md), xi3gpnh (ManualCorrectionView + correction.md), xi3gpni (DataView + DataRow + MealHistoryModel correction composition + data.md), xi3gpnj (MealOverviewView + meal-overview.md), xi3gpnk (TrendsView + TrendsModel + TrendsOptionsSheet + trends.md), xi3gpnl (SettingsView rework + AboutView + settings.md + about.md)
   - Stream: 1
-  - Requirements: [14.1](requirements.md#14.1), [14.2](requirements.md#14.2), [14.3](requirements.md#14.3)
+  - Requirements: [14.1](requirements.md#14.1), [14.2](requirements.md#14.2)

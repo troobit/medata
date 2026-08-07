@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS processed_images (
 - `GlucoseImportModel` (`@Observable @MainActor`) processes items **sequentially** (bounded memory; Vision is itself parallel internally): load `Data` → SHA-256 (CryptoKit) → `store.isImageProcessed` → decode `CGImage` → resolve asset date (`PHAsset.fetchAssets(withLocalIdentifiers:)` → EXIF fallback via `CGImageSourceCopyPropertiesAtIndex`) → `GlucoseGraph.extract` on a background task → `store.ingestBsl` → append an `ImageResult` (filename, outcome, counts, warnings) to the published list.
 - Extraction runs via `Task.detached` (CPU-bound; keeps the main actor free); results hop back for UI updates. Cancellation: leaving the sheet cancels the session after the in-flight image completes (per-image transactions make this safe).
 - Rejections (`RejectImage.reason`) and store errors render as that image's outcome row; processing continues (Req 1.2).
-- Copy: British English; strings pass `make spell`.
+- Copy: strings pass `make spell`.
 
 ## Error Handling
 

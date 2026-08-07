@@ -233,7 +233,7 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   correct and reuse existing API/`Color.*` tokens.
 - **`ColourTokenUsageTests`** forbids inline `Color(red:…)` in view bodies — always
   use a named token from `App/Colors.swift`. `tools/check_spelling.sh` enforces
-  Irish/British spelling but, run over a whole file, naively flags SwiftUI API
+  correct spelling but, run over a whole file, naively flags SwiftUI API
   (`colors:`, `.center`, the `Color` type); the real gate scopes tighter. New copy
   must avoid US spellings regardless.
 - **Running `generate.py` rebakes `cofid_db.sqlite`/`afcd_db.sqlite` and the SQLite

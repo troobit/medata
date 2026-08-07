@@ -1,6 +1,6 @@
 # Copy Inventory — design-handoff-00
 
-The verbatim contract for every user-facing string (Req 14.2). Implementation matches the **Final** column exactly. Sources: handoff scaffold strings, existing app strings. Rules: Req 14.1 (minimal wording), 14.3 (Irish/British spelling). Legal/safety copy exemptions marked ⚖.
+The verbatim contract for every user-facing string (Req 14.2). Implementation matches the **Final** column exactly. Sources: handoff scaffold strings, existing app strings. Rules: Req 14.1 (minimal wording). Legal/safety copy exemptions marked ⚖.
 
 ## Capture chrome (§2)
 

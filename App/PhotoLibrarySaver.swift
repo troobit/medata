@@ -19,11 +19,11 @@ protocol PhotoLibrarySaver: Sendable {
     func saveNadirFrame(_ frame: RawFrame) async throws -> String
 }
 
-// Failure modes that propagate to the UI as the Irish-English placeholder
+// Failure modes that propagate to the UI as the thumbnail placeholder
 // state, but never block the meal record from being persisted.
 enum PhotoLibrarySaveError: Error, Equatable {
-    case encodingFailed         // RawFrame could not be re-encoded as RGB/JPEG
-    case performChangesFailed   // PHPhotoLibrary.performChanges threw
+    case encodingFailed  // RawFrame could not be re-encoded as RGB/JPEG
+    case performChangesFailed  // PHPhotoLibrary.performChanges threw
 }
 
 // Production saver: requests `.addOnly` authorisation on first call, encodes
@@ -38,7 +38,7 @@ struct PhotoKitSaver: PhotoLibrarySaver {
             return ""
         }
         guard let image = Self.uiImage(from: frame),
-              let pngData = image.pngData()
+            let pngData = image.pngData()
         else {
             throw PhotoLibrarySaveError.encodingFailed
         }
@@ -56,20 +56,22 @@ struct PhotoKitSaver: PhotoLibrarySaver {
     private static func performAdd(pngData: Data) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             var assetID: String = ""
-            PHPhotoLibrary.shared().performChanges({
-                let request = PHAssetCreationRequest.forAsset()
-                request.addResource(with: .photo, data: pngData, options: nil)
-                assetID = request.placeholderForCreatedAsset?.localIdentifier ?? ""
-            }, completionHandler: { success, error in
-                if let error {
-                    continuation.resume(throwing: PhotoLibrarySaveError.performChangesFailed)
-                    _ = error
-                } else if success {
-                    continuation.resume(returning: assetID)
-                } else {
-                    continuation.resume(throwing: PhotoLibrarySaveError.performChangesFailed)
-                }
-            })
+            PHPhotoLibrary.shared().performChanges(
+                {
+                    let request = PHAssetCreationRequest.forAsset()
+                    request.addResource(with: .photo, data: pngData, options: nil)
+                    assetID = request.placeholderForCreatedAsset?.localIdentifier ?? ""
+                },
+                completionHandler: { success, error in
+                    if let error {
+                        continuation.resume(throwing: PhotoLibrarySaveError.performChangesFailed)
+                        _ = error
+                    } else if success {
+                        continuation.resume(returning: assetID)
+                    } else {
+                        continuation.resume(throwing: PhotoLibrarySaveError.performChangesFailed)
+                    }
+                })
         }
     }
 
@@ -98,7 +100,7 @@ struct PhotoKitSaver: PhotoLibrarySaver {
         let colourSpace = CGColorSpaceCreateDeviceRGB()
         let data = frame.imageBytes as CFData
         guard let provider = CGDataProvider(data: data),
-              let cgImage = CGImage(
+            let cgImage = CGImage(
                 width: width,
                 height: height,
                 bitsPerComponent: 8,
@@ -110,7 +112,7 @@ struct PhotoKitSaver: PhotoLibrarySaver {
                 decode: nil,
                 shouldInterpolate: false,
                 intent: .defaultIntent
-              )
+            )
         else { return nil }
         return UIImage(cgImage: cgImage)
     }
