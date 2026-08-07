@@ -11,9 +11,13 @@ durable position (HealthKit anchor / LibreLinkUp cursor) **only after** the writ
 background kill cannot lose readings. Ingestion lives in a module the estimation targets do not
 depend on, enforced by a package-graph test.
 
-Requirements traced: [1](requirements.md#1) abstraction, [2](requirements.md#2) HealthKit,
-[3](requirements.md#3) LibreLinkUp, [4](requirements.md#4) storage, [5](requirements.md#5) dedup,
-[6](requirements.md#6) UI, [7](requirements.md#7) firewall.
+Requirements traced: [1](requirements.md#1-glucose-source-abstraction) abstraction,
+[2](requirements.md#2-healthkit-glucose-source) HealthKit,
+[3](requirements.md#3-librelinkup-follower-source) LibreLinkUp,
+[4](requirements.md#4-event-log-storage) storage,
+[5](requirements.md#5-cross-source-duplicate-handling) dedup,
+[6](requirements.md#6-connection-ui-and-settings) UI,
+[7](requirements.md#7-estimation-path-firewall-and-offline-core) firewall.
 
 ## Module layout and the firewall (Req 7)
 
