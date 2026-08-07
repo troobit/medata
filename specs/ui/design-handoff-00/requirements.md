@@ -22,7 +22,7 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 - Splitting the estimation pipeline into user-visible segment/estimate phases (segmentation review is post-hoc — Decision 7)
 - Pixel-fidelity to the wireframes (they are low-fi; native iOS idioms win)
 - Figma bridge for the design system (paste/archive path only)
-- Localisation beyond Irish/British English; iPad/Watch layouts; landscape
+- Localisation beyond English; iPad/Watch layouts; landscape
 
 ## Requirements
 
@@ -180,7 +180,6 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 1. <a name="14.1"></a>Every user-facing string SHALL use the shortest phrasing that keeps its meaning: no full sentences where a fragment works, no filler. Binding examples: `Hold the phone level` → `Hold level`; `Skip to 2-view` → `2-view`; `Hold the phone 30–40 cm from the food.` → `30–40 cm`; `It's too dark to read the plate edge reliably.` → `More light`. Exempt: legal/safety copy explicitly marked so (§10.7, §13.1).  
 2. <a name="14.2"></a>The design phase SHALL produce a copy inventory listing every user-facing string on the redesigned screens with its final minimal form; compliance with 14.1 is defined as verbatim match with the inventory.  
-3. <a name="14.3"></a>All copy SHALL use Irish/British English spelling and pass `make spell`.  
 4. <a name="14.4"></a>Every colour-coded status indicator (bubble level, confidence chips, banners, LiDAR dot) SHALL pair colour with a non-colour cue — icon, position, or text — per `design-system/MASTER.md`.  
 5. <a name="14.5"></a>WHILE the app is developer-only, screens SHALL carry no reassurance or disclaimer copy (privacy notes, read-only warnings, data-preservation notices) — the developer already knows (Decision 21). The About screen remains the sole legal/attribution surface; functional accuracy signals (calibration banner, very-low retake surface) are NOT disclaimers and stay.
 

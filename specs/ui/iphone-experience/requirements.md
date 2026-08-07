@@ -16,7 +16,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 - Bundling the Core ML segmenter weights (separate smolspec)
 - Cloud sync or multi-device
 - Onboarding / tutorial flows beyond the standard iOS permission dialog
-- Localisation beyond Irish/British English
+- Localisation beyond English
 - iPad-optimised or Apple Watch layouts (iPhone first)
 - User-correction UI — research Req 14.2 persistence support is unchanged; surfacing deferred to a future spec
 - Data import (restoring from a previously exported archive) — export remains in scope (§11.4); import is deferred
@@ -81,7 +81,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 **Acceptance Criteria:**
 
 1. <a name="5.1"></a>WHEN the active `CaptureMode` is `Double` (resulting in `two_view_sfs`), THEN the system SHALL prompt the user for the nadir view first, then the oblique view.
-2. <a name="5.2"></a>Each view's prompt SHALL show a single-line instruction in Irish-English (e.g. "Top-down view", "Angled view").  
+2. <a name="5.2"></a>Each view's prompt SHALL show a single-line instruction (e.g. "Top-down view", "Angled view").  
 3. <a name="5.3"></a>The capture stage SHALL advance to the next view (or to estimation) only after a successful capture completes; no auto-advance from a non-captured state.  
 4. <a name="5.4"></a>WHEN the user has captured the first view AND a refusal subsequently occurs at the second view, THEN the system SHALL allow the user to retry the second view without retaking the first.  
 5. <a name="5.5"></a>IF world-tracking confidence falls below the platform-defined "normal" threshold between the two views, THEN the system SHALL discard the second view and prompt the user to retake it (research Req 3.7).  
@@ -151,13 +151,12 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 4. <a name="11.4"></a>The Settings view SHALL contain an "Export archive" control that invokes the persistence-layer archive export (research Req 15.8) and presents the produced file via the standard iOS share sheet. The archive SHALL reference photos by `PHAsset.localIdentifier`, not embed image bytes (research Req 17.3).
 5. <a name="11.5"></a>The Settings view SHALL NOT expose data import, model/inference info, or debug info controls in v1 (per Out of Scope above).
 
-### 12. Localisation
+### 12. Failure copy
 
-**User Story:** As an Irish-English user, I want every visible string to read in my dialect, so that the app feels like it was made for me.
+**User Story:** As a user, I want a refusal to say the same thing wherever it surfaces, so that the message is not softened or reworded on the way to me.
 
 **Acceptance Criteria:**
 
-1. <a name="12.1"></a>Every user-facing string the app shows SHALL be Irish/British English per research Req 19.1 (e.g. "colour", "centre", "recognise", "favourite").  
 2. <a name="12.2"></a>WHERE a user-facing string originates from an `EstimationFailure.localisedMessage`, the app SHALL surface that string verbatim without rewording.  
 
 ### 13. Permissions
@@ -220,7 +219,7 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 
 1. <a name="18.1"></a>The root view of the application SHALL be a SwiftUI `TabView` containing exactly three tabs, in this order: Photo (§1), Meals (§19), Settings (§11). The tab order SHALL NOT be user-configurable in v1.
 2. <a name="18.2"></a>The Photo tab SHALL be the selected tab on cold launch. On warm launch (the app returning from the background), the previously selected tab SHALL be restored.
-3. <a name="18.3"></a>Each tab SHALL be labelled with a SF Symbol and an Irish-English label: Photo = `camera.fill` + "Photo"; Meals = `fork.knife` + "Meals"; Settings = `gearshape.fill` + "Settings".
+3. <a name="18.3"></a>Each tab SHALL be labelled with a SF Symbol and a label: Photo = `camera.fill` + "Photo"; Meals = `fork.knife` + "Meals"; Settings = `gearshape.fill` + "Settings".
 4. <a name="18.4"></a>The tab bar SHALL use the system-default Liquid Glass material on iOS 26.5. No custom tab-bar background SHALL be applied; the app SHALL NOT call `toolbarBackground()` or set a tab-bar appearance proxy.
 5. <a name="18.5"></a>WHEN the user taps a tab while it is already the selected tab, THEN the tab's navigation stack SHALL pop to root (the standard iOS behaviour) and the tab's state SHALL otherwise be preserved.
 6. <a name="18.6"></a>The selected-tab state SHALL persist across app cold/warm launches via `@AppStorage("selectedTab")` in `App/AppRoot.swift` (or the equivalent owner of the `TabView`). The default value SHALL be the Photo tab.
@@ -233,10 +232,10 @@ The MeData iOS app currently ships an algorithmic pipeline (`Pipeline.estimate(_
 **Acceptance Criteria:**
 
 1. <a name="19.1"></a>The Meals tab SHALL display a list of all `MealRecord`s currently persisted in `meals.sqlite`, sorted by `capturedAt` descending (newest first). The list SHALL be wrapped in its own `NavigationStack` per the platform navigation rules (one stack per tab).
-2. <a name="19.2"></a>Each list row SHALL show: the captured-at timestamp formatted as `dd MMM yyyy, HH:mm` (Irish/British locale), the meal-level carbohydrate total to the nearest 1 g (per research Req 12.4), the meal's confidence pill in the same three-tier styling as the result view (§9.2), and a thumbnail of the captured photo where one is available (resolved via `PHImageManager.requestImage(for:)` using `MealRecord.photoAssetID`).
+2. <a name="19.2"></a>Each list row SHALL show: the captured-at timestamp formatted as `dd MMM yyyy, HH:mm`, the meal-level carbohydrate total to the nearest 1 g (per research Req 12.4), the meal's confidence pill in the same three-tier styling as the result view (§9.2), and a thumbnail of the captured photo where one is available (resolved via `PHImageManager.requestImage(for:)` using `MealRecord.photoAssetID`).
 3. <a name="19.3"></a>WHEN `MealRecord.segmenterSource == "dev_stub"`, THEN the list row SHALL display a small yellow "Placeholder" chip next to the carb value, matching the meaning of the result-view placeholder banner from research Req 23.3. The chip SHALL be present even when the current build is a Phase 3 build (the chip reads from the persisted field, not the build flag).
 4. <a name="19.4"></a>WHEN the user taps a row, THEN the system SHALL push a meal-detail view onto the Meals tab's navigation stack. The detail view SHALL reuse `ResultView` and SHALL display the same content the user saw immediately after the original capture (confidence pill, carbohydrate total, photo thumbnail, placeholder banner where applicable).
-5. <a name="19.5"></a>WHEN no meals have been captured yet, THEN the list SHALL display an Irish-English empty-state message ("No meals yet. Tap the Photo tab to capture your first meal.") and a `fork.knife` SF Symbol; no placeholder rows SHALL be shown.
+5. <a name="19.5"></a>WHEN no meals have been captured yet, THEN the list SHALL display a empty-state message ("No meals yet. Tap the Photo tab to capture your first meal.") and a `fork.knife` SF Symbol; no placeholder rows SHALL be shown.
 6. <a name="19.6"></a>WHEN a new meal is persisted by the Photo tab while the user is on the Meals tab, THEN the list SHALL update to show the new row within 500 ms without the user needing to refresh.
 7. <a name="19.7"></a>The list SHALL support `swipeActions(edge: .trailing)` providing a single "Delete" action per row. WHEN the user confirms a delete, THEN the corresponding `MealRecord` SHALL be removed from `meals.sqlite` and its on-disk mask / depth artefacts SHALL be removed from the per-meal artefact directory. The associated `PHAsset` in the user's Photos library SHALL NOT be deleted; the user manages their Photos library separately (research Req 17.3).
 8. <a name="19.8"></a>The Meals tab SHALL NOT expose: per-class carbohydrate breakdowns, per-meal note editing, user-correction entry, search, filtering, multi-select, or bulk export. These are deferred to a future spec.

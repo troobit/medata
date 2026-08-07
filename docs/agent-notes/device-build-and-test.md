@@ -21,7 +21,7 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
   `/tmp/medata-device.log`. **Post-hoc only** — macOS has no scriptable live
   stream for an iOS device (`log stream` is host-only, devicectl has no log
   subcommand); live viewing stays in Console.app (recipe below).
-- `make spell` — Irish/British spelling lint.
+- `make spell` — spelling lint.
 
 Default device (Makefile): `you`, iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`, bundle `rtob.MeData`. Note the
 devicectl (CoreDevice) identifier is NOT the hardware UDID — `log collect

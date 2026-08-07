@@ -83,7 +83,7 @@
 └─────────────────────────────────────┘
 ```
 
-Both lines Irish-English. Vertically centred in the available area between the top safe area and the tab bar.
+Vertically centred in the available area between the top safe area and the tab bar.
 
 ### Detail view — reuses `ResultView` in `historyDetail` mode
 

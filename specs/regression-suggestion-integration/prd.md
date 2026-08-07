@@ -198,6 +198,6 @@ the same `project.pbxproj` — MUST run after App UI, never in parallel with it.
   `~/repos/medreg/docs/insulin-event-convention.md`; medreg's parsing source of
   truth is `~/repos/medreg/src/medreg/insulin.py`. Consumers ignore unknown
   metadata keys; do not add keys beyond the convention.
-- Irish/British English in all strings and docs; metric only (units of insulin,
+- Metric only (units of insulin,
   mmol/L); no reassurance/disclaimer copy anywhere in the new UI.
 - Estimation path is untouched; nothing here may call the network or an LLM.

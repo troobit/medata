@@ -31,6 +31,6 @@ references:
 - [x] 3. Document the local-Mac MPS training route in docs/ml-training.md <!-- id:e8gm7vc -->
   - Section 1: replace the existing "Segmenter training" row text with the exact wording given in the smolspec Implementation Approach (local M5 Pro-class MPS supported route, roughly 5-10x a mid-range CUDA card per epoch, run iteratively with train.py --resume, CUDA box remains the faster alternative)
   - Section 4: add a short run-hygiene note — caffeinate -is; PYTORCH_ENABLE_MPS_FALLBACK=1 as a safety net (verify nothing hot falls back to CPU); measure one epoch before committing to a full run; watch food-class mIoU
-  - Run bash tools/check_spelling.sh (Irish/British English)
+  - Run bash tools/check_spelling.sh
   - Stream: 1
   - References: specs/estimation/resumable-segmenter-training/smolspec.md, docs/ml-training.md

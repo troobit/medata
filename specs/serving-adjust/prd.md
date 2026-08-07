@@ -61,7 +61,7 @@ Covers the SwiftUI result surfaces in `App/`: `ResultView.swift` (both `justCapt
    - Acceptance: `ManualCorrectionView.swift` is deleted, the Adjust button leaves the result action row (Done remains), and no route references it; the free-text correction note entry is dropped (notes are now the machine-written serving/portion stamps).
    - Acceptance: any pbxproj references are removed per the four-section checklist in `docs/agent-notes/ui-capture-flow.md`.
 6. The redesigned surface MUST follow the existing design system and copy rules.
-   - Acceptance: capture palette (`Colors.swift`), sizing/`contentShape` inside Button labels (the dead-pill trap), no reassurance/disclaimer copy, Irish/British spelling (`make spell` clean), monospaced digits for numbers.
+   - Acceptance: capture palette (`Colors.swift`), sizing/`contentShape` inside Button labels (the dead-pill trap), no reassurance/disclaimer copy, `make spell` clean, monospaced digits for numbers.
    - Acceptance: no ellipsis truncation in portrait on the primary device at default Dynamic Type; row layout survives the longest unit strings ("heaped tablespoons").
    - Acceptance: load the `frontend-design` skill before reshaping the screen — this is a design uplift, not a mechanical swap.
 

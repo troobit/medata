@@ -2,7 +2,7 @@ import XCTest
 
 // Task 26 + Task 52 (v1.1 — Visual design): trip
 // `EstimationFailure.noScaleAvailable` via the launch-argument harness, assert
-// the refusal *sheet* shows the localised Irish-English message verbatim
+// the refusal *sheet* shows the message verbatim (Req §12.2)
 // (Req §10.1, §12.2 / Req §20.7), tap "Try again", and assert the sheet
 // dismisses and the flow re-enters `.capturing` at the nadir stage (Req §10.2,
 // §10.3). The v1.0 top-banner overlay is superseded by the bottom sheet per

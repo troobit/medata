@@ -141,7 +141,7 @@ Minimum API surface = smallest code path = least visual QA per OS version. iOS 2
 
 ### Context
 
-`Pipeline.estimate(_:)` throws `EstimationFailure` cases with localised Irish-English messages (research Req 19.1, task 52). The UI needs to surface these and let the user try again. Two patterns are reasonable: full-screen modal forcing a flow restart, or an inline banner.
+`Pipeline.estimate(_:)` throws `EstimationFailure` cases with messages (research Req 19.1, task 52). The UI needs to surface these and let the user try again. Two patterns are reasonable: full-screen modal forcing a flow restart, or an inline banner.
 
 ### Decision
 
@@ -311,7 +311,7 @@ A mid-busy-state informational toast would require a new UI pattern (background 
 
 ### Context
 
-An earlier draft of `requirements.md` included §14 "Accessibility" with three acceptance criteria covering VoiceOver labels on live indicators, accessibility-announcement notifications on qualitative state changes, and VoiceOver focus-order requirements for the shutter. The research spec carries no accessibility requirement — Req 19 is about Irish/British English copy, not assistive technology.
+An earlier draft of `requirements.md` included §14 "Accessibility" with three acceptance criteria covering VoiceOver labels on live indicators, accessibility-announcement notifications on qualitative state changes, and VoiceOver focus-order requirements for the shutter. The research spec carries no accessibility requirement — Req 19 is about the Meals tab, not assistive technology.
 
 ### Decision
 
@@ -784,7 +784,7 @@ The v1.1 `RefusalSheet` (Req §20.7 / Decision 16) is presented via SwiftUI `.sh
 1. `model.refusal` was a derived read of `state == .refused`; its setter no-op'd on nil. A swipe-down on the sheet would write nil into the binding, the setter would ignore it, and on the next SwiftUI render the sheet would re-present because `state` was still `.refused`.
 2. `tabSelectionChanged(to:)` excluded `.refused` from the "reset to `.initialising`" branch, on the principle that the user should "find the same surface when they come back". Combined with (1) this meant the refusal sheet popped back up on every return to the Photo tab.
 
-The user reported the symptom on `lidarFitDegenerate` ("Surface not detected" in Irish-English) on flat camera mode, but the behaviour is uniform across all 14 `EstimationFailure` cases. Full investigation in `specs/bugfixes/surface-not-detected/report.md`.
+The user reported the symptom on `lidarFitDegenerate` ("Surface not detected") on flat camera mode, but the behaviour is uniform across all 14 `EstimationFailure` cases. Full investigation in `specs/bugfixes/surface-not-detected/report.md`.
 
 ### Decision
 

@@ -38,7 +38,7 @@ where:
 1. **Visual hull is an upper bound on volume.** Pure Shape-from-Silhouette without depth produces a strict superset of the true food shape (Laurentini 1994). The pipeline closes the hull (a) from below against a detected support plane, (b) from above against LiDAR depth where available, and (c) by per-class bulk-correction calibrated against the v1 test set. Without these three corrections the volume estimate is systematically biased high.
 2. **Constant per-class bulk density.** $m = V \rho$ assumes uniform $\rho$ within a class region. This is approximate for layered foods, foods with internal voids, and granular foods. Densities in the bundled database are *served-portion bulk densities* (with packing fraction folded in), not pure-substance densities.
 3. **Foods rest on a level support plane.** The voxel grid is gravity-aligned. A markedly tilted tray or plate breaks the assumption silently.
-4. **Standalone liquids and semi-liquids are out of scope for v1.** Clear liquids served on their own (water, tea, fruit juice), opaque liquids served on their own (soup, smoothies, milk), and pourable semi-liquids served on their own (yoghurt, custard) are excluded. **Pourable accompaniments served on a solid food are NOT excluded:** curry sauce on rice, gravy on roast, baked-bean tomato sauce, pasta sauce on pasta — these are part of the composite class with the solid (per Decision 8) and are estimated normally. The segmenter palette includes an `unsupported_liquid` class that catches *standalone* liquids and surfaces an explicit Irish-English message disabling the carb estimate for that region only.
+4. **Standalone liquids and semi-liquids are out of scope for v1.** Clear liquids served on their own (water, tea, fruit juice), opaque liquids served on their own (soup, smoothies, milk), and pourable semi-liquids served on their own (yoghurt, custard) are excluded. **Pourable accompaniments served on a solid food are NOT excluded:** curry sauce on rice, gravy on roast, baked-bean tomato sauce, pasta sauce on pasta — these are part of the composite class with the solid (per Decision 8) and are estimated normally. The segmenter palette includes an `unsupported_liquid` class that catches *standalone* liquids and surfaces an explicit message disabling the carb estimate for that region only.
 5. **Single-view path silently undercounts inter-class occlusion.** When a tall food occludes a shorter food in the nadir view (rice partly behind a chicken breast), the height-field integration in the single-view path produces zero volume for the occluded portion. The two-view path partially recovers occluded food via the oblique silhouette. The single-view path's geometric-completeness sub-confidence (Req 13.2) is reduced when inter-class occlusion is detected, and the user is prompted to recapture using the two-view path.
 
 ### Out of scope (deferred to other specs)
@@ -58,10 +58,6 @@ V1 work proceeds in three ordered phases. Each phase has an acceptance bar; late
 ### Hardware floor
 
 V1 hardware floor: iPhone 13 Pro Max. V1 OS floor: iOS 26.5. The architecture is platform-portable so a future Android implementation can re-use the algorithms, data formats and segmenter without re-deriving the mathematics.
-
-### Spelling
-
-All user-facing strings, identifiers, comments and documentation use Irish / British English spelling (e.g. "recognised", "fibre", "colour", "programme"). HSE Language Matters and person-first language are out of scope (see Decision 4).
 
 ---
 
@@ -166,7 +162,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 2. <a name="7.2"></a>WHEN both signals are present, $s_{\text{meal}}$ SHALL be the LiDAR-derived metric scale and $\sigma_s$ SHALL be raised toward 1 in proportion to agreement with the card scale, where agreement is $a = 1 - \min(1, |s_{\text{lidar}} - s_{\text{card}}| / s_{\text{card}})$ and $\sigma_s = 0.85 + 0.15 a$.
 3. <a name="7.3"></a>WHEN only LiDAR is present, $\sigma_s$ SHALL be 0.85 and the meal record SHALL carry a `noCardConfidence` flag.
 4. <a name="7.4"></a>WHEN only the card is present, $\sigma_s$ SHALL be 0.85 and the meal record SHALL carry a `noLidarConfidence` flag.
-5. <a name="7.5"></a>IF neither LiDAR nor a card is available, THEN the resolver SHALL return a failure outcome and the pipeline SHALL surface an actionable Irish-English message instructing the user to include a card or capture on a LiDAR device.
+5. <a name="7.5"></a>IF neither LiDAR nor a card is available, THEN the resolver SHALL return a failure outcome and the pipeline SHALL surface an actionable message instructing the user to include a card or capture on a LiDAR device.
 6. <a name="7.6"></a>The metric scale resolver SHALL be specified in pseudocode and SHALL NOT use any iOS-only construct.
 
 ### 8. Food Semantic Segmentation
@@ -181,7 +177,7 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 4. <a name="8.4"></a>The segmenter class palette SHALL contain at least 24, and mo more than 40 food classes for v1 (curated jointly with the density coverage in [11](#11-density-and-macronutrient-database)) plus a `background` class, an `unknown_food` class, and an `unsupported_liquid` class.
 5. <a name="8.5"></a>The segmenter SHALL be sourced from a single source-of-truth model that exports cleanly to both the iOS inference runtime and the Android inference runtime via ONNX or an equivalent intermediate representation.
 6. <a name="8.6"></a>IF a pixel is labelled `unknown_food`, THEN the pipeline SHALL include those voxels in volume estimation but SHALL flag the meal as containing unrecognised food, and the macro contribution from those voxels SHALL be reported as "unknown carbs" with a confidence of 0.
-7. <a name="8.7"></a>IF a pixel is labelled `unsupported_liquid`, THEN the pipeline SHALL exclude those voxels from volume estimation, SHALL flag the meal as containing an unsupported liquid, and SHALL surface an Irish-English message stating that standalone liquids are not estimated in v1. The `unsupported_liquid` class SHALL match *standalone* liquids only (a glass of water, a bowl of soup, a glass of milk); pourable accompaniments served on a solid food (curry sauce on rice, gravy on roast, baked-bean tomato sauce, pasta sauce on pasta) SHALL be assigned to the composite class for that dish per Decision 8 and estimated normally.
+7. <a name="8.7"></a>IF a pixel is labelled `unsupported_liquid`, THEN the pipeline SHALL exclude those voxels from volume estimation, SHALL flag the meal as containing an unsupported liquid, and SHALL surface a message stating that standalone liquids are not estimated in v1. The `unsupported_liquid` class SHALL match *standalone* liquids only (a glass of water, a bowl of soup, a glass of milk); pourable accompaniments served on a solid food (curry sauce on rice, gravy on roast, baked-bean tomato sauce, pasta sauce on pasta) SHALL be assigned to the composite class for that dish per Decision 8 and estimated normally.
 8. <a name="8.8"></a>The segmenter input SHALL be a fixed-size resized colour image (aspect-preserving with letterboxing); the resize procedure SHALL be specified once and applied identically on both platforms.
 9. <a name="8.9"></a>The segmenter SHALL meet a minimum mean Intersection-over-Union (mIoU) of **0.48 averaged across food classes** (amended by segmenter-foundation Decision 5: the original 0.60 sat above the published FoodSeg103 frontier — no published model at any size clears it — so the gate was re-derived from the frontier, the pinned baseline, and the carb-priority floors; Decision 14 is superseded accordingly) on the held-out segmenter test set, evaluated separately from the end-to-end accuracy bar in [21.3](#21.3). This bar applies to the Phase 3 trained model only ([23](#23-phased-delivery-and-development-stubs)); Phase 1 ships with a dev-stub segmenter and does NOT meet this bar.
 10. <a name="8.10"></a>WHEN a Phase 1 build (per [23.1](#23.1)) is running, the segmenter implementation SHALL be the development stub from [23.2](#23.2). The dev stub SHALL satisfy the same `SegmenterInferenceEngine` contract as the real Core ML segmenter so that downstream stages (volume, ownership, macros, confidence) execute unchanged.
@@ -336,15 +332,13 @@ REQUIREMENT IS AN MVP WITH AN UPPER BOUND - allowing for overestimation caused b
 4. <a name="18.4"></a>The bundled food database SHALL be a single SQLite file usable verbatim on Android (per [11.8](#11.8)).
 5. <a name="18.5"></a>The design document SHALL include a "Portability Notes" subsection per algorithm that lists the iOS-only API used in v1 and the equivalent Android API expected to be used in a future port.
 
-### 19. Localisation — Irish / British English
+### 19. Language scope
 
-**User Story:** As a user, I want all text in the app spelled in Irish / British English.
+**User Story:** As a project owner, I want the boundaries of language work stated, so that clinical-communication conventions are not assumed to be in scope.
 
 **Acceptance Criteria:**
 
-1. <a name="19.1"></a>All user-facing strings in the application, including UI labels, error messages, log lines, and bundled documentation, SHALL use Irish / British English spelling: "recognised", "fibre", "colour", "favourite", "centre", etc.
-2. <a name="19.2"></a>A linter or string audit step SHALL be part of the CI pipeline, rejecting common US-English abberations ("recognized", "color", "fiber", "favorite", "center").
-3. <a name="19.3"></a>Person-first language are explicitly out of scope for v1 (Decision 4 in `decision_log.md`).
+3. <a name="19.3"></a>HSE Language Matters and person-first language are explicitly out of scope for v1 (Decision 4 in `decision_log.md`).
 
 ### 20. Training-Data Acquisition (Open Risk — Promoted from Open Items)
 
@@ -395,7 +389,7 @@ This application is a single-developer data and context tool. Interpretation of 
 
 1. <a name="23.1"></a>The application SHALL build and run on the v1 hardware floor ([1.2](#1.2)) without requiring a bundled trained `.mlpackage`. Phase 1 builds (as defined under "Delivery phases" in the introduction) are the default development configuration; they SHALL run the full pipeline using the dev stub from [23.2](#23.2).
 2. <a name="23.2"></a>A `StubInferenceEngine` SHALL exist in `MedataCore/Sources/Segmentation/` and conform to the same `SegmenterInferenceEngine` contract as `CoreMLInferenceEngine`. The stub SHALL emit a deterministic per-pixel probability tensor that assigns ≥0.99 probability to a single non-background class (default: `class index 0` from `ClassPalette.v1Standard`) and SHALL NOT depend on any external model file. It SHALL complete in under 50 ms per view on the v1 hardware floor.
-3. <a name="23.3"></a>WHEN the application is built with the dev stub active, the result view SHALL display a visible Irish-English banner stating that the macronutrient values are placeholders produced by a development segmenter. The banner SHALL be unmistakable (high-contrast colour, persistent above the carbohydrate total). It SHALL be removed only when the trained Core ML model is bundled per Phase 3.
+3. <a name="23.3"></a>WHEN the application is built with the dev stub active, the result view SHALL display a visible banner stating that the macronutrient values are placeholders produced by a development segmenter. The banner SHALL be unmistakable (high-contrast colour, persistent above the carbohydrate total). It SHALL be removed only when the trained Core ML model is bundled per Phase 3.
 4. <a name="23.4"></a>Selection between the dev stub and the real Core ML segmenter SHALL be controlled by a compile-time mechanism (Swift compile flag) defined in `Package.swift` for the iOS app target. The flag SHALL be defined in Debug configurations by default and SHALL NOT be defined in Release configurations once the trained model is bundled. The selection SHALL NOT be a runtime toggle.
 5. <a name="23.5"></a>Phase 1 SHALL NOT modify any algorithm, data structure, or persisted contract specified in [2](#2-camera-capture-session-and-intrinsics) through [22](#22-optional-cloud-validation-fallback-deferred-non-core). The dev stub substitutes only the inference engine; pre-processing, post-processing, ownership ([9.5](#9.5)), confidence ([13](#13-confidence-reporting)), and persistence ([15](#15-persistence-and-data-model)) SHALL be the same code paths that Phase 3 will exercise.
 6. <a name="23.6"></a>Each meal record produced by a Phase 1 build SHALL persist a `segmenterSource` field with values `dev_stub` or `coreml_<modelVersion>` so that an audit can distinguish placeholder records from real ones. Phase 1 records SHALL NOT be admitted to any Phase 3 accuracy harness output.

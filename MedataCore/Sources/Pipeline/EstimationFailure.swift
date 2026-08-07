@@ -2,8 +2,8 @@ import Foundation
 
 // Pipeline refusal cases per design §5, one-to-one with the table therein.
 // Thrown by `Pipeline.estimate(_:)` to short-circuit the pipeline on an
-// unrecoverable condition. The UI dispatches a localised Irish-English message
-// per case (Req 17.1, task 52).
+// unrecoverable condition. The UI dispatches the message for each case
+// verbatim (Req 17.1, task 52).
 public enum EstimationFailure: Error, Equatable {
     // Device does not have the required LiDAR hardware (Req 1.3).
     case noLidarDevice
@@ -49,7 +49,7 @@ public enum EstimationFailure: Error, Equatable {
     // error=<Type>` line at debug time.
     case internalError(String)
 
-    // MARK: - Localised Irish-English messages (Req 17.1)
+    // MARK: - User-facing messages (Req 17.1)
 
     public var localisedMessage: String {
         switch self {
@@ -86,13 +86,14 @@ public enum EstimationFailure: Error, Equatable {
         case .obliqueTiltOutOfRange:
             return "Tilt the camera closer to 25° for the angled view."
         case .mealsDbCorrupt:
-            return "Your meal history could not be loaded and has been reset. Capture continues normally."
+            return
+                "Your meal history could not be loaded and has been reset. Capture continues normally."
         case .internalError(let typeName):
             #if DEBUG
-            return "Couldn't process the photo. Internal error: \(typeName)"
+                return "Couldn't process the photo. Internal error: \(typeName)"
             #else
-            _ = typeName
-            return "Couldn't process the photo. Please try again."
+                _ = typeName
+                return "Couldn't process the photo. Please try again."
             #endif
         }
     }

@@ -302,16 +302,7 @@ RNG (RANSAC seeding) uses a fixed seed derived from a deterministic hash; volume
 promote to FP32 for stable accumulation. This is what makes the offline accuracy harness
 and β-calibration round-trip meaningful.
 
-### 5.5 Irish / British English everywhere
-
-All user-facing strings, identifiers, comments, and docs use Irish/British spelling
-(*colour*, *recognised*, *fibre*, *behaviour*, *analyse*). This is enforced in CI:
-
-```sh
-bash tools/check_spelling.sh
-```
-
-### 5.6 Build & test
+### 5.5 Build & test
 
 ```sh
 swift build        # all module targets + HarnessCLI

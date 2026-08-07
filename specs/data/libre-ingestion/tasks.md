@@ -89,7 +89,7 @@ references:
   - GlucoseImportView sheet: PhotosPicker (.screenshots preferred; multiple)
   - progress
   - per-image outcome rows incl. rejection reasons + warnings + discrepancy counts
-  - SettingsView: Glucose data section with import row; British English copy passing make spell
+  - SettingsView: Glucose data section with import row; copy passing make spell
   - Blocked-by: 14pl0ef (Port trace extraction and sampling (TraceExtractor, Sampler) and extract orchestrator), extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, extract, 14pl0ei (Implement persistence additions: EventType.bsl, processed_images, ingestBsl, isImageProcessed)
   - Stream: 3
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.2](requirements.md#2.2), [5.4](requirements.md#5.4)

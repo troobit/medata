@@ -415,9 +415,9 @@ metadata:
 
 - [x] 52. Implement `EstimationFailure` enum and refusal-message localisation hooks <!-- id:0f0700i -->
   - Closed enum mapped one-to-one with design §5 table.
-  - Localised Irish-English messages keyed by enum case for UI dispatch.
+  - messages keyed by enum case for UI dispatch.
   - Blocked-by: 0f0700h (Write tests for `EstimationFailure` error mapping (§5))
-  - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5), [19.1](requirements.md#19.1)
+  - Requirements: [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [13.1](requirements.md#13.1), [13.5](requirements.md#13.5)
 
 - [x] 53. Implement SwiftUI app shell with placeholder views and `CaptureFlowDelegate` <!-- id:0f0700j -->
   - `App.swift`, `CaptureFlowView`, `ResultView`, `SettingsView` as placeholders (UI design deferred to specs/ui per design §10).
@@ -542,17 +542,15 @@ metadata:
   - Blocked-by: 0f0700g (Implement `Pipeline.estimate(_:)` orchestration)
   - Requirements: [16.2](requirements.md#16.2), [16.5](requirements.md#16.5)
 
-- [x] 69. Write tests for Irish/British English spelling linter <!-- id:0f0700y -->
+- [x] 69. Write tests for the spelling linter <!-- id:0f0700y -->
   - Test rejects 'recognized', 'color', 'fiber', 'favorite', 'center'.
   - Test allows 'recognised', 'colour', 'fibre', 'favourite', 'centre'.
   - Blocked-by: 0f06zz7 (Create Swift Package + Xcode project skeleton)
-  - Requirements: [19.1](requirements.md#19.1), [19.2](requirements.md#19.2)
 
 - [x] 70. Implement spelling linter as CI step <!-- id:0f0700z -->
   - Shell script or Swift CLI scanning `*.swift` and bundled string catalogs.
   - Runs in CI; failure blocks merge.
-  - Blocked-by: 0f0700y (Write tests for Irish/British English spelling linter)
-  - Requirements: [19.1](requirements.md#19.1), [19.2](requirements.md#19.2)
+  - Blocked-by: 0f0700y (Write tests for the spelling linter)
 
 ## v1 Adjustments — New Tasks (May 2026)
 
@@ -561,7 +559,7 @@ metadata:
   - Add `SettingsKeys.captureMode` UserDefaults key; default `.double` on first install.
   - Capture view: persistent segmented control above the shutter, single tap to switch; ignores in-flight estimations (matches §7.4 behaviour).
   - `Pipeline.estimate(_:mode:)` takes mode explicitly; `MealRecord.capturePath` copied from `mode` at capture time.
-  - Single mode disabled (greyed) on non-LiDAR hardware; selecting it with no LiDAR returns the existing Irish-English refusal.
+  - Single mode disabled (greyed) on non-LiDAR hardware; selecting it with no LiDAR returns the existing refusal.
   - Delete `derivePathHint` / LiDAR-coverage threshold dispatch and the prior `.forcingTwoView` transient state.
   - Tests: round-trip UserDefaults persistence; control reflects current mode; Pipeline receives the correct mode for each capture; switching mode mid-session is ignored during in-flight estimation.
   - Decision: 35
@@ -569,7 +567,7 @@ metadata:
 
 - [x] 73. Migrate photo storage to PhotoKit (`PHAsset.localIdentifier`) <!-- id:na4humg -->
   - On successful capture, persist the original RGB nadir frame to the user's Photos library via `PHPhotoLibrary.shared().performChanges`; record the returned `PHAsset.localIdentifier` as `MealRecord.photoAssetID` and `meals.photo_asset_id`.
-  - Request `PHAuthorizationStatus(for: .addOnly)` on first capture; show Irish-English permission-denied banner if refused (estimation still completes; `photoAssetID = ""`).
+  - Request `PHAuthorizationStatus(for: .addOnly)` on first capture; show the permission-denied banner if refused (estimation still completes; `photoAssetID = ""`).
   - SQLite migration: add `photo_asset_id TEXT NOT NULL DEFAULT ''` column to `meals`; drop `image` artefact rows from existing meals (they remain on disk; cleanup is a separate dev task).
   - Remove image-bytes write from `Persistence` and from `RawFrameMetadata.imageFilename`.
   - Result view: fetch `PHAsset` by identifier; render thumbnail via `PHImageManager` if the user has full Photos access; otherwise show a placeholder.
@@ -589,7 +587,7 @@ metadata:
 
 - [x] 75. Narrow hardware floor + replace per-stage perf checks with single 30 s soft check <!-- id:f8a1to9 -->
   - Update Info.plist `MinimumOSVersion` to 26.5; deployment target → iOS 26.5.
-  - Remove the iPhone 12 Pro device-allow guard; document iPhone 13 Pro Max as the only supported device. Update Irish-English unsupported-device message.
+  - Remove the iPhone 12 Pro device-allow guard; document iPhone 13 Pro Max as the only supported device. Update the unsupported-device message.
   - Delete tasks 65/66's per-path XCTClockMetric tests; add a single end-to-end XCTest that asserts `< 30 s` for both `single` and `double` modes on the v1 device.
   - Keep `os_signpost` intervals around pipeline stages for ad-hoc Instruments inspection only (no assertions).
   - Tests: end-to-end-under-30 s for both modes on the v1 device; unsupported-device guard surfaces the new message on simulator / earlier hardware.
@@ -652,8 +650,8 @@ metadata:
   - Decision: 42
   - Requirements: [23.6](requirements.md#23.6)
 
-- [x] 83. Add Irish-English placeholder banner on result view (gated on `segmenterSource == "dev_stub"`) <!-- id:0f07019 -->
-  - In `App/ResultView.swift`, render a high-contrast Irish-English banner (system .yellow background, .black foreground, top-of-screen, persistent) when `record.segmenterSource == "dev_stub"`.
+- [x] 83. Add the placeholder banner on result view (gated on `segmenterSource == "dev_stub"`) <!-- id:0f07019 -->
+  - In `App/ResultView.swift`, render a high-contrast banner (system .yellow background, .black foreground, top-of-screen, persistent) when `record.segmenterSource == "dev_stub"`.
   - Copy: "Placeholder estimate. The food recogniser is a development stub — the carbohydrate value is not a real measurement."
   - Banner is NOT computed from `#if DEV_STUB_SEGMENTER` so Phase 1 records still surface the banner when viewed under a later Phase 3 build (per design §3.5).
   - Tests: `ResultView` shows the banner for a `MealRecord` with `segmenterSource = "dev_stub"`; banner is absent for `segmenterSource = "coreml_v0.1"`.
