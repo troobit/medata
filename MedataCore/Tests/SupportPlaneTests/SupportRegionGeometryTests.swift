@@ -1,100 +1,116 @@
 import CaptureKit
+import Foundation
 import PortableContracts
-import XCTest
 @testable import SupportPlane
+import Testing
 
 // Task 1: depth-intrinsics derivation and colour-to-depth mask downsampling
-// (design §"Native depth grid, and the intrinsics trap"; Req 2.1, 2.4).
+// (Reqs 2.1, 2.4).
+@Suite("SupportRegion depth intrinsics and mask downsampling (Reqs 2.1, 2.4)")
+struct SupportRegionGeometryTests {
 
-final class SupportRegionGeometryTests: XCTestCase {
-    // The half-pixel terms are the point of the test: dropping them shifts the
-    // principal point by 0.5·(1 − s) depth px — silent at nadir, but wrong.
-    func testDepthIntrinsicsAppliesHalfPixelScaling() {
-        let colour = CameraIntrinsics(fx: 1920, fy: 1440, cx: 963.2, cy: 717.9,
-                                      distortion: [], imageWidth: 1920, imageHeight: 1440)
-        let depth = heightFieldDepthMap(intrinsics: colour, depthWidth: 256, depthHeight: 192,
-                                        heightMmAt: { _, _ in 100 })
-        let kd = SupportRegion.depthIntrinsics(from: colour, depth: depth)
+    // The device's real grids: a 1920×1440 colour frame against a 256×192 depth map,
+    // which is where the design's 3.25-colour-pixel figure comes from.
+    private static let deviceColour = CameraIntrinsics(
+        fx: 1312.5, fy: 1312.5, cx: 959.5, cy: 719.5,
+        distortion: [], imageWidth: 1920, imageHeight: 1440
+    )
+    private static let deviceScale = Float(256) / Float(1920)
 
-        let sx: Float = 256.0 / 1920.0
-        let sy: Float = 192.0 / 1440.0
-        XCTAssertEqual(kd.fx, colour.fx * sx, accuracy: 1e-4)
-        XCTAssertEqual(kd.fy, colour.fy * sy, accuracy: 1e-4)
-        XCTAssertEqual(kd.cx, (colour.cx + 0.5) * sx - 0.5, accuracy: 1e-4)
-        XCTAssertEqual(kd.cy, (colour.cy + 0.5) * sy - 0.5, accuracy: 1e-4)
-        XCTAssertEqual(kd.imageWidth, 256)
-        XCTAssertEqual(kd.imageHeight, 192)
+    @Test("focal length scales by W_d/W_c and the principal point carries the half-pixel terms")
+    func derivesDepthIntrinsicsFromColour() {
+        let depth = SPRScene.makeDepth(SPRScene.plateAboveTable())
+        let kd = SupportRegion.depthIntrinsics(from: Self.deviceColour, depth: depth)
+        let kc = Self.deviceColour
+        let sx = Float(depth.width) / Float(kc.imageWidth)
+        let sy = Float(depth.height) / Float(kc.imageHeight)
+
+        #expect(abs(kd.fx - kc.fx * sx) < 1e-3, "fx_d must be fx_c · W_d/W_c; got \(kd.fx)")
+        #expect(abs(kd.fy - kc.fy * sy) < 1e-3)
+        #expect(abs(kd.cx - ((kc.cx + 0.5) * sx - 0.5)) < 1e-3,
+                "cx_d must be (cx_c + 0.5)·W_d/W_c − 0.5; got \(kd.cx)")
+        #expect(abs(kd.cy - ((kc.cy + 0.5) * sy - 0.5)) < 1e-3)
+        #expect(kd.imageWidth == depth.width && kd.imageHeight == depth.height)
     }
 
-    // Guard against reading `depth.depthIntrinsics` (ARKit writes it as
-    // all-zero on device — see LiDARPlaneFitter's identical guidance): the
-    // derived intrinsics must never be the degenerate fx=0 that produces a
-    // NaN plane, regardless of what the DepthMap's own field says.
-    func testDepthIntrinsicsIgnoresDepthMapsOwnZeroedField() {
-        let colour = CameraIntrinsics(fx: 1500, fy: 1500, cx: 320, cy: 240,
-                                      distortion: [], imageWidth: 640, imageHeight: 480)
-        let zeroDepthIntrinsics = CameraIntrinsics(fx: 0, fy: 0, cx: 0, cy: 0,
-                                                   distortion: [], imageWidth: 256, imageHeight: 192)
-        let depth = DepthMap(
-            depthBytesMm: Data(count: 256 * 192 * 4), confidenceBytes: Data(count: 256 * 192),
-            width: 256, height: 192, rowStrideBytes: 256 * 4,
-            depthIntrinsics: zeroDepthIntrinsics, depthFromColour: .identity
+    // The half-pixel terms are what this asserts; dropping them is a real offset, not
+    // a rounding artefact. The design corrects the magnitude to 0.5(1 − s) = 0.433
+    // depth px = 3.25 colour px (an earlier draft said 3.75).
+    @Test("dropping the half-pixel terms shifts the principal point by 3.25 colour pixels")
+    func halfPixelTermsAreNotOptional() {
+        let depth = SPRScene.makeDepth(SPRScene.plateAboveTable())
+        let kd = SupportRegion.depthIntrinsics(from: Self.deviceColour, depth: depth)
+        let naive = Self.deviceColour.cx * Self.deviceScale
+        let shiftDepthPx = naive - kd.cx
+
+        #expect(abs(shiftDepthPx - 0.5 * (1 - Self.deviceScale)) < 1e-3,
+                "expected a 0.5(1 − s) depth-pixel shift; got \(shiftDepthPx)")
+        #expect(abs(shiftDepthPx / Self.deviceScale - 3.25) < 0.05,
+                "0.433 depth px is 3.25 colour px; got \(shiftDepthPx / Self.deviceScale)")
+    }
+
+    // `ARKitCaptureEngine` writes CameraIntrinsics(fx: 0, fy: 0, cx: 0, cy: 0, …) into
+    // every device depth map. Reading it divides by zero and yields a NaN plane.
+    @Test("derivation ignores depth.depthIntrinsics, which is all zeros on device")
+    func doesNotReadDeviceDepthIntrinsics() {
+        let depth = SPRScene.makeDepth(SPRScene.plateAboveTable())
+        #expect(depth.depthIntrinsics.fx == 0, "scene must reproduce the device's zeroed intrinsics")
+
+        let kd = SupportRegion.depthIntrinsics(from: SPRScene.colourIntrinsics, depth: depth)
+        #expect(kd.fx > 0 && kd.fy > 0)
+
+        // And the whole path stays finite: an fx of 0 would surface as a NaN plane.
+        let mask = SPRScene.makeColourMask(SPRScene.plateAboveTable())
+        let fit = SupportRegion.fitFoodSupportPlane(
+            depth: depth, colourIntrinsics: SPRScene.colourIntrinsics,
+            foodRegionMask: mask, gravityCamera: SPRScene.gravity
         )
-        let kd = SupportRegion.depthIntrinsics(from: colour, depth: depth)
-        XCTAssertGreaterThan(kd.fx, 0)
-        XCTAssertGreaterThan(kd.fy, 0)
-    }
-
-    // Assert a depth pixel is food when ANY covered colour pixel is food, so
-    // ambiguity resolves towards exclusion (Req 2.1) — the fitted set may
-    // never contain a food pixel.
-    func testMaskDownsampleMarksDepthPixelFoodWhenAnyCoveredColourPixelIsFood() {
-        // 8×8 colour grid downsampled 4:1 to a 2×2 depth grid. Only ONE colour
-        // pixel inside the depth pixel (0,0)'s 4×4 block is food.
-        var colourPixels = [UInt8](repeating: 0, count: 8 * 8)
-        colourPixels[0 * 8 + 0] = 1   // single food pixel, corner of block (0,0)
-        let colourMask = BinaryMask(pixels: colourPixels, width: 8, height: 8)
-
-        let depthMask = SupportRegion.depthGridMask(from: colourMask, depthWidth: 2, depthHeight: 2)
-
-        XCTAssertTrue(depthMask.isFood(x: 0, y: 0), "any covered colour pixel food => depth pixel food")
-        XCTAssertFalse(depthMask.isFood(x: 1, y: 0))
-        XCTAssertFalse(depthMask.isFood(x: 0, y: 1))
-        XCTAssertFalse(depthMask.isFood(x: 1, y: 1))
-    }
-
-    func testMaskDownsampleAllFoodBlockStaysFood() {
-        let colourMask = BinaryMask(pixels: [UInt8](repeating: 1, count: 8 * 8), width: 8, height: 8)
-        let depthMask = SupportRegion.depthGridMask(from: colourMask, depthWidth: 2, depthHeight: 2)
-        for y in 0..<2 {
-            for x in 0..<2 {
-                XCTAssertTrue(depthMask.isFood(x: x, y: y))
-            }
+        guard let plane = fit?.plane else {
+            Issue.record("expected a food-support fit on the plate scene")
+            return
         }
+        #expect(plane.distanceMm.isFinite, "plane distance must be finite")
+        #expect(plane.normal.z.isFinite)
     }
 
-    func testMaskDownsampleAllBackgroundBlockStaysBackground() {
-        let colourMask = BinaryMask(pixels: [UInt8](repeating: 0, count: 8 * 8), width: 8, height: 8)
-        let depthMask = SupportRegion.depthGridMask(from: colourMask, depthWidth: 2, depthHeight: 2)
-        for y in 0..<2 {
-            for x in 0..<2 {
-                XCTAssertFalse(depthMask.isFood(x: x, y: y))
-            }
-        }
+    // Req 2.1 requires the fitted set to contain NO food pixel, so a depth pixel that
+    // is only partly covered by food must resolve towards exclusion.
+    @Test("a depth pixel is food when ANY covered colour pixel is food")
+    func downsampleResolvesTowardsExclusion() {
+        var pixels = [UInt8](repeating: 0, count: SPRScene.colourWidth * SPRScene.colourHeight)
+        // A single food colour pixel, one of the sixteen covered by depth pixel (1,0).
+        pixels[7] = 1
+        let mask = BinaryMask(pixels: pixels, width: SPRScene.colourWidth, height: SPRScene.colourHeight)
+
+        let down = SupportRegion.downsampleFoodMask(
+            mask, width: SPRScene.depthWidth, height: SPRScene.depthHeight
+        )
+        #expect(down.isFood(x: 1, y: 0), "one food colour pixel must mark its depth pixel")
+        #expect(!down.isFood(x: 0, y: 0), "an uncovered depth pixel must not be marked")
+        #expect(!down.isFood(x: 2, y: 0))
+        #expect(!down.isFood(x: 1, y: 1))
     }
 
-    // Non-integer scale factors (the real 1920×1440 → 256×192 case is exact,
-    // but N5k identity-grid fixtures and other resolutions are not) must not
-    // crash or drop rows/columns.
-    func testMaskDownsamplePreservesDimensionsAtNonIntegerScale() {
-        let colourMask = BinaryMask(pixels: [UInt8](repeating: 1, count: 100 * 60), width: 100, height: 60)
-        let depthMask = SupportRegion.depthGridMask(from: colourMask, depthWidth: 33, depthHeight: 19)
-        XCTAssertEqual(depthMask.width, 33)
-        XCTAssertEqual(depthMask.height, 19)
-        for y in 0..<19 {
-            for x in 0..<33 {
-                XCTAssertTrue(depthMask.isFood(x: x, y: y), "all-food source must downsample to all-food")
-            }
+    @Test("downsampling is the identity when the grids already match")
+    func downsampleIsIdentityOnMatchingGrid() {
+        var pixels = [UInt8](repeating: 0, count: 16 * 16)
+        pixels[5 * 16 + 5] = 1
+        let mask = BinaryMask(pixels: pixels, width: 16, height: 16)
+        let down = SupportRegion.downsampleFoodMask(mask, width: 16, height: 16)
+        #expect(down.pixels == mask.pixels)
+    }
+
+    @Test("the downsampled mask covers the scene's food region on the depth grid")
+    func downsampleRoundTripsASceneMask() {
+        let scene = SPRScene.plateAboveTable()
+        let down = SupportRegion.downsampleFoodMask(
+            SPRScene.makeColourMask(scene),
+            width: scene.width, height: scene.height
+        )
+        var missing = 0
+        for i in 0..<(scene.width * scene.height) where scene.food[i] && down.pixels[i] == 0 {
+            missing += 1
         }
+        #expect(missing == 0, "\(missing) food pixels were lost in the downsample")
     }
 }

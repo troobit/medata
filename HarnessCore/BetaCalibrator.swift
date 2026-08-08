@@ -2,6 +2,7 @@
 import Foundation
 import Foods
 import PortableContracts
+import SupportPlane
 
 // Input bundle for one meal in the calibration / evaluation set.
 // Predicted carbs are pre-computed with β = 1 (uncorrected).
@@ -22,6 +23,10 @@ public struct MealCalibrationInput: Sendable {
     public let perClassVolumesCm3: [String: Float]
     // Plate-plane fit residual, recorded per plate (Req 3.6).
     public let supportPlaneResidualMm: Float?
+    // Which surface the plane referenced (support-plane-reference Reqs 4.4, 5.4).
+    // nil on the two-view path, which derives no depth plane. β_c is fitted within
+    // one reference, so this is what partitions the corpus.
+    public let supportPlaneReference: SupportPlaneReference?
 
     public init(
         fixtureID: String,
@@ -31,7 +36,8 @@ public struct MealCalibrationInput: Sendable {
         actualCarbsPerClass: [String: Float],
         groundTruthTotalCarbsG: Float,
         perClassVolumesCm3: [String: Float] = [:],
-        supportPlaneResidualMm: Float? = nil
+        supportPlaneResidualMm: Float? = nil,
+        supportPlaneReference: SupportPlaneReference? = nil
     ) {
         self.fixtureID = fixtureID
         self.capturePath = capturePath
@@ -41,6 +47,7 @@ public struct MealCalibrationInput: Sendable {
         self.groundTruthTotalCarbsG = groundTruthTotalCarbsG
         self.perClassVolumesCm3 = perClassVolumesCm3
         self.supportPlaneResidualMm = supportPlaneResidualMm
+        self.supportPlaneReference = supportPlaneReference
     }
 }
 

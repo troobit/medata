@@ -97,6 +97,31 @@ public enum Confidence {
     // Uncertain-estimate UI threshold (Req 13.5).
     public static let uncertainThreshold: Float = 0.6
 
+    // Multiplicative penalty on σ_plane when the support plane came from the
+    // edge-band fallback rather than the food-support fit
+    // (`specs/estimation/support-plane-reference/` Req 4.6, Decision 12). It is a
+    // SEPARATE factor rather than a residual adjustment precisely so that the
+    // persisted `planeResidualMm` stays the measured residual: the fallback plane
+    // can be a perfectly good fit to the wrong surface, so its residual says
+    // nothing about the error the reference introduces.
+    //
+    // [owed] — a task 26 corpus measurement. 0.9 mirrors the card-only best-of-5
+    // penalty below and satisfies Req 4.6's "no higher than a restricted fit of
+    // equal residual" at any value in (0, 1); the corpus is what prices it.
+    //
+    // MEASURED, and the shipped value is above the bound (Decision 36). σ_plane is
+    // exp(−r/5) with r in millimetres, so a penalty p prices the fallback at
+    // −5·ln(p) mm of plane error: 0.9 charges **0.53 mm**. On `1785135663727` the
+    // edge-band plane adds **18.37 mm** to the mean food pixel, which prices it at
+    // **0.025** — a 35.5× over-report. Two riders. The fallback's residual is LOWER
+    // than the restricted fit's (1.95 vs 2.33 mm), so exp(−r/5) rewards it and the
+    // penalty spends 71 % of itself cancelling that before pricing anything; the net
+    // reduction measured on the same capture is 3.1 %. And the corpus bounds it from
+    // above only: a fallback on food resting directly on the table is the CORRECT
+    // plane, where the honest penalty is 1, and the mixture weight is Req 4.5's
+    // fallback rate — absent until model-production Bucket C. The value is still owed.
+    public static let supportPlaneFallbackPenalty: Float = 0.9
+
     // Compute σ_meal and all sub-factors.
     //
     // Parameters:
@@ -108,6 +133,8 @@ public enum Confidence {
     //   interClassOcclusionDetected — nadir-view flag from HeightFieldEstimator (§6.8)
     //   cardOnlyPath              — true when support plane used card-only iterative fit (§4.3)
     //   cardOnlyIterations        — number of iterations taken; penalty applied when == 5 (§6.8)
+    //   supportPlaneFallback      — the plane came from the edge-band fallback rather
+    //                               than the food-support fit (support-plane-reference Req 4.6)
     //   deltaThetaNadirDeg        — angular deviation of the nadir frame from 0° at shutter
     //   deltaThetaObliqueDeg      — angular deviation of the oblique frame from 25°; nil = single-view
     public static func combine(
@@ -120,13 +147,19 @@ public enum Confidence {
         cardOnlyPath: Bool,
         cardOnlyIterations: Int,
         deltaThetaNadirDeg: Float = 0,
-        deltaThetaObliqueDeg: Float? = nil
+        deltaThetaObliqueDeg: Float? = nil,
+        supportPlaneFallback: Bool = false
     ) -> ConfidenceResult {
         // σ_geom sub-factors (not individually floored — product is floored at meal level)
         let sigmaView  = viewCoverage.sigmaView
         var sigmaPlane = Foundation.exp(-planeFitResidualMm / 5.0)  // r_0 = 5 mm
         if cardOnlyPath && cardOnlyIterations == 5 {
             sigmaPlane *= 0.9   // best-of-5 fallback penalty per §6.8
+        }
+        if supportPlaneFallback {
+            // support-plane-reference Req 4.6: the fallback plane must never report
+            // higher confidence than a restricted fit of equal residual.
+            sigmaPlane *= supportPlaneFallbackPenalty
         }
         let sigmaOccl: Float
         if capturePath == .singleViewLidar && interClassOcclusionDetected {

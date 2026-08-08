@@ -844,6 +844,115 @@ Given four image-plane pixel coordinates $\mathbf{u}_i \in \mathbb{R}^2$ for $i 
 
 ### 6.2 LiDAR support-plane fit (RANSAC)
 
+**Amended by `support-plane-reference` (Reqs 1.1, 2–4).** What follows in §6.2.2 — the
+lower-edge-band scan on the colour grid — was, until 2026-08, *the* LiDAR support-plane fit.
+It is now the **fallback only**. It fits the surrounding table rather than the surface the food
+rests on, and because volume is integrated per-pixel above π_sup, the height of a raised support
+is added to every food pixel: measured at 26.1 mm, a 2–3.6× volume over-read, proportionally worst
+on the flattest food (2 slices of bread weighed at 80 g read as 285.94 g). The restricted fit of
+§6.2.1 runs **first**; §6.2.2 runs only where it declines. Neither the refusal conditions of
+Req 4.5 nor the edge-band result itself change, so no capture that succeeds today can fail.
+
+#### 6.2.1 Restricted fit — the surface the food rests on (primary)
+
+```
+Inputs: depth_m[H_d][W_d] (metric depth, m), confidence[H_d][W_d] (UInt8 0..255),
+        food_region_mask[H_c][W_c] (colour-image grid),
+        gravity (unit vector in camera-1 frame),
+        K_colour (intrinsics)
+Output: π_sup = (n̂, d), residual_mm, ring statistics    — or NOTHING (fall through to §6.2.2)
+
+# Enumerated on the NATIVE depth grid, never the colour grid. Candidates enumerated at
+# 1920×1440 against depth sampled from 256×192 replicate each measurement ~56×, which
+# inflates every count derived from them (Req 2.4). Depth intrinsics are DERIVED —
+#   fx_d := fx_c · W_d / W_c,   cx_d := (cx_c + 0.5) · W_d / W_c − 0.5
+# — and never read from ARKit's depthIntrinsics, which the capture engine writes as zeros.
+
+1. Downsample food_region_mask onto the depth grid. A depth pixel is food when ANY colour
+   pixel it covers is food, so ambiguity resolves towards EXCLUSION (Req 2.1).
+
+2. Candidate samples := depth pixels with confidence/255 ≥ τ_conf (0.40) lying in a
+   millimetre-denominated ANNULUS of annulusOuterMm (50 mm) around the food mask, and outside it.
+   Bounding the neighbourhood in millimetres — not by dilating the mask by a multiple of the
+   food radius — is what keeps clutter beyond the plate from ever competing.
+
+3. Sequential CC-RANSAC, up to maxCandidatePlanes passes over the residue, one
+   depth-hash-seeded generator threaded through all passes (Req 7.7 determinism):
+       a. Iterations adapt to the observed inlier ratio rather than a fixed 256. (The "~6 %
+          pass-1 ratio, where 256 iterations reach ~4 % success" this step was written
+          against is SUPERSEDED by support-plane-reference Decision 51: measured, the
+          pass-1 ratios are 0.402 and 0.698 and the passes spend 72, 11, 250 and 12, 41, 5
+          draws. Adapting is still right; the figure that motivated it was not the corpus's.)
+       b. Score := size of the largest 8-CONNECTED inlier component, not the total inlier
+          count — a plane straddling two surfaces separated by a step must lose to either
+          surface alone. Component labelling is AMORTISED to hypotheses whose raw inlier
+          count is within a constant factor of the running best; unamortised it is order 10⁸
+          operations on the path that already produced a 32 GB allocation failure.
+       c. Remove the winner's polished inliers within 2 × inlierBandMm before the next pass;
+          a 1× shell seeds near-duplicate planes.
+
+4. For EVERY candidate, build the contact ring — non-food depth samples in a thin annulus
+   ringInnerMm…ringOuterMm outside the food boundary, resolved into ringBandCount radial
+   bands and the inner band into ringSectorCount angular sectors about the mask centroid —
+   then admit it only if it passes ALL of:
+       extent          winning component ≥ minAcceptedExtentPx across
+       support         inner-band support fraction ≥ ringSupportMin
+       sectors         sectors meeting sectorSupportMin ≥ minSupportingSectors
+       food envelope   p90 of food signed height above the plane ≥ foodEnvelopeMinMm
+       ring median     |inner-band median| ≤ ringMedianMaxMm            (SIGNED, Req 3.2)
+       band step       (mid − inner) ≤ bandStepMaxMm                    (inner→mid ONLY)
+       visibility      in-band annulus samples ÷ food samples ≥ supportVisibilityMin
+       escape          annulus median height ≤ escapeBandMm             (Req 3.3)
+
+5. Among admissible candidates, maximise the inner-band SUPPORT FRACTION — not |median|,
+   which has a 50 % cliff at which the table plane reads ≈ 0 and is persisted with a
+   textbook-perfect diagnostic. Ties break on component size, then on d, so the winner does
+   not depend on sort stability.
+
+6. If the top two admissible candidates are within ringSupportMarginMin of each other,
+   DECLINE. Two candidates 26 mm apart scoring near-equally is the straddling ring, and a
+   coin flip between them moves the carb number 3×.
+
+7. Declining at any step is an expected outcome, not an error: fall through to §6.2.2.
+```
+
+**Why sectors and not a residual or MAD bar.** Under RANSAC the residual is computed over inliers
+already within the ±5 mm band, so it is ≤ 5 mm by construction and a residual bar cannot fire.
+Inner-band MAD shares the defect: for a two-surface mixture the in-band majority puts the median
+on the supported surface, so MAD collapses to the noise scale at any mixture away from 50/50 —
+and a near-50/50 candidate fails `ringSupportMin` first. The **sector** measure is the Req 2.3
+dispersion bar: a ring 65 % on the table is 100 % table across ~235° and 0 % across the remainder,
+scores a healthy 0.65 in aggregate, has a flat band profile and a median of ≈ 0, and passes every
+other guard. That is the silent-failure case this feature exists to remove, and only the sector
+guard rejects it.
+
+**Constants are `[owed]` a corpus measurement, not asserted.** `support-plane-reference` Req 3.7
+forbids shipping the sector trio as asserted values; the figures in `SupportRegion.swift` are
+placeholders carrying `[owed]` markers until that spec's task 26 measures them. They are named
+here rather than numbered for that reason.
+
+**Rimmed plates and bowls, stated honestly.** The inner band is authoritative because the support
+surface is by definition the one immediately adjacent to the food, so a rimmed plate with the well
+partly visible resolves *correctly* rather than merely being rejected. When food fills the well the
+well produces **no depth samples at all** — a sensing limit, not an algorithm choice — and the
+visibility guard routes it to the §6.2.2 over-read, the direction a human catches. One wrong-plane
+path survives with healthy diagnostics: a ring lying wholly on a wide rim records a flat profile,
+uniform sectors and a median of ≈ 0, and under-reads by the rim height. It is bounded by weighed
+truth, not by the record.
+
+**Resolvable-food limits (Req 2.5 / `support-plane-reference` Req 2.5).** Minimum food **width**
+≈ 8 mm at 350 mm range (≈ 6 mm at 300 mm, ≈ 10 mm at 500 mm); minimum food **height** ≈ 2–4 mm,
+bounded by depth noise rather than by the ~4-px lateral smear. Food below the width floor falls
+back rather than being silently under-measured. See requirements §"Key modelling assumptions" 5.
+
+#### 6.2.2 Edge-band fit — fallback (unchanged)
+
+Reached only where §6.2.1 declines. Byte-identical to the pre-2026-08 behaviour, and **lazy**:
+computed on the rejection path only. The reference actually used is persisted per attempt, the
+fallback rate is aggregated across the fixture corpus, and σ_plane carries a multiplicative
+`fallbackPenalty` on this path so a fallback never reports higher confidence than a restricted fit
+of equal residual — a functional accuracy signal, not a disclaimer.
+
 ```
 Inputs: depth_m[H_d][W_d] (metric depth, m), confidence[H_d][W_d] (UInt8 0..255),
         food_region_mask[H_c][W_c] (resampled to colour-image grid),
@@ -858,6 +967,14 @@ Output: π_sup = (n̂, d), residual_mm
    for confidence). For each pixel in food_region_mask's lower-edge band (within 30 mm of
    the food bbox lower edge in camera-1 image coords) where confidence/255 ≥ τ_conf (0.40, Decision 49)
    AND the pixel is OUTSIDE food_region_mask: back-project to 3D camera-space:
+
+   > **Superseded 2026-06-16** by `lidar-plane-fit-degenerate-on-clean-capture`, and the
+   > constant is now gone (support-plane-reference Decision 56). The scan is **four** bands —
+   > below, above, left, right of the food bbox — each as thick as the bbox dimension
+   > perpendicular to it, in **pixels**, clipped to image bounds. No millimetre bound is read:
+   > `LiDARPlaneFitter.lowerEdgeBandMm = 30` had no reader from that date and was deleted.
+   > `LiDARPlaneFitter.collectCandidatePoints` is the region's only definition.
+
        p := K_colour^{-1} · [u, v, 1] · z(u,v)        // mm
    Collect points P = {p_k}.
 
@@ -882,7 +999,9 @@ Output: π_sup = (n̂, d), residual_mm
 5. If residual_mm > 20 mm: throw lidarFitResidualTooHigh        // raised from 8 mm per Decision 46
 ```
 
-**Parameter justification (asserted; sensitivity study in design phase).** Inlier band 5 mm chosen as the standard ARKit LiDAR per-pixel σ. Residual cap 20 mm (Decision 46, raised from 8 mm) admits real-surface roughness and textured tablecloths; residuals in (8, 20] mm accept with σ_plane = exp(−r/5) carrying the degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε floor). 15° gravity-angle bias is wide enough to admit a tray on a slight slope but rejects candidates whose normals don't even vaguely align with up. 256 iterations is standard for a 3-point sample; success probability > 0.999 for 50% inliers.
+**Parameter justification for §6.2.2 (asserted; sensitivity study in design phase).** Inlier band 5 mm chosen as the standard ARKit LiDAR per-pixel σ. Residual cap 20 mm (Decision 46, raised from 8 mm) admits real-surface roughness and textured tablecloths; residuals in (8, 20] mm accept with σ_plane = exp(−r/5) carrying the degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε floor). 15° gravity-angle bias is wide enough to admit a tray on a slight slope but rejects candidates whose normals don't even vaguely align with up. 256 iterations is standard for a 3-point sample; success probability > 0.999 for 50% inliers.
+
+**Superseded in part, support-plane-reference Decisions 51, 55 and 57.** The "256 iterations" sentence is arithmetically correct and is **not** the derivation of the value: measured on the committed corpus, the fallback fit's winning hypothesis holds 0.607 and 0.949 of its points, and the same success-probability criterion at those ratios asks for **39 and 5 draws**, not 256. The plane the fit ships settles by the **eighth** draw (movement 0.027 and 0.152 mm above it, inside Req 5.1's 1 mm) while the search itself never converges — a budget of 1024 still finds a better hypothesis on both captures. `LiDARPlaneFitter.maxIterations` is therefore `[owed]` to support-plane-reference task 26, bracketed 8…unbounded by the corpus and 4…unbounded by the committed regression suite (Decision 57). The 15° cone is likewise `[owed]`, bracketed 10°…unbounded, and bounds nothing at any value on this corpus (Decision 55). §6.2.2's promoted leg no longer uses a fixed budget at all.
 
 ### 6.3 Card-only iterative support-plane fit (Req 4.3)
 

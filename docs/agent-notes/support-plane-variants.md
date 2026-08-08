@@ -3,16 +3,27 @@
 Three independent implementations of `specs/estimation/support-plane-reference/`
 exist as of 2026-08-08. This note records where each lives, how they differ, and
 the evidence each produced, so a merge/selection decision can be made without
-re-deriving any of it. See [support-region.md](support-region.md) for the research
-line's own implementation notes.
+re-deriving any of it.
+
+> **Resolved 2026-08-08: impl-1 selected and merged to `research`** (decision_log
+> Decision 59). The research line's tasks 1–8 fitter, its tests and its
+> `support-region.md` note were removed in the merge; the live implementation
+> note is [support-plane-fit.md](support-plane-fit.md). This note stays as the
+> record of the compete run and of the evidence still to import from impl-2.
 
 ## Where they live
 
 | Line | Location | Tasks | State |
 |---|---|---|---|
 | research | branch `research`, commit `f143a66` | 1–8 of 27 | committed; whole-ring median guard (see below) |
-| impl-1 (opus) | branch `orbit-impl-1/support-plane-reference` | 25/27 + deep task 26 | green: 572 XCTest (5 skipped) + 324 swift-testing / 36 suites |
-| impl-2 (sonnet) | branch `orbit-impl-2/support-plane-reference` | 25/27 + partial task 26 | green: 572 XCTest (5 skipped) + 213 swift-testing / 27 suites |
+| impl-1 (opus) | branch `orbit-impl-1/support-plane-reference` | 25/27 + deep task 26 | green (exit 0, all suites passed); 324 swift-testing / 36 suites |
+| impl-2 (sonnet) | branch `orbit-impl-2/support-plane-reference` | 25/27 + partial task 26 | green (exit 0, all suites passed); 213 swift-testing / 27 suites |
+
+Per-variant XCTest totals are deliberately not quoted: the two verification runs
+executed concurrently and `make test` greps its totals from a fixed shared log
+path, so each run's printed XCTest line can belong to the other run (see
+[device-build-and-test.md](device-build-and-test.md)). The merged tree, run
+alone, reports 537 XCTest (3 skipped, 0 failures) + 324 swift-testing.
 
 The variant branches were produced by an orbit compete run (2026-08-05/06, ~$664
 combined) whose worktrees sit under
@@ -114,9 +125,13 @@ the mechanism (sign-blind count; crossed-sector rule) that explains it.
 
 ## Open items
 
-- Selection decision: which line survives (record in the spec's decision log).
-- Import the task-26 record from both variants' decision logs into the surviving
-  line's `decision_log.md`.
-- Fix the `paletteVersion` mislabel in the fixture tooling on research regardless
-  of selection.
-- Task 27 (on-device weighed-food verification) remains human-gated on every line.
+- ~~Selection decision~~ — done: impl-1 (Decision 59, 2026-08-08).
+- Import impl-2's task-26 record (its Decisions 34–43, renumbered) into the
+  surviving `decision_log.md`; record the `minSupportingSectors` cross-explanation.
+- Port impl-2's `paletteVersion` fixture-loader fix (its Decision 34) — impl-1
+  does not carry it.
+- Task 27 (on-device weighed-food verification) remains human-gated.
+- Cleanup after the evidence import is verified: remove the `.orbit` worktrees
+  (~6 GB; the phase logs live in `.orbit/logs/`, outside the worktrees) and
+  archive or delete `orbit-impl-2/support-plane-reference` only once its
+  decisions are imported.

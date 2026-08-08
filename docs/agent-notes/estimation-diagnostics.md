@@ -215,9 +215,12 @@ replay:
 
 **−4.79 g, −4.6 %**, with no error raised. β is not the cause — the device recorded β = 1 for this
 attempt too. The prime suspect is the support plane: the bundle stamps
-`estimator_path = 'single_dominant'`, which routes `FixtureRunner` to `fitPlateRegionPlane` (the
+`estimator_path = 'single_dominant'`, which routed `FixtureRunner` to `fitPlateRegionPlane` (the
 centre-seeded flood fill written for the N5k overhead rig), whereas replay's other branch,
-`fitPlaneFromDepth`, masks the whole frame. The device's own fit recorded
+`fitPlaneFromDepth`, masked the whole frame. **Resolved by support-plane-reference task 16**: the
+`estimatorPath` branch is gone and both paths now call the device's own
+`LiDARSupportPlaneFitter.fitFromDepth`, so this divergence cannot recur by construction (Req 5.1,
+guarded by `SupportPlaneParityTests`). The device's own fit recorded
 `planeResidualMm 1.94, candidates 1,065,089, inliers 639,569` for comparison. Note this
 **refutes** the standing roadmap §5 prediction that handheld captures would *skip* or throw
 `volumeEstimationFailed` on this branch: the flood fill succeeded. A silent few-percent drift is

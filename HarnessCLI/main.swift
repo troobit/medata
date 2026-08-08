@@ -86,8 +86,42 @@ struct AccuracyJSON: Encodable {
     // more than one means the run mixed models and the aggregate is not
     // attributable to any single checkpoint.
     let checkpointSHAs: [String]
+    // Req 4.4: how often the restricted support-plane fit was rejected, segmented
+    // by reference. `fallbackRate` is null when nothing was depth-derived.
+    let supportPlaneFallback: FallbackJSON
     let perClass: [String: PerClassJSON]
     let rows: [RowJSON]
+    struct FallbackJSON: Encodable {
+        let countsByReference: [String: Int]
+        let depthDerivedCount: Int
+        let unreportedCount: Int
+        let fallbackCount: Int
+        let fallbackRate: Float?
+
+        init(_ r: FallbackRateReport) {
+            countsByReference = r.countsByReference
+            depthDerivedCount = r.depthDerivedCount
+            unreportedCount = r.unreportedCount
+            fallbackCount = r.fallbackCount
+            fallbackRate = r.fallbackRate
+        }
+
+        // Encode a null rate explicitly, so an absent rate reads as absent rather
+        // than as a missing key a consumer would default to zero.
+        enum CodingKeys: String, CodingKey {
+            case countsByReference, depthDerivedCount, unreportedCount
+            case fallbackCount, fallbackRate
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(countsByReference, forKey: .countsByReference)
+            try c.encode(depthDerivedCount, forKey: .depthDerivedCount)
+            try c.encode(unreportedCount, forKey: .unreportedCount)
+            try c.encode(fallbackCount, forKey: .fallbackCount)
+            try c.encode(fallbackRate, forKey: .fallbackRate)
+        }
+    }
     struct PerClassJSON: Encodable {
         let mape: Float; let mae: Float
         let sampleCount: Int; let calibrationStatus: String
@@ -112,6 +146,7 @@ func emitAccuracy(_ report: AccuracyReport,
         passesBar: report.passesBar,
         scoredCount: report.scoredCount, unscoredCount: report.unscoredCount,
         checkpointSHAs: checkpointSHAs,
+        supportPlaneFallback: AccuracyJSON.FallbackJSON(report.fallback),
         perClass: report.perClassStats.mapValues { s in
             AccuracyJSON.PerClassJSON(mape: s.mape, mae: s.mae,
                                       sampleCount: s.sampleCount,
@@ -126,6 +161,24 @@ func emitAccuracy(_ report: AccuracyReport,
                 scored: r.isScored)
         }
     ), to: outputPath)
+
+    // Req 4.5: a fallback rate above the (task 26) threshold is a defect against
+    // this feature, not a success — a change where every capture falls back
+    // satisfies Reqs 4.1–4.3 while delivering nothing. Printed on every run so the
+    // figure is read alongside the accuracy, not looked up afterwards.
+    if let rate = report.fallback.fallbackRate {
+        let byReference = report.fallback.countsByReference
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: " ")
+        fputs("support-plane fallback rate: \(rate * 100)% "
+              + "(\(report.fallback.fallbackCount) of "
+              + "\(report.fallback.depthDerivedCount) depth-derived attempts; "
+              + "\(byReference))\n", stderr)
+    } else {
+        fputs("support-plane fallback rate: not measured — no attempt derived a "
+              + "plane from depth\n", stderr)
+    }
 
     if report.unscoredCount > 0 {
         fputs("WARNING: \(report.unscoredCount) of \(report.rows.count) meals carry no "
@@ -300,7 +353,8 @@ func runAccuracy(args: Args) throws {
             statusPerClass: m.predictedCarbsPerClass.keys.reduce(into: [:]) { d, k in
                 d[k] = .uncalibratedUnity
             },
-            groundTruthTotalCarbsG: m.groundTruthTotalCarbsG
+            groundTruthTotalCarbsG: m.groundTruthTotalCarbsG,
+            supportPlaneReference: m.supportPlaneReference
         )
     }
     let report = AccuracyHarness.evaluate(meals: evalMeals)
@@ -382,23 +436,32 @@ func runCalibration(args: Args, db: any FoodDatabase,
     let n5kSD = sdInputs.filter { massDominant[$0.fixtureID] != nil }
     let legacySD = sdInputs.filter { massDominant[$0.fixtureID] == nil }
     let gated = CalibrateRun.applyPurityGate(n5kSD, massDominantByFixture: massDominant)
-    let admittedInputs = legacySD + gated.admitted
+    // Req 5.4: β_c is fitted on the subset sharing the reference it will be
+    // applied under. The corpus spans two references permanently (Decision 17),
+    // so this is a standing constraint rather than a migration measure.
+    let referenceGated = CalibrateRun.applyReferenceGate(legacySD + gated.admitted)
+    let admittedInputs = referenceGated.admitted
     // The split-based result feeds the legacy self-evaluation only; the baked
     // β fits on ALL qualifying plates (design §Split reconciliation), so a
     // single-dominant staple needs the 30-plate floor, not ~50.
     let (sdResult, _) = BetaCalibrator.calibrateWithFit(meals: admittedInputs)
     let sdFit = BetaCalibrator.bakeFit(meals: admittedInputs)
 
-    // Mixture fixtures: plate-region plane + depth-threshold hull volume.
+    // Mixture fixtures: plate-region plane + depth-threshold hull volume. The
+    // skips are counted SEPARATELY from the single-dominant ones: this site
+    // swallows a `fitPlateRegionPlane` throw, so a broken flood fill would empty
+    // the mixture corpus while the run still reported success (Decision 17).
     var mixtureObs: [MixtureBetaCalibrator.PlateObservation] = []
+    var mixturePlaneFitSkipped: [String] = []
     for fx in routed.mixture {
-        guard fx.hasNadirDepth else { planeFitSkipped.append(fx.fixtureID); continue }
+        guard fx.hasNadirDepth else { mixturePlaneFitSkipped.append(fx.fixtureID); continue }
         do {
             mixtureObs.append(try CalibrateRun.mixtureObservation(fixture: fx))
         } catch {
-            planeFitSkipped.append(fx.fixtureID)
+            mixturePlaneFitSkipped.append(fx.fixtureID)
         }
     }
+    planeFitSkipped.append(contentsOf: mixturePlaneFitSkipped)
     let liquidClasses = Set(palette.liquidClasses)
     var densityByClass: [String: Float] = [:]
     for c in Set(mixtureObs.flatMap { $0.massByClassG.keys }) {
@@ -438,6 +501,10 @@ func runCalibration(args: Args, db: any FoodDatabase,
           unmapped-mass excluded (Req 4.1): \(routed.unmappedExcluded.count)
           purity dropped (not re-routed): \(gated.dropped)
           plane-fit/pipeline skipped: \(planeFitSkipped.count)
+          of which mixture plate-region fits: \(mixturePlaneFitSkipped.count) \
+        of \(routed.mixture.count)
+          support-plane reference excluded (Req 5.4): \
+        \(referenceGated.excluded.count)
           stacking excluded: \(mixtureResult.excludedPlates)
           liquid excluded: \(mixtureResult.liquidExcludedPlates)\n
         """, stderr)
@@ -448,11 +515,14 @@ func runCalibration(args: Args, db: any FoodDatabase,
         purityDropped: gated.dropped.sorted(),
         planeFitSkipped: planeFitSkipped.sorted(),
         stackingExcluded: mixtureResult.excludedPlates.sorted(),
-        liquidExcluded: mixtureResult.liquidExcludedPlates.sorted())
+        liquidExcluded: mixtureResult.liquidExcludedPlates.sorted(),
+        supportPlaneReferenceExcluded: referenceGated.excluded.sorted())
 
     return CalibrationOutcome(
-        artifact: CalibrationArtifact(merged: merged, betaPool: sdFit.betaPool,
-                                      lineage: lineage, runSummary: runSummary),
+        artifact: CalibrationArtifact(
+            merged: merged, betaPool: sdFit.betaPool,
+            supportPlaneReference: CalibrateRun.fittedSupportPlaneReference,
+            lineage: lineage, runSummary: runSummary),
         routed: routed,
         mixtureObs: mixtureObs,
         mixtureResult: mixtureResult,
@@ -551,6 +621,12 @@ func runCalibrateAndEval(args: Args) throws {
         fputs("calibrate-and-eval: official-split skip \(reason) "
             + "(\(ids.count)): \(ids.sorted().joined(separator: " "))\n", stderr)
     }
+    // The plate-region fit is wrapped in `try?` here, so a broken fitter reads as
+    // an empty official split rather than a failure. Report the count even when it
+    // is zero, so its absence is a measurement rather than a silence (Decision 17).
+    fputs("calibrate-and-eval: official-split mixture plate-region fits skipped: "
+        + "\(officialSkipped["plane_fit_failed"]?.count ?? 0) of "
+        + "\(outcome.routed.depthTestExcluded.count)\n", stderr)
 
     let config = CalibrationEvalConfig(
         folds: 5, seed: args.seed,
@@ -591,7 +667,8 @@ func runLegacyEval(outcome: CalibrationOutcome, args: Args) throws {
         }
         return MealEvalInput(fixtureID: m.fixtureID, capturePath: m.capturePath,
                              predictedCarbsPerClass: predicted, statusPerClass: status,
-                             groundTruthTotalCarbsG: m.groundTruthTotalCarbsG)
+                             groundTruthTotalCarbsG: m.groundTruthTotalCarbsG,
+                             supportPlaneReference: m.supportPlaneReference)
     }
     let report = AccuracyHarness.evaluate(meals: evalMeals)
     // Legacy eval works from calibration inputs, not fixtures, so no checkpoint
