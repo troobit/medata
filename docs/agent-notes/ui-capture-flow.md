@@ -1,5 +1,22 @@
 # UI capture flow (App/)
 
+> **Post-capture flow re-merged by `specs/ui/meal-review/` (2026-08-09, superseding
+> design-handoff-00 §5 and the capture-step Result).** The two-screen split —
+> `SegmentationReviewView` then `ResultView(.justCaptured)` — is replaced by one review
+> surface (`MealReviewView` + `MealReviewModel`): `CaptureRoute` loses `.review`, estimation
+> completion pushes the surface directly, `SegmentationReviewView` is deleted, and
+> `ResultView.mode` collapses to `historyDetail` (the Records/Graph read path only). The
+> surface permits relabel, reject, absent-food and amount corrections; each is persisted per
+> detected food in the **`correction_records`** table the moment it is made.
+> **`correction_records` is the one store exempt from every deletion path** — no
+> `deleteMeal`/`deleteRecords` cascade, no age or count bound, excluded from the artefact
+> sweep's reach, and **must never be added to the Settings Debug reset
+> (`deleteAllData()`)** — the corpus is the deliverable, not test data (meal-review
+> Req 9.9/9.10, Decision 16). The four-place `project.pbxproj` registration checklist below
+> still applies to any new `App/` file (e.g. `MealReviewView.swift`,
+> `MealReviewModel.swift`). Mentions of `CaptureRoute` "(review/result)" and the
+> `SegmentationReviewView` "Carbs" button below predate this merge and are historical.
+
 > **Shell re-rooted by `specs/ui/home-router/` (2026-07-10, superseding design-handoff-00
 > Decision 20's Graph root).** The launch root is **`HomeView`** — a pure router with six
 > controls (Capture primary, then Intake / Dose / Records / Graph / Settings). Capture /
