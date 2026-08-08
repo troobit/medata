@@ -142,9 +142,44 @@ public enum LiDARPlaneFitter {
     // derivation. Not repaired, on Decisions 52-54's precedent — gating the first refinement
     // removes a candidate from `1785135663727` and moves `planeCandidateCount` (Req 6.1).
     static let gravityAngleMaxRad: Float = 15 * .pi / 180
-    // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5. Residuals in (8, 20]
-    // accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm,
-    // σ_plane ≈ 0.018, near the ε = 0.01 floor).
+    // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 58. The sentences that
+    // stood here — "residuals in (8, 20] accept the fit; σ_plane = exp(−r/5) carries the
+    // degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε = 0.01 floor)" — describe an
+    // EMPTY interval and a state neither leg can produce. Three things that decision measured
+    // and this comment must not lose:
+    //
+    // 1. The bar CANNOT FIRE, and not because the corpus is clean. Every member of the set
+    //    the RMS is taken over lies within one `inlierBandMm` of the plane that SELECTED it,
+    //    so RMS(least squares) ≤ RMS(selecting) < `inlierBandMm` = 5 for every input, on both
+    //    legs, at every budget and every cone. This bar is FOUR TIMES a quantity the fit's own
+    //    geometry cannot reach and `.lidarFitResidualTooHigh` is unreachable at the default.
+    //    Its whole live range is (0, residual] — 1.954 and 1.928 mm on the corpus — so the
+    //    raise from 8 was a no-op and so was the 8. It is the first constant in this feature
+    //    bounded by an ARGUMENT the captures only witness.
+    // 2. What the gate reads is NOT that residual. `refine` accumulates its centroid in three
+    //    Float `reduce(0, +)` sums, so at this leg's colour-grid inlier counts (641,694 and
+    //    1,298,233) the partial sums reach 10⁸ where an ulp is 32 mm, and d = n̂ · centroid
+    //    inherits it. The plane it returns is displaced 0.724 and 1.184 mm along its own
+    //    normal from the least-squares plane — the second past Req 5.1's 1 mm tolerance — and
+    //    the reading is inflated 1.077× and 1.267×. The normal is untouched (0.000° tilt) and
+    //    `computeResidual` is not the culprit (8e-5 relative against a Double sum). The
+    //    promoted leg refines 10⁴-sample annuli and is accurate. The ceiling in (1) survives
+    //    the inflation with 2.5× to spare, so the verdict does not change — but every residual,
+    //    σ_plane and fallback plane OFFSET this feature has quoted carries the error.
+    // 3. It is `public` and per-call overridable, so 20 is a DEFAULT and not a value. The only
+    //    callers that override it — `HarnessCore.FixtureRunner`, `PlateRegionPlaneTests` at
+    //    1.0, `LiDARPlaneFitterTests` at 0.1 — pass values inside the live range the default
+    //    sits outside of. Both corpus and committed suite floor it at 1.0 for one reason:
+    //    below the measured residual `fitOutcome` returns nil and every assertion in
+    //    `SupportPlaneRegressionSliceTests` becomes uncomputable rather than wrong.
+    //
+    // Bracketed 1.0…unbounded, shipped value strictly inside, and NOT set: a bar that cannot
+    // fire on a two-capture corpus is not thereby the right bar for a scene that needs it.
+    // Not repaired, on Decisions 52-57's precedent — the Double-accumulation fix in
+    // `SupportPlaneCorpusMeasurementTests.refineDoubleAccumulated` moves the shipped fallback
+    // plane 1.184 mm, which is the plane Decision 36 prices `fallbackPenalty` against.
     public static let residualMaxMm: Float = 20
     static let stabilityRatioMin: Float = 1e-6
     static let minPoints: Int = 3
@@ -489,6 +524,16 @@ public enum LiDARPlaneFitter {
         // JOBVT='A' and allocates an n×n V^T (~32 GB at the 1920×1440 inlier
         // counts observed on iPhone 13 Pro Max). See bugfix spec
         // `specs/bugfixes/lidar-plane-fit-oom-on-device-1920x1440/`.
+        //
+        // THE CENTROID BELOW IS NOT ACCURATE AT THOSE SAME COUNTS, and support-plane-reference
+        // Decision 58 measures it: three Float `reduce(0, +)` sums over coordinates of
+        // magnitude ~350 mm reach partial sums of 10⁸, where a Float ulp is 32 mm. At the
+        // 641,694 and 1,298,233 inlier counts the fallback leg produces, `d = n̂ · centroid`
+        // lands 0.724 and 1.184 mm off the least-squares plane — the second past Req 5.1's
+        // 1 mm tolerance. The normal is unaffected: the scatter terms are centred, so they
+        // stay small. The promoted leg refines 10⁴-sample annuli and drifts under 0.01 mm.
+        // The fix is to accumulate the centroid (and the scatter) in Double; it is NOT made
+        // here because it moves the shipped fallback plane by that same 1.184 mm.
         let n = inliers.count
         guard n >= 3 else { throw SupportPlaneError.lidarFitDegenerate }
         let cx = inliers.map { $0.x }.reduce(0, +) / Float(n)
