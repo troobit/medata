@@ -3331,3 +3331,81 @@ The full improvement traces are the reading:
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (the `maxIterations` provenance block), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theFallbackBudgetTruncatesASearchThatNeverFinishes`, the traced `fallbackRansacTrace`, the `adaptiveStop` replay, the restated regression bands and `foodVolumeCm3`), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and the fallback plane on both committed captures is bit-identical to what it was.
 
 ---
+## Decision 58: The residual bar cannot fire, and the reading it cannot fire on is inflated by the fitter's own arithmetic
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.residualMaxMm = 20` is step 4 of `fitOutcome`: the whole-plane RMS gate that turns a fit into `.lidarFitResidualTooHigh`. It is the last `[owed]` constant either fitter reads that the corpus can reach, and it is unlike every constant measured before it in three ways. It is **`public`**, so it is a per-call default rather than a value, and three callers already override it. It carries a **derivation that is arithmetic rather than empirical** — "residuals in (8, 20] accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε = 0.01 floor)" — which Decision 52 distinguished in KIND from a per-sample sigma. And this feature's own `design.md` already carries the argument that a residual bar of this shape **cannot fire**, made about a different constant: "under RANSAC the residual is computed over `polishedInliers`, each within `inlierBandMm = 5` of the plane, so RMS is ≤ 5 mm by construction and the bar can never fire" — the reason `restrictedResidualMaxMm = 8` was deleted before it shipped (Decisions 16 and 19).
+
+So the question this pass asks is not what the corpus says about 20. It is whether the argument that deleted one residual bar applies to the one that shipped, and what the gate is actually reading when it applies it.
+
+### Decision
+
+`residualMaxMm` stays at **20** and stays `[owed]`, bracketed **1.0…unbounded** with the shipped value strictly inside and no ceiling.
+
+The bar **cannot fire at any value at or above the inlier band**, for the structural reason `design.md` already gives about the bar that was deleted, now checked on the corpus and extended to both legs. Its entire live range is (0, residual] — 1.954 and 1.928 mm — so Decision 46's raise from 8 to 20 was a no-op and so was the 8.
+
+Separately and unexpectedly: **`refine` does not return the least-squares plane at this leg's inlier counts.** Its centroid is accumulated in Float over 641,694 and 1,298,233 points, and the plane it returns is displaced **0.724 mm** and **1.184 mm** along its own normal from the true minimiser — the second past Req 5.1's 1 mm tolerance. The residual the gate reads is inflated **1.077×** and **1.267×** by that displacement. Recorded, not repaired.
+
+### Rationale
+
+**The ceiling is an argument, and the corpus's job is to witness it.** Every member of the set the RMS is taken over lies strictly within one `inlierBandMm` of the plane that SELECTED it — that is what selection means — so RMS(selecting) < 5 mm identically, and the least-squares plane over that set cannot do worse than the selecting plane. Hence
+
+    RMS(least squares) ≤ RMS(selecting) < inlierBandMm
+
+for every input, on both legs, at every budget and every cone. Measured: 1.815 ≤ 1.952 < 5 and 1.522 ≤ 1.804 < 5. This is the **first owed constant in this feature bounded by an argument rather than by captures**; every earlier one was bracketed by what two scenes happened to produce, and this one would hold on a scene that does not exist. It is also the first time this feature has found `design.md` already carrying the finding — stated about `restrictedResidualMaxMm`, never applied to the general bar that shipped, and the deletion of one while the other survives is the asymmetry.
+
+**The gate is not reading that number, and the reason is in `refine`.** The centroid is three Float `reduce(0, +)` sums over coordinates of magnitude ~350 mm. At 1.3 million points the partial sums reach 4.6 × 10⁸, where a Float ulp is 32 mm, and `d = n̂ · centroid` inherits every bit of the accumulated rounding. The measurement isolates it three ways: the normal is untouched (**0.000°** tilt against the true minimiser, because the scatter terms are centred and stay small); `computeResidual` is exonerated (its Float `sumSq` agrees with a Double sum to **8e-5** relative); and a Double-accumulated mirror of `refine` — identical in every other line — lands on an independent Jacobi eigen-solve of the same scatter matrix to **1e-7 mm** of RMS. The defect is the centroid alone.
+
+| capture | inliers | shipped residual | least squares | inflation | plane offset | at the food |
+| --- | --- | --- | --- | --- | --- | --- |
+| `1785135663727` | 641,694 | 1.954 mm | 1.815 mm | 1.077× | 0.724 mm | 0.723 mm |
+| `1785901032716` | 1,298,233 | 1.928 mm | 1.522 mm | 1.267× | 1.184 mm | 1.186 mm |
+
+**The count bounds the drift without determining it.** Refitting the same geometry over growing prefixes of one inlier set: 1,000 points cost 0.000 mm, 10,000 cost 0.008 and 0.002 mm, 100,000 cost 0.030 and 0.042 mm, 500,000 cost 0.317 and 0.737 mm. The promoted leg refines the 10,469 and 12,551-sample annuli of Decision 51 and is accurate at that scale — so this is the **second defect in two passes confined to the leg that never received the promoted leg's fixes**, after Decision 57's missing adaptive stopping, and for the same underlying reason: the fallback runs on the COLOUR grid at 1920×1440 while extraction runs on a depth annulus. It is not a bias, either: the band sweep reads 1.007× at 1,385,960 inliers and 1.349× at 1,231,960. A count says how far a rounding walk *can* have gone, not where it is.
+
+**The verdict on the constant does not change, and several numbers around it do.** The inflated reading is still 39 % of the band, so the ceiling in (1) survives with 2.5× to spare and the bar remains unreachable. But Decision 36 prices `fallbackPenalty` on "the edge-band plane's residual is lower than the restricted fit's (1.95 vs 2.33 mm), and 71 % of the penalty is spent cancelling that" — the 1.95 is this inflated number, the true gap is 1.815 against 2.327, and the residual channel therefore works *harder* against the penalty than that decision recorded. Every fallback-leg residual, σ_plane and plane offset quoted in Decisions 35–37 and 54–57 carries the error.
+
+**Req 5.1 is not violated, and the thing that is wrong is not what it measures.** The drift is deterministic: identical bytes in the same order give the same rounding, so device and replay still agree exactly and Decision 35's tolerance holds. What fails is the plane's agreement with the fit it claims to be — 1.186 mm at the food centroid ray, measured in the same units Req 5.1 is denominated in, against a 1 mm tolerance. A requirement about two paths agreeing cannot see an error both paths make.
+
+**σ_plane inherits the ceiling, so this constant's own derivation prices a state neither leg can produce.** Confidence computes σ_plane = exp(−r/5) from the same residual, so σ_plane > exp(−`inlierBandMm`/5) = **0.368** structurally. The plane channel of the confidence product spans (0.368, 1], not (0, 1]; the derivation's "at r = 20 mm, σ_plane ≈ 0.018, near the ε = 0.01 floor" describes a point 20× below the floor. Measured: 0.676 and 0.680.
+
+**The floor is 1.0, and corpus and committed suite give it for the same reason.** Below the measured residual `fitOutcome` returns nil, so `SupportPlaneRegressionSliceTests` — which measures the pre-feature edge-band plane on both slices — loses its input entirely and every assertion becomes uncomputable rather than merely wrong. This is the **seventh** distinct way the committed suite has spoken to a constant here (after Decision 41's brackets, Decision 49's measured silence, Decision 50's structural silence, Decision 52's noise-limited identity, Decision 56's floor at the shipped bar and Decision 57's fallback-leg regression bands) and the first where the two sources cannot disagree, because both read the one residual this leg produces. Decision 57 found the suite the looser source; here they are the same number.
+
+**The bar is denominated in `inlierBandMm`, which makes it a fifth marker terminating in Decision 52's constant.** The ceiling tracks the band across Decision 52's whole 1…12.5 mm bracket — 0.512…3.192 and 0.601…2.534 mm, never above 60 % of the band and never within a factor of two of the shipped 20. Reaching 20 needs a band above 20, which is off that bracket entirely. It is the first of the five markers that terminates there **without saying so**, since this constant carries a derivation of its own that never mentions the band.
+
+### Alternatives Considered
+
+- **Set it to 5 — the band — since that is the structural ceiling and any value above it is dead** - It is the exact bound the argument gives, it makes the constant honest, and it costs nothing on the corpus because the bar still never fires - Rejected because it changes nothing and forecloses something. A bar at the ceiling is still unreachable, so the change buys no behaviour; and if the fitter ever gains a path that refines against a set it did not select — a merged consensus, a multi-band polish — the ceiling stops holding and 5 would then be a live bar set from an argument that no longer applies. Req 3.7 forbids setting a bar from the pass side alone, and here the pass side is every possible input.
+- **Delete it, on Decisions 32 and 56's precedent for constants that turn out to do nothing** - It cannot fire at the shipped value, its derivation prices an unreachable state, and the feature has twice removed an owed constant rather than postpone it - Rejected because it is `public` and three callers pass their own values inside the live range: `HarnessCore.FixtureRunner` exposes it as a parameter and the two test callers pass 1.0 and 0.1. The constant does nothing at its default and something at the values callers choose, which is a default to be re-derived, not a mechanism to remove. Deleting it would also remove the only refusal path the fallback leg has.
+- **Repair `refine`'s centroid now — it is a two-line change and the corpus proves it wrong** - The Double-accumulated mirror is already written and validated against an independent eigen-solve, and the shipped plane is 1.184 mm from the answer it claims to compute, past Req 5.1's tolerance - Rejected on Decisions 52–57's precedent: it moves the shipped fallback plane by that same 1.184 mm, and the fallback plane is what Decision 36 prices `fallbackPenalty` against and what feeds `lidarMmPerPx = |d| / f` on the legacy path. Recorded as the repair this measurement recommends, made at the sitting rather than here. The sitting is where the penalty is repriced anyway.
+- **Treat the drift as a Req 5.1 violation and open a bugfix spec** - 1.186 mm at the food is past a documented 1 mm tolerance, and `lidar-plane-fit-oom-on-device-1920x1440` set the precedent for `refine`-related bugfix specs - Rejected on the requirement's text: Req 5.1 constrains a device capture against its replay, and the drift is deterministic in the input order, so both agree exactly. The error is real but it is an accuracy defect in one function, not a transfer defect, and the owed-constant sitting is where a plane that moves 1.184 mm gets decided.
+- **Measure the bar against a synthetic straddling scene, where a high residual is constructible** - It would give the ceiling a counter-example and turn the bracket two-sided - Rejected as the circularity Decision 11 and Req 3.7 both name: a synthetic scene built to make the bar fire sets the bar to whatever the scene was built for. The ceiling holds structurally, so no natural scene can defeat it; a scene that does would have to break the selection invariant, which is a code change and not a capture.
+
+### Consequences
+
+**Positive:**
+
+- The argument that deleted `restrictedResidualMaxMm` before it shipped is finally applied to the bar that did ship, closing an asymmetry `design.md` has carried since Decision 16.
+- The first owed constant in this feature bounded by an argument rather than by two captures, so its ceiling does not inherit the corpus's narrowness.
+- A real arithmetic defect in `refine` is found, isolated to the centroid, quantified on both captures and priced against Req 5.1's own units — found only because the ceiling argument gave a number the reading could be checked against.
+- The measurement's helper IS the proposed repair, so the sitting has a validated fix and its exact cost (1.184 mm of plane movement) rather than a direction.
+- σ_plane's true range is recorded, which bounds what the plane channel can contribute to any confidence reading — a constraint task 27's latency and confidence work inherits.
+- The regression bound on `refine`'s drift means a future change that makes the accumulation worse fails a test rather than moving a plane silently.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the eighth pass running, and this one is owed with no corpus evidence that can ever settle it, since no capture can make the bar fire.
+- Every fallback-leg residual and plane offset quoted in Decisions 35–37 and 54–57 is now known to carry up to 27 % of inflation, and those decisions are not re-run.
+- Decision 36's `fallbackPenalty` reasoning quotes an inflated residual, so the 71 % figure it records is wrong in a direction that makes the penalty look better than it is.
+- The feature now carries a fourth known-unrepaired path — after the gravity cone, `SupportRegion.percentile`'s p = 0.5 branch and the fallback's fixed budget — and this one is an accuracy defect rather than a structural one.
+- The bar's floor at 1.0 is set by what starves the committed suite, not by what a bad fit looks like, so the bracket's lower end carries no scene evidence either.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (the `residualMaxMm` provenance block and a new accumulation note on `refine`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theResidualGateCannotFireAtTheShippedBand`, `refineDoubleAccumulated`, `rmsDouble`, `inlierSet`, the extended `ResidualReading`), `specs/estimation/support-plane-reference/design.md` (the "why there is no separate residual bar" section, and Decision 36's residual figures), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and both legs produce bit-identical planes.
+
+---

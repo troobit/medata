@@ -1,4 +1,5 @@
 import CaptureKit
+import CardDetection
 import Confidence
 import Foundation
 import PortableContracts
@@ -7662,8 +7663,14 @@ struct SupportPlaneCorpusMeasurementTests {
     // is therefore the last improvement at or before B.
     // `theFallbackBudgetTruncatesASearchThatNeverFinishes` checks that against independent
     // short runs rather than assuming it.
+    //
+    // `band` is defaulted to the shipped value so Decision 57's readings are untouched. It is
+    // a parameter at all because Decision 58 has to re-trace the same loop at other bands: the
+    // residual gate's ceiling is the band, and a sweep of one needs a sweep of the other.
     static func fallbackRansacTrace(points: [Vec3], gravity: Vec3, rng: inout SplitMix64,
-                                    budget: Int, coneRad: Float) -> [BudgetImprovement] {
+                                    budget: Int, coneRad: Float,
+                                    band: Float = LiDARPlaneFitter.inlierBandMm)
+        -> [BudgetImprovement] {
         var improvements: [BudgetImprovement] = []
         var bestScore = 0
         var draws = 0
@@ -7693,7 +7700,7 @@ struct SupportPlaneCorpusMeasurementTests {
             let d = nHat.dot(p1)
             var inliers: [Int] = []
             inliers.reserveCapacity(n)
-            for idx in 0..<n where abs(nHat.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+            for idx in 0..<n where abs(nHat.dot(points[idx]) - d) < band {
                 inliers.append(idx)
             }
             guard inliers.count > bestScore else { continue }
@@ -8246,6 +8253,497 @@ struct SupportPlaneCorpusMeasurementTests {
             guard let tight = byCone[coneDeg], let shipped = byCone[15] else { return false }
             return corpus.contains { tight[$0.name]?.last != shipped[$0.name]?.last }
         }, "\(coneFree)")
+    }
+
+    // MARK: - The residual gate, and the band its own input is selected in
+
+    // What `fitOutcome`'s step 4 holds when it applies the bar, plus the two quantities the
+    // shipped path discards: the plane the final inlier set was SELECTED against, and the
+    // widest single deviation in that set. Both are needed because the claim under test is
+    // not "the residual is small on this corpus" — it is that the gate's input has a ceiling
+    // it cannot cross, and the ceiling is an argument about the selecting plane.
+    struct ResidualReading {
+        let bandMm: Float
+        let residualMm: Float        // RMS against the refined plane — what the gate compares
+        let selectingRmsMm: Float    // the same set against the plane that selected it
+        let leastSquaresRmsMm: Float // the same set against its own least-squares plane
+        let maxAbsMm: Float          // sup-norm against the refined plane
+        let inlierCount: Int
+        let polishIterations: Int
+        let polishStop: PolishStop
+        let plane: (normal: Vec3, d: Float)         // what the fallback ships
+        let selecting: (normal: Vec3, d: Float)     // what its inlier set was selected against
+        let leastSquares: (normal: Vec3, d: Float)  // the same set's own minimiser
+        // The continuous channel the bar sits on: Confidence's σ_plane = exp(−r/5), r₀ = 5 mm.
+        var sigmaPlane: Float { Foundation.exp(-residualMm / 5) }
+        // How much of the reading is `refine`'s own accumulation error rather than the scene.
+        var inflation: Float { residualMm / leastSquaresRmsMm }
+        // The shipped plane's displacement from the minimiser, along its own normal.
+        var refineOffsetMm: Float { abs(plane.d - leastSquares.d) }
+        var refineTiltDeg: Float {
+            SupportPlaneCorpusMeasurementTests.angleDeg(plane.normal, leastSquares.normal)
+        }
+    }
+
+    // RMS in Double, so a reading of the shipped path's arithmetic is not taken with the
+    // same arithmetic. `computeResidual` accumulates `sumSq` in Float over inlier counts up
+    // to 1.3 million; this exists to establish that that sum is NOT where the error is.
+    static func rmsDouble(_ points: [Vec3], normal: Vec3, d: Float) -> Float {
+        guard !points.isEmpty else { return .infinity }
+        let nx = Double(normal.x), ny = Double(normal.y), nz = Double(normal.z)
+        let dd = Double(d)
+        var sumSq = 0.0
+        for p in points {
+            let dist = nx * Double(p.x) + ny * Double(p.y) + nz * Double(p.z) - dd
+            sumSq += dist * dist
+        }
+        return Float((sumSq / Double(points.count)).squareRoot())
+    }
+
+    // `LiDARPlaneFitter.refine`, line for line, with the centroid and the scatter matrix
+    // accumulated in DOUBLE and the 3×3 scaled to unity before the Float SVD. Everything
+    // else — the singular vector taken, the seed orientation, d = n̂ · centroid — is the
+    // shipped path's. This is both the reference the shipped plane is measured against and
+    // the repair this decision recommends, so the measurement prices the repair directly.
+    //
+    // It is the least-squares plane and not merely a more careful one: checked against an
+    // independent Double Jacobi eigen-solve of the same scatter matrix, the two agree to
+    // 1e-7 mm of RMS on both captures.
+    static func refineDoubleAccumulated(inliers: [Vec3], seedNormal: Vec3) -> (Vec3, Float)? {
+        guard inliers.count >= LiDARPlaneFitter.minPoints else { return nil }
+        var cx = 0.0, cy = 0.0, cz = 0.0
+        for p in inliers { cx += Double(p.x); cy += Double(p.y); cz += Double(p.z) }
+        let n = Double(inliers.count)
+        cx /= n; cy /= n; cz /= n
+        var m00 = 0.0, m01 = 0.0, m02 = 0.0, m11 = 0.0, m12 = 0.0, m22 = 0.0
+        for p in inliers {
+            let x = Double(p.x) - cx, y = Double(p.y) - cy, z = Double(p.z) - cz
+            m00 += x * x; m01 += x * y; m02 += x * z
+            m11 += y * y; m12 += y * z; m22 += z * z
+        }
+        let scale = Swift.max(m00, Swift.max(m11, m22))
+        guard scale > 0 else { return nil }
+        let mCol: [Float] = [
+            Float(m00 / scale), Float(m01 / scale), Float(m02 / scale),
+            Float(m01 / scale), Float(m11 / scale), Float(m12 / scale),
+            Float(m02 / scale), Float(m12 / scale), Float(m22 / scale)
+        ]
+        guard let svd = try? LinearAlgebra.svdFull(mCol, rows: 3, cols: 3) else { return nil }
+        var nHat = Vec3(svd.u[6], svd.u[7], svd.u[8]).normalised()
+        if nHat.dot(seedNormal) < 0 { nHat = -nHat }
+        let d = Double(nHat.x) * cx + Double(nHat.y) * cy + Double(nHat.z) * cz
+        return (nHat, Float(d))
+    }
+
+    // `fitOutcome` steps 2-4 with the inlier band as a parameter, tracking the selecting
+    // plane alongside the refined one. Every other line is the shipped path's, so at the
+    // shipped band this returns exactly `SupportPlaneFitStats.residualMm`.
+    static func fallbackResidualReading(points: [Vec3], gravity: Vec3, band: Float,
+                                        budget: Int, coneRad: Float,
+                                        improvements: [BudgetImprovement]) -> ResidualReading? {
+        guard let winner = improvements.last(where: { $0.iteration <= budget }),
+              winner.inliers.count >= LiDARPlaneFitter.minPoints,
+              let refined = try? LiDARPlaneFitter.refine(
+                  inliers: winner.inliers.map { points[$0] }, seedNormal: winner.normal)
+        else { return nil }
+
+        // The invariant the ceiling rests on: `inliers` and (`normal`, `d`) are ALWAYS a set
+        // and the plane `refine` returned for exactly that set, and `selecting` is the plane
+        // that set was chosen against — the RANSAC hypothesis on entry, the previous iterate
+        // afterwards. Every `break` below leaves the triple consistent, which is why the
+        // bound holds on the early-exit paths too and not only on the converged one.
+        var normal = refined.0
+        var d = refined.1
+        var inliers = winner.inliers
+        var selecting = (normal: winner.normal, d: winner.d)
+        var applied = 0
+        var stop = PolishStop.cap
+        for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+            var reselected: [Int] = []
+            reselected.reserveCapacity(points.count)
+            for idx in 0..<points.count where abs(normal.dot(points[idx]) - d) < band {
+                reselected.append(idx)
+            }
+            if reselected == inliers { stop = .fixedPoint; break }
+            if reselected.count < LiDARPlaneFitter.minPoints { stop = .underpopulated; break }
+            guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                inliers: reselected.map { points[$0] }, seedNormal: normal
+            ) else { stop = .degenerate; break }
+            if acos(SupportRegion.clampedCosine(nextNormal.dot(gravity))) > coneRad {
+                stop = .gravity
+                break
+            }
+            selecting = (normal, d)
+            inliers = reselected
+            normal = nextNormal
+            d = nextD
+            applied += 1
+        }
+
+        let members = inliers.map { points[$0] }
+        var maxAbs: Float = 0
+        for p in members { maxAbs = Swift.max(maxAbs, abs(normal.dot(p) - d)) }
+        // The same set's own least-squares plane, computed without the Float accumulation.
+        guard let exact = Self.refineDoubleAccumulated(inliers: members, seedNormal: normal)
+        else { return nil }
+        return ResidualReading(
+            bandMm: band,
+            residualMm: LiDARPlaneFitter.computeResidual(
+                points: members, normal: normal, d: d),
+            selectingRmsMm: Self.rmsDouble(
+                members, normal: selecting.normal, d: selecting.d),
+            leastSquaresRmsMm: Self.rmsDouble(members, normal: exact.0, d: exact.1),
+            maxAbsMm: maxAbs,
+            inlierCount: inliers.count,
+            polishIterations: applied, polishStop: stop,
+            plane: (normal, d), selecting: selecting, leastSquares: (exact.0, exact.1))
+    }
+
+    // The set `fallbackResidualReading`'s numbers are taken over, re-derived from the reading
+    // rather than carried in it — every exit path of the polish loop leaves `inliers` equal
+    // to the points within one band of `selecting`, so one O(n) pass reproduces it. Keeping
+    // the indices instead would hold a quarter of a gigabyte across the band sweep.
+    static func inlierSet(points: [Vec3], reading: ResidualReading) -> [Vec3] {
+        var members: [Vec3] = []
+        members.reserveCapacity(reading.inlierCount)
+        for p in points where abs(reading.selecting.normal.dot(p) - reading.selecting.d)
+            < reading.bandMm {
+            members.append(p)
+        }
+        return members
+    }
+
+    // The largest displacement between `refine` and its own least-squares answer this
+    // decision measured, plus headroom. A regression bound, not a bar anything reads.
+    static let refineDriftBoundMm: Float = 2
+
+    // Bars either side of the shipped 20, including the 8 Decision 46 raised it FROM, the
+    // 5 that is the shipped inlier band, and the 1.0 and 0.1 two callers already pass.
+    static let residualBarSweep: [Float] = [0.1, 0.5, 1, 2, 3, 4, 5, 8, 20, 40]
+
+    // Decision 52's bracket on `inlierBandMm`, swept here because the gate's ceiling IS the
+    // band and a claim about one is a claim about the other.
+    static let residualBandSweep: [Float] = [1, 2, 3, 4, 5, 6, 8, 10, 12.5]
+
+    @Test("the residual gate is denominated four times above the band its own input is selected in")
+    func theResidualGateCannotFireAtTheShippedBand() throws {
+        struct Capture {
+            let name: String
+            let slice: DepthSlice
+            let points: [Vec3]
+            let gravity: Vec3
+        }
+
+        var corpus: [Capture] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            corpus.append(Capture(name: name, slice: slice, points: points,
+                                  gravity: slice.gravity.normalised()))
+        }
+
+        let shippedBand = LiDARPlaneFitter.inlierBandMm
+        let shippedBar = LiDARPlaneFitter.residualMaxMm
+        let shippedCone = LiDARPlaneFitter.gravityAngleMaxRad
+        let budget = LiDARPlaneFitter.maxIterations
+
+        // One traced run per capture per band. The trace has to be re-drawn at every band
+        // because the band selects the inliers the hypothesis is SCORED on, so a different
+        // band is a different winner and not merely a different residual.
+        var byBand: [String: [Float: ResidualReading]] = [:]
+        for c in corpus {
+            var readings: [Float: ResidualReading] = [:]
+            for band in ([shippedBand] + Self.residualBandSweep).sorted() {
+                var rng = SplitMix64(seed: Fnv1a64.hash(c.slice.depth.depthBytesMm))
+                let trace = Self.fallbackRansacTrace(
+                    points: c.points, gravity: c.gravity, rng: &rng,
+                    budget: budget, coneRad: shippedCone, band: band)
+                readings[band] = Self.fallbackResidualReading(
+                    points: c.points, gravity: c.gravity, band: band,
+                    budget: budget, coneRad: shippedCone, improvements: trace)
+            }
+            byBand[c.name] = readings
+        }
+
+        // THE ANCHOR. At the shipped band the instrumented chain must reproduce the residual
+        // `fitOutcome` computes exactly — not within a tolerance — or nothing below is a
+        // reading on the shipped path.
+        for c in corpus {
+            let outcome = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
+                depth: c.slice.depth, colourIntrinsics: c.slice.colourIntrinsics,
+                foodRegionMask: c.slice.colourFoodMask, gravityCamera: c.slice.gravity))
+            let reading = try #require(byBand[c.name]?[shippedBand])
+            let drift = "\(c.name): the instrumented residual chain no longer reproduces"
+                + " LiDARPlaneFitter.fitOutcome's residualMm"
+            #expect(reading.residualMm == outcome.stats.residualMm, "\(drift)")
+        }
+
+        // MARK: the ceiling, and it is not a corpus fact
+
+        // THE FIRST FINDING, and it is an argument the corpus CONFIRMS rather than supplies.
+        // The gate compares an RMS taken over a set every member of which is strictly inside
+        // one `inlierBandMm` of the plane that SELECTED it, so
+        //
+        //     RMS(least squares) ≤ RMS(selecting) < inlierBandMm
+        //
+        // holds for every input, on both legs, at every budget and every cone: the first is
+        // minimality — no plane beats the least-squares one over its own set — and the second
+        // is the selection test itself. `residualMaxMm = 20` is therefore FOUR TIMES a
+        // quantity the fit's own geometry cannot reach, and `.lidarFitResidualTooHigh` is
+        // unreachable at the shipped default. The corpus's job here is to CHECK the two
+        // inequalities rather than to establish them, which is what makes this the first owed
+        // constant in the feature bounded by an argument the captures only witness.
+        //
+        // Both are asserted against a DOUBLE reading of the same sets, because the shipped
+        // path's own arithmetic is what the second finding is about.
+        print("=== the residual gate's input at the shipped band (\(fmt(shippedBand)) mm) ===")
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            print("  \(c.name): least-squares RMS \(fmt(r.leastSquaresRmsMm)) mm"
+                  + " ≤ selecting-plane RMS \(fmt(r.selectingRmsMm)) mm"
+                  + " < band \(fmt(r.bandMm)) mm; the gate reads \(fmt(r.residualMm)) mm;"
+                  + " sup |deviation| \(fmt(r.maxAbsMm)) mm,"
+                  + " \(r.inlierCount) inliers, polish \(r.polishIterations)"
+                  + " (\(r.polishStop.rawValue));"
+                  + " the bar is \(fmt(shippedBar / r.residualMm))× the reading")
+            let notMinimal = "\(c.name): the least-squares plane over the final inlier set no"
+                + " longer minimises over that set (\(fmt(r.leastSquaresRmsMm)) mm against the"
+                + " selecting plane's \(fmt(r.selectingRmsMm)) mm)"
+            #expect(r.leastSquaresRmsMm <= r.selectingRmsMm, "\(notMinimal)")
+            let unselected = "\(c.name): the selecting plane's RMS \(fmt(r.selectingRmsMm)) mm"
+                + " has reached the band \(fmt(r.bandMm)) mm it selected every member inside —"
+                + " the structural ceiling this decision rests on is broken"
+            #expect(r.selectingRmsMm < r.bandMm, "\(unselected)")
+            let broken = "\(c.name): the residual the gate reads, \(fmt(r.residualMm)) mm, is"
+                + " not below the inlier band \(fmt(r.bandMm)) mm — the gate may now be"
+                + " reachable"
+            #expect(r.residualMm < r.bandMm, "\(broken)")
+        }
+
+        // THE SECOND FINDING, and the ceiling above is what exposes it: the gate does NOT read
+        // the least-squares residual, because `refine` does not return the least-squares plane
+        // at this leg's inlier counts. Its centroid is three Float `reduce(0, +)` sums over
+        // 641,694 and 1,298,233 coordinates of magnitude ~350 mm, so the partial sums reach
+        // 10⁸ where a Float ulp is 32 mm — and d = n̂ · centroid inherits every bit of that.
+        // The normal is untouched (the scatter matrix is centred, so its terms stay small);
+        // the plane is displaced ALONG that normal.
+        //
+        // The reading the gate compares is inflated 1.077× and 1.267× by the fitter's own
+        // arithmetic. The ceiling survives it — 39 % of the band, not 100 % — so the finding
+        // does not change this constant's verdict, but every residual, σ_plane and plane
+        // OFFSET this feature has quoted on the fallback leg carries it.
+        //
+        // Not `computeResidual`: its Float `sumSq` agrees with a Double sum to 8e-5 relative
+        // on the same points. The error is in `refine` alone.
+        //
+        // It is quoted at the food centroid ray as well as in d, because that is the measure
+        // Req 5.1's 1 mm tolerance is denominated in (Decision 35) — and on one capture the
+        // fitter's own arithmetic moves the plane further than the tolerance the requirement
+        // allows between a device capture and its replay.
+        print("=== how much of the reading is refine's own arithmetic ===")
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            let ray = try #require(Self.foodCentroidRay(c.slice))
+            let atFood = abs(Self.planeDepthMm(normal: r.plane.normal, d: r.plane.d, ray: ray)
+                             - Self.planeDepthMm(normal: r.leastSquares.normal,
+                                                 d: r.leastSquares.d, ray: ray))
+            print("  \(c.name): \(r.inlierCount) inliers; the shipped plane sits"
+                  + " \(fmt(r.refineOffsetMm)) mm off the least-squares plane along its own"
+                  + " normal (tilt \(fmt(r.refineTiltDeg))°, \(fmt(atFood)) mm at the food);"
+                  + " the gate reads \(fmt(r.residualMm)) mm against a least-squares"
+                  + " \(fmt(r.leastSquaresRmsMm)) mm — inflated \(fmt(r.inflation))×")
+            let grown = "\(c.name): refine's displacement from the least-squares plane has"
+                + " reached \(fmt(r.refineOffsetMm)) mm, past the"
+                + " \(fmt(Self.refineDriftBoundMm)) mm this decision records — the Float"
+                + " accumulation has got worse"
+            #expect(r.refineOffsetMm < Self.refineDriftBoundMm, "\(grown)")
+            let tilted = "\(c.name): refine's normal now tilts \(fmt(r.refineTiltDeg))° off the"
+                + " least-squares normal, so the error is no longer the centroid's alone"
+            #expect(r.refineTiltDeg < 0.05, "\(tilted)")
+            let uninflated = "\(c.name): the gate's reading is no longer above the least-squares"
+                + " residual, so the inflation this decision measures has gone"
+            #expect(r.residualMm >= r.leastSquaresRmsMm, "\(uninflated)")
+        }
+
+        // THE THIRD FINDING: the count BOUNDS the displacement without determining it, and
+        // this leg is the only one whose counts make the bound large. Refit the SAME geometry
+        // over growing prefixes of one inlier set and the drift grows with the prefix — a
+        // thousand points cost nothing and half a million cost a third of a millimetre — so
+        // the promoted leg, which refines the 10,469 and 12,551 annulus samples of Decision
+        // 51, runs the identical code accurately. It is the second defect in two passes
+        // confined to the leg that never received the promoted leg's fixes (Decision 57's was
+        // the first), and the reason is the same one: this loop runs on the COLOUR grid.
+        //
+        // Not determining it, because the error is a rounding walk and not a bias: the band
+        // sweep below reads 1.007× at 1,385,960 inliers and 1.349× at 1,231,960. A count is
+        // a bound on how far the walk can have gone, not a prediction of where it is.
+        print("=== refine's drift against the inlier count ===")
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            let members = Self.inlierSet(points: c.points, reading: r)
+            let mismatch = "\(c.name): the inlier set re-derived from the selecting plane holds"
+                + " \(members.count) points against the reading's \(r.inlierCount) — the polish"
+                + " loop no longer leaves the set and the selecting plane consistent"
+            #expect(members.count == r.inlierCount, "\(mismatch)")
+            let rows = ([1_000, 10_000, 100_000, 500_000] + [members.count])
+                .filter { $0 <= members.count }
+                .compactMap { k -> String? in
+                    let prefix = Array(members[0..<k])
+                    guard let shipped = try? LiDARPlaneFitter.refine(
+                        inliers: prefix, seedNormal: r.plane.normal),
+                        let exact = Self.refineDoubleAccumulated(
+                            inliers: prefix, seedNormal: r.plane.normal) else { return nil }
+                    return "\(k) → \(fmt(abs(shipped.1 - exact.1))) mm"
+                }
+            print("  \(c.name): " + rows.joined(separator: ", "))
+            // The promoted leg's own scale, on this leg's points: whatever the fallback's
+            // counts do to `refine`, an annulus-sized set does not do it.
+            let annulus = Array(members[0..<Swift.min(12_551, members.count)])
+            guard let shipped = try? LiDARPlaneFitter.refine(
+                inliers: annulus, seedNormal: r.plane.normal),
+                let exact = Self.refineDoubleAccumulated(
+                    inliers: annulus, seedNormal: r.plane.normal)
+            else { Issue.record("\(c.name): refine failed on an annulus-sized set"); continue }
+            let promotedScale = "\(c.name): at the promoted leg's 12,551-sample scale refine"
+                + " already drifts \(fmt(abs(shipped.1 - exact.1))) mm, so the defect is not"
+                + " confined to the fallback's colour-grid counts"
+            #expect(abs(shipped.1 - exact.1) < 0.05, "\(promotedScale)")
+        }
+
+        // The promoted leg selects and refines the same way (`SupportRegion.extractCandidates`
+        // re-selects within `inlierBandMm` and refines with the same `refine`), so the ceiling
+        // is the pipeline's and not the fallback's. It has no residual gate at all — the
+        // asymmetry is that the leg which CAN refuse on residual is the one whose residual is
+        // bounded, and the leg that ships without the check is bounded identically.
+        for name in Self.captures {
+            let promoted = try #require(Self.candidates(name))
+            let worst = promoted.map(\.residualMm).max() ?? 0
+            print("  \(name): promoted-leg candidate residuals"
+                  + " [\(promoted.map { fmt($0.residualMm) }.joined(separator: ", "))] mm,"
+                  + " worst \(fmt(worst)) mm, and no residual gate reads them")
+            let promotedBroken = "\(name): a promoted-leg candidate residual reaches"
+                + " \(fmt(worst)) mm, at or above the inlier band — the ceiling is not"
+                + " shared by both legs after all"
+            #expect(worst < shippedBand, "\(promotedBroken)")
+        }
+
+        // MARK: what the bar does at every value
+
+        // THE FOURTH FINDING: Decision 46's raise was a no-op, and so was the value it raised
+        // from. Sweeping the bar, each capture refuses only below its OWN residual — so the
+        // gate's whole live range is (0, residual], entirely below the 5 mm band and two
+        // orders below the shipped 20. The 8 mm this was raised FROM was already 1.6× the
+        // ceiling; "residuals in (8, 20] accept the fit" describes an empty interval.
+        var barFloor: [String: Float] = [:]
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            let verdicts = Self.residualBarSweep.map { bar -> String in
+                "\(fmt(bar)) → \(r.residualMm > bar ? "REFUSE" : "accept")"
+            }
+            barFloor[c.name] = Self.residualBarSweep.filter { r.residualMm > $0 }.max()
+            print("  \(c.name) (residual \(fmt(r.residualMm)) mm): "
+                  + verdicts.joined(separator: ", "))
+        }
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            let fires = "\(c.name): the shipped residual bar now REFUSES the fallback fit"
+                + " (residual \(fmt(r.residualMm)) mm against a \(fmt(shippedBar)) mm bar)"
+            #expect(r.residualMm <= shippedBar, "\(fires)")
+            let raiseMattered = "\(c.name): the 8 mm bar Decision 46 raised from would now"
+                + " refuse this capture, so that raise was not the no-op this decision records"
+            #expect(r.residualMm <= 8, "\(raiseMattered)")
+        }
+
+        // THE FIFTH FINDING: the ceiling TRACKS the band, so the gate is denominated in
+        // `inlierBandMm` and is a FIFTH marker terminating in Decision 52's constant — the
+        // first that terminates there without saying so, since this one carries a derivation
+        // of its own that never mentions it. At no band in Decision 52's 1…12.5 mm bracket
+        // does the residual come within a factor of two of the shipped bar: reaching 20 mm
+        // needs a band above 20 mm, which is off that bracket entirely.
+        print("=== the ceiling tracks the band ===")
+        var worstOverBands: Float = 0
+        for c in corpus {
+            let rows = Self.residualBandSweep.compactMap { band -> String? in
+                guard let r = byBand[c.name]?[band] else { return "\(fmt(band)) → none" }
+                worstOverBands = Swift.max(worstOverBands, r.residualMm)
+                return "\(fmt(band)) → \(fmt(r.residualMm))"
+                    + " (\(fmt(100 * r.residualMm / band)) % of band,"
+                    + " \(fmt(r.inflation))× least squares,"
+                    + " \(r.inlierCount) inliers)"
+            }
+            print("  \(c.name): " + rows.joined(separator: ", "))
+            for band in Self.residualBandSweep {
+                guard let r = byBand[c.name]?[band] else { continue }
+                let over = "\(c.name): at a \(fmt(band)) mm band the residual reads"
+                    + " \(fmt(r.residualMm)) mm, at or above the band"
+                #expect(r.residualMm < band, "\(over)")
+            }
+        }
+        let reachable = "the residual now reaches \(fmt(worstOverBands)) mm somewhere in"
+            + " Decision 52's band bracket — the shipped bar is reachable after all"
+        #expect(worstOverBands < shippedBar, "\(reachable)")
+
+        // MARK: what else reads the same ceiling
+
+        // THE SIXTH FINDING: σ_plane inherits the ceiling, so the confidence channel this
+        // constant's own derivation appeals to has an unreachable floor. Confidence computes
+        // σ_plane = exp(−r/5) from the SAME residual, so σ_plane > exp(−inlierBandMm/5)
+        // structurally — 0.368 at the shipped band. The derivation's "at r = 20 mm,
+        // σ_plane ≈ 0.018, near the ε = 0.01 floor" prices a state neither leg can produce,
+        // and the plane channel of the confidence product spans (0.368, 1] rather than (0, 1].
+        let sigmaFloor = Foundation.exp(-shippedBand / 5)
+        print("=== what σ_plane can actually reach ===")
+        print("  structural floor exp(−\(fmt(shippedBand))/5) = \(fmt(sigmaFloor));"
+              + " the derivation prices exp(−\(fmt(shippedBar))/5)"
+              + " = \(fmt(Foundation.exp(-shippedBar / 5)))")
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            print("  \(c.name): σ_plane \(fmt(r.sigmaPlane)) at a residual of"
+                  + " \(fmt(r.residualMm)) mm")
+            let belowFloor = "\(c.name): σ_plane \(fmt(r.sigmaPlane)) has fallen to or below"
+                + " the structural floor \(fmt(sigmaFloor)) — the ceiling on the residual no"
+                + " longer bounds the confidence channel"
+            #expect(r.sigmaPlane > sigmaFloor, "\(belowFloor)")
+        }
+
+        // THE SEVENTH FINDING: this is the only owed constant that is `public` and overridable
+        // per call, so the shipped 20 is a DEFAULT rather than a value — and the two callers
+        // that override it pass values inside the live range the default sits outside of.
+        // `HarnessCore.FixtureRunner` exposes it as a parameter, `PlateRegionPlaneTests` passes
+        // 1.0 and `LiDARPlaneFitterTests` passes 0.1. The constant does something only when a
+        // caller asks it to.
+        //
+        // AND THE EIGHTH: corpus and committed suite give the SAME floor, for the first time in
+        // this feature, and it is one number for a structural reason rather than a coincidence.
+        // `SupportPlaneRegressionSliceTests` measures the pre-feature edge-band plane on both
+        // slices, so a bar below that capture's residual makes `fitOutcome` return nil and
+        // every assertion on that slice becomes uncomputable rather than merely wrong.
+        // Decision 57 found the suite the LOOSER source (4 against the corpus's 8); here the
+        // two cannot disagree, because both read the one residual this leg produces.
+        //
+        // One run per capture at the harness's own 1.0 mm override carries both. The verdict
+        // at every OTHER bar needs no run: `fitOutcome` compares `residual > bar` and the
+        // residual does not depend on the bar, so the sweep above is exact by construction and
+        // this is the wiring check the sweep cannot make.
+        for c in corpus {
+            let r = try #require(byBand[c.name]?[shippedBand])
+            let floor = try #require(barFloor[c.name])
+            let below = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
+                depth: c.slice.depth, colourIntrinsics: c.slice.colourIntrinsics,
+                foodRegionMask: c.slice.colourFoodMask, gravityCamera: c.slice.gravity,
+                residualMaxMm: 1.0))
+            print("  \(c.name): residual \(fmt(r.residualMm)) mm, highest swept bar that"
+                  + " refuses \(fmt(floor)) mm; at the harness's 1.0 mm override the fallback"
+                  + " returns \(below.plane == nil ? "nothing (\(below.refusal.map { "\($0)" } ?? "")), so every regression assertion on this slice is uncomputable" : "a plane, and the floor has moved")")
+            let stillFits = "\(c.name): a bar below the measured residual no longer starves"
+                + " the fallback, so neither the caller overrides nor the suite floor read the"
+                + " residual this decision measures"
+            #expect(below.plane == nil && r.residualMm > 1.0, "\(stillFits)")
+        }
     }
 
     // MARK: - Req 4.5: what the fallback rate is a function of
