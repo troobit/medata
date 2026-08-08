@@ -141,7 +141,10 @@ the mechanism (sign-blind count; crossed-sector rule) that explains it.
   `compactMap`) is a candidate `specs/bugfixes/` entry — shared harness code,
   out of this spec's scope.
 - Task 27 (on-device weighed-food verification) remains human-gated.
-- Cleanup: the `.orbit` worktrees (~6 GB) can go once the user confirms;
-  **`orbit-impl-2/support-plane-reference` must stay until task 26 closes** —
-  Decision 60 imports its record by reference and the branch is the only copy
-  of the full text (unpushed by design).
+- ~~Cleanup~~ — done (2026-08-09): both worktrees removed and
+  `orbit-impl-1/support-plane-reference` deleted (its history is reachable from
+  `research` through merge `ae584f0`). The orbit phase logs remain under the
+  spec's `.orbit/logs/`. **`orbit-impl-2/support-plane-reference` stays until
+  task 26 closes** — Decision 60 imports its record by reference and the branch
+  is the only copy of the full text (unpushed by design); to read it without a
+  worktree: `git show orbit-impl-2/support-plane-reference:specs/estimation/support-plane-reference/decision_log.md`.
