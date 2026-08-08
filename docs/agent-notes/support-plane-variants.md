@@ -126,12 +126,22 @@ the mechanism (sign-blind count; crossed-sector rule) that explains it.
 ## Open items
 
 - ~~Selection decision~~ — done: impl-1 (Decision 59, 2026-08-08).
-- Import impl-2's task-26 record (its Decisions 34–43, renumbered) into the
-  surviving `decision_log.md`; record the `minSupportingSectors` cross-explanation.
-- Port impl-2's `paletteVersion` fixture-loader fix (its Decision 34) — impl-1
-  does not carry it.
+- ~~Import impl-2's task-26 record~~ — done by reference as Decision 60
+  (2026-08-09): transferable findings (n=11 corpus inventory, two
+  `paletteVersion` mislabels, the `buildCalInputs` silent `try?` swallow, the
+  mounded-rice fallback mode, the overlapping-slices ground-truth
+  disqualification) are recorded there; its guard-threshold sweeps are flagged
+  geometry-bound and must be re-measured on the promoted fitter. There was no
+  code fix to port — impl-2 shipped no source change (temporary reverted
+  override; see its Decision 34).
+- Task 26 next session: re-derive the three flagged sweeps against the n=11
+  bundles through the promoted fitter; two bundles need a palette override at
+  load.
+- The `buildCalInputs` error swallow (`HarnessCLI/main.swift`, `try?` in
+  `compactMap`) is a candidate `specs/bugfixes/` entry — shared harness code,
+  out of this spec's scope.
 - Task 27 (on-device weighed-food verification) remains human-gated.
-- Cleanup after the evidence import is verified: remove the `.orbit` worktrees
-  (~6 GB; the phase logs live in `.orbit/logs/`, outside the worktrees) and
-  archive or delete `orbit-impl-2/support-plane-reference` only once its
-  decisions are imported.
+- Cleanup: the `.orbit` worktrees (~6 GB) can go once the user confirms;
+  **`orbit-impl-2/support-plane-reference` must stay until task 26 closes** —
+  Decision 60 imports its record by reference and the branch is the only copy
+  of the full text (unpushed by design).
