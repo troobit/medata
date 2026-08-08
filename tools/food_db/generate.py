@@ -414,6 +414,13 @@ LIQUID_SUBCLASSES = [
 DENSITY_SPOT_CHECK_CLASSES = ("white_rice", "pasta")
 DENSITY_TOLERANCE_FACTOR = 1.8
 
+# The support-plane reference the runtime integrates volume above
+# (specs/estimation/support-plane-reference Req 5.3). A β_c is a ratio between a
+# measured volume and a weighed mass, so it is only valid against the geometric
+# basis it was fitted on: applying a β fitted above the table to volumes measured
+# above the plate is a ~3x error, which is the defect that spec exists to remove.
+SUPPORT_PLANE_REFERENCE_IN_USE = "foodSupport"
+
 
 def _load_calibration(path: str) -> dict:
     """Load and validate the calibrate JSON artifact (design §DB bake handoff
@@ -439,6 +446,25 @@ def _load_calibration(path: str) -> dict:
                 f"calibration JSON {path} lineage is missing '{key}' — "
                 "mandatory lineage record (Req 1.5/5.5); bake aborted"
             )
+    # Req 5.3, fail-closed: an artifact that records NO support-plane reference
+    # must block application, not permit it. Every artifact produced before the
+    # support-plane-reference feature records none, and those are precisely the
+    # ones calibrated on the old (table) basis — so defaulting the absent case to
+    # "assume it matches" would bake in exactly the β this guard exists to stop.
+    reference = cal.get("support_plane_reference")
+    if not reference:
+        raise SystemExit(
+            f"calibration JSON {path} records no 'support_plane_reference' — "
+            "β_c is only valid against the geometric basis it was fitted on, and "
+            "an artifact predating that record was fitted above the table "
+            "(Req 5.3). Regenerate it with the current harness; bake aborted"
+        )
+    if reference != SUPPORT_PLANE_REFERENCE_IN_USE:
+        raise SystemExit(
+            f"calibration JSON {path} was fitted against support-plane reference "
+            f"'{reference}', but the runtime integrates above "
+            f"'{SUPPORT_PLANE_REFERENCE_IN_USE}' (Req 5.3). Bake aborted"
+        )
     known = {row[0] for row in FOOD_DATA}
     unknown = sorted(set(classes) - known)
     if unknown:
@@ -499,7 +525,16 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
     clamped = []
     supersessions = []
     standard_errors = {}
+    reference_skipped = []
     for class_id, entry in sorted(cal["classes"].items()):
+        # Req 5.4: β fitted under another reference is NOT applied. A single
+        # artifact spans two references by construction — the mixture path keeps
+        # the plate-region flood fill permanently (Decision 17) — so a mismatch
+        # here is the expected shape of a healthy artifact, not a malformed one,
+        # and the class is left at its default β rather than aborting the bake.
+        if entry.get("support_plane_reference") != SUPPORT_PLANE_REFERENCE_IN_USE:
+            reference_skipped.append(class_id)
+            continue
         conn.execute(
             "UPDATE foods SET beta = ?, beta_status = ?, beta_provenance = ? "
             "WHERE class_id = ?",
@@ -518,9 +553,18 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
                                   "from": "n5k_mixture",
                                   "to": "n5k_single_dominant"})
 
+    if reference_skipped:
+        print(
+            f"calibration: {len(reference_skipped)} class(es) not applied — "
+            f"fitted against a different support-plane reference from "
+            f"'{SUPPORT_PLANE_REFERENCE_IN_USE}' (Req 5.4): "
+            f"{', '.join(reference_skipped)}", file=sys.stderr)
+
     lineage = cal["lineage"]
     meta_rows = {
         "calibration_beta_pool": cal.get("betaPool"),
+        "calibration_support_plane_reference": cal.get("support_plane_reference"),
+        "calibration_reference_skipped_classes": json.dumps(reference_skipped),
         "calibration_n5k_release": lineage.get("n5k_release"),
         "calibration_n5k_metadata_version": lineage.get("n5k_metadata_version"),
         "calibration_mapping_artifact_version":

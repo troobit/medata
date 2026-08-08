@@ -463,7 +463,7 @@ Component scoring addresses the straddle *inside* the loop by changing which pla
 
 Bounding the sample set is five lines and fixes three things at once: clutter stops consuming candidate slots, the plate's inlier ratio rises out of the region where 256 iterations is a coin flip, and the point count drops enough to pay for the extra passes.
 
-Ring MAD replaces the residual bar because it measures the actual failure — a ring resting on two surfaces is bimodal, and MAD is large exactly then. The residual could not measure it, and setting the bar to 8 mm would additionally have pushed matte-table captures onto the fallback, regressing `lidar-plane-fit-matte-table-confidence` (Decision 46 raised that bar to 20 mm for genuine single-surface depth noise).
+Ring MAD replaces the residual bar because it measures the actual failure — a ring resting on two surfaces is bimodal, and MAD is large exactly then. The residual could not measure it, and setting the bar to 8 mm would additionally have pushed matte-table captures onto the fallback, regressing `lidar-plane-fit-matte-table-confidence` (pipeline Decision 46 raised that bar to 20 mm for genuine single-surface depth noise).
 
 ### Alternatives Considered
 
@@ -914,5 +914,2578 @@ Restoring the signed median costs one comparison against a value already persist
 ### Impact
 
 Design guard table, constants block and the new "Three guards that did not do what their requirement says" section; tasks 3, 4, 7 and 8; prerequisites (the overhang query is now answered and its conclusion recorded here).
+
+---
+
+## Decision 23: The new candidate-plane count is named apart from the pre-existing point count
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The design's Data Models table adds `planeCandidateCount: Int?` to `EstimationAttemptRecord`, meaning "candidates extracted" — the number of candidate PLANES the sequential CC-RANSAC passes produced. `EstimationAttemptRecord` already carries a field of exactly that name (`PipelineDiagnostics.swift`), populated from `SupportPlaneFitStats.candidatePointCount` and meaning the number of candidate POINTS the fit sampled. The collision was not visible when the table was written and surfaced while implementing task 12.
+
+The two quantities differ by three orders of magnitude on a real capture — a few thousand annulus samples against at most `maxCandidatePlanes = 3` planes. Reusing the name would silently redefine a field that pre-feature rows already carry, which is the failure Req 6.3 exists to prevent.
+
+### Decision
+
+Keep `planeCandidateCount` with its existing meaning (candidate points, units set by `planeReference`) and add the plane count as a separate optional field, `planeCandidatePlaneCount`.
+
+### Rationale
+
+Req 6.3 requires pre-feature rows to stay distinguishable from post-feature ones. A field whose meaning changes under a fixed name defeats that at the point it matters most: a stored row cannot say which definition it was written under, and the in-app browser and the accuracy report would silently mix a point count with a plane count across the schema boundary. A new name leaves every stored row exactly as recorded (Decision 6) and costs one extra optional.
+
+### Alternatives Considered
+
+- **Redefine `planeCandidateCount` as the plane count**: matches the design table verbatim - Rejected: pre-feature rows carry point counts under that key, so the field would mean two different things with no way to tell which, breaking Req 6.3 and requiring the migration Decision 6 forbids.
+- **Rename the existing field to `planePointCount` and take the freed name**: the clearest end state - Rejected: it is the same break in the other direction; every already-persisted row would decode the old key into nothing, and the field is a live diagnostic for three prior plane-fit bugfixes.
+- **Drop the plane count and infer it from the reference**: `.foodSupport` implies at least one candidate - Rejected: the count is the evidence that sequential extraction actually surfaced more than the table, which is the mechanism Decision 15's bound rests on; a boolean does not carry it.
+
+### Consequences
+
+**Positive:**
+- Stored meals are untouched and every row's fields keep one meaning for the life of the schema.
+- The two counts stay separately queryable, so a fallback-rate investigation can read sample starvation and candidate starvation apart.
+
+**Negative:**
+- The record's field name no longer matches the design's Data Models table, so the table is a stale reference until amended.
+- `planeCandidateCount` keeps a name that reads like a plane count and is not one; the units also depend on `planeReference`, so it now carries two footnotes.
+
+### Impact
+
+`EstimationAttemptRecord`, `PipelineDiagnostics.recordSupportPlane`, and the design's Data Models table. Task 19's fallback-rate reporting reads `planeReference`, not either count.
+
+---
+
+## Decision 24: `fitFoodSupportPlane` returns a struct carrying the two point counts
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The design declares `fitFoodSupportPlane` as returning `(plane, ring, candidateCount)?` and, separately, fixes the stats semantics of a `.foodSupport` row: `candidatePointCount` and `inlierCount` mean native depth samples there, against colour-grid points on an `.edgeBand` row. Task 10 requires the fitter to populate those two counters, and nothing outside `fitFoodSupportPlane` ever sees the annulus sample set or the winning inlier component — the declared tuple cannot supply them.
+
+### Decision
+
+Return a `FoodSupportFit` struct whose first three members keep the declared names and meanings, extended with `annulusSampleCount` and `inlierCount`.
+
+### Rationale
+
+The counts have to cross the boundary somehow, and every alternative either re-derives them (repeating the prepare/ring pass, the expensive part of the fit) or leaves the `.foodSupport` row's stats at their zero defaults, which contradicts the design's own stats semantics and leaves the snaq-parity diagnostics blank on the new primary path. A struct also names the members at the call site, where a five-element tuple would not.
+
+### Alternatives Considered
+
+- **Keep the tuple and recompute the counts in the fitter**: no signature change - Rejected: `prepare` plus `ringSamples` is the dominant non-RANSAC cost, and the recomputed inlier component would be a second labelling of the winner rather than the one that was actually selected.
+- **Leave `candidatePointCount` / `inlierCount` at zero on a `.foodSupport` row**: smallest change - Rejected: it discards the counters three prior plane-fit bugfixes were diagnosed with, exactly when the fit path changed underneath them.
+- **Return the counts through `RingStatistics`**: it already crosses the boundary - Rejected: they are candidate-extraction quantities, not ring measurements, and `RingStatistics` is computed per candidate including rejected ones.
+
+### Consequences
+
+**Positive:**
+- The `.foodSupport` row's stats carry the units the design specifies, so the fallback rate and the point counts can be read from the same record.
+- Named members make the ~56x unit difference legible at the call site rather than positional.
+
+**Negative:**
+- The design's Components signature is stale until amended.
+- Two more members to keep in step with the fit as the selection rules change.
+
+### Impact
+
+`SupportRegion.fitFoodSupportPlane`, `LiDARSupportPlaneFitter`, the `SupportRegionScenes` test helper, and the design's Components and Interfaces block.
+
+---
+
+## Decision 25: `SupportPlaneReference` gains a `plateRegion` case for the mixture path
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+The design's Components block declares `SupportPlaneReference` with two cases, `foodSupport` and `edgeBand`. Its "mixture calibration path keeps the flood fill" section then states that mixture artefacts "record the plate-region reference" while single-dominant artefacts record `foodSupport`, and that Req 5.4 keeps β_c fitted within a reference. Those two statements contradict each other: with a two-case enum there is no value a mixture artefact can record, so the reference it was fitted under is either absent — which Req 5.3 says must block application — or misrecorded as one of the two the device produces.
+
+Decision 17 made this permanent rather than transitional: mixture fixtures carry neither `probs_hwc` nor `argmax_hw`, so `fitPlateRegionPlane` survives for that corpus indefinitely and the calibration corpus spans two references by construction.
+
+### Decision
+
+Add a third case, `plateRegion`, to `SupportPlaneReference`. It is never produced on device or by the single-view replay; it exists so a calibration artefact can state which basis each β was fitted on.
+
+### Rationale
+
+Req 5.4 is only enforceable if every β can name its reference. A third case is the minimum that makes the partition total, and it keeps the partition in one type rather than splitting it across an enum plus a "some other basis" convention that each consumer would re-invent. The device path is unaffected because nothing on it can produce the value: `fitFromDepth` returns `foodSupport` or `edgeBand` and no other writer exists.
+
+### Alternatives Considered
+
+- **Leave the mixture reference absent**: no type change - Rejected: Req 5.3 makes absent block application, so every mixture β would be permanently unbakeable, which is a harsher outcome than the Req 5.4 partition asks for and hides the distinction rather than recording it.
+- **Record the mixture reference as `edgeBand`**: reuses an existing case for "not the food-support plane" - Rejected: the flood-filled plate region is not the edge band; conflating them makes the fallback rate of Req 4.4 unreadable, since the same value would mean both "the restricted fit was rejected" and "this plate came from the mixture corpus".
+- **A separate `CalibrationBasis` enum in HarnessCore**: keeps the shipped enum at two cases - Rejected: two enums over the same domain must be kept in step by hand, and the artefact would then carry a value that no runtime type can be compared against.
+
+### Consequences
+
+**Positive:**
+- Req 5.4's within-reference rule becomes checkable in code rather than by convention.
+- The fallback rate stays a clean two-way split on the depth-derived subset, because `plateRegion` rows are counted separately.
+
+**Negative:**
+- A case the device can never produce sits in a shipped enum, so every exhaustive switch must handle a branch that cannot occur there.
+- The design's Components block is stale until amended.
+
+### Impact
+
+`SupportPlaneReference`, `CalibrationArtifact`, `CalibrateRun.applyReferenceGate`, and the design's Components and Interfaces block.
+
+---
+
+## Decision 26: The calibration reference guard blocks per artefact and skips per class
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Req 5.3 requires β_c to be applied only when the calibration artefact records a support-plane reference matching the one in use, and says an artefact recording none must block. Req 5.4 requires β_c to be fitted on the subset sharing the reference it will be applied under. Decision 17 makes a mixed-reference artefact the permanent expected shape, not a transitional one — so a guard that aborted on any mismatch would reject every artefact the harness will ever produce, while a guard that only warned would apply `plateRegion` β to `foodSupport` volumes and reintroduce the ~3× error through the calibration path.
+
+### Decision
+
+Enforce at two granularities in `tools/food_db/generate.py`: an absent or mismatched **artefact-level** `support_plane_reference` aborts the bake before anything is written; a **class entry** whose own reference differs from the one in use is not applied, is left at its uncalibrated default, and is reported on stderr and in a `calibration_reference_skipped_classes` meta row. On the fitting side, `CalibrateRun.applyReferenceGate` admits only inputs matching the reference β will be applied under, and the excluded fixture IDs land in the run summary.
+
+### Rationale
+
+The two granularities answer two different questions. The artefact-level value says what basis this calibration run was conducted on; a pre-feature artefact has no answer, and that is the case Req 5.3 names explicitly. The per-class value says what basis one β was fitted on, and a mismatch there is ordinary — it identifies a mixture-corpus class in an artefact whose pool is single-dominant. Aborting on the ordinary case would make the bake unusable; silently applying it would make the guard decorative.
+
+Recording the skipped classes rather than dropping them quietly matters for the same reason the fallback rate does: an artefact where most classes are skipped is measuring corpus coverage, not calibrating, and that must be visible in the output rather than inferable from a diff of β values.
+
+### Alternatives Considered
+
+- **Abort on any per-class mismatch**: strictest reading of "nothing may mix them" - Rejected: a mixed artefact is the permanent expected shape under Decision 17, so this rejects every future artefact and forces the guard to be disabled rather than obeyed.
+- **Warn on mismatch and apply anyway**: preserves current β coverage - Rejected: it is the defect this feature exists to remove, applied one level up — a β fitted above the flood-filled plate region against volumes measured above the food-support plane.
+- **Filter mismatched classes in the Swift writer instead**: the artefact would carry only applicable β - Rejected: the artefact is the audit record of a calibration run, and dropping the mixture β from it destroys the evidence that the mixture corpus was fitted at all. It also moves the guard away from the point of application, where Req 5.3 places it.
+
+### Consequences
+
+**Positive:**
+- Pre-feature artefacts, the ones calibrated on the old basis, cannot bake at all.
+- A mixed-reference artefact bakes exactly the subset that is valid, and says which classes it left out.
+- The fitting side and the application side enforce the same rule, so a mismatch cannot be introduced between them.
+
+**Negative:**
+- Mixture-provenance β never reach the shipped database while the runtime integrates above `foodSupport`, so classes calibrated only on the mixture corpus stay at unity. Nothing breaks today because every β is `uncalibrated_unity` (Decision 10), but this bounds what the N5k mixture corpus can contribute later.
+- Two enforcement points in two languages that must agree on one string constant.
+
+### Impact
+
+`tools/food_db/generate.py`, `CalibrationArtifact`, `CalibrateRun.applyReferenceGate`, `HarnessCLI/main.swift`, and the design's Data Models section.
+
+---
+
+## Decision 27: The voxel-carve exposure is a grid translation, and the excluded-voxel count does not change
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Req 1.6 requires the voxel carve's use of the support plane as a lower carving bound to be evaluated against the corrected plane, and any change in excluded voxels to be stated. The design's pattern-parity audit had already committed to an answer in advance: `VoxelCarveEstimator` drops a voxel outright when `signedDistanceToPlane(centre) < 0`, a hard exclusion where the height field only clamps with `max(0, ·)`, so raising the plane 26.1 mm was expected to delete a slab of voxels — and, because overhanging food (Decision 4) sits inside that slab, to compound with the ~11 % under-measurement Decision 4 already accepts.
+
+That prediction was never measured. Task 24 measures it.
+
+### Decision
+
+State the measured result: correcting the support plane changes the excluded-voxel count by **zero**. The exposure is a translation of the voxel grid, not a deletion of voxels from it, and it does not compound with Decision 4. The measurement is pinned as `VoxelCarvePlaneExclusionTests` rather than recorded only in prose.
+
+### Rationale
+
+The prediction assumed a grid fixed in space with the plane sliding through it. The grid is not fixed. `VoxelGridSizer.size` anchors `originCamera1` **on** the support plane — the food-mask centroid back-projected onto it — and `VoxelGrid.voxelCentre` offsets each voxel along `axisZ` by `dz = (iz + 0.5) · edgeMm`, which is strictly one-signed. Raising the plane translates the whole grid with it, so every voxel keeps the signed distance it had and the exclusion decides identically before and after.
+
+What does change is where the grid sits: the ~26 mm between the table and the plate top used to lie inside it and now lies outside it. Food overhanging below the plate leaves the grid rather than failing the plane test. That is the same under-measurement Decision 4 brackets at ~11 %, reached by a different mechanism — so it is the same 26 mm counted once, and there is nothing to compound.
+
+Pinning the measurement as a test rather than a number in the design matters because the conclusion is contingent on two implementation details a future change could quietly reverse: the origin being on the plane, and `dz` being one-signed. A prose statement would go stale silently; `testVoxelHeightOffsetsAreOneSigned` fails loudly.
+
+### Alternatives Considered
+
+- **State the predicted slab deletion without measuring** - Carry the parity-audit row's figure into the requirements as the Req 1.6 answer - Rejected because it is wrong, and wrong in the direction that overstates this feature's risk: it would have booked a compounding error against Decision 4 that does not exist, and might have bought an unnecessary mitigation.
+- **Change `VoxelCarveEstimator` to clamp rather than exclude** - Match the height field's `max(0, ·)` so the two consumers treat the plane alike - Rejected as out of scope. The exclusion is not what makes the two-view carve wrong (see below), the two-view carve's accuracy is an explicit Non-Goal, and changing a carving bound to fix a defect that is not this feature's would move the number without evidence.
+- **Fix the `gravityCamera` sign disagreement found while measuring** - Resolve whether the parameter means world-up or gravity-down, and make callers agree - Rejected here and referred to `bugfixes/two-view-carve-no-volume`. The Req 1.6 answer is zero under **both** conventions, so this feature does not depend on the resolution, and folding an unrelated defect into it would make the accuracy change unattributable.
+
+### Consequences
+
+**Positive:**
+
+- Req 1.6 is answered with a measurement rather than an assumption, and the assumption turned out to be wrong.
+- No compounding with Decision 4, so the accepted overhang bracket stays ~11 % rather than needing to widen.
+- The measurement surfaced a real and more serious defect: under the convention `Pipeline` actually passes (`nadir.gravity`, world-up), `axisZ = −gravity` points down, the grid extends below the plane, and **every** voxel is excluded — 23,040 of 23,040 in the measured case. The two-view carve recovers no volume at all on a LiDAR device whose depth-derived plane reaches it, which is consistent with the ~10× under-read measured on 2026-08-05.
+
+**Negative:**
+
+- That defect is now known and left unfixed in this feature, which is a deliberate scope choice but means the two-view path stays broken while this spec closes.
+- The zero-change result rests on two implementation details of `VoxelGridSizer`/`VoxelGrid` rather than on a stated contract; the pinning test is the mitigation, not a guarantee.
+- The design's parity-audit row had to be superseded rather than merely updated, since a reader who had already taken the compounding claim as given needs to see it withdrawn.
+
+### Impact
+
+`specs/estimation/support-plane-reference/design.md` (parity audit row and the new "Voxel-carve exposure" section), `MedataCore/Tests/VolumeTests/VoxelCarvePlaneExclusionTests.swift`. No production code changes. `bugfixes/two-view-carve-no-volume` gains a concrete mechanism and a measured figure.
+
+---
+
+## Decision 28: Three acceptance figures do not reproduce and are superseded by the committed slices
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Reqs 6.2, 7.1 and 7.2 each name a number taken from the original diagnosis of the flat-food over-read: a pre-feature contact-ring measure of +18…+26 mm on capture `1785135663727`, a corrected volume of 235.96 cm³ on the same capture, and ~200 cm³ on the weighed capture `1785901032716`. All three were recorded by a throwaway probe (`DiagProbe/main.swift`) against the full 195 MB bundles, on a machine holding the device. Nothing in the repository could execute them, which is why task 22 commits depth-only slices of both captures.
+
+With the slices in place the figures became checkable for the first time. Two of the three do not reproduce, and the third cannot be reached by any candidate plane.
+
+### Decision
+
+Supersede the three figures with the measurements the committed slices produce, and re-express the criteria they support in terms that the data sustains:
+
+| Criterion | Stated | Measured | Disposition |
+|---|---|---|---|
+| Req 6.2 pre-feature ring measure | +18…+26 mm | **+4.2 mm** | Range superseded; the *sign and separation* are asserted instead |
+| Req 6.2 corrected ring measure | ≈ 0 | **−0.93 mm** | Holds |
+| Req 7.1 pre-feature volume | 682.96 cm³ | **714.8 cm³** (+4.7 %) | Holds, inside Req 7.1's own 5 % band |
+| Req 7.1 corrected volume | 235.96 cm³ | **306.8 cm³** (+30 %) | Superseded; a >50 % reduction is asserted instead |
+| Req 7.2 pre-feature volume | 714.84 cm³ | **735.7 cm³** (+2.9 %) | Holds |
+| Req 7.2 corrected volume | ~200 cm³ ± 20 % | **646.7 cm³** best candidate | Unreachable; recorded as mask-bound, not plane-bound |
+
+`SupportPlaneRegressionSliceTests` asserts the surviving claims. Reqs 6.2, 7.1 and 7.2 keep their stated figures in the requirements document with the measured ones recorded beside them, so the disagreement stays visible rather than being edited away.
+
+### Rationale
+
+The two pre-feature volumes reproduce within 5 % and 3 %. That agreement is what makes the rest of the table trustworthy: it establishes that the slice is faithful to the bundle and that integrating on the native depth grid agrees with the shipped colour-grid height field. A disagreement of 30 % on the corrected volume, against that background, is a disagreement about *which plane the diagnosis fitted*, not about the data — and volume on this capture moves ~70 cm³ per 3 mm of plane height, so a probe fitting the plate 3 mm differently accounts for the whole gap. The probe is gone (task 23), so the 235.96 figure is no longer reconstructible and cannot be treated as ground truth.
+
+The Req 7.2 case is different in kind and more useful. No candidate plane yields ~200 cm³ because the constraint is not the plane: the food mask covers ~298 cm² of depth samples, where two slices of bread are ~200 cm², and 200 cm³ over 298 cm² implies a mean food height of 6.7 mm against the ~11 mm the depth map shows. That is a segmentation error, which Req 7.2 half-anticipated by pinning the class as a precondition. Recording it as mask-bound keeps this feature from being graded on a defect it does not control — and, equally, stops a future plane change from being tuned to hit 200 cm³ by compensating for a bad mask.
+
+Asserting reductions and separations rather than absolute figures is the honest form for a criterion whose reference implementation has been deleted. Req 7.1 already describes itself as "a parity check against a known implementation, not an accuracy claim"; with the known implementation gone, what remains checkable is the claim the feature actually makes — that correcting the reference removes most of the over-read.
+
+### Alternatives Considered
+
+- **Re-state the criteria at the measured values** - Replace +18…+26 mm with +4.2 mm and 235.96 cm³ with 306.8 cm³, and assert those - Rejected because it is circular: the measurement would become its own acceptance criterion, and any error in the slice or the integration would be baked in as the target. Asserting a *reduction* is falsifiable in a way that asserting the number just measured is not.
+- **Keep the stated figures and let the tests fail** - Leave Reqs 6.2/7.1 asserting +18…+26 mm and 235.96 cm³ until someone reconciles them - Rejected because a permanently red suite stops being read, and the reconciliation cannot happen: the probe that produced the figures no longer exists and the captures have no weighed truth to appeal to.
+- **Rebuild `DiagProbe` and reconcile against it** - Restore the deleted probe, re-run it, and find the 3 mm - Rejected as a poor trade. It would reinstate code task 23 deletes for good reasons, to reconcile a figure that Req 7.1 itself says is not an accuracy claim, on a capture with no weighed truth. Task 27's weighed on-device capture is the evidence that would actually settle it.
+- **Widen Req 7.2's band until 646.7 cm³ fits** - Treat the gap as tolerance rather than as a mask defect - Rejected outright. It would hide a segmentation error inside a support-plane criterion and make the feature look accurate by loosening the thing measuring it.
+
+### Consequences
+
+**Positive:**
+
+- Reqs 6.2, 7.1 and 7.2 are executable by anyone with the repository for the first time, which is what Req 6.2's "falsifiable rather than merely recorded" asks for.
+- The surviving assertions are constant-free — each measures a named plane rather than the selected one — so they do not move when task 26 sets the `[owed]` thresholds.
+- The Req 7.2 finding attributes a real defect to segmentation rather than leaving it to be absorbed into plane tuning.
+- The corrected ring measure of −0.93 mm is direct evidence that the geometry works on real device data, independent of whether the guards currently admit it.
+
+**Negative:**
+
+- Three figures the requirements state are now known to be wrong, and the requirements keep stating them; a reader must reach this decision to learn that.
+- The corrected-volume criterion is weaker than it was — "less than half" instead of a 5 % band — so a fit that removed 55 % rather than 57 % of the over-read would pass. Task 27's weighed capture is what restores a hard bound.
+- Both slices currently fall back, so the criteria exercise candidate planes the selection does not yet choose. That gap closes only when task 26 measures the constants.
+
+### Impact
+
+`tools/fixture_slice.py`, `MedataCore/Tests/SupportPlaneTests/{DepthSlice.swift,SupportPlaneRegressionSliceTests.swift,Fixtures/}`, `Package.swift`, and the Reqs 6.2/7.1/7.2 notes in `requirements.md`. Task 26 gains its first real corpus measurements; task 27 gains a specific figure to check on device.
+
+---
+
+## Decision 29: The corpus measurement pass settles four constants and cannot settle the rest
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Task 26 commits to determining the constants the design deliberately left unstated — every value marked `[owed]` in `SupportRegion`, plus Req 4.5's fallback-rate threshold, Req 5.1's device/replay tolerance and `fallbackPenalty` — by measurement against the fixture corpus rather than by assertion. Req 3.7 makes this binding for the sector trio in particular: the sector count, the per-sector support bar and the number of failing sectors that constitutes a rejection MUST be derived from measurement, and the derivation recorded.
+
+Two things narrowed the available corpus after the task was written. Task 17 established that the promoted fitter never runs on Nutrition5k: pre-checkpoint ingestion stamps every plate `mixture`, `run_summary.json` records `single_dominant: 0`, and — decisively — pre-checkpoint ingestion runs no segmenter at all, so those 3,490 fixtures carry no food mask and `fitFoodSupportPlane` has no input on them. N5k becomes available only after model-production Bucket C lands and ingestion re-runs with `--checkpoint`. And the 2026-08-05 device session produced no usable capture: all 22 single-view attempts refused and all three successes were two-view, which Req 7.11 excludes as evidence.
+
+What remains is the two committed depth slices from task 22 — `1785135663727` and `1785901032716`, both flat bread on a plate at ~337 mm. `SupportPlaneCorpusMeasurementTests` is the instrumented pass `prerequisites.md` asks for, run over them with the guards disabled: per-candidate `supportFraction`, `bandMedianMm`, `supportVisibility`, per-sector support fractions, per-sector inner-band medians, and the raw signed-height distribution.
+
+### Decision
+
+Four constants are settled by the pass and their provenance markers change; the rest stay `[owed]` on named captures.
+
+**Settled.**
+
+- `ringInnerMm = 8` — confirmed, with a stated range envelope. Measured `mmPerPx` is 1.862 and 1.839 at median food depths of 338.9 mm and 336.9 mm, so the ~4 px depth smear spans **7.45 mm and 7.36 mm** — inside 8 mm on both. Because the smear is a fixed pixel count, `smear_mm = 4z/f_d` with `f_d ≈ 182 px`, so 8 mm covers capture range up to **≈ 365 mm** and no further. The constant is correct for the corpus and for ordinary handheld range; beyond ~365 mm it must become `max(ringInnerMm, 4 × mmPerPx)`.
+- `ringMinSamples = 200`, per band — confirmed with large margin. Measured band counts are `[1120, 1132, 1213]` and `[1294, 1347, 1392]`, **5.6× to 7.0×** the floor. Decision 20's derivation (`ringSectorCount × 25`) is validated from the other end too: inner-band sectors carry **102–184** samples apiece against the 25 the derivation targets, so a 0.5 sector bar has binomial σ ≈ 0.042 rather than the σ ≈ 0.19 that made the guard noise at the old floor of 60.
+- `supportVisibilityMin` is **firable**, and task 26's argument that it is not was based on the wrong region. That argument computes the ratio over the contact ring (8–25 mm), where a support strip thinner than `ringInnerMm` is indeed invisible. The implementation computes it over the **annulus** (0–50 mm), which begins at the food boundary and therefore does see a thin strip. Measured ceilings — every annulus sample an inlier — are **1.710 and 1.426**, and the highest-support candidate achieves **0.880 and 1.032**, so 0.15 sits at roughly a tenth of the achievable range. The guard is live; its *value* is still owed to prerequisites capture 4.
+- The **pipeline Decision 46 tension is resolved in kind, not in value**. Pipeline Decision 46's 20 mm bar is a whole-plane residual over a matte table; `ringBandMm = 5` is a per-sample window. They are not the same quantity and were never in conflict. The per-sample figure is measured below and is what `ringSupportMin` actually rests on.
+
+**Not settled, and why.** `ringSupportMin`, `sectorSupportMin`, `ringSectorCount`, `minSupportingSectors`, `ringSupportMarginMin`, `ringOuterMm`, `bandStepMaxMm`, `foodEnvelopeMinMm`, `minCandidateSamples`, `minAcceptedExtentPx`, `supportVisibilityMin`, Req 4.5's fallback-rate threshold, Req 5.1's tolerance and `fallbackPenalty` all stay `[owed]`. The corpus cannot set them for two measured reasons.
+
+> **`minCandidateSamples` is superseded by Decision 32.** It was two constants under one name. Its whole-fit half is retired — `fitFoodSupportPlane` now tests ring-band feasibility against the already-`[measured]` `ringMinSamples` — and its extraction-pass half survives as `minResidueSamples`, still `[owed]` but bounded above at 581 by this same pass. `minAcceptedExtentPx` also stays `[owed]` and gains a corpus bracket of 13…26.
+
+*The corpus contains no clean correct-fit case.* On `1785135663727` the plate-top candidate reads a ring median of −0.93 mm and a support fraction of 0.629, but its per-sector inner-band medians are `[+3.7, −0.4, +0.8, +1.4, −6.8, −32.6, −9.7, +3.8]`: sectors 4–6 form a contiguous arc sitting up to 32.6 mm below the plate, so the ring genuinely escapes onto the table over ~135°. On `1785901032716` the highest-support candidate is **the table, not the plate** — its per-sector medians are `[+16.6, +4.4, +3.0, +6.0, +19.8, +18.0, +4.7, +0.4]`, with three sectors a plate-height above it. Both captures are near-instances of the Req 3.6 silent-failure geometry rather than clean successes, so a bar fitted to make them pass would be fitted to the wrong side.
+
+*Per-sample noise on a flat surface straddles `ringBandMm`.* The tightest inner-band mode — robust σ over samples within 15 mm of the band median, taken across every candidate so a contaminated winner cannot set it — measures **3.44 mm** on `1785135663727` (over 75.5 % of the band) and **6.98 mm** on `1785901032716` (over 92.0 %). At essentially the same range, 338.9 mm against 336.9 mm, that is a 2× disagreement, so it is a *surface* difference and not a range one — which is what pipeline Decision 46's matte-table evidence predicts. `ringBandMm = 5` falls between the two, and `ringSupportMin = 0.6` is a statement about exactly this distribution.
+
+`prerequisites.md`'s suggestion to "capture at least one on a matte surface" is therefore promoted to a requirement of the capture session.
+
+### Rationale
+
+The alternative to recording a partial result is to set the numbers anyway, and the corpus actively argues against that. A bar tuned until both committed captures pass would be tuned on two captures whose rings demonstrably straddle the plate edge — it would encode "admit a ring that has escaped onto the table" as the definition of a correct fit, which is the precise defect Req 3.6 exists to prevent and the circularity Req 3.7 forbids.
+
+The four settled constants are settled because each rests on a measurement whose answer does not depend on which plane is correct. Sample counts, millimetres per depth pixel, and the ratio of annulus samples to food samples are properties of the capture geometry. They would read the same on a clean capture, so a two-capture corpus is enough for them, where it is not enough for a threshold that must separate two populations the corpus only supplies one side of.
+
+Promoting the matte-surface capture from suggestion to requirement follows directly from the 2× noise spread. Before the measurement it was a hypothesis that surface material dominates depth noise at this range; the two captures are now a demonstration, and `ringSupportMin` cannot be derived until the spread is characterised rather than merely observed.
+
+### Alternatives Considered
+
+- **Set every constant from the two committed slices** - Fit each bar until both captures admit their plate-top candidate, and record that as the corpus derivation - Rejected under Req 3.7. Both captures' rings cross the plate edge, so the fit would be to the failure side; it would also make `minSupportingSectors ≤ 5`, which admits the Decision 18 case outright (see Decision 30).
+- **Run the pass over Nutrition5k for a larger corpus** - Call `FixtureRunner.fitSupportPlane` directly on the 3,490 ingested fixtures, bypassing the `mixture` estimator-path stamp - Rejected because it is not merely blocked by routing: pre-checkpoint ingestion runs no segmenter, N5k ships no ground-truth mask, and `fitFoodSupportPlane` requires a food mask. There is no input to give it until Bucket C.
+- **Defer the whole of task 26 to the capture session** - Record nothing until captures 1–6 exist - Rejected because four constants are answerable now, two open `prerequisites.md` items are closed by the same pass, and the pass itself is the instrument the session needs. Deferring would mean building it twice.
+- **Relax `ringSupportMin` to admit the measured 0.480** - Take the corpus's best support fraction as the achievable ceiling and set the bar below it - Rejected because 0.480 was scored by the **table** plane on `1785901032716`. Setting the bar below it admits precisely the wrong surface.
+
+### Consequences
+
+**Positive:**
+
+- Four constants move from asserted to measured, and two `prerequisites.md` items — the `ringInnerMm` smear envelope and the pipeline Decision 46 tension — are closed without a capture session.
+- The instrumented pass exists, is committed, and runs from a clean checkout, so the capture session feeds an instrument rather than starting one.
+- The reason both committed captures fall back is now attributed to a measured geometry — rings crossing the plate edge — rather than left as an unexplained placeholder effect.
+- The assertions are written so that new evidence breaks them: if a future capture stops straddling `ringBandMm`, `supportSurfaceNoiseStraddlesTheBand` fails and forces the derivation to be revisited rather than silently inherited.
+
+**Negative:**
+
+- Task 26 cannot be completed, and the remaining `[owed]` constants are now known to need specific captures rather than merely more data.
+- The measurement pass lives in the test target because `SupportRegion`'s internals are not public; anyone wanting the numbers must run `swift test`, not a CLI.
+- `1785901032716` yields no usable support-surface noise figure at all — its tightest mode spans plate and table — so the 3.44 mm figure rests on a single capture.
+- The `ringInnerMm` range envelope of ~365 mm is stated but not enforced; a capture beyond it silently uses a ring inside the smear until the adaptive form lands.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (new), the provenance markers in `MedataCore/Sources/SupportPlane/SupportRegion.swift` and `design.md`, `prerequisites.md`, and task 26's detail in `tasks.md`. No shipped behaviour changes: no constant's value moves.
+
+---
+
+## Decision 30: The sector guard discards the sign that separates its two failure modes
+
+**Date**: 2026-08-05
+**Status**: superseded by Decision 40
+
+**Superseded in part.** The finding — that the count takes `|height|` and so reads the same 5 of 8 for two opposite scenes — stands and is unchanged. What Decision 40 supersedes is this entry's *disposition*: the reason given below for leaving the proposal open, that "a rule for rejecting on signed sectors needs a threshold, and that threshold has the same evidence problem as every other `[owed]` constant", is measured and holds on only one of the rule's two axes. The magnitude bar is `ringBandMm`, already `[inherited]`; only a sector count is owed, and the corpus brackets it. Decision 40 states the rule precisely and carries the remaining owing forward. The **Decision** section below, which declines to state a rule, is the part that no longer applies.
+
+### Context
+
+Req 3.6 adds the sector measure because an aggregate support fraction cannot distinguish a ring lying wholly on the surface the food rests on from one that has crossed onto the surrounding surface. Decision 18 states the case: a ring 65 % on the table is 100 % table across roughly 235° and 0 % across the remainder, scores 0.65 in aggregate, and reproduces the defect this feature exists to remove while recording a ring median of approximately zero.
+
+Decision 29's measurement pass ran that guard against the two committed captures and found it does not separate the case it was written for. `SupportRegion.ringStatistics` counts an inner-band sector as supporting when the share of its samples with `|height| ≤ ringBandMm` reaches `sectorSupportMin`. The absolute value is taken, so the count is blind to whether a failing sector sits above the candidate plane or below it.
+
+Measured, at the shipped trio of `ringSectorCount = 8`, `sectorSupportMin = 0.5`, `minSupportingSectors = 6`:
+
+| Capture | Candidate | Supporting sectors | Failing-sector inner medians |
+|---|---|---|---|
+| `1785135663727` | plate top (ring median −0.93 mm) | 5 of 8 | −6.8, −32.6, −9.7 mm |
+| `1785901032716` | table (ring median +3.04 mm) | 5 of 8 | +16.6, +19.8, +18.0 mm |
+
+Both score 5. Decision 18's geometry produces a supporting count within ±1 of `0.65 × ringSectorCount`, i.e. 4 to 7, and 5 sits inside it. No value of `minSupportingSectors` admits the first row and rejects the second.
+
+The sign does separate them, and it separates them cleanly. Where the candidate is the raised support and the ring has escaped downward, failing sectors read strongly **negative** — the surrounding surface is below. Where the candidate is the surrounding surface and part of the ring lies on the support, failing sectors read strongly **positive**. The two rows differ by ~36 mm in the failing sectors while agreeing exactly in the count the guard uses.
+
+### Decision
+
+Record the finding and propose, without implementing, that the per-sector measure carry the signed median alongside the unsigned support fraction, and that the guard reject on *negative* failing sectors — a support surface whose ring has left it — separately from *positive* ones, which indicate the candidate is below the support rather than on it.
+
+The change is not made here. Task 26 is scoped to determining constants, and this alters what the sector measure computes, which is a design change. It is recorded as proposed so that the capture session measures the signed quantity — `prerequisites.md` already asks for per-sector support fractions, and the sign costs nothing to record alongside them — and so that the sector trio is not set against a measure that is about to change.
+
+### Rationale
+
+Setting `ringSectorCount`, `sectorSupportMin` and `minSupportingSectors` against the current unsigned measure would spend the capture session deriving constants for a guard the same session's data would then show needs replacing. The measurement that reveals the problem is already in hand; deriving the trio first and discovering the blindness afterwards is the more expensive order.
+
+The signed form is also what the rest of the design already relies on. Req 3.1 defines the ring measure as a *signed* median precisely because "the table plane reads strongly positive; a plane on a vessel rim reads negative", and Decision 22 restored the signed `|median|` admission guard on the grounds that "the support fraction is unsigned and cannot separate a plane above the ring from one below it". The sector measure is the same statistic computed per arc, and it lost the sign the whole-ring version was careful to keep.
+
+Leaving it as `proposed` rather than accepted reflects that the corpus is two captures. The sign separation is 36 mm and unambiguous on both, but a rule for rejecting on signed sectors needs a threshold, and that threshold has the same evidence problem as every other `[owed]` constant.
+
+### Alternatives Considered
+
+- **Raise `minSupportingSectors` to 7 or 8** - Demand near-total sector support so the Decision 18 case at 4–7 is excluded - Rejected because it excludes the correct plate plane too: `1785135663727` scores 5 with a genuinely escaped ring, and a clean capture has not been measured, so there is no evidence any real capture reaches 7. It trades a false accept for a guaranteed false reject.
+- **Increase `ringSectorCount` for finer angular resolution** - More arcs make a contiguous 235° failure more visible - Rejected because it does not address the blindness. Decision 18's case scales with the count: at 16 sectors it produces ~10 supporting, and a correct-but-escaped ring produces ~10 as well. It also halves the samples per sector, from ~140 towards the noise floor Decision 20 set the 200 sample floor to avoid.
+- **Require contiguity of the failing arc rather than a count** - Reject when failing sectors form one contiguous run - Rejected as insufficient on the measured data: both rows have contiguous failing runs (sectors 4–6 in the first, 4–5 plus 0 wrapping in the second). Contiguity describes both failure modes; only the sign distinguishes them.
+- **Implement the signed measure now** - Change `ringStatistics` in this task and set the trio against it - Rejected as out of scope and premature. It changes a persisted diagnostic (Req 6.4), and the threshold it needs is owed to the same captures as the constants it would replace.
+
+### Consequences
+
+**Positive:**
+
+- The capture session will record the signed per-sector medians, so the evidence for or against this proposal arrives with the same six captures rather than requiring a further sitting.
+- The sector trio is not set against a measure with a known blind spot.
+- The finding is attributable: a supporting-sector count of 5 currently means two opposite things, and the record says which captures show each.
+
+**Negative:**
+
+- Req 3.6's guard remains, in its shipped form, unable to separate the case it cites — and the feature ships with that gap open until the proposal is decided.
+- A proposed decision that the capture session does not resolve leaves the sector trio blocked on a design question as well as on evidence.
+- Persisting a signed per-sector statistic would widen `RingStatistics` and the `EstimationAttemptRecord` fields task 12 added, after those were settled.
+
+### Impact
+
+No code changes. `SupportPlaneCorpusMeasurementTests` records the measurement; `prerequisites.md` adds the sign to the session's dump list. If accepted, it would touch `SupportRegion.ringStatistics`, `RingStatistics`, `SupportRegion.admissibility` and the Req 6.4 persisted fields.
+
+---
+
+## Decision 31: The third capture bundle is sliceable but not corpus-grade
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Decision 29 recorded that task 26 stalls on a two-capture corpus, both of them flat bread on a white plate, and that the constants still `[owed]` need scenes the corpus does not contain. The most acute gap is a non-flat capture: `prerequisites.md` calls it capture 2 and states why it matters — the defect adds a roughly constant *height* to every food pixel, so a fix that overcorrects tall food passes every criterion the flat corpus can express.
+
+A third bundle was already in hand. `1785054950406-success.fixture` is the 208 g mounded-rice capture from the 2026-07-26 session, pulled from the device and sitting in `tmp/device_captures/`. `field-truth-sessions.md` records it as unusable because `FixtureLoader` loads zero meals from it, and adds "not diagnosed — a fresh weighed capture is cheaper than repairing a July bundle". That verdict was reached through the replay path, which is not the path this feature's measurement pass uses: `tools/fixture_slice.py` reads the capture proto directly and needs only the depth map and the argmax mask.
+
+Sliced, it produces a well-formed 295 KB `.depthslice` and runs through the whole pass. So the loader's failure is not a slice-level one, and the question of whether the bundle can serve as the non-flat anchor had to be answered on the depth data rather than inherited from the loader.
+
+### Decision
+
+The slice is committed and **excluded from the measurement corpus**, in a named `rejectedCaptures` list with the disqualifying measurement asserted in `rejectedCaptureIsNotCorpusGrade`. It is not the capture 2 anchor and does not reduce the capture session's scope; the session still needs all six.
+
+The exclusion rests on the depth confidence map. **43.2 %** of the capture's food-mask samples carry ARKit's low confidence and are discarded by `SupportRegion.prepare` at τ_conf, against **0.0 %** on both admitted captures, and frame-wide it is 41.1 % against 22.7 % and 0.1 %. The discarded samples are the **near** ones — median 247.9 mm against the 277.8 mm of those that survive — which is to say the mound itself. What reaches the fit is the flat remnant around the pile, spanning 13.4 mm from p10 to p90, and the best candidate consequently reports a food envelope of **−9.0 mm**: the surviving food sits *below* the plane fitted around it. After filtering, the capture no longer contains a mound to anchor anything against.
+
+### Rationale
+
+Every check that does not read the confidence map passes, which is precisely why the exclusion is worth committing a fixture for. The capture fills all three ring bands at `[1391, 1405, 1541]`, comfortably clear of `ringMinSamples`; its 4 px smear is 6.06 mm at 277.8 mm range, inside `ringInnerMm`; and its confident food median sits 15.1 mm above its confident surroundings, which is a plate. A future session re-running the pass over `tmp/device_captures/` would find nothing wrong with it short of the confidence map.
+
+And admitting it does not merely weaken the corpus, it produces a wrong answer. Its best candidate scores **3** supporting sectors, outside the 4…7 band Decision 18's geometry produces — so `sectorTrioDoesNotSeparateTheDecision18Case` flips from failing-as-designed to passing, reporting that the corpus can now separate a correct fit from the silent-failure case. It cannot. The count is 3 because the mound is missing, not because the ring is clean, and the sector trio would then be derived from a capture whose food is absent. That is the same circularity Req 3.7 forbids, arriving by a route Decision 29 did not anticipate: not a bar fitted to the failure side, but a bar fitted to a capture that no longer contains the thing being measured.
+
+The finding also closes a question `field-truth-sessions.md` left open. The 208 g bundle's unusability is now attributed — depth confidence collapsed across the frame during that capture — rather than merely observed at the loader.
+
+### Alternatives Considered
+
+- **Admit it to `captures` as the third corpus capture** - Take the non-flat anchor the session is missing, on the grounds that three captures beat two - Rejected on the measurement: τ_conf removes 43 % of its food region including the whole mound, so it is not a non-flat capture by the time the fit sees it, and admitting it silently converts the sector derivation into a false positive.
+- **Admit it with a τ_conf exemption for this capture** - Lower the confidence bar so the mound's samples survive and the capture becomes the anchor - Rejected because the low-confidence returns are what `lidar-plane-fit-matte-table-confidence` exists to exclude (Req 7.5), and their depth spread — p10 158.8 mm against a 277.8 mm surface — shows them to be wrong rather than merely uncertain. Deriving the noise constants from samples the shipped path discards would set bars the shipped path can never meet.
+- **Leave the slice out of the repository entirely** - Record the finding in the decision log and delete the fixture - Rejected because the exclusion is not self-evident: the capture is well-formed at every level a reader would check, and the next session to notice an unused mounded-rice bundle would repeat this work. 295 KB buys a reproducible answer and a trap for the false positive.
+- **Repair the bundle so `FixtureLoader` reads it** - Fix the loader path and recover the capture properly - Rejected as beside the point. The slice already bypasses the loader and reaches the pass; the defect is in the captured depth, which no loader fix recovers.
+
+### Consequences
+
+**Positive:**
+
+- The one remaining "maybe we already have this capture" question is answered on measurement, so the capture session's scope is settled at six rather than argued.
+- A false positive that would have set the sector trio from an empty mound is trapped by an assertion rather than left to a future reader's care.
+- `field-truth-sessions.md`'s undiagnosed bundle is diagnosed, and the diagnosis — frame-wide confidence collapse — is a capture-technique lesson for the session rather than a code defect.
+- The pass now records what makes a capture corpus-grade, which the six new captures will be measured against on arrival.
+
+**Negative:**
+
+- A third 295 KB fixture is committed that no derivation reads.
+- The corpus is still two captures and every `[owed]` constant from Decision 29 stays owed; this changes none of them.
+- The low-confidence share bar is asserted at 0.4 against a 0.0/0.43 split with nothing in between, so it separates the captures in hand but is not a calibrated admission threshold.
+- Task 26 remains open, and task 27 remains blocked behind it.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/Fixtures/1785054950406.depthslice` (new, not read by any derivation), `SupportPlaneCorpusMeasurementTests` (`rejectedCaptures` and `rejectedCaptureIsNotCorpusGrade`), `prerequisites.md`, `docs/agent-notes/field-truth-sessions.md` and task 26's detail. No shipped code changes and no constant's value moves.
+
+---
+
+## Decision 32: One sufficiency constant answered two questions, and one of them has an exact answer
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Task 26 is measurement, not invention: every constant marked `[owed]` in `SupportRegion` has to be derived against the fixture corpus and the derivation recorded. Decisions 29 and 31 established that most of them cannot be, because the corpus is two captures of flat bread on a white plate and the missing scenes — a rimmed plate, a bowl, food at a small plate's edge, a matte surface — are what the remaining bars have to separate.
+
+`minCandidateSamples = 500` is on that owed list, and re-reading its call sites shows it is not one constant. It is used twice, for questions that have nothing to do with each other. In `extractCandidates` it stops the sequential passes once the residue is too thin to be worth another RANSAC draw. In `fitFoodSupportPlane` it refuses the whole fit when the annulus is too small — a sufficiency test on the capture, asked before any plane exists.
+
+The second use has an exact answer sitting beside it. `ringStatistics` returns nil unless *every* radial band clears `ringMinSamples`, and that test reads `samples.band` — the radial banding — and nothing else. It never touches a candidate plane. `ringSamples` is already computed one line above the guard, so the condition that actually decides whether this capture can produce a support fit is knowable there, exactly, for free.
+
+### Decision
+
+Split the constant and retire the half that has an exact answer.
+
+`fitFoodSupportPlane`'s guard becomes `ringBandsAreFeasible(samples:)` — every radial band clears `ringMinSamples` — replacing the annulus count entirely. `ringMinSamples` is `[measured]` (Decision 29), so no `[owed]` value is involved.
+
+What remains is renamed `minResidueSamples`, keeps the value 500 unchanged, and stays `[owed]` for the one question it now asks. The corpus bounds it **from above only**: measured residue per pass is `[10469, 3310, 581]` and `[12551, 2811, 932]`, so any floor above 581 cuts a pass the corpus produces. Nothing in the corpus fails for want of residue, so there is no measured floor and the lower end is owed to the capture session.
+
+`minAcceptedExtentPx = 24` is **bracketed, not set**. Measured extents are 123, 76, 12 px and 155, 44, 26 px. The 12 px candidate is a 153-sample sliver sitting 32.9 mm off the ring, correctly rejected here, so the floor is above 12. The ceiling is soft: 26 px is the smallest extent reaching the later guards, and that candidate is rejected on `supportFraction` anyway, so the corpus never shows a 26 px candidate that deserved admission. 24 sits inside 13…26 with 2 px to spare.
+
+### Rationale
+
+The substitution is outcome-preserving by construction rather than by measurement, which is what makes it safe to ship against a two-capture corpus. The ring is built inside the annulus loop under a narrower radial test, so it is a strict subset. If the annulus holds fewer than 500 samples the ring holds fewer than 500 across three bands, so some band is under 167 and therefore under `ringMinSamples` — everything the retired floor rejected, ring feasibility rejects too. In the other direction a capture that passed 500 but cannot fill three bands used to run a full sequential extraction and then find every candidate's `ringStatistics` nil, returning nil after the work rather than before it. Same answer, less work, and one fewer asserted number on the shipped path.
+
+Keeping `minResidueSamples` at 500 is deliberate. Raising it to the corpus ceiling would look like a derivation and is not one: 581 is where a floor starts *cutting* passes, not where a pass starts being worthless. Both third-pass candidates are rejected on their own merits, so cutting them changes no plane on this corpus — but `planeCandidateCount` is persisted (Req 6.4's neighbourhood), so a cut pass changes the record, and pass 3 is where a plate under a dominant table can still surface. Moving a value on evidence that only says "this is where it would start costing something" is the circularity Req 3.7 forbids, in a smaller shape.
+
+Recording the extent bracket rather than the extent value follows the same line. The corpus supplies one clear sliver and no clear counter-example, so it can say where the bar is *not* and cannot say where it is.
+
+### Alternatives Considered
+
+- **Derive an annulus floor from the measured ring share** - Ring share is 0.331 and 0.321, close to the 17/50 the radial widths predict, so the annulus floor implying three feasible bands is ≈ 1,800; set `minCandidateSamples` there - Rejected because it replaces an exact test with a calibrated proxy for the same test. The ring share depends on mask shape and frame clipping, so the proxy needs an error bar the exact condition does not.
+- **Leave `minCandidateSamples` as one constant and simply record the two uses** - Note the ambiguity in the decision log and change no code - Rejected because the ambiguity is the finding. A single number cannot be derived while it answers two questions, and the whole task is derivation; leaving it fused means neither half can ever be settled.
+- **Raise `minResidueSamples` to 1200** - Take a value comfortably above both third-pass residues, on the grounds that a 581-sample residue is too thin for a meaningful RANSAC draw - Tried and rejected on measurement: it cuts pass 3 on both captures, dropping `planeCandidateCount` from 3 to 2 with no evidence that either cut candidate was worthless. The thinness is asserted, not measured.
+- **Set `minAcceptedExtentPx` to 13, the bottom of the bracket** - Take the most permissive value the corpus admits, so no legitimate candidate is lost - Rejected because the guard's purpose is conditioning, not permissiveness: a 13 px component is a sliver by the Req 2.3 argument regardless of what this corpus happens to contain. The bracket is evidence about the bar's location, not an argument for its lower end.
+
+### Consequences
+
+**Positive:**
+
+- One `[owed]` constant leaves the shipped path entirely, replaced by a `[measured]` one already derived in Decision 29 — the first owed value this feature has retired rather than deferred.
+- A capture that cannot fill its ring bands now falls back before extraction instead of after it, so the wasted sequential RANSAC on a starved capture is gone.
+- `minResidueSamples` has one job, so the capture session can derive it against one question instead of two.
+- The extent bracket is asserted, so a future capture that narrows it below 2 px fails the test rather than silently losing a candidate to the guard.
+
+**Negative:**
+
+- `minResidueSamples` and `minAcceptedExtentPx` both remain `[owed]`; this narrows what they owe without paying it.
+- The extent bracket rests on a single sliver, and its upper end on a candidate rejected for an unrelated reason, so 13…26 is weaker evidence than the interval's width suggests.
+- `PlaneCandidate` gains a `residueCount` field read only by the measurement pass.
+- Task 26 stays open and task 27 stays blocked behind it.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringBandsAreFeasible`, the constant split, `PlaneCandidate.residueCount`), `SupportPlaneCorpusMeasurementTests` (three derivation tests), `SupportRegionSelectionTests` (a stale comment), `design.md` and task 26's detail. No plane moves and no persisted value changes on any capture in the corpus.
+
+---
+
+## Decision 33: The plate margin is measured, and `ringOuterMm`'s derivation rule cannot be met
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+`ringOuterMm = 25` is `[owed]` against a rule its own comment states: it "must sit inside the smallest measured plate margin". Unlike the noise thresholds Decisions 29 and 32 could not settle, that rule asks for a property of the **capture geometry** — how far the plate extends beyond the food — and Decision 29's rationale is explicit that such properties are exactly what a two-capture corpus can answer, because they read the same on a clean capture as on a straddling one.
+
+Decision 29 also left a question open in its account of why both captures fall back. It attributes the fallback to rings that "demonstrably straddle the plate edge" and treats that as a property of the two captures. It does not measure how far the plate actually extends, so it cannot say whether the ring escapes because the captures are unlucky or because the ring is wider than the plates it is being asked to sit on.
+
+`SupportPlaneCorpusMeasurementTests` gains the instrument that answers both: the **support margin** per sector. For each of the eight arcs, the median height is profiled outward from the food boundary in 2 mm bins, referenced to the strip within 4 mm of the boundary — whatever the food rests on, that strip is on it — and the margin is the distance at which the profile departs from that reference by more than `ringBandMm`. Denominating the departure in `ringBandMm` means the margin bounds the guard it feeds rather than being a separate quantity. The winning candidate's normal is borrowed to remove camera tilt; its offset is not used, so the measure is valid on `1785901032716`, whose best candidate is the table.
+
+### Decision
+
+Record the measured margins, and restate what `ringOuterMm` owes rather than setting it. No code changes and no constant moves.
+
+**Measured.** Per-sector support margins are **16, 40, 10, 42, 6, 4, 6, 44 mm** on `1785135663727` and **34, 4, 46, 8, 30, 14, 12, 6 mm** on `1785901032716`. Every departure inside the ring is a **fall**, of 5.1 to 15.6 mm, so these are plate edges and not the raised rim of a vessel.
+
+**The rule is unsatisfiable.** The smallest margin is 4 mm on both captures — inside `ringInnerMm = 8`, where no ring can be placed. There is no value of `ringOuterMm`, including one below the ring's own inner edge, that sits inside the smallest measured plate margin. The rule as written cannot be met by any capture whose food reaches within 8 mm of the plate edge, which both of these do.
+
+**What it explains.** Only **3 of 8** sectors reach `ringOuterMm` on each capture, and only **4 of 8** reach the inner band's outer radius of 13.7 mm — the radius the sector measure is actually decided at. `minSupportingSectors = 6` therefore cannot be met on either capture *by geometry*, before `sectorSupportMin` or any noise threshold is consulted. The measured supporting counts of 5 (Decisions 29, 30) exceed the 4 fully-on-plate sectors only because a sector whose plate ends mid-band can still clear a 0.5 share.
+
+`ringOuterMm` stays `[owed]`, now against the margin the **sector measure** needs in **enough** sectors — a joint derivation with the trio, owed to the same captures.
+
+### Rationale
+
+The finding changes what the capture session has to establish. Decision 29 and Decision 30 both read the corpus as supplying no clean correct-fit case, and both treat that as a fact about the two captures. It is partly a fact about the ring: at 8–25 mm around the food, the ring extends past the plate in five of eight directions on captures whose food is ordinarily placed. A session that captures six new scenes without recording the margin would produce the same stalled derivation and attribute it, again, to the captures.
+
+Restating the rule rather than repairing it follows Decision 30's shape and for the same reason. A rule of the form "inside the smallest margin" presumes the ring can always be placed wholly on the support surface, and the measurement shows that presumption is false for real food on real plates — food is put in the middle of a plate, not concentrically inside a 25 mm collar. Tolerating a partial crossing is precisely the job Decisions 18 and 19 gave the **sector** measure, so the surviving question is how much margin the sector measure needs and in how many sectors, which is one derivation and not two.
+
+Leaving `ringOuterMm` at 25 while recording that it is too wide for the corpus's plates is deliberate. Shrinking it — to 13 mm, say, so more sectors stay on-plate — would narrow the ring towards the smear at `ringInnerMm`, collapse the three radial bands `bandStepMaxMm` reads, and be fitted to two captures' plate diameters. That is the circularity Req 3.7 forbids, and it would trade a measured, understood failure for an unmeasured one.
+
+### Alternatives Considered
+
+- **Set `ringOuterMm` to the smallest measured margin** - Take 4 mm as the corpus's answer and shrink the ring to fit - Rejected because 4 mm is inside `ringInnerMm`: the resulting ring is empty. The measurement disproves the rule rather than supplying a value for it.
+- **Set `ringOuterMm` to the median margin (≈ 13 mm)** - Size the ring so a majority of sectors stay on the plate - Rejected because it leaves 5 mm of radial width for three bands, roughly one depth pixel apiece at corpus range, which starves `ringMinSamples` and makes `bandStepMaxMm` unreadable. It also fits the constant to two plate diameters, which Req 3.7 forbids.
+- **Treat the margins as evidence that the captures are unusable** - Add a margin bar to the corpus-grade criteria, as Decision 31 did with depth confidence - Rejected because there is nothing wrong with these captures. Bread in the middle of a dinner plate is the modal case this feature exists for; a corpus admitting only food inside a 25 mm collar would be selected to make the ring work.
+- **Implement a sector-relative ring now** - Size the ring per sector from the measured margin so it always sits on the support surface - Rejected as out of scope and unevidenced. Task 26 determines constants; this changes what the ring is. It would also make the ring's radial extent scene-dependent, and the sector measure's whole premise is that arcs are comparable to one another.
+
+### Consequences
+
+**Positive:**
+
+- The reason both corpus captures fall back is now measured to the sector rather than described: the plate ends inside the ring in five of eight directions, and the supporting count is capped at 4–5 against a bar of 6 by geometry alone.
+- `ringOuterMm` has a rule that can be satisfied, so the capture session can derive it instead of discovering mid-session that it cannot.
+- The trio and `ringOuterMm` are now known to be one derivation, which removes a false independence from the session's plan.
+- The assertions break in the right direction: a capture whose plate reaches the inner band in six sectors fails `plateMarginCannotSetRingOuter`, forcing the derivation to be revisited rather than inherited.
+
+**Negative:**
+
+- `ringOuterMm` remains `[owed]` and the ring ships wider than the plates in the corpus, so the shipped guard's sector counts are depressed by geometry on ordinary captures — the feature falls back where it should fit, which is the safe direction but not the correct one.
+- The margin rests on the food mask's boundary, so a segmentation that leaks onto the plate shortens the margin it measures; the corpus cannot separate the two.
+- One more open design question — how much margin the sector measure needs — now waits on the same six captures as Decision 30's proposal, and the two interact.
+- The measure reports the margin at 2 mm resolution and censors at the annulus edge (50 mm), so the three wide sectors per capture are lower bounds rather than distances.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`SectorMargin`, `sectorMargins`, `plateMarginCannotSetRingOuter`), the `ringOuterMm` comment in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---
+
+## Decision 34: Five of the nine rejection reasons never fire on the corpus
+
+**Date**: 2026-08-05
+**Status**: accepted
+
+### Context
+
+Decisions 29, 32 and 33 each took one `[owed]` constant, measured what the two committed captures can say about it, and recorded the bound rather than inventing a value. Each treated the constant in isolation. Reading them together raises a question none of them asks: of the guards these constants gate, which does the corpus ever *reach*?
+
+`admissibility` applies nine rejection reasons in a fixed order and short-circuits at the first that fires, so the reason it returns says which guard came first, not which guards would have fired. Nothing observable depends on that order — the reason is not persisted, and a rejected candidate is rejected either way — but it bounds what a measurement pass can see. A constant behind a guard the corpus never reaches is in a weaker position than one the corpus bounds from a single side: nothing in the corpus says it is even correctly oriented.
+
+`SupportPlaneCorpusMeasurementTests` gains `allRejections`, which restates the shipped conditions and evaluates all of them independently. The restatement is pinned against drift by asserting that its first entry equals what `admissibility` returns for the same candidate.
+
+### Decision
+
+Record what the corpus exercises, and bound the four constants behind the guards it does not. No constant moves and no shipped behaviour changes.
+
+**Under the shipped order, three reasons fire**: `extent`, `supportFraction`, `sectors`. Evaluated independently a fourth does — `ringMedian`, on four of the six candidates. **Five never fire**: `ringUnavailable`, `foodEnvelope`, `bandStep`, `visibility`, `escaped`.
+
+**`foodEnvelopeMinMm = 0` is bounded from above at 25.8 mm** — the envelope of the candidate the design intends to select on `1785901032716`, and 26.6 mm on `1785135663727`. Above that the guard rejects the fit this feature exists to produce. Every envelope in the corpus is positive (7.2 to 39.6 mm), so the negative-envelope cases the guard is written for — a bowl, a plane on the food top — are absent and there is no floor. The design's illustrative "bread p90 ≈ +8 mm" is measured at **+26.6 mm**, low by 3×; the figure is corrected, the argument it supports is unaffected.
+
+**`bandStepMaxMm = 6` is approached from the wrong side.** It fires on an outward *rise*; every inner→mid step in the corpus is a *fall*, from −0.5 to −6.5 mm, because a flat plate ends and the table begins. The corpus is 6.5 mm from the bar on the side that cannot reach it, and its ceiling still waits on the ruler measurement `prerequisites.md` carries.
+
+**`escapeBandMm = 30` is correctly one-sided.** Req 3.3 rejects a plane lying *below* the surrounding surface, which reads a **positive** annulus median, and that is the comparison shipped. Corpus annulus medians span −36.6 to +5.7 mm: the largest positive is a fifth of the bar, and the one candidate far from its surroundings is far *above* them — a plane on the food top, which `ringMedianMaxMm` rejects and Req 3.3 makes no claim about.
+
+**`supportVisibilityMin = 0.15` is firable (Decision 29) but never fired**: the lowest visibility any corpus candidate reaches is 0.246, 1.6× the bar.
+
+**`ringSupportMarginMin = 0.15` is not reachable at all.** It compares the top two *admissible* candidates and neither capture produces even one. The gaps real candidates open are **0.312 and 0.117**, so 0.15 falls between them and would call one capture's pair distinct and the other's ambiguous — with no known-correct winner on either to say which verdict is right.
+
+### Rationale
+
+The finding changes what the capture session has to do, in the same way Decision 33 did. Its brief so far is "produce the scenes that set the values". For these four it is "produce the scenes that *fire the guards*", which is a stronger requirement and maps onto specific captures: capture 5, the bowl, is the only source of a negative food envelope; captures 3 and 4, the rimmed plate, are the only source of an outward band rise and of a visibility below 0.246; and no planned capture produces a positive annulus median anywhere near 30 mm, so `escapeBandMm` will still be unexercised after the session unless one is arranged.
+
+Stating that as a measurement rather than a worry is what the pass is for. "These constants are owed" and "these guards have never run" read alike in a task list, and they are different problems: the first needs a value, the second needs evidence that the guard does anything at all. Decision 22 retired two guards on exactly this ground — a bar positioned where it cannot fire — and the only reason `escapeBandMm` and `ringSupportMarginMin` are not in the same position is that the corpus is too small to tell.
+
+`ringSupportMarginMin`'s straddle is the same shape as `ringBandMm`'s in Decision 29, and gets the same treatment. A corpus that brackets a constant from both sides at once is a corpus that cannot set it, and asserting the straddle is what makes a future capture that closes it fail the test rather than pass unnoticed.
+
+The guard-order note is recorded because it is a live trap rather than a defect. A future reader measuring "why was this candidate rejected" from `admissibility` alone would conclude the corpus exercises three guards and that the rest are fine; the independent evaluation says a fourth fires and five do not. Reordering the guards would change every such reading while changing no behaviour.
+
+### Alternatives Considered
+
+- **Set `foodEnvelopeMinMm` to a positive value inside the measured ceiling** - The corpus shows envelopes from 7.2 to 39.6 mm, so a floor at, say, 5 mm sits below all of them and would reject a plane on the food top - Rejected because it fits the bar to the pass side alone, which Req 3.7 forbids. The guard exists to catch bowls and food-top planes; the corpus contains neither, so a value chosen inside it is calibrated against the cases the guard is *not* for.
+- **Reorder `admissibility` so the cheap, always-computable guards run last** - Put `extent` and `supportFraction` after the geometric ones so a measurement pass sees more reasons fire - Rejected because it treats the pass's convenience as a reason to change shipped code, and it does not help: the guards that never fire are never fired by these captures at any position in the order. `allRejections` gets the same information without touching the shipped path.
+- **Retire `escapeBandMm` and `ringSupportMarginMin` as unfirable, following Decision 22** - Two guards no capture has ever fired look exactly like the residual bar and the MAD bar that were deleted - Rejected because the evidence is not the same. Those two were shown unfirable by *arithmetic* — a bar below a floor the algorithm enforces elsewhere. These two are firable in principle and merely unreached by a two-capture corpus, and deleting a guard on absence of evidence from two captures is how the Decision 18 silent failure got in.
+- **Record the finding in the task detail and add no assertions** - The numbers are in the dump already - Rejected because the value of the finding is that it *breaks* when the corpus improves. A capture that fires `bandStep` or produces two admissible candidates should fail a test and force the derivation, not pass quietly into a dump nobody re-reads.
+
+### Consequences
+
+**Positive:**
+
+- The capture session's brief for four constants changes from "set a value" to "fire the guard", and each is now mapped to the specific planned capture that can do it.
+- `escapeBandMm`'s orientation is verified against Req 3.3 rather than assumed, which is the one thing about it the corpus *can* settle.
+- The design's bread envelope figure is a measurement instead of an estimate that was 3× low.
+- Every finding is an assertion that fails when the corpus improves, so the next session is told what changed rather than having to re-derive it.
+- The restatement of the guard conditions is pinned to `admissibility`, so the two cannot drift apart silently.
+
+**Negative:**
+
+- Five findings, no values: this narrows what four constants owe without paying any of them, and `ringSupportMarginMin` is now known to be untestable on anything the corpus contains.
+- `escapeBandMm` will likely still be unexercised after the six planned captures, so a constant on the shipped path may ship having never been demonstrated to do anything.
+- The guard conditions are now written twice — once in `SupportRegion.admissibility`, once in the pass's `allRejections` — and only the first entry of the second is pinned; a drift in a later condition would show up as a wrong count rather than a failed pin.
+- Task 26 stays open and task 27 stays blocked behind it.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`CandidateMeasurement`, `measurements`, `allRejections` and five derivation tests), the constant comments and the `admissibility` order note in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---
+
+## Decision 35: Req 5.1's tolerance is a grid-transfer measurement, and one bar does not transfer
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Req 5.1 asks for support-plane coefficients "equal within a documented tolerance, verified on a named fixture", and `design.md` lists that tolerance and that fixture among the numbers the design owes. Decisions 29 to 34 each took an `[owed]` constant; this one takes the two owed figures that are not constants at all.
+
+Half the question was answered by construction and has been since task 16. Device and offline replay run **one** implementation, so on identical bytes the arithmetic is identical — `fitIsDeterministic` asserts it for Req 7.7 — and a tolerance over that measures nothing. What legitimately differs between a device capture and a replay is the **depth grid**: `design.md`'s own transfer table names the N5k identity grid as the case the millimetre-denominated radii exist to survive. Until now that claim was tested only on a synthetic scene built to satisfy it (`fitTransfersAcrossDepthGrids`), where the geometry is exact by construction and the answer is the premise.
+
+`SupportPlaneCorpusMeasurementTests` gains three tests that measure it on the committed captures instead: decimate the depth grid, refit, and compare where the plane cuts the food-mask centroid ray. That comparison point is chosen because volume is integrated per-pixel above the plane, so a millimetre of movement there is a millimetre added to every food pixel — the units the tolerance has to be in to constrain anything.
+
+### Decision
+
+**The tolerance is 1 mm, and the named fixture is `1785135663727`.** Across a 2× depth-grid halving — 256×192 to 128×96, a different RANSAC seed, and a quarter of the samples — the plane moves **0.835 mm** on `1785135663727` and **0.037 mm** on `1785901032716`, with normals tilting 0.945° and 0.063° and the ring measure moving 0.52 mm and 0.06 mm. One millimetre is the wider of those rounded up; the corpus meets it at 84 %, so it is a measured bar rather than a comfortable one. The fixture named is the wider capture, which is already the fixture Reqs 6.2 and 7.1 name.
+
+Two things this bounds and two it does not.
+
+**The transfer has a resolution floor, and the floor is the ring's.** Halving again refuses the fit outright: at 64×48 the inner band holds **37** and **32** samples against `ringMinSamples = 200`, so `ringBandsAreFeasible` returns false before any plane is fitted. The inner band is the narrowest in millimetres and therefore the first to fall under a pixel of width. Both bounds that decide this are the same quantity — `mmPerPx = z / f_d` — so coarsening the grid divides `f_d` exactly as increasing the range multiplies `z`, and this is Decision 29's ~365 mm range envelope reached from the other direction. Note also that at 128×96 the 4 px smear is already **14.9 mm** against `ringInnerMm = 8` and the plane still transfers within a millimetre: the smear bound governs how clean the ring *measure* is, not where the plane lands.
+
+**`planeCandidateCount` is grid-dependent where the plane is not.** Both captures extract three candidates natively and two at half resolution, because each pass leaves a smaller residue. That field is persisted (Req 6.1, task 12), so a device/replay comparison must read it as a property of the capture's resolution rather than of the scene.
+
+**`minAcceptedExtentPx` does not transfer at all.** It is the only bar in `admissibility` denominated in pixels; every other one is millimetres or a dimensionless fraction, which is precisely what Req 5.1's transfer rests on. Extents halve with the grid — 123→61, 155→77, 44→22 — and the third of those crosses the bar: a surface the guard admits at 44 px is rejected as a sliver at 22 px, same scene, same plane, same 24. Decision 32's 13…26 bracket is therefore a **256×192** bracket, and nothing said so where the constant is defined.
+
+### Rationale
+
+The tolerance had to be denominated in something the requirement cares about. Plane coefficients are not comparable in the abstract — `d` is in millimetres but the normal is dimensionless, and a small tilt on a distant plane moves the surface more than a large tilt on a near one. Evaluating both planes on one fixed camera ray through the food gives a single number in millimetres that is exactly the per-pixel volume error, which is the quantity Req 5.1 exists to protect.
+
+Decimation was chosen over interpolation or synthetic rescaling because it is the only resampling that invents no depth values. It subsamples one sensor's output, and that is also its limit: it models a coarser **grid**, not a different sensor, so it carries this sensor's smoothing with it. The device leg of Req 5.1 — the same capture fitted on the phone and in replay — stays task 27's, and this measurement does not pre-empt it. What it does is give task 27 a bar to report against instead of a blank.
+
+The `minAcceptedExtentPx` finding is the reason this is worth a decision rather than a line in the dump. Req 5.1's transfer argument is stated as a property of the design — "everything downstream is millimetre-denominated off `mmPerPx`" — and it is true of every constant but one. The exception is not hypothetical: `tools/nutrition5k/ingest.py` pins N5k at f = 617 px against the device's measured f_d = 182 px, so the same physical extent spans **3.4×** more pixels on the N5k grid, and 24 px is a materially stricter bar on the device than on the corpus the calibration will be fitted against. Nothing has hit it yet only because pre-checkpoint N5k ingestion runs no segmenter, so those fixtures carry no food mask and never reach the guard. Model-production Bucket C is when they do.
+
+### Alternatives Considered
+
+- **Document the tolerance as exact equality** - One implementation, same bytes, same plane; state 0 mm and cite `fitIsDeterministic` - Rejected because it answers a question nobody is at risk from. Req 5.1 exists so that a β_c fitted offline is valid on device, and the two corpora differ in depth resolution, not in arithmetic. A tolerance of zero would be true and would license nothing.
+- **Derive the tolerance from the ~5 % device-to-replay volume divergence Req 7.2 quotes** - There is already a figure in the spec; convert it to millimetres - Rejected because that figure is a *volume* divergence measured on the pre-feature path, and it bundles segmentation, class, and density with the plane. Converting it back into a plane tolerance would attribute all of it to geometry.
+- **Test the transfer by upsampling instead of decimating** - Replicate each depth pixel 2×2 to reach a finer grid, closer to the N5k direction - Rejected because it adds no information: a nearest-neighbour upsample is the same surface sampled redundantly, so the RANSAC draws land on duplicated points and the fit is bounded to agree. Decimation removes information, which is the direction that can fail.
+- **Re-denominate `minAcceptedExtentPx` in millimetres now** - Replace the pixel bar with `extentMm ≥ k` and set k from the corpus - Rejected as out of scope and premature in the same way Decision 30's sector fix is. It changes what `admissibility` computes, the constant is `[owed]` and bracketed rather than set, and the capture session is what settles the bracket. Recorded here and in the constant's comment so the session sets it in the right units.
+
+### Consequences
+
+**Positive:**
+
+- Two of the four figures `design.md` lists as owed beyond the constants are now measured, and one of the four gates on task 27's device leg rather than on a capture session.
+- Req 5.1's transfer claim is verified on real captures for the first time; it was previously verified only on a scene constructed to satisfy it.
+- The resolution floor is a number — 128×96 holds, 64×48 refuses — and it is shown to be the same `mmPerPx` bound as Decision 29's range envelope, so two envelopes become one.
+- A live defect in the calibration path is identified before it can fire: `minAcceptedExtentPx` is 3.4× stricter on the device than on the N5k grid it will be fitted against, and Bucket C is when that starts to matter.
+- `planeCandidateCount`'s grid dependence is recorded before someone compares it across references and reads a resolution change as a scene change.
+
+**Negative:**
+
+- The tolerance is derived from decimation, which models a coarser grid rather than a different sensor, so it does not bound sensor-to-sensor divergence — and the device/replay pair Req 5.1 literally names is still unmeasured until task 27.
+- Two captures, one halving: 0.835 mm and 0.037 mm differ by 20×, so the corpus says little about what governs the spread, and a third capture could exceed 1 mm.
+- `minAcceptedExtentPx` is now known to be wrongly denominated and is not fixed, so the feature ships a guard whose verdict depends on the sensor grid.
+- Task 26 stays open and task 27 stays blocked behind it; nothing here needs a capture, and nothing here closes a constant.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`GridFit`, `decimated`, `foodCentroidRay`, `planeDepthMm`, `gridTransferToleranceMm` and three derivation tests), the `minAcceptedExtentPx` comment in `MedataCore/Sources/SupportPlane/SupportRegion.swift`, `requirements.md` Req 5.1, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---
+
+## Decision 36: The fallback penalty is priced in millimetres, and the corpus measures 35× what it charges
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`Confidence.supportPlaneFallbackPenalty = 0.9` is the last `[owed]` figure in task 26 that no derivation has touched. Unlike every `SupportRegion` constant, it is not a bar a guard fires on — it is a price, and Req 4.6 states the only compliance test it has: when the fallback fires, the reported confidence must be "no higher than for a restricted fit of equal residual". At *equal* residual any value in (0, 1) satisfies that, so the criterion cannot choose the number and never could.
+
+The number's denomination comes from the curve it multiplies. `sigmaPlane` is exp(−r/5) with r in millimetres and r₀ = 5 mm, so a multiplicative penalty p asserts that the fallback carries −5·ln(p) millimetres of extra plane error. **0.9 prices the fallback at 0.53 mm.** That is a measurable quantity: it is the height the edge-band plane adds to a food pixel relative to the plane the design intends to select, which is exactly what volume integration adds.
+
+`SupportPlaneCorpusMeasurementTests` gains two tests that measure it on the committed slices. The measure is taken **per food sample and averaged**, not on the food-centroid ray Decision 35 uses: that ray is legitimate for Req 5.1, where the two planes are two fits of the *same* surface and are near-parallel, but here they are 7.18° apart on one capture and a single ray would stand for nothing.
+
+### Decision
+
+**The corpus bounds `supportPlaneFallbackPenalty` from above at 0.025 and cannot bound it from below. The constant does not move.** The over-report is recorded, with its three components measured.
+
+**The price.** On `1785135663727` the edge-band plane adds **18.370 mm** to the mean food pixel (p10 7.956, p90 28.606, centroid ray 18.352 mm), which prices the fallback at exp(−18.37/5) = **0.025**. The shipped 0.9 is **35.5× above** it. The figure is corroborated outside this pass: 18.37 mm over the capture's ≈ 212 cm² equivalent-disc food footprint is ≈ 390 cm³, against the **408 cm³** `SupportPlaneRegressionSliceTests` measures between the pre-feature and corrected volumes (714.8 → 306.8 cm³), the residue being the `max(0, ·)` clamp and off-axis pixel area.
+
+**The residual channel works against the penalty rather than with it.** The edge-band plane is a *good* fit to the wrong surface, so its residual is **lower** than the restricted fit's on both captures — 1.954 mm against 2.327 mm, and 1.928 against 2.365 — and exp(−r/5) rewards it for that. The advantages are 0.373 mm and 0.437 mm, i.e. **71 % and 83 %** of the 0.527 mm the penalty prices. The penalty is therefore mostly spent cancelling an advantage before it prices anything, and the net effect measured on the same capture is a **3.1 %** confidence reduction (σ_plane 0.609 against 0.628) for a plane 18 mm wrong and a 2.33× volume over-read.
+
+**Only one capture can price it, and the sign is what says so.** On `1785901032716` the same subtraction gives 2.787 mm, and that is not a fallback error: Decision 30 established that this capture's highest-support candidate is the **table**, so the two planes are two fits of one surface. The discriminator is Decision 30's proposed sign, used here as an analysis tool rather than a guard — the median signed inner-band height of the failing sectors is **−9.680 mm** on the first capture (the candidate is the raised support, the ring escaped downward) and **+18.021 mm** on the second (the candidate is what the ring escaped onto). The 2.787 mm is kept as what it is: a Req 4.3 agreement figure between two independent fitters on one surface, inside `ringBandMm`.
+
+**The obvious per-capture substitute is measured and rejected.** The fallback path already persists a ring measure (Req 6.1), so pricing each fallback from it looks free. It does not track the quantity: the ring median reads 4.244 mm against an 18.370 mm offset (**0.231×**) and 6.888 mm against 2.787 mm (**2.471×**) — low where the offset is real, high where it is not. The cause is Decision 33's: the ring sits 8–25 mm out and the plate ends inside it in five of eight directions, so the median averages support and surroundings instead of reading either. Wrong in both directions is worse than wrong in one, because no scale factor repairs it.
+
+### Rationale
+
+Setting the constant to the measured ceiling would be the same circularity Req 3.7 forbids for the sector trio, arriving from the other side. The fallback fires in two distinct situations: when a raised support exists and the restricted fit was rejected, where the error is the support height and the honest penalty is ≈ 0.025; and when the food rests directly on the surrounding surface, where the edge-band plane *is* the support plane and the honest penalty is 1. One multiplicative constant must price the mixture, and the mixture weight is precisely Req 4.5's fallback rate — which has no denominator until model-production Bucket C. The two owed figures are therefore one dependency, not two, and pricing the constant at 0.025 today would charge every capture for a plate that half of them do not have.
+
+Measuring per food sample rather than on one ray is not a refinement, it is the difference between a number and an artefact. The 7.18° tilt between the two planes spreads the offset from 7.96 mm to 28.61 mm across a single food region — a 3.6× range — so even a per-capture price is a single number for an error that is not uniform over the food it is charged against. That is worth recording against any future proposal to make the penalty adaptive.
+
+The residual finding is the part that changes how Req 4.6 should be read. The criterion compares against "a restricted fit of *equal* residual", and no such fit exists on either capture: the fallback's residual is lower, because a plane fitted to a large clean table is better conditioned than one fitted to a plate top. So the penalty's first 0.4 mm buys nothing, and Req 4.6 is satisfied on the real comparison by 3 % rather than by the 10 % the constant appears to give. Decision 12's argument for keeping the penalty multiplicative and separate from the residual is strengthened by this — the residual genuinely cannot carry the error — but its sufficiency at 0.9 is not.
+
+### Alternatives Considered
+
+- **Set the penalty to the measured ceiling of 0.025** - The corpus has priced it; charge what it costs - Rejected because the corpus contains one raised-support capture and no capture of the other leg. A fallback on food resting directly on the table is a *correct* plane, and 0.025 would report it at a fortieth of the confidence it earns. The mixture weight is Req 4.5's fallback rate, absent until Bucket C.
+- **Price each fallback from its persisted ring median** - The measurement is already recorded on the fallback path, so the constant could become a per-capture function at no storage cost - Rejected on measurement: the ratio of ring median to offset at the food is 0.231 on one capture and 2.471 on the other. It is the right *sign* (Req 3.1) and the wrong size, in both directions.
+- **Retire the penalty and let the residual carry the fallback's error** - One channel is simpler than two - Rejected, and the measurement is what rejects it: the fallback's residual is *lower* than the restricted fit's on both captures, so the residual channel would report the fallback as the better fit. This is Decision 12's argument, now with numbers.
+- **Record Req 4.6 as satisfied and close the figure** - The shipped 0.9 does make the fallback report lower confidence than the restricted fit on both captures - Rejected because "satisfied" and "correct" are different claims and the gap between them is 35×. A criterion any value in (0, 1) meets is not evidence for the value chosen, and task 26 exists to say where numbers come from.
+
+### Consequences
+
+**Positive:**
+
+- The last untouched figure in task 26 now has a derivation, a denomination, and a measured bound, rather than a value that mirrored an unrelated constant.
+- The over-report is attributable and reproducible: 35.5×, from one capture, with the volume cross-check agreeing to ≈ 5 %.
+- A plausible design change — pricing the fallback from the persisted ring median — is closed on evidence before anyone builds it.
+- Decision 12's separation of the penalty from the residual is confirmed by measurement rather than by argument, and the reason is the opposite of the intuitive one: the fallback's residual is *better*, not worse.
+- Decision 30's proposed sign earns a second use. It is what tells a priceable capture from an unpriceable one here, which is independent evidence that the sector measure should carry it.
+- `fallbackPenalty` is now known to depend on Req 4.5's fallback rate, so two owed figures collapse into one gate at Bucket C.
+
+**Negative:**
+
+- The shipped 0.9 is now known to be wrong on the only evidence in existence and is left in place, so the feature ships a confidence signal that under-reports the fallback's cost by a factor of 35 on a capture like `1785135663727`.
+- The ceiling rests on **one** capture; the second cannot price the fallback at all, and no planned capture supplies the other leg — food resting directly on the surrounding surface, where the honest penalty is 1.
+- The offset is not uniform over the food (7.96–28.61 mm across one capture), so a single multiplicative constant is a coarse instrument even once the mixture is known.
+- Task 26 stays open and task 27 stays blocked behind it; nothing here needs a capture, and nothing here closes a constant.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`fallbackPlane`, `foodOffsetsMm` and two derivation tests), the `supportPlaneFallbackPenalty` comment in `MedataCore/Sources/Confidence/Confidence.swift`, the `SupportPlaneTests` dependency list in `Package.swift`, `design.md`, `prerequisites.md` and task 26's detail. No shipped behaviour changes and no constant's value moves.
+
+---
+
+## Decision 37: The extent bar is re-denominated in millimetres, and Req 5.1 loses its exception
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 35 measured Req 5.1's transfer across depth grids and found it holds — the plane moves 0.835 mm and 0.037 mm across a 2× halving — with one exception. `minAcceptedExtentPx = 24` was the only bar in `admissibility` denominated in **pixels**; every other one is millimetres or a dimensionless fraction, which is precisely what the transfer rests on. A pixel count on the winning inlier component halves when the grid halves, so a surface admitted at 44 px was rejected as a sliver at 22 px by the same constant. Decision 35 recorded the defect and deferred the repair, and the constant's own comment stated the two ways out: "re-derive it against `mmPerPx`, or state the grid it is denominated on, before any capture at another depth resolution is admitted to the corpus."
+
+The gap is not hypothetical. `tools/nutrition5k/ingest.py` pins f = 617 px against the device's measured f_d = 182.033 px, so at equal range the same physical extent spans **3.389×** more pixels on the N5k grid — measured, not assumed. Model-production Bucket C is when N5k fixtures first carry a food mask and reach this guard at all, and at that point a bar tuned on the device grid becomes 3.4× looser there without anything in the code saying so.
+
+Nothing about the repair needs a capture. `mmPerPx = median food depth / f_d` is already computed in `prepare` and already used to convert every ring radius, so the conversion is the module's existing one rather than a new one.
+
+### Decision
+
+**`minAcceptedExtentPx = 24` becomes `minAcceptedExtentMm: Float = 44`.** `PlaneCandidate` gains `extentMm` alongside the raw `extentPx`, computed once at construction as `Float(component.minExtentPx) * g.mmPerPx`; `admissibility` takes `extentMm` and compares it against the new constant. The pixel extent is kept because it is what the component scan produces and what a grid-dependence measurement has to see.
+
+**The value does not move.** 24 px at the corpus's measured `mmPerPx` of 1.8616 and 1.8393 is 44.68 mm and 44.14 mm, so 44 mm is the largest whole millimetre at or below both and **every corpus verdict is unchanged** — at either capture's range the mm bar admits at ≥ 24 px exactly as the pixel bar did.
+
+**The bracket becomes a physical bracket.** Measured extents are 228.973, 141.479, 22.339 mm and 285.084, 80.927, 47.821 mm, so the corpus brackets the constant at **22.339…47.821 mm** where it previously bracketed it at 13…26 px. Those two pixel numbers meant different physical sizes on the two captures, whose `mmPerPx` differ, and meant nothing at all on another grid.
+
+**The transfer is measured, not argued.** Across the same 2× halving Decision 35 used, four surfaces pair across the grids. Their pixel extents halve — 123→61, 76→38, 155→77, 44→22 — while their millimetre extents drift by **1.698, 0.102, 1.839 and 0.000 mm**, at most half a pixel of the halved grid (3.68 mm). Verdict flips fall from one to **zero**. The 44 px → 22 px pair is the exact case Decision 35 named: it now reads 80.927 mm on both grids.
+
+### Rationale
+
+Of the two ways out the constant's comment offered, only one removes the defect. Stating the grid documents that a bar does not transfer; converting it means there is no longer a bar that does not transfer, and Req 5.1's transfer claim stops carrying an exception. That is worth more than the documentation because the exception was load-bearing — Req 5.1 is what makes a β_c constant derived offline valid on device, and a guard whose answer depends on the sensor's grid is exactly the kind of thing that invalidates it silently.
+
+Holding the value fixed while changing its units is the same discipline `minResidueSamples` records: the corpus brackets this constant, it does not set it, so a change of denomination must not smuggle in a change of behaviour. Choosing 44 mm rather than the bracket's midpoint keeps the derivation honest — the number still traces to the pixel value someone once chose, and it is still `[owed]` until a capture session shows what a support surface can legitimately be.
+
+Storing `extentMm` on the candidate rather than passing `mmPerPx` into `admissibility` keeps one conversion in one place. The candidate is built where the geometry is in hand; the guard is called from two sites that would otherwise each have to agree on the conversion.
+
+The repair did not wait for Bucket C because the corpus already demonstrates the failure. A verdict that flips under decimation of the committed slices is evidence in hand, and the N5k ratio only says what the same defect would have cost later.
+
+### Alternatives Considered
+
+- **State the grid the constant is denominated on** - The other option the constant's own comment offered: annotate 24 px as a 256×192 value and require restatement for any other grid - Rejected because it preserves the defect and adds a manual step to every future corpus admission. Req 5.1 would still have to be stated with an exception, and the exception is the part that can invalidate a calibration transfer.
+- **Set the value to the bracket midpoint (~35 mm)** - The corpus brackets 22.3…47.8 mm and 44 sits near the top, with only 3.8 mm of headroom above - Rejected because nothing measured justifies moving the value. The corpus never shows a 47.8 mm candidate deserving admission — that one is rejected on `supportFraction` anyway — so the ceiling is soft and a midpoint would be an invention dressed as a derivation.
+- **Pass `mmPerPx` into `admissibility` and convert at the guard** - Keeps `PlaneCandidate` unchanged - Rejected: two call sites would each have to perform the conversion and agree, where the candidate already knows its own geometry at construction.
+- **Leave it in pixels until Bucket C can measure the N5k leg** - The device grid is fixed at 256×192, so the bar is well defined for every capture that exists today - Rejected on the measurement: decimating the committed slices already flips a verdict, so the defect is demonstrable now and does not need the corpus that would first suffer from it.
+
+### Consequences
+
+**Positive:**
+
+- Req 5.1's transfer claim no longer carries an exception: every bar in `admissibility` is now a millimetre or a dimensionless fraction, and the grid-transfer measurement shows zero verdict flips where it previously showed one.
+- The corpus bracket becomes physical (22.3…47.8 mm) instead of grid-relative (13…26 px), so a capture at another depth resolution can be admitted to the corpus without restating it — which is what `prerequisites.md`'s session will produce.
+- The N5k grid's 3.389× pixel-density difference is now measured and neutralised before Bucket C rather than discovered during it.
+- No shipped behaviour changes on the corpus: the value was chosen so that every candidate keeps its verdict, and the full `SupportPlane` suite passes unchanged.
+- `SupportPlaneCorpusMeasurementTests` now asserts the repair rather than the defect, so a future change that reintroduces a grid-dependent bar fails a test instead of being noticed three decisions later.
+
+**Negative:**
+
+- The constant is still `[owed]`. Re-denominating it does not set it, and 44 mm remains a value traced to a chosen pixel count rather than to a measured property of any support surface.
+- The conversion uses `mmPerPx`, which is derived from the **median food depth**, so the bar now assumes the candidate surface lies at roughly the food's range. That assumption is the same one every ring radius already makes, but it is newly load-bearing for this guard: a candidate surface far behind the food is measured against a `mmPerPx` that is not its own.
+- The headroom above the bar is 3.8 mm on the corpus — the same 2 px as before, restated — so a capture with smaller support surfaces can still close the bracket, and the assertion that guards it now fires in millimetres.
+- `extentPx` and `extentMm` both exist on `PlaneCandidate`. The redundancy is deliberate, but it leaves two numbers where a future reader could reach for the wrong one; only `extentMm` is a bar.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`minAcceptedExtentMm`, `PlaneCandidate.extentMm`, `extractCandidates`, `admissibility`, `fitFoodSupportPlane`), `MedataCore/Tests/SupportPlaneTests/` (`SupportRegionSelectionTests`, `SupportPlaneRegressionSliceTests`, `SupportPlaneCorpusMeasurementTests` — the bracket derivation and the grid-transfer test, which changes sense), `requirements.md` Req 5.1, `design.md` (the `SupportRegion` block, the transfer table, and the owed-numbers section) and task 26's detail. Shipped behaviour is unchanged on the corpus by construction.
+
+---
+
+## Decision 38: The residue floor is re-denominated in millimetres², and the pass count stops reading the grid
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 35 measured Req 5.1's transfer across depth grids and left three riders. Decision 37 closed one of them — `minAcceptedExtentPx`, the only bar in `admissibility` denominated in pixels. The second stands: **`planeCandidateCount` is grid-dependent where the plane is not**, three extraction passes natively against two at half resolution.
+
+The cause is one constant. `extractCandidates` stops when the residue falls below `minResidueSamples = 500`, a raw count of native depth samples. Halving the grid quarters every sample count while the surface those samples stand for is unchanged, so pass 3 — which enters with 581 and 932 samples natively — enters with roughly a quarter of that and is cut. `planeCandidateCount` is persisted (Req 6.1, task 12), so the record of how many candidate planes a capture produced was a property of the sensor's resolution rather than of the scene.
+
+This is the same defect class Decision 37 repaired, and the same conversion repairs it: `mmPerPx` is already computed in `prepare` and already converts every ring radius and the extent bar. Nothing here needs a capture.
+
+### Decision
+
+**`minResidueSamples = 500` becomes `minResidueAreaMm2: Float = 1691`**, converted per capture by `minResidueSamples(mmPerPx:)`, which rounds **up** so the bar is never weaker than the area it stands for. `extractCandidates` converts once per capture and compares residue counts against that.
+
+**The value does not move.** 500 samples at the corpus's measured pixel areas of 3.465 mm² and 3.383 mm² is 1732.6 mm² and 1691.5 mm², so 1691 mm² is the largest whole millimetre² at or below both — the floor is 488 and 500 samples on the two captures, and every corpus pass keeps its verdict.
+
+**The area is the invariant, and it is measured rather than argued.** Pass 1 draws from the annulus, which no removal has touched, and its area agrees across the halving to **0.29 %** and **1.17 %** (36 279.6 → 36 175.7 mm², 42 458.0 → 41 961.0 mm²) where its sample count quarters. Later passes drift further — **5.02 %, 6.43 %** and **4.94 %, 22.75 %** — because each pass removes its own polished inliers within a millimetre band and that removal is resolved on the grid, so the coarser run removes a slightly different set. Every drift is an order below the 4× the sample count moves by.
+
+**The rider closes.** The pass the old floor cut enters with 155 and 180 samples on the halved grid, below the 500 the count floor was and above the 122 and 125 the area floor expresses itself as there. `planeCandidateCount` is now **3 → 3** on both captures, and the plane at the food is unchanged: 0.835 mm and 0.037 mm of movement, the figures Decision 35 recorded.
+
+### Rationale
+
+The choice between denominations is a question about what the floor is *for*, and the two questions it could be asking have different answers. If it is a statistical floor — enough draws for RANSAC — a sample count is right and the grid-dependence is correct behaviour, as it is for `ringMinSamples`, whose 200 comes from binomial separation per sector (Decision 20) and whose refusal at 64×48 is the transfer's legitimate floor. But the residue floor does not ask that: `ccRansac` already guards its own minimum at `LiDARPlaneFitter.minPoints`, and `admissibility` decides whether whatever the pass finds is usable. What is left for this constant to ask is physical — is there enough **surface** left that another pass could find something — and surface is area.
+
+Holding the value while changing its units is the discipline Decision 37 records and `minResidueSamples` itself already carried from Decision 32: the corpus brackets this constant, it does not set it, so a change of denomination must not smuggle in a change of behaviour. 1691 mm² is chosen the same way 44 mm was — the largest whole unit at or below the shipped value on every corpus capture — so the bar is never stricter than the one it replaces.
+
+The repair did not wait for the capture session because the corpus already demonstrates the failure, on the committed slices, at a resolution one halving down. The session will supply captures at whatever grid the device gives; a floor that means a different physical thing on each of them is a floor that cannot be set by them.
+
+### Alternatives Considered
+
+- **Record the grid-dependence and leave the constant in samples** - Decision 35's own resolution: note that `planeCandidateCount` must be read as a property of resolution and move on - Rejected for the reason Decision 37 gives: documenting a quantity that does not transfer preserves the defect and leaves Req 5.1's transfer claim carrying an exception. The field is persisted, so the exception would have to be carried by every future reader of the estimation record, not just by this design.
+- **Denominate the floor as a fraction of the annulus** - The residue-to-annulus ratio is also grid-stable (0.316/0.334 and 0.224/0.215 entering pass 2) and needs no `mmPerPx` - Rejected because it makes the floor depend on food size: a large plate has a large annulus, so the same physical scrap of surface would be sufficient on a small capture and insufficient on a big one. Area is the quantity the question is actually about.
+- **Derive the value from `minAcceptedExtentMm` rather than holding it** - A candidate is admissible only if its component spans 44 mm in both axes, so a residue smaller than 44² = 1936 mm² looks like it cannot produce one - Rejected because the bound is not sound: a component whose bounding box is 44 × 44 mm need not fill it — a diagonal run of ~24 depth pixels spans the same box — so a residue below 1936 mm² can still yield an admissible candidate. That 1691 mm² sits just under 1936 mm² is a corroboration that the floor is permissive relative to the extent bar, not a derivation of it.
+- **Set the floor at the measured ceiling of 2013 mm²** - The corpus shows exactly where a floor starts costing a pass - Rejected as the circularity Req 3.7 forbids, in the same shape Decision 32 rejected raising it to 1200 samples: 2013 mm² is where a floor begins cutting passes the corpus produces, not where a pass stops being worth running.
+
+### Consequences
+
+**Positive:**
+
+- Req 5.1's second rider closes: `planeCandidateCount` is 3 → 3 across a 2× halving where it was 3 → 2, so a persisted field now records a property of the scene.
+- The bracket becomes physical — bounded above at **2013 mm²** — where 581 samples meant different physical areas on the two captures and nothing at all on another grid.
+- Only one Decision 35 rider is left, the ring's sample floor, and that one is correct as it stands: `ringMinSamples` is a statistical requirement per sector, so its refusal at 64×48 is the transfer's honest resolution floor rather than a denomination defect.
+- The measurement distinguishes what the grid does to a fixed set of surface (0.3 %, 1.2 %) from what sequential inlier removal does on top of it (up to 22.7 %), which is a figure any future change to the removal band can be checked against.
+- N5k's 3.389× pixel-density gap is neutralised for this constant as well as for the extent bar, before Bucket C rather than during it.
+
+**Negative:**
+
+- The constant is still `[owed]`. Re-denominating it does not set it, and 1691 mm² remains a value traced to a chosen sample count rather than to any measured property of a surface worth another pass.
+- The margin above the floor narrows on coarser grids: the smallest residue clears it by 1.86× natively and **1.44×** at half resolution, so the halved grid is closer to losing the pass than the native one is.
+- A third pass now runs on 155 samples where it previously ran on 581. Nothing in the corpus is decided by it — both third-pass candidates are rejected on `extent` and `supportFraction` — but a RANSAC pass over 155 samples is a weaker draw than the count floor used to permit, and no capture in hand exercises what it produces.
+- `minResidueAreaMm2` needs a conversion where `minResidueSamples` was directly comparable to `residueCount`, so a reader of `extractCandidates` has one more indirection between the constant and the guard.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`minResidueAreaMm2`, `minResidueSamples(mmPerPx:)`, `extractCandidates`, the `PlaneCandidate.residueCount` comment), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`residueFloorIsBoundedFromAboveOnly` restated in mm², the new `residueAreaTransfersAcrossAGridHalving`, and the candidate-count assertion in `planeTransfersAcrossADepthGridHalving`, which changes sense), `design.md`, `docs/agent-notes/support-plane-fit.md` and task 26's detail. Shipped behaviour is unchanged on the corpus by construction; on a coarser grid the pass count rises to what the native grid already produced.
+
+---
+
+## Decision 39: The smear-tracking inner radius is measured and refused, and the envelope stays a range bound
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decisions 37 and 38 each found a bar whose denomination made it read the depth grid rather than the scene, and repaired it by converting through `mmPerPx`. One instruction of the same shape was still outstanding, and it was written as an obligation rather than a proposal. `ringInnerMm = 8` stands for ARKit's ~4 px depth smear at the food boundary, and Decision 29 measured that the smear spans 7.45 mm and 7.36 mm on the two committed slices — inside 8 mm, but by under 8 %. Since a smear is a fixed count of pixels, `smear_mm = 4z/f_d`, so 8 mm covers capture range only to about 365 mm. Decision 29 concluded, and both `SupportRegion`'s own comment and the `prerequisites.md` item of the same name repeat, that the radius "must become `max(ringInnerMm, 4 × mmPerPx)`" before any capture beyond that range is trusted.
+
+Taken at face value this is the third instance of the Decision 37/38 pattern and the last one available: a bar that means a different physical thing on a different grid, with the conversion already computed in `prepare` and used by every other radius. The two prior repairs each held their value while changing their units, and each closed a rider on Req 5.1. This one was expected to do the same.
+
+It does not, and the difference is what `mmPerPx` is made of. `mmPerPx` is `z/f_d`; coarsening the grid divides f_d exactly as increasing the range multiplies z, so the quantity cannot tell the two apart. Only one of them moves the smear. A coarser grid subsamples a map ARKit has *already* smoothed, so the physical smear is unchanged while `4 × mmPerPx` doubles.
+
+### Decision
+
+**The repair is rejected and the instruction is withdrawn.** `ringInnerMm` stays at a fixed 8 mm with no `mmPerPx` term. The envelope it carries is restated as what it is — a **range** bound of `ringInnerMm × f_d / 4`, computed from the corpus at **364.1 mm** and **366.4 mm** — and left to the capture session rather than paid for in code.
+
+**The session gains one recording requirement.** `prerequisites.md` now asks for the capture range alongside the plate diameter, the surface material and the depth resolution it already asks for. This is the cheapest of the four to record and the only one with a hard bound already measured against it.
+
+**The measurement is committed** as `smearTrackingInnerRadiusCollapsesTheRing` and `smearEnvelopeIsARangeBoundTheCorpusNearlyReaches`, so the rejection is reproducible and the instruction cannot be re-derived from the same reasoning a third time.
+
+### Rationale
+
+The measurement is one-sided at corpus range and decisive one halving down. Natively the repair is a no-op — `max` picks the constant on both captures, because the smear is 7.45 and 7.36 mm against 8 — so nothing in the corpus argues *for* it either. At 128 px the smear-tracking radius reads **14.9 mm** and **14.7 mm** for a physical smear still near 7.4 mm, and the cost is structural before it is statistical: the radius eats 6.9 mm of a 17 mm ring, so the three bands it leaves are **3.37 mm and 3.43 mm wide against depth pixels of 3.73 mm and 3.68 mm**. Each band is narrower than one pixel. Decision 14 resolved the ring radially in order to tell the surface immediately beside the food from the one beyond it, and a band the grid cannot resolve cannot make that distinction whatever its samples total.
+
+What the sample counts then do is confirm it. `1785135663727` loses ring feasibility outright, its inner band falling to **166** against `ringMinSamples = 200`, and `1785901032716` clears the floor by nothing at all at exactly **200**. Two captures of the same scene type, taken 2 mm of range apart, landing either side of the bar is the signature of a quantisation artefact rather than of support. Both clear it comfortably under the shipped radius, at [313, 292, 299] and [322, 361, 323] — and that is the grid on which Req 5.1's documented 2× transfer envelope rests, where the plane moves 0.835 mm and 0.037 mm. Obeying the instruction would spend a measured transfer on a smear the grid does not have.
+
+Refusing it leaves the range envelope open, and that is the honest place for it. `f_d` is the sensor's and does not vary; `z` is the photographer's and does. The corpus stands at **93.1 %** and **92.0 %** of its own envelope on two captures framed as tightly as flat bread on a plate allows, so the headroom is under 8 % on the most favourable scenes the feature has. A session that shoots one plate from a little further back crosses it, and nothing in the record would say so — which makes recording the range a prerequisite of closing the constant rather than a nicety.
+
+This also draws the line the previous two decisions did not have to. Decision 38 already noted that `ringMinSamples`'s refusal at 64×48 is "the transfer's honest resolution floor and not a denomination defect", because a statistical requirement per sector is legitimately grid-dependent. The same test applies here and gives the same answer for a different reason: `ringInnerMm` is not grid-dependent at all, it is *range*-dependent, and `mmPerPx` is the wrong instrument because it conflates the two. Not every constant that can be multiplied by `mmPerPx` should be.
+
+### Alternatives Considered
+
+- **Implement `max(ringInnerMm, 4 × mmPerPx)` as Decision 29 instructed** - Take the third instance of the Decision 37/38 pattern and close the envelope in code - Rejected on the measurement: it is a no-op at corpus range and costs ring feasibility on one of two captures at 128 px, leaving three sub-pixel bands on both. It buys nothing measurable and spends Req 5.1's 2× transfer envelope.
+- **Refuse the fit outright when `4 × mmPerPx` exceeds `ringInnerMm`** - Make the envelope a feasibility guard rather than a moving radius, in the shape Decision 38 endorsed for `ringMinSamples` - Rejected because it refuses on the same conflated quantity: it would reject the 128 px grid, where the plane demonstrably transfers within 0.9 mm and all three bands are full, and `gridTransferRefusesBelowTheRingSampleFloor` already asserts that fit as feasible. A guard that fires on the transfer test's passing case is measuring the wrong thing.
+- **Key the envelope on the native grid width rather than on `mmPerPx`** - Recover `z` by assuming 256×192 and compare that against the envelope, so range and resolution are separated - Rejected as an assumption dressed as a measurement. `SupportRegion` sees one depth map and cannot know whether a coarse one is a subsampled ARKit frame or a coarser sensor's native output; hard-coding 256×192 would break exactly the N5k grid Decision 37 went out of its way to neutralise.
+- **Raise `ringInnerMm` to cover a longer range unconditionally** - Set it at, say, 12 mm so the envelope reaches ~545 mm - Rejected because it is the circularity Req 3.7 forbids, applied to a `[measured]` constant. Nothing measures a scene that needs 12 mm; it would narrow the ring by a quarter on every capture in hand to buy an envelope no capture has ever approached, and `ringOuterMm` is itself `[owed]` against a restated rule (Decision 33), so the ring's width is not a free parameter.
+- **Leave the instruction standing and record the doubt** - Note in the decision log that the repair may be wrong and defer - Rejected because the instruction appears in three places as a "must", and the next session to look for a Decision 37/38-shaped repair would find it and implement it. The measurement exists and settles it; leaving it open invites the wrong work.
+
+### Consequences
+
+**Positive:**
+
+- An instruction that reads as an obvious repair, and would have cost Req 5.1's measured 2× transfer envelope, is refused on measurement rather than followed on pattern.
+- The envelope is now a computed figure — `ringInnerMm × f_d / 4`, 364.1 mm and 366.4 mm — asserted against the corpus rather than a "≈ 365 mm" quoted in prose across three documents.
+- The corpus's headroom is stated as a fraction, 93.1 % and 92.0 %, which says the constant is near its bound in a way "inside 8 mm on both" does not.
+- The capture session gains a recording requirement that costs one number per capture and is the only thing that can close the envelope.
+- The limit of the `mmPerPx` conversion is now recorded. Decisions 37 and 38 established it as the repair for grid dependence; this establishes that it cannot repair range dependence, and says why.
+
+**Negative:**
+
+- `ringInnerMm` remains correct only below ~365 mm, and the feature ships with that gap open. Nothing in the shipped path detects a capture beyond it or marks the ring measure as contaminated.
+- The rejection rests on two captures 2 mm of range apart, both flat bread on a white plate. The sub-pixel-band argument is structural and does not depend on them, but the 166-against-200 figure that makes it concrete does.
+- One more thing is added to a capture session that already carries plate diameter, food placement, surface material, depth resolution, weighed mass, class and vessel per capture.
+- A future device with a different f_d moves the envelope, and nothing recomputes it outside the test.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringInnerMm` comment, which stated the repair as required), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`smearTrackingInnerRadiusCollapsesTheRing`, `smearEnvelopeIsARangeBoundTheCorpusNearlyReaches`, and the `geometry(_:decimation:)` and `bandCounts(geometry:innerMm:)` helpers), `prerequisites.md` (the `ringInnerMm` item and the capture-recording list), `design.md` (Stated limits, Req 2.5) and task 26's detail. **No shipped behaviour changes at any grid or range** — the decision is to leave a constant alone, and the measurement is what says that is the right thing to do.
+
+---
+## Decision 40: The sector rule is stated over failing sectors, and its bar is inherited rather than owed
+
+**Date**: 2026-08-06
+**Status**: accepted (settles Decision 30's proposal; supersedes its disposition, not its finding)
+
+### Context
+
+Task 26's sector trio — `ringSectorCount`, `sectorSupportMin`, `minSupportingSectors` — is blocked on two things at once. Captures 1–6 are one. Decision 30 is the other: it measured that the supporting-sector count takes `|height|`, so a correct plane whose ring has run off the plate and a table plane with part of its ring still on the plate both score **5 of 8**, and no `minSupportingSectors` separates them. It proposed carrying the sign, declined to state a rule, and gave one reason for declining — "a rule for rejecting on signed sectors needs a threshold, and that threshold has the same evidence problem as every other `[owed]` constant".
+
+Every other remaining item in task 26 waits on the capture session or on model-production Bucket C. This proposal is the one blocker that is a design question rather than a missing scene, and the corpus already holds both of the failure modes it is about — which is how Decision 30 found them. So the question of whether a signed rule needs a threshold of its own is answerable now.
+
+Decision 33 also arrived after Decision 30 and bears on it. The support margin is 4 mm in the tightest sector of both captures, the plate ends inside the ring in five of eight directions, and only 4 of 8 sectors reach the inner band's 13.7 mm. A low supporting count is therefore in part a statement about plate size, which is exactly the reading the sign is needed to separate from a wrong plane.
+
+### Decision
+
+The sector rule is: **a failing sector — one below `sectorSupportMin` — whose signed inner-band median exceeds `+ringBandMm` is a *crossed* sector, and a candidate is rejected when more than `maxCrossedSectors` of its sectors are crossed.** A failing sector reading below `−ringBandMm` is an *escaped* sector and is not grounds for rejection: the support surface ended, which is plate geometry, not a wrong plane.
+
+The magnitude bar is `ringBandMm`, `[inherited]` from `LiDARPlaneFitter.inlierBandMm` and already the bar that decides which samples in those same sectors count as supported. **No new millimetre constant is created.** `maxCrossedSectors` is a new `[owed]` count, bracketed **0…2** by the corpus and set by prerequisites capture 6.
+
+Shipped code is unchanged. `SupportRegion.ringStatistics` still computes the unsigned count and `admissibility` still reads `minSupportingSectors`; the rule above is recorded with its measured basis and lands with the capture that sets its count, because shipping it now would mean asserting `maxCrossedSectors`, which is what Req 3.7 forbids for exactly these constants.
+
+### Rationale
+
+Measured over all six candidate planes on the two committed captures, the sign classifies cleanly and the two intended candidates are pure:
+
+| Capture | Candidate | Supporting | Failing-sector medians | Crossed | Escaped |
+|---|---|---|---|---|---|
+| `1785135663727` | plate top (ring median −0.93 mm) | 5 of 8 | −6.79, −32.56, −9.68 mm | 0 | 3 |
+| `1785901032716` | table (ring median +3.04 mm) | 5 of 8 | +16.60, +19.80, +18.02 mm | 3 | 0 |
+
+The supporting counts agree exactly, which is Decision 30's premise; the crossed counts are 0 and 3. Neither capture's intended candidate mixes signs.
+
+The threshold objection fails on the magnitude axis because the separating window is wide and the design already owns a bar inside it. The plate candidate's highest failing median is **−6.794 mm** and the table candidate's lowest is **+16.603 mm**: any bar in that **23.397 mm** window separates them, and `ringBandMm = 5` sits 11.794 mm above the floor and 11.603 mm below the ceiling — near the centre, and not chosen to be there.
+
+Restricting the rule to *failing* sectors is what earns that. Applied to every sector, the window is the plate candidate's highest median of +3.846 mm against the table candidate's lowest crossed median of +5.974 mm — **2.128 mm** wide, a tenth of the other, with `ringBandMm` inside it by about a millimetre on each side. A bar surviving in a 2 mm window on two captures is being fitted to the corpus; one surviving in a 23 mm window is being inherited. The `sectorSupportMin` gate is therefore doing real work in the rule and is not redundant.
+
+The rule is also the per-arc form of a guard the design already has and already justifies. `ringMedianMaxMm = 5` is the signed whole-ring admission bar Decision 22 restored precisely because "the support fraction is unsigned and cannot separate a plane above the ring from one below it". On the table candidate that whole-ring guard reads **+3.04 mm** and does not fire — inside ±5 — while the same statistic at the same bar, computed per arc, reads +16.6, +19.8 and +18.0 in three sectors. This is Decision 18's silent-failure case measured rather than argued: an aggregate median of approximately zero over a ring that has crossed.
+
+The count stays owed because the corpus bounds it two-sidedly but loosely — 0 admits the plate candidate, and anything above 2 admits the table one, so 0, 1 and 2 all survive. Three values is a bracket, not a derivation. Capture 6, food filling a small plate to within ~10 mm of the edge, is the scene that produces a correct fit with several genuinely escaped sectors, and it is what says how many crossed sectors a correct fit can carry.
+
+Not implementing follows from the same place. The rule needs one constant, that constant is owed, and Req 3.7 bans shipping it asserted. What the session needs in order to set it — the signed per-sector medians — the measurement pass already dumps, so nothing is gained by moving the statistic into `RingStatistics` before there is a count to compare it against, and Decision 30's cost note stands: it would widen a persisted Req 6.4 field.
+
+### Alternatives Considered
+
+- **Accept Decision 30 and implement the guard now, choosing `maxCrossedSectors`** - Replace `minSupportingSectors` with the crossed-sector ceiling in this task, since the corpus shows the direction is right - Rejected because choosing among 0, 1 and 2 is inventing evidence, and Req 3.7 names the sector constants specifically. It would also make the plate candidate admissible on a capture with no weighed ground truth, which is the false positive Decision 31 committed a fixture to trap.
+- **State the rule over all sectors rather than failing ones** - Simpler: drop `sectorSupportMin` from the rule and count any sector whose median exceeds `+ringBandMm` - Rejected on the measured window. It separates the corpus (0 against 4) but only within 2.128 mm, so `ringBandMm` would be surviving by luck rather than by inheritance and the bar would become owed after all.
+- **Reject on sign alone, with no magnitude bar** - A failing sector reading positive is crossed, whatever its size - Rejected because it has no noise floor. Per-sample σ on a flat surface measures 3.44 mm and 6.98 mm (Decision 29), so a sector median a millimetre above zero is not evidence of anything, and the rule would fire on noise wherever a sector fails for coverage reasons.
+- **Leave Decision 30 proposed until the captures arrive** - Change nothing; let the session settle the design question and the constants together - Rejected because it spends the session's evidence twice. The session would arrive at a measure whose shape was still unfixed, and the magnitude question it would then answer is one the corpus in hand answers already.
+- **Keep `minSupportingSectors` and add the crossed-sector ceiling beside it** - Two sector guards, one floor and one ceiling - Rejected as unreachable rather than wrong: Decision 33 measured that only 4 of 8 sectors reach the inner band's 13.7 mm on either capture, so a floor of 6 cannot be met by plate geometry before support is consulted at all. Retaining it would keep a bar no capture can clear.
+
+### Consequences
+
+**Positive:**
+
+- The sector trio's non-capture blocker is removed. Task 26's detail said the trio waits on captures 1–6 *and* on Decision 30's proposal; it now waits on captures only.
+- One axis of the rule costs no new constant. The magnitude bar is inherited from `ringBandMm` with 11.6 mm of headroom on each side, so the capture session has one count to set rather than a count and a threshold.
+- The rule is stated, so capture 6 has a defined quantity to produce rather than a proposal to adjudicate, and the measurement pass already dumps the statistic it needs.
+- Decision 18's silent-failure case is measured end to end for the first time: an aggregate ring median of +3.04 mm — inside `ringMedianMaxMm` — over three sectors reading +16.6 to +19.8 mm.
+- Applying the rule across all six corpus candidates rather than the two intended ones shows it is not degenerate: one plane reads 6 crossed and 0 escaped, one reads 0 and 7, and one is genuinely mixed at 2 and 4.
+
+**Negative:**
+
+- Req 3.6's guard still ships in its blind form. The shipped `minSupportingSectors = 6` is both asserted and, per Decision 33, unreachable, and this decision does not change that — it records what will replace it.
+- One `[owed]` constant is traded for another. `minSupportingSectors` and `sectorSupportMin` do not leave the list, and `maxCrossedSectors` joins it; the net count of owed sector constants rises until capture 6 arrives.
+- The classification rests on two captures and six planes, both captures flat bread on a white plate. The sign separation is 23 mm and unambiguous, but "no correct fit carries a crossed sector" is asserted of scenes the corpus does not contain — a rimmed plate is the obvious counter-case, where a correct plane's ring reaches a rim that is genuinely above it, and that is capture 3/4's scene rather than capture 6's.
+- Implementing later means `RingStatistics` and the Req 6.4 persisted fields widen after task 12 settled them, as Decision 30 noted.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`failingSectorSignSeparatesWhatTheCountCannot` and the `SectorSigns` helper), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md` (the owed-numbers section and the `SupportRegion` sketch), `prerequisites.md` (capture 6's second job), `decision_log.md` (Decision 30's status) and task 26's detail. **No shipped behaviour changes**: no constant's value moves and no guard is rewired.
+
+---
+
+## Decision 41: The committed scenes bound six owed constants, and on one they contradict the corpus
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`prerequisites.md` has carried one open item since before task 8 that is explicitly **not** a hardware gate: "set the guard constants before task 8 hard-codes them", flagged because `tasks.md` orders task 8 — `fitFoodSupportPlane`, which carries every threshold — ahead of task 26, so "the numbers get baked into code and tests before anything measures them". Task 8 shipped long ago, so the item can no longer be answered by reordering. It is the last item on the list that no capture and no Bucket C run unblocks.
+
+What replaced the reorder was a provenance discipline: every `SupportRegion` constant is annotated `[derived]`, `[measured]`, `[inherited]` or `[owed]`, Req 3.7 bans shipping the sector constants asserted, and the regression slices were built to assert only *named* planes so that "nothing in it moves when task 26 sets the `[owed]` constants" (design, §Regression fixtures). That covers the slices. It says nothing about the twenty-eight references to owed constants in `SupportRegionSelectionTests`, `SupportRegionRingTests`, `SupportRegionCandidateTests` and `PlateTopSupportPlaneTests`.
+
+Those references are all **symbolic** — `SupportRegion.ringSupportMin`, never a literal — which looks like insulation and is not. Two shapes hide behind it. A test that expresses its *input* in terms of the constant (`extentMm: minAcceptedExtentMm - 1`) tracks it wherever it goes. A test that fixes a synthetic scene and asserts the scene's *measured* value against the constant flips the moment the constant crosses that value. `SupportRegionSelectionTests` says so in prose — "the window in which the aggregate passes and the sectors fail is therefore narrow, and this scene sits inside it by construction" — without ever measuring how narrow, or against what.
+
+### Decision
+
+The committed suite is recorded as a **second, independent source of bounds** on the owed constants, measured rather than assumed, and is now the binding constraint on three of them. `committedScenesBoundTheOwedConstants` computes, per constant, the interval over which every committed assertion keeps its verdict:
+
+| Constant | Suite interval | Corpus bracket | Which binds |
+|---|---|---|---|
+| `ringSupportMin` | ≤ **0.676** | none — needs a matte capture (Decision 29) | suite (the only ceiling that exists) |
+| `minSupportingSectors` | **6…7** | ≤ **5** (Decision 33) | **they contradict** |
+| `bandStepMaxMm` | **0.024…9.288** mm | no floor at all (Decision 34) | suite (the only floor that exists) |
+| `supportVisibilityMin` | ≤ **2.667** | ≥ 0.246 (Decision 34) | two-sided for the first time |
+| `foodEnvelopeMinMm` | **−6.758…8.233** mm | ≤ 25.793 mm (Decision 34) | **suite, 3.1× tighter** |
+| `escapeBandMm` | ≥ **14.868** mm | reaches +5.750 mm (Decision 34) | **suite, 2.6× higher** |
+
+No constant's value moves and no shipped code changes. What changes is that the capture session now has to satisfy two constraint sets rather than one, and one of the two owes a scene change.
+
+### Rationale
+
+A scene bounds a constant only where a committed assertion would change verdict, which is not the same as where the scene happens to satisfy the guard. The bowl fails almost every guard, but the only assertion made about it is on its inner→mid step, so it caps `bandStepMaxMm` and bounds nothing else. Encoding participation per assertion rather than per scene is what makes the intervals real; the first cut of this measurement tagged each scene with the one guard it exists to fire and produced nonsense — a ceiling of 0.000 on `ringSupportMin`, an empty sector interval — because the bowl and the covered well were counted as passing guards no test asks them to pass.
+
+The eight scenes and what each is required to do:
+
+| Scene | Fraction | Sectors | Inner→mid | Visibility | Envelope | Annulus | Required |
+|---|---|---|---|---|---|---|---|
+| plate above table | 1.000 | 8 | 0.021 | 4.016 | 8.242 | −19.753 | fit succeeds |
+| flat surface | 1.000 | 8 | 0.024 | 8.188 | 8.242 | 0.005 | fit succeeds |
+| rim in the outer band | 1.000 | 8 | 0.021 | 2.667 | 8.242 | 14.868 | fit succeeds |
+| overhanging food | 0.676 | 7 | −0.024 | 2.704 | 8.233 | −19.857 | fit succeeds |
+| food across the plate edge | 0.681 | **5** | 0.009 | 5.626 | 28.242 | 0.171 | every guard passes, verdict `.sectors` |
+| rim in the mid band | 0.770 | 8 | 14.923 | 1.309 | 8.242 | 14.950 | verdict `.bandStep` |
+| bowl | 0.000 | 0 | 9.288 | 0.376 | 8.242 | 48.539 | step exceeds the bar |
+| fully covered well | 1.000 | 8 | 0.018 | 3.835 | **−6.758** | −0.054 | envelope below the floor |
+
+**The contradiction.** Decision 33 measured that the plate ends inside the 8–25 mm ring in five of eight directions on both captures, so a real intended candidate scores **5 of 8** and `minSupportingSectors` has to come down to admit it — Decision 40 records the same figure and calls a floor of 6 "unreachable by plate geometry before support is consulted at all". The suite's floor is **6**, and it is 6 for a reason that is not arbitrary: the silent-failure scene the sector guard exists to reject *also* scores 5. Both the case the guard must admit and the case it must reject sit at the same count, which is precisely Decision 30's finding — the unsigned count cannot separate them — now showing up as a test-suite constraint rather than a corpus one. No value of `minSupportingSectors` satisfies both, so the session cannot set this constant without the scene moving with it.
+
+**The two the suite binds tighter.** `foodEnvelopeMinMm`'s corpus ceiling is 25.793 mm, from the intended candidate's own envelope; the suite's is **8.233 mm**, from the overhanging-food scene, 3.1× lower. `escapeBandMm`'s corpus evidence tops out at +5.750 mm; the suite floors it at **14.868 mm**, from the rim-in-the-outer-band scene whose annulus median sits on the rim. A session setting either against captures alone would land inside the corpus's bracket and outside the suite's, and would discover this only when the suite went red.
+
+**The two the suite bounds where the corpus could not.** Decision 29 concluded `ringSupportMin` "cannot be derived until a matte-surface capture characterises the spread" — the suite supplies a ceiling of 0.676 regardless, from the overhanging-food scene, which the shipped 0.6 clears by 0.076. Decision 34 found every corpus inner→mid step to be a fall, so the corpus gives `bandStepMaxMm` no floor at all — the suite gives 0.024 mm, and a ceiling of 9.288 mm from the bowl, making it two-sided for the first time.
+
+The measurement recomputes the corpus figures from `Self.measurements` rather than quoting Decisions 33 and 34, and reproduces 25.793 mm and +5.750 mm exactly, so the two constraint sets are compared on one run rather than across documents.
+
+### Alternatives Considered
+
+- **Loosen the silent-failure scene now so the sector interval admits 5** - Move `foodAcrossPlateEdge`'s `edgeOffsetPx` until the scene scores 4 or fewer, clearing room for `minSupportingSectors = 5` - Rejected because it fixes the symptom in the wrong place. Decision 40 already settled that the unsigned count is the wrong measure and the crossed-sector rule replaces it; re-tuning the scene to prop up a guard that is being retired spends effort on both and buys nothing the rule does not.
+- **Treat the suite bounds as advisory and let the session set constants from captures alone** - Record the intervals in the decision log and fix the tests afterwards if they break - Rejected because it inverts the evidence. A committed assertion that a correct fit is admitted is a claim about the feature, not scaffolding; discovering the conflict when the suite goes red would put the session under pressure to change whichever side is cheaper rather than whichever side is wrong.
+- **Delete the coupled assertions so the constants are free** - Strip the `>= SupportRegion.ringSupportMin`-style assertions from the scene tests, leaving only the verdict assertions - Rejected because those assertions are what makes the silent-failure test mean anything: "every guard except sectors reads healthy" is the whole content of Decision 18's case, and without them the test only says a scene is rejected, not that it is rejected for the reason that matters.
+- **Assert the intervals without comparing them to the corpus** - Report the suite's brackets and stop - Rejected as half the finding. Three of the six only matter because they sit on the other side of the corpus's bracket, and that is not visible from either source alone.
+
+### Consequences
+
+**Positive:**
+
+- The last non-hardware item on `prerequisites.md` is answered, and answered with a measurement rather than a reorder.
+- The capture session gains ceilings for two constants the corpus could not bound at all (`ringSupportMin`, `bandStepMaxMm`'s floor), so fewer constants arrive at the sitting completely unbounded.
+- The `minSupportingSectors` conflict is found **before** the sitting rather than after, when its resolution would compete with the session's own evidence.
+- The comparison is reproducible in one run: the corpus figures are recomputed, not quoted, so the two constraint sets cannot drift apart in the documents.
+- The measurement is written against the assertions rather than the scenes, so a test that stops asserting a guard automatically stops bounding its constant.
+
+**Negative:**
+
+- Six owed constants now carry two brackets each, and the documents have to keep both current — a maintenance surface that did not exist before.
+- The intervals are properties of eight synthetic scenes at one range on one grid, so they are not evidence about the world in the way the corpus is. They constrain what the session may set without also editing tests; they do not say what is correct.
+- The `minSupportingSectors` collision is recorded, not resolved. ~~Task 26 gains a dependency — the scene must move when the crossed-sector rule lands — that Decision 40 did not anticipate.~~ **Superseded by Decision 43**: measured against the same eight scenes, the crossed-sector rule's joint interval is 0…2 where the count's is empty, so no committed scene moves when the rule lands. The collision is a property of the unsigned count alone.
+- `bandStepMaxMm`'s suite floor of 0.024 mm is nearly vacuous, being sensor noise on a flat scene; it is a floor in form more than in force.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`committedScenesBoundTheOwedConstants`, `SceneReading` and `sceneReadings`), `design.md` (the owed-numbers section), `prerequisites.md` (the "during implementation" item, now answered) and task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
+
+---
+
+## Decision 42: The fallback rate is a readout of the owed constants, and an inherited bar is the only thing between a 0 % rate and Decision 18's failure
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Req 4.5 asks for a fallback rate above which this feature counts as a defect rather than a success, "since a change where every capture falls back satisfies 4.1–4.3 while delivering nothing". `prerequisites.md` has carried the open question as a choice of **denominator**: N5k has none until model-production Bucket C (pre-checkpoint ingestion stamps every plate `mixture`, so `single_dominant: 0` and `fitFoodSupportPlane` never runs), and the device corpus is two captures, far too small for a percentage. Decision 36 put `fallbackPenalty` behind the same gate, because a penalty prices a mixture whose weight is this rate.
+
+`SupportPlaneRegressionSliceTests` already records that both committed captures fall back today, and that every candidate rejection on both is on a constant marked `[owed]`. What nobody had measured is what the rate is a function OF. If it moves with the owed constants and with nothing else, then the denominator is not the first problem with Req 4.5 — a threshold stated before the constants are set grades the placeholders, which is exactly the circularity Req 3.7 forbids for the sector trio, arriving at Req 4.5 by another route.
+
+### Decision
+
+Req 4.5's threshold stays deferred, and the recorded reason is now the stronger one. On the corpus that exists the fallback rate takes **every value it can take** as the owed constants move, so it is recorded as a function rather than as a number, with two figures pinned: the rate the shipped placeholders produce, and the rate at the most permissive setting the owed constants could ever be given.
+
+| Setting | Fallback rate | Plane selected |
+|---|---|---|
+| shipped placeholders | **1.000** (2 of 2) | none — both captures fall back |
+| `minSupportingSectors` ≤ 5, all else shipped | **0.500** | `1785135663727` selects its plate top |
+| every owed bar at its loosest | **0.000** | both captures select the candidate nearest Req 3.1's zero |
+
+`ringMedianMaxMm` — `[inherited]` from `ringBandMm`, not owed — is what rejects every remaining candidate at the loosest setting, and it clears the closest of them by **0.338 mm**. No constant's value moves and no shipped code changes.
+
+### Rationale
+
+**The rate is a readout of the placeholders, not of the algorithm.** Swept alone with everything else shipped, `minSupportingSectors` produces `8→1.000 7→1.000 6→1.000 5→0.500 4→0.500 3→0.500 2→0.500 1→0.500 0→0.500`: one owed bar, crossing the 5 of 8 sectors Decision 33 measured as what a real intended candidate scores, halves the rate on its own, and nothing below 5 moves it again because a second owed bar (`ringSupportMin`) stands in front of the other capture. Set every owed bar as permissive as it could ever be and the rate is 0. A threshold asserted today would therefore be satisfied or violated by the placeholders alone, on captures that never changed.
+
+**And the rate reaching zero does not cost a wrong plane.** At the loosest owed setting each capture selects the candidate whose inner-band median is nearest zero — **−0.521 mm** on `1785135663727` and **−1.023 mm** on `1785901032716` — which is Req 3.1's own signature of the surface the food rests on. So the geometry finds the right surface on both captures, nothing structural is wrong, and the whole distance between a 100 % fallback rate and a 0 % one is constants the committed suite currently contradicts (Decision 41).
+
+**What holds the wrong planes out is not owed, and its margin is 0.338 mm.** Every candidate rejected at the loosest setting is rejected by `ringMedianMaxMm`, and the closest is the table candidate on `1785901032716` — Decision 40's crossed-sector case, three of its sectors reading +16.6 to +19.8 mm — whose inner band reads **5.338 mm against a 5 mm bar**, 6.8 % of it. That is the entire separation between this corpus at a 0 % fallback rate and the Decision 18 silent failure the feature exists to prevent. `ringMedianMaxMm` was never sized for that job: Decision 22 gave it the Req 3.2 signed-admission role, and it is `ringBandMm` reused. It is standing in for the sector guard by accident of arithmetic.
+
+**The 0.000 is a bound, not a proposal.** On `1785901032716` the correct plane is selected there with support **0.362 over 2 of 8 sectors** — thinner than any bar the design would plausibly set, and rejected by the shipped 0.6 and 6 with room to spare. That capture's plate ends inside the 8–25 mm ring in five of eight directions (Decision 33), so its right plane is admissible only when the guards are effectively off. Read from the rate's side, this is the same finding: the corpus cannot simultaneously have a low fallback rate and meaningful guards, and only a capture whose plate extends further past the food can. That is what the session's plate-size variation is for.
+
+**So Req 4.5's own denominator problem is real but second.** Both blockers now stand: there is no corpus that can carry a percentage until Bucket C, and the rate on the corpus that exists is not yet a measurement of anything. The `prerequisites.md` item stays open with both reasons rather than being closed on one.
+
+### Alternatives Considered
+
+- **Set the threshold from the device corpus now** - Take "below 100 %" or "below 50 %" as Req 4.5's bar, since both figures are measured - Rejected because either is met by lowering one owed bar and says nothing about correctness. A rate of 0.500 is reachable by setting `minSupportingSectors` to 5, which Decision 41 records the committed suite as forbidding; a bar that a forbidden setting satisfies is not grading the feature.
+- **Close the prerequisites item by splitting Req 4.5 into an N5k rate and a device count** - The two-figure form that item has been carrying - Rejected as premature rather than wrong. It is still the defensible shape, but this measurement says the denominator is not the only blocker, and closing the item on half the reason would lose the other half.
+- **Widen `ringMedianMaxMm` so the 0.338 mm margin is comfortable** - Raise the bar, or re-derive it against the table candidate - Rejected because nothing measured supports moving it and the direction is wrong besides. It is `[inherited]`, the corpus's per-sample σ straddles `ringBandMm` at 3.44 and 6.98 mm (Decision 29), and widening it would *weaken* the only guard currently doing this work. The correct repair is Decision 40's crossed-sector rule, which rejects that candidate on three crossed sectors rather than on a third of a millimetre.
+- **Map the rate over all owed constants jointly as a feasible region** - Sweep the full product rather than one bar at a time - Rejected as more than two captures can carry: a two-capture corpus has exactly three possible rates, so a joint map would report structure the corpus does not contain.
+
+### Consequences
+
+**Positive:**
+
+- Req 4.5's deferral now rests on a measurement rather than on the absence of a denominator, and the measurement is reproducible in one run.
+- The feature is shown to be sound where it matters: at every owed setting that admits anything, both captures select the plane Req 3.1 identifies, so the remaining work is constants and not geometry.
+- The 0.338 mm margin is on record. It is a concrete argument for implementing Decision 40's crossed-sector rule that does not depend on capture 6 — the rule replaces an accidental sub-millimetre separation with a signed one holding 11.7 mm on each side.
+- Task 27's likely failure mode is stated in advance: under shipped constants a device capture of this kind records `.edgeBand`, so "confirm the reference recorded is `.foodSupport`" fails for constant reasons, not implementation ones.
+- The parameterised guards are pinned against `SupportRegion.admissibility` at the shipped bars, so the sweep cannot drift into measuring a different guard set.
+
+**Negative:**
+
+- The corpus's headline figure is that the shipped feature falls back on 100 % of the captures it was built from — true, previously recorded only as a per-capture fact, and now unavoidable in the aggregate.
+- A rate over two captures has three possible values, so the curve above is coarse by construction and the 0.500 step is one capture changing its mind.
+- The 0.338 mm finding creates pressure to implement Decision 40's rule before capture 6 sets `maxCrossedSectors`, which Req 3.7 forbids. The tension is recorded, not resolved.
+- `prerequisites.md` gains a second reason on an item that was already blocked, without moving it any closer to being answerable.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`OwedBars`, `admissible(_:bars:)`, `selection(_:bars:)` and `fallbackRateIsAFunctionOfTheOwedConstantsAlone`), `prerequisites.md` (the Req 4.5 denominator item, still open with a second reason), task 26's detail and task 27's, and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
+
+---
+
+## Decision 43: The crossed-sector rule clears both constraint sets where the count clears neither
+
+**Date**: 2026-08-06
+**Status**: accepted (discharges Decision 41's third negative consequence)
+
+### Context
+
+Decision 41 measured the committed suite as a second source of bounds on six `[owed]` constants and found one outright contradiction: `minSupportingSectors` is floored at **6** by the silent-failure scene the guard exists to reject and capped at **5** by what a real intended candidate scores on the corpus (Decision 33). It recorded the collision rather than resolving it, and drew a consequence — "the scene has to move when Decision 40's crossed-sector rule lands", a dependency task 26 did not previously carry.
+
+Decision 42 then measured that the only thing keeping a wrong plane out of a 0 % fallback rate is `ringMedianMaxMm` clearing the table candidate by **0.338 mm** on a 5 mm bar, and called that "a concrete argument for implementing Decision 40's crossed-sector rule that does not depend on capture 6".
+
+Both point at the same unasked question. The contradiction is a property of the unsigned *count*, not of the scenes: the count takes `|height|`, so the case that must be admitted and the case that must be rejected land on the same number (Decision 30). The scenes are unchanged. So the replacement rule can be measured against exactly the two constraint sets that broke the count — the same eight committed scenes and the same corpus candidates — before capture 6 exists, and the claim that a scene must move can be checked rather than assumed.
+
+### Decision
+
+`maxCrossedSectors` is recorded as bracketed **0…2 by the committed suite**, which is the corpus's own bracket unchanged. The joint interval is **0…2**, three admissible values, and no committed scene and no corpus candidate distinguishes them: every one returns the same verdict at 0, at 1 and at 2. The same two sources give the unsigned count a joint interval of **6…5** — empty.
+
+**Decision 41's third negative consequence is withdrawn.** No committed scene has to move when the crossed-sector rule lands. The dependency was a property of the count it replaces.
+
+The rule is still **not implemented**. The interval has three values, nothing in hand narrows it, and Req 3.7 bans shipping the count asserted. No constant's value moves and no shipped code changes.
+
+### Rationale
+
+The eight scenes read through Decision 40's rule, each at the plane its own committed test evaluates:
+
+| Scene | Supporting | Failing-sector medians | Crossed | Escaped |
+|---|---|---|---|---|
+| plate above table | 8 of 8 | — | 0 | 0 |
+| flat surface | 8 of 8 | — | 0 | 0 |
+| rim in the outer band | 8 of 8 | — | 0 | 0 |
+| overhanging food | 7 of 8 | −20.024 mm | 0 | **1** |
+| food across the plate edge | **5 of 8** | +19.967, +19.947, +19.980 mm | **3** | 0 |
+| rim in the mid band | 8 of 8 | — | 0 | 0 |
+| bowl | 0 of 8 | +15.047 … +15.591 mm | 8 | 0 |
+| fully covered well | 8 of 8 | — | 0 | 0 |
+
+**The brackets.** Five scenes' committed assertions require the sector guard to pass; the largest crossed count among them is **0**, so the suite floors `maxCrossedSectors` at 0. One scene requires it to fire, at 3 crossed, so the suite caps it at **2**. That is 0…2, and the corpus is 0…2 as well — the plate-top candidate carries 0 crossed sectors and the table candidate carries 3. Unlike Decision 41's six constants, where the suite bound three of them *tighter* than the corpus, here it adds no constraint the corpus did not already impose. The capture session can set this constant against captures alone with no risk of turning the suite red.
+
+**Why the collision does not recur.** On the corpus the admit case and the reject case both score 5 of 8 supporting sectors and are 3 apart in the crossed reading; in the suite the reject scene scores 5 as well while every admit scene scores 7 or 8. The count therefore has to be simultaneously ≤ 5 and ≥ 6 and the rule has to be simultaneously ≥ 0 and ≤ 2. This is Decision 30's finding discharged rather than restated: the statistic that separates the two cases is the one the rule reads.
+
+**The escape half now has a committed scene.** `overhangingFood` is the first committed scene to produce a failing sector at all, and it reads **−20.024 mm** — an escape, which Decision 40's rule declines to reject on. Until now the escape reading was exercised only by `1785135663727`'s plate top on the corpus. A rule whose non-rejecting half fires on no test is a rule half-checked.
+
+**The margin the rule replaces.** At the loosest admissible ceiling the table candidate is rejected by 3 crossed sectors against 2 — a margin of one whole sector, and of three at `maxCrossedSectors = 0`. Decision 42's 0.338 mm on a 5 mm bar is 6.8 % of an inherited constant sized for a different job.
+
+**What the agreement is not.** `foodAcrossPlateEdge` is authored as "the geometry of capture `1785901032716`", so both ceilings come from one physical situation modelled twice, and their agreement at 3 is not two independent measurements. The floor of 0 is the independent part — five synthetic scenes and one real candidate. The finding does not rest on independence: what it says is that the *same* evidence which is infeasible under the count is feasible under the rule.
+
+**And one limit stands.** Decision 40's stated blind spot is a rimmed plate where a correct plane's ring reaches a rim genuinely above it. The suite has two rimmed-plate scenes and neither exercises it — both read 8 of 8 supporting and no failing sector, because their rims never reach the inner band the sector median is computed over. Prerequisites captures 3 and 4 remain the only source for that case, and the suite's silence on it is now measured rather than assumed.
+
+### Alternatives Considered
+
+- **Implement the rule now at `maxCrossedSectors = 0`** - Both constraint sets floor it at 0, so 0 is the one value both sources reach directly - Rejected because floors and ceilings are not evidence of a value. All three of 0, 1 and 2 return identical verdicts on everything in hand, so choosing 0 is choosing the end of a bracket, which is what Req 3.7 names these constants to prevent. Capture 6 exists to say how many crossed sectors a *correct* fit can carry, and no scene in hand carries one.
+- **Move `foodAcrossPlateEdge` now so `minSupportingSectors = 5` becomes feasible** - Decision 41's own first alternative, revisited - Rejected on the same ground and now with a measurement behind it: the collision is not in the scene, and the rule that replaces the count clears the scene untouched. Editing it would repair a guard being retired and lose the corpus's own geometry from the suite.
+- **Record the suite bracket without comparing it to the count's** - Report 0…2 and stop - Rejected as half the finding. That the interval is non-empty matters only against the fact that the other formulation's is empty on the same eight scenes; neither number says it alone.
+- **Extend a rimmed-plate scene until its rim reaches the inner band, closing Decision 40's blind spot in the suite** - Author the counter-case rather than wait for captures 3/4 - Rejected because it would invent the evidence the capture is for. Where a real rim sits relative to a real food boundary is exactly what is being measured, and a synthetic scene would set the constant to whatever radius was chosen for it.
+
+### Consequences
+
+**Positive:**
+
+- Decision 41's third negative consequence is discharged with a measurement. Task 26 loses a dependency rather than gaining one, and no committed scene has to move.
+- `maxCrossedSectors` is the first `[owed]` constant whose two constraint sets **agree exactly**, so the session sets it from captures with no suite interaction to track.
+- The rule's escape half is exercised by a committed scene for the first time, at −20.024 mm.
+- The verdict invariance is asserted rather than assumed: every committed scene and both corpus candidates are checked at each of 0, 1 and 2, so "the value cannot be narrowed by what exists" is a test result and not a reading of one.
+- Decision 42's argument for the rule is strengthened in the currency it was made in — a one-sector margin at the loosest ceiling against 0.338 mm on a 5 mm bar.
+
+**Negative:**
+
+- Both ceilings trace to one physical situation, `foodAcrossPlateEdge` being a model of capture `1785901032716`, so the two sources are less independent than the two brackets look.
+- The rule is now checked from two directions and still cannot ship, which sharpens the tension Decision 42 recorded rather than relieving it: the better guard stays out of the binary until capture 6.
+- Decision 40's rimmed-plate blind spot is confirmed uncovered by the suite, so captures 3 and 4 acquire a job the documents had left implicit.
+- The suite adds no constraint here, so unlike Decision 41 this measurement gives the capture session nothing it did not have — its value is in what it rules out.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`crossedSectorRuleIsBracketedByBothConstraintSets`, and `SceneReading` gains its `signs` member), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md` (the owed-numbers section and the Decision 40/41 paragraphs), `prerequisites.md` (capture 6, captures 3/4, and the suite-bracket table), `decision_log.md` (Decision 41's consequence), task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing test is edited.
+
+---
+
+## Decision 44: The sector count is the unit the other sector constants are denominated in, and Req 5.1 caps it at 11
+
+**Date**: 2026-08-06
+**Status**: accepted (re-denominates the brackets of Decisions 40, 41 and 43)
+
+### Context
+
+Every bracket this feature has recorded for the sector measure is a **count of sectors**: Decision 40's `maxCrossedSectors` 0…2, Decision 41's `minSupportingSectors` 6…7, Decision 43's empty joint interval 6…5. Each was read at `ringSectorCount = 8`, and none of them says so. `ringMinSamples = 200` is worse placed still — it is annotated `[measured]`, and its whole derivation is `ringSectorCount × 25`, so a constant marked settled takes an `[owed]` constant as its input.
+
+Req 3.7 names three constants the design may not ship asserted — `ringSectorCount`, `sectorSupportMin`, `minSupportingSectors` — and the feature has treated them as three peers. Decisions 30, 40, 41, 42 and 43 all attacked `minSupportingSectors` and the rule that replaces it. Nothing has measured the count itself, and if the capture session moves it, every sector bracket in the documents is void.
+
+The question is answerable without a capture: the committed rings can be re-cut into any number of equal arcs and re-read. `SupportRegion.sectorIndex` is one `atan2` and a bucket index about the food-mask centroid, so the same ring samples support any count.
+
+### Decision
+
+`ringSectorCount` is recorded as **bracketed 4…8, not set**, with a hard ceiling of **11** from Req 5.1's grid-transfer claim. It stays `[owed]`.
+
+Every sector bracket already recorded is restated as **denominated in the count**: `maxCrossedSectors` 0…2 means 0…2 *at eight sectors*, and reads 0…0 at four and 1…2 at eleven. So the count must be fixed **before** the capture session, not read out of it alongside the constants it denominates.
+
+Nothing is rewired and no value moves.
+
+### Rationale
+
+Both corpus captures' best candidates and all eight committed scenes, re-sectored at nine counts. `crossed` is Decision 40's failing-sector rule; `joint` is the intersection of the corpus and suite brackets on `maxCrossedSectors`, exactly as Decision 43 computes it at 8.
+
+| N | plate crossed | table crossed | corpus | suite | joint | min sector samples | `ringMinSamples` | halved grid |
+|---|---|---|---|---|---|---|---|---|
+| 4 | 0 | 2 | 0…1 | 0…0 | **0…0** | 248 | 100 | feasible |
+| 6 | 0 | 3 | 0…2 | 0…1 | 0…1 | 137 | 150 | feasible |
+| **8** | **0** | **3** | **0…2** | **0…2** | **0…2** | 102 | 200 | feasible |
+| 10 | **1** | 5 | 1…4 | 0…2 | 1…2 | 80 | 250 | feasible |
+| 11 | 1 | 6 | 1…5 | 0…2 | 1…2 | 73 | 275 | feasible |
+| 12 | 1 | 7 | 1…6 | 0…3 | 1…3 | 66 | 300 | **refused** |
+| 16 | 1 | 7 | 1…6 | 0…4 | 1…4 | 45 | 400 | refused |
+| 24 | 1 | 13 | 1…12 | 0…6 | 1…6 | 29 | 600 | refused |
+| 32 | 1 | 18 | 1…17 | 0…9 | 1…9 | 21 | 800 | refused |
+
+**Nine counts, eight distinct joint intervals.** `maxCrossedSectors` is a count of sectors, so of course it scales — but it was recorded as "0…2, and nothing in hand narrows it", which reads as a range the session may choose from. It is a range *conditional on a constant that is itself owed*.
+
+**The ceiling is Req 5.1's, and the constraint is self-tightening.** `ringMinSamples = ringSectorCount × 25` rises with the count, so asking for finer arcs raises the very floor the ring must clear. The native corpus is nowhere near it — the thinnest radial band holds 1120 samples, which would carry 44 sectors. The 2× halved grid is: its thinnest band holds **292**, so 292/25 = **11** is the last count at which `ringBandsAreFeasible` still passes on both captures. Decision 35 recorded that Req 5.1's transfer "floors at the ring, not the plane"; this measures the count as the knob that sets where that floor sits. Above 11 the plane still transfers and the ring measure does not, which is the same refusal Decision 39 declined to engineer around with `mmPerPx`.
+
+**No floor, and that is a negative result worth having.** Decision 40's rule works by finding an arc of the ring sitting above the candidate plane while the rest supports it, so a coarse cut might have averaged the crossing away inside one sector. It does not: the corpus separates its plate-top candidate from its table candidate at **every** count from 4 to 32. The rule's separation is robust to the count; only its bracket is not.
+
+**The pass side erodes above 8, and that is where the bracket's top comes from.** The plate-top candidate — the plane a correct fit must admit — reads **0** crossed sectors at 4, 6 and 8 and **1** from 10 upward. Narrow enough arcs resolve the direction in which its own ring ran off the plate onto the table, which is Decision 33's plate margin read a third way, and the rule's floor stops being zero. So the count is bracketed 4…8 by the pass side, inside the Req 5.1 ceiling of 11.
+
+**And the trade inside that bracket runs backwards.** A *coarser* cut leaves *less* freedom in the constant it denominates: joint bracket widths are 1 at four sectors, 2 at six, 3 at eight. At four, `maxCrossedSectors` is **determined** at 0 by evidence already committed — the suite's silent-failure scene reads 1 crossed sector there and the plate candidate reads 0, so no value but 0 survives. Decision 43's "any choice among the three is asserting" is therefore partly an artefact of the shipped count, which is precisely the count at which the freedom is widest.
+
+That does not make four the answer. At four sectors an arc is 90°, and whether that resolves the straddle Req 3.6 and Decision 18 describe is exactly what the corpus cannot say — the corpus has no clean correct fit (Decision 29) and its only straddle is the table candidate, which four sectors happen to catch. Buying determinacy in `maxCrossedSectors` by asserting `ringSectorCount` moves the assertion rather than removing it.
+
+### Alternatives Considered
+
+- **Set `ringSectorCount = 8` now, as the largest count with a clean pass side inside the Req 5.1 ceiling** - The bracket has a defensible top and the shipped value is already there - Rejected because 4 and 6 are equally clean on both sides, so the top of a three-value bracket is still an end of a bracket. Req 3.7 names this constant for exactly this move.
+- **Set `ringSectorCount = 4` and discharge `maxCrossedSectors` with it** - It would close two owed constants at once from evidence in hand, and the joint bracket collapses to a single value - Rejected because it buys determinacy in one constant by asserting another, and the 90° arc's adequacy against Decision 18's straddle is a property of scenes the corpus does not contain. It also halves the resolution of the guard whose whole job is angular.
+- **Re-denominate `ringMinSamples` so it stops moving with the count** - Fix it at 200 regardless, and the Req 5.1 ceiling disappears - Rejected because the 25-samples-per-sector derivation is what gives the 0.5 support bar its binomial footing (Decision 20, σ ≈ 0.10 at 25 samples against σ ≈ 0.19 at the old floor of 60 overall). Decoupling them leaves the sector fraction unfloored at high counts, which is the noise regime Decision 20 removed.
+- **Record the count as settled at 8 because nothing has ever moved it** - It has survived every decision from 18 onward - Rejected because surviving is not measurement. This pass is the first thing to vary it, and it finds every recorded sector bracket depends on it.
+- **Sweep `sectorSupportMin` in the same pass** - The third member of the trio is equally unmeasured - Deferred rather than rejected: the support bar is a fraction of a sector's samples, not a count of sectors, so it is not re-denominated by this finding and its measurement is a separate one. Recorded here so the omission is deliberate.
+
+### Consequences
+
+**Positive:**
+
+- `ringSectorCount` gets its first two-sided bracket — 4…8 from the pass side, 11 as a hard ceiling — where before it had no measurement at all.
+- Req 5.1's transfer claim acquires a stated ceiling on the count, so a later session cannot raise `ringSectorCount` without re-reading Decision 35. The coupling was invisible before: `ringMinSamples` is `[measured]` and takes an `[owed]` input.
+- Decisions 40, 41 and 43's brackets are restated in their true units, and the capture session's ordering changes with them — the count is fixed first, and capture 6 then reads `maxCrossedSectors` in whatever unit that fixed.
+- The rule's separation is confirmed robust to the count over an 8× range, which is a stronger statement about Decision 40 than any single-count reading could make.
+
+**Negative:**
+
+- Three counts survive both sides, so nothing is set. The feature gains another bracket rather than a value, and `ringSectorCount` joins the list task 27 waits on.
+- The shipped count is the one leaving `maxCrossedSectors` *least* determined, so Decision 43's headline — two constraint sets agreeing on 0…2 with nothing to narrow it — is weaker than it read.
+- The ceiling of 11 comes from a 2× halving of two captures. A sensor with a different native grid moves it, and the corpus cannot say by how much.
+- The 4…8 bracket's top rests on one candidate on one capture — `1785135663727`'s plate top is the only intended-correct plane the corpus has, and Decision 29 already records that it is not a clean one.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`sectorCountIsTheUnitOfTheSectorTrio`; `sectorSigns` gains a count parameter and a `sectorSampleCounts` member, and `SceneReading` carries its ring so it can be re-sectored), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio and `ringMinSamples` comments), `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
+
+## Decision 45: The support bar selects the population the crossed-sector rule reads, and the shipped value sits on a cliff
+
+**Date**: 2026-08-06
+**Status**: accepted (qualifies Decisions 40 and 44; strengthens Decision 43)
+
+### Context
+
+`sectorSupportMin` is the third constant Req 3.7 names and the only one nothing has ever varied. Decision 44 measured `ringSectorCount` and deferred this one in as many words — "the support bar is a fraction of a sector's samples, not a count of sectors, so it is not re-denominated by this finding and its measurement is a separate one".
+
+It is not a peer of the other two either, and Decision 40 is where that shows. The crossed-sector rule reads the sign of sectors that **fail** this bar, so `sectorSupportMin` selects the population the rule is computed over. Decision 40's central claim — that the rule's magnitude bar is `[inherited]` rather than fitted, because failing sectors separate over **23.397 mm** where all sectors separate over **2.128 mm** — is a statement about that population. And "all sectors" is precisely this constant at 1.0, so the contrast Decision 40 draws is its own sweep's other endpoint. The claim is a reading at 0.5 of a quantity that moves with the bar, and nothing recorded what it does in between.
+
+Decision 44 also left an ordering instruction that assumes the two constants are separable: fix the count **before** the sitting, then read `maxCrossedSectors` in whatever unit that fixed. Whether the count's own bracket depends on the bar was never asked.
+
+### Decision
+
+`sectorSupportMin` is recorded as **bracketed 0…0.5 at eight sectors, with the shipped 0.5 sitting ON the ceiling rather than inside the bracket**. It stays `[owed]`.
+
+Decision 44's ordering is **superseded**: `ringSectorCount` and `sectorSupportMin` must be fixed **jointly**, not in sequence, because the count's pass-side bracket is a function of the bar.
+
+Nothing is rewired and no value moves.
+
+### Rationale
+
+The same two corpus candidates and the same eight committed scenes, re-classified at eleven bars. The window is Decision 40's, recomputed: how far `ringBandMm` may move before either candidate changes its crossed count — lower edge the plate candidate's highest failing median, upper edge the table candidate's lowest crossed median.
+
+| `sectorSupportMin` | plate supporting / crossed | table supporting / crossed | invariance window | joint `maxCrossedSectors` |
+|---|---|---|---|---|
+| 0.0 | 8 / 0 | 8 / **0** | — (rule silent) | empty |
+| 0.1 | 7 / 0 | 6 / 2 | −32.564…+16.603 (**49.167**) | 0…0 |
+| 0.2 | 7 / 0 | 6 / 2 | −32.564…+16.603 (49.167) | 0…0 |
+| 0.3 | 7 / 0 | 6 / 2 | −32.564…+16.603 (49.167) | 0…1 |
+| 0.4 | 6 / 0 | 5 / 3 | −9.680…+16.603 (26.283) | 0…2 |
+| **0.5** | **5 / 0** | **5 / 3** | **−6.794…+16.603 (23.397)** | **0…2** |
+| 0.6 | 4 / 0 | 3 / 4 | +3.711…+5.974 (**2.263**) | 0…2 |
+| 0.7–0.8 | 4 / 0 | 1 / 4 | +3.711…+5.974 (2.263) | 0…2 |
+| 0.9–1.0 | 3 / 0 | 1–0 / 4 | +3.846…+5.974 (**2.128**) | 0…2 |
+
+**The ceiling is a cliff, and the shipped value is standing on it.** The window collapses **10.339×** in one notch, 23.397 mm at 0.5 to 2.263 mm at 0.6, and it is the largest single step in the sweep by a wide margin. Decision 40 supplied the criterion without knowing it was one: 2.128 mm is "being fitted to the corpus", 23.397 mm is "being inherited". So the criterion needs no threshold of its own — the collapse picks the ceiling, and the ceiling is 0.5. Raise `sectorSupportMin` by one notch and `ringBandMm` stops being inherited, which is the ground Decision 40 rejected the all-sector formulation on.
+
+**Both edges converge on the bar, from opposite sides.** As `sectorSupportMin` rises, sectors that sit *on* the plate candidate's plane but are noisy start failing, and they read near zero, so the lower edge climbs from −32.564 to +3.846. Meanwhile sectors holding the table candidate's plane at a small positive offset fail too and become crossed, so the upper edge falls from +16.603 to +5.974. The bar is squeezed from both directions by the same constant.
+
+**Decision 40's contrast understates its own case.** At 1.0 the reading reproduces its all-sector figure exactly, +3.846…+5.974. But that is the room the bar has *at its current value*, not a gap between the two populations: read without conditioning on where `ringBandMm` sits, the all-sector failing medians **interleave** — the table's lowest is +0.426, *below* the plate's highest +3.846, a separation of **−3.419 mm**. At the shipped bar the same reading is +23.397 mm and genuinely positive. Restricting the rule to failing sectors is therefore more necessary than Decision 40 recorded, not less.
+
+**The floor is the rule's own.** At 0.0 nothing fails, the population the rule reads is empty, and a rule with nothing to read admits the plane Decision 18 exists to reject. At eight sectors that is the only silent bar; at four it is 0.0…0.2, which is the coupling arriving from the other side.
+
+**And the count is not separable from the bar** — the finding that supersedes Decision 44's ordering. The counts with a clean pass side and a firing rule, per bar:
+
+| `sectorSupportMin` | counts with a clean pass side |
+|---|---|
+| 0.1–0.2 | 6, 8, 10, 11 |
+| 0.3 | **4, 6, 8, 10, 11** |
+| 0.4 | 4, 6, 8, 10 |
+| 0.5–1.0 | **4, 6, 8** |
+
+Decision 44's 4…8 is a reading at 0.5. Lower the bar and the fine end opens up — at 0.3 every count Req 5.1 permits has a clean pass side, so the "pass-side erosion above 8" that gave the bracket its top is itself a consequence of the bar being at 0.5. Raise it and nothing changes, because 0.5 is already at the ceiling. Fixing the count first and the bar afterwards therefore fixes the count against a value that has not been chosen yet.
+
+**Decision 43 is strengthened, not qualified.** Over the whole grid — five counts × eleven bars — **no cell collides**: wherever the rule fires at all, the suite and the corpus admit a common `maxCrossedSectors`. Decision 43 could only say that at one pair; it is now a property of the rule rather than of the shipped pair.
+
+### Alternatives Considered
+
+- **Set `sectorSupportMin = 0.5` now, since it is the ceiling of a measured bracket** - The cliff is sharp, the shipped value is exactly at it, and Decision 40's criterion picks it without a free parameter - Rejected because a ceiling is an end of a bracket, and 0.1…0.4 are all admissible on the same criterion with *wider* windows. Req 3.7 names this constant for exactly this move. The cliff says where the bar may not go, not where it should sit.
+- **Set `sectorSupportMin` low — 0.3 — to buy back the count's fine end** - It would restore counts 10 and 11 to the pass side and widen the invariance window to 49.167 mm, so both other sector constants gain room - Rejected because it optimises the corpus's two candidates. A low bar means a sector counts as supporting on a small share of its samples, which is the noise regime Decision 20 removed the old 60-sample floor to escape, and the corpus contains no scene where that misfires. It is fitting, in the direction the measurements happen to reward.
+- **Keep Decision 44's ordering and note the bar dependence as a caveat** - Less churn in `prerequisites.md`, and the ordering is still better than no ordering - Rejected because the ordering's whole purpose was to stop capture 6 measuring a number in a unit that was still moving. If the unit itself moves with a third owed constant, the instruction gives false assurance.
+- **Sweep the bar against the fallback rate as well (Decision 42's function)** - The rate is a readout of the owed constants and this is one of them - Deferred rather than rejected: Decision 42 already sweeps `minSupportingSectors` and reads 1.000 → 0.500 → 0.000, and the crossed rule is not wired into `admissibility`, so a rate swept on this bar would grade the shipped guard rather than the replacement. Recorded so the omission is deliberate.
+- **Treat the interleaving at 1.0 as a defect in Decision 40's window** - It reports 2.128 mm where the honest separation is −3.419 mm - Rejected: the invariance interval is the right statistic for asking how much room an inherited bar has, and Decision 40 uses it consistently. The interleaving is an additional finding in the same direction, not a correction.
+
+### Consequences
+
+**Positive:**
+
+- `sectorSupportMin` gets its first bracket — 0…0.5 at eight sectors — where before it had no measurement at all. All three constants Req 3.7 names are now bracketed rather than merely owed.
+- Decision 40's inheritance claim acquires the condition it was always subject to: `ringBandMm` is inherited *while `sectorSupportMin` ≤ 0.5*, and one notch above that it is fitted. A later session cannot raise the bar without re-reading Decision 40.
+- The capture session's ordering is corrected before the sitting rather than after it: the count and the bar are fixed together, and capture 6 reports in a unit fixed by both.
+- Decision 43's agreement between the two constraint sets is confirmed over a 55-cell grid instead of a single pair — the strongest statement the feature has about the crossed-sector rule.
+- The all-sector interleaving strengthens the case for the `sectorSupportMin` gate inside the rule, which Decision 40 flagged as the thing someone would be tempted to drop as redundant.
+
+**Negative:**
+
+- Another bracket rather than a value, and the bracket's ceiling is where the shipped placeholder already sits — so the measurement constrains the session's freedom without reducing what it owes.
+- Two owed constants are now known to be jointly determined, which makes the sitting harder to plan: `prerequisites.md` can no longer give a sequence, only a pair to choose before the captures.
+- The cliff rests on the two corpus candidates. It is sharp because a handful of sectors cross the bar together between 0.5 and 0.6, and a corpus of two captures cannot say whether that coincidence generalises.
+- `maxCrossedSectors` is now denominated in **two** owed constants, so Decision 43's "the two sources agree exactly" holds per (count, bar) pair rather than absolutely.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`supportBarSelectsThePopulationTheRuleReads`; `sectorSigns` and `SceneReading.signs(at:)` gain a `supportMin` parameter), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the sector-trio comment), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
+
+## Decision 46: The ring radius re-selects the candidates, and it is the first owed constant that moves the answer
+
+**Date**: 2026-08-06
+**Status**: accepted (replaces the rule Decision 33 found unsatisfiable; extends Decisions 44 and 45's joint pair to a triple; qualifies Decisions 43 and 45)
+
+> Not to be confused with **pipeline Decision 46**, the 20 mm LiDAR residual bar, which several
+> documents in this feature cite. Every reference to that one is qualified as "pipeline
+> Decision 46" from this entry onward.
+
+### Context
+
+`ringOuterMm` is `[owed]` and has no derivation at all. Decision 33 measured its stated rule — "inside the smallest measured plate margin" — and found it **unsatisfiable**, because the tightest margin is 4 mm and `ringInnerMm` is 8, so no ring can be placed inside it. Nothing replaced the rule. It has sat since as the one owed constant with neither a bracket nor a criterion.
+
+Decisions 44 and 45 measured the sector measure's other two free constants and concluded they must be fixed **jointly**. `ringOuterMm` is upstream of both. The crossed-sector rule reads the **inner band**, whose outer edge is `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount` = 13.667 mm at the shipped value — so Decision 33's "only 4 of 8 sectors reach the inner band" and Decision 43's rimmed-plate blind spot ("their rims never reach the inner band the sector median is computed over") are both readings of this constant, taken at 25 mm and recorded without saying so.
+
+And it differs in kind from the other two. The count re-cuts a fixed ring; the bar re-classifies a fixed set of sectors. The radius moves the **annulus**, `2 × ringOuterMm`, which is the candidate bound — so extraction runs on a different sample set at every value and the constant can change **which plane is selected**, not only how a fixed selection is read.
+
+### Decision
+
+`ringOuterMm` is recorded as **bracketed 22…32 mm**, floor from Req 5.1's grid halving and ceiling from the committed suite, with the shipped 25 inside rather than on an edge. It stays `[owed]`.
+
+It is the **first owed constant that moves the answer**: across the sweep the selected plane moves **18.719 mm** at the food on `1785901032716` and **4.162 mm** on `1785135663727`, against the **1 mm** Decision 35 measures Req 5.1's grid transfer at. Decisions 44 and 45 both closed with "no value moves"; that does not extend here.
+
+Decision 45's instruction to fix `ringSectorCount` and `sectorSupportMin` jointly becomes a **triple** — the radius joins them, and it is fixed first, because it selects the candidates the other two are read on.
+
+Nothing is rewired and no shipped value moves.
+
+### Rationale
+
+The same two corpus captures and the same eight committed scenes, re-ringed at seventeen radii. Extraction is **re-run** at each, not re-read. "Best" is the highest inner-band support, as `bestCandidate` computes it. "Plane at food" is where the selected plane cuts the food-centroid ray, the instrument Decision 35 measures Req 5.1's tolerance with.
+
+| `ringOuterMm` | inner band ends | best on `…3727` supporting / crossed | best on `…2716` ring median | `…2716` plane at food | joint `maxCrossedSectors` | Req 5.1 halving | committed suite |
+|---|---|---|---|---|---|---|---|
+| 13 | 9.667 | 5 / 0 | −1.757 | 342.372 | 0…1 | **refused** | holds |
+| 15 | 10.333 | 5 / 0 | −1.142 | 346.249 | 0…2 | **refused** | holds |
+| 17 | 11.000 | 5 / 0 | −2.461 | 342.053 | 0…0 | **refused** | holds |
+| 20 | 12.000 | 5 / 0 | −1.796 | 344.484 | 0…1 | **refused** | holds |
+| **22** | 12.667 | 5 / 0 | −12.231 | 338.413 | **empty** | feasible | holds |
+| 23 | 13.000 | 5 / 0 | −2.706 | 344.194 | 0…1 | feasible | holds |
+| 24 | 13.333 | **3 / 2** | −4.897 | 343.378 | **empty** | feasible | holds |
+| **25** | **13.667** | **5 / 0** | **+3.039** | **356.280** | **0…2** | feasible | holds |
+| 26 | 14.000 | 5 / 0 | +2.938 | 356.341 | 0…2 | feasible | holds |
+| 27 | 14.333 | **3 / 2** | +2.867 | 356.394 | 2…2 | feasible | holds |
+| 28 | 14.667 | 5 / 0 | +2.652 | 356.300 | 0…2 | feasible | holds |
+| 29 | 15.000 | 5 / 0 | +2.753 | 356.533 | 0…2 | feasible | holds |
+| 30 | 15.333 | **3 / 2** | +2.610 | 356.545 | 2…2 | feasible | holds |
+| 31 | 15.667 | 5 / 0 | +2.555 | 356.600 | 0…2 | feasible | holds |
+| **32** | 16.000 | **3 / 2** | +2.552 | 356.738 | 2…2 | feasible | holds |
+| 35 | 17.000 | 5 / 0 | +2.290 | 356.823 | 0…2 | feasible | **red** |
+| 40 | 18.667 | 5 / 0 | +2.022 | 357.132 | 0…3 | feasible | **red** |
+
+**The bracket is two-sided, and neither side existed before.** The **floor is Req 5.1's**, and it is the mirror of the ceiling Decision 44 read off the same transfer. A narrower ring holds fewer samples per radial band and the 2× halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses on a grid where the plane still transfers within a millimetre — halved bands read [78, 111, 48] and [65, 148, 45] at 13 mm against the 200 floor, and [237, 242, 248] and [258, 264, 272] at 22 mm. The **ceiling is the committed suite's**, and it arrives exactly as Decision 41 warned: the scenes place their features at fixed pixel radii, so a wide enough ring reaches the rim a scene deliberately put outside it. At 35 mm and 40 mm every sector of a scene the suite requires to **pass** reads crossed, the suite's floor on `maxCrossedSectors` jumps to 8 and its ceiling on `minSupportingSectors` falls to 0, and both intervals go empty together. Between 32 and 35 mm the committed suite goes red.
+
+**The radius denominates `maxCrossedSectors` too, and it reorders it rather than scaling it.** Decision 44 recorded the constant as a count of sectors and Decision 45 as a count read at a bar. It is also a count read at a radius: the joint bracket reads 0…0, 0…1, 0…2 and 2…2 over the sweep, with no ordering in the radius at all. Where Decision 44's counts gave eight *monotonically widening* intervals, these interleave.
+
+**And the pass side alternates at 1 mm steps.** The best candidate on `1785135663727` — the corpus's only intended-correct plane — reads **0** crossed sectors at 22, 23, 25, 26, 28, 29 and 31 mm and **2** at 24, 27, 30 and 32 mm. Clean and dirty alternate inside the bracket at the sweep's own resolution, and its plane at the food oscillates over 4.162 mm with them. A radius between two clean radii is therefore not implied by either, so this constant **cannot be bracketed by interpolation** the way the count and the bar were. That is the direct consequence of it re-running extraction: the other two constants could only move a verdict, this one moves the input the verdict is computed on.
+
+**The separation Decision 44 found robust is not robust to this.** Decision 44 measured that the crossed-sector rule separates the two corpus candidates at every sector count from 4 to 32 — "a coarse cut does not average the crossing away". The radius breaks it: at 22 and 24 mm the two constraint sets admit **no common `maxCrossedSectors`**. Decision 45's headline — no cell collides over its 55-cell (count × bar) grid — therefore holds *at the shipped radius* and not outright. Wherever the rule fires the agreement is real; the radius decides whether it fires on the planes the rule was measured against.
+
+**The bifurcation, and what it is not.** On `1785901032716` the selection changes sign at 24/25 mm: at 13…24 mm the best-support candidate reads a **negative** ring median and sits ~10 mm nearer the camera; from 25 mm up it reads **positive** and is the plane Decision 30 identified as the table. Which surface this capture selects is a function of an owed constant. This is *not* a claim that the narrow radii find the correct plate plane — those readings are not clean either (2–3 supporting sectors, 1–3 crossed, and at 22 mm a plane 12.2 mm above its own ring), and the corpus still has no clean correct fit. What it establishes is narrower and firmer: Decision 42's finding that only `ringMedianMaxMm`'s 0.338 mm holds the wrong plane out is a statement about the shipped radius, because at a smaller one the wrong plane is not the one selected.
+
+**The control, and it changes what the sweep means.** The 1 mm-step alternation admits a second reading: extraction is unstable and moving the annulus merely re-rolls it. Held at the shipped radius with only the RANSAC seed varied over eight draws:
+
+| capture | distinct planes at the food | spread | supporting | crossed |
+|---|---|---|---|---|
+| `1785135663727` | 349.232 / 350.948 / 351.328 | **2.095 mm** | 5 | 0 |
+| `1785901032716` | 356.280 | **0.001 mm** | 5 | 3 |
+
+Both halves matter. The **plane** is seed-dependent by 2.095 mm on the capture that carries the corpus's intended-correct fit — twice the figure Decision 35 measures the grid transfer at, and a quantity nothing had recorded. This is **not** a Req 5.1 failure: the seed is `Fnv1a64.hash(depthBytesMm)`, so identical bytes draw identically and replay reproduces device exactly, which is what the requirement asks. What it bounds is how much of any plane figure this feature quotes is the capture and how much is the draw.
+
+The **verdict** is not. Across eight draws per capture the supporting and crossed counts are single-valued, so the brackets Decisions 40–45 read off one draw each are properties of the captures. And that is what separates the control from the sweep: the seed never moves the crossed count, the radius moves it four times in eleven millimetres. The alternation is the radius reordering the candidates, not extraction re-rolling them.
+
+### Alternatives Considered
+
+- **Set `ringOuterMm = 25` now, since it is inside a measured two-sided bracket and no other value is better supported** - The bracket exists for the first time and the shipped value is comfortably inside it, away from both edges - Rejected because "inside a bracket" is what the other ten values in 22…32 also are, and four of them read a dirty pass side. Choosing among them on the corpus's two captures is fitting, and the constant is `[owed]` for that reason. The bracket says where the session may look, not what it should pick.
+- **Set `ringOuterMm = 22`, the smallest radius that survives Req 5.1** - It maximises the plate margin available in each sector, which is the pressure Decision 33 measured, and it is a principled end rather than an arbitrary interior point - Rejected because 22 mm is the one radius in the bracket where the two constraint sets **collide** — the rule stops separating the corpus's candidates entirely. Picking the end of a bracket because it is an end is what Decision 44 rejected for the count and Decision 45 for the bar; here the end is also measurably worse.
+- **Re-denominate the inner band so the sector rule stops moving with `ringOuterMm`** - Fix the inner band at a stated width rather than `(ringOuterMm − ringInnerMm) / ringBandCount`, and the radius would then bound only the annulus - Rejected because it does not touch the finding. The annulus is `2 × ringOuterMm` and the annulus is what re-selects the candidates, so decoupling the band leaves the 18.719 mm of plane movement exactly where it is while adding a fourth radial constant to own. Decisions 37 and 38 re-denominated constants whose *unit* was wrong; this one's unit is correct and its *value* is unset.
+- **Treat the alternating pass side as extraction noise and report the bracket without it** - Simpler, and the seed control does show 2.095 mm of instability on the same capture - Rejected by the control itself: the seed moves the plane and never the verdict, the radius moves the verdict four times. Reporting the bracket alone would let a session interpolate inside it, which is the one thing this measurement says it may not do.
+- **Sweep `ringInnerMm` in the same pass** - It is the ring's other radial edge and would complete the geometry - Deferred rather than rejected: `ringInnerMm` is `[measured]` against the depth smear (Decisions 29, 39) and is not owed, so sweeping it would measure a settled constant. Recorded so the omission is deliberate.
+
+### Consequences
+
+**Positive:**
+
+- `ringOuterMm` gets a bracket at all — 22…32 mm, two-sided — where Decision 33 left it with an unsatisfiable rule and nothing else. It is the last owed constant that had no criterion.
+- Req 5.1's grid transfer now bounds the ring from **both** ends: Decision 44's ceiling of 11 on `ringSectorCount` and this floor of 22 mm on the radius come off the same halving, so the transfer claim constrains the ring's angular and radial resolution alike.
+- The committed suite acquires a stated ceiling on the radius, so a later session cannot widen the ring past 32 mm without re-authoring scenes — the dependency Decision 41 predicted, now measured on a second constant.
+- The capture session's ordering is corrected again before the sitting: three constants are fixed together, and the radius is fixed first because it selects the candidates the other two are read on.
+- Selection is confirmed **verdict-stable under the RANSAC seed**, which is the first evidence that any bracket in Decisions 40–45 is a property of the captures rather than of one draw. Nothing had checked.
+
+**Negative:**
+
+- Another bracket rather than a value, and this one cannot be interpolated inside — so it constrains the session more tightly than it reduces what the session owes.
+- `maxCrossedSectors` is now denominated in **three** owed constants. Decision 43's "the two sources agree exactly" holds per (radius, count, bar) triple, and Decision 45's collision-free grid is a slice of a larger one that does collide.
+- The plane at the food is seed-dependent by 2.095 mm on the corpus's one intended-correct capture. Req 5.1 is satisfied by determinism, but every plane figure this feature quotes — Decision 35's 0.835 mm transfer, Decision 36's 18.370 mm fallback price — is one draw, and their error bars are wider than recorded.
+- The bracket rests on two captures whose plates end inside the ring in five of eight directions (Decision 33). The ceiling in particular is a property of the committed **scenes**, so it moves if they are re-authored, and the corpus cannot say whether 32 mm is physically right.
+- The sweep costs ~87 s. It re-runs extraction seventeen times per capture, and the measurement suite is now the slowest thing in `make test`.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`ringRadiusIsTheRadialUnitOfTheSectorRule` and `candidateSelectionIsSeedUnstableAtTheShippedRadius`; a `ringSamples(geometry:outerMm:)` mirroring the shipped builder, an `innerSupportFraction` that reads below the `ringMinSamples` floor, and the eight committed scenes lifted into a `SceneSpec` list so they can be re-ringed), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringOuterMm` comment), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
+
+## Decision 47: The band count is the divisor the sector measure was never varied over, and two values survive
+
+**Date**: 2026-08-06
+**Status**: accepted (adds a fourth constant to Decision 46's triple; qualifies Decisions 41 and 43; confirms Decision 46's attribution)
+
+### Context
+
+Of the seven constants the sector measure reads — `ringInnerMm`, `ringOuterMm`, `ringBandCount`, `ringBandMm`, `ringSectorCount`, `sectorSupportMin`, `ringMinSamples` — six carry a provenance marker. `ringBandCount` carries none. Its whole comment is "Structural: inner / mid / outer", which is an assertion in a word that does not look like one, and it has never been varied.
+
+Decision 46 is what turns that into a gap. It found `ringOuterMm` upstream of the count and the bar because the crossed-sector rule reads the **inner band**, whose outer edge is `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount` — and then swept only the numerator. The divisor sets the same edge. It also divides in a second place at once: `ringMinSamples` is floored **per band**, so raising the count narrows every band and starves the floor in the same move that sharpens the rule.
+
+Three things separate it from the other three constants in advance of measuring it. It does **not** move the annulus, so unlike the radius the candidate set is fixed. It does move the inner band, and `bestCandidate` ranks on inner-band support, so unlike the count and the bar it is not obviously a pure re-reading. And it is the only one of the four bounded from below by a guard's **existence**: `admissibility` reads `bandMedianMm[1] − bandMedianMm[0]` behind a `count > 1` test.
+
+### Decision
+
+`ringBandCount` is recorded as **bracketed 2…3**, floor from the `bandStep` guard's existence and from the committed suite, ceiling from Req 5.1's grid halving. The shipped 3 sits **on the ceiling**, the position Decision 45 found `sectorSupportMin` in. It is marked `[owed]`; "structural" is withdrawn.
+
+It does **not** move the answer. The selected plane at the food is unchanged to 0.000 mm on both captures at every band count in the sweep, so Decision 46's "first owed constant that moves the answer" is confirmed as a property of the **annulus** specifically rather than of radial geometry generally.
+
+Decision 46's triple stays a triple for the *sitting*. This constant is bracketed to two values by evidence already committed and does not need the captures, so it is fixed **before** them, not with them.
+
+Nothing is rewired and no shipped value moves.
+
+### Rationale
+
+The same two corpus captures and the same eight committed scenes, re-banded at nine counts at the shipped radius. Extraction is re-run but the annulus does not move, so the candidate set is the shipped one at every count and only the reading changes.
+
+| `ringBandCount` | band width | inner band ends | `…3727` sup / crossed | `…2716` sup / crossed | joint `maxCrossedSectors` | `bandStepMaxMm` suite | Req 5.1 halving | `bandStep` guard |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 17.000 | 25.000 | 5 / 0 | 5 / 3 | **empty** | n/a | feasible | **silent** |
+| **2** | 8.500 | 16.500 | 5 / 0 | 5 / 3 | **1…2** | 0.214…13.470 | feasible | runs |
+| **3** | **5.667** | **13.667** | **5 / 0** | **5 / 3** | **0…2** | **0.024…9.288** | feasible | runs |
+| 4 | 4.250 | 12.250 | 5 / 0 | 3 / 5 | 0…2 | 0.024…6.755 | **refused** | runs |
+| 5 | 3.400 | 11.400 | 5 / 0 | 2 / 6 | 0…2 | 0.042…5.496 | **refused** | runs |
+| 6 | 2.833 | 10.833 | 5 / 0 | 5 / 3 | 0…2 | 0.009…0.211 | **refused** | runs |
+| 7 | 2.429 | 10.429 | 5 / 0 | 3 / 5 | 0…2 | **empty** | **refused** | runs |
+| 8 | 2.125 | 10.125 | 5 / 0 | 2 / 6 | 0…2 | **empty** | **refused** | runs |
+| 10 | 1.700 | 9.700 | 5 / 0 | 2 / 6 | 0…2 | **empty** | **refused** | runs |
+
+**The floor is 2, and it arrives twice independently.** The first reason is that a guard stops existing. At one band there is no mid band, `admissibility`'s `bandMedianMm.count > 1` test is false, and the `bandStep` guard does not fire and does not report that it did not — while two committed scenes, `bowl` and `rim in the mid band`, assert that it *does*. That is the shape of failure Decision 18 exists to prevent, reached through a constant nobody was watching. The second reason is the committed suite, arriving as Decision 41 predicted and for the third time: at one band the inner band **is** the whole 8…25 mm ring, so the rims the rimmed-plate scenes place at fixed pixel radii fall inside it, a scene that must *pass* reads all eight sectors crossed, and both suite intervals go empty together — `maxCrossedSectors` 8…2 and `minSupportingSectors` 6…0. Either reason alone excludes 1.
+
+**The ceiling is 3, and it is Req 5.1's for the third time.** Decision 44 read this bound on `ringSectorCount` (≤ 11) and Decision 46 on `ringOuterMm` (≥ 22 mm). The same 2× depth-grid halving reads it here, and it lands hardest, because `ringMinSamples` is floored per band and this constant *is* how many bands there are. Halved band counts are [322, 361, 323] and [313, 292, 299] at three bands, and [237, 197, 215, 255] and [258, 264, 204, 280] at four — refused on a grid where the plane still transfers within a millimetre. One partition, three constants dividing it, one bound; this is the constant that divides it most directly.
+
+**Two values, which is the tightest bracket any owed constant in this feature has** — and the shipped value is on its ceiling rather than inside it.
+
+**It denominates `bandStepMaxMm`, and not by scaling.** The step is a difference between two bands this constant creates, so narrowing them moves the quantity the bar is read against. The suite interval collapses monotonically — 13.470, 9.288, 6.755, 5.496, 0.211 mm of ceiling at 2 through 6 bands — and then **inverts**: from seven bands the scene that must fire on `bandStep` reads a *smaller* step than the scene that must pass, and no value of the constant satisfies the suite at all. A rim spanning a fixed radial distance stops being a step between adjacent bands once the bands are narrower than the rim. Decision 41's 0.024…9.288 mm is a reading at three bands and says so nowhere.
+
+The two shipped values are consistent, but by a margin nothing records: `bandStepMaxMm = 6` sits inside the suite interval at 2, 3 and 4 bands and above its ceiling from 5 up. That covers the whole Req 5.1 bracket, so the pair does not collide — the coupling is real and currently harmless.
+
+**It denominates `maxCrossedSectors` too, which makes a fourth.** Decision 44 recorded that constant as a count of sectors, Decision 45 as a count read at a bar, Decision 46 as a count read at a radius. It is also a count read at a band count: the joint bracket is **1…2 at two bands** and 0…2 at three and above. So Decision 43's headline — that 0 is admissible and nothing in hand narrows 0…2 — is a reading at three bands. What moves it is Decision 43's own recorded blind spot: the rimmed-plate rims "never reach the inner band the sector median is computed over" at three bands, and at two the inner band ends at 16.5 mm instead of 13.667 and one of them does. The blind spot Decision 43 attributed to the scenes is a property of this constant.
+
+**What does not move.** The selected plane is identical at every band count on both captures — 351.328 mm and 356.280 mm at the food throughout, 0.000 mm of movement against Decision 46's 18.719 mm on the radius. The candidate set is fixed because the annulus is, and although selection ranks on inner-band support, the ranking never flips. Decision 46's attribution of the movement to the annulus was an argument; it is now a measurement.
+
+The crossed-sector rule also separates the two corpus candidates at **every** band count — the plate-top candidate reads 0 crossed sectors throughout and the table candidate 3 to 6 — so, as Decision 44 found for the sector count, a coarse divisor does not average the crossing away. And Decision 41's collision on `minSupportingSectors` is band-count invariant: the suite floors it at 6 and the corpus caps it at 5 at every count from 2 up.
+
+### Alternatives Considered
+
+- **Set `ringBandCount = 3` now, since the bracket has two values and 3 is shipped** - The bracket is the tightest in the feature and the value is already in the code, so setting it costs nothing and closes an owed constant - Rejected because 3 is on the **ceiling**, not inside the bracket, and Decision 45 established what that position means: the constraint that produces the edge is the one under-measured there. Req 5.1's halving refuses 4 by 3 samples in the tightest band (197 against 200) on a two-capture corpus, which is not a margin to sit against. Two values is a narrow choice, not an automatic one.
+- **Set `ringBandCount = 2`, the other admissible value, for the sample-count headroom** - Halved bands read [434, 470] and [522, 484] at two bands against [313, 292, 299] and [322, 361, 323] at three, so it clears Req 5.1 with roughly 50 % more margin - Rejected because it is the value at which `maxCrossedSectors` loses 0 from its joint bracket, and because it discards the mid band the outward *profile* is read from — Decision 14's shape detection needs three bands to distinguish flat from rising from falling, and at two "outward" has one meaning only. The headroom is real; it is not free.
+- **Leave `ringBandCount` unmarked as structural, since three bands is what "inner / mid / outer" means** - The name states the intent and the design's Decision 14 describes exactly a three-way shape reading - Rejected because the sweep shows the word carrying weight it has not earned: the constant sets the inner-band edge the sector rule reads, bounds `bandStepMaxMm`'s suite interval, moves `maxCrossedSectors`'s bracket, and is capped by Req 5.1. A constant with four downstream dependants is not structural notation. Decision 14's three-way reading is a *reason* for 3, and it is now recorded as one — in the alternative above, where it belongs.
+- **Sweep the band count jointly with the radius rather than at the shipped radius** - Both divide the same ring and Decision 46 showed the radius reorders what the count reads, so the honest measurement is the 2-D grid - Rejected for this pass and recorded as a limitation instead. The bracket here is produced by Req 5.1's halving and the suite, both of which the radius also moves, so 2…3 is a **slice at `ringOuterMm` = 25** exactly as Decision 45's collision-free grid was. Running the grid means re-extracting at seventeen radii × nine band counts; the sweep at one radius already costs ~35 s.
+- **Re-denominate the bands in millimetres, as Decisions 37 and 38 re-denominated the extent and residue bars** - A band width in millimetres would not move with `ringOuterMm`, and the Req 5.1 ceiling would then be a statement about width rather than count - Rejected on the same ground Decision 46 rejected the matching proposal for the inner band: the unit here is not wrong. A count of bands is what the shape reading needs, and converting it would replace an owed count with an owed width plus an implied count, which is more to own rather than less.
+
+### Consequences
+
+**Positive:**
+
+- `ringBandCount` is bounded at all, and by two values — the tightest bracket in the feature — where it previously had no marker and no measurement. It is the last constant the sector measure reads that had neither.
+- Decision 46's central attribution is confirmed rather than assumed: the plane movement belongs to the annulus, and a constant that divides the inner band without moving the annulus moves nothing at the food.
+- A silent-failure mode is found and bounded before it could be reached: at one band the `bandStep` guard stops firing without saying so, and two committed scenes assert against exactly that.
+- Req 5.1's grid transfer now bounds **three** of the ring's constants — angular resolution (Decision 44), radial extent (Decision 46) and radial resolution (here) — off one halving. The transfer claim is doing more work than any single decision recorded.
+- The capture session's list shortens by one item that was never on it: this constant is settled to two values by committed evidence and needs no capture.
+
+**Negative:**
+
+- The shipped value is on the ceiling of its own bracket, and the constraint producing that ceiling clears by 3 samples in one band on a two-capture corpus.
+- `maxCrossedSectors` is now denominated in **four** owed constants. Decision 43's "nothing in hand narrows 0…2" is a reading at one point of a four-dimensional space, and 2 bands already gives 1…2.
+- The bracket is a slice at the shipped radius, so the same caveat Decision 46 attached to Decision 45's grid attaches here — and the two constants that produce both ends of this bracket are the two the radius also moves.
+- `bandStepMaxMm`'s suite interval is now known to go empty above six bands, which means the guard the interval belongs to is only measurable on the committed scenes at coarse partitions. Nothing says whether that is the scenes or the guard.
+- The measurement suite grows by another ~35 s and is now decisively the slowest thing in `make test`.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theBandCountIsTheRadialDivisorOfTheSectorRule`; a `ringSamples(geometry:bandCount:)` mirroring the shipped builder, a `bandMediansMm` reading below the `ringMinSamples` floor, and `sceneSigns`/`sceneStepMm` overloads that re-band the committed scenes), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `ringBandCount` and `bandStepMaxMm` comments), `design.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
+
+## Decision 48: The pass cap never fires, and lifting it determines a constant three decisions could not
+
+**Date**: 2026-08-06
+**Status**: accepted (narrows Decision 43; corrects Decision 34; confirms Decision 38 unconditionally; couples `maxCandidatePlanes` to `minResidueAreaMm2`)
+
+### Context
+
+Decision 47 closed the ring geometry: every constant the sector measure reads now carries a provenance marker. `maxCandidatePlanes` sits outside it, in extraction, and carries the same kind of comment the band count did — "Structural: table, support, one more" — with no marker at all. It had never been varied either.
+
+Decision 46 is what makes it worth varying. That decision found `ringOuterMm` moves the selected plane *because* it moves the annulus, and Decision 47 confirmed the attribution by moving radial geometry without moving the annulus and watching the plane stand still. The annulus is the sample set extraction draws from; this constant is how many times it may draw. It is the second constant that changes which planes **compete**, and the only one that can *add* a candidate rather than reshuffle a fixed set.
+
+It also sits under two claims that were never tested at a lifted cap. Decision 38 restored the native/halved candidate counts to 3 → 3 and read that agreement as the residue **area** being grid-invariant — but both numbers were *at* the cap, so the agreement could equally have been the cap truncating both. And `planeCandidateCount` is a persisted field (Req 6.1) that Decisions 35 and 38 worked to make a property of the scene rather than of the sensor grid; if the cap binds, it is a property of the cap.
+
+### Decision
+
+`maxCandidatePlanes` is recorded as **`[owed]`, bracketed from below at 2 and unbounded above**. "Structural" is withdrawn.
+
+The cap **never fires on the corpus**. Lifted to 8, both captures still stop at three passes, and both stop **starved** — the residue left after the last pass is 1330.7 mm² and 155.6 mm² against a `minResidueAreaMm2` of 1691. It is the residue floor that ends extraction, so no value at or above 3 is distinguishable on this corpus and the ceiling stays open.
+
+That makes the two constants **coupled**, in one direction and with an order: `minResidueAreaMm2` is itself `[owed]` and bounded from above only, and `1785135663727` leaves 78.7 % of the floor after its last pass — so a session that lowers the floor below 1331 mm² gives that capture a fourth pass and this cap something to truncate. **Set the residue floor first**; a ceiling here is unreadable until it is.
+
+Two consequences belong to other constants and are recorded against them.
+
+Read at full pass depth with the intended plane identified by **Req 3.1's ring median** rather than by the ranking, the corpus **determines `maxCrossedSectors` at 2**, where Decision 43 recorded 0…2 and "nothing in hand narrows it".
+
+And Decision 34's finding that `foodEnvelopeMinMm` has **no floor** is withdrawn. The corpus contains a plane above the support surface after all, and its envelope is positive rather than negative.
+
+No shipped value moves and nothing is rewired.
+
+### Rationale
+
+**The negative first, because it is the opposite of Decision 46's.** Every constant swept since Decision 44 either moved a verdict or moved a plane. This one moves nothing, because it is never reached. The measurement that says so is not the candidate count — that reads 3 either way — but the residue *left over*: replaying the removal chain past the last pass gives 384 and 46 samples against floors of 488 and 500. Extraction on this corpus is stopped by `minResidueAreaMm2`, in both captures, at both grid resolutions.
+
+| capture | natural depth at cap 8 | residue after last pass | floor | stopped by |
+|---|---|---|---|---|
+| `1785135663727` | 3 | 1330.7 mm² (0.787×) | 1691 mm² | residue floor |
+| `1785901032716` | 3 | 155.6 mm² (0.092×) | 1691 mm² | residue floor |
+
+**Which makes Decision 38's repair unconditional.** Lift the cap and the two grids still stop at three passes each. The 3 → 3 agreement that decision quotes is the residue area being grid-invariant, as recorded, and not the cap truncating both — a reading that was available to it and that nothing in hand had excluded.
+
+**The floor of 2 is the corpus's, and it is where sequential extraction earns its keep.** On `1785901032716` the plane a correct fit must select is **pass 2**, nearest Req 3.1's zero at a ring median of −2.658 mm, while the **ranking's** winner is pass 1, the table, at +3.039 mm. The candidates are:
+
+| capture | pass | plane at food | ring median | inner support | crossed | escaped | envelope |
+|---|---|---|---|---|---|---|---|
+| `1785135663727` | 1 | 351.328 mm | **−0.928 mm** | **0.629** | 0 | 3 | 26.628 mm |
+| | 2 | 371.282 mm | +6.366 mm | 0.317 | 6 | 0 | 39.601 mm |
+| | 3 | 316.216 mm | −32.917 mm | 0.183 | 0 | 7 | 8.958 mm |
+| `1785901032716` | 1 | 356.280 mm | +3.039 mm | **0.480** | 3 | 0 | 25.793 mm |
+| | 2 | 344.883 mm | **−2.658 mm** | 0.362 | 2 | 4 | 21.041 mm |
+| | 3 | 335.147 mm | −12.844 mm | 0.304 | 0 | 6 | 7.154 mm |
+
+Below a cap of 2 the intended plane on the second capture is not in the candidate set at all, and no setting of any owed constant recovers it — the capture falls back by construction. The committed suite agrees independently: `sequentialExtractionSurfacesThePlate` asserts the plate arrives on pass 2. Two sources, one floor, no disagreement — the second time that has happened, after Decision 43's.
+
+**And the corpus determines `maxCrossedSectors` at 2.** Every reading of that constant since Decision 40 takes its bracket from the **highest-support** candidate on each capture: floor from `1785135663727`'s (0 crossed), ceiling from `1785901032716`'s (3 crossed, minus one). But the highest-support candidate on the second capture *is the table* — the plane the guard exists to reject. The plane the feature must **admit** there is pass 2, which carries 2 crossed sectors and was never entered into the bracket. Floor 2, ceiling 2:
+
+| source | floor | ceiling |
+|---|---|---|
+| Decision 43, corpus (highest-support candidates) | 0 | 2 |
+| Decision 43, committed suite | 0 | 2 |
+| here, corpus at full pass depth (Req 3.1's candidate) | **2** | 2 |
+
+This is the first thing in hand that narrows 0…2, and it needed both the rule and the full pass depth to see: the plane that supplies the floor is only in the set because `maxCandidatePlanes` ≥ 2. The constant stays `[owed]` — this is a slice at the shipped `(ringOuterMm, ringSectorCount, sectorSupportMin, ringBandCount)`, as every reading since Decision 44 is — but the session no longer chooses freely within 0…2 at the shipped four. It either reads 2 or moves one of them.
+
+**The ranking is what makes all of this load-bearing.** `fitFoodSupportPlane` ranks admissible candidates by `supportFraction`, and on `1785901032716` the table outranks the intended plane 0.480 to 0.362. So selection there depends entirely on the table being *rejected* by a guard — Decision 18's silent-failure case arriving one level above the guard written for it. The pass cap's floor, `maxCrossedSectors`'s determination and Decision 42's 0.338 mm of accidental `ringMedianMaxMm` separation are three readings of that same fact.
+
+**`foodEnvelopeMinMm` has a floor, and Decision 34's reasoning for saying it does not is the part that fails.** That decision recorded the guard's cases — a bowl, a plane on the food top — as *negative-envelope* scenes the corpus does not contain. The corpus contains one: the second capture's pass 3 sits 9.736 mm above the plate with 6 escaped sectors, and its envelope is **positive at 7.154 mm**. A plane above a surface still has food above *it* wherever the food is taller than the gap, so "plane on the food top → p90 ≈ 0" holds only once the plane reaches the food's own top. The same reading tightens the ceiling: 25.8 mm is the *table's* envelope, and the intended plane's is 21.041 mm.
+
+| bound | Decision 34 | here |
+|---|---|---|
+| floor | none | **7.154 mm** (the above-surface candidate) |
+| corpus ceiling | 25.8 mm | **21.041 mm** (Req 3.1's candidate, not the ranking's) |
+| suite ceiling (Decision 41) | 8.233 mm | 8.233 mm |
+
+Against the suite that leaves a **1.079 mm** joint window, the narrowest any owed constant in this feature has. The above-surface candidate is currently rejected by `ringMedianMaxMm` anyway — `[inherited]`, firing at |−12.844| > 5 — so the floor is a bound rather than a repair, and it is the same inherited bar Decision 42 found holding the table out by 0.338 mm.
+
+### Alternatives Considered
+
+- **Mark `maxCandidatePlanes` `[measured]` and close it, since the corpus shows it never fires** - Never firing is a measurement, the sweep is reproducible, and a constant with no effect needs no capture - Rejected because "never fires" is contingent on `minResidueAreaMm2`, which is `[owed]` with its floor still owed to the session. `1785135663727` is 78.7 % of the way to a fourth pass. Marking this settled would record as a property of the scene something that is a property of an unset constant — the exact defect Decision 35 found in `planeCandidateCount` and Decision 38 repaired.
+- **Lower `maxCandidatePlanes` to 2, the measured floor, since nothing on the corpus uses the third pass** - It would tighten the RANSAC cost bound Req 7.6 measures, the third pass produces a rejected candidate on both captures, and a value at its own floor is at least derived - Rejected because the third pass is where a plate under a dominant table can still surface, which is the case the corpus does not contain and prerequisites capture 6 is for; and because the third-pass candidate is exactly what determines `maxCrossedSectors` here. The corpus's own evidence for 2 being sufficient is two captures of flat bread on a white plate.
+- **Raise the cap so the corpus can be measured at its natural depth** - The cap would then never be the binding constraint by construction, and `planeCandidateCount` would be unambiguously a scene property - Rejected because it is already never binding, so the change would buy nothing measurable and would raise the `maxIterationsPerPass × maxCandidatePlanes` bound on a path that has produced an OOM before (Decision 13). Req 7.6's device latency is denominated in this constant and task 27 has not measured it yet.
+- **Record `maxCrossedSectors = 2` as settled, since the corpus now determines it and the suite agrees** - The two constraint sets close on a single value, which no other owed constant achieves, and Req 3.7's circularity objection is about fitting to the pass side alone rather than about agreement between independent sources - Rejected because the determination is a slice at four constants that are themselves owed and bracketed — Decision 44's count, Decision 45's bar, Decision 46's radius, Decision 47's band count — and Decision 46 measured the two constraint sets colliding outright at two radii inside that bracket. A value determined at one point of a four-dimensional space is not determined.
+- **Identify the intended candidate by highest ring support throughout, as Decisions 34 and 43 do, and leave their brackets alone** - It is the criterion the shipped ranking uses, so it is the one selection actually applies, and changing criteria mid-feature invites inconsistent readings - Rejected because it is the criterion under test. Req 3.1 states the target as the plane the food rests on, and the ring median is its direct measure; the support fraction is a *proxy* the design chose for its cliff behaviour (`admissibility`'s own comment says so). On the one corpus capture where the two disagree, the proxy picks the table. Using the proxy to identify the correct plane is what made Decision 43's floor unreadable.
+
+### Consequences
+
+**Positive:**
+
+- `maxCandidatePlanes` carries a provenance marker and a measured floor where it had neither, and the last "Structural:" comment standing in for a derivation in `SupportRegion` is gone.
+- `maxCrossedSectors` is narrowed for the first time — from three admissible values to one, at the shipped four — by evidence already committed, on the constant three decisions had recorded as unnarrowable.
+- `foodEnvelopeMinMm` gains a floor and a tighter ceiling, so an `[owed]` constant that had one-sided evidence now has a two-sided bracket, and the joint window against the suite is 1.079 mm.
+- Decision 38's grid-invariance claim is confirmed at a lifted cap, which excludes the one alternative reading of it that was available.
+- The ranking's failure on `1785901032716` is now measured rather than implied: the design's selection rule picks the table on one of two committed captures, and everything holding the right plane in is a guard.
+
+**Negative:**
+
+- The corpus can bound this constant from below only, so `maxCandidatePlanes` joins `ringSupportMin` and `minResidueAreaMm2` as one-sided — and its open end depends on one of the others.
+- Two owed constants are now coupled with an *order* (`minResidueAreaMm2` before `maxCandidatePlanes`), which the capture session's list did not previously carry. Decision 46's radius-first triple is now a sequence of two independent orderings.
+- `maxCrossedSectors`'s determination at 2 rests on identifying the intended plane by ring median on a capture where the ranking disagrees. If prerequisites capture 6 disagrees with that identification, the narrowing goes rather than moves.
+- Decision 34's per-guard survey is now known to have read "intended candidate" as the ranking's winner throughout, so its other bounds — `escapeBandMm`, `supportVisibilityMin`, `ringSupportMarginMin` — carry the same question and have not been re-read here.
+- Req 7.6's device latency bound is denominated in a constant with no measured ceiling, and task 27 measures that latency at the shipped value only.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`thePassCapIsWhatStopsExtractionOnTheCorpus`, and an `extractCandidates(annulus:geometry:gravity:rng:maxPasses:)` mirroring the shipped extraction with the cap as an argument), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `maxCandidatePlanes`, `maxCrossedSectors` and `foodEnvelopeMinMm` comments), `design.md`, task 26's detail, `prerequisites.md` and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and no existing assertion is edited.
+
+---
+
+## Decision 49: The candidate bound is a constant of its own, and it carried the radius's movement
+
+**Date**: 2026-08-06
+**Status**: accepted (supersedes Decision 46's "do not interpolate" and "fix it first"; re-denominates the bound as Decisions 37 and 38 re-denominated the extent bar and the residue floor; qualifies Decisions 41 and 48)
+
+### Context
+
+Three decisions in a row have been readings *through* the annulus. Decision 46 swept `ringOuterMm`, found the selected plane moving 18.719 mm at the food on `1785901032716`, and attributed the movement to the annulus — the candidate bound, written as `annulusOuterMultiple × ringOuterMm`, which the radius therefore moved with it. Decision 47 supported that attribution by elimination: `ringBandCount` re-cuts the ring without touching the annulus, and the plane does not move at all. Decision 48 varied how many times the annulus may be drawn from.
+
+None of the three could vary the annulus **itself**. The shipped path did not let them: with the bound expressed as a multiple of the radius, there is no radius at which the bound is held still, and no bound at which the radius is. `annulusOuterMultiple` carried no provenance marker — it read "The candidate set is an annulus of 2 × ringOuterMm around the food mask (Decision 15)", which is Decision 15's *comparison against the pre-feature band scan*, not a derivation of the 2 — and it had never been swept.
+
+Decision 46 also left the capture session its hardest instruction: the radius must be fixed **first** and its 22…32 mm bracket **must not be interpolated**, because the intended plate candidate reads 0 crossed sectors at 22, 23, 25, 26, 28, 29 and 31 mm and 2 at 24, 27, 30 and 32 mm. That instruction is only justified if the alternation belongs to the radius.
+
+### Decision
+
+`annulusOuterMultiple = 2` becomes **`annulusOuterMm = 50`**, `[owed]`, bracketed **50…75 mm** by the corpus and by nothing else. The value does not move — `2 × 25` is 50 — so every corpus candidate, every committed scene and every persisted field is unchanged by construction.
+
+**The radius does not move the plane. The bound does.** Over the same 13…40 mm radius sweep with the bound pinned at 50 mm, the selected plane moves **0.000 mm** at the food on both captures — not within a tolerance, exactly. Swept itself at a fixed ring, the bound moves it **18.843 mm** and 1.978 mm, which is Decision 46's number rather than a fraction of it.
+
+Two of Decision 46's riders are **superseded**. The bracket **may** be interpolated: with the bound pinned, the intended plate candidate reads 0 crossed sectors at every radius in the sweep, so the alternation was the annulus re-selecting the candidates. And the radius is **not** fixed first: Decision 45's joint `(ringSectorCount, sectorSupportMin)` pair is a pair again, not a triple, because the radius no longer selects the candidates the other two are read on.
+
+`maxCrossedSectors` acquires a fifth denomination. Decision 48 determined it at 2; that determination holds at `annulusOuterMm` = 50 mm and at no other value in the sweep.
+
+### Rationale
+
+**The decomposition is exact, and it is exact for a structural reason.** `extractCandidates` takes the annulus and nothing else. Pin the bound and every radius is handed the same candidates; the ring still moves, so the *ranking* could still pick a different one — and it does not, at any radius from 13 to 40 mm on either capture.
+
+| sweep | `1785135663727` | `1785901032716` |
+|---|---|---|
+| radius 13…40 mm, bound coupled (Decision 46) | 4.162 mm | 18.719 mm |
+| radius 13…40 mm, bound pinned at 50 mm | **0.000 mm** | **0.000 mm** |
+| bound 25…100 mm, ring pinned at 25 mm | 1.978 mm | **18.843 mm** |
+
+Against Req 5.1's 1 mm grid-transfer tolerance, the constant that moves the answer is the bound, and the radius is a bracket-only constant like `ringSectorCount` and `sectorSupportMin`.
+
+**The alternation goes with it.** Decision 46's interior exceptions — 24, 27, 30, 32 mm, and 35 mm above the bracket — are radii at which the intended plate candidate reads crossed sectors. With the bound pinned there are none. A radius between two clean radii is implied by both after all, once the candidate set stops resizing underneath it.
+
+**The value does not move, which is what makes this a re-denomination rather than a change.** Decision 37 converted `minAcceptedExtentPx` to millimetres and Decision 38 converted `minResidueSamples` to mm², both without moving the bar, because the *unit* was wrong: a pixel count and a sample count both track the sensor grid where the surface they stand for does not. Here the unit is a length and it is correct; what is wrong is the **denominator**. Expressing the candidate bound as a multiple of a ring radius makes a measure parameter resize the candidate set, and the measurements above are what that costs.
+
+**The corpus brackets it 50…75 mm, reading `maxCrossedSectors` as Decision 48 reads it** — floor from the plane a correct fit must admit (nearest Req 3.1's zero), ceiling from the ranking's winner where that is a different plane.
+
+| bound | candidates (plate / table capture) | corpus `maxCrossedSectors` |
+|---|---|---|
+| 25 mm | 2 / 2 | 4…−1 **empty** |
+| 31.25 mm | 2 / 3 | 3…unbounded |
+| 37.5 mm | 2 / 3 | 3…1 **empty** |
+| 43.75 mm | 2 / 3 | 3…−1 **empty** |
+| **50 mm (shipped)** | 3 / 3 | **2…2** |
+| 62.5 mm | 3 / 3 | 2…4 |
+| 75 mm | 3 / 3 | 2…4 |
+| 100 mm | 3 / 3 | 6…−1 **empty** |
+
+Below the floor the plane a correct fit must admit is itself crossed, and at 25 mm — where the bound collapses onto the ring — extraction produces two candidates on both captures. At 100 mm the interval collapses the other way: the plate capture's intended candidate reads **6** crossed sectors and a ring median of +1.793 mm as the annulus reaches surfaces beyond the plate. The shipped 50 mm is **on the floor** of that window, as `sectorSupportMin` sits on its ceiling (Decision 45) and `ringBandCount` on its (Decision 47), and it is the only value in the sweep at which the corpus determines `maxCrossedSectors` at 2.
+
+**The committed suite cannot bound it at all**, which is the first time since Decision 41 that a constraint set has been silent. The scenes never run extraction — each asserts against a plane its own test states — so the bound reaches them through exactly two guards, `visibility` and `escaped`, and both are among the five Decision 34 found never fire. Every scene keeps its verdict at 25 mm and at 100 mm alike. Decision 41 predicted the suite would cap constants and it capped three (`ringSectorCount`, `ringOuterMm`, `ringBandCount`); this one it leaves entirely to the captures.
+
+**One side finding, and it belongs to `escapeBandMm`.** Decision 41 read that constant's suite floor as ≥ 14.868 mm. That is an *annulus* median, so it is a reading at the shipped bound: over the sweep the same scenes read 0.131, 0.189, 14.743, 14.821, **14.868**, 14.865, 14.719 and 0.214 mm — a 14.737 mm span, because a wider annulus reaches past the plate a scene sits on and the median goes negative. An owed constant that never fires is denominated in one that moves the answer.
+
+**Req 7.6's latency is denominated here too.** The annulus holds 10 469 and 12 551 samples at the shipped bound and 19 427 and 25 659 at 100 mm, and RANSAC iterates over all of them — so the cost bound is `maxIterationsPerPass × maxCandidatePlanes` over a sample count this constant sets. Task 27 measures that at the shipped value only.
+
+### Alternatives Considered
+
+- **Record the measurement and leave `annulusOuterMultiple` as a multiple** - The finding is the decomposition, not the denomination; the numbers stand either way, and a multiple keeps the ring inside the bound by construction, which becomes an invariant to maintain once the two are independent - Rejected because the coupling is what produced Decision 46's headline and its two instructions to the capture session, both of which are wrong. Leaving it would mean the session fixes `ringOuterMm` first, refuses to interpolate a bracket that is interpolable, and re-reads the count and the bar at each radius — work the measurement shows is unnecessary. The invariant is cheap to keep: `SupportRegionRingTests` already asserts every ring sample is inside the bound.
+- **Set `annulusOuterMm = 50` as settled, since the corpus brackets it and the shipped value is inside** - It is on the corpus floor with a measured window above it, and it is the only value at which `maxCrossedSectors` is determined - Rejected because "on the floor" is where Decision 45 found `sectorSupportMin` and Decision 47 found `ringBandCount`, and both stayed owed. The floor is read from two captures of flat bread on a white plate, and the failure at 25…43.75 mm is that the *intended* plane is crossed — a property of the plate-size-to-food-size ratio the corpus fixes and the capture session varies.
+- **Widen the bound to 62.5 or 75 mm, where the corpus still holds and the candidate set is larger** - More surface competes, `maxCrossedSectors` stays feasible, and a wider annulus is what a large plate needs - Rejected because it asserts an owed constant to buy a wider bracket on another owed constant, and because it costs Decision 48's determination: at 62.5 and 75 mm `maxCrossedSectors` reads 2…4 rather than 2…2. Req 7.6's cost also rises with it and has not been measured on device.
+- **Rewrite Decision 46's test to sweep the radius at the pinned bound** - It would then measure the shipped path rather than a coupling that no longer exists - Rejected because that decision's measurement is the coupled one and this decision's comparison is against it. The test now passes the coupled bound explicitly and says why, which keeps the record and stops the coupling being implied by a helper's default.
+- **Derive the bound from the food mask instead — `k × foodRadius`, as the design's rejected alternative had it** - It would scale with the scene rather than being a fixed length, and a small food item would not drag in a metre of table - Rejected on Decision 15's own measurement: `dilate(foodMask, 2 × foodRadius)` spans ~8.3 s² against the pre-feature bands' ~4 s², looser than the code this feature replaces. Nothing here reopens that.
+
+### Consequences
+
+**Positive:**
+
+- The one owed constant that moved the answer is identified, and it is not the one three decisions attributed the movement to. `ringOuterMm` is bracket-only, so `ringSectorCount`, `sectorSupportMin`, `ringOuterMm` and `ringBandCount` are now all constants that move verdicts and not planes.
+- Decision 46's two instructions to the capture session are withdrawn: the 22…32 mm bracket may be interpolated, and the radius is fixed beside the count and the bar rather than before them.
+- The last constant in `SupportRegion` whose comment stood in for a derivation now carries a marker and a two-sided corpus bracket.
+- No shipped value moves and no verdict changes, so the repair costs nothing to verify: 537 XCTest and 312 swift-testing cases pass unchanged.
+- `escapeBandMm`'s suite floor is known to be a reading at one bound rather than a property of the scenes, which Decision 41 recorded without qualification.
+
+**Negative:**
+
+- The capture session has one more constant to set, and it is one the committed suite cannot help with — the corpus is its only source, and the corpus is two captures of the same food on the same plate.
+- The ring-inside-the-bound invariant was free under a multiple ≥ 1 and is now a constraint the session must respect between two owed constants.
+- Decision 48's determination of `maxCrossedSectors` at 2 is now a slice at **five** constants rather than four, and the fifth is the one that changes which planes compete.
+- Every plane figure quoted by Decisions 44 to 48 is a reading at `annulusOuterMm` = 50 mm. Those decisions swept constants that do not move the plane, so their verdict brackets stand, but their candidate *sets* were never varied.
+- Req 7.6's latency bound is denominated in a constant with an open cost profile, and the corpus's 50…75 mm window spans a 1.5× difference in annulus samples.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`annulusOuterMultiple` → `annulusOuterMm`, its provenance block, the `ringSamples` derivation, and the superseded riders in `ringOuterMm`'s comment), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theCandidateBoundIsAConstantOfItsOwn`, a `ringSamples(geometry:outerMm:annulusOuterMm:)` taking the bound as an argument, and `coupledBoundMm` so Decision 46's sweep states the coupling it measures), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes**: `2 × ringOuterMm` is 50 mm, the constant's new value.
+
+---
+
+## Decision 50: The removal band is what one pass hands the next, and its one stated rule is false
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decisions 46 to 49 worked through the constants that decide which planes *compete*. `ringOuterMm` re-rings a candidate set already chosen; `annulusOuterMm` fixes the sample set extraction draws from and is the one that moves the plane; `maxCandidatePlanes` fixes how many times that set may be drawn from. One constant in `SupportRegion` sits between the passes and was in none of those sweeps: `inlierRemovalMultiple = 2`, the shell a pass removes its polished inliers within before the next pass runs.
+
+It is the fourth constant that changes which planes compete, and the only one that decides what each draw *leaves*. It was also the last constant in the file carrying a claim in place of a provenance marker: "a pass removes its polished inliers within 2 × `inlierBandMm`; a 1× shell seeds near-duplicate planes on the next pass". That is a statement about what happens at 1×. Like `ringOuterMm`'s "inside the smallest measured plate margin" (Decision 33) and `ringBandCount`'s "structural: inner / mid / outer" (Decision 47), it had never been measured.
+
+### Decision
+
+`inlierRemovalMultiple` is `[owed]` and **bracketed 1…2.5×** by the corpus, with the shipped 2× strictly inside it. Its stated rule is measured and **false**, so the shipped value has no derivation at all; the floor is structural and the ceiling is the corpus's. It does **not** move the answer. `maxCandidatePlanes` is coupled to it with an order — the removal band is fixed before the residue floor, which Decision 48 already puts before the pass cap.
+
+### Rationale
+
+**The stated rule is false, and not marginally.** Read in the removal's own units — the largest gap between two planes' signed heights taken over the whole annulus, against one `inlierBandMm` — **no** adjacent pass pair anywhere in the sweep is a near-duplicate: 0 of 33 pairs across eight multiples. The closest pair at 1× diverges by **30.807 mm** and the closest at any multiple by **23.973 mm**, nearly five bands. CC-RANSAC is why. A pass keeps the largest *connected* component, so what a 1× shell leaves behind is a thin ring around a surface already taken and it does not form one. The shipped 2× therefore stands on nothing, and the floor cannot come from here.
+
+**It does not move the answer, exactly.** The selected plane at the food is unchanged to **0.000 mm** on both captures at every multiple, because removal happens *after* a pass — pass 1 is drawn from an annulus this constant has never touched — and the ranking picks pass 1 on both captures at every multiple. So it joins `ringSectorCount`, `sectorSupportMin`, `ringBandCount` and (since Decision 49) `ringOuterMm` as bracket-only, and `annulusOuterMm` remains the only owed constant that moves the plane.
+
+**The ceiling is where a shell wide enough to take the table takes the plate with it.** On `1785901032716` the plane a correct fit must select is pass 2, nearest Req 3.1's zero (Decision 48). Its ring median degrades over the sweep and then the candidate stops existing:
+
+| multiple | removal band | natural depth (plate / table capture) | intended ring median on `1785901032716` | corpus `maxCrossedSectors` |
+|---|---|---|---|---|
+| 1× | 5 mm | 7 / 5 | −2.203 mm | **2…2** |
+| 1.25× | 6.25 mm | 5 / 3 | −2.309 mm | **2…2** |
+| 1.5× | 7.5 mm | 4 / 3 | −2.377 mm | **2…2** |
+| **2× (shipped)** | 10 mm | 3 / 3 | −2.658 mm | **2…2** |
+| 2.5× | 12.5 mm | 2 / 3 | −3.011 mm | **2…2** |
+| 3× | 15 mm | 2 / 2 | +3.039 mm | 3…unbounded |
+| 4× | 20 mm | 2 / 2 | +3.039 mm | 3…unbounded |
+| 6× | 30 mm | 2 / 1 | +3.039 mm | 3…unbounded |
+
+At 3× the nearest-to-zero candidate is pass 1, the **table**, carrying 3 crossed sectors of its own, so the guard would have to admit the plane Decision 18 exists to reject. That is Decision 49's floor argument arriving on a second constant. The **floor of 1** is structural rather than measured: below 1× a pass leaves samples it selected within `inlierBandMm` and the next pass can re-find the same plane. The corpus does not raise it — at 1× the intended candidate is still admissible and still separable. Unlike Decision 46's radius the readings are monotone across the sweep, so nothing here forbids interpolating inside the bracket.
+
+**`maxCandidatePlanes` is coupled to it with an order.** Decision 48 lifted the cap to 8 and found extraction stopping at three passes on both captures, starved, and concluded that no value at or above 3 is distinguishable. That reading is at 2×. A narrower shell hands the next pass more residue and extraction runs deeper: at 1× it reaches 7 and 5 passes, so the cap truncates, and the shipped 2× is the **smallest multiple in the sweep at which it does not**. Decision 48's headline is a slice at this constant, and that decision's ordering — residue floor before pass cap — gains a member before both. Req 7.6's latency is denominated here for the same reason, since the RANSAC bound is `maxIterationsPerPass` times the passes actually run.
+
+**The committed suite cannot bound it, and here that is structural rather than measured.** Decision 49's bound reached the scenes through `visibility` and `escaped` and was found silent by measurement. This constant reaches them through nothing: no scene runs extraction — each asserts against a plane its own test states — so no suite reading is even definable. It is the only owed constant of which that is true. One positive comes with it: `maxCrossedSectors` reads **2…2 at every multiple this constant's own bracket admits**, so unlike the candidate bound it does not denominate Decision 48's determination and the sitting sets the two apart.
+
+### Alternatives Considered
+
+- **Leave the comment and record only the bracket** - The numbers stand either way, and the claim about 1× is a design note rather than a shipped bar - Rejected because the claim is the only thing standing where a derivation should be, and it is false. Leaving it means the next reader takes 2× as reasoned when it is not, which is the failure Decisions 33 and 47 both found and repaired.
+- **Set the multiple to 1×, since the rule that argued against it is false** - It is the structural floor, it keeps the most surface in play for later passes, and the corpus reads `maxCrossedSectors` 2…2 there - Rejected because it asserts an owed constant, which Req 3.7 forbids, and because it is the multiple at which extraction runs deepest — 7 passes on one capture against a cap of 3 — so it moves the pass cap from idle to load-bearing without any measurement of what the extra candidates are worth.
+- **Re-denominate it in millimetres as `inlierRemovalBandMm = 10`, on Decisions 37, 38 and 49's pattern** - Those three re-denominations each removed a dependence a measure parameter had no business carrying - Rejected because there is no dependence to remove. `inlierBandMm` is `[inherited]` from `LiDARPlaneFitter` and is itself in millimetres, so the multiple already transfers across depth grids; expressing removal as a multiple of the band a pass *selected* inliers within is the relation that makes the floor of 1 structural, and millimetres would hide it.
+- **Widen it toward 2.5×, the top of the bracket, to end extraction sooner and cut Req 7.6's cost** - Fewer passes is less RANSAC, and 2.5× still reads `maxCrossedSectors` 2…2 - Rejected because it buys latency with the margin on the plate candidate: its ring median is already degrading (−2.658 → −3.011 mm) and 3× is where it disappears. Choosing a value inside a bracket is asserting, and this one is asserting toward the failing end.
+
+### Consequences
+
+**Positive:**
+
+- Every constant in `SupportRegion` now carries a provenance marker; no comment stands in for a derivation anywhere in the file.
+- The claim that argued for the shipped value is measured and disposed of, so no future reader treats 2× as reasoned.
+- The constant is bracketed two-sidedly, and it is the first owed constant in this feature whose shipped value sits strictly inside its bracket rather than on an edge.
+- `maxCrossedSectors` is confirmed **not** denominated in it — 2…2 throughout the admissible range — so the capture session sets the two independently, which is true of no other constant that changes the candidate set.
+- No shipped value moves and no verdict changes.
+
+**Negative:**
+
+- The capture session has one more constant to set, and the corpus is its only source — the committed suite cannot express a reading on it at all.
+- Decision 48's "the pass cap never fires" is a reading at 2× and not a property of the corpus; the ordering the session must follow is now removal band, then residue floor, then pass cap.
+- The floor of 1 is structural, not measured, so the bracket is one-and-a-half-sided in the same way `maxCandidatePlanes`'s was before Decision 48.
+- Req 7.6's latency is denominated in a fourth constant, and the pass count over the bracket runs from 7 to 2 on one capture — a wider spread than any other owed constant produces.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`inlierRemovalMultiple`'s provenance block, and `maxCandidatePlanes`'s coupling note), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theRemovalBandIsWhatOnePassHandsTheNext`, and the removal multiple added as an argument to the parameterised extraction the pass-cap sweep already uses), `design.md`, `prerequisites.md`, task 26's detail and `docs/agent-notes/support-plane-fit.md`. **No shipped behaviour changes.**
+
+---
+
+## Decision 51: The iteration budget is set by the constant that carries no marker
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`SupportRegion` reaches task 26 with every constant carrying a provenance marker except one. `ransacSuccessProbability = 0.99` says only "Target probability of drawing one outlier-free triple, for adaptive stopping" — a description of what it is, not a record of why it is that. It had never been varied. Its neighbour `maxIterationsPerPass = 2048` is marked `[derived]` and carries a paragraph: "the budget is sufficient because extraction is SEQUENTIAL — pass 1 removes the table — not because the pass-1 inlier ratio is high (it is ~6 %, where 2048 iterations reach ~36 %)".
+
+The two are one mechanism. `requiredIterations` returns `min(maxIterationsPerPass, log(1 − p) / log(1 − w³))`, so whichever end of that clamp is smaller is the constant that actually sets a pass's budget, and the shipped code never reports which. Decision 46 gave the question weight: held at the shipped radius over eight RANSAC seeds the selected plane moves 2.095 mm at the food, so every plane figure Decisions 40 to 50 quote carries about 2 mm of draw dependence. That decision recorded the caveat and could not say what it was denominated in — the budget was the one input never swept.
+
+### Decision
+
+Mark `maxIterationsPerPass` `[measured]` with its stated derivation withdrawn and replaced: it never fires on this corpus, and it is bracketed 128…unbounded from below. Mark `ransacSuccessProbability` `[owed]`, bracketed 0.9…unbounded, and record that it is the constant that sets every pass's budget and the one Decision 46's draw dependence is denominated in. Do not choose a value inside either bracket.
+
+### Rationale
+
+The clamp is measured at both ends, per pass, on both captures. The passes spend 72, 11, 250 and 12, 41, 5 iterations against a cap of 2048: the target is always the smaller, so **`maxIterationsPerPass` never fires**, the third thing in the file of which that is true after Decision 48's pass cap and Decision 34's five guards. The largest draw the corpus ever needs is 250, so the cap truncates nothing at or above 256.
+
+That makes the `[derived]` argument checkable, and its own quantity refutes it. The pass-1 inlier ratio is measured at **0.402 and 0.698**, six to twelve times the ~6 % the comment quotes; at those ratios a 0.99 target is met in 69 and 12 iterations. The budget is sufficient because the dominant plane is easy, not because extraction is sequential.
+
+The target is the live half, and it moves the answer — which only `annulusOuterMm` otherwise does. Swept 0.5…0.99999 at the shipped cap the selected plane at the food moves **3.704 mm** on `1785135663727` (351.620, 349.473, 353.130, 351.328, 349.426, 349.426 mm), past the 1 mm Decision 35 measures Req 5.1's transfer at. The readings wander rather than climb, so like Decision 46's radius and unlike Decision 50's removal band **the bracket must not be interpolated**.
+
+And it is what Decision 46's caveat is denominated in, measured rather than inferred by elimination: that decision's eight-seed control was re-run against each end of the clamp. Against the **cap** the spread does not move at all — 1.992 mm at 64 and 2.095 mm at 256, 2048 and 8192 — because the cap is not what ends a pass. Against the **target** it collapses **2.095 → 0.194 mm** from 0.99 to 0.99999, a 10.8x fall that takes it under the Req 5.1 bar. So the draw dependence every bracket in Decisions 40 to 50 carries is neither a property of the captures nor a price of the cap: it is this constant, and it is removable.
+
+The brackets follow. The cap's floor is 128: at 64 the sector verdict on `1785135663727` flips from 5 supporting / 0 crossed to 3 / 2 — the guard every one of those brackets is read from — and at 32 the plane moves 1.9 mm, while at 128 and above it is the shipped plane to 0.000 mm. Its ceiling stays open because above the largest required draw there is nothing to distinguish; what sets it is Req 7.6's worst-case latency, and the scene where it would fire is a low-inlier-ratio one the corpus does not contain. The target's floor is 0.9: `1785901032716` is draw-stable at 0.001 mm at every value from 0.9 up and jumps to 2.376 mm at 0.5. Tightening it is paid for out of the cap's 8x headroom, so the two do not compete.
+
+### Alternatives Considered
+
+- **Leave the pair as shipped and record only the missing marker**: Annotate `ransacSuccessProbability` as `[derived]` from the cap's paragraph and move on - Rejected because the paragraph is about the wrong constant. Attaching the cap's sufficiency argument to the target would document a value that moves the plane 3.704 mm as though it were settled, which is the circularity Req 3.7 forbids.
+- **Set `ransacSuccessProbability` to 0.99999 now**: The corpus shows draw dependence falling under the Req 5.1 bar there, and the cap has the headroom to pay for it - Rejected because it is choosing a value inside a bracket, which Req 3.7 forbids for exactly these constants, and because the readings wander rather than climb, so 0.99999 being the best of six sampled values is not evidence that it is the right one.
+- **Retire the cap, since it never fires**: Decision 32 retired `minCandidateSamples` on similar grounds - Rejected because the two cases differ. That constant was provably outcome-identical to a bar already measured; this one is a worst-case latency bound for a scene the corpus lacks, and removing it would leave `ccRansac` unbounded on exactly the low-inlier-ratio input it exists to survive.
+- **Re-read Decisions 40 to 50's brackets at a tighter target**: The draw dependence they carry is now known to be removable - Rejected as premature. The target is bracketed, not set; re-reading every bracket at a value that has not been chosen would produce a second set of readings owed to the same sitting.
+
+### Consequences
+
+**Positive:**
+
+- Every constant in `SupportRegion` now carries a provenance marker, and none rests on a quantity the corpus contradicts.
+- Decision 46's caveat on the whole feature — about 2 mm of draw dependence in every plane figure Decisions 40 to 50 quote — is denominated for the first time, and shown to be removable rather than intrinsic.
+- The first owed constant that the committed corpus alone can bracket and set, needing no capture session. Every other one waits on the sitting or on Bucket C.
+- The cap's `[derived]` marker no longer rests on a pass-1 inlier ratio that is wrong by an order of magnitude.
+
+**Negative:**
+
+- Task 26 gains an owed constant rather than losing one, and it is one that moves the answer.
+- The brackets Decisions 40 to 50 read are now known to be quoted at a draw dependence that a different target would remove, so some of them may need re-reading once the target is fixed.
+- The corpus is two captures of flat bread on a plate, so the cap's ceiling and the scene in which it would fire are both outside what can be measured here.
+- The measurement is the slowest in the suite (about 70 s), because the eight-seed control now runs against both ends of the clamp.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (`maxIterationsPerPass` and `ransacSuccessProbability` provenance blocks, and `ringOuterMm`'s seed-control note), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theIterationBudgetIsWhatTheSeedSpreadIsDenominatedIn`, with `ccRansac` and the pass chain parameterised on the budget pair), task 26's detail. **No shipped behaviour changes.**
+
+---
+
+## Decision 52: The inlier band is where four provenance markers terminate
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 51 closed with "every constant in `SupportRegion` now carries a provenance marker, and none rests on a quantity the corpus contradicts". That was true, and it was not sufficient. Four of those markers read `[inherited]`, and an `[inherited]` marker is a pointer: it is only as good as the constant it points at. All four resolve, directly or in one hop, to `LiDARPlaneFitter.inlierBandMm = 5` — `ringBandMm` is "[inherited] `inlierBandMm`", `ringMedianMaxMm` is "[inherited] `ringBandMm`", `inlierRemovalMultiple` is a multiple *of* it, and `supportVisibility` is a count *within* it. In its own file it was a bare `static let` with no comment at all, in a block headed "Tunable parameters per design §6.2". The provenance chain ended one file outside the file this feature audits.
+
+It had never been varied. It is the **fifth** constant that decides which planes *compete*, and the most upstream of them: `annulusOuterMm` fixes the set extraction draws from (Decision 49), `maxCandidatePlanes` how many times it may draw (Decision 48), `inlierRemovalMultiple` what each draw leaves (Decision 50), `ringOuterMm` re-rings a set already chosen (Decision 46) — this one decides what an *inlier is*, in three places at once: the RANSAC inlier test, the consensus polish's re-selection, and the removal band the multiple is denominated in.
+
+design.md also left it a debt by name. Its CC-RANSAC section records that "whether the smeared ramp bridges the two inlier sets is contested and unresolved", gives two reviews that reach opposite conclusions, and ends **"Task 26 settles it by measurement; neither reading may be assumed."** That question is a question about this constant: ε is what decides whether the two inlier sets touch.
+
+### Decision
+
+`LiDARPlaneFitter.inlierBandMm` is `[owed]`. Its corpus interval is **empty at the shipped bars**, and it is non-empty — and exactly the shipped 5 mm — only once `ringSupportMin` falls to 0.362 or below. The band, `ringSupportMin` and `maxCrossedSectors` are one joint set and are set together, not in sequence. `ringSupportMin` gains a corpus ceiling of **0.362**. The removal band's ordering (Decision 50) gains a member at its head: the band is set before `inlierRemovalMultiple`, which is a multiple of it.
+
+design.md's contested question is answered: **the straddler is real and it is in the shipped candidate set on both captures.** design.md's ε/h table is superseded — its "plate above table, h = 26 mm" row is measured at 11.706 mm.
+
+### Rationale
+
+**It moves the answer, by more than anything swept so far.** Over a 1…12.5 mm sweep at the shipped seed the selected plane at the food moves **18.132 mm** on `1785135663727` and **19.389 mm** on `1785901032716`, against the 1 mm Decision 35 measures Req 5.1's transfer at. It is the first owed constant to move *both* captures past that bar — `annulusOuterMm` moved 18.843 mm and 1.978 mm (Decision 49), `ransacSuccessProbability` 3.704 mm on one (Decision 51). Readings **wander rather than climb**, because extraction re-runs and the candidate is re-selected under the sweep (the intended candidate's support reads 0.312 at 3 mm and 0.281 at 4 mm), so like Decision 46's radius and Decision 51's target, and unlike Decision 50's removal band, **the bracket must not be interpolated**.
+
+**design.md's envelope table is measured, and the row it rests on is outside the envelope.** The table prices "plate above table" at h = 26 mm, giving ε/h = 0.19 and the conclusion that component scoring is "validated for the defect this feature fixes". The 26 mm is pipeline Decision 6's plane *error at the food*, not the step between the two competing surfaces over the annulus. Measured from the shipped run, the two surfaces the ranking chooses between on `1785901032716` — the table at a ring median of +3.039 mm and the plate at −2.658 mm — are **11.706 mm** apart, so the shipped ε/h is **0.427**, outside Gallo et al.'s 0.25…0.35 envelope and in the same band as the table's own two rows marked "outside" (0.42 and 0.50). On `1785135663727` the closest pair is 19.464 mm and ε/h is 0.257, at the lower edge of the envelope rather than the 0.19 the table quotes.
+
+**So the straddler is real, and it is present at the shipped band.** On `1785901032716`, where all three candidate planes sit within 5.4° of gravity and their pairwise separations are 11.594…20.892 mm, so surface assignment is unambiguous, the plate candidate's largest connected component holds **22.1 %** of its members within one band of the surface *below* it, at ε/h = 0.431. That is Gallo's "for large enough ε, an incorrect plane straddling across the two patches will produce a large number of connected inliers", measured on the feature's own corpus. The reading on `1785135663727` is weaker evidence and is not relied on: its third candidate is tilted 20.512°, so it crosses the others inside the annulus and part of the spanning share there is a crossing artefact rather than a straddle.
+
+**And the cone the opposing review's refutation rests on is not enforced.** That refutation is "the ramp's own slope is ~73°, a 15°-capped plane rises only ~2.1 mm across its whole width, so the plane cannot *track* the ramp". `SupportRegion.extractCandidates` gates gravity on the RANSAC hypothesis and on every consensus-polish iteration, but **not on the first refinement between them** — `refine` is called on the hypothesis's members and its result is assigned unchecked, and a polish that reaches its fixed point on the first iteration leaves that plane standing. The shipped candidate set on `1785135663727` contains a plane at **20.512°**, and at a 4 mm band the same slot reads **25.422°**. The cone is an invariant of the hypotheses, not of the candidate set. Nothing observable changes today — that candidate is rejected on `extent` and `supportFraction` — but the refutation's premise does not hold on the shipped path.
+
+**The corpus interval is empty, and both constants that empty it are owed and denominated in this one.** Three constraints bound the band, all read on the plane a correct fit must select (Decision 48's identification, the candidate nearest Req 3.1's zero). `ringMedian` is a bar that *is* the band, so below 4 mm the intended candidate fails it on both captures (inner-band medians 6.117 mm and 4.685 mm). `maxCrossedSectors` caps it: at 6 mm the intended candidate on `1785901032716` reads 3 crossed sectors against the 2 Decision 48 determines. `ringSupportMin` floors it: support reaches 0.6 only at 10 mm and above on that capture. The last two are **disjoint** — support ≥ 0.6 needs ≥ 10 mm, crossed ≤ 2 needs ≤ 5 mm — so no band satisfies both and the interval is empty. This is Decision 41's "one constant contradicts" and Decision 30's straddle arriving on a constant one file over.
+
+**Which hands `ringSupportMin` a ceiling.** Its stated derivation, "a ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm", is written in terms of the band, and the constant *is* a share counted within it — so sweeping the band sweeps the achievable support. The largest support the intended candidate reaches at any band the crossed-sector rule still admits is **0.362**, at 5 mm. Any bar above that leaves the band with an empty interval. Decision 42 measured the same 0.362 as the value at the shipped band; over the whole sweep it is the maximum, and it is the corpus's first ceiling on a constant Decision 29 recorded as having none — Decision 41's suite ceiling of 0.676 was the only bound in existence. Below ~0.28 the interval widens to {4, 5} mm.
+
+**The committed suite gives it nothing, for a third distinct reason.** Decision 49's bound reached the scenes through two guards and was silent by measurement; Decision 50's removal band could not be read at all, since no scene runs extraction. This one *does* reach them — as `ringBandMm` it is the tolerance every sector is classified within and the magnitude bar Decision 40's rule inherits — and every reading from 1 mm to 12.5 mm is identical: `maxCrossedSectors` 0…2, `minSupportingSectors` 6…7, no scene's `supportFraction` or `ringMedian` verdict broken. `SPRScene.makeDepth` adds ±0.3 mm of synthetic noise, an order of magnitude below the smallest band swept, so the tolerance is never the binding quantity. **The committed scenes validate every guard's logic and no tolerance in any of them** — a limitation of the suite worth recording independently of this constant.
+
+**Two riders on other constants.** Extraction falls from three passes to two on both captures at 6 mm, and to one on `1785901032716` at 12.5 mm, so Decision 48's "the cap never fires" and Decision 50's [7,5]/[5,3]/[4,3]/[3,3] pass-depth table are readings at this band as much as at that multiple. And Decision 50's ordering — removal band before `minResidueAreaMm2` before `maxCandidatePlanes` — gains a member at its head, since the removal band is `inlierRemovalMultiple × inlierBandMm`; Req 7.6's latency follows all four.
+
+### Alternatives Considered
+
+- **Treat the `[inherited]` markers as discharged, since they name a real constant in a real file** - The audit Decisions 29 to 51 performed is of `SupportRegion`, and every marker in it now resolves - Rejected because a pointer is not a derivation. Following all four to their target found a bare number, unvaried, that moves the plane further than any constant the feature has swept. The previous halt's claim was scoped to one file and the constant that mattered most was outside it.
+- **Repair the missing gravity gate at the first refinement in this pass** - It is a one-line change and the cone is stated in the design - Rejected because it removes a candidate and therefore moves the answer, which is exactly what task 26 measures rather than makes. It is priced at the sitting alongside the constants it interacts with, and recorded at the call site meanwhile.
+- **Bracket the band from `1785135663727` alone, where the interval is 5…12.5 mm** - That capture gives a clean floor and no ceiling, so a bracket exists - Rejected because it is the pass side only, which is the circularity Req 3.7 forbids. The capture that contains the silent-failure geometry is the one whose interval is empty, and reporting the easy capture's bracket would hide the collision.
+- **Re-denominate the band, on Decisions 37, 38 and 49's pattern** - Those three removed a dependence a measure parameter had no business carrying - Rejected because there is no dependence to remove. The band is already in millimetres and already transfers across depth grids; what it carries is four inheritances and no derivation, which is a provenance problem rather than a denomination one.
+- **Widen the sweep below 1 mm to find the floor Gallo's small-ε warning predicts** - The paper warns CC-RANSAC is *worse* than plain RANSAC at very small ε, and this design's sample set is ~4× smaller - Rejected as unreadable on this corpus: at 1 mm the intended candidate already fails `ringMedian` and `ringSupportMin` on both captures, so every constraint is violated before the paper's mechanism becomes the binding one.
+
+### Consequences
+
+**Positive:**
+
+- The `[inherited]` chain is followed to its end, and the constant it terminates in is bracketed and marked for the first time.
+- design.md's one explicitly deferred question — "task 26 settles it by measurement; neither reading may be assumed" — is answered, and answered against the reading the design's own table implies.
+- `ringSupportMin` gains a corpus ceiling of 0.362, on a constant Decision 29 recorded as having none.
+- The committed suite's blind spot is measured: ±0.3 mm of scene noise means the scenes bound no tolerance anywhere, which is a finding about every guard rather than about this constant.
+- An unenforced gravity cone is found and recorded at its call site before a capture session reads brackets off the candidate set it admits.
+
+**Negative:**
+
+- Task 26 gains an owed constant again, and this one has an empty corpus interval rather than a bracket — it cannot be set before two others that cannot be set before it.
+- Every bracket in Decisions 40 to 51 is a reading at ε = 5, which is now known to be a value the corpus cannot confirm independently.
+- The straddling finding means CC-RANSAC's component score is not doing the job design.md's table claims for it on this corpus, and what that costs is not measured here.
+- The corpus is still two captures of flat bread on a plate, so the small-ε end of the sweep is unreadable and the rimmed-plate rows of the envelope table remain unmeasured.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`inlierBandMm` and `gravityAngleMaxRad` provenance blocks), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringBandMm` and `ringSupportMin` provenance blocks, and the unenforced-cone note at `extractCandidates`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theInlierBandIsWhatTheInheritedMarkersTerminateIn` and `theCommittedSuiteReadsOnlyTheInheritedHalfOfTheBand`, with `ccRansac`, the pass chain, `sectorSigns` and `innerSupportFraction` parameterised on the band), design.md's CC-RANSAC section, task 26's detail. **No shipped behaviour changes.**
+
+---
+
+## Decision 53: The confidence bar has three states, and it is upstream of everything
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+Decision 52 followed four `[inherited]` markers out of `SupportRegion` and into `LiDARPlaneFitter.inlierBandMm`, and described it as "the most upstream constant, because it decides what an *inlier* is". There is one further step up the same file. `LiDARPlaneFitter.confidenceThreshold` — τ_conf — decides what a **sample** is: `SupportRegion.prepare` drops any pixel whose confidence falls below it before back-projection, so every sample the inlier test is ever applied to has already passed this bar. It governs the promoted path and the legacy band scan through one constant.
+
+It had never been varied. Unlike the band it is not undocumented — it carries a bug reference, `lidar-plane-fit-matte-table-confidence`, and a paragraph explaining that it was lowered from 0.66 to 0.40 so that MEDIUM-confidence returns from a matte table are accepted rather than starving the fit into `noLidarPoints`. That paragraph is a **floor** argument and nothing in it bounds the constant from above, so the question this pass asks is what the corpus says about the state the shipped value selects.
+
+It is also the constant Decision 31's exclusion of the corpus's only non-flat capture is denominated in. That decision rejected `1785054950406` because "43.2 % of its food mask is ARKit-low", and because the food that survives τ_conf sits *below* the plane fitted around it, so "there is no mound left to anchor a non-flat criterion against".
+
+### Decision
+
+`LiDARPlaneFitter.confidenceThreshold` is `[owed]`, and it is the **sixth** constant that decides which planes compete — the most upstream of the six. Its domain is **not an interval**: ARKit reports three confidence levels, so τ_conf has exactly **three states** over the whole of [0, 1], and a twelve-value sweep enumerates the domain exhaustively rather than sampling it. The corpus rules out one state and admits two. It **moves the plane** past Req 5.1's 1 mm on one capture and changes the extraction pass count, so `minResidueAreaMm2` and `maxCandidatePlanes` are denominated in it as well.
+
+Decision 52's three-way joint set — the inlier band, `ringSupportMin`, `maxCrossedSectors` — is **four-way**, with τ_conf at its head. Both of Decision 52's determinations move with it: `ringSupportMin`'s corpus ceiling goes from 0.362 to **0.497**, and the band the corpus admits there goes from the shipped 5 mm to **6 mm**.
+
+τ_conf is **two constants under one name**, and the two fall on opposite sides of the only boundary in the domain: `HeightFieldEstimator.tauConfidence` is 0.66. Not repaired here.
+
+Decision 31's exclusion **stands, on a different ground than it records**. Its second ground is circular in this constant.
+
+### Rationale
+
+**Its domain is three states, and that is a finding rather than an assumption.** ARKit maps `ARConfidenceLevel.{low,medium,high}` to bytes {0, 127, 255} (design §6.0), and all three committed slices contain **exactly those three values and no others** — 11145/12454/25553, 36/1827/47289, and 20220/12725/16207. So τ_conf compared against `byte / 255` has three behaviours: accept LOW and up (τ ≤ 0), accept MEDIUM and up (0 < τ ≤ 127/255 = 0.498, where the shipped 0.40 sits), accept HIGH only (τ > 0.498). Twelve swept values across [0, 1] collapse to three distinct sample sets on both captures, with the boundaries exactly at 0 and 0.498. This is the **first owed constant whose domain the corpus enumerates completely**: every bracket in Decisions 29 to 52 is an interval containing values that were never read, and the riders those decisions carry — "do not interpolate" for the radius, the target probability and the band, "may be interpolated" for the removal band — have no meaning here. There is nothing between the states.
+
+**The measurement needs no restatement of shipped code, which is new.** Every other sweep in this pass reimplements a stage with the constant as an argument — `ccRansac`, the pass chain, `sectorSigns`, `sectorIndex` — and each restatement is pinned against the shipped function so it cannot drift. This one rewrites the *confidence map* instead: setting each byte to 255 when it clears the swept τ and 0 otherwise makes the shipped 0.40 admit exactly the set τ admits, so `prepare`, `ringSamples`, `extractCandidates` and `admissibility` all run unmodified. At the shipped value the rewritten map reproduces the shipped validity set and food sample set index for index. The depth bytes are untouched, so `Fnv1a64.hash(depthBytesMm)` is identical at every value and the RANSAC **seed is held** across the sweep — the draw is not, because `uniformInt(n)` reads a residue size that moves with the sample set.
+
+**It moves the answer.** The selected plane at the food reads 349.325, 351.328 and 349.229 mm across the three states on `1785135663727` — a **2.098 mm** spread against the 1 mm Decision 35 measures Req 5.1's transfer at — and 356.280/356.318 mm on `1785901032716`, a spread of 0.038 mm. That puts it with `annulusOuterMm` (18.843 and 1.978 mm, Decision 49), `ransacSuccessProbability` (3.704 mm on one, Decision 51) and `inlierBandMm` (18.132 and 19.389 mm, Decision 52) as one of four owed constants that move the plane, and against the eight that do not. It also moves the **pass count**: `1785135663727` runs three extraction passes at MEDIUM and two at HIGH only, because a 12.7 % smaller annulus starves the residue floor one pass earlier. So Decision 48's cap, Decision 38's `minResidueAreaMm2` and Decision 50's ordering are all readings at this bar too, and Req 7.6's latency follows.
+
+**The floor is measured, strictly above zero, and rests on one capture.** Admitting LOW on `1785135663727` — 11145 pixels, 22.7 % of the grid — moves the plane 2.003 mm and pushes the intended candidate's inner-band median from −0.521 mm to −1.454 mm, away from the zero Req 3.1 wants. So the accept-all state costs accuracy and the corpus rules it out. `1785901032716` cannot say so: 36 of its 49152 pixels are LOW, 0.07 %, and admitting all of them changes every reading by less than a thousandth of a millimetre. The floor is therefore on the same one-capture footing Decision 36 recorded for `fallbackPenalty`, for the same kind of reason — the corpus contains one capture that can price the quantity and one that cannot.
+
+**The corpus cannot reproduce the bug that set the shipped value, and it mildly argues the other way.** At HIGH only both committed captures still fit — every ring band clears `ringMinSamples`, extraction still yields candidates, and the fitter's own band scan returns a plane rather than `noLidarPoints` — so `lidar-plane-fit-matte-table-confidence` does not reappear on this corpus. And the intended candidate **improves** on both: inner-band support 0.629 → 0.690 and supporting sectors 5 → 6 on `1785135663727`, support 0.362 → 0.379, supporting 2 → 3 and ring median −2.658 → −1.632 mm on `1785901032716`. The MEDIUM samples the shipped bar admits are 25.3 % and 3.7 % of each capture's valid samples, and on these two captures they cost support rather than buying it. This does not make 0.66 the right value — the capture that justifies 0.40 is a matte table, which the corpus does not contain, and one bad scene starving to `noLidarPoints` outweighs a 0.06 support improvement on two good ones. It makes the constant **unsettleable from the corpus in either direction**, and a matte-table capture a requirement of the sitting rather than a nice-to-have.
+
+**Both of Decision 52's determinations move, which is why this constant is upstream rather than beside.** Re-running the 1…12.5 mm band sweep inside each state: at the shipped bar `ringSupportMin`'s corpus ceiling is 0.362 and the only band the corpus admits there is the shipped 5 mm — Decision 52 reproduced exactly. At HIGH only the ceiling is **0.497** and the band the corpus admits is **6 mm**. Accepting LOW reads the same as the shipped state (0.362, 5 mm), because the capture that binds both quantities is the one with 36 LOW pixels. So the ceiling Decision 52 gave `ringSupportMin` — its first from the corpus, on a constant Decision 29 recorded as having none — is a reading at this bar, and so is the band it conditionally determines. The four are set together, with the confidence bar first: it decides what a sample is, before the band decides which samples are inliers.
+
+**Decision 41's one genuinely empty joint interval closes on the capture it was stated on.** That decision found the feature's only outright contradiction between its two constraint sets: a real intended candidate scores 5 of 8 sectors, "so `minSupportingSectors` must fall to 5 or below", while the silent-failure scene the guard exists to reject also scores 5 and floors the committed suite at 6 — no value satisfies both. The 5 is `1785135663727`'s reading at the shipped bar; at HIGH only it is **6**, and 6…6 is non-empty. It does not *resolve* the collision — `1785901032716`'s tighter reading rises 2 → 3 and stays far below the floor either way — but it establishes that the contradiction is a reading at an owed constant on the capture it was recorded on, not a property of the geometry. Decision 43 withdrew that negative by attributing the collision to the unsigned count; this locates a second thing it is denominated in.
+
+**τ_conf is two constants under one name, and they straddle the MEDIUM level.** `LiDARPlaneFitter.confidenceThreshold` is 0.40 and admits MEDIUM; `Volume.HeightFieldEstimator.tauConfidence` is 0.66 — the value the fitter's bar was lowered *from* — and admits HIGH only. One pipeline reads one confidence surface at two levels, so the support plane is fitted to MEDIUM and HIGH samples while the food volume above it is integrated over HIGH alone. This is Decision 32's `minCandidateSamples` shape a second time, and worse: there the two halves shared a value, here they sit on opposite sides of the only boundary in the domain. Measured consequence for the corpus's own composition: Decision 31's "43.2 % of its food mask is ARKit-low against 0.0 % on both admitted captures" is the *support plane's* reading. At the bar that actually consumes the food samples the same three shares are **60.3 %, 2.7 % and 1.9 %** — so neither admitted capture reads 0 at the bar the mound is measured with. Not repaired: aligning the two adds or removes samples on every capture and moves the answer, the same discipline Decision 52 applied to the unenforced gravity cone.
+
+**Decision 31's exclusion stands, and its second ground is circular in this constant.** That decision's grounds were (a) 43.2 % of the food is discarded, (b) the surviving food's envelope is negative so there is no mound to anchor against, (c) admitting the capture produces a spuriously separable sector count. Measured across the states, (b) is a restatement of (a): at τ_conf = 0 the same slice reads a food envelope of **+58.353 mm** against −9.012 mm at the shipped bar. The mound is in the data, and it is τ_conf that removes it — which Decision 31 says, before treating the result as independent evidence. (c) **reverses**: the spurious count Decision 31 committed a slice to prevent needs 4 or more supporting sectors, and the intended candidate reads 2 at τ_conf = 0 and 3 at the shipped bar, reaching 4 only at HIGH only. What the exclusion actually stands on is a ground Decision 31 does not state: the samples the mound is made of are the ones ARKit marks unreliable, and admitting them wrecks the ring fit the capture would have to anchor — its intended candidate's ring median goes from a near-exact −0.018 mm to −4.589 mm. The capture is not disqualified in principle; it is disqualified because its mound and its usable support surface cannot both be present at any one setting of an owed constant.
+
+**One positive.** `maxCrossedSectors` reads 2 at the shipped band in **all three states** on `1785901032716`, so Decision 48's determination of it at 2 survives τ_conf directly — the only member of the joint set that does. It survives there only: at HIGH only the band the corpus points at is 6 mm, where the intended candidate reads 1 crossed, so it remains what Decision 48 already calls it, a reading at the shipped band.
+
+### Alternatives Considered
+
+- **Treat τ_conf as settled, since it has a bug reference and a written derivation** - It is the best-documented constant in either file, and unlike `inlierBandMm` it is not a bare number - Rejected because the derivation is one-sided. It argues a floor from a scene the corpus does not contain and bounds nothing from above, and the corpus prefers the state it rejects on every quantity the feature ranks candidates by. A constant that moves the plane 2.098 mm cannot be settled by an argument that never mentions the plane.
+- **Re-set it to 0.66 and align the two halves** - The corpus prefers HIGH only on both captures, and aligning them removes an undocumented divergence between two stages of one pipeline - Rejected on two counts. It reverses a fix made against a real device failure whose scene is not in the corpus, trading a measured 0.06 support improvement on two good captures for a `noLidarPoints` refusal on a class of bad ones. And it moves the answer, which task 26 measures rather than makes.
+- **Re-set it to 0.40's own state boundary, 0.498, so the intent is explicit** - The shipped 0.40 does not name the level it is selecting, and 127/255 would - Rejected as worse: at exactly 0.498 the comparison `byte / 255 < 0.498` is decided by float rounding on the MEDIUM level itself. 0.40 sits 0.098 clear of the boundary, which is the one respect in which the shipped value is well chosen, and that is worth recording rather than removing.
+- **Admit `1785054950406` at τ_conf = 0, giving the corpus its non-flat anchor** - Decision 31's stated grounds do not survive the sweep, and prerequisites capture 2 is the corpus's largest gap - Rejected because the ring fit degrades from −0.018 mm to −4.589 mm in that state, so the capture would anchor a non-flat criterion on a support plane fitted to samples ARKit marks unreliable. The gap is real and the fix is a capture, not a threshold.
+- **Repair the divergence with `HeightFieldEstimator.tauConfidence` in this pass** - It is a one-line change and the two bars plainly should agree - Rejected on Decision 52's precedent for the gravity cone: it changes which samples exist and therefore the volume, which is priced at the sitting. Recorded at both call sites meanwhile, so neither can be changed without the other.
+
+### Consequences
+
+**Positive:**
+
+- The provenance chain is followed one step further than Decision 52 took it, to the constant that decides what a sample is; every constant either file reads now carries a marker and a reading.
+- The first owed constant whose domain is enumerated **exhaustively** rather than bracketed, which removes the interpolation question entirely instead of answering it.
+- Decision 52's three-way joint set is corrected to four-way before the sitting reads brackets off it, and both of that decision's determinations are shown to be readings at this bar.
+- Decision 41's one empty joint interval is located in an owed constant on the capture it was recorded on.
+- An undocumented divergence between two stages of one pipeline is found, measured, and pinned at both call sites.
+- Decision 31's exclusion is re-grounded on evidence that survives the sweep, and its circular ground is retired rather than left standing.
+- The measurement runs the shipped path end to end with no restatement, so it cannot drift from the code the way the seven parameterised restatements in this pass could.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the third pass running, and this one cannot be set from the corpus in either direction — the matte-table capture the shipped value rests on is now a hard requirement of the sitting.
+- Every bracket in Decisions 40 to 52 is a reading in the MEDIUM-and-up state, and two of them are known to move out of it.
+- The floor rests on a single capture, because the other has almost no LOW samples.
+- The corpus's only non-flat capture remains excluded, and the sweep shows the exclusion is not a preference but a genuine conflict between two things that cannot both be present at one setting.
+- The confidence divergence is documented rather than fixed, so the shipped pipeline still fits a plane and integrates a volume over different sample sets.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`confidenceThreshold` provenance block), `MedataCore/Sources/Volume/HeightFieldEstimator.swift` (`tauConfidence` cross-reference), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (`ringSupportMin` provenance block and the τ_conf note in `prepare`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theConfidenceBarHasThreeStatesRatherThanABracket`, `theConfidenceBarIsTwoConstantsStraddlingTheMediumLevel`, and the `reconfidenced` / `tauReading` helpers), `Package.swift` (`SupportPlaneTests` gains `Volume`), task 26's detail. **No shipped behaviour changes.**
+
+---
+
+## Decision 54: The consensus polish is a cap that always binds, and its depth is not what the loop was added for
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.consensusPolishMaxPasses = 3` is read by **both** fitters. `SupportRegion.extractCandidates` polishes every candidate with it; `LiDARPlaneFitter.fitOutcome` polishes its single winner with the same number. It had never been varied, and unlike the constants Decisions 47, 48 and 51 found unmarked it does not lack a derivation — it has one, written in two places. The source says "the loop usually exits earlier because the inlier set reaches a fixed point"; `docs/agent-notes/estimation-runtime-consistency.md` says the polish iterates "until the consensus set stops changing (cap `consensusPolishMaxPasses = 3`)" and that "clean fixtures reach the fixed point immediately".
+
+Both statements are claims about the corpus, and both are checkable. So is the guard's purpose: the polish was added because the RANSAC winner's inlier band is anchored to a 3-point candidate plane, and re-selecting against the refined plane is supposed to "converge to a fixed point that no longer depends on which minimal sample won". Decision 46 measured that dependence at 2.095 mm at the food over eight seeds and Decision 51 found it removable — by tightening `ransacSuccessProbability`, not by anything the polish does. Nobody had read the guard's own bound against the guard's own purpose.
+
+It is also the loop Decision 52 found the gravity cone missing from: the refinement *before* the loop is ungated, and the corpus holds a candidate at 20.512° as a result.
+
+### Decision
+
+`consensusPolishMaxPasses` is `[owed]`. It is the **seventh** constant that decides which planes compete and the third that can add one, and it is the first whose stated derivation is refuted by its own firing record: the cap **always binds**, on both legs, and the corpus needs 17 passes in extraction and 11 in the fallback to reach the fixed point every argument for the guard is stated about.
+
+It moves both legs, and only the promoted one stays inside Req 5.1's 1 mm — the **fallback** plane moves 1.719 mm. Readings are monotone, so unlike Decisions 46, 51 and 52 the bracket **may** be interpolated.
+
+Bracketed **1…unbounded**, with the shipped 3 inside and the corpus pointing **above** it rather than at it. Its depth is **not** what removes the seed dependence the loop exists to remove.
+
+Decision 52's unenforced gravity cone is sharpened: the gate's *firing* is what preserves the out-of-cone plane. Not repaired.
+
+### Rationale
+
+**The cap always binds, and that refutes the sentence it carries.** Traced per pass at the shipped value, extraction stops on the cap on **4 of its 6 passes**, reaches the stated fixed point on **1**, and is stopped by the gravity gate on the sixth; the fallback fit is truncated by the cap on **both** captures. Swept to 64, the depth the corpus actually needs is **17** in extraction (pass 1 of `1785135663727`) and **11** in the fallback. So the plane both paths ship is a truncated iterate of the polish map, not its fixed point, and "clean fixtures reach the fixed point immediately" is false on the only two real captures in hand. This is the exact mirror of Decision 51's `maxIterationsPerPass`, which never fires at any value the corpus reaches: that cap is idle everywhere, this one binds everywhere. Two caps, two `[derived]` arguments, opposite failures.
+
+**It decides which planes compete, and it can add one.** Extraction ends at the pass cap or at the residue floor, and the polish moves the plane, which moves the removal shell, which changes what the next pass draws from. `1785135663727` yields **two** candidates at 0 and 1 polish passes and **three** from 2 up: its third pass exists only once the polish has run deep enough to leave it something above `minResidueAreaMm2`. That puts this constant with `annulusOuterMm` (Decision 49) and `maxCandidatePlanes` (Decision 48) rather than with the eight bracket-only ones, and it makes the persisted `planeCandidateCount` (Req 6.1) denominated here as well — the third distinct constant of which that is true after Decision 38's residue floor and Decision 53's confidence bar.
+
+**It moves both legs, and the fallback further than the promoted one.** Over 0…64 the selected plane at the food moves **0.490 mm** on `1785135663727` and **0.106 mm** on `1785901032716`, both inside the 1 mm Decision 35 measures Req 5.1's transfer at. The **fallback** plane moves **0.158 mm** and **1.719 mm** — outside it. On `1785901032716` the fallback reads 357.506 mm unpolished, 359.096 mm at the shipped cap and 359.225 mm converged, so the shipped value sits 1.590 mm above the unpolished plane and 0.129 mm short of its own fixed point. Req 4.3 — the fallback plane identical to what the edge-band fit produces for the same capture — holds at *every* value here, because one constant moves both; what moves is the plane both of them name. That plane is what Decision 36 prices `fallbackPenalty` against (18.37 mm of plane error at the food) and what feeds `lidarMmPerPx = |d| / f` at Pipeline stage E on the legacy path. Decision 36's figure survives — its capture's fallback leg moves only 0.158 mm — but it is a reading at this constant, which nothing recorded.
+
+**Its depth is not what the loop was added for, and this is the finding that matters most.** Re-running Decision 46's eight-seed control at three polish depths:
+
+| Capture | no polish | shipped 3 | converged 64 |
+|---|---|---|---|
+| `1785135663727` | 2.123 mm | **2.095 mm** | 2.067 mm |
+| `1785901032716` | 0.096 mm | 0.001 mm | 0.000 mm |
+
+On the capture carrying the corpus's only intended-correct fit the polish removes **2.6 %** of the seed spread at the shipped cap and **2.9 %** run to its own fixed point. The guard works completely on the other capture — 0.096 → 0.001 mm — and that is the capture whose plane was nearly seed-stable to begin with. What *does* remove the dependence is `ransacSuccessProbability`, which Decision 51 measured taking the same 2.095 mm to 0.194 mm. The reason the polish cannot is visible in the rolls: the surviving spread is three distinct planes with the candidate count itself varying between 2 and 3, so the seeds disagree about **which candidate wins**, not about where one plane lies. The polish refines a plane; it does not reorder a set. So the guard's stated mechanism is sound and its stated benefit is delivered by a different constant, which is worth knowing before the sitting prices either.
+
+**Decision 52's unenforced cone is worse than "not enforced".** That decision recorded the gravity gate as absent from the first refinement, with a 20.512° candidate in the corpus as the consequence. Traced through the loop, the candidate is `1785135663727`'s third pass and its record reads **`gravity` at 0 applied iterations at every depth from 2 up**: the gate fires on the very first re-selection, and its rejection path is `break`, which keeps the previous plane — the ungated refinement, itself outside the cone. So the conservative fallback `estimation-runtime-consistency.md` documents ("a re-selection outside the 15° gravity cone keeps the previous pass's plane — the polish can never fail a fit that previously succeeded") is precisely what preserves the plane the cone exists to exclude. It is correct as written and inverted in effect. The tilt it leaves standing moves with this constant — **26.573°** at 2 passes, Decision 52's **20.512°** at the shipped 3, 18.771° at 4…8, **18.609°** from 16 — so that figure is a reading here too, and at 0 and 1 passes no candidate is outside the cone at all because the third candidate does not yet exist. Not repaired, on Decisions 52 and 53's precedent: adding the gate removes a candidate and moves the answer.
+
+**The bracket, and it is the corpus's alone.** The **floor is 1**, and it costs the feature something real: at 0 the candidate set is short a plane on one capture and `maxCrossedSectors` reads **2…3** rather than the **2…2** Decision 48 determined, so the polish is part of what makes that determination tight. From 1 up the reading is 2…2 at every depth, so like Decision 50's removal band this constant does not otherwise denominate it. There is **no ceiling**, and the corpus points *above* the shipped value: the constant's own derivation is met only at 17, and every quantity the feature ranks candidates by improves or holds as the depth rises. What stops that being a proposal is **Req 7.6** — this is the innermost loop in extraction, each iteration costs a full re-selection over the residue plus a connected-component labelling plus an SVD, and 17 quintuples it on the path that has already produced a 32 GB allocation failure. The committed suite is silent for the same structural reason Decision 50 recorded: no scene runs extraction, and no scene runs the fallback fit either.
+
+**Readings are monotone, so the bracket may be interpolated.** Each depth is one more iteration of the same map from a plane to its re-selected consensus, so the sequence converges rather than wanders: the promoted plane reads 350.934, 351.177, 351.281, 351.328, 351.345, 351.363, 351.374, 351.420 mm over 0…16 on `1785135663727`, and the fallback 357.506 … 359.225 mm on `1785901032716`. This is Decision 50's rider, not Decision 46's — the third owed constant that may be interpolated, against four that may not.
+
+### Alternatives Considered
+
+- **Raise it to 17, so the loop reaches the fixed point its own derivation names** - The derivation is written in two places and is currently false; satisfying it costs nothing in correctness and every quantity the corpus ranks by improves - Rejected on Req 7.6. The polish is the innermost loop in extraction and this multiplies it by 5.7 on a path with a recorded OOM, and the latency budget is task 27's measurement rather than this pass's. It also moves the fallback plane 0.129 mm and the promoted plane 0.092 mm, which task 26 measures rather than makes.
+- **Lower it to 1, since the polish delivers 2.6 % of its stated benefit on the capture that matters** - It would make the constant nearly free and the guard's cost proportional to what it buys - Rejected because 1 is where the corpus loses a candidate and `maxCrossedSectors` widens from Decision 48's determined 2…2 to 2…3 at 0; and because the benefit is 2.6 % on one capture and 99 % on the other, which is a two-capture reading and not a rate.
+- **Remove the polish outright and tighten `ransacSuccessProbability` instead, since that is what removes the seed spread** - Decision 51 measured 2.095 → 0.194 mm from the probability alone, a 10.8× fall this loop cannot approach at any depth - Rejected as a change rather than a measurement, and because the two are not substitutes: the probability decides which plane a pass *finds*, the polish decides where that plane *settles*, and the fallback leg moves 1.719 mm under the polish with the probability untouched. Recorded so the sitting can price them together.
+- **Split it into two constants, one per fitter** - The two legs move by very different amounts and the fallback's fixed point is 6 passes shallower than extraction's, so one number is serving two loops with different convergence - Rejected here for Decision 32's reason in reverse: splitting a constant is justified when the two halves have different *jobs*, and these have the same job on different sample sets. Recorded as a reading, because the fallback converging at 11 and extraction at 17 is what a per-leg value would be set from.
+- **Treat it as settled, since it carries a written derivation and a PRD reference** - It is better documented than `inlierBandMm` was and it is not a bare number - Rejected because the derivation is a claim about the corpus and the corpus refutes it. A constant whose comment says the loop exits early, on a corpus where the cap truncates 4 of 6 passes and both fallback fits, is not settled by that comment.
+
+### Consequences
+
+**Positive:**
+
+- The last of the four constants the previous pass named as never varied and measurable from the committed corpus is measured, and it turned out to be the one with a false derivation rather than a missing one.
+- The guard's stated purpose is read against the guard's own bound for the first time, and the constant that actually delivers it is identified.
+- The second call site is measured. This is the first owed constant read on the **fallback** leg, and the leg that moves further.
+- Decision 52's unenforced cone is sharpened from "absent" to "inverted", with the mechanism traced and the 20.512° located as a reading at this constant.
+- `planeCandidateCount`, persisted under Req 6.1, gains its third denominator.
+- The bracket is interpolable, which only Decisions 49 and 50 could say before.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the fourth pass running.
+- The shipped value is inside its bracket but on the wrong side of its own derivation, so either the constant or the two comments that describe it must move at the sitting, and the constant cannot move without Req 7.6's latency measurement from task 27.
+- Every plane figure this feature quotes for the **fallback** path is a reading at a truncated polish, including Decision 36's 18.37 mm — it survives, but its footing is narrower than recorded.
+- The gravity-cone defect is documented for the second decision running rather than fixed, and it is now known to be worse than Decision 52 described.
+- The seed-spread finding is a two-capture reading with the two captures disagreeing by a factor of 2000, so what the polish buys in general is not bounded by it.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`consensusPolishMaxPasses` and `gravityAngleMaxRad` provenance blocks), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`thePolishCapIsACapOnALoopThatFixedPointsFirst`, `thePolishDoesNotRemoveTheSeedSpreadItWasAddedFor`, and the instrumented `extractCandidates` / `fallbackReading` helpers), `docs/agent-notes/estimation-runtime-consistency.md` and `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes.**
+
+---
+
+## Decision 55: The gravity cone is read at four gates, enforced at two, and bounds nothing
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.gravityAngleMaxRad = 15°` is the last of the constants both fitters read that had never been varied. Decisions 52 and 54 both wrote about it and neither swept it: Decision 52 recorded that `SupportRegion.extractCandidates` leaves the refinement between the RANSAC hypothesis and the consensus polish ungated, so the corpus holds a candidate at 20.512°; Decision 54 traced that candidate through the loop and found the polish gate *firing* on it at zero applied iterations, its `break` preserving the ungated plane. Both decisions ended with the same sentence — the angle itself has never been read.
+
+It is read at **four** gates, and no other constant in this feature is read at more than three. `SupportRegion.ccRansac` tests every hypothesis against it; `SupportRegion.extractCandidates` tests every consensus re-selection; `LiDARPlaneFitter.ransac` and `LiDARPlaneFitter.fitOutcome` do the same on the fallback leg. It is therefore the **eighth** constant that decides which planes compete and the second, after `consensusPolishMaxPasses`, that both fitters share.
+
+Its comment carries a mechanism and no derivation. Nothing anywhere says why 15 rather than 10 or 25.
+
+### Decision
+
+`gravityAngleMaxRad` is `[owed]`. Bracketed **10°…unbounded** by the corpus, with the shipped 15° strictly inside — the second owed constant in this feature not sitting on an edge, after Decision 50's removal band.
+
+The guard **does not bound the candidate set at any value the corpus admits**, and the violation is not monotone in the bar: at a 1° cone every candidate extraction produces is outside 1°, and at 2° the worst is at 18.955° — nine times its own bar — against 20.512° at 1.37× the shipped 15°.
+
+It moves the answer, and **every millimetre of that movement is below the floor**: 3.758 mm and 14.584 mm at the food over the sweep, and 0.000 mm from 10° to 90° with the gate fully off included. So it is a floor, not a knob.
+
+The floor's derivation is measured for the first time: the corpus's one intended-correct fit is the **plate top at 8.309°**, from a hypothesis at **8.900°**, which leaves the shipped value **6.100°** of margin.
+
+Not repaired.
+
+### Rationale
+
+**Four gates, and only the two hypothesis tests turn anything away.** The polish gates' rejection path is `break`, which keeps the plane the *previous* iteration produced, and the refinement between the hypothesis and the polish is not gated at all. Swept, the consequence is not that a tighter cone leaves a tighter set — it is the opposite. At **1°** the hypothesis gate admits only hypotheses within 1° and **4 of the 4 candidates** extraction produces lie outside 1°, every one of them recorded as `gravity` at 0 applied iterations. At 2° it is 5 of 6, the worst at **18.955°**. At the shipped 15° it is 1 of 6, at 20.512°. Read as a ratio to the bar the guard is asked to enforce, the violation is **9.5×** at 2° and **1.37×** at 15°. A guard whose violation grows as its bar falls is not measuring the quantity it names.
+
+**And it is not monotone in either direction.** At 8° *nothing* is outside the cone; seven degrees looser, at the shipped 15°, one candidate sits at 20.512°. The count outside reads 4/4, 5/6, 1/5, 3/6, **0/6**, 1/6, 1/6, 1/6, 1/6, 0/6, 0/6, 0/6, 0/6 over 1…90°. So no value of this constant can be chosen by asking how far outside it the candidate set reaches, because that quantity does not order with it.
+
+**It moves the answer, and all of the movement is on the floor side.** The selected plane at the food spans **3.758 mm** on `1785135663727` and **14.584 mm** on `1785901032716`, both past the 1 mm Decision 35 measures Req 5.1's transfer at. But from **10° to 90°** — the gate switched fully off at the top, since both fitters orient every hypothesis onto gravity's half-space before measuring and nothing can then exceed a right angle — the selected plane is unchanged to **0.000 mm** on both captures. Every millimetre is below 10°. That separates this constant from `inlierBandMm` (Decision 52) and `ransacSuccessProbability` (Decision 51), which wander across their whole range: this one either admits the hypothesis that produces the correct fit or it does not, and above that there is nothing to tune.
+
+**The floor is the corpus's, twice over.** Below 8° the joint `maxCrossedSectors` interval is **empty** on all four values swept — the intended candidate reads 6 crossed sectors where the selected one reads 0, because extraction is drawing from a starved hypothesis pool and finding different surfaces. At 8° the interval recovers to 2…2 but the plane still moves **1.802 mm**: `1785135663727`'s pass 1 lands at 353.130 mm with inner support 0.536 and 2 crossed sectors, against the 351.328 mm / 0.629 / 0 the corpus reads from 10° up. 10° is the first swept value at which the shipped answer is reproduced exactly.
+
+**And the floor's derivation is the thing worth keeping.** The two legs disagree about how much room the guard needs, by six degrees, in the same frame. The fallback leg fits the **table** over the colour-grid edge bands and lands at 1.742° and 0.579° of tilt; the promoted leg fits the **plate top** and lands at 8.309° on `1785135663727`, from a hypothesis at 8.900°. Its own table candidate in the same capture is at 2.030°, so the surface the feature exists to find is **6.3° off the surface the legacy fitter finds**, and only the promoted leg is anywhere near the bar. The shipped 15° therefore carries **6.100°** of margin over the hypothesis that produces the corpus's one intended-correct fit — the first number this constant has ever had attached to it.
+
+**The fallback leg barely moves, which is the exact reverse of Decision 54.** That constant moved the fallback plane 1.719 mm and the promoted one 0.490 mm; this one moves the promoted plane 14.584 mm and the fallback **0.226 mm and 0.074 mm**, inside Req 5.1 at every value including a 1° cone. Req 4.3 holds throughout for the same reason it held there — one constant moves both legs — but the asymmetry runs the other way, and the reason is the six degrees above. Two constants read by both fitters, opposite sensitivities.
+
+**There is no ceiling at all.** At 90° the gate cannot reject anything and the corpus reads `maxCrossedSectors` 2…2 and the same selected plane on both captures. What a cone above 45° does buy is one absurd candidate: `1785135663727`'s third pass finds a **79.809°** surface 1305.187 mm away with inner support 0.000 and a ring median of +163.392 mm — and `minAcceptedExtentMm` rejects it anyway at 35.370 mm of extent. So **on this corpus the guard could be removed entirely without changing a single answer**, which is the strongest statement against setting its value from these captures.
+
+**Req 7.6 is denominated here, and in the tightening direction.** The gate is what the fallback's fixed 256-iteration budget is spent against: at the shipped 15° it turns away **137 and 10** of 256 draws on the two captures, at 8° **173 and 29**, at 1° **252 and 207**. Extraction pays twice, because `requiredIterations` cannot stop adaptively until a good component is found — pass 1 of `1785135663727` costs 72 draws at 15° and above, 86 at 8°, and **169** at 1°. Every other owed constant in this feature trades latency against quality in the *loosening* direction; this one costs both when tightened.
+
+### Alternatives Considered
+
+- **Set it at 10°, the corpus's floor, since the corpus reads every value from there up identically** - It is the tightest value that reproduces the shipped answer exactly, and a tighter cone is a stronger guard for nothing - Rejected because the floor is a reading on one plate at 8.309°, and 10° leaves 1.7° over the hypothesis that produces it. A plate resting a degree less flat than this one falls out, and the corpus contains one plate. The margin is what the sitting prices, not the floor.
+- **Remove the guard, since the corpus reads 90° identically to 15°** - It is measured: no verdict, no plane and no bracket in this feature moves when the cone is switched off, and the one absurd candidate it admits at 90° is rejected on `extent` regardless - Rejected because the corpus is two near-nadir captures of a plate on a table, which is exactly the scene where a gravity cone has nothing to do. The wall-and-floor scenes it exists for are not in it, and 79.809° at 1305 mm is what the annulus finds the moment the gate stops looking.
+- **Repair the two unenforced gates — gate the first refinement and make the polish gate reject rather than `break`** - The measurement shows the guard does not do the job it names at any value, and repairing it is a few lines - Rejected on Decisions 52, 53 and 54's precedent, and more firmly than there: repairing it removes a candidate from `1785135663727`, which changes `planeCandidateCount` (Req 6.1) and the removal chain the third pass draws from. This pass measures; the sitting prices.
+- **Derive it from the capture envelope, since `CaptureFlowModel`'s oblique shutter gate is also 15°** - Two 15s in one pipeline look like one derivation - Rejected because they are different quantities. The capture gate is a **camera pose** tolerance (`abs(θ − 25) ≤ 15`, closeout-trail Decision 1); this is the angle between a fitted plane's normal and gravity, which is a property of the surface and not of how the phone was held. The coincidence is recorded so nobody re-derives one from the other.
+- **Split it per leg, since the two legs need 13° and 6.1° of margin respectively** - The fallback would be comfortable at 5° and the promoted leg would not - Rejected for Decision 54's reason: the two halves have the same job on different sample sets. Recorded as a reading, because a per-leg value would be set from exactly these two margins.
+
+### Consequences
+
+**Positive:**
+
+- The first of the three constants the previous pass named as never swept is measured, and it is the one both fitters read.
+- A guard that has been described in two decisions is finally read against its own bar, and the description turns out to understate it: the cone is not a bound on the candidate set at **any** value, and the violation is worst where the bar is tightest.
+- The floor has a derivation rather than a bracket edge — 8.900°, the hypothesis that produces the corpus's one intended-correct fit — so the shipped value has a margin attached to it for the first time.
+- The corpus's intended plane is measured against its own table in the same capture, at 6.3°, which is a fact about the feature's target surface that nothing else in this pass would have surfaced.
+- The second constant read on the fallback leg, and the first where the two legs' sensitivities run opposite ways.
+- Req 7.6 gains an owed constant that costs latency when **tightened**, which no earlier one did.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the fifth pass running, and this one the corpus cannot bound from above at all — even the gate switched off reads identically.
+- The floor rests on a single plate at a single tilt, so it is a property of one capture rather than of the scene class.
+- The guard is now known to be non-enforcing at every value and is documented rather than repaired for the third decision running.
+- The 6.3° disagreement between the plate top and its own table is unexplained. It could be the plate, the fit, or the recorded gravity, and the corpus cannot separate them.
+- Every plane figure this feature quotes is a reading at a cone that admits planes outside itself, so the candidate set behind them has never been bounded by the thing that is supposed to bound it.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`gravityAngleMaxRad` provenance block), `MedataCore/Sources/SupportPlane/SupportRegion.swift` (the unenforced-cone note at `extractCandidates`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theGravityConeIsTheBarFourGatesReadAndTwoEnforce`, and the instrumented `ccRansac` / `extractCandidates` / `fallbackRansac` / `fallbackReading` helpers), `design.md` (the "correct and reused" claim about the cone, and the straddling section's second review, both marked superseded), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes.**
+
+---
+
+## Decision 56: The envelope percentile is a denominator, and every bound on the envelope bar is a reading at it
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`SupportRegion.foodEnvelopePercentile = 0.90` is the only constant in the envelope guard that had never been varied, and the reason it survived eleven sweeps is its marker. Decisions 47, 48 and 51 each found a constant carrying `Structural:` or nothing at all in place of a provenance marker; Decision 52 found four markers pointing at a constant that had none. This one is different again: it reads `[derived] Decision 22`, and that derivation is **real** — it is why the guard is denominated in millimetres rather than as a sample-count fraction, and why `foodAboveFractionMax` was retired. It derives the guard's **kind**. Nothing anywhere derives the **0.90**.
+
+It is the **denominator** of `foodEnvelopeMinMm`. The two are one measure: a bar in millimetres and the statistic it is compared against. So every bound ever quoted on that constant is a reading at this one — Decision 34's ceiling of 25.8 mm, Decision 41's suite interval of −6.758…8.233 mm, Decision 48's corpus bracket of 7.154…21.041 mm, and Decision 48's headline that the joint window of **1.079 mm** is the narrowest any owed constant in the feature has.
+
+`lowerEdgeBandMm = 30` in `LiDARPlaneFitter` is the other constant the previous pass named as never measured, and it is not a measurement job.
+
+### Decision
+
+`foodEnvelopePercentile` is `[owed]`, bracketed **0.1…0.92** and **interpolable**, with the shipped 0.90 strictly inside.
+
+It is a **unit**, not a peer: the corpus ceiling on `foodEnvelopeMinMm` moves **45.453 mm** across its domain, so the bar's whole bracket travels further than the bracket is wide. Fix it **before** the bar.
+
+Decision 48's joint window of 1.079 mm is a **slice at two constants that decision did not name**. At the shipped percentile it reproduces exactly; at p = 0.5 the same window is **8.779 mm**, 8.1× wider. And whether the corpus floors the bar at all depends on `ringSupportMin`: three regimes, all admissible today.
+
+`lowerEdgeBandMm` is **deleted**, not measured.
+
+### Rationale
+
+**The bracket, and the floor is the only bound in this feature that needs nothing owed.** Below p = 0.1 the committed suite goes **red at the shipped `foodEnvelopeMinMm = 0`**: `overhangingFood`'s test requires the envelope guard to pass, and its envelope reads −6.440 mm at p = 0, −4.968 at 0.02 and −2.579 at 0.05, because a percentile that low reads the overhanging lobe rather than the loaf. No owed value enters that — the bar is the shipped 0, the scene is committed, the verdict flips. It is the fifth distinct way the suite has spoken to a constant here, after Decision 41's brackets, Decision 49's measured silence, Decision 50's structural silence and Decision 52's noise-limited identity. The **ceiling of 0.92** is where the corpus floor on `foodEnvelopeMinMm` rises past the suite's ceiling: 8.171 mm against 8.245 mm at 0.92, a window of 0.075 mm, and 9.366 against 8.264 at 0.95 — Decision 41's prediction of a collision on a **fourth** constant, after Decision 46's radius and Decision 47's band count.
+
+**It is a denominator, and the numbers move by more than the thing they bound.** The corpus ceiling — the intended candidate's own envelope, the quantity Decisions 34 and 48 both cap the bar with — runs **−19.415 mm at p = 0 to +26.038 mm at p = 1**. The suite ceiling runs −6.440 to +8.299 mm. Decision 48's bracket is 13.887 mm wide; the ceiling alone travels 45.453 mm across a constant nothing had varied. That is the same shape as Decision 44's `ringSectorCount`, which re-denominated three sector counts, and Decision 47's `ringBandCount`, which re-denominated `bandStepMaxMm` — but larger, because those two moved counts and this one moves millimetres against a bar measured in millimetres.
+
+**The shipped value is where the joint window is nearly minimal.** In Decision 48's own regime the window is non-empty over 0.02…0.92 and reads 2.057, 4.202, 6.286, 6.684, 8.056, **8.779**, 7.565, 5.961, 4.829, 3.203, **1.079**, 0.075 mm over the sweep. The shipped 0.90 is the second-narrowest non-empty reading, 8.1× below the widest. So "the narrowest joint window in the feature" is a property of the **denominator** and not of the constant it bounds, and 0.90 is very nearly the value that makes it narrowest without making it empty. Nothing chose it for that; it simply was never varied.
+
+**Whether the corpus floors the bar at all is a reading at `ringSupportMin`, which Decision 48 did not name.** A candidate floors the envelope bar only if the envelope guard is what has to reject it — Decision 34's own rule for the suite, read on the corpus. The two above-surface candidates carry **0.183** and **0.304** inner-band support, and both sit inside `ringSupportMin`'s (0, 0.362] bracket (Decision 52's ceiling). So at the shipped percentile there are three regimes and the session may still choose any of them:
+
+| `ringSupportMin` | corpus floor | joint window at p = 0.90 |
+| --- | --- | --- |
+| ≤ 0.183 | **8.958 mm** — both above-surface candidates reach the guard | **EMPTY** by 0.725 mm |
+| 0.183…0.304 | 7.154 mm — Decision 48's reading | 1.079 mm |
+| > 0.304 | **none** — Decision 34's original reading restored | 14.991 mm |
+
+Decision 48 quoted 7.154 mm from one capture; the other capture's above-surface pass reads 8.958 mm at the same percentile and was printed by that decision's own measurement. Taking the floor over both captures is what surfaces the regime, because the maximum is what a floor has to clear.
+
+**Interpolable, and for a reason no other constant here has.** A percentile of a fixed multiset cannot fall as the percentile rises, so the readings are monotone **by construction** rather than by measurement — asserted anyway, because `SupportRegion.percentile` special-cases p = 0.5 and averages the two middle samples where every other value takes a nearest-rank index, so the sweep crosses a code branch and not only a value. That makes this the fourth interpolable owed constant, after Decision 47's band count, Decision 49's radius and Decision 54's polish cap, and the only one where interpolability is a property of the function rather than of the corpus.
+
+**It cannot move the candidate set, and it is still live.** Extraction never reads it, so unlike the eight constants of Decisions 46–55 this one cannot reorder or re-roll the candidates. Its only route to the answer is `admissibility` — and there it is not idle: **4 of the 6 corpus candidates** (−18.503…31.914, −87.418…18.653, −19.415…26.038, −28.549…13.212 mm) and **1 of the 8 committed scenes** cross the shipped `foodEnvelopeMinMm = 0` over the sweep. Whether a crossing reaches the selected plane depends on bars that are themselves owed, which makes this the first owed constant whose effect on the answer is entirely mediated by another owed constant.
+
+**`lowerEdgeBandMm` is deleted rather than swept.** It has exactly one occurrence in the repository — its own declaration. The four-edge band scan that `lidar-plane-fit-degenerate-on-clean-capture` added on 2026-06-16 sizes each band from `bbox.heightPx` and `bbox.widthPx` and never reads a millimetre bound, so the constant has not defined the fallback's region since that date. Decision 36 prices the fallback at 18.37 mm of plane error over a region this constant does not set. `specs/estimation/pipeline/design.md` §6.2 still describes the region as "within 30 mm of the food bbox lower edge" and is marked superseded; `collectCandidatePoints` is the region's only definition.
+
+### Alternatives Considered
+
+- **Set it at 0.5, where the joint window on `foodEnvelopeMinMm` is widest at 8.779 mm** - It is the value that leaves the session the most room, it is inside the bracket, and the median is the least noise-sensitive statistic in the sweep - Rejected because widening the window is not the guard's purpose. At p = 0.5 the guard asks whether *half* the food is above the plane, which the bowl case fails only when the plane is above the food's midline rather than its top; Req 3.4 states an **upper** envelope and Decision 22's derivation is written about one. Choosing the percentile to widen a bracket is fitting the unit to the convenience of the bar.
+- **Keep 0.90 and record it as settled, since it is inside the bracket and reproduces every committed verdict** - It is the shipped value, it is strictly inside 0.1…0.92, and no committed test moves - Rejected because it is 0.02 from a ceiling in one `ringSupportMin` regime and **outside** the bracket in another, and Req 3.7 forbids asserting a constant the corpus can still see moving. The narrowness of Decision 48's window is the evidence: at 0.90 the two constraint sets are 1.079 mm apart, and one notch of a constant nothing measured puts them 0.075 mm apart.
+- **Retire the percentile and use the maximum (p = 1), since Req 3.4 says "upper envelope"** - It removes a constant rather than adding one, which Decision 32 did for `minCandidateSamples` - Rejected on measurement: at p = 1 the corpus floor is 18.653 mm against a suite ceiling of 8.299 mm and the joint window is **empty** in two of three regimes. A single-sample statistic is also the one reading in the sweep with no noise rejection at all, on a depth map whose per-sample σ is 3.44–6.98 mm (Decision 29).
+- **Sweep `lowerEdgeBandMm` as the fallback's region parameter, as the previous handoff proposed** - Decision 36 prices the fallback over a region, and a region parameter is the natural thing to sweep - Rejected because it is not the region's parameter and has not been since 2026-06-16. Sweeping it would produce a flat reading at every value and record a false derivation for a dead constant.
+- **Repair `SupportRegion.percentile`'s p = 0.5 branch so the function is one rule over its whole domain** - The special case makes the sweep cross a branch, and a percentile function with two rules is a latent surprise - Rejected on Decisions 52–55's precedent: the branch is only reachable at exactly 0.5, the shipped constant is 0.90, and changing `median` changes every ring and annulus median in the feature. Recorded, not repaired.
+
+### Consequences
+
+**Positive:**
+
+- The last unswept constant on the promoted leg is measured, and it turns out to denominate the constant with the narrowest bracket in the feature.
+- A **third** kind of provenance failure is identified: a marker that points at a real derivation of a different quantity. Decisions 47/48/51 found missing markers and Decision 52 found markers pointing at an underived constant; this one is a marker that reads correctly and covers nothing.
+- Decision 48's joint window of 1.079 mm gains its two denominators, so the feature's tightest constraint is no longer quoted unconditionally.
+- `ringSupportMin` gains a consequence it did not have — it decides whether `foodEnvelopeMinMm` has a corpus floor at all — and Decision 34's "no floor" is restored as one of three live regimes rather than withdrawn outright.
+- The committed suite bounds an owed constant with **no owed value in the bound**, for the first time in this pass.
+- The bracket is interpolable for a structural reason, so the sitting can choose inside it without a finer sweep.
+- One constant is **removed** rather than postponed — the second after Decision 32's `minCandidateSamples` — and a stale region description in another spec is corrected with it.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the sixth pass running, and this one is upstream of a constant already owed, so the sitting's ordering grows another edge.
+- The shipped 0.90 is admissible only if `ringSupportMin` exceeds 0.183, which is a joint constraint between two owed constants that no earlier decision recorded.
+- The ceiling of 0.92 rests on a 0.075 mm margin between two constraint sets, which is inside the noise of either.
+- `SupportRegion.percentile`'s p = 0.5 branch is documented and not repaired, so the feature carries a second known-unrepaired code path after the gravity cone.
+- Decision 48's headline sentence — "the narrowest joint window in the feature" — was true of a slice and read as unconditional for one pass.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/SupportRegion.swift` (the `foodEnvelopePercentile` and `foodEnvelopeMinMm` provenance blocks), `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`lowerEdgeBandMm` deleted, replaced by the note recording why), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theEnvelopePercentileIsTheUnitTheEnvelopeBarIsDenominatedIn` and the parameterised `foodEnvelopeMm`), `specs/estimation/pipeline/design.md` (the §6.2 lower-edge band description, marked superseded), `prerequisites.md`, `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and the deleted constant had no reader.
+
+---
+
+## Decision 57: The fallback's iteration budget truncates a search that never finishes
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.maxIterations = 256` is the fallback leg's RANSAC budget: a bare `for _ in 0..<maxIterations` over the colour-grid edge bands, with no adaptive stopping, no connected-component step, and no early exit of any kind. It is read in `ransac` and nowhere else, which makes it the **first constant this feature has measured that only one leg reads** — Decisions 54 and 55 both measured constants both fitters share, and Decision 56 deleted a fallback-only constant rather than measuring one.
+
+It carried no marker and no comment, which is the shape Decisions 47, 48 and 51 each found. But unlike those, a derivation for it exists, it is correct, and it is a **refutation**. `SupportRegion.ccRansac` and `SupportRegionCandidateTests` both carry the sentence "maxIterations = 256 was sized to find the DOMINANT plane and must not be inherited on faith — P(clean triple) is 98 % at w = 0.25 but 3 % at w = 0.05". The promoted leg acted on that argument and built adaptive stopping around `requiredIterations`; the fallback leg still runs on the number the argument rejects. The reasoning is filed on the leg that abandoned the constant and is unreachable from the constant itself.
+
+Decision 55 measured what the gravity cone takes **out** of this budget — 137 and 10 of 256 draws rejected at 15°, 252 and 207 at 1° — so the spend was characterised before the budget was. What was unmeasured is what the plane does as the budget falls.
+
+### Decision
+
+`maxIterations` is `[owed]`, bracketed **8…unbounded** by the corpus and **4…unbounded** by the committed regression suite, with the shipped 256 strictly inside both.
+
+It is a **floor, not a knob** — the second constant with that shape after Decision 55's cone. And the search it truncates **never finishes**: doubling the budget finds a better hypothesis on both captures, so no value in the sweep is a convergence point and the shipped 256 is an arbitrary cut.
+
+Req 4.3 does **not** pin it. Req 7.6 and the corpus point the **same** way for the first time in this feature.
+
+Not repaired. Adding adaptive stopping to this leg is a code change that moves the shipped fallback plane, and Decisions 52–55's precedent is to record such a repair rather than make it.
+
+### Rationale
+
+**The search never finishes, which is the mirror of Decision 51 rather than its repeat.** That decision measured `SupportRegion.maxIterationsPerPass = 2048` and found it **never fires**: the promoted leg's adaptive target is always the smaller of the two, so the cap truncates nothing. This loop has no target at all. RANSAC's running best is monotone in the draws and nothing here stops it, so a budget of 1024 finds a better hypothesis on **both** captures — improvements at **#689** and **#1005**, against the **#76** and **#210** that 256 stops at. Two caps, two legs, two `[owed]` constants, opposite failures: one never binds, the other cannot stop binding.
+
+The full improvement traces are the reading:
+
+| capture | points | improvements over 1024 draws (iteration → inliers) |
+| --- | --- | --- |
+| `1785135663727` | 1,077,427 | #1 → 189,449; #3 → 379,141; #5 → 520,777; #46 → 596,432; #60 → 613,910; #74 → 651,402; **#76 → 653,816**; #689 → 654,433 |
+| `1785901032716` | 1,475,580 | #1 → 1,264,309; #12 → 1,300,029; #20 → 1,391,616; **#210 → 1,399,938**; #1005 → 1,402,476 |
+
+**It is a floor, and the floor is eight draws.** The selected plane spans **23.474 mm** and **0.152 mm** at the food over a 1…1024 sweep — past Req 5.1's 1 mm on one capture — and every millimetre of the wide one is **below a budget of 8**. From 8 up the two captures hold to **0.027 mm** and **0.152 mm**, both inside Req 5.1, while a budget of 2 sits 23.466 mm out at a 9.504° tilt with a hypothesis holding 0.176 of the points. Below the floor the loop has not yet drawn a triple on the table; above it every further draw refines a plane it already has. One-capture footing, Decision 36's again: `1785901032716`'s table holds **0.857** of the points on the **first** draw, so no budget in the sweep moves it past Req 5.1 at all.
+
+**The promoted leg's own rule, replayed on this leg's own trace, agrees with the argument that was filed against the constant.** Running `requiredIterations` at `ransacSuccessProbability` over the fallback's improvement sequence exits at **39** and **5** draws — **6.6×** and **51×** cheaper — and lands **0.019 mm** and **0.069 mm** from the plane 256 draws produce, both inside Req 5.1 by a factor of fifty and fourteen. The budget is generous because the surface is easy: the winning hypothesis holds **0.607** and **0.949** of the points, far above the w = 0.25 the argument treats as comfortable and the w = 0.05 it treats as starved. That is Decision 51's finding on the other leg — "the budget is sufficient because the dominant plane is EASY" — reproduced on the leg that never got the fix.
+
+**The sweep is exact rather than sampled, and that is a property of the shipped loop.** `uniformInt` consumes exactly one `next()`, the loop draws i, j and k unconditionally before any `continue`, and nothing else touches the RNG — so iteration *t* is the same triple whatever the budget is and a budget-B run is a strict **prefix** of a budget-B′ run. The winner at any budget is the last improvement at or before it. Checked against independently seeded short runs at 4, 64 and 256 draws rather than assumed. No owed constant in this feature has had this: Decisions 46, 51, 52 and 53 all carry a "do not interpolate" rider because their readings wander, and Decisions 47, 49, 50 and 54 are interpolable because readings converge. This one is exact at **every** intermediate value.
+
+**Req 4.3 does not pin it, and the committed suite does.** Req 4.3 requires the plane **used** when the fallback fires to equal the one the edge-band fit **produces** for that capture; both sides move together when the budget moves, which is Decision 54's reading of the same requirement applied to a constant only one leg reads. The shipped bits are reproduced by **{256, 512}** alone — precisely because the search never converges — but that is a fact about the corpus, not a requirement. What bounds the constant is `SupportPlaneRegressionSliceTests`, and this is the **sixth** distinct way the committed suite has spoken here (after Decision 41's brackets, Decision 49's measured silence, Decision 50's structural silence, Decision 52's noise-limited identity and Decision 56's floor at the shipped bar) and the **first through the fallback leg** — every earlier suite reading was on `SPRScene` scenes that run neither extraction nor the fallback fit. At a budget of 1 or 2 the parity capture's pre-feature ring median goes **negative** (−4.309 mm, the sign the whole Req 6.2 criterion is about), its support fraction reads 0.594 against a 0.5 bar, and its volume reads **200.885 cm³** against the 682.96 the file asserts within 5 %. All three go red at once and the suite floors the budget at **4**.
+
+**The suite is the looser of the two sources, which no earlier decision has seen.** Decision 41 found the committed suite binding **tighter** than the corpus on two constants and warned that a value set from captures alone could land inside the corpus bracket and outside the suite's. Here the corpus floors at 8 and the suite at 4: a budget of 4 passes every committed assertion while sitting 2.231 mm from the shipped plane, past Req 5.1's 1 mm. The regression bands are volume and ring-median bands, not transfer bands, and on this constant that gap is four draws.
+
+**What the spend is denominated in, and Req 7.6 agrees with the corpus for the first time.** Every iteration is a full O(n) inlier scan over the **colour** grid — this loop is the one place in the feature that runs at 1920×1440 rather than over the depth annulus — so the budget multiplies **1,077,427** and **1,475,580** candidate points against the promoted leg's 10,469 and 12,551 annulus samples (Decision 51). 256 draws cost **2.76 × 10⁸** and **3.78 × 10⁸** distance tests, **96.9 %** of them past the 8-draw floor. Req 7.6's latency and the 32 GB allocation failure `refine` was rewritten for both live on this path. Decision 55 recorded Req 7.6 pulling one owed constant tighter and noted no other owed constant does; this is the second, and the first where the **corpus pulls the same way**, because everything above the floor is measured rather than insurance the captures cannot price.
+
+**Both brackets are readings at `gravityAngleMaxRad`.** A rejected triple spends an iteration and buys nothing, so the cone decides how much of the budget is reachable. Re-traced at the shipped budget under three cones, the last improvement moves with the bar: **#76 → #46** on the parity capture (45 of 46 draws rejected by then, against 38 of 76 at the shipped cone) and **#210 → #236** on the weighed one (192 of 236, against 9 of 210). Neither floor nor the byte-identical set can be quoted without naming the cone it was read at.
+
+### Alternatives Considered
+
+- **Lower it to 39, the largest replay figure, and record the constant as set** - The corpus floors the answer at 8, the suite at 4, the promoted leg's own rule asks for 39 and 5, and the change would cut 85 % of the fallback's latency on a path that has produced an OOM - Rejected because both floors are read on two captures of an unusually easy surface: the table fills the colour-grid edge bands and the winning hypothesis holds 0.607 and 0.949 of the points. The argument in `ccRansac` prices w = 0.05 at 3 % per triple, and the corpus contains no scene anywhere near it. Req 3.7 forbids setting a bar from the pass side alone, and this is the pass side twice over.
+- **Add adaptive stopping to this leg so the constant becomes a cap like `maxIterationsPerPass`** - It is the repair the argument in `ccRansac` implies, it removes the constant rather than setting it (Decisions 32 and 56's shape), and the replay shows it landing inside Req 5.1 on both captures - Rejected on Decisions 52–55's precedent: it moves the shipped fallback plane, and the fallback plane is what Decision 36 prices `fallbackPenalty` against and what feeds `lidarMmPerPx` on the legacy path. Recorded as the repair this measurement recommends, made at the sitting rather than here.
+- **Raise it, since the search demonstrably has not converged at 256** - Improvements at #689 and #1005 are real, and a budget that stops mid-search is by definition arbitrary - Rejected because the improvements buy nothing: the plane moves 0.001 mm and 0.029 mm at those iterations, both three orders inside Req 5.1, while the cost is linear in the budget on the leg Req 7.6 is most exposed on. The search not converging is an argument that the constant cannot be derived from convergence, not an argument for a larger value.
+- **Treat Req 4.3's byte-identity as pinning the constant to {256, 512} and close it** - The measurement does produce a two-element admissible set, and the agent note reads Req 4.3 as "byte-identical to what the fallback produces today" - Rejected on the requirement's text: it constrains the plane **used** against the plane the edge-band fit **produces**, and both move together. Reading it as a freeze would make every constant either fitter reads unsettleable, which contradicts Decision 54's own reading of the same requirement.
+- **Sweep it jointly with `gravityAngleMaxRad` and report a grid** - The cone measurably moves the floor, and Decision 45 established the joint-pair precedent - Rejected as premature: the cone is itself bracketed 10°…unbounded with no ceiling (Decision 55), and a grid over two constants neither of which the corpus can set produces readings with no value in them. Three cone slices are enough to record that the coupling exists.
+
+### Consequences
+
+**Positive:**
+
+- The fallback leg's budget is measured for the first time, and the constant that Decision 51's argument was written about turns out to be alive on the leg that never received the fix.
+- A fourth kind of provenance failure is identified: a derivation that exists, reads correctly, and argues **against** its own constant — filed on the leg that acted on it, unreachable from the leg that did not.
+- The sweep is **exact at every intermediate value**, the first owed constant in this feature for which that is true, so no interpolation rider is needed in either direction.
+- The committed suite bounds a constant through the **fallback** leg for the first time, which is a source Decisions 50 and 54 both recorded as structurally silent for the promoted one.
+- Req 7.6 and the corpus point the same way for the first time, so the sitting has one direction to move this constant rather than a trade-off.
+- The measurement costs nothing on the promoted leg: `maxIterations` is read in one function and no candidate, verdict or persisted field changes.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the seventh pass running, and this one's brackets are readings at another owed constant's bar.
+- Both floors rest on two captures of the easiest surface in the corpus, so the constant is bracketed where a hard scene would bracket it hardest — the matte-table capture Decision 53 made a hard requirement of the sitting is the one that would price it.
+- The repair the measurement recommends — adaptive stopping on the fallback leg — is recorded and not made, so the feature now carries a third known-unrepaired path after the gravity cone and `SupportRegion.percentile`'s p = 0.5 branch.
+- The shipped 256 is confirmed arbitrary, which means no reading in Decisions 36, 54 or 55 that quotes a fallback plane is quoting a converged one.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (the `maxIterations` provenance block), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theFallbackBudgetTruncatesASearchThatNeverFinishes`, the traced `fallbackRansacTrace`, the `adaptiveStop` replay, the restated regression bands and `foodVolumeCm3`), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and the fallback plane on both committed captures is bit-identical to what it was.
+
+---
+## Decision 58: The residual bar cannot fire, and the reading it cannot fire on is inflated by the fitter's own arithmetic
+
+**Date**: 2026-08-06
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.residualMaxMm = 20` is step 4 of `fitOutcome`: the whole-plane RMS gate that turns a fit into `.lidarFitResidualTooHigh`. It is the last `[owed]` constant either fitter reads that the corpus can reach, and it is unlike every constant measured before it in three ways. It is **`public`**, so it is a per-call default rather than a value, and three callers already override it. It carries a **derivation that is arithmetic rather than empirical** — "residuals in (8, 20] accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε = 0.01 floor)" — which Decision 52 distinguished in KIND from a per-sample sigma. And this feature's own `design.md` already carries the argument that a residual bar of this shape **cannot fire**, made about a different constant: "under RANSAC the residual is computed over `polishedInliers`, each within `inlierBandMm = 5` of the plane, so RMS is ≤ 5 mm by construction and the bar can never fire" — the reason `restrictedResidualMaxMm = 8` was deleted before it shipped (Decisions 16 and 19).
+
+So the question this pass asks is not what the corpus says about 20. It is whether the argument that deleted one residual bar applies to the one that shipped, and what the gate is actually reading when it applies it.
+
+### Decision
+
+`residualMaxMm` stays at **20** and stays `[owed]`, bracketed **1.0…unbounded** with the shipped value strictly inside and no ceiling.
+
+The bar **cannot fire at any value at or above the inlier band**, for the structural reason `design.md` already gives about the bar that was deleted, now checked on the corpus and extended to both legs. Its entire live range is (0, residual] — 1.954 and 1.928 mm — so Decision 46's raise from 8 to 20 was a no-op and so was the 8.
+
+Separately and unexpectedly: **`refine` does not return the least-squares plane at this leg's inlier counts.** Its centroid is accumulated in Float over 641,694 and 1,298,233 points, and the plane it returns is displaced **0.724 mm** and **1.184 mm** along its own normal from the true minimiser — the second past Req 5.1's 1 mm tolerance. The residual the gate reads is inflated **1.077×** and **1.267×** by that displacement. Recorded, not repaired.
+
+### Rationale
+
+**The ceiling is an argument, and the corpus's job is to witness it.** Every member of the set the RMS is taken over lies strictly within one `inlierBandMm` of the plane that SELECTED it — that is what selection means — so RMS(selecting) < 5 mm identically, and the least-squares plane over that set cannot do worse than the selecting plane. Hence
+
+    RMS(least squares) ≤ RMS(selecting) < inlierBandMm
+
+for every input, on both legs, at every budget and every cone. Measured: 1.815 ≤ 1.952 < 5 and 1.522 ≤ 1.804 < 5. This is the **first owed constant in this feature bounded by an argument rather than by captures**; every earlier one was bracketed by what two scenes happened to produce, and this one would hold on a scene that does not exist. It is also the first time this feature has found `design.md` already carrying the finding — stated about `restrictedResidualMaxMm`, never applied to the general bar that shipped, and the deletion of one while the other survives is the asymmetry.
+
+**The gate is not reading that number, and the reason is in `refine`.** The centroid is three Float `reduce(0, +)` sums over coordinates of magnitude ~350 mm. At 1.3 million points the partial sums reach 4.6 × 10⁸, where a Float ulp is 32 mm, and `d = n̂ · centroid` inherits every bit of the accumulated rounding. The measurement isolates it three ways: the normal is untouched (**0.000°** tilt against the true minimiser, because the scatter terms are centred and stay small); `computeResidual` is exonerated (its Float `sumSq` agrees with a Double sum to **8e-5** relative); and a Double-accumulated mirror of `refine` — identical in every other line — lands on an independent Jacobi eigen-solve of the same scatter matrix to **1e-7 mm** of RMS. The defect is the centroid alone.
+
+| capture | inliers | shipped residual | least squares | inflation | plane offset | at the food |
+| --- | --- | --- | --- | --- | --- | --- |
+| `1785135663727` | 641,694 | 1.954 mm | 1.815 mm | 1.077× | 0.724 mm | 0.723 mm |
+| `1785901032716` | 1,298,233 | 1.928 mm | 1.522 mm | 1.267× | 1.184 mm | 1.186 mm |
+
+**The count bounds the drift without determining it.** Refitting the same geometry over growing prefixes of one inlier set: 1,000 points cost 0.000 mm, 10,000 cost 0.008 and 0.002 mm, 100,000 cost 0.030 and 0.042 mm, 500,000 cost 0.317 and 0.737 mm. The promoted leg refines the 10,469 and 12,551-sample annuli of Decision 51 and is accurate at that scale — so this is the **second defect in two passes confined to the leg that never received the promoted leg's fixes**, after Decision 57's missing adaptive stopping, and for the same underlying reason: the fallback runs on the COLOUR grid at 1920×1440 while extraction runs on a depth annulus. It is not a bias, either: the band sweep reads 1.007× at 1,385,960 inliers and 1.349× at 1,231,960. A count says how far a rounding walk *can* have gone, not where it is.
+
+**The verdict on the constant does not change, and several numbers around it do.** The inflated reading is still 39 % of the band, so the ceiling in (1) survives with 2.5× to spare and the bar remains unreachable. But Decision 36 prices `fallbackPenalty` on "the edge-band plane's residual is lower than the restricted fit's (1.95 vs 2.33 mm), and 71 % of the penalty is spent cancelling that" — the 1.95 is this inflated number, the true gap is 1.815 against 2.327, and the residual channel therefore works *harder* against the penalty than that decision recorded. Every fallback-leg residual, σ_plane and plane offset quoted in Decisions 35–37 and 54–57 carries the error.
+
+**Req 5.1 is not violated, and the thing that is wrong is not what it measures.** The drift is deterministic: identical bytes in the same order give the same rounding, so device and replay still agree exactly and Decision 35's tolerance holds. What fails is the plane's agreement with the fit it claims to be — 1.186 mm at the food centroid ray, measured in the same units Req 5.1 is denominated in, against a 1 mm tolerance. A requirement about two paths agreeing cannot see an error both paths make.
+
+**σ_plane inherits the ceiling, so this constant's own derivation prices a state neither leg can produce.** Confidence computes σ_plane = exp(−r/5) from the same residual, so σ_plane > exp(−`inlierBandMm`/5) = **0.368** structurally. The plane channel of the confidence product spans (0.368, 1], not (0, 1]; the derivation's "at r = 20 mm, σ_plane ≈ 0.018, near the ε = 0.01 floor" describes a point 20× below the floor. Measured: 0.676 and 0.680.
+
+**The floor is 1.0, and corpus and committed suite give it for the same reason.** Below the measured residual `fitOutcome` returns nil, so `SupportPlaneRegressionSliceTests` — which measures the pre-feature edge-band plane on both slices — loses its input entirely and every assertion becomes uncomputable rather than merely wrong. This is the **seventh** distinct way the committed suite has spoken to a constant here (after Decision 41's brackets, Decision 49's measured silence, Decision 50's structural silence, Decision 52's noise-limited identity, Decision 56's floor at the shipped bar and Decision 57's fallback-leg regression bands) and the first where the two sources cannot disagree, because both read the one residual this leg produces. Decision 57 found the suite the looser source; here they are the same number.
+
+**The bar is denominated in `inlierBandMm`, which makes it a fifth marker terminating in Decision 52's constant.** The ceiling tracks the band across Decision 52's whole 1…12.5 mm bracket — 0.512…3.192 and 0.601…2.534 mm, never above 60 % of the band and never within a factor of two of the shipped 20. Reaching 20 needs a band above 20, which is off that bracket entirely. It is the first of the five markers that terminates there **without saying so**, since this constant carries a derivation of its own that never mentions the band.
+
+### Alternatives Considered
+
+- **Set it to 5 — the band — since that is the structural ceiling and any value above it is dead** - It is the exact bound the argument gives, it makes the constant honest, and it costs nothing on the corpus because the bar still never fires - Rejected because it changes nothing and forecloses something. A bar at the ceiling is still unreachable, so the change buys no behaviour; and if the fitter ever gains a path that refines against a set it did not select — a merged consensus, a multi-band polish — the ceiling stops holding and 5 would then be a live bar set from an argument that no longer applies. Req 3.7 forbids setting a bar from the pass side alone, and here the pass side is every possible input.
+- **Delete it, on Decisions 32 and 56's precedent for constants that turn out to do nothing** - It cannot fire at the shipped value, its derivation prices an unreachable state, and the feature has twice removed an owed constant rather than postpone it - Rejected because it is `public` and three callers pass their own values inside the live range: `HarnessCore.FixtureRunner` exposes it as a parameter and the two test callers pass 1.0 and 0.1. The constant does nothing at its default and something at the values callers choose, which is a default to be re-derived, not a mechanism to remove. Deleting it would also remove the only refusal path the fallback leg has.
+- **Repair `refine`'s centroid now — it is a two-line change and the corpus proves it wrong** - The Double-accumulated mirror is already written and validated against an independent eigen-solve, and the shipped plane is 1.184 mm from the answer it claims to compute, past Req 5.1's tolerance - Rejected on Decisions 52–57's precedent: it moves the shipped fallback plane by that same 1.184 mm, and the fallback plane is what Decision 36 prices `fallbackPenalty` against and what feeds `lidarMmPerPx = |d| / f` on the legacy path. Recorded as the repair this measurement recommends, made at the sitting rather than here. The sitting is where the penalty is repriced anyway.
+- **Treat the drift as a Req 5.1 violation and open a bugfix spec** - 1.186 mm at the food is past a documented 1 mm tolerance, and `lidar-plane-fit-oom-on-device-1920x1440` set the precedent for `refine`-related bugfix specs - Rejected on the requirement's text: Req 5.1 constrains a device capture against its replay, and the drift is deterministic in the input order, so both agree exactly. The error is real but it is an accuracy defect in one function, not a transfer defect, and the owed-constant sitting is where a plane that moves 1.184 mm gets decided.
+- **Measure the bar against a synthetic straddling scene, where a high residual is constructible** - It would give the ceiling a counter-example and turn the bracket two-sided - Rejected as the circularity Decision 11 and Req 3.7 both name: a synthetic scene built to make the bar fire sets the bar to whatever the scene was built for. The ceiling holds structurally, so no natural scene can defeat it; a scene that does would have to break the selection invariant, which is a code change and not a capture.
+
+### Consequences
+
+**Positive:**
+
+- The argument that deleted `restrictedResidualMaxMm` before it shipped is finally applied to the bar that did ship, closing an asymmetry `design.md` has carried since Decision 16.
+- The first owed constant in this feature bounded by an argument rather than by two captures, so its ceiling does not inherit the corpus's narrowness.
+- A real arithmetic defect in `refine` is found, isolated to the centroid, quantified on both captures and priced against Req 5.1's own units — found only because the ceiling argument gave a number the reading could be checked against.
+- The measurement's helper IS the proposed repair, so the sitting has a validated fix and its exact cost (1.184 mm of plane movement) rather than a direction.
+- σ_plane's true range is recorded, which bounds what the plane channel can contribute to any confidence reading — a constraint task 27's latency and confidence work inherits.
+- The regression bound on `refine`'s drift means a future change that makes the accumulation worse fails a test rather than moving a plane silently.
+
+**Negative:**
+
+- Task 26 gains an owed constant for the eighth pass running, and this one is owed with no corpus evidence that can ever settle it, since no capture can make the bar fire.
+- Every fallback-leg residual and plane offset quoted in Decisions 35–37 and 54–57 is now known to carry up to 27 % of inflation, and those decisions are not re-run.
+- Decision 36's `fallbackPenalty` reasoning quotes an inflated residual, so the 71 % figure it records is wrong in a direction that makes the penalty look better than it is.
+- The feature now carries a fourth known-unrepaired path — after the gravity cone, `SupportRegion.percentile`'s p = 0.5 branch and the fallback's fixed budget — and this one is an accuracy defect rather than a structural one.
+- The bar's floor at 1.0 is set by what starves the committed suite, not by what a bad fit looks like, so the bracket's lower end carries no scene evidence either.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (the `residualMaxMm` provenance block and a new accumulation note on `refine`), `MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift` (`theResidualGateCannotFireAtTheShippedBand`, `refineDoubleAccumulated`, `rmsDouble`, `inlierSet`, the extended `ResidualReading`), `specs/estimation/support-plane-reference/design.md` (the "why there is no separate residual bar" section, and Decision 36's residual figures), `docs/agent-notes/support-plane-fit.md`, task 26's detail. **No shipped behaviour changes**: no constant's value moves, no guard is rewired, and both legs produce bit-identical planes.
+
+---
+
+## Decision 59: The opus compete variant is the surviving implementation, merged to research
+
+**Date**: 2026-08-08
+**Status**: accepted
+
+### Context
+
+The 2026-08-05/06 orbit compete run produced two complete, independently written
+implementations of this spec (25/27 tasks each, both suites fully green), while the
+`research` branch had separately implemented tasks 1–8. All three wrote
+`SupportRegion.swift` from scratch off the same fork point (`d456028`), so no git
+merge across lines was possible — one line had to be selected and the others
+harvested for evidence. Orbit had recorded both variants as failed; triage found
+that status spurious (the final phase hit the weekly usage limit — a quota exit,
+not a verification failure). The comparison is recorded in
+`docs/agent-notes/support-plane-variants.md`.
+
+### Decision
+
+Adopt the opus variant (`orbit-impl-1/support-plane-reference`, tip `0f30ac8`) as
+the surviving implementation, merged into `research` wholesale: its
+`SupportRegion` and dispatch wiring, its test suites (including the task-26 corpus
+measurement suite), its spec-document amendments and its decision log (Decisions
+23–58). The research line's tasks 1–8 fitter, its five `SupportRegionTests` files
+and its `support-region.md` agent note are removed as superseded.
+
+### Rationale
+
+impl-1 is the furthest through the work that actually remains. Task 26 — the owed
+constants — is the spec's open core, and impl-1 built the measurement
+infrastructure for it: constants re-denominated so Req 5.1's grid transfer holds
+(`minAcceptedExtentMm`, `minResidueAreaMm2`, `annulusOuterMm` pinned at 50 mm),
+`ransacSuccessProbability` surfaced as the live end of the iteration clamp, typed
+`CandidateRejection` guards evaluated independently by the corpus suite, and a
+total-order winner sort for Req 7.7. Both variants independently corrected the
+research line's whole-ring median guard to the inner band, which settled that the
+research line should not survive unmodified.
+
+### Alternatives Considered
+
+- **impl-2 (sonnet variant)**: the smallest reviewable full implementation, green,
+  with real-device corpus evidence (n=11) annotated inline - Rejected as the base
+  because its radial banding runs on ring-centroid pixel distance rather than
+  mm-from-mask (unverified on non-circular masks) and it carries none of impl-1's
+  re-denominations or measurement suite. Its evidence and its `paletteVersion`
+  fixture-loader fix are imported separately rather than lost.
+- **Continue the research line (tasks 1–8)**: closest to the design text -
+  Rejected because it re-pays ~19 tasks the variants had already built and tested,
+  and carries two defects both variants independently corrected (whole-ring median
+  guard; single-pass polish).
+
+### Consequences
+
+**Positive:**
+- Tasks 9–25 land tested: dispatch with lazy edge-band fallback, persisted plane
+  diagnostics, fallback penalty, device/offline parity, fallback-rate reporting,
+  the calibration reference guard, committed depth-slice fixtures.
+- Task 26 continues from Decisions 27–58's measurements instead of restarting.
+- `SupportPlaneReference.plateRegion` (Req 5.4 calibration lineage) arrives now
+  rather than at task 16.
+
+**Negative:**
+- `make test` gains ~14 minutes of wall clock from the corpus measurement suite;
+  gating it behind an opt-in flag is future work if the cost bites.
+- The merge diff is the largest of the three options to review after the fact.
+- impl-2's Decisions 34–43 must be renumbered and imported, and its
+  `paletteVersion` fix ported, before its branch can be retired — tracked in
+  `support-plane-variants.md`.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/*`, `MedataCore/Tests/{SupportPlaneTests,
+VolumeTests,PipelineTests,HarnessCLITests,ConfidenceTests}/*`, `HarnessCore/*`,
+`HarnessCLI/main.swift`, `DiagProbe` (deleted), `Package.swift`, this spec's
+`design.md`/`tasks.md`/`prerequisites.md`/`requirements.md`, `specs/OVERVIEW.md`,
+`specs/DECISIONS.md`, `specs/estimation/pipeline/*`, `docs/agent-notes/`
+(`support-plane-fit.md` replaces `support-region.md`).
 
 ---

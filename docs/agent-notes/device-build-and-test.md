@@ -14,6 +14,14 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
 - `make build` / `make test` — SwiftPM core. `make test` prints **both** test
   totals (XCTest ~323 + swift-testing 16). Never report only one framework's
   slice as "the" test count.
+  - **Gotcha: the totals are grepped from a fixed shared log path**
+    (`tee /tmp/medata-swift-test.log`, Makefile ~line 75). Two `make test` runs
+    overlapping in time — e.g. in two worktrees — clobber each other's log, so
+    the printed totals can belong to the *other* run (observed 2026-08-08: both
+    orbit variant runs reported an identical XCTest line down to the timing
+    stamp). Pass/fail from the live stream and the exit code are still per-run
+    truth; only the grepped summary lines are unreliable under concurrency.
+    Never run two `make test` invocations concurrently if the totals matter.
 - `make deploy-device` — Debug build + install + launch. Makefile DEFAULTS point at `you` (iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`), the current primary device — no override needed. To target another device, override per invocation: `make deploy-device DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>` (same overrides for `deploy-release-stub` / `logs-device`; `logs-device` needs sudo for tethered collection). UI/non-capture work only.
 - `make deploy-release-stub` — the automated Path B below (capture testing).
 - `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs

@@ -37,26 +37,26 @@ import XCTest
 // requires the opposite for the offline path: integrate "above the surface the
 // food rests on (the plate top), not the surrounding table".
 //
-// These tests therefore encode ONE candidate resolution — that the device adopt
-// the plate-top reference the calibration path already uses. That choice has
-// open design questions (bowls, whose rim sits ABOVE the food surface; food
-// overhanging the plate onto the table; candidate starvation) and reverses a
-// documented decision, so it needs a spec update before it can be asserted as
-// the contract. Un-skip as part of that work.
+// These tests encoded ONE candidate resolution — that the device adopt the
+// plate-top reference the calibration path already uses — and were SKIPPED
+// pending the spec work that would settle it. `specs/estimation/support-plane-reference/`
+// is that work: Req 1.1 redefines the support plane as the surface the food
+// rests on, and `SupportRegion.fitFoodSupportPlane` implements it. The skip is
+// therefore removed and the assertions now run (task 23, Req 7.5).
+//
+// What changed with the un-skip. The tests exercise
+// `LiDARSupportPlaneFitter.fitFromDepth` — the Req 4 fallback ladder — rather
+// than `LiDARPlaneFitter.fitOutcome` directly, because the edge-band fitter is
+// deliberately unchanged: it remains the fallback and still lands on the table
+// by construction (Req 4.3). The reference actually selected is asserted
+// alongside the plane, since a plate-height plane reached via the fallback
+// would be an accident rather than the contract.
 //
 // Field evidence, capture bundle 1785135663727-success.fixture: shipped band
 // scan 682.96 cm3 (device recorded 682.31); plane fitted to the plate surface
 // 235.96 cm3; the fitted plane sits 26.1 mm below the plate the bread rests on.
 // Mass 272.92 g -> 94.4 g, i.e. "7.5 slices" -> ~2.6.
 final class PlateTopSupportPlaneTests: XCTestCase {
-
-    // Remove alongside the spec decision that settles the reference surface.
-    private func skipPendingSpecDecision() throws {
-        throw XCTSkip(
-            "Support-plane reference surface (table vs the surface the food "
-            + "rests on) is pending a spec decision; see the class comment."
-        )
-    }
 
     // Depths in mm along the optical axis; a horizontal plane at Z = -d reads a
     // constant depth d, so each surface is one flat depth value.
@@ -67,13 +67,27 @@ final class PlateTopSupportPlaneTests: XCTestCase {
     private let width = 240
     private let height = 180
 
-    // Centred 40x40 food square; a plate disc of radius 30 px around it; table
-    // everywhere else. The bbox-sized bands therefore span roughly 120x120 px,
-    // in which table pixels outnumber plate pixels about 9:1 — the same
-    // area domination that made the field capture pick the worktop.
+    // Centred 40x40 food square; a plate disc around it; table everywhere else.
+    //
+    // The plate radius grew from 30 px to 44 px when the skip came off, and the
+    // reason is a real constraint rather than test convenience. Selection is now
+    // decided by a contact ring spanning `SupportRegion.ringInnerMm` 8 mm to
+    // `ringOuterMm` 25 mm outside the food boundary, so the plate has to carry
+    // 25 mm of visible surface in EVERY direction — including past the food
+    // square's corners, which sit 28.3 px from centre. At 370 mm range with
+    // f = 200 the scale is 1.85 mm/px, making 25 mm about 13.5 px; 28.3 + 13.5
+    // rounds up to 44. A 30 px plate leaves the ring's diagonal sectors on the
+    // table, which is the Req 3.6 crossing case and correctly falls back — a
+    // different scene from the one these tests are about.
+    //
+    // The pre-feature bands still favour the table, which is what makes the
+    // assertions meaningful, but by 1.9:1 rather than the 9:1 the 30 px plate
+    // gave: the bbox-sized bands span ~120x120 px, holding ~8,300 table pixels
+    // against ~4,500 plate ones. Domination is thinner, and the fitter still
+    // picks the table, because area is all it scores on.
     private let foodMinX = 100, foodMaxX = 139
     private let foodMinY = 70, foodMaxY = 109
-    private let plateRadiusPx: Float = 30
+    private let plateRadiusPx: Float = 44
 
     private func intrinsics() -> CameraIntrinsics {
         CameraIntrinsics(
@@ -126,15 +140,23 @@ final class PlateTopSupportPlaneTests: XCTestCase {
     // The fitted support plane must be the surface the food RESTS ON (the plate
     // top at 380 mm), not the table it merely sits near (400 mm).
     func testSupportPlaneLandsOnPlateTopNotTable() throws {
-        try skipPendingSpecDecision()
         let (depth, mask, k) = scene()
-        let outcome = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
-            depth: depth,
-            colourIntrinsics: k,
-            foodRegionMask: mask,
-            gravityCamera: Vec3(0, 0, 1)
-        ))
+        let outcome = LiDARSupportPlaneFitter.fitFromDepth(
+            depth: depth, intrinsics: k, mask: mask, gravity: Vec3(0, 0, 1)
+        )
         let plane = try XCTUnwrap(outcome.plane, "expected a support plane fit")
+
+        // The reference is asserted, not inferred from the height: a plane at
+        // plate height reached through the edge-band fallback would be luck.
+        XCTAssertEqual(
+            outcome.stats.reference, .foodSupport,
+            "plate-top selection must come from the restricted fit, not the fallback"
+        )
+        // The whole-ring median is the Req 3.1 measure: ~0 on the surface the
+        // food rests on, +20 mm here if the fit had landed on the table.
+        let ring = try XCTUnwrap(outcome.stats.ring, "expected ring statistics")
+        XCTAssertEqual(ring.medianMm, 0, accuracy: 2,
+                       "ring median \(ring.medianMm) mm — the plane is not on the ring's surface")
 
         // distanceMm = n·p with n ≈ (0,0,1), so a surface at depth d gives -d.
         let fittedDepthMm = -plane.distanceMm
@@ -151,7 +173,6 @@ final class PlateTopSupportPlaneTests: XCTestCase {
     // End-to-end consequence: the integrated volume must be the slab's own
     // volume, not the slab plus the plate's rise over the slab's footprint.
     func testFlatFoodVolumeExcludesPlateRise() throws {
-        try skipPendingSpecDecision()
         let (depth, mask, k) = scene()
         let palette = makePalette(numFood: 1)
         let foodClass = 0
@@ -166,13 +187,11 @@ final class PlateTopSupportPlaneTests: XCTestCase {
             return 0
         }
 
-        let planeOutcome = LiDARPlaneFitter.fitOutcome(LiDARPlaneFitter.Inputs(
-            depth: depth,
-            colourIntrinsics: k,
-            foodRegionMask: mask,
-            gravityCamera: Vec3(0, 0, 1)
-        ))
+        let planeOutcome = LiDARSupportPlaneFitter.fitFromDepth(
+            depth: depth, intrinsics: k, mask: mask, gravity: Vec3(0, 0, 1)
+        )
         let plane = try XCTUnwrap(planeOutcome.plane, "expected a support plane fit")
+        XCTAssertEqual(planeOutcome.stats.reference, .foodSupport)
 
         let outcome = HeightFieldEstimator.integrate(HeightFieldEstimator.Inputs(
             probabilities: probs,

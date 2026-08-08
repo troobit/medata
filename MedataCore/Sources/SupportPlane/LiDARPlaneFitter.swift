@@ -9,7 +9,15 @@ import PortableContracts
 // same fixture produce identical inliers.
 public enum LiDARPlaneFitter {
     // Tunable parameters per design §6.2 ("Parameter justification").
-    static let lowerEdgeBandMm: Float = 30
+    //
+    // `lowerEdgeBandMm = 30` stood here and is DELETED rather than measured (Decision 56).
+    // It had exactly one occurrence in the repository — its own declaration. The four-edge
+    // band scan that `lidar-plane-fit-degenerate-on-clean-capture` added on 2026-06-16
+    // sizes each band from `bbox.heightPx` / `bbox.widthPx` and never reads a millimetre
+    // bound, so this constant has not defined the fallback's region since that date.
+    // Decision 36 prices the fallback at 18.37 mm of plane error over a region it does not
+    // set. `collectCandidatePoints` below is the region's only definition.
+    //
     // τ_conf: minimum normalised LiDAR confidence for a table pixel to seed the
     // fit. ARKit maps `ARConfidenceLevel.{low,medium,high}` → bytes `{0,127,255}`
     // (§6.0). Lowered from 0.66 (HIGH-only) to 0.40 per Decision 47 so MEDIUM
@@ -20,19 +28,197 @@ public enum LiDARPlaneFitter {
     // residual gate still reject a bad plane, and σ_plane = exp(−r/5) carries the
     // extra medium-confidence noise into the confidence surface (Decision 46).
     // Bug `lidar-plane-fit-matte-table-confidence` 2026-07-06.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 53, and upstream of
+    // `inlierBandMm` below: this decides what a SAMPLE is, and every sample the inlier test is
+    // applied to has already passed it. Three things that decision measured and this comment
+    // must not lose:
+    //
+    // 1. Its domain is NOT an interval. ARKit reports three levels, so over the whole of
+    //    [0, 1] there are three behaviours — accept LOW and up (τ ≤ 0), accept MEDIUM and up
+    //    (0 < τ ≤ 127/255 = 0.498, where the 0.40 sits), accept HIGH only (above 0.498). A
+    //    value between 0.40 and 0.49 is not a different setting; there is nothing to tune.
+    // 2. It MOVES THE PLANE — 2.098 mm at the food on `1785135663727`, past the 1 mm Req 5.1's
+    //    transfer is measured at — and it changes the extraction pass count, so `bandMm` above,
+    //    `SupportRegion.minResidueAreaMm2` and `maxCandidatePlanes` are all denominated in it.
+    // 3. The corpus does NOT reproduce the starvation the paragraph above describes: at HIGH
+    //    only both committed captures still fit and the intended candidate's ring support
+    //    RISES. The matte-table capture that justifies the 0.40 is not in the corpus, so do
+    //    not re-set this from the corpus alone in either direction.
+    //
+    // The second half of the same constant lives in `Volume.HeightFieldEstimator.tauConfidence`
+    // at 0.66, on the FAR side of the MEDIUM level: the support plane is fitted to MEDIUM and
+    // HIGH samples while the food volume above it is integrated over HIGH alone. Deliberately
+    // not aligned here — closing it adds or removes samples on every capture and moves the
+    // answer (Decision 53).
     static let confidenceThreshold: Float = 0.40
+    // The fallback's RANSAC budget: a fixed loop bound with no adaptive stopping, read in
+    // `ransac` below and nowhere else. `[owed]` to support-plane-reference task 26 as of its
+    // Decision 57, and the first constant that feature has measured which only ONE leg reads.
+    //
+    // It carried no marker and no comment, which is Decisions 47, 48 and 51's shape — but
+    // unlike those a derivation for it does exist, it is CORRECT, and it is a REFUTATION.
+    // `SupportRegion.ccRansac` and `SupportRegionCandidateTests` both carry "maxIterations =
+    // 256 was sized to find the DOMINANT plane and must not be inherited on faith — P(clean
+    // triple) is 98 % at w = 0.25 but 3 % at w = 0.05". The promoted leg acted on that and
+    // built adaptive stopping; this leg still runs on the number the argument rejects, and
+    // the argument is filed on the leg that abandoned it. Four things Decision 57 measured
+    // and this comment must not lose:
+    //
+    // 1. The search it truncates NEVER FINISHES. The running best is monotone in the draws
+    //    and nothing here stops it, so doubling the budget to 1024 finds a better hypothesis
+    //    on BOTH committed captures (improvements at #689 and #1005, against the #76 and
+    //    #210 that 256 stops at). The shipped value is a truncation, not a convergence
+    //    point — the exact mirror of `SupportRegion.maxIterationsPerPass`, which never binds
+    //    at all because adaptive stopping ends the pass first (Decision 51).
+    // 2. It is a FLOOR, not a knob, and the floor is EIGHT DRAWS. The plane spans 23.474 mm
+    //    and 0.152 mm at the food over a 1…1024 sweep; from a budget of 8 up the two
+    //    captures hold to 0.027 and 0.152 mm, both inside Req 5.1's 1 mm. Second constant
+    //    with this shape after `gravityAngleMaxRad` (Decision 55).
+    // 3. The promoted leg's own stopping rule, replayed on this leg's own improvement trace,
+    //    exits at 39 and 5 draws — 6.6× and 51× cheaper — and lands 0.019 and 0.069 mm from
+    //    the plane 256 draws produce. The budget is generous because the surface is easy:
+    //    the winning hypothesis holds 0.607 and 0.949 of the points, far above either ratio
+    //    the argument above prices.
+    // 4. Every iteration is a full O(n) inlier scan over the COLOUR grid — 1,077,427 and
+    //    1,475,580 candidate points, two orders of magnitude past the promoted leg's annulus
+    //    — so 256 draws cost 2.76e8 and 3.78e8 distance tests, 96.9 % of them past the
+    //    8-draw floor. Req 7.6's latency and the OOM this fitter has already produced are
+    //    denominated here, in the TIGHTENING direction.
+    //
+    // Bracketed 8…unbounded by the corpus and 4…unbounded by the committed regression
+    // suite — the first owed constant where the corpus binds TIGHTER than the suite, against
+    // Decision 41's warning about the reverse. Req 4.3 does NOT pin it: that requirement
+    // makes the plane USED equal the plane this fit PRODUCES, and both move together
+    // (Decision 54's reading). Both brackets are readings at `gravityAngleMaxRad`, because a
+    // rejected triple spends an iteration and buys nothing.
     static let maxIterations: Int = 256
+    // ε, the RANSAC inlier band. `[owed]` to support-plane-reference task 26 as of its
+    // Decision 52 — this was a bare number with no derivation anywhere, and it is where
+    // FOUR of that feature's `[inherited]` provenance markers terminate: `ringBandMm`
+    // reads "[inherited] inlierBandMm", `ringMedianMaxMm` reads "[inherited] ringBandMm",
+    // `inlierRemovalMultiple` is a multiple OF it, and `supportVisibility` is counted
+    // within it. A marker is only as good as the constant it points at, and the chain
+    // ended here, one file outside the file whose provenance that feature audits.
+    //
+    // Measured on the committed corpus it MOVES THE PLANE 18.132 mm and 19.389 mm at the
+    // food over a 1…12.5 mm sweep — more than any constant that feature has swept — and
+    // its corpus interval is EMPTY at the shipped `ringSupportMin`, because the support
+    // bar and `maxCrossedSectors` pull it in opposite directions. Do not treat the 5 as
+    // settled; `SupportRegion.ringBandMm` carries the full reading.
     static let inlierBandMm: Float = 5
+    // The gravity cone. `[owed]` to support-plane-reference task 26 as of its Decision 55,
+    // which is where the ANGLE was finally swept — Decisions 52 and 54 both described this
+    // guard's mechanism and neither varied its bar.
+    //
+    // It is read at FOUR gates, more than any other constant in that feature: the hypothesis
+    // test and the polish gate, in `SupportRegion.ccRansac` / `extractCandidates` and again in
+    // `ransac` / `fitOutcome` below. Only the two hypothesis tests turn anything away. The
+    // polish gates' rejection path is `break`, which keeps the plane the PREVIOUS iteration
+    // produced, and the refinement between hypothesis and polish is not gated at all. Four
+    // things that decision measured and this comment must not lose:
+    //
+    // 1. It BOUNDS NOTHING, and the violation is worst where the bar is tightest. At a 1° cone
+    //    every candidate extraction produces — 4 of 4 — lies outside 1°, each recorded as
+    //    `gravity` at 0 applied iterations. At 2° it is 5 of 6, the worst at 18.955°, NINE
+    //    times its own bar, against 20.512° at 1.37× the shipped 15°. It is not monotone
+    //    either: 8° leaves nothing outside itself and 15° leaves one candidate at 20.512°.
+    // 2. It is a FLOOR, not a knob. The selected plane spans 3.758 mm and 14.584 mm at the
+    //    food over a 1…90° sweep, past Req 5.1's 1 mm — and every millimetre of it is below
+    //    10°. From 10° to 90°, gate fully off included, the plane is unchanged to 0.000 mm.
+    // 3. The floor's derivation is the margin, and this is the number the value stands on.
+    //    The corpus's one intended-correct fit is the PLATE TOP at 8.309°, from a hypothesis
+    //    at 8.900°, so the shipped 15° carries 6.100° of margin. Its own table candidate in
+    //    the same capture is at 2.030° — the surface this feature exists to find sits 6.3° off
+    //    the surface the fallback leg finds, and only the promoted leg is near the bar.
+    // 4. NO CEILING. At 90° the gate cannot reject anything (both fitters orient onto
+    //    gravity's half-space first) and the corpus reads the same planes and the same
+    //    `maxCrossedSectors` 2…2. On this corpus the guard could be removed without changing
+    //    an answer; the scenes it exists for — a wall, a floor, a counter edge — are not in it.
+    //
+    // Bracketed 10°…unbounded, shipped value strictly inside. Do NOT re-derive it from
+    // `CaptureFlowModel`'s 15° oblique shutter gate: that is a camera-POSE tolerance and this
+    // is the angle between a fitted plane's normal and gravity. The coincidence is not a
+    // derivation. Not repaired, on Decisions 52-54's precedent — gating the first refinement
+    // removes a candidate from `1785135663727` and moves `planeCandidateCount` (Req 6.1).
     static let gravityAngleMaxRad: Float = 15 * .pi / 180
-    // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5. Residuals in (8, 20]
-    // accept the fit; σ_plane = exp(−r/5) carries the degradation (at r = 20 mm,
-    // σ_plane ≈ 0.018, near the ε = 0.01 floor).
+    // Raised from 8 mm to 20 mm per Decision 46 / Req §4.5.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 58. The sentences that
+    // stood here — "residuals in (8, 20] accept the fit; σ_plane = exp(−r/5) carries the
+    // degradation (at r = 20 mm, σ_plane ≈ 0.018, near the ε = 0.01 floor)" — describe an
+    // EMPTY interval and a state neither leg can produce. Three things that decision measured
+    // and this comment must not lose:
+    //
+    // 1. The bar CANNOT FIRE, and not because the corpus is clean. Every member of the set
+    //    the RMS is taken over lies within one `inlierBandMm` of the plane that SELECTED it,
+    //    so RMS(least squares) ≤ RMS(selecting) < `inlierBandMm` = 5 for every input, on both
+    //    legs, at every budget and every cone. This bar is FOUR TIMES a quantity the fit's own
+    //    geometry cannot reach and `.lidarFitResidualTooHigh` is unreachable at the default.
+    //    Its whole live range is (0, residual] — 1.954 and 1.928 mm on the corpus — so the
+    //    raise from 8 was a no-op and so was the 8. It is the first constant in this feature
+    //    bounded by an ARGUMENT the captures only witness.
+    // 2. What the gate reads is NOT that residual. `refine` accumulates its centroid in three
+    //    Float `reduce(0, +)` sums, so at this leg's colour-grid inlier counts (641,694 and
+    //    1,298,233) the partial sums reach 10⁸ where an ulp is 32 mm, and d = n̂ · centroid
+    //    inherits it. The plane it returns is displaced 0.724 and 1.184 mm along its own
+    //    normal from the least-squares plane — the second past Req 5.1's 1 mm tolerance — and
+    //    the reading is inflated 1.077× and 1.267×. The normal is untouched (0.000° tilt) and
+    //    `computeResidual` is not the culprit (8e-5 relative against a Double sum). The
+    //    promoted leg refines 10⁴-sample annuli and is accurate. The ceiling in (1) survives
+    //    the inflation with 2.5× to spare, so the verdict does not change — but every residual,
+    //    σ_plane and fallback plane OFFSET this feature has quoted carries the error.
+    // 3. It is `public` and per-call overridable, so 20 is a DEFAULT and not a value. The only
+    //    callers that override it — `HarnessCore.FixtureRunner`, `PlateRegionPlaneTests` at
+    //    1.0, `LiDARPlaneFitterTests` at 0.1 — pass values inside the live range the default
+    //    sits outside of. Both corpus and committed suite floor it at 1.0 for one reason:
+    //    below the measured residual `fitOutcome` returns nil and every assertion in
+    //    `SupportPlaneRegressionSliceTests` becomes uncomputable rather than wrong.
+    //
+    // Bracketed 1.0…unbounded, shipped value strictly inside, and NOT set: a bar that cannot
+    // fire on a two-capture corpus is not thereby the right bar for a scene that needs it.
+    // Not repaired, on Decisions 52-57's precedent — the Double-accumulation fix in
+    // `SupportPlaneCorpusMeasurementTests.refineDoubleAccumulated` moves the shipped fallback
+    // plane 1.184 mm, which is the plane Decision 36 prices `fallbackPenalty` against.
     public static let residualMaxMm: Float = 20
     static let stabilityRatioMin: Float = 1e-6
     static let minPoints: Int = 3
     // Upper bound on the deterministic consensus-polish passes after the RANSAC
     // winner is refined (estimation-runtime-consistency, PRD estimation-quality).
-    // The loop usually exits earlier because the inlier set reaches a fixed point.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 54. The sentence that
+    // stood here — "the loop usually exits earlier because the inlier set reaches a fixed
+    // point" — is FALSE on the committed corpus, and false on both legs at once. Four things
+    // that decision measured and this comment must not lose:
+    //
+    // 1. The cap ALWAYS BINDS. At 3 the corpus reaches the stated fixed point on 1 of its 6
+    //    extraction passes and on NEITHER fallback fit; the depth it actually needs is 17 in
+    //    extraction and 11 in the fallback. The plane both paths ship is a truncated iterate
+    //    of the polish, not the fixed point every argument for the guard is stated about.
+    //    This is the mirror of `SupportRegion.maxIterationsPerPass`, which never fires at all
+    //    (Decision 51).
+    // 2. It decides WHICH PLANES COMPETE — the seventh constant that does, and one of the
+    //    three that can add a candidate. A shallower polish leaves a different plane, so a
+    //    different removal shell, so a different residue: `1785135663727` yields two
+    //    candidates at 0-1 passes and three from 2 up. The persisted `planeCandidateCount`
+    //    (Req 6.1) is denominated here as well.
+    // 3. It moves BOTH legs, and only the promoted one stays inside Req 5.1's 1 mm. Over
+    //    0…64 the promoted plane moves 0.490 and 0.106 mm at the food; the FALLBACK plane
+    //    moves 0.158 and 1.719 mm. Req 4.3 holds at every value because one constant moves
+    //    both — but the plane it names is the one Decision 36 prices `fallbackPenalty`
+    //    against and the one that feeds `lidarMmPerPx = |d| / f` on the legacy path.
+    // 4. Its DEPTH is not what removes the seed dependence the loop exists to remove. Over
+    //    eight seeds the spread at the food reads 2.123 / 2.095 / 2.067 mm at 0, 3 and 64
+    //    passes on `1785135663727` — 2.9 % for running the loop to its own fixed point. What
+    //    does remove it is `SupportRegion.ransacSuccessProbability` (2.095 → 0.194 mm,
+    //    Decision 51), because the residual spread is the seeds disagreeing about which
+    //    candidate WINS rather than about where one plane lies.
+    //
+    // Bracketed 1…unbounded. The floor is the corpus's: at 0 the candidate set is short a
+    // plane and `maxCrossedSectors` reads 2…3 rather than the 2…2 Decision 48 determined.
+    // There is no ceiling, and the corpus points ABOVE the shipped value rather than at it —
+    // what stops that being a proposal is Req 7.6, since this is the innermost loop in
+    // extraction and 17 quintuples it on a path that has already produced an OOM.
     static let consensusPolishMaxPasses: Int = 3
 
     // Where candidate points are sampled relative to `foodRegionMask`.
@@ -338,6 +524,16 @@ public enum LiDARPlaneFitter {
         // JOBVT='A' and allocates an n×n V^T (~32 GB at the 1920×1440 inlier
         // counts observed on iPhone 13 Pro Max). See bugfix spec
         // `specs/bugfixes/lidar-plane-fit-oom-on-device-1920x1440/`.
+        //
+        // THE CENTROID BELOW IS NOT ACCURATE AT THOSE SAME COUNTS, and support-plane-reference
+        // Decision 58 measures it: three Float `reduce(0, +)` sums over coordinates of
+        // magnitude ~350 mm reach partial sums of 10⁸, where a Float ulp is 32 mm. At the
+        // 641,694 and 1,298,233 inlier counts the fallback leg produces, `d = n̂ · centroid`
+        // lands 0.724 and 1.184 mm off the least-squares plane — the second past Req 5.1's
+        // 1 mm tolerance. The normal is unaffected: the scatter terms are centred, so they
+        // stay small. The promoted leg refines 10⁴-sample annuli and drifts under 0.01 mm.
+        // The fix is to accumulate the centroid (and the scatter) in Double; it is NOT made
+        // here because it moves the shipped fallback plane by that same 1.184 mm.
         let n = inliers.count
         guard n >= 3 else { throw SupportPlaneError.lidarFitDegenerate }
         let cx = inliers.map { $0.x }.reduce(0, +) / Float(n)

@@ -170,7 +170,10 @@ struct CalibrateRunTests {
             pinnedIntrinsicsModel: "realsense_d435_factory_640x480",
             licence: "CC BY 4.0"
         )
-        return CalibrationArtifact(merged: merged, betaPool: 1.0, lineage: lineage)
+        return CalibrationArtifact(
+            merged: merged, betaPool: 1.0,
+            supportPlaneReference: CalibrateRun.fittedSupportPlaneReference,
+            lineage: lineage)
     }
 
     @Test("Per-class entries carry beta, status, provenance, standard_error, effective_sample, clamped")

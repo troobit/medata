@@ -251,8 +251,9 @@ public struct Pipeline: Sendable {
         let planeInterval = pipelineSignposter.beginInterval("SupportPlane")
         #endif
         let plane: SupportPlane
+        let planeReference: SupportPlaneReference?
         do {
-            plane = try fitSupportPlane(
+            (plane, planeReference) = try fitSupportPlane(
                 nadir: nadir,
                 cardPose: cardPose,
                 corners: corners,
@@ -517,7 +518,8 @@ public struct Pipeline: Sendable {
             cardOnlyPath: nadir.depth == nil,
             cardOnlyIterations: plane.convergedIterations ?? 0,
             deltaThetaNadirDeg: deltaThetaNadirDeg,
-            deltaThetaObliqueDeg: deltaThetaObliqueDeg
+            deltaThetaObliqueDeg: deltaThetaObliqueDeg,
+            supportPlaneFallback: planeReference == .edgeBand
         )
         #if DEBUG
         logStageEnd(name: "Confidence", startedAt: confidenceStartedAt)
@@ -635,13 +637,16 @@ public struct Pipeline: Sendable {
     // Fit stats arrive as returned values on both exits (snaq-parity Req 3.1;
     // previously the `LiDARPlaneFitter.debugLast*` statics) and are recorded
     // into the diagnostics accumulator before any throw.
+    // Returns the reference alongside the plane: the confidence stage needs it for
+    // the Req 4.6 fallback penalty, and it is not recoverable from the plane
+    // itself (`specs/estimation/support-plane-reference/`).
     private func fitSupportPlane(
         nadir: RawFrame,
         cardPose: CardPose?,
         corners: [PixelCorner]?,
         preShutterFoodMask: BinaryMask?,
         diagnostics: PipelineDiagnostics
-    ) throws -> SupportPlane {
+    ) throws -> (plane: SupportPlane, reference: SupportPlaneReference?) {
         #if DEBUG
         supportPlaneLog.info(
             """
@@ -660,18 +665,24 @@ public struct Pipeline: Sendable {
         diagnostics.recordSupportPlane(
             candidateCount: stats.candidatePointCount,
             inlierCount: stats.inlierCount,
-            residualMm: stats.residualMm
+            residualMm: stats.residualMm,
+            reference: stats.reference,
+            ring: stats.ring,
+            candidatePlaneCount: stats.candidatePlaneCount
         )
         if let plane = outcome.plane {
             #if DEBUG
             supportPlaneLog.info(
                 """
                 event=supportplane.end success=true \
-                residual_mm=\(plane.residualMm, privacy: .public)
+                residual_mm=\(plane.residualMm, privacy: .public) \
+                reference=\(stats.reference?.rawValue ?? "none", privacy: .public) \
+                ring_median_mm=\(stats.ring?.medianMm ?? .nan, privacy: .public) \
+                supporting_sectors=\(stats.ring?.supportingSectors ?? -1, privacy: .public)
                 """
             )
             #endif
-            return plane
+            return (plane, stats.reference)
         }
         let error = outcome.refusal ?? .noLidarPoints
         // Failure-path trace. `failure=` carries the EXACT SupportPlaneError

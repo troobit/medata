@@ -2,41 +2,59 @@ import CaptureKit
 import Foundation
 import PortableContracts
 
-// Restricted support-plane fit per design §"Bound the candidate set to an annulus" /
-// §"Candidate scoring — CC-RANSAC" / §"Selection and admissibility". Extracts up to
-// `maxCandidatePlanes` gravity-aligned planes from an annulus around the food mask
-// on the NATIVE depth grid (Req 2.4), scores each by its largest 8-connected inlier
-// component (CC-RANSAC, Decision 13), and selects the admissible candidate with the
-// highest inner-band ring support fraction (Decisions 18–22).
+// Food-support plane fit per `specs/estimation/support-plane-reference/`.
 //
-// Reuses `LiDARPlaneFitter.refine` / `.computeResidual` / the 15° gravity cone / the
-// 5 mm inlier band unchanged (design §"What changes and what does not").
-
-// Which reference produced a support plane for an attempt (Req 4.4, 6.1).
-public enum SupportPlaneReference: String, Sendable, Codable, Equatable {
+// The pre-feature fitter (`LiDARPlaneFitter`) selects the largest gravity-aligned
+// plane in four colour-grid bands around the food bbox, which is the TABLE when the
+// food rests on a plate — measured 26.1 mm too low, and integrated per-pixel, so the
+// offset is added to every food pixel. This file replaces "largest plane in the
+// frame" with "the plane the food is resting on" by changing three things:
+//
+//   1. WHICH SAMPLES COMPETE — a mm-denominated annulus of `annulusOuterMm` around
+//      the food mask, enumerated on the NATIVE depth grid (Req 2.4). The band scan
+//      enumerated 1920×1440 colour pixels against a 256×192 depth map, replicating
+//      each measurement ~56×.
+//   2. HOW A CANDIDATE IS SCORED — the size of its largest 8-connected inlier
+//      component, not its raw inlier count (CC-RANSAC; Gallo, Manduchi & Rafii 2011).
+//   3. WHICH CANDIDATE WINS — measured contact with the food, via a radial/angular
+//      contact ring, under an admissibility filter applied to EVERY candidate before
+//      the best one is picked (design §Selection and admissibility).
+//
+// Rejection is an expected outcome, not an error: `fitFoodSupportPlane` returns nil
+// and the caller runs the pre-feature edge-band fit unchanged (Req 4.1–4.3).
+public enum SupportPlaneReference: String, Sendable, Codable {
     case foodSupport
     case edgeBand
+    // The N5k mixture calibration path's flood-filled plate region. Never produced
+    // on device or by the single-view replay — it exists so a calibration artefact
+    // can say which basis each β was fitted on, because the mixture corpus keeps the
+    // flood fill permanently (Decision 17) and Req 5.4 forbids mixing references.
+    case plateRegion
 }
 
-// Contact-ring evidence for a candidate plane (Req 3.1, 3.6, 3.8; Decisions 14, 18–20).
-// `bandMedianMm` / `bandSampleCount` are ordered [inner, mid, outer].
+// Contact-ring measurements for ONE candidate plane. Every field is persisted or
+// feeds a guard; there is deliberately no MAD statistic — the MAD bar cannot fire on
+// an admissible candidate and was deleted with its constant and its field
+// (Decision 19).
 public struct RingStatistics: Sendable, Equatable {
-    // Whole-ring median signed height above the plane. Persisted for Req 6.2;
-    // NOT used for selection (Decision 9) — see `supportFraction`.
+    // Whole-ring median signed height above the plane. ~0 on a correct fit,
+    // +18…+26 mm when the plane is the table. Persisted for Req 6.2; NOT used for
+    // selection — a median has a 50 % cliff (design §Score).
     public let medianMm: Float
-    // Per-band medians; rises outward on a rimmed plate (Decision 14). The
-    // admission step guard reads [0]→[1] only (Decision 21).
+    // Inner/mid/outer band medians. Rises outward on a rimmed plate, falls outward
+    // on a ring that leaked past the plate edge (Decision 14). The step guard reads
+    // [0]→[1] only (Decision 21).
     public let bandMedianMm: [Float]
-    // Inner-band share of samples within ±ringBandMm of the plane — the score
-    // (Decision 18's replacement for |median|).
+    // Share of INNER-band samples within ±ringBandMm of the plane. This is the score.
     public let supportFraction: Float
-    // Inner-band sectors meeting `sectorSupportMin`; empty sectors count as
-    // neither supporting nor failing (Decision 20). Persisted for Req 6.4.
+    // Inner-band sectors meeting `sectorSupportMin`. Empty sectors count as neither
+    // supporting nor failing (Decision 20). Persisted (Req 6.4): a ring median of ~0
+    // is not on its own evidence of a correct fit (Decision 18).
     public let supportingSectors: Int
-    // ringMinSamples holds PER BAND (Decisions 14, 20).
+    // Per-band sample counts; `ringMinSamples` holds PER band (Decisions 14, 20).
     public let bandSampleCount: [Int]
-    // Annulus samples within inlierBandMm of the plane ÷ food sample count
-    // (Decision 14, Req 3.9). Native depth samples on both sides — dimensionless.
+    // Annulus samples within `inlierBandMm` of the plane ÷ food sample count. Both
+    // native depth samples, so the ratio is grid-independent (Req 5.1).
     public let supportVisibility: Float
 
     public init(medianMm: Float, bandMedianMm: [Float], supportFraction: Float,
@@ -50,65 +68,692 @@ public struct RingStatistics: Sendable, Equatable {
     }
 }
 
-// A gravity-aligned plane extracted from one CC-RANSAC pass over the residue
-// (Decision 13). `inlierIndices` are the largest-8-connected-component members,
-// as NATIVE DEPTH-GRID linear indices (y·width+x) — used for the extent guard
-// and for reporting.
-struct SupportPlaneCandidate {
-    let normal: Vec3
-    let d: Float
-    let residualMm: Float
-    let inlierIndices: [Int]
-    // Raw (pre-CC) inlier ratio observed at the winning hypothesis, reported so
-    // the iteration budget's sufficiency is a measurement (design §"Extraction
-    // loop" / §"Iteration budget", Decision 15).
-    let residueInlierRatio: Float
-}
-
 public enum SupportRegion {
-    // MARK: - Constants (design §"Components and Interfaces")
-    // Radii in MILLIMETRES, converted per capture from median food depth.
-    // Provenance markers per the design: [derived] has a stated derivation here;
-    // [inherited] reuses a named tested constant; [owed] is a task 26 corpus
-    // measurement — the values below are the design's stated placeholders.
-    public static let ringInnerMm: Float = 8    // [derived] ~4 px smear ≈ 8 mm at 350 mm
-    public static let ringOuterMm: Float = 25   // [owed]
-    public static let ringBandCount = 3         // structural: inner/mid/outer
-    public static let bandStepMaxMm: Float = 6  // [owed]
-    public static let supportVisibilityMin: Float = 0.15 // [owed]
-    public static let ringBandMm: Float = LiDARPlaneFitter.inlierBandMm // [inherited]
-    public static let ringSupportMin: Float = 0.6 // [owed]
-    // Sector measure (Req 3.6, Decisions 18–20).
-    public static let ringSectorCount = 8            // [owed] Req 3.7
-    public static let sectorSupportMin: Float = 0.5  // [owed] Req 3.7
-    public static let minSupportingSectors = 6       // [owed] Req 3.7
-    public static let ringSupportMarginMin: Float = 0.15 // [owed]
-    public static let escapeBandMm: Float = 30       // [owed] Decision 22
-    // [derived] ringSectorCount × 25 (Decision 20): at 25 samples per sector a
-    // 0.5 bar has binomial σ ≈ 0.10. Holds per radial band.
+
+    // MARK: – Constants
+    //
+    // Radii are in MILLIMETRES, converted to pixels per capture from the median food
+    // depth, so they transfer across depth-grid resolutions (Req 5.1).
+    //
+    // Provenance markers, per the design's Components section:
+    //   [derived]   derivation recorded in design.md
+    //   [measured]  derivation confirmed against the committed corpus (Decision 29)
+    //   [inherited] from a named, already-tested constant
+    //   [owed]      a task 26 corpus measurement — shipping an [owed] value
+    //               as-asserted is a defect, and Req 3.7 says so for the sector trio.
+
+    // [measured] Decision 29. The ~4 px depth smear spans 7.45 mm and 7.36 mm on the
+    // two committed slices, at median food depths of 338.9 mm and 336.9 mm — inside
+    // 8 mm on both. The smear is a fixed PIXEL count, so `smear_mm = 4z/f_d`: with
+    // f_d 182.0 and 183.2 px the envelope is 364.1 mm and 366.4 mm, and the corpus sits
+    // at 93.1 % and 92.0 % of it. Under 8 % of headroom, so the range a capture is taken
+    // at now matters and `prerequisites.md` asks for it to be recorded per capture.
+    //
+    // Decision 29 concluded this "must become `max(ringInnerMm, 4 × mmPerPx)`" beyond
+    // the envelope. Measured and REJECTED (Decision 39). `mmPerPx` is `z/f_d` and carries
+    // range and grid resolution alike, but only range moves the smear — a coarser grid
+    // subsamples a map ARKit has already smoothed. At 128 px the smear-tracking radius
+    // therefore reads 14.9 mm for a physical smear still near 7.4, eats 6.9 mm of a
+    // 17 mm ring, and leaves three bands of 3.37 and 3.43 mm against depth pixels of
+    // 3.73 and 3.68 — each band narrower than one pixel. `1785135663727` loses ring
+    // feasibility outright (inner band 166 against `ringMinSamples`) and `1785901032716`
+    // clears it by nothing (exactly 200), on a grid where the plane transfers within
+    // 0.9 mm today. The envelope is a RANGE bound and is left to the capture session;
+    // it must not be paid for with Req 5.1's transfer.
+    public static let ringInnerMm: Float = 8
+    // [owed] against a RESTATED rule (Decision 33). The old rule — "must sit inside the
+    // smallest measured plate margin" — is measured and unsatisfiable: the support
+    // margin, the distance from the food boundary at which the surface departs by more
+    // than `ringBandMm`, is 4 mm in the tightest sector of BOTH committed captures,
+    // inside `ringInnerMm`. No ring can be placed inside it.
+    //
+    // Measured per-sector margins are [16, 40, 10, 42, 6, 4, 6, 44] mm and
+    // [34, 4, 46, 8, 30, 14, 12, 6] mm — every departure inside the ring is a FALL of
+    // 5.1 to 15.6 mm, so these are plate edges. 3 of 8 sectors reach `ringOuterMm` on
+    // each capture, and only 4 of 8 reach the inner band's 13.7 mm, which is BELOW
+    // `minSupportingSectors`. The supporting count is therefore capped by where the
+    // plate ends before `sectorSupportMin` is consulted at all.
+    //
+    // What is owed is the margin the SECTOR measure needs in enough sectors, which is a
+    // joint derivation with the trio and waits on the same captures.
+    //
+    // BRACKETED 22…32 mm, and it MOVED THE ANSWER only through the annulus (Decisions 46,
+    // 49). The other two sector constants re-read a fixed candidate set, so the most they
+    // can move is a verdict. This one moved the candidate bound with it, `2 × ringOuterMm`
+    // as the bound was then written, so extraction ran on a different sample set at every
+    // value: over a 13…40 mm sweep the SELECTED plane moved 18.719 mm at the food on
+    // `1785901032716` and 4.162 mm on `1785135663727`, against the 1 mm Decision 35 measures
+    // Req 5.1's grid transfer at.
+    //
+    // SUPERSEDED by Decision 49, which pinned the bound and re-ran the same sweep: the
+    // movement is 0.000 mm at every radius on both captures, exactly, because extraction
+    // reads the annulus and nothing else. The bound is now `annulusOuterMm` and owns that
+    // movement; this constant is bracket-only, like `ringSectorCount` and `sectorSupportMin`.
+    // Everything below that follows from the coupling is superseded with it and marked
+    // where it stands.
+    //
+    // Both ends of the bracket are new. The FLOOR is Req 5.1's, the mirror of the ceiling
+    // Decision 44 read off the same halving: a narrower ring holds fewer samples per band
+    // and the 2× halving quarters them, so below 22 mm `ringBandsAreFeasible` refuses on a
+    // grid where the plane still transfers within a millimetre (halved bands [78, 111, 48]
+    // at 13 mm against the 200 floor). The CEILING is the committed suite's, arriving as
+    // Decision 41 predicted: the scenes place their features at fixed pixel radii, so at
+    // 35 mm the ring reaches the rim a scene put outside it, every sector of a scene that
+    // must PASS reads crossed, and both suite intervals go empty.
+    //
+    // DO NOT INTERPOLATE INSIDE THE BRACKET — SUPERSEDED (Decision 49). The pass side
+    // alternated at 1 mm steps: the corpus's only intended-correct candidate read 0 crossed
+    // sectors at 22, 23, 25, 26, 28, 29 and 31 mm and 2 at 24, 27, 30 and 32 mm, its plane
+    // oscillating over 4.162 mm with them. With the bound pinned it reads 0 crossed at every
+    // radius in the sweep, so the alternation was the annulus re-selecting the candidates.
+    // The bracket may be interpolated. (The seed control still stands on its own terms: held
+    // at the shipped radius over eight RANSAC seeds the plane moves 2.095 mm while the
+    // sector verdict does not, so selection is verdict-stable under the draw. That 2.095 mm
+    // is now DENOMINATED — it is `ransacSuccessProbability`, not a property of the captures,
+    // and it falls to 0.194 mm at 0.99999 (Decision 51).)
+    //
+    // FIX IT FIRST — SUPERSEDED (Decision 49). Decision 45's joint (count, bar) pair was a
+    // TRIPLE only because the radius selected the candidates the other two were read on. It
+    // no longer does, so the pair is a pair again and this constant is fixed beside them
+    // rather than before them. `maxCrossedSectors` is still denominated in it as a COUNT
+    // read at a radius — the joint bracket read 0…0, 0…1, 0…2 and 2…2 over the coupled
+    // sweep — but those readings are coupled ones and the sitting re-reads them with the
+    // bound fixed. What the coupling produced instead is a fifth denomination: the corpus
+    // determines `maxCrossedSectors` at 2 only at `annulusOuterMm` = 50 mm.
+    public static let ringOuterMm: Float = 25
+    // [owed], and BRACKETED 2…3 — two values, the tightest bracket in this feature, with
+    // the shipped one ON the ceiling (Decision 47). This said "Structural: inner / mid /
+    // outer" and was the only constant the sector measure reads that carried no provenance
+    // marker at all. It had never been varied, and it divides in two places at once: the
+    // INNER BAND the crossed-sector rule reads, whose outer edge is
+    // `ringInnerMm + (ringOuterMm − ringInnerMm) / ringBandCount` = 13.667 mm shipped, and
+    // the band partition `ringMinSamples` is floored PER member of.
+    //
+    // The FLOOR of 2 arrives twice, independently. A guard stops EXISTING: at one band
+    // there is no mid band, `admissibility`'s `bandMedianMm.count > 1` test is false, and
+    // the `bandStep` guard neither fires nor reports that it did not — while two committed
+    // scenes (`bowl`, `rim in the mid band`) assert that it does. And the committed suite
+    // goes empty: at one band the inner band IS the whole ring, the rimmed-plate scenes'
+    // rims fall inside it, a scene that must PASS reads 8 of 8 crossed, and both suite
+    // intervals collapse together (`maxCrossedSectors` 8…2, `minSupportingSectors` 6…0).
+    //
+    // The CEILING of 3 is Req 5.1's, for the third time — Decision 44 read the same 2×
+    // halving as `ringSectorCount` ≤ 11 and Decision 46 as `ringOuterMm` ≥ 22 mm. It lands
+    // hardest here because this constant IS how many bands the floor applies to: halved
+    // counts are [322, 361, 323] and [313, 292, 299] at three bands, [237, 197, 215, 255]
+    // and [258, 264, 204, 280] at four.
+    //
+    // It does NOT move the answer. The selected plane at the food is unchanged to 0.000 mm
+    // on both captures at every band count, against Decision 46's 18.719 mm on the radius —
+    // so that finding belongs to the ANNULUS specifically, which this constant leaves
+    // alone. It is fixed BEFORE the sitting rather than at it, since committed evidence
+    // already brackets it to two values.
+    public static let ringBandCount = 3
+    // [owed] below the smallest measured rim step — and UNEXERCISED (Decision 34). The
+    // guard fires on an outward RISE; every inner→mid step in the corpus is a FALL, of
+    // −0.5 to −6.5 mm, because a flat plate ends and the table begins. The corpus is
+    // therefore 6.5 mm from the bar on the wrong side and supplies no floor either. The
+    // ceiling still waits on the ruler measurement in `prerequisites.md`.
+    //
+    // DENOMINATED IN `ringBandCount` (Decision 47), which is the constant this one most
+    // obviously belongs to: the step is a difference between two bands that constant
+    // creates. Decision 41's suite interval of 0.024…9.288 mm is a reading at THREE bands.
+    // Over 2…10 bands the ceiling collapses — 13.470, 9.288, 6.755, 5.496, 0.211 mm — and
+    // from seven bands the interval INVERTS and no value satisfies the suite at all, because
+    // a rim spanning a fixed radial distance stops being a step between adjacent bands once
+    // the bands are narrower than the rim. The shipped 6 holds at 2, 3 and 4 bands, which
+    // covers the whole Req 5.1 bracket, so the pair is coupled but does not collide.
+    public static let bandStepMaxMm: Float = 6
+    // [owed] prerequisites capture 4 is the only source for the VALUE. Its firability
+    // is settled (Decision 29): the ratio is computed over the ANNULUS, which begins at
+    // the food boundary and so does see a support strip thinner than `ringInnerMm`.
+    // Measured ceilings — every annulus sample an inlier — are 1.710 and 1.426, and the
+    // highest-support candidate reaches 0.880 and 1.032, so 0.15 is roughly a tenth of
+    // the achievable range rather than unreachable.
+    //
+    // Firable but never FIRED (Decision 34): the lowest visibility any corpus candidate
+    // reaches is 0.246, 1.6x the bar, so the corpus cannot distinguish 0.15 from any
+    // value below that.
+    public static let supportVisibilityMin: Float = 0.15
+    // [inherited] LiDARPlaneFitter.inlierBandMm = 5 — and that constant is [owed], so this
+    // marker is too (Decision 52). `inlierBandMm` was a bare number with no derivation in
+    // its own file, and it is where FOUR markers here terminate: this one, `ringMedianMaxMm`
+    // ([inherited] from this), `inlierRemovalMultiple` (a multiple OF it) and
+    // `supportVisibility` (counted within it). An [inherited] marker is only as good as the
+    // constant it points at, and the chain ended outside the file this feature audits — the
+    // reason Decision 51's closing claim, "every constant in SupportRegion now carries a
+    // provenance marker", was true and not sufficient.
+    //
+    // It is the FIFTH constant that decides which planes COMPETE, and the most upstream of
+    // them: `annulusOuterMm` fixes the set extraction draws from, `maxCandidatePlanes` how
+    // many times it may draw, `inlierRemovalMultiple` what each draw leaves, `ringOuterMm`
+    // re-rings a set already chosen — this one decides what an INLIER IS, in three places at
+    // once (the RANSAC inlier test, the consensus polish's re-selection, and the removal band
+    // the multiple is denominated in).
+    //
+    // It MOVES THE ANSWER, by more than anything swept so far. Over 1…12.5 mm the selected
+    // plane at the food moves 18.132 mm on `1785135663727` and 19.389 mm on `1785901032716`,
+    // against the 1 mm Decision 35 measures Req 5.1's transfer at — the first owed constant
+    // to move BOTH captures past it, where `annulusOuterMm` moved 18.843 and 1.978 mm
+    // (Decision 49) and `ransacSuccessProbability` 3.704 mm on one (Decision 51). Readings
+    // WANDER rather than climb, because extraction re-runs and the candidate is re-selected
+    // under the sweep, so the bracket must NOT be interpolated.
+    //
+    // ITS CORPUS INTERVAL IS EMPTY at the shipped bars, and both that empty it are [owed] and
+    // both denominated in it. On `1785901032716` the plane a correct fit must select clears
+    // `ringSupportMin` only at 10 mm and above, and reads at most `maxCrossedSectors` = 2
+    // only at 5 mm and below. No band satisfies both. The interval is non-empty only once
+    // `ringSupportMin` falls to 0.362 or below, and there it is exactly the shipped 5 mm —
+    // so the corpus determines the band CONDITIONALLY and hands `ringSupportMin` a ceiling
+    // in the same reading (see that constant below).
+    //
+    // The committed SUITE gives it nothing, and for a third distinct reason. Decision 49's
+    // bound reached the scenes and was silent by measurement; Decision 50's removal band
+    // could not be read at all, since no scene runs extraction. This one DOES reach them —
+    // it is the tolerance every sector is classified within — and every reading from 1 to
+    // 12.5 mm is identical, because `SPRScene.makeDepth` adds ±0.3 mm of synthetic noise and
+    // the tolerance is never the binding quantity. The scenes validate every guard's LOGIC
+    // and no tolerance in any of them.
+    //
+    // SET IT BEFORE `inlierRemovalMultiple`, which is a multiple of it — so Decision 50's
+    // ordering (removal band → `minResidueAreaMm2` → `maxCandidatePlanes`) gains a member at
+    // its head, and Req 7.6's latency follows all four. But it cannot be set in sequence with
+    // `ringSupportMin` and `maxCrossedSectors`: those are a share counted within it and a
+    // count of sectors exceeding it, so all three are one joint set — the feature's first
+    // three-way one, after Decision 45's pair.
+    public static let ringBandMm: Float = 5
+    // [owed] must be measured against the support-surface noise distribution: a
+    // ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm. The pipeline Decision 46 tension is
+    // resolved in KIND (Decision 29) — that 20 mm bar is a whole-plane residual over a
+    // matte table, not a per-sample σ — but not in VALUE: the measured per-sample σ on
+    // a flat surface is 3.44 mm on one committed slice and 6.98 mm on the other, at
+    // 338.9 mm and 336.9 mm respectively. A 2× spread at the same range is a surface
+    // difference, and ringBandMm = 5 falls between the two. A matte-surface capture is
+    // required before this can be set (prerequisites, capture session).
+    //
+    // AND IT NOW HAS A CEILING, from the constant its own derivation is written in terms of
+    // (Decision 52). "A ±5 mm band at 0.6 support implies σ_z ≲ 5.9 mm" is denominated in
+    // `ringBandMm`, and this constant IS a share counted within that band — so a sweep of
+    // the band is a sweep of the achievable support. Over 1…12.5 mm the largest inner-band
+    // support the plane a correct fit must select ever reaches, at any band the
+    // crossed-sector rule still admits, is 0.362 on `1785901032716`. Any bar above that
+    // leaves the band with an EMPTY corpus interval, so 0.362 is a ceiling here — the
+    // corpus's first, where Decision 29 recorded that it had none and Decision 41's suite
+    // ceiling of 0.676 was the only bound in existence. Decision 42 measured the same 0.362
+    // as the value at the shipped band; over the whole sweep it is the maximum.
+    //
+    // Which makes this and the band ONE mechanism, as `maxIterationsPerPass` and
+    // `ransacSuccessProbability` were (Decision 51). Setting this from a capture taken at
+    // some band and then reading the band's floor off it is Req 3.7's circularity between
+    // two constants rather than within one. The two are set jointly, with
+    // `maxCrossedSectors` as the third member.
+    //
+    // AND THE CEILING IS ITSELF A READING at one further constant (Decision 53).
+    // `LiDARPlaneFitter.confidenceThreshold` decides which samples the ring holds at all, and
+    // it has three states rather than a range. At the shipped state the ceiling is the 0.362
+    // above and the band it admits is the shipped 5 mm; with only HIGH-confidence samples the
+    // ceiling is 0.497 and the band the corpus admits is 6 mm. So the joint set is FOUR-way and
+    // the confidence bar heads it — it decides what a sample is, before the band decides which
+    // samples are inliers.
+    public static let ringSupportMin: Float = 0.6
+    // Sector measure (Req 3.6, Decisions 18–20). Equal arcs about the food-mask
+    // centroid; empty sectors count as neither supporting nor failing, and the bar is
+    // absolute, so a ring heavily clipped by the frame edge fails towards fallback.
+    // [owed] Req 3.7 explicitly forbids shipping these as asserted values — and
+    // Decision 30 records that the measure itself is blind where it matters: the count
+    // takes |height|, so a correct plane whose ring escaped DOWNWARD onto the table
+    // (failing sectors −6.8…−32.6 mm) and a table plane with part of its ring on the
+    // plate (failing sectors +16.6…+19.8 mm) both score 5 of 8.
+    //
+    // The replacement rule is now stated (Decision 40): a FAILING sector whose signed
+    // inner-band median exceeds +ringBandMm is CROSSED — the support surface is still
+    // there and this plane is not on it — and a candidate is rejected when more than
+    // `maxCrossedSectors` sectors are crossed. Below −ringBandMm the sector has ESCAPED,
+    // which is the plate ending (Decision 33) and not grounds for rejection. The
+    // magnitude bar costs nothing: it is `ringBandMm`, already [inherited], and the
+    // separating window is −6.794…+16.603 mm, so it sits ~11.7 mm clear on both sides.
+    // Restricting to FAILING sectors is what earns that — over all sectors the window is
+    // +3.846…+5.974 mm, a tenth as wide, and the bar would be fitted rather than
+    // inherited.
+    //
+    // Nothing is rewired here. `maxCrossedSectors` is bracketed 0…2 by the corpus and
+    // [owed] to prerequisites capture 6; shipping the rule means asserting that count,
+    // which is what Req 3.7 forbids for exactly these constants. Setting the trio waits
+    // on the captures alone now, not on a proposal as well.
+    //
+    // The committed SUITE brackets it at 0…2 as well (Decision 43) — the same eight
+    // scenes on which `minSupportingSectors` has an EMPTY joint interval, 6…5. So no
+    // committed scene has to move when the rule lands, and the two sources agree
+    // exactly, which they do for no other [owed] constant. Nothing in hand narrows
+    // 0…2: every committed scene and both corpus candidates return the same verdict
+    // at 0, at 1 and at 2.
+    //
+    // READ 0…2 AS "0…2 AT EIGHT SECTORS" (Decision 44). `ringSectorCount` is not a peer
+    // of the other two constants here — it is the UNIT they and `maxCrossedSectors` are
+    // denominated in, and it is [owed] as well. Re-cutting the same rings at nine counts
+    // gives eight distinct joint intervals: 0…0 at four sectors, 0…2 at eight, 1…2 at
+    // eleven. Fix the count BEFORE the capture session; capture 6 then reads
+    // `maxCrossedSectors` in whatever unit that fixed.
+    //
+    // The count is bracketed 4…8 and not set. No floor: the rule separates the two corpus
+    // candidates at every count from 4 to 32, so a coarse cut does not average the
+    // crossing away. The top is the PASS side — the plate-top candidate a correct fit must
+    // admit reads 0 crossed sectors at 4, 6 and 8 and 1 from 10 up, because narrow arcs
+    // resolve where its own ring ran off the plate (Decision 33). Above that sits a hard
+    // ceiling of 11 from Req 5.1, in `ringMinSamples` below.
+    //
+    // And the trade runs backwards: a COARSER cut leaves LESS freedom in the constant it
+    // denominates. Joint bracket widths are 1, 2, 3 at counts 4, 6, 8 — at four sectors
+    // `maxCrossedSectors` is determined at 0 by evidence already committed. That is not a
+    // reason to pick four: it asserts `ringSectorCount` to avoid asserting
+    // `maxCrossedSectors`, and a 90° arc's adequacy against Decision 18's straddle is a
+    // property of scenes the corpus does not contain.
+    //
+    // `sectorSupportMin` is the POPULATION the rule reads, and the shipped value is on a
+    // CLIFF (Decision 45). The rule classifies sectors that FAIL this bar, so Decision 40's
+    // inheritance claim is a statement about the set this constant selects. Re-classified at
+    // eleven bars, `ringBandMm`'s room — how far it may move before either corpus candidate
+    // changes its crossed count — reads 49.167 mm at 0.1-0.3, 26.283 at 0.4, 23.397 at 0.5,
+    // then 2.263 at 0.6 and 2.128 at 1.0. A 10.3x collapse in ONE notch, at exactly the
+    // shipped value. Decision 40's own criterion (2.128 is fitted, 23.397 is inherited)
+    // therefore caps the bar at 0.5 with no new threshold, and it is bracketed 0…0.5 with
+    // the shipped value ON the ceiling. Both edges converge on the bar as it rises: noisy
+    // sectors that sit ON the correct plane start failing and read near zero, lifting the
+    // floor from −32.564 to +3.846, while sectors holding the table plane at a small
+    // positive offset fail and become crossed, dropping the ceiling from +16.603 to +5.974.
+    // At 0 nothing fails and the rule is silent, which is the floor.
+    //
+    // AND THE CORPUS DETERMINES IT AT 2 (Decision 48). Everything above reads the bracket
+    // off the HIGHEST-SUPPORT candidate on each capture, and on `1785901032716` that is
+    // the TABLE — the plane the guard exists to reject. The plane a correct fit must admit
+    // there is pass 2, nearest Req 3.1's zero at a ring median of −2.658 mm, and it carries
+    // 2 crossed sectors; the table it must beat carries 3. So the floor is 2, not 0, and
+    // the corpus interval closes to a single value. Decision 43's "nothing in hand narrows
+    // 0…2" was true of the candidates it looked at and not of the capture.
+    //
+    // It stays `[owed]`: this is a slice at the shipped (radius, count, bar, band count),
+    // as every reading since Decision 44 is, and those four are not set. What changes is
+    // that the session no longer chooses freely within 0…2 at the shipped four — it either
+    // reads 2 or moves one of them.
+    //
+    // FIX THE COUNT AND THE BAR TOGETHER, not in sequence — Decision 44's ordering is
+    // superseded. The count's own pass-side bracket moves with the bar: counts with a clean
+    // pass side are 6, 8, 10, 11 at 0.1-0.2; all five Req 5.1 permits at 0.3; 4, 6, 8, 10 at
+    // 0.4; and 4, 6, 8 from 0.5 up. So the erosion above eight sectors that gave 4…8 its top
+    // is a consequence of the bar sitting at 0.5.
+    public static let ringSectorCount = 8
+    public static let sectorSupportMin: Float = 0.5
+    public static let minSupportingSectors = 6
+    // [owed] two candidates 26 mm apart scoring near-equally is the straddling-ring
+    // case, and a coin flip between them moves the carb number 3×.
+    //
+    // STRADDLED, and never reachable on the corpus (Decision 34). The margin compares the
+    // top two ADMISSIBLE candidates and neither capture produces even one, so it has never
+    // run on real data. The gaps real candidates open are 0.312 and 0.117 — 0.15 falls
+    // between them, so it would call one capture's pair distinct and the other's
+    // ambiguous, and neither capture has a known-correct winner to say which is right.
+    public static let ringSupportMarginMin: Float = 0.15
+    // [owed] Decision 22 — the Req 3.3 comparator. "Below the lowest admissible
+    // candidate" compares a set minimum against itself and cannot fire.
+    //
+    // The one-sidedness is CORRECT (Decision 34): Req 3.3 rejects a plane lying below the
+    // surrounding surface, and such a plane reads a POSITIVE annulus median. The corpus
+    // confirms the orientation and nothing else — annulus medians span −36.6 to +5.7 mm,
+    // so the largest positive is a fifth of the bar, and the one candidate far from its
+    // surroundings is far ABOVE them, which is `ringMedianMaxMm`'s case and not this one.
+    public static let escapeBandMm: Float = 30
+    // [measured] ringSectorCount × 25: at 25 samples per sector a 0.5 bar has binomial
+    // σ ≈ 0.10 and separates a supported sector (p ≈ 0.9) from a crossed one
+    // (p ≈ 0.3) by > 4σ. At the old floor of 60, sectors averaged 7 samples
+    // (σ ≈ 0.19) and the guard was noise (Decision 20). Holds PER radial band.
+    //
+    // Confirmed against the corpus with large margin (Decision 29): measured band
+    // counts are [1120, 1132, 1213] and [1294, 1347, 1392], 5.6× to 7.0× the floor,
+    // and inner-band sectors carry 102–184 samples apiece against the 25 the
+    // derivation targets — binomial σ ≈ 0.042 at the 0.5 bar.
+    //
+    // [measured] ON AN [owed] INPUT (Decision 44). The derivation is
+    // `ringSectorCount × 25`, so this constant rises with a count that is not itself set,
+    // and the floor tightens as the arcs it exists to protect get finer. That is what caps
+    // `ringSectorCount` at 11: Req 5.1's 2× grid halving leaves the thinnest radial band
+    // at 292 samples, and 292/25 = 11 is the last count `ringBandsAreFeasible` still
+    // passes on both captures. The native grid would carry 44. Above 11 the plane still
+    // transfers within a millimetre and the ring measure does not — the same refusal
+    // Decision 39 declined to engineer around with `mmPerPx`.
     public static let ringMinSamples = 200
-    // [derived] Decision 22 — replaces foodAboveFractionMax.
+    // [inherited] ringBandMm. The SIGNED admission guard of Req 3.2 — the support
+    // fraction is unsigned and cannot separate a plane above the ring (table, +)
+    // from one below it (vessel rim, −). Both are rejected; the persisted sign is
+    // what says which.
+    public static let ringMedianMaxMm: Float = 5
+    // [derived] Decision 22 — replaces foodAboveFractionMax, which rejected this
+    // feature's own acceptance capture (~11 % of the weighed bread's samples
+    // overhang below the plate plane, against a 5 % bar). Denominated in millimetres
+    // as Req 3.4 states, not as a sample-count fraction.
+    //
+    // [owed] (Decision 56), and the marker above is why it took this long to notice: it
+    // points at a REAL derivation, of the guard's KIND. Nothing derives the 0.90. This is
+    // the DENOMINATOR of `foodEnvelopeMinMm` below — the two are one measure, and every
+    // bound ever quoted on that constant is a reading at this one. Swept over its whole
+    // domain the corpus ceiling moves 45.453 mm (−19.415 mm at p = 0 to +26.038 mm at
+    // p = 1), so the bar's bracket travels further than the bar's own bracket is wide.
+    //
+    // Bracketed 0.1…0.92 and INTERPOLABLE — a percentile of a fixed multiset cannot fall as
+    // the percentile rises, so unlike Decision 46's radius or Decisions 51 and 52's
+    // wandering readings this one is monotone by construction. The FLOOR of 0.1 is the
+    // committed suite's at the SHIPPED bar and needs no owed value: below it
+    // `overhangingFood`'s envelope goes negative (−2.579 mm at 0.05) and a scene whose test
+    // requires this guard to pass fires. The CEILING of 0.92 is where the corpus floor on
+    // `foodEnvelopeMinMm` rises past the suite's ceiling.
+    //
+    // The shipped 0.90 is strictly inside, and it is where the joint corpus/suite window on
+    // `foodEnvelopeMinMm` is 1.079 mm — Decision 48's "narrowest in the feature", 8.1×
+    // narrower than the 8.779 mm the same window reads at p = 0.5. That narrowness is a
+    // property of THIS constant, not of the one it bounds.
+    //
+    // It cannot move the candidate SET — extraction never reads it — so the only route to
+    // the answer is `admissibility`, and there it is live: 4 of the 6 corpus candidates and
+    // 1 of the 8 committed scenes cross the shipped `foodEnvelopeMinMm = 0` over the sweep.
     public static let foodEnvelopePercentile: Float = 0.90
-    public static let foodEnvelopeMinMm: Float = 0    // [owed] Decision 22
-    public static let maxCandidatePlanes = 3     // structural: table, support, one more
-    public static let minCandidateSamples = 500  // [owed]
-    public static let minAcceptedExtentPx = 24   // [owed]
-    public static let maxIterationsPerPass = 2048 // [derived] adaptive stopping caps it
+    // [owed] Decision 22, bounded from ABOVE only (Decision 34). The corpus's intended
+    // candidate — highest ring support, taken before admissibility — reports an envelope
+    // of 26.6 mm and 25.8 mm, so any floor at or above 25.8 rejects the fit this feature
+    // exists to produce. Every envelope the corpus measures is positive (7.2 to 39.6 mm),
+    // so the negative-envelope cases the guard is written for — a bowl, a plane on the
+    // food top — are scenes it does not contain and there is no floor.
+    //
+    // BOTH HALVES MOVE (Decision 48), because "highest ring support" is the wrong reading
+    // of "intended" on `1785901032716`: the ranking's winner there is the TABLE, and the
+    // plane a correct fit must select is pass 2, nearest Req 3.1's zero. Its envelope is
+    // 21.0 mm, not 25.8, so the ceiling tightens by 4.8 mm.
+    //
+    // And there IS a floor. The corpus contains a plane above the support surface after
+    // all — the same capture's pass 3, sitting 9.736 mm above the plate with 6 escaped
+    // sectors — and its envelope is not negative but POSITIVE at 7.154 mm. A plane above
+    // a surface still has food above IT wherever the food is taller than the gap, so
+    // "plane on the food top → p90 ≈ 0" holds only once the plane reaches the food's own
+    // top. Bracketed 7.154…21.041 mm by the corpus, and against Decision 41's suite
+    // ceiling of 8.233 mm the joint window is 1.079 mm — the narrowest any owed constant
+    // in this feature has. Still `[owed]` to the capture session, no longer floorless.
+    //
+    // BOTH OF THOSE ARE SLICES (Decision 56), at two constants that decision did not name.
+    // The first is `foodEnvelopePercentile` above, this bar's own denominator: the ceiling
+    // runs −19.415…26.038 mm over p ∈ [0, 1] and the joint window 8.779 mm at p = 0.5
+    // against 1.079 mm at the shipped 0.90. The second is `ringSupportMin`, because a floor
+    // is only a floor if the envelope guard is what has to reject the plane. The two
+    // above-surface candidates carry 0.183 and 0.304 inner-band support, both inside that
+    // constant's (0, 0.362] bracket, so at the shipped percentile there are THREE regimes:
+    // below 0.183 the floor is 8.958 mm and the joint window is EMPTY, between them it is
+    // Decision 48's 7.154 mm, and above 0.304 there is NO floor and Decision 34's original
+    // reading is restored. Set the percentile and `ringSupportMin` BEFORE this constant.
+    public static let foodEnvelopeMinMm: Float = 0
+    // [owed] from BELOW at 2, and UNBOUNDED above — the corpus cannot see this constant at
+    // all (Decision 48). This said "Structural: table, support, one more", the second
+    // constant in this file to carry that word in place of a provenance marker after
+    // `ringBandCount` (Decision 47), and it had never been varied either.
+    //
+    // The cap NEVER FIRES. Lift it to 8 and both captures still stop at three passes, and
+    // both stop STARVED: the residue left after the last pass is 1330.7 mm² and 155.6 mm²
+    // against a `minResidueAreaMm2` of 1691. It is the residue floor that ends extraction,
+    // so no value at or above 3 is distinguishable on this corpus and the ceiling is open.
+    //
+    // That makes it COUPLED to `minResidueAreaMm2`, which is `[owed]` and bounded from
+    // above only. `1785135663727` leaves 78.7 % of the floor after its last pass, so a
+    // session that lowers the floor below 1331 mm² gives that capture a fourth pass and
+    // this cap something to truncate. SET THE RESIDUE FLOOR FIRST; a ceiling here is
+    // unreadable until it is fixed. Cost runs the same way — the RANSAC bound is
+    // `maxIterationsPerPass × maxCandidatePlanes`, so Req 7.6's device latency is
+    // denominated in this constant (task 27).
+    //
+    // The FLOOR of 2 is the corpus's, and it is where sequential extraction earns its
+    // keep. On `1785901032716` the plane a correct fit must select is pass 2 — nearest
+    // Req 3.1's zero at a ring median of −2.658 mm — while the RANKING's winner is pass 1,
+    // the table, at +3.039 mm. Below a cap of 2 the intended plane is not in the candidate
+    // set at all and no setting of any owed constant recovers it. The committed suite
+    // agrees independently: `sequentialExtractionSurfacesThePlate` asserts the plate
+    // arrives on pass 2.
+    //
+    // Two side findings, both belonging to other constants. Decision 38's native/halved
+    // agreement (3 → 3) is confirmed UNCONDITIONAL — both counts were at the cap and could
+    // have been it truncating both; lift the cap and the grids still agree. And read at
+    // full pass depth with the intended plane identified by its ring median rather than by
+    // the ranking, the corpus DETERMINES `maxCrossedSectors` at 2 — see it below.
+    public static let maxCandidatePlanes = 3
+    // [owed] Decision 32, but a NARROWER owing than before. This was
+    // `minCandidateSamples = 500`, one number answering two unrelated questions: "can
+    // this capture support the fit at all" and "is there enough residue left for
+    // another extraction pass". The first is now asked exactly, by
+    // `ringBandsAreFeasible`, so only the second is left here and the value has one
+    // job. The value itself does not move — nothing measured justifies moving it.
+    //
+    // Denominated in millimetres², not samples, since Decision 38. It was `500` raw
+    // depth samples, and a sample count divides by four under a 2x grid halving where
+    // the surface it stands for does not: the corpus runs three extraction passes
+    // natively and two at half resolution, so `planeCandidateCount` — a PERSISTED field
+    // (Req 6.1) — was a property of the sensor's grid rather than of the scene
+    // (Decision 35). Converting through the same `mmPerPx` the ring radii and
+    // `minAcceptedExtentMm` already use removes the dependence: the residue's AREA is
+    // near-invariant across the halving (36 280 → 36 176 mm² and 42 458 → 41 961 mm²
+    // on the first pass) where its sample count quarters.
+    //
+    // The VALUE does not move. 500 samples at the corpus's pixel areas of 3.465 mm² and
+    // 3.383 mm² is 1732.6 mm² and 1691.5 mm², so 1691 mm² is the largest whole
+    // millimetre² at or below both and every corpus pass keeps its verdict.
+    //
+    // The corpus bounds it from ABOVE only. Measured residue per pass is
+    // [36 280, 11 471, 2013] mm² and [42 458, 9509, 3153] mm², so any floor above
+    // 2013 mm² cuts a pass the corpus produces. Both third-pass candidates are then
+    // rejected on their own merits (`extent` at 22.3 mm, and `supportFraction`), so
+    // cutting them would change no plane on this corpus — but it would drop
+    // `planeCandidateCount` from 3 to 2, and pass 3 is where a plate under a dominant
+    // table can still surface. Nothing in the corpus fails for want of residue, so
+    // there is no measured floor and the lower end stays owed to the capture session.
+    public static let minResidueAreaMm2: Float = 1691
+    // The floor as the sample count a given capture's grid expresses it in. Rounded UP,
+    // so the bar is never weaker than the area it stands for.
+    public static func minResidueSamples(mmPerPx: Float) -> Int {
+        Int((minResidueAreaMm2 / (mmPerPx * mmPerPx)).rounded(.up))
+    }
+    // [owed] minimum bbox extent of the winning inlier component, in MILLIMETRES —
+    // a sliver gives a badly conditioned normal (Req 2.3).
+    //
+    // Denominated in millimetres, not pixels, since Decision 37. It was `24 px`, and
+    // that was the only bar in `admissibility` measured in pixels while every other one
+    // is millimetres or a dimensionless fraction — which is precisely what Req 5.1's
+    // transfer across depth grids rests on. Halve the grid and pixel extents halve with
+    // it, so a surface admitted at 44 px was rejected as a sliver at 22 px by the same
+    // bar (Decision 35). Converting through `mmPerPx`, the conversion the ring radii
+    // already use, removes the dependence: the same physical surface measures the same
+    // millimetres on any grid, and the corpus confirms it holds to 0.5 mm across a 2×
+    // halving where the pixel count halves exactly.
+    //
+    // The VALUE does not move — nothing measured justifies moving it. 24 px at the
+    // corpus's `mmPerPx` of 1.8616 and 1.8393 is 44.68 and 44.14 mm, so 44 mm is the
+    // largest whole millimetre at or below both and every corpus verdict is unchanged.
+    //
+    // Bracketed by the corpus at 22.3…47.8 mm and no tighter (Decisions 32, 37).
+    // Measured extents are 229, 141, 22 mm and 285, 81, 48 mm: the 22 mm candidate is a
+    // 153-sample sliver sitting 32.9 mm off the ring and is rejected here, which is the
+    // guard working, so the floor is above 22.3. The ceiling is soft — 47.8 mm is the
+    // smallest extent on a candidate that reaches the later guards, and that candidate
+    // is rejected on `supportFraction` anyway, so the corpus never shows a 47.8 mm
+    // candidate deserving admission. Unlike the pixel bracket this one is a physical
+    // bracket rather than a 256×192 one, so a capture at another depth resolution can
+    // now be admitted to the corpus without restating it.
+    public static let minAcceptedExtentMm: Float = 44
+    // [measured] on the corpus, and it NEVER FIRES (Decision 51). This said `[derived]`
+    // and rested on a quantity: "the budget is sufficient because extraction is
+    // SEQUENTIAL — pass 1 removes the table — not because the pass-1 inlier ratio is high
+    // (it is ~6 %, where 2048 iterations reach ~36 %)". The pass-1 ratio is measured at
+    // 0.402 and 0.698, six to twelve times the quoted figure, so the argument is refuted
+    // by its own number: the budget is sufficient because the dominant plane is EASY, and
+    // the sequential structure is not what pays for it.
+    //
+    // `requiredIterations` is `min(this, target)` and on this corpus the target is always
+    // the smaller. The passes spend 72, 11, 250 and 12, 41, 5 iterations against a cap of
+    // 2048, so the cap truncates nothing at or above 256 — the largest draw the corpus
+    // ever needs is 250 — and it is the third thing in this file that never fires, after
+    // Decision 48's pass cap and Decision 34's five guards.
+    //
+    // Bracketed 128…unbounded from BELOW by the corpus, the shipped value far inside it.
+    // At 64 the sector verdict on `1785135663727` FLIPS from 5 supporting / 0 crossed to
+    // 3 / 2 — the guard every bracket in Decisions 40 to 50 is read from — and at 32 the
+    // plane moves 1.9 mm. At 128 and above the plane is the shipped one to 0.000 mm. The
+    // ceiling is open and stays open: above the largest required draw there is nothing to
+    // distinguish, so what sets it is Req 7.6's worst-case latency and not this corpus.
+    // The scene where it WOULD fire is one with a low inlier ratio, which is exactly the
+    // scene the corpus does not contain — both captures are flat bread on a plate.
+    public static let maxIterationsPerPass = 2048
+    // Target probability of drawing one outlier-free triple, for adaptive stopping.
+    //
+    // [owed], and it is the constant that actually sets the budget (Decision 51). This
+    // carried NO provenance marker at all — the last constant in this file of which that
+    // was true, after Decision 47's band count and Decision 48's pass cap — and it had
+    // never been varied. It is the live end of a two-constant clamp whose inert end
+    // carries the paragraph of argument.
+    //
+    // It MOVES THE ANSWER, which only `annulusOuterMm` otherwise does. Swept 0.5…0.99999
+    // at the shipped cap the selected plane at the food moves 3.704 mm on
+    // `1785135663727` — past the 1 mm Decision 35 measures Req 5.1's transfer at, and
+    // past the 2.095 mm of draw dependence Decision 46 recorded as a caveat on every
+    // plane figure this feature quotes. Readings wander rather than climb (351.620,
+    // 349.473, 353.130, 351.328, 349.426, 349.426 mm), so like Decision 46's radius and
+    // unlike Decision 50's removal band the bracket must NOT be interpolated.
+    //
+    // And it is what Decision 46's caveat is denominated in. Re-run that decision's
+    // eight-seed control against each end of the clamp: against the CAP the spread does
+    // not move at all — 1.992 mm at 64 and 2.095 mm at 256, 2048 and 8192 — because the
+    // cap is not what ends a pass; against the TARGET it collapses 2.095 → 0.194 mm from
+    // 0.99 to 0.99999, a 10.8x fall that takes it under the Req 5.1 bar. So the draw
+    // dependence Decisions 40 to 50 all carry is not a property of the captures and not
+    // a price of the cap: it is this constant, and it is removable.
+    //
+    // Bracketed 0.9…unbounded by the corpus. Below 0.9 the FLOOR is that the capture
+    // which is otherwise draw-stable stops being so — `1785901032716`'s seed spread is
+    // 0.001 mm at every value from 0.9 up and 2.376 mm at 0.5. The ceiling is open, and
+    // the cap is what pays for tightening it: the largest draw at 0.99 is 250 against
+    // 2048, so there is 8x of headroom before Req 7.6 is consulted at all. Choosing a
+    // value inside the bracket is asserting, which Req 3.7 forbids for exactly these
+    // constants, so the sitting sets it — but unlike every other owed constant it is set
+    // from the committed corpus alone and needs no capture.
+    static let ransacSuccessProbability = 0.99
+    // The candidate set is an annulus of this radius around the food mask (Decision 15).
+    // NOT dilate(foodMask, 2 × foodRadius), which spans ~8.3 s² against the pre-feature
+    // bands' ~4 s² — looser than the code it replaces.
+    //
+    // [owed], and RE-DENOMINATED (Decision 49). This was `annulusOuterMultiple = 2`, a
+    // multiple of `ringOuterMm`, and it is the third constant in this file that changes
+    // which planes COMPETE — the one the other two were measured through. Decision 46 swept
+    // the radius and found the selected plane moving 18.719 mm at the food; Decision 47
+    // attributed that to the annulus by elimination; Decision 48 varied how many times the
+    // annulus may be drawn from. None of the three could vary the annulus itself, because
+    // expressing it as a multiple of the radius meant every radius carried a different one.
+    //
+    // Pin the bound and the attribution is exact. Over the same 13…40 mm radius sweep, with
+    // the bound held at 50 mm, the selected plane moves 0.000 mm at the food on BOTH
+    // captures — not within a tolerance, exactly, because extraction reads the annulus and
+    // nothing else. The ring still changes with the radius, so the RANKING could still pick
+    // a different candidate; it does not. Swept itself at a fixed ring, this constant moves
+    // the plane 18.843 mm and 1.978 mm — Decision 46's number rather than a fraction of it.
+    //
+    // The VALUE does not move: `annulusOuterMultiple × ringOuterMm` is 2 × 25 = 50 mm, so
+    // every corpus candidate, every committed scene and every persisted field is unchanged
+    // by construction, as Decisions 37 and 38 were when they re-denominated the extent bar
+    // and the residue floor. What changes is that `ringOuterMm` stops resizing the candidate
+    // set, which is what made it the one owed constant that moved the answer.
+    //
+    // Bracketed 50…75 mm by the CORPUS and by nothing else. Below the floor the plane a
+    // correct fit must admit is itself crossed — `maxCrossedSectors` reads 3…unbounded at
+    // 31.25 mm and an EMPTY interval at 25, 37.5 and 43.75 mm — and at 100 mm the interval
+    // collapses the other way, the plate capture's intended candidate reading 6 crossed
+    // sectors as the annulus reaches surfaces beyond the plate. The shipped 50 is ON the
+    // floor, and it is the only value in the sweep at which the corpus DETERMINES
+    // `maxCrossedSectors` at 2 (Decision 48's reading); 62.5 and 75 mm both widen it to 2…4.
+    //
+    // The committed SUITE cannot bound it at all — the first constant since Decision 41 for
+    // which that is true. The scenes never run extraction, so the bound reaches them through
+    // exactly two guards, `visibility` and `escaped`, and both are among the five Decision 34
+    // found never fire. Every scene keeps its verdict at 25 mm and at 100 mm alike.
+    //
+    // Two riders. Req 7.6's latency is denominated here as well as in `maxCandidatePlanes`:
+    // the annulus holds 10 469 and 12 551 samples at the shipped bound and 19 427 and 25 659
+    // at 100 mm, and RANSAC iterates over all of them. And the ring must sit INSIDE the
+    // bound — guaranteed by construction while this was a multiple ≥ 1, an invariant to keep
+    // now that it is not. `ringSamples` collects a ring sample only if it is already an
+    // annulus sample, so a bound below `ringOuterMm` would silently empty the ring;
+    // `SupportRegionRingTests` is what holds the two together at whatever values ship.
+    static let annulusOuterMm: Float = 50
+    // A pass removes its polished inliers within this multiple of `inlierBandMm`.
+    //
+    // [owed], BRACKETED 1…2.5×, and its stated rule is MEASURED AND FALSE (Decision 50).
+    // This is the FOURTH constant in this file that decides which planes COMPETE, and the
+    // only one that acts BETWEEN passes: `annulusOuterMm` fixes the set extraction draws
+    // from, `maxCandidatePlanes` fixes how many times it may draw, `ringOuterMm` re-rings a
+    // set already chosen — this one decides what each draw LEAVES for the next. It was the
+    // last constant here carrying a claim in place of a provenance marker.
+    //
+    // The claim was "a 1× shell seeds near-duplicate planes on the next pass", and no
+    // adjacent pass pair anywhere in the sweep is a near-duplicate: read in the removal's
+    // own units — the largest gap between two planes' signed heights over the annulus,
+    // against one `inlierBandMm` — the closest pair at 1× diverges by 30.807 mm and the
+    // closest at any multiple by 23.973 mm, nearly five bands. CC-RANSAC is why. A pass
+    // keeps the largest CONNECTED component, so what a 1× shell leaves behind is a thin
+    // ring around a surface already taken and it does not form one. So the shipped value
+    // has no derivation at all, as `ringOuterMm` had none once Decision 33 measured its
+    // stated rule, and the floor cannot come from here.
+    //
+    // It does NOT move the answer — 0.000 mm at the food on both captures at every
+    // multiple, exactly. Removal happens AFTER a pass, so pass 1 is drawn from an annulus
+    // this constant has never touched, and the ranking picks pass 1 on both captures at
+    // every multiple. Bracket-only, like the count, the bar, the band count and (since
+    // Decision 49) the radius; `annulusOuterMm` stays the only owed constant that moves
+    // the plane.
+    //
+    // The CEILING is where a shell wide enough to take the table takes the plate with it.
+    // On `1785901032716` the plane a correct fit must select is pass 2 (Decision 48), and
+    // its ring median degrades −2.203, −2.309, −2.377, −2.658, −3.011 mm over 1…2.5× before
+    // the candidate stops existing: at 3× the nearest-to-zero candidate is pass 1, the
+    // TABLE at +3.039 mm carrying 3 crossed sectors of its own, so `maxCrossedSectors`
+    // reads 3…unbounded and the guard would have to admit the plane Decision 18 exists to
+    // reject. Decision 49's floor argument on a second constant. The FLOOR of 1 is
+    // structural — below it a pass leaves samples it selected within `inlierBandMm` and the
+    // next pass can re-find the same plane — and the corpus does not raise it.
+    //
+    // Two riders. `maxCandidatePlanes` is COUPLED to it with an order: natural extraction
+    // depth runs [7, 5] passes at 1×, [5, 3] at 1.25×, [4, 3] at 1.5×, [3, 3] at 2× and
+    // down to [2, 1] at 6×, so the cap truncates below the shipped value and the shipped 2×
+    // is the SMALLEST multiple at which it does not. Decision 48's "the cap never fires,
+    // so no value at or above 3 is distinguishable" is a reading at 2×, and that decision's
+    // ordering — residue floor before pass cap — gains a member before both. And Req 7.6's
+    // latency is denominated here for the same reason, since the RANSAC bound is
+    // `maxIterationsPerPass` times the passes actually run.
+    //
+    // The committed SUITE cannot bound it, and here that is structural rather than measured:
+    // Decision 49's bound reached the scenes through `visibility` and `escaped` and was
+    // found silent by measurement, but no scene runs extraction at all — each asserts
+    // against a plane its own test states — so no suite reading is even definable. The only
+    // owed constant of which that is true. One positive: `maxCrossedSectors` reads 2…2 at
+    // EVERY multiple this constant's own bracket admits, so unlike the candidate bound it
+    // does not denominate Decision 48's determination and the sitting sets the two apart.
+    static let inlierRemovalMultiple: Float = 2
 
-    static let confidenceThreshold: Float = LiDARPlaneFitter.confidenceThreshold
-    // Amortisation factor for connected-component labelling (design §"Connected-
-    // component labelling is the dominant term"): only hypotheses whose raw
-    // inlier count is within this factor of the running best get CC-labelled.
-    static let ccAmortizeFactor: Float = 0.5
+    // MARK: – Depth intrinsics (design §Native depth grid, and the intrinsics trap)
 
-    // MARK: - Depth intrinsics (Req 2.4; design §"Native depth grid, and the
-    // intrinsics trap"). `depth.depthIntrinsics` is unusable on device — ARKit
-    // writes it as all-zero — so depth intrinsics are derived from the colour
-    // ones. The half-pixel terms match `LiDARPlaneFitter.sampleDepthBilinear`'s
-    // existing convention.
+    // `depth.depthIntrinsics` is UNUSABLE on device: ARKitCaptureEngine writes
+    // CameraIntrinsics(fx: 0, fy: 0, cx: 0, cy: 0, …) and only width/height are real,
+    // so reading it divides by zero and yields a NaN plane. Derive from the colour
+    // intrinsics instead. The half-pixel terms match `sampleDepthBilinear`
+    // (LiDARPlaneFitter.swift:440-441), which already resamples this way.
+    //
+    // The failure ranked worst here is NOT the half-pixel term (0.433 depth px of
+    // principal-point offset, ~0.016° of induced tilt — three orders of magnitude
+    // below the 15° gravity cone). It is passing the COLOUR intrinsics through
+    // unscaled: the plane barely moves at nadir because z is unchanged, while every
+    // mm-denominated radius is corrupted by 7.5× — the 8–25 mm ring silently becomes
+    // a 1–3.3 mm ring, which no plane-level assertion catches.
     static func depthIntrinsics(from colour: CameraIntrinsics, depth: DepthMap) -> CameraIntrinsics {
-        let sx = Float(depth.width) / Float(colour.imageWidth)
-        let sy = Float(depth.height) / Float(colour.imageHeight)
+        let sx = Float(depth.width) / Float(max(1, colour.imageWidth))
+        let sy = Float(depth.height) / Float(max(1, colour.imageHeight))
         return CameraIntrinsics(
             fx: colour.fx * sx,
             fy: colour.fy * sy,
@@ -120,437 +765,442 @@ public enum SupportRegion {
         )
     }
 
-    // MARK: - Mask downsample (Req 2.1, 2.4). A depth pixel is food when ANY
-    // covered colour pixel is food — ambiguity resolves towards exclusion, so
-    // the restricted fit's candidate set never contains a food pixel.
-    static func depthGridMask(from colourMask: BinaryMask, depthWidth: Int, depthHeight: Int) -> BinaryMask {
-        var pixels = [UInt8](repeating: 0, count: depthWidth * depthHeight)
-        let sx = Float(colourMask.width) / Float(depthWidth)
-        let sy = Float(colourMask.height) / Float(depthHeight)
-        for dy in 0..<depthHeight {
-            let yStart = Int(Float(dy) * sy)
-            let yEnd = max(yStart + 1, min(colourMask.height, Int(Float(dy + 1) * sy)))
-            for dx in 0..<depthWidth {
-                let xStart = Int(Float(dx) * sx)
-                let xEnd = max(xStart + 1, min(colourMask.width, Int(Float(dx + 1) * sx)))
+    // `BinaryMask` is colour-grid; the ring and the candidates are depth-grid. A
+    // depth pixel is food when ANY covered colour pixel is food — Req 2.1 requires
+    // the fitted set to contain no food pixel, so ambiguity resolves towards
+    // exclusion.
+    static func downsampleFoodMask(_ mask: BinaryMask, width dw: Int, height dh: Int) -> BinaryMask {
+        if mask.width == dw && mask.height == dh { return mask }
+        var pixels = [UInt8](repeating: 0, count: dw * dh)
+        let sx = Float(mask.width) / Float(dw)
+        let sy = Float(mask.height) / Float(dh)
+        for dy in 0..<dh {
+            let y0 = max(0, Int((Float(dy) * sy).rounded(.down)))
+            let y1 = min(mask.height - 1, Int((Float(dy + 1) * sy).rounded(.up)) - 1)
+            guard y0 <= y1 else { continue }
+            for dx in 0..<dw {
+                let x0 = max(0, Int((Float(dx) * sx).rounded(.down)))
+                let x1 = min(mask.width - 1, Int((Float(dx + 1) * sx).rounded(.up)) - 1)
+                guard x0 <= x1 else { continue }
                 var isFood = false
-                yLoop: for y in yStart..<yEnd {
-                    for x in xStart..<xEnd where colourMask.isFood(x: x, y: y) {
+                scan: for y in y0...y1 {
+                    for x in x0...x1 where mask.isFood(x: x, y: y) {
                         isFood = true
-                        break yLoop
+                        break scan
                     }
                 }
-                pixels[dy * depthWidth + dx] = isFood ? 1 : 0
+                pixels[dy * dw + dx] = isFood ? 1 : 0
             }
         }
-        return BinaryMask(pixels: pixels, width: depthWidth, height: depthHeight)
+        return BinaryMask(pixels: pixels, width: dw, height: dh)
     }
 
-    // MARK: - Contact ring (Req 3.1–3.9). `foodMask`/`intrinsics` are already on
-    // the NATIVE DEPTH GRID — callers downsample via `depthGridMask` and derive
-    // intrinsics via `depthIntrinsics` first (`fitFoodSupportPlane` does both).
-    static func contactRing(foodMask: BinaryMask, depth: DepthMap, intrinsics: CameraIntrinsics) -> [Int] {
-        ringAndAnnulusSamples(depthGridFoodMask: foodMask, depth: depth, depthIntrinsics: intrinsics)?
-            .ring.map(\.index) ?? []
+    // MARK: – Depth-grid geometry
+
+    // Everything downstream reads from one prepared pass over the native depth grid:
+    // back-projected points, validity (depth > 0 AND confidence ≥ τ_conf), the
+    // downsampled food mask, and the mm-per-pixel scale from the median food depth.
+    struct DepthGeometry {
+        let intrinsics: CameraIntrinsics       // depth grid
+        let foodMask: BinaryMask               // depth grid
+        let points: [Vec3]                     // indexed by depth index; junk where !valid
+        let valid: [Bool]
+        let width: Int
+        let height: Int
+        let mmPerPx: Float
+        let foodSampleCount: Int               // valid-depth food samples
+        let foodIndices: [Int]
+        let centroidX: Float                   // food-mask centroid, depth grid
+        let centroidY: Float
     }
 
-    // Public convenience: computes ring statistics for an arbitrary plane (e.g.
-    // the lazy edge-band fallback plane) directly from the colour-grid inputs a
-    // caller has on hand, so Req 6.1's "every depth-derived attempt" holds
-    // without the caller re-deriving depth intrinsics or the depth-grid mask.
-    public static func ringStatistics(for plane: SupportPlane, depth: DepthMap,
-                                      foodMask: BinaryMask,
-                                      intrinsics colourIntrinsics: CameraIntrinsics) -> RingStatistics? {
-        let depthIntr = depthIntrinsics(from: colourIntrinsics, depth: depth)
-        let depthMask = depthGridMask(from: foodMask, depthWidth: depth.width, depthHeight: depth.height)
-        return ringStatistics(foodMask: depthMask, depth: depth, intrinsics: depthIntr, plane: plane)
-    }
-
-    // Depth-grid-native entry point directly unit-tested (design §"contactRing
-    // and ringStatistics are internal but directly unit-tested"). NOTE: this
-    // takes the plane and derives ring + annulus itself, rather than the raw
-    // index arrays the design's illustrative signature sketched — `ring`/
-    // `annulus` there had no way to carry the 3-D points and angles the
-    // statistics actually need without recomputing the mask's distance field a
-    // second time per call.
-    static func ringStatistics(foodMask: BinaryMask, depth: DepthMap, intrinsics: CameraIntrinsics,
-                               plane: SupportPlane) -> RingStatistics? {
-        guard let samples = ringAndAnnulusSamples(depthGridFoodMask: foodMask, depth: depth,
-                                                   depthIntrinsics: intrinsics) else { return nil }
-        let foodCount = foodSamplePoints(mask: foodMask, depth: depth, intrinsics: intrinsics).count
-        guard foodCount > 0 else { return nil }
-        return ringStatistics(ring: samples.ring, annulus: samples.annulus,
-                              foodSampleCount: foodCount, plane: plane)
-    }
-
-    // MARK: - fitFoodSupportPlane (Req 1.1–1.3, 3.*, 7.7). nil when no candidate
-    // is admissible — the caller then runs the edge-band fit (Req 4.1). Never
-    // throws: rejection is an expected outcome, not an error.
-    public static func fitFoodSupportPlane(
-        depth: DepthMap, colourIntrinsics: CameraIntrinsics,
-        foodRegionMask: BinaryMask, gravityCamera: Vec3
-    ) -> (plane: SupportPlane, ring: RingStatistics, candidateCount: Int)? {
-        let depthIntr = depthIntrinsics(from: colourIntrinsics, depth: depth)
-        let depthMask = depthGridMask(from: foodRegionMask, depthWidth: depth.width, depthHeight: depth.height)
-        guard let samples = ringAndAnnulusSamples(depthGridFoodMask: depthMask, depth: depth,
-                                                   depthIntrinsics: depthIntr) else { return nil }
-        guard samples.annulus.count >= minCandidateSamples else { return nil }
-
-        let foodPoints = foodSamplePoints(mask: depthMask, depth: depth, intrinsics: depthIntr)
-        guard !foodPoints.isEmpty else { return nil }
-
-        let gravity = gravityCamera.normalised()
-        let seed = Fnv1a64.hash(depth.depthBytesMm)
-        var rng = SplitMix64(seed: seed)
-        let annulusPoints = samples.annulus.map(\.point)
-        let annulusIdx = samples.annulus.map(\.index)
-        let candidates = extractCandidatePlanes(
-            points: annulusPoints, depthIndices: annulusIdx,
-            width: depth.width, height: depth.height, gravity: gravity, rng: &rng
-        )
-        guard !candidates.isEmpty else { return nil }
-
-        struct Scored {
-            let plane: SupportPlane
-            let ring: RingStatistics
-        }
-        var scored: [Scored] = []
-        for candidate in candidates {
-            let plane = SupportPlane(normal: candidate.normal, distanceMm: candidate.d,
-                                     residualMm: candidate.residualMm, convergedIterations: nil)
-            guard let ring = ringStatistics(ring: samples.ring, annulus: samples.annulus,
-                                            foodSampleCount: foodPoints.count, plane: plane) else { continue }
-            guard isAdmissible(candidate: candidate, ring: ring, plane: plane,
-                               annulus: samples.annulus, foodPoints: foodPoints,
-                               width: depth.width) else { continue }
-            scored.append(Scored(plane: plane, ring: ring))
-        }
-        guard !scored.isEmpty else { return nil }
-        scored.sort { $0.ring.supportFraction > $1.ring.supportFraction }
-        if scored.count >= 2,
-           scored[0].ring.supportFraction - scored[1].ring.supportFraction < ringSupportMarginMin {
-            return nil
-        }
-        let winner = scored[0]
-        return (winner.plane, winner.ring, candidates.count)
-    }
-
-    // MARK: - Admissibility (design §"Selection and admissibility", Decisions 18–22)
-    static func isAdmissible(
-        candidate: SupportPlaneCandidate, ring: RingStatistics, plane: SupportPlane,
-        annulus: [RingSample], foodPoints: [Vec3], width: Int
-    ) -> Bool {
-        // ring support fraction < ringSupportMin → ring not resting on this plane (Req 3.2)
-        guard ring.supportFraction >= ringSupportMin else { return false }
-        // supporting sectors < minSupportingSectors → ring crossed the support's
-        // edge, or straddles two surfaces (Req 2.3, 3.6, Decisions 18–20)
-        guard ring.supportingSectors >= minSupportingSectors else { return false }
-        // food's p90 signed height above the plane < foodEnvelopeMinMm → vessel
-        // rim, or a plane on the food top (Req 3.4, Decision 22)
-        let foodHeights = foodPoints.map { plane.normal.dot($0) - plane.distanceMm }
-        guard percentile(foodHeights, foodEnvelopePercentile) >= foodEnvelopeMinMm else { return false }
-        // |ring median| outside the documented band around zero, signed (Req 3.1, 3.2)
-        guard abs(ring.medianMm) <= ringBandMm else { return false }
-        // inner→mid band step > bandStepMaxMm rising outward → not flat (Req 3.8, Decision 21)
-        guard ring.bandMedianMm.count == ringBandCount,
-              ring.bandMedianMm[1] - ring.bandMedianMm[0] <= bandStepMaxMm else { return false }
-        // support visibility < supportVisibilityMin → support surface not
-        // observable under the food (Req 3.9)
-        guard ring.supportVisibility >= supportVisibilityMin else { return false }
-        // plane below the annulus median height by > escapeBandMm → region
-        // escaped through a depth dropout (Req 3.3, Decision 22)
-        let annulusHeights = annulus.map { plane.normal.dot($0.point) - plane.distanceMm }
-        guard median(annulusHeights) <= escapeBandMm else { return false }
-        // fewer than minAcceptedExtentPx inlier bbox extent → badly conditioned normal (Req 2.3)
-        guard inlierExtentPx(indices: candidate.inlierIndices, width: width) >= minAcceptedExtentPx
-        else { return false }
-        return true
-    }
-
-    // MARK: - Geometry internals
-
-    // One depth-grid non-food sample, with its 3-D back-projection, its
-    // distance to the food mask boundary (mm, converted via the per-capture
-    // scale from median food depth), and its angle about the food-mask
-    // centroid for sector bucketing (Req 3.6).
-    struct RingSample {
-        let index: Int
-        let point: Vec3
-        let distMm: Float
-        let angle: Float
-    }
-
-    // Computes the ring (ringInnerMm..<ringOuterMm) and annulus
-    // (0..<2×ringOuterMm) samples in one pass over the depth grid, sharing one
-    // distance-field computation (design §"Bound the candidate set to an
-    // annulus": "ring is the region the [candidate] set already reads").
-    static func ringAndAnnulusSamples(
-        depthGridFoodMask mask: BinaryMask, depth: DepthMap, depthIntrinsics intrinsics: CameraIntrinsics
-    ) -> (ring: [RingSample], annulus: [RingSample])? {
-        guard let medianZ = medianFoodDepthMm(mask: mask, depth: depth),
-              let centroid = foodMaskCentroid(mask) else { return nil }
-        let focalAvg = (intrinsics.fx + intrinsics.fy) / 2
-        guard focalAvg > 0 else { return nil }
-        let mmPerPixel = medianZ / focalAvg
-        guard mmPerPixel > 0 else { return nil }
-        let field = chamferDistanceField(foodMask: mask)
-        let candidateBoundMm = 2 * ringOuterMm
-
-        var ring: [RingSample] = []
-        var annulus: [RingSample] = []
+    static func prepare(depth: DepthMap, colourIntrinsics: CameraIntrinsics,
+                        foodRegionMask: BinaryMask) -> DepthGeometry? {
+        let kd = depthIntrinsics(from: colourIntrinsics, depth: depth)
         let w = depth.width, h = depth.height
+        let count = w * h
+        guard w > 0, h > 0, kd.fx > 0, kd.fy > 0,
+              depth.depthBytesMm.count >= count * 4 else { return nil }
+
+        let mask = downsampleFoodMask(foodRegionMask, width: w, height: h)
+        let depths: [Float] = depth.depthBytesMm.withUnsafeBytes { raw in
+            (0..<count).map { raw.loadUnaligned(fromByteOffset: $0 * 4, as: Float.self) }
+        }
+        // No confidence map (N5k RealSense fixtures) means no confidence filtering;
+        // invalid returns are zeroed depth and are excluded by the z > 0 guard.
+        // τ_conf = 0.40 applies here exactly as it does in the band scan, so
+        // `lidar-plane-fit-matte-table-confidence` is not bypassed (Req 7.5).
+        //
+        // That bar is `[owed]` and it is the most upstream constant this file reads — it
+        // decides what a SAMPLE is, so every guard below is denominated in it and it moves the
+        // selected plane. See `LiDARPlaneFitter.confidenceThreshold` for the reading
+        // (Decision 53); the short version is that its domain is three ARKit levels rather
+        // than a range, and the corpus admits two of the three states.
+        let confidence = depth.confidenceBytes
+        let hasConfidence = confidence.count >= count
+
+        var points = [Vec3](repeating: Vec3(0, 0, 0), count: count)
+        var valid = [Bool](repeating: false, count: count)
+        var foodIndices: [Int] = []
+        var foodDepths: [Float] = []
+        var sumX: Float = 0, sumY: Float = 0
+        var maskPixelCount = 0
+
         for y in 0..<h {
             for x in 0..<w {
-                let i = y * w + x
-                if mask.isFood(x: x, y: y) { continue }
-                let distMm = field.distancePx[i] * mmPerPixel
-                guard distMm > 0, distMm < candidateBoundMm else { continue }
-                let conf = depth.confidenceBytes.isEmpty ? UInt8.max : depth.confidenceBytes[i]
-                if Float(conf) / 255 < confidenceThreshold { continue }
-                let z = LiDARPlaneFitter.depthValueMm(depth, x: x, y: y)
-                guard z > 0 else { continue }
-                let p = Vec3((Float(x) - intrinsics.cx) / intrinsics.fx * z,
-                            (Float(y) - intrinsics.cy) / intrinsics.fy * z, -z)
-                let angle = atan2(Float(y) - centroid.y, Float(x) - centroid.x)
-                let sample = RingSample(index: i, point: p, distMm: distMm, angle: angle)
-                annulus.append(sample)
-                if distMm >= ringInnerMm, distMm < ringOuterMm {
-                    ring.append(sample)
+                let idx = y * w + x
+                let isFood = mask.isFood(x: x, y: y)
+                if isFood {
+                    sumX += Float(x)
+                    sumY += Float(y)
+                    maskPixelCount += 1
+                }
+                let z = depths[idx]
+                guard z > 0, z.isFinite else { continue }
+                if hasConfidence,
+                   Float(confidence[idx]) / 255 < LiDARPlaneFitter.confidenceThreshold { continue }
+                points[idx] = Vec3(
+                    (Float(x) - kd.cx) / kd.fx * z,
+                    (Float(y) - kd.cy) / kd.fy * z,
+                    -z
+                )
+                valid[idx] = true
+                if isFood {
+                    foodIndices.append(idx)
+                    foodDepths.append(z)
                 }
             }
         }
-        return (ring, annulus)
-    }
+        guard maskPixelCount > 0, !foodDepths.isEmpty else { return nil }
 
-    // Core statistics computation shared by both public entry points, given
-    // already-collected ring/annulus samples (avoids recomputing the distance
-    // field once per candidate plane in `fitFoodSupportPlane`).
-    static func ringStatistics(
-        ring: [RingSample], annulus: [RingSample], foodSampleCount: Int, plane: SupportPlane
-    ) -> RingStatistics? {
-        let bandWidth = (ringOuterMm - ringInnerMm) / Float(ringBandCount)
-        guard bandWidth > 0 else { return nil }
-        var bandSamples: [[RingSample]] = Array(repeating: [], count: ringBandCount)
-        for s in ring {
-            var bandIdx = Int((s.distMm - ringInnerMm) / bandWidth)
-            bandIdx = min(max(bandIdx, 0), ringBandCount - 1)
-            bandSamples[bandIdx].append(s)
-        }
-        let bandSampleCount = bandSamples.map(\.count)
-        guard bandSampleCount.allSatisfy({ $0 >= ringMinSamples }) else { return nil }
+        // mm per depth pixel at the food's range: z / f. This is what makes the ring
+        // radii mm-denominated and therefore grid-independent (Req 5.1).
+        let mmPerPx = median(foodDepths) / kd.fx
+        guard mmPerPx > 0, mmPerPx.isFinite else { return nil }
 
-        func signedHeights(_ arr: [RingSample]) -> [Float] {
-            arr.map { plane.normal.dot($0.point) - plane.distanceMm }
-        }
-        let bandMedianMm = bandSamples.map { median(signedHeights($0)) }
-        let medianMm = median(signedHeights(ring))
-
-        let innerSamples = bandSamples[0]
-        let innerHeights = signedHeights(innerSamples)
-        let supportedFlags = innerHeights.map { abs($0) <= ringBandMm }
-        let supportCount = supportedFlags.filter { $0 }.count
-        let supportFraction = innerSamples.isEmpty ? 0 : Float(supportCount) / Float(innerSamples.count)
-
-        var sectorTotal = [Int](repeating: 0, count: ringSectorCount)
-        var sectorSupport = [Int](repeating: 0, count: ringSectorCount)
-        for (idx, sample) in innerSamples.enumerated() {
-            let sector = sectorIndex(for: sample.angle)
-            sectorTotal[sector] += 1
-            if supportedFlags[idx] { sectorSupport[sector] += 1 }
-        }
-        var supportingSectors = 0
-        for sec in 0..<ringSectorCount where sectorTotal[sec] > 0 {
-            let frac = Float(sectorSupport[sec]) / Float(sectorTotal[sec])
-            if frac >= sectorSupportMin { supportingSectors += 1 }
-        }
-
-        guard foodSampleCount > 0 else { return nil }
-        let annulusInliers = annulus.filter {
-            abs(plane.normal.dot($0.point) - plane.distanceMm) <= LiDARPlaneFitter.inlierBandMm
-        }.count
-        let supportVisibility = Float(annulusInliers) / Float(foodSampleCount)
-
-        return RingStatistics(
-            medianMm: medianMm, bandMedianMm: bandMedianMm, supportFraction: supportFraction,
-            supportingSectors: supportingSectors, bandSampleCount: bandSampleCount,
-            supportVisibility: supportVisibility
+        return DepthGeometry(
+            intrinsics: kd, foodMask: mask, points: points, valid: valid,
+            width: w, height: h, mmPerPx: mmPerPx,
+            foodSampleCount: foodIndices.count, foodIndices: foodIndices,
+            centroidX: sumX / Float(maskPixelCount),
+            centroidY: sumY / Float(maskPixelCount)
         )
     }
 
-    static func sectorIndex(for angle: Float) -> Int {
-        var a = angle
-        if a < 0 { a += 2 * Float.pi }
-        let sectorWidth = 2 * Float.pi / Float(ringSectorCount)
-        var idx = Int(a / sectorWidth)
-        idx = min(max(idx, 0), ringSectorCount - 1)
-        return idx
+    // MARK: – Contact ring (Req 3.1, 3.6, 3.8)
+
+    // The ring is the 8–25 mm sub-annulus outside the food boundary, resolved into
+    // radial bands and angular sectors. The annulus is the wider `annulusOuterMm`
+    // candidate bound. Both are needed: `supportVisibility` counts plane inliers
+    // across the whole annulus, which ring indices alone cannot supply.
+    struct RingSamples {
+        let ring: [Int]        // depth indices, ascending
+        let band: [Int]        // parallel to `ring`: 0 = inner … ringBandCount-1
+        let sector: [Int]      // parallel to `ring`: inner-band sector, else -1
+        let annulus: [Int]     // depth indices, ascending
     }
 
-    static func median(_ values: [Float]) -> Float {
-        guard !values.isEmpty else { return 0 }
-        let sorted = values.sorted()
-        let mid = sorted.count / 2
-        if sorted.count % 2 == 0 { return (sorted[mid - 1] + sorted[mid]) / 2 }
-        return sorted[mid]
-    }
+    static func ringSamples(geometry g: DepthGeometry) -> RingSamples {
+        let distancePx = distanceToFoodPx(mask: g.foodMask)
+        let bandWidthMm = (ringOuterMm - ringInnerMm) / Float(ringBandCount)
 
-    static func percentile(_ values: [Float], _ p: Float) -> Float {
-        guard !values.isEmpty else { return 0 }
-        let sorted = values.sorted()
-        let idx = min(sorted.count - 1, max(0, Int((p * Float(sorted.count - 1)).rounded())))
-        return sorted[idx]
-    }
-
-    static func medianFoodDepthMm(mask: BinaryMask, depth: DepthMap) -> Float? {
-        var values: [Float] = []
-        for y in 0..<mask.height {
-            for x in 0..<mask.width where mask.isFood(x: x, y: y) {
-                let z = LiDARPlaneFitter.depthValueMm(depth, x: x, y: y)
-                if z > 0 { values.append(z) }
+        var ring: [Int] = [], band: [Int] = [], sector: [Int] = [], annulus: [Int] = []
+        for y in 0..<g.height {
+            for x in 0..<g.width {
+                let idx = y * g.width + x
+                guard g.valid[idx], !g.foodMask.isFood(x: x, y: y) else { continue }
+                let distMm = distancePx[idx] * g.mmPerPx
+                guard distMm <= annulusOuterMm else { continue }
+                annulus.append(idx)
+                guard distMm >= ringInnerMm, distMm <= ringOuterMm else { continue }
+                let b = min(ringBandCount - 1, Int((distMm - ringInnerMm) / bandWidthMm))
+                ring.append(idx)
+                band.append(b)
+                sector.append(b == 0 ? sectorIndex(x: x, y: y, geometry: g) : -1)
             }
         }
-        guard !values.isEmpty else { return nil }
-        return median(values)
+        return RingSamples(ring: ring, band: band, sector: sector, annulus: annulus)
     }
 
-    static func foodMaskCentroid(_ mask: BinaryMask) -> (x: Float, y: Float)? {
-        var sx: Float = 0, sy: Float = 0, n: Float = 0
-        for y in 0..<mask.height {
-            for x in 0..<mask.width where mask.isFood(x: x, y: y) {
-                sx += Float(x); sy += Float(y); n += 1
-            }
+    // Declared API (design §Components): depth-grid indices in the ring, excluding
+    // food and low-confidence samples.
+    static func contactRing(foodMask: BinaryMask, depth: DepthMap,
+                            intrinsics: CameraIntrinsics) -> [Int] {
+        guard let g = prepare(depth: depth, colourIntrinsics: intrinsics,
+                              foodRegionMask: foodMask) else { return [] }
+        return ringSamples(geometry: g).ring
+    }
+
+    // Equal arcs about the food-mask centroid. Cost is one atan2 and a bucket index
+    // per inner-band sample, reusing the samples radial banding already collects.
+    static func sectorIndex(x: Int, y: Int, geometry g: DepthGeometry) -> Int {
+        let angle = atan2(Float(y) - g.centroidY, Float(x) - g.centroidX)
+        let normalised = (angle + .pi) / (2 * .pi)
+        return min(ringSectorCount - 1, max(0, Int(normalised * Float(ringSectorCount))))
+    }
+
+    // Exact squared Euclidean distance transform (Felzenszwalb & Huttenlocher 2012),
+    // O(w·h). `large` is finite rather than .infinity so the parabola-intersection
+    // arithmetic stays well-defined on columns that contain no food pixel.
+    static func distanceToFoodPx(mask: BinaryMask) -> [Float] {
+        let w = mask.width, h = mask.height
+        let large: Float = 1e10
+        var grid = [Float](repeating: 0, count: w * h)
+        var column = [Float](repeating: 0, count: h)
+        for x in 0..<w {
+            for y in 0..<h { column[y] = mask.isFood(x: x, y: y) ? 0 : large }
+            let transformed = distanceTransform1D(column)
+            for y in 0..<h { grid[y * w + x] = transformed[y] }
         }
-        guard n > 0 else { return nil }
-        return (sx / n, sy / n)
-    }
-
-    static func foodSamplePoints(mask: BinaryMask, depth: DepthMap, intrinsics: CameraIntrinsics) -> [Vec3] {
-        var out: [Vec3] = []
-        for y in 0..<mask.height {
-            for x in 0..<mask.width where mask.isFood(x: x, y: y) {
-                let z = LiDARPlaneFitter.depthValueMm(depth, x: x, y: y)
-                guard z > 0 else { continue }
-                out.append(Vec3((Float(x) - intrinsics.cx) / intrinsics.fx * z,
-                                (Float(y) - intrinsics.cy) / intrinsics.fy * z, -z))
-            }
-        }
-        return out
-    }
-
-    // Two-pass chamfer distance transform (pixel units) to the nearest food
-    // pixel; 0 inside the food mask. An approximation to true Euclidean
-    // distance, adequate at the ring/annulus scale (design's radii are tens of
-    // millimetres, a handful of depth pixels).
-    struct DistanceField {
-        let distancePx: [Float]
-        let width: Int
-        let height: Int
-    }
-
-    static func chamferDistanceField(foodMask: BinaryMask) -> DistanceField {
-        let w = foodMask.width, h = foodMask.height
-        let inf: Float = 1e9
-        var dist = [Float](repeating: inf, count: w * h)
+        var row = [Float](repeating: 0, count: w)
         for y in 0..<h {
-            for x in 0..<w where foodMask.isFood(x: x, y: y) {
-                dist[y * w + x] = 0
-            }
+            for x in 0..<w { row[x] = grid[y * w + x] }
+            let transformed = distanceTransform1D(row)
+            for x in 0..<w { grid[y * w + x] = transformed[x].squareRoot() }
         }
-        let diag: Float = 1.4142135
-        for y in 0..<h {
-            for x in 0..<w {
-                let i = y * w + x
-                var best = dist[i]
-                if x > 0 { best = min(best, dist[i - 1] + 1) }
-                if y > 0 { best = min(best, dist[i - w] + 1) }
-                if x > 0, y > 0 { best = min(best, dist[i - w - 1] + diag) }
-                if x < w - 1, y > 0 { best = min(best, dist[i - w + 1] + diag) }
-                dist[i] = best
-            }
-        }
-        for y in stride(from: h - 1, through: 0, by: -1) {
-            for x in stride(from: w - 1, through: 0, by: -1) {
-                let i = y * w + x
-                var best = dist[i]
-                if x < w - 1 { best = min(best, dist[i + 1] + 1) }
-                if y < h - 1 { best = min(best, dist[i + w] + 1) }
-                if x < w - 1, y < h - 1 { best = min(best, dist[i + w + 1] + diag) }
-                if x > 0, y < h - 1 { best = min(best, dist[i + w - 1] + diag) }
-                dist[i] = best
-            }
-        }
-        return DistanceField(distancePx: dist, width: w, height: h)
+        return grid
     }
 
-    // MARK: - CC-RANSAC extraction (Decision 13, 15; design §"Extraction loop")
+    private static func distanceTransform1D(_ f: [Float]) -> [Float] {
+        let n = f.count
+        guard n > 0 else { return [] }
+        var d = [Float](repeating: 0, count: n)
+        var v = [Int](repeating: 0, count: n)
+        var z = [Float](repeating: 0, count: n + 1)
+        var k = 0
+        v[0] = 0
+        z[0] = -.greatestFiniteMagnitude
+        z[1] = .greatestFiniteMagnitude
+        for q in 1..<n {
+            var s = ((f[q] + Float(q * q)) - (f[v[k]] + Float(v[k] * v[k])))
+                / Float(2 * q - 2 * v[k])
+            while k > 0, s <= z[k] {
+                k -= 1
+                s = ((f[q] + Float(q * q)) - (f[v[k]] + Float(v[k] * v[k])))
+                    / Float(2 * q - 2 * v[k])
+            }
+            k += 1
+            v[k] = q
+            z[k] = s
+            z[k + 1] = .greatestFiniteMagnitude
+        }
+        k = 0
+        for q in 0..<n {
+            while z[k + 1] < Float(q) { k += 1 }
+            d[q] = Float((q - v[k]) * (q - v[k])) + f[v[k]]
+        }
+        return d
+    }
+
+    // MARK: – Ring statistics (Reqs 3.1, 3.2, 3.5, 3.6, 3.8, 3.9)
+
+    // Whether `ringStatistics` can return anything at all for this capture, for ANY
+    // candidate plane. The band counts come from `samples.band`, which the plane never
+    // touches, so the answer is a property of the capture and can be asked before a
+    // single plane is fitted (Decision 32).
+    static func ringBandsAreFeasible(samples: RingSamples) -> Bool {
+        var counts = [Int](repeating: 0, count: ringBandCount)
+        for band in samples.band { counts[band] += 1 }
+        return counts.allSatisfy { $0 >= ringMinSamples }
+    }
+
+    // nil when any radial band holds fewer than `ringMinSamples` — the floor holds
+    // PER band, because radial banding divides the samples (Decision 14) and
+    // sectoring divides the inner band again, which is where the 200 comes from
+    // (Decision 20).
+    static func ringStatistics(samples: RingSamples, geometry g: DepthGeometry,
+                               normal: Vec3, d: Float) -> RingStatistics? {
+        var bandHeights = [[Float]](repeating: [], count: ringBandCount)
+        var allHeights: [Float] = []
+        allHeights.reserveCapacity(samples.ring.count)
+        var sectorTotal = [Int](repeating: 0, count: ringSectorCount)
+        var sectorSupported = [Int](repeating: 0, count: ringSectorCount)
+
+        for (i, idx) in samples.ring.enumerated() {
+            let height = normal.dot(g.points[idx]) - d
+            allHeights.append(height)
+            let b = samples.band[i]
+            bandHeights[b].append(height)
+            guard b == 0 else { continue }
+            let s = samples.sector[i]
+            guard s >= 0 else { continue }
+            sectorTotal[s] += 1
+            if abs(height) <= ringBandMm { sectorSupported[s] += 1 }
+        }
+
+        let counts = bandHeights.map(\.count)
+        guard counts.allSatisfy({ $0 >= ringMinSamples }) else { return nil }
+
+        let inner = bandHeights[0]
+        let supported = inner.reduce(into: 0) { $0 += abs($1) <= ringBandMm ? 1 : 0 }
+        // An empty sector counts as neither supporting nor failing, and the bar is
+        // absolute — so a ring heavily clipped by the frame edge loses sectors and
+        // fails towards fallback rather than passing on a majority of what remains.
+        var supporting = 0
+        for s in 0..<ringSectorCount where sectorTotal[s] > 0
+            && Float(sectorSupported[s]) / Float(sectorTotal[s]) >= sectorSupportMin {
+            supporting += 1
+        }
+
+        var visible = 0
+        for idx in samples.annulus
+        where abs(normal.dot(g.points[idx]) - d) <= LiDARPlaneFitter.inlierBandMm {
+            visible += 1
+        }
+
+        return RingStatistics(
+            medianMm: median(allHeights),
+            bandMedianMm: bandHeights.map { median($0) },
+            supportFraction: Float(supported) / Float(inner.count),
+            supportingSectors: supporting,
+            bandSampleCount: counts,
+            supportVisibility: Float(visible) / Float(max(1, g.foodSampleCount))
+        )
+    }
+
+    // Req 6.1 requires the ring measure on EVERY depth-derived attempt, including
+    // fallbacks — Req 6.2's before/after comparison is unexecutable otherwise.
+    public static func ringStatistics(for plane: SupportPlane, depth: DepthMap,
+                                      foodMask: BinaryMask,
+                                      intrinsics: CameraIntrinsics) -> RingStatistics? {
+        guard let g = prepare(depth: depth, colourIntrinsics: intrinsics,
+                              foodRegionMask: foodMask) else { return nil }
+        return ringStatistics(samples: ringSamples(geometry: g), geometry: g,
+                              normal: plane.normal, d: plane.distanceMm)
+    }
+
+    // MARK: – Candidate extraction (Reqs 2.2, 2.3, 2.4)
+
+    struct PlaneCandidate {
+        let normal: Vec3
+        let d: Float
+        let residualMm: Float
+        let componentSize: Int
+        // The raw pixel extent, kept because it is what the component scan produces and
+        // what a grid-dependence measurement needs to see; `extentMm` is what the guard
+        // reads (Decision 37).
+        let extentPx: Int
+        let extentMm: Float
+        // The budget is sufficient because pass 1 removes the table, not because the
+        // pass-1 ratio is high. Reported so that holds as a measurement.
+        let residueInlierRatio: Float
+        // The denominator of `residueInlierRatio`: how many annulus samples this pass
+        // had left to draw from. Reported so `minResidueAreaMm2` — the only floor the
+        // corpus can bracket rather than derive — is measurable per pass.
+        let residueCount: Int
+    }
+
+    // Sequential CC-RANSAC: up to `maxCandidatePlanes` passes over the annulus, each
+    // removing its polished inliers within 2 × inlierBandMm before the next.
+    static func extractCandidates(annulus: [Int], geometry g: DepthGeometry,
+                                  gravity: Vec3, rng: inout SplitMix64) -> [PlaneCandidate] {
+        var residue = annulus
+        var candidates: [PlaneCandidate] = []
+        let scratch = ComponentScratch(width: g.width, height: g.height)
+        // Converted once per capture: the floor is an area, and this is the sample count
+        // this grid expresses it in (Decision 38).
+        let residueFloor = minResidueSamples(mmPerPx: g.mmPerPx)
+
+        for _ in 0..<maxCandidatePlanes {
+            guard residue.count >= residueFloor else { break }
+            guard let hypothesis = ccRansac(indices: residue, geometry: g, gravity: gravity,
+                                            rng: &rng, scratch: scratch) else { break }
+
+            var inliers = hypothesis.members
+            // MEASURED GAP (Decision 52): this refinement is NOT gravity-gated, and the
+            // polish below returns before its own gate whenever the consensus set is already
+            // a fixed point — so a plane that leaves the 15° cone here stays in the candidate
+            // set. The corpus contains one, at 20.512° on `1785135663727` (25.422° at a 4 mm
+            // inlier band). It is rejected downstream on `extent` and `supportFraction`, so
+            // nothing observable changes today, but it is one of the two surfaces the
+            // straddling measurement below reads across, and design.md's refutation of the
+            // bridging argument is stated in terms of a cone this does not enforce.
+            //
+            // SWEPT (Decision 55): the bar itself is `[owed]`, and the gap above is not a
+            // property of the shipped 15° — it is a property of the gate. At a 1° cone ALL
+            // FOUR candidates this loop produces lie outside 1°; at 2° five of six do, the
+            // worst at 18.955°. Tightening the bar widens the violation in units of the bar,
+            // so no value repairs this and only the code can.
+            //
+            // NOT repaired here. Adding the gate removes a candidate and therefore moves the
+            // answer, which is a change task 26 measures and the sitting prices.
+            guard let refined = try? LiDARPlaneFitter.refine(
+                inliers: inliers.map { g.points[$0] }, seedNormal: hypothesis.normal
+            ) else { break }
+            var normal = refined.0
+            var d = refined.1
+
+            // Consensus polish, as on the pre-feature path: re-select against the
+            // REFINED plane and re-refine until the consensus set stops changing, so
+            // the result no longer depends on which minimal sample won. Re-selection
+            // stays component-based, or a straddling re-selection would drag the
+            // plane back across the step.
+            for _ in 0..<LiDARPlaneFitter.consensusPolishMaxPasses {
+                var reselected: [Int] = []
+                reselected.reserveCapacity(residue.count)
+                for idx in residue
+                where abs(normal.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                    reselected.append(idx)
+                }
+                let component = scratch.largestComponent(of: reselected)
+                let next = component.members
+                if next == inliers || next.count < LiDARPlaneFitter.minPoints { break }
+                guard let (nextNormal, nextD) = try? LiDARPlaneFitter.refine(
+                    inliers: next.map { g.points[$0] }, seedNormal: normal
+                ) else { break }
+                if acos(clampedCosine(nextNormal.dot(gravity))) > LiDARPlaneFitter.gravityAngleMaxRad {
+                    break
+                }
+                inliers = next
+                normal = nextNormal
+                d = nextD
+            }
+
+            let component = scratch.largestComponent(of: inliers)
+            candidates.append(PlaneCandidate(
+                normal: normal, d: d,
+                residualMm: LiDARPlaneFitter.computeResidual(
+                    points: inliers.map { g.points[$0] }, normal: normal, d: d
+                ),
+                componentSize: component.size,
+                extentPx: component.minExtentPx,
+                extentMm: Float(component.minExtentPx) * g.mmPerPx,
+                residueInlierRatio: Float(inliers.count) / Float(residue.count),
+                residueCount: residue.count
+            ))
+
+            let removalBandMm = inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            residue = residue.filter { abs(normal.dot(g.points[$0]) - d) >= removalBandMm }
+        }
+        return candidates
+    }
 
     struct RansacHypothesis {
         let normal: Vec3
         let d: Float
-        let ccInlierIndices: [Int]   // local indices into the pass's point array
-        let rawInlierRatio: Float
+        let members: [Int]     // the largest 8-connected inlier component
     }
 
-    // Adaptive per-pass iteration count (design §"Iteration budget"): derives N
-    // from the best observed inlier ratio rather than a fixed 256/2048.
-    static func requiredRansacIterations(inlierRatio w: Float, confidence: Float = 0.99) -> Int {
-        guard w > 0, w < 1 else { return maxIterationsPerPass }
-        let wCubed = Double(w) * Double(w) * Double(w)
-        let denom = log(max(1e-12, 1 - wCubed))
-        guard denom < 0 else { return maxIterationsPerPass }
-        let numer = log(1 - Double(confidence))
-        let needed = Int((numer / denom).rounded(.up))
-        return max(1, min(maxIterationsPerPass, needed))
-    }
-
-    // Largest 8-connected component among `indices` (native depth-grid linear
-    // indices). Returns its members. O(n) — each index visited once.
-    static func largestConnectedComponent(indices: [Int], width: Int, height: Int) -> [Int] {
-        guard !indices.isEmpty else { return [] }
-        let indexSet = Set(indices)
-        var visited = Set<Int>()
-        var best: [Int] = []
-        for start in indices {
-            if visited.contains(start) { continue }
-            visited.insert(start)
-            var stack = [start]
-            var comp: [Int] = []
-            while let cur = stack.popLast() {
-                comp.append(cur)
-                let cx = cur % width, cy = cur / width
-                for dy in -1...1 {
-                    for dx in -1...1 where !(dx == 0 && dy == 0) {
-                        let nx = cx + dx, ny = cy + dy
-                        guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
-                        let nb = ny * width + nx
-                        guard indexSet.contains(nb), !visited.contains(nb) else { continue }
-                        visited.insert(nb)
-                        stack.append(nb)
-                    }
-                }
-            }
-            if comp.count > best.count { best = comp }
-        }
-        return best
-    }
-
-    // One CC-RANSAC pass over the current residue. Draws exactly 3
-    // `rng.uniformInt` calls per iteration unconditionally (matching
-    // `LiDARPlaneFitter.ransac`), so the RNG sequence stays pass-count-
-    // independent when one generator is threaded across passes (Decision 15).
-    static func ransacPass(
-        points: [Vec3], depthIndices: [Int], width: Int, height: Int,
-        gravity: Vec3, rng: inout SplitMix64
-    ) -> RansacHypothesis? {
-        let n = points.count
+    // Score a candidate by the size of its largest 8-connected inlier component, not
+    // by total inlier count (Gallo, Manduchi & Rafii 2011). What this buys is stated
+    // narrowly in the design: it CANNOT prefer the plate over the table — the table
+    // is a genuine single surface with a larger component. It excludes a co-height
+    // surface elsewhere in the annulus (a second plate, a board), which forms a
+    // separate blob. Surfacing the plate is sequential extraction's job.
+    static func ccRansac(indices: [Int], geometry g: DepthGeometry, gravity: Vec3,
+                         rng: inout SplitMix64, scratch: ComponentScratch) -> RansacHypothesis? {
+        let n = indices.count
         guard n >= LiDARPlaneFitter.minPoints else { return nil }
-        var bestRawCount = 0
-        var bestCCSize = 0
         var best: RansacHypothesis?
-        var requiredIterations = maxIterationsPerPass
-        var iter = 0
-        while iter < requiredIterations {
-            iter += 1
+        var bestComponent = 0
+        var required = maxIterationsPerPass
+        var iteration = 0
+
+        while iteration < required && iteration < maxIterationsPerPass {
+            iteration += 1
+            // Three draws per iteration UNCONDITIONALLY, so the generator sequence
+            // stays independent of how many hypotheses are rejected and of how many
+            // passes have run before this one (Req 7.7).
             let i = rng.uniformInt(n)
             var j = rng.uniformInt(n); if j == i { j = (j + 1) % n }
             var k = rng.uniformInt(n)
@@ -558,113 +1208,285 @@ public enum SupportRegion {
             if k == i || k == j { k = (k + 2) % n }
             if k == i || k == j { continue }
 
-            let p1 = points[i], p2 = points[j], p3 = points[k]
+            let p1 = g.points[indices[i]], p2 = g.points[indices[j]], p3 = g.points[indices[k]]
             var nHat = (p2 - p1).cross(p3 - p1)
             if nHat.lengthSquared < 1e-12 { continue }
             nHat = nHat.normalised()
             if nHat.dot(gravity) < 0 { nHat = -nHat }
-            let angle = acos(max(-1, min(1, nHat.dot(gravity))))
-            if angle > LiDARPlaneFitter.gravityAngleMaxRad { continue }
+            if acos(clampedCosine(nHat.dot(gravity))) > LiDARPlaneFitter.gravityAngleMaxRad { continue }
+
             let d = nHat.dot(p1)
-
-            var rawInliers: [Int] = []
-            rawInliers.reserveCapacity(n)
-            for idx in 0..<n where abs(nHat.dot(points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
-                rawInliers.append(idx)
-            }
-            guard !rawInliers.isEmpty else { continue }
-
-            if rawInliers.count > bestRawCount {
-                bestRawCount = rawInliers.count
-                let w = Float(bestRawCount) / Float(n)
-                requiredIterations = min(requiredIterations, requiredRansacIterations(inlierRatio: w))
+            var inliers: [Int] = []
+            inliers.reserveCapacity(n)
+            for idx in indices where abs(nHat.dot(g.points[idx]) - d) < LiDARPlaneFitter.inlierBandMm {
+                inliers.append(idx)
             }
 
-            if Float(rawInliers.count) >= Float(bestRawCount) * ccAmortizeFactor {
-                let localDepthIndices = rawInliers.map { depthIndices[$0] }
-                let component = largestConnectedComponent(indices: localDepthIndices, width: width, height: height)
-                if component.count > bestCCSize {
-                    bestCCSize = component.count
-                    let componentSet = Set(component)
-                    let ccInliers = rawInliers.filter { componentSet.contains(depthIndices[$0]) }
-                    best = RansacHypothesis(normal: nHat, d: d, ccInlierIndices: ccInliers,
-                                            rawInlierRatio: Float(rawInliers.count) / Float(n))
-                }
-            }
+            // Amortise the connected-component labelling. Decision 13 puts CC scoring
+            // INSIDE the loop, so unamortised it runs up to
+            // maxIterationsPerPass × maxCandidatePlanes times over the annulus —
+            // order 1e8 operations, on the path that already produced a 32 GB
+            // allocation failure. A component can never be larger than the raw inlier
+            // count, so a hypothesis whose raw count cannot beat the running best
+            // component size cannot win and is never labelled. The bound is exact,
+            // which is why it needs no constant of its own.
+            if inliers.count <= bestComponent { continue }
+
+            let component = scratch.largestComponent(of: inliers)
+            guard component.size > bestComponent else { continue }
+            bestComponent = component.size
+            best = RansacHypothesis(normal: nHat, d: d, members: component.members)
+            // Adaptive stopping: recompute the required N from the best inlier ratio
+            // seen so far. maxIterations = 256 was sized to find the DOMINANT plane
+            // and must not be inherited on faith — P(clean triple) is 98 % at w = 0.25
+            // but 3 % at w = 0.05. Deterministic, because the ratio sequence is.
+            required = requiredIterations(inlierRatio: Float(bestComponent) / Float(n))
         }
         return best
     }
 
-    // Sequential extraction: up to `maxCandidatePlanes` passes, each removing
-    // the polished inlier set within 2×inlierBandMm from the residue (a 1×
-    // shell seeds near-duplicate planes on the next pass, design §"Extraction
-    // loop"). One RNG threaded across all passes (Decision 15).
-    static func extractCandidatePlanes(
-        points initialPoints: [Vec3], depthIndices initialIndices: [Int],
-        width: Int, height: Int, gravity: Vec3, rng: inout SplitMix64
-    ) -> [SupportPlaneCandidate] {
-        var points = initialPoints
-        var indices = initialIndices
-        var candidates: [SupportPlaneCandidate] = []
-        var pass = 0
-        while pass < maxCandidatePlanes, points.count >= minCandidateSamples {
-            pass += 1
-            guard let hyp = ransacPass(points: points, depthIndices: indices, width: width, height: height,
-                                       gravity: gravity, rng: &rng),
-                  hyp.ccInlierIndices.count >= LiDARPlaneFitter.minPoints else { break }
-            guard let (refinedNormal, refinedD) = try? LiDARPlaneFitter.refine(
-                inliers: hyp.ccInlierIndices.map { points[$0] }, seedNormal: hyp.normal
-            ) else { break }
-
-            // Re-select against the refined plane and take its largest CC once
-            // more — the deterministic polish step §"What changes and what does
-            // not" says is reused.
-            var reselected: [Int] = []
-            reselected.reserveCapacity(points.count)
-            for idx in 0..<points.count
-            where abs(refinedNormal.dot(points[idx]) - refinedD) < LiDARPlaneFitter.inlierBandMm {
-                reselected.append(idx)
-            }
-            let reselectedDepthIdx = reselected.map { indices[$0] }
-            let component = largestConnectedComponent(indices: reselectedDepthIdx, width: width, height: height)
-            guard component.count >= LiDARPlaneFitter.minPoints else { break }
-            let componentSet = Set(component)
-            let finalInliers = reselected.filter { componentSet.contains(indices[$0]) }
-
-            let residual = LiDARPlaneFitter.computeResidual(
-                points: finalInliers.map { points[$0] }, normal: refinedNormal, d: refinedD
-            )
-            let finalDepthIndices = finalInliers.map { indices[$0] }
-            candidates.append(SupportPlaneCandidate(
-                normal: refinedNormal, d: refinedD, residualMm: residual,
-                inlierIndices: finalDepthIndices, residueInlierRatio: hyp.rawInlierRatio
-            ))
-
-            var nextPoints: [Vec3] = []
-            var nextIndices: [Int] = []
-            nextPoints.reserveCapacity(points.count)
-            nextIndices.reserveCapacity(indices.count)
-            for idx in 0..<points.count {
-                let dist = abs(refinedNormal.dot(points[idx]) - refinedD)
-                if dist >= 2 * LiDARPlaneFitter.inlierBandMm {
-                    nextPoints.append(points[idx])
-                    nextIndices.append(indices[idx])
-                }
-            }
-            points = nextPoints
-            indices = nextIndices
-        }
-        return candidates
+    // N = log(1 − p) / log(1 − w³), capped at `maxIterationsPerPass`.
+    static func requiredIterations(inlierRatio w: Float) -> Int {
+        guard w > 0 else { return maxIterationsPerPass }
+        let clean = pow(Double(min(0.999, w)), 3)
+        guard clean < 1 else { return 1 }
+        let n = log(1 - ransacSuccessProbability) / log(1 - clean)
+        guard n.isFinite else { return maxIterationsPerPass }
+        return max(1, min(maxIterationsPerPass, Int(n.rounded(.up))))
     }
 
-    static func inlierExtentPx(indices: [Int], width: Int) -> Int {
-        guard !indices.isEmpty else { return 0 }
-        var minX = Int.max, maxX = Int.min, minY = Int.max, maxY = Int.min
-        for idx in indices {
-            let x = idx % width, y = idx / width
-            minX = min(minX, x); maxX = max(maxX, x)
-            minY = min(minY, y); maxY = max(maxY, y)
+    // 8-connected component labelling over depth-grid indices, with the stamp arrays
+    // reused across calls so each labelling costs O(inliers) rather than O(w·h).
+    final class ComponentScratch {
+        private var member: [Int32]
+        private var visited: [Int32]
+        private var generation: Int32 = 0
+        private let width: Int
+        private let height: Int
+
+        init(width: Int, height: Int) {
+            self.width = width
+            self.height = height
+            member = [Int32](repeating: 0, count: width * height)
+            visited = [Int32](repeating: 0, count: width * height)
         }
-        return min(maxX - minX + 1, maxY - minY + 1)
+
+        // `members` is returned in ascending index order so equality against a
+        // previous pass's set is a plain array comparison.
+        func largestComponent(of indices: [Int]) -> (size: Int, members: [Int], minExtentPx: Int) {
+            guard !indices.isEmpty else { return (0, [], 0) }
+            generation += 1
+            let stamp = generation
+            for idx in indices { member[idx] = stamp }
+
+            var bestMembers: [Int] = []
+            var stack: [Int] = []
+            for start in indices where visited[start] != stamp {
+                visited[start] = stamp
+                stack.removeAll(keepingCapacity: true)
+                stack.append(start)
+                var component = [start]
+                while let current = stack.popLast() {
+                    let cx = current % width, cy = current / width
+                    for dy in -1...1 {
+                        let ny = cy + dy
+                        if ny < 0 || ny >= height { continue }
+                        for dx in -1...1 where !(dx == 0 && dy == 0) {
+                            let nx = cx + dx
+                            if nx < 0 || nx >= width { continue }
+                            let neighbour = ny * width + nx
+                            guard member[neighbour] == stamp, visited[neighbour] != stamp else { continue }
+                            visited[neighbour] = stamp
+                            stack.append(neighbour)
+                            component.append(neighbour)
+                        }
+                    }
+                }
+                if component.count > bestMembers.count { bestMembers = component }
+            }
+            bestMembers.sort()
+
+            var minX = Int.max, maxX = Int.min, minY = Int.max, maxY = Int.min
+            for idx in bestMembers {
+                let x = idx % width, y = idx / width
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+            }
+            let extent = bestMembers.isEmpty ? 0 : min(maxX - minX + 1, maxY - minY + 1)
+            return (bestMembers.count, bestMembers, extent)
+        }
+    }
+
+    // MARK: – Admissibility and selection (Reqs 1.1–1.3, 3.1–3.4, 3.6, 3.8, 3.9)
+
+    // Guards are an ADMISSIBILITY FILTER applied to every candidate; the best
+    // admissible candidate then wins. Applying them after selection would let a
+    // phantom rim-ramp plane win the score, fail a guard, and drop a capture to
+    // fallback while an admissible plate plane sat unexamined in the candidate set.
+    enum CandidateRejection: String, Sendable, Equatable {
+        case ringUnavailable   // a radial band held fewer than ringMinSamples
+        case extent            // badly conditioned normal (Req 2.3)
+        case supportFraction   // ring not resting on this plane (Req 3.2)
+        case sectors           // ring crossed the support's edge, or straddles (Req 3.6)
+        case foodEnvelope      // vessel rim, or a plane on the food top (Req 3.4)
+        case ringMedian        // signed: table (+) or raised edge (−) (Reqs 3.1, 3.2)
+        case bandStep          // bowl wall, or a rim beginning inside the ring (Req 3.8)
+        case visibility        // support surface not observable under the food (Req 3.9)
+        case escaped           // region escaped through a depth dropout (Req 3.3)
+    }
+
+    // The order short-circuits, so the reason returned is the FIRST guard to fire rather
+    // than the only one. Nothing observable depends on it — the reason is not persisted
+    // and a rejected candidate is rejected — but it does bound what a measurement pass can
+    // see, which is why `SupportPlaneCorpusMeasurementTests` evaluates every guard
+    // independently. On the corpus only three of these reasons ever fire (Decision 34).
+    static func admissibility(ring: RingStatistics, annulusMedianMm: Float,
+                              foodEnvelopeMm: Float, extentMm: Float) -> CandidateRejection? {
+        if extentMm < minAcceptedExtentMm { return .extent }
+        // The score is the inner-band support fraction, not |median|: a median has a
+        // 50 % cliff, and just past it the TABLE plane reads ~0, passes every other
+        // guard, and is persisted with a textbook-perfect diagnostic.
+        if ring.supportFraction < ringSupportMin { return .supportFraction }
+        // THE guard of Decision 18. Without it, food reaching within ~14 mm of a
+        // plate's edge selects the table plane and persists a ring median of ~0 —
+        // the value this design otherwise treats as proof of correctness.
+        if ring.supportingSectors < minSupportingSectors { return .sectors }
+        // Decision 22: an upper-envelope test in millimetres, NOT a count fraction.
+        // Bread p90 is measured at +26.6 mm → accepted, with the overhanging slice's
+        // samples in the lower decile where they belong (the +8 mm this comment carried
+        // before was an estimate, low by 3× — Decision 34). Bowl → all food below the rim
+        // plane, p90 negative, rejected. Plane on the food top → p90 ≈ 0, rejected.
+        if foodEnvelopeMm < foodEnvelopeMinMm { return .foodEnvelope }
+        if abs(ring.bandMedianMm[0]) > ringMedianMaxMm { return .ringMedian }
+        // Decision 21: inner→mid ONLY. A well plane's own profile rises outward
+        // whenever the ring spans well and rim (inner ≈ 0, outer ≈ +18), so a guard
+        // firing on any outward rise would reject the exact candidate Decisions 14
+        // and 16 exist to rescue.
+        if ring.bandMedianMm.count > 1,
+           ring.bandMedianMm[1] - ring.bandMedianMm[0] > bandStepMaxMm { return .bandStep }
+        if ring.supportVisibility < supportVisibilityMin { return .visibility }
+        // Decision 22: the Req 3.3 comparator is the annulus median height with
+        // escapeBandMm. "Below the lowest admissible candidate" compares a set
+        // minimum against itself, is circular besides, and cannot fire.
+        if annulusMedianMm > escapeBandMm { return .escaped }
+        return nil
+    }
+
+    // The design gives `fitFoodSupportPlane` as returning
+    // `(plane, ring, candidateCount)`. It is a struct rather than that tuple because
+    // the design ALSO fixes the stats semantics of a `.foodSupport` row —
+    // "candidatePointCount / inlierCount mean native depth samples" — and those two
+    // counts exist nowhere else: only this function ever sees the annulus and the
+    // winning inlier component. The three declared members keep their names.
+    public struct FoodSupportFit: Sendable {
+        public let plane: SupportPlane
+        public let ring: RingStatistics
+        // Candidate PLANES extracted by the sequential passes, not points.
+        public let candidateCount: Int
+        // Native depth samples that competed, and the winner's largest 8-connected
+        // inlier component. ~56x smaller than the edge-band path's colour-grid
+        // counts, and never comparable across references.
+        public let annulusSampleCount: Int
+        public let inlierCount: Int
+    }
+
+    // nil when no candidate is admissible — the caller then runs the edge-band fit.
+    // NEVER throws: rejection is an expected outcome, not an error.
+    public static func fitFoodSupportPlane(
+        depth: DepthMap, colourIntrinsics: CameraIntrinsics,
+        foodRegionMask: BinaryMask, gravityCamera: Vec3
+    ) -> FoodSupportFit? {
+        guard let g = prepare(depth: depth, colourIntrinsics: colourIntrinsics,
+                              foodRegionMask: foodRegionMask) else { return nil }
+        let samples = ringSamples(geometry: g)
+        // Decision 32: the exact condition, not a proxy for it. `ringStatistics`
+        // returns nil unless EVERY radial band clears `ringMinSamples`, and that test
+        // reads `samples.band` alone, so it is plane-independent and knowable here.
+        // A capture that fails it cannot produce ring statistics for any candidate and
+        // therefore cannot produce an admissible one — the extraction below would run
+        // in full and return nil regardless. Outcome-identical, and it retires an
+        // `[owed]` constant rather than replacing it with another.
+        guard ringBandsAreFeasible(samples: samples) else { return nil }
+
+        // Deterministic seed from the depth bytes, threaded through every pass.
+        var rng = SplitMix64(seed: Fnv1a64.hash(depth.depthBytesMm))
+        let gravity = gravityCamera.normalised()
+        let candidates = extractCandidates(annulus: samples.annulus, geometry: g,
+                                           gravity: gravity, rng: &rng)
+        guard !candidates.isEmpty else { return nil }
+
+        var admissible: [(candidate: PlaneCandidate, ring: RingStatistics)] = []
+        for candidate in candidates {
+            guard let ring = ringStatistics(samples: samples, geometry: g,
+                                            normal: candidate.normal, d: candidate.d) else { continue }
+            let annulusMedian = medianHeight(indices: samples.annulus, geometry: g,
+                                             normal: candidate.normal, d: candidate.d)
+            let envelope = foodEnvelopeMm(geometry: g, normal: candidate.normal, d: candidate.d)
+            guard admissibility(ring: ring, annulusMedianMm: annulusMedian,
+                                foodEnvelopeMm: envelope, extentMm: candidate.extentMm) == nil
+            else { continue }
+            admissible.append((candidate, ring))
+        }
+        guard !admissible.isEmpty else { return nil }
+
+        // Total order, so the winner does not depend on sort stability (Req 7.7).
+        admissible.sort { lhs, rhs in
+            if lhs.ring.supportFraction != rhs.ring.supportFraction {
+                return lhs.ring.supportFraction > rhs.ring.supportFraction
+            }
+            if lhs.candidate.componentSize != rhs.candidate.componentSize {
+                return lhs.candidate.componentSize > rhs.candidate.componentSize
+            }
+            return lhs.candidate.d > rhs.candidate.d
+        }
+        // Two candidates 26 mm apart scoring near-equally is exactly the straddling
+        // ring, and a coin flip between them moves the carb number 3×.
+        if admissible.count >= 2,
+           admissible[0].ring.supportFraction - admissible[1].ring.supportFraction < ringSupportMarginMin {
+            return nil
+        }
+
+        let winner = admissible[0]
+        return FoodSupportFit(
+            plane: SupportPlane(normal: winner.candidate.normal, distanceMm: winner.candidate.d,
+                                residualMm: winner.candidate.residualMm, convergedIterations: nil),
+            ring: winner.ring,
+            candidateCount: candidates.count,
+            annulusSampleCount: samples.annulus.count,
+            inlierCount: winner.candidate.componentSize
+        )
+    }
+
+    // MARK: – Small helpers
+
+    // Median signed height of `indices` above the plane.
+    static func medianHeight(indices: [Int], geometry g: DepthGeometry,
+                             normal: Vec3, d: Float) -> Float {
+        median(indices.map { normal.dot(g.points[$0]) - d })
+    }
+
+    // `foodEnvelopePercentile` of the food's signed height above the plane (Req 3.4).
+    static func foodEnvelopeMm(geometry g: DepthGeometry, normal: Vec3, d: Float) -> Float {
+        percentile(g.foodIndices.map { normal.dot(g.points[$0]) - d },
+                   foodEnvelopePercentile)
+    }
+
+    static func median(_ values: [Float]) -> Float {
+        percentile(values, 0.5)
+    }
+
+    static func percentile(_ values: [Float], _ p: Float) -> Float {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        if p == 0.5, sorted.count % 2 == 0 {
+            let hi = sorted.count / 2
+            return (sorted[hi - 1] + sorted[hi]) / 2
+        }
+        let index = Int((p * Float(sorted.count - 1)).rounded())
+        return sorted[min(sorted.count - 1, max(0, index))]
+    }
+
+    static func clampedCosine(_ value: Float) -> Float {
+        max(-1, min(1, value))
     }
 }
