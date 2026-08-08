@@ -94,7 +94,7 @@ references:
 
 ## Review surface (App)
 
-- [ ] 10. MaskOverlayDecoder.contours(from:) beside the colourise path <!-- id:fffbfh0 -->
+- [x] 10. MaskOverlayDecoder.contours(from:) beside the colourise path <!-- id:fffbfh0 -->
   - Extraction raster: label map downsampled to <=512 long edge, nearest-neighbour (class identity must not be interpolated) — ~0.19 M cells against 2.76 M at full resolution
   - Minimum area 0.25% of image; Douglas-Peucker simplification at eps 1.5 px at extraction scale
   - nonisolated decode off the MainActor, cached by mealId — the current decode is MainActor-isolated with no cache and re-runs on every appearance via .task(id:), blocking the push transition
