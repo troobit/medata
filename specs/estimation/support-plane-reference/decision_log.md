@@ -3489,3 +3489,113 @@ VolumeTests,PipelineTests,HarnessCLITests,ConfidenceTests}/*`, `HarnessCore/*`,
 (`support-plane-fit.md` replaces `support-region.md`).
 
 ---
+
+## Decision 60: The sonnet variant's task-26 evidence is imported by reference, not transplanted
+
+**Date**: 2026-08-09
+**Status**: accepted
+
+### Context
+
+Decision 59 adopted the opus compete variant; the sonnet variant
+(`orbit-impl-2/support-plane-reference`, local branch) carries its own task-26
+record as Decisions 34–43 of its `decision_log.md`. That work took the opposite
+approach to this log's Decisions 27–58: instead of sweeping constants against
+committed evidence, it grew the real device corpus by pulling capture bundles
+off the paired device — n=3 → n=6 → n=11 across its Decisions 34–36 — and read
+the guards against them. Its numeric findings, however, were measured through
+its own fitter, whose radial banding runs on ring-centroid pixel distance
+rather than the promoted fitter's mm-from-mask distance, so its guard-threshold
+brackets are not readings of the promoted implementation.
+
+### Decision
+
+Import the sonnet variant's findings by reference rather than renumbering its
+ten decisions into this log. The transferable findings are recorded here; the
+geometry-bound ones are flagged for re-measurement on the promoted fitter. The
+full text remains on the `orbit-impl-2/support-plane-reference` branch, which
+is retained locally until task 26 closes.
+
+**Transferable (implementation-independent):**
+
+- **The device corpus is n=11, fully inventoried** (its Decisions 35–37): the
+  paired device's `Documents/captures/` holds 77 files; all 17 `-success`
+  bundles are accounted for — 11 usable `single_view_lidar`, 6 `two_view_sfs`.
+  Every earlier note that quoted a smaller corpus was undercounting.
+- **Two bundles carry a mislabelled `paletteVersion` field** (its Decisions
+  34–35): stored `"v1"` against a 36-channel v2 `nadirProbs` payload
+  (`ab812dc3aa9d` checkpoint). The label cannot be corrected in place (the
+  `.fixture` blob is immutable history); the palette must be inferred or
+  overridden at load for those bundles. Among them is `1785054950406` — the
+  weighed 208 g mounded-rice capture, the only non-flat anchor in the corpus.
+- **`HarnessCLI/main.swift`'s `buildCalInputs` swallows fixture-load errors**
+  (`try?` inside a `compactMap`): a bundle that fails to load vanishes with no
+  trace from `make harness-accuracy`. This is what hid the mislabel for ten
+  days. Out of this spec's scope to fix (shared harness code), but any future
+  fixture-tooling work should surface it — a candidate `specs/bugfixes/` entry.
+- **The mounded-rice capture falls back in a different mode than flat bread**
+  (its Decision 34): its candidates fail on ring support itself
+  (supportFraction 0.0–0.14 through the sonnet fitter) where both committed
+  bread captures fail at the sector margin with support 0.99+. The mode
+  contrast is qualitative and survives the geometry difference; the numbers do
+  not. This is the evidence `prerequisites.md`'s capture 2 asked for.
+- **One weighed ground truth is unusable for single-plane validation** (its
+  Decision 39): the 200 cm³ bread capture `1785901032716`'s two weighed slices
+  physically overlap on the plate, which no single-support-plane architecture
+  can model — its −40 % "regression" under a candidate guard change was the
+  capture, not the code. This capture must not be used as a pass/fail bar for
+  any constant.
+
+**Flagged for re-measurement on the promoted fitter (geometry-bound):**
+
+- Its `ringSupportMin` gap (correct ≥ 0.99 vs wrong ≤ 0.483), its
+  `ringSectorCount` sweep (clean bands {3–5, 7–9}, inversion from 13 up), and
+  its `sectorSupportMin` breakpoint sweep (0.5 at the top edge of a
+  [0.2474, 0.5000] band) were all computed over inner bands its centroid-based
+  banding selected. The promoted fitter's corpus suite must re-derive these
+  against the same 11 bundles before any of them informs a constant.
+
+### Rationale
+
+Renumbering ten decisions into this log would present sonnet-fitter
+measurements as readings of the promoted implementation — precisely the
+provenance failure this log's Decisions 52 and 56 exist to name. The corpus
+inventory, the mislabel diagnosis, the silent-swallow defect and the
+ground-truth overlap are facts about the world; the brackets are facts about a
+fitter that lost the selection. Importing by reference keeps the boundary
+exact, at the cost of one indirection for a reader who wants the full text.
+
+### Alternatives Considered
+
+- **Renumber Decisions 34–43 wholesale into this log as 60–69**: keeps every
+  detail in one place - Rejected: cross-references inside them point at sonnet
+  decisions 23–33 that are not being imported, and their numeric findings would
+  sit beside this log's opus-fitter sweeps with no marker distinguishing the
+  geometry they were measured through.
+- **Discard the sonnet record entirely and re-derive everything on the promoted
+  fitter**: cleanest provenance - Rejected: the corpus inventory, the mislabel
+  diagnosis and the overlap root-cause are fitter-independent and cost real
+  session time to find; re-deriving them buys nothing.
+
+### Consequences
+
+**Positive:**
+- Task 26's next session starts from n=11 known bundles (two needing a palette
+  override), one disqualified ground truth, and a named fallback-mode contrast
+  — none of which any committed note recorded before.
+- The promoted fitter's constants remain measured only through the promoted
+  fitter; no cross-geometry number enters this log unmarked.
+
+**Negative:**
+- The sonnet branch must stay alive locally until task 26 closes, or the full
+  text behind this summary is lost — it is unpushed by design.
+- Re-measuring the three flagged sweeps against 11 bundles through the promoted
+  fitter is real work added to task 26's remaining scope.
+
+### Impact
+
+`specs/estimation/support-plane-reference/decision_log.md` (this entry),
+`docs/agent-notes/support-plane-variants.md` (open items updated). No code
+changes. Task 26 remains open; its next session should read this entry first.
+
+---
