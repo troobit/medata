@@ -8,6 +8,10 @@ support fraction. See `specs/estimation/support-plane-reference/` for the full s
 this note covers implementation details the design doc doesn't (or gets slightly wrong
 as a literal interface sketch).
 
+> **Two competing full implementations of this spec exist on local orbit branches**
+> (25/27 tasks each, both green) — see
+> [support-plane-variants.md](support-plane-variants.md) before extending this line.
+
 ## Architecture
 
 One pass, shared geometry: `ringAndAnnulusSamples(depthGridFoodMask:depth:depthIntrinsics:)`
