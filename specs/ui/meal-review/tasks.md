@@ -181,7 +181,7 @@ references:
 
 ## Supersession and documentation
 
-- [ ] 18. Remove superseded requirement text from design-handoff-00 <!-- id:fffbfh8 -->
+- [x] 18. Remove superseded requirement text from design-handoff-00 <!-- id:fffbfh8 -->
   - Requirements 5.1, 5.3 and 7.1 are removed, not annotated in place — the superseded text is edited out of the document that holds it
   - Req 5.2's banners are carried to meal-review Req 1.5 and must not be lost in the removal
   - Req 7.1 was already partly stale: serving-adjust item 5 retired ManualCorrectionView and the free-text note. This is cleanup of that debt plus the relabel addition
@@ -190,7 +190,7 @@ references:
   - design-handoff-00 Decision 7 remains in force: correction stays post-hoc, with no user-visible segmentation phase before the estimate completes
   - Stream: 3
 
-- [ ] 19. Remove superseded text from serving-adjust and the design system <!-- id:fffbfh9 -->
+- [x] 19. Remove superseded text from serving-adjust and the design system <!-- id:fffbfh9 -->
   - serving-adjust prd.md: remove §iOS app item 2 (the global portion stepper) and item 4 (the confirm pill and the edit-by-exception rule), and the non-goal "no new correction mechanism, event types, or schema changes"
   - Items 1, 3 and 5 remain in force and are cited, not restated, by meal-review Req 6.1 — do not touch them
   - design-system/pages/segmentation-review.md: remove the "Do NOT offer a relabel / per-class exclusion interaction" anti-pattern
@@ -205,7 +205,7 @@ references:
   - Stream: 3
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2)
 
-- [ ] 21. Agent notes, OVERVIEW and nextup <!-- id:fffbfhb -->
+- [x] 21. Agent notes, OVERVIEW and nextup <!-- id:fffbfhb -->
   - docs/agent-notes/ui-capture-flow.md: the two-screen split is replaced by one surface; correction_records is the one store exempt from every sweep including the Debug reset; the four-place project.pbxproj registration still applies to any new file
   - specs/OVERVIEW.md: add the Meal Review row (domain ui, mode full) and regenerate rather than hand-merging
   - nextup.md: record the state at hand-off

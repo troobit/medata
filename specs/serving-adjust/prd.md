@@ -20,7 +20,6 @@ Target repository: `medata` (this repository). Two contexts: the food-database g
 ## Non-goals
 
 - No changes to the estimation pipeline, Core ML model, volume/mass/β maths, or the per-100 g composition data — serving scaling is post-estimation arithmetic on the recorded estimate.
-- No new correction mechanism, event types, or schema changes on the Swift side: portion adjustments persist via `store.appendCorrection` exactly as the snaqui portion control does today.
 - No photo-reference portion images this cycle (the research says they help; they need art direction and a licensing pass — record as a possible successor, do not build).
 - No changes to benchmark truth entry (`BenchmarkView` keeps weighed grams — benchmark ground truth is deliberately gram-precise) or to the manual Intake surface.
 - No localisation of units (metric-only invariant stands; UK/Irish household measures only).
@@ -47,16 +46,10 @@ Covers the SwiftUI result surfaces in `App/`: `ResultView.swift` (both `justCapt
    - Acceptance: the "PORTION / Ate N of M" card and `PortionStepper` pair are gone from `ResultView`; the "Per food" rows each show the food name, the estimated amount expressed serving-first (e.g. "≈ 2 potatoes", "≈ 3 spoons", using `unit_singular`/`unit_plural` and the nearest displayable half-unit), the gram mass as secondary text, and that row's carb contribution.
    - Acceptance: each row carries inline − / + controls stepping by the class's `step` in serving units, floored at 0; the hero carb total updates live with the same `.numericText()` transition the hero uses today, and the "estimated N g" line keeps showing the untouched full estimate whenever the pending state diverges.
    - Acceptance: a class with no `solid_servings` row (and any liquid class) falls back to a gram stepper on the same row — never a dead row.
-2. A plate-fraction quick control MUST cover the leftovers case in one tap.
-   - Acceptance: a compact control on the result screen (e.g. segmented "All · ¾ · ½ · ¼") scales every row's pending amount from the original estimate in one tap; selecting it then nudging an individual row keeps the other rows at the fraction (fraction first, per-row refinement second).
-   - Acceptance: the control's default state is All and writes nothing.
+2. *Removed — superseded by `specs/ui/meal-review/` Req 6.3–6.5 (see `decision_log.md` Decision 1): the whole-meal scale control is restated there, with stops at or below one and each row's currently derived amount as its base.*
 3. Grams MUST remain the secondary precise path per ingredient.
    - Acceptance: tapping a row's amount (not the − / + controls) reveals an editable gram value for that row, two-way bound with the serving display (editing grams updates the serving readout and vice versa); the gram field uses the digits-only clamp convention from the existing carb-entry surfaces.
-4. Confirming adjustments MUST persist through the existing correction mechanism, edit-by-exception.
-   - Acceptance: with nothing touched, no correction is written and Done behaves exactly as today (zero additional taps photo → recorded meal).
-   - Acceptance: once any row or the fraction control diverges from the recorded state, a single confirm action appears (the existing "Log N g" pill pattern) that appends one `PbUserCorrection` carrying the scaled total, per-class carbs scaled per row, and a machine-readable note recording the per-class serving counts (extend the `PortionFormat` note convention; keep parsing the legacy `portion N/M` notes so existing history still seeds).
-   - Acceptance: scaling always derives from the ORIGINAL estimate so repeated adjustments never compound; reopening from history seeds rows from the latest correction and re-adjusting (including back to the full estimate) appends a further correction.
-   - Acceptance: Graph carb bars, Records rows, and Meal overview show the corrected total via the existing wiring (`displayTotalCarbsG` / corrections fold-in) — verified by the existing MedataCore tests staying green and by build.
+4. *Removed — superseded by `specs/ui/meal-review/` Req 7.4 and 9.1/9.3 (see `decision_log.md` Decision 1): corrections apply live with no confirm pill, and unchanged foods are retained as records rather than written off by exception.*
 5. The separate Adjust screen MUST be retired in favour of the inline surface.
    - Acceptance: `ManualCorrectionView.swift` is deleted, the Adjust button leaves the result action row (Done remains), and no route references it; the free-text correction note entry is dropped (notes are now the machine-written serving/portion stamps).
    - Acceptance: any pbxproj references are removed per the four-section checklist in `docs/agent-notes/ui-capture-flow.md`.
