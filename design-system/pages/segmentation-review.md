@@ -1,3 +1,5 @@
+> **Superseded by meal-review** — this page is superseded by [`design-system/pages/meal-review.md`](meal-review.md) (specs/ui/meal-review, 2026-08-09). `SegmentationReviewView` is deleted; the single review surface replaces it. Content is preserved for history only; do not implement against it.
+
 # Segmentation review — page-specific overrides
 
 **Inherits:** `design-system/MASTER.md`. The §5 Segmentation review screen,
