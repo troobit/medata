@@ -102,6 +102,65 @@ struct CalibrationMergeCorroborationTests {
         #expect(!c.singleSourceUncorroborated)
     }
 
+    @Test("A qualifying single-dominant fit still records the skew inconsistency (Req 5.3)")
+    func singleDominantCarriesSkewInconsistency() throws {
+        // The SD fit bakes — it is an N5k-only fit, not the blended pooled
+        // value Req 5.3 blocks — but the per-dataset disagreement must be
+        // recorded, not silently dropped on this path.
+        let sd = sdFit(["broccoli": .init(
+            beta: 0.6, status: .calibrated, logResidualSE: 0.05,
+            effectiveSample: 40, clamped: false)])
+        let merged = CalibrationMerge.merge(
+            singleDominant: sd,
+            mixture: mixResult(beta: ["broccoli": 0.75], se: ["broccoli": 0.02],
+                               n: ["broccoli": 80], identifiable: ["broccoli": true]),
+            perDataset: [
+                .init(dataset: "nutrition5k",
+                      result: mixResult(beta: ["broccoli": 0.5], se: ["broccoli": 0.03],
+                                        n: ["broccoli": 40],
+                                        identifiable: ["broccoli": true])),
+                .init(dataset: "metafood3d",
+                      result: mixResult(beta: ["broccoli": 1.0], se: ["broccoli": 0.03],
+                                        n: ["broccoli": 40],
+                                        identifiable: ["broccoli": true])),
+            ])
+        let c = try #require(merged["broccoli"])
+        #expect(c.status == .calibrated)
+        #expect(c.provenance == .n5kSingleDominant)
+        #expect(c.beta == 0.6, "the SD fit bakes, never the blended 0.75")
+        #expect(c.crossDatasetInconsistent,
+                "the Req 5.3 record must survive the single-dominant path")
+    }
+
+    @Test("A single-dominant β records its actual N5k fit source, never MetaFood3D presence (Req 6.1)")
+    func singleDominantAttributesActualFitSource() throws {
+        // The class has ZERO N5k mixture effective samples but MetaFood3D
+        // presence; the β is fit from N5k single-dominant plates, so the
+        // contributor record must say nutrition5k — recording metafood3d
+        // here misattributes a β MetaFood3D never touched.
+        let sd = sdFit(["white_rice": .init(
+            beta: 0.8, status: .calibrated, logResidualSE: 0.04,
+            effectiveSample: 35, clamped: false)])
+        let merged = CalibrationMerge.merge(
+            singleDominant: sd,
+            mixture: mixResult(beta: ["white_rice": 0.82], se: ["white_rice": 0.3],
+                               n: ["white_rice": 12],
+                               identifiable: ["white_rice": false]),
+            perDataset: [
+                .init(dataset: "metafood3d",
+                      result: mixResult(beta: ["white_rice": 0.82],
+                                        se: ["white_rice": 0.3],
+                                        n: ["white_rice": 12],
+                                        identifiable: ["white_rice": false])),
+            ])
+        let c = try #require(merged["white_rice"])
+        #expect(c.provenance == .n5kSingleDominant)
+        #expect(c.beta == 0.8)
+        #expect(c.contributingDatasets == ["nutrition5k": 35],
+                "the recorded contributors are the plates that fed THIS fit")
+        #expect(c.singleSourceUncorroborated)
+    }
+
     @Test("Sampling noise between agreeing datasets does NOT fire the skew guard (Req 5.2)")
     func samplingNoiseDoesNotFireTheGuard() throws {
         // 0.78 vs 0.82 at SE 0.03: a fixed 2.5% relative constant would fire;

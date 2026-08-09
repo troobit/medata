@@ -37,6 +37,11 @@ struct Args {
     // Fraction of MetaFood3D objects held out of the fit for the Req 10.2
     // accuracy anchor. 0 = no holdout (the anchor is then not measured).
     var heldoutFrac: Float = 0
+    // The ingestion truth sidecar metafood3d_truth.json ({fixture_id:
+    // mesh_volume_mm3}) for the Req 2.3 volume-fit diagnostic: β_geom =
+    // V_mesh_true / V_est per class, reported next to the mass-fit β with a
+    // divergence flag. Reported, never baked.
+    var meshTruthPath: String = ""
 }
 
 func parseArgs() -> Args? {
@@ -64,6 +69,7 @@ func parseArgs() -> Args? {
             if let path = it.next() { result.ingestSummaryPaths.append(path) }
         case "--heldout-frac":
             if let s = it.next(), let f = Float(s) { result.heldoutFrac = f }
+        case "--mesh-truth":        result.meshTruthPath    = it.next() ?? ""
         default: break
         }
     }
@@ -286,6 +292,10 @@ struct N5kEvalJSON: Encodable {
         let unvalidatedStaples: [String]
         let minEvalPlateCount: Int
         let heldOutAnchor: AnchorJSON?
+        // Req 2.3 volume-fit diagnostic (nil unless --mesh-truth was given):
+        // β_geom per class beside the mass-fit β + divergence flag. Reported,
+        // never baked.
+        let volumeFitDiagnostic: CalibrationArtifact.VolumeFitDiagnosticBlock?
     }
 
     let seed: UInt64
@@ -446,6 +456,10 @@ struct CalibrationOutcome {
     let merged: [String: CalibrationMerge.ClassCalibration]
     let mergedBaseline: [String: CalibrationMerge.ClassCalibration]?
     let heldOutAnchor: HeldOutAnchorReport?
+    // Req 2.3 volume-fit diagnostic (nil unless --mesh-truth was given):
+    // rides the calibrate artifact AND the eval report — reported, never
+    // baked (generate.py does not read it).
+    let volumeFitDiagnostic: CalibrationArtifact.VolumeFitDiagnosticBlock?
 }
 
 // β map the eval applies: calibrated classes only — pooled/unity classes ride
@@ -648,6 +662,51 @@ func runCalibration(args: Args, db: any FoodDatabase,
             + "\n", stderr)
     }
 
+    // Volume-fit diagnostic (Req 2.3, Decision 7): β_geom = V_mesh_true/V_est
+    // per class from the ingestion truth sidecar, next to the baked mass-fit
+    // β with a divergence flag. Reported, never baked — a large gap between
+    // the two isolates a density-draw problem the mass fit conflates. Held-out
+    // objects are included: the diagnostic is per object, not part of the fit.
+    var volumeFitDiagnostic: CalibrationArtifact.VolumeFitDiagnosticBlock?
+    if !args.meshTruthPath.isEmpty {
+        let truth = try VolumeFitDiagnostic.loadTruth(
+            from: URL(fileURLWithPath: args.meshTruthPath))
+        var diagObs: [VolumeFitDiagnostic.Observation] = []
+        for obs in mixtureObs where obsDataset[obs.fixtureID] == "metafood3d" {
+            // Single-food by construction: the one mapped class.
+            if let className = obs.massByClassG.max(by: { $0.value < $1.value })?.key {
+                diagObs.append(.init(fixtureID: obs.fixtureID, className: className,
+                                     estimatedVolumeCm3: obs.totalHullVolumeCm3))
+            }
+        }
+        for held in heldOutObs {
+            diagObs.append(.init(fixtureID: held.fixtureID, className: held.className,
+                                 estimatedVolumeCm3: held.estimatedVolumeCm3))
+        }
+        let report = VolumeFitDiagnostic.compute(
+            observations: diagObs, truthVolumeMm3ByFixture: truth)
+        let block = CalibrationArtifact.VolumeFitDiagnosticBlock(
+            report: report, bakedBeta: calibratedBetaMap(merged))
+        volumeFitDiagnostic = block
+        for (className, row) in block.perClass.sorted(by: { $0.key < $1.key }) {
+            fputs("volume-fit diagnostic (reported, not baked): \(className) "
+                + "beta_geom \(row.betaGeom) over \(row.sampleCount) object(s)"
+                + (row.betaBaked.map { "; mass-fit beta \($0)"
+                    + (row.divergesFromMassFit ? " — DIVERGES (>\(block.divergenceDelta))" : "")
+                } ?? "; no baked beta")
+                + "\n", stderr)
+        }
+        if !report.missingTruth.isEmpty {
+            fputs("volume-fit diagnostic: \(report.missingTruth.count) object(s) "
+                + "missing from the truth sidecar: "
+                + report.missingTruth.joined(separator: " ") + "\n", stderr)
+        }
+    } else if hasMF3D {
+        fputs("calibrate: WARNING — MetaFood3D fixtures without --mesh-truth; "
+            + "the Req 2.3 volume-fit diagnostic (beta_geom vs the mass-fit "
+            + "beta) is not computed\n", stderr)
+    }
+
     // Lineage (Req 5.5). Release/metadata identifiers ride the fixtures'
     // source_dataset stamp: "nutrition5k@<release>/<metaver>".
     let source = fixtures.first(where: {
@@ -667,15 +726,27 @@ func runCalibration(args: Args, db: any FoodDatabase,
             imageHeight: mf3d.renderImageHeight ?? 0,
             seatingRule: mf3d.renderSeatingRule ?? "")
     }
+    // Licence provenance (cross-dataset-calibration Decision 17): each
+    // dataset's licence rides its per-dataset lineage — Nutrition5k is a
+    // known CC BY 4.0 release; MetaFood3D's comes from its ingest summary
+    // (whose loader already fails loudly when it is absent). The top-level
+    // lineage licence is the STRICTEST contributing licence, so a MetaFood3D
+    // contribution (CC BY-NC 4.0, non-commercial) is never understated by
+    // the single value generate.py persists.
+    let n5kLicence = "CC BY 4.0"
     var perDatasetLineage: [String: CalibrationArtifact.DatasetLineage] = [:]
     if hasN5k {
         perDatasetLineage["nutrition5k"] = .init(
-            snapshot: afterAt, mappingArtifactVersion: args.mappingVersion)
+            snapshot: afterAt, mappingArtifactVersion: args.mappingVersion,
+            licence: n5kLicence)
     }
     if let mf3d = mf3dSummary, hasMF3D {
         perDatasetLineage["metafood3d"] = .init(
-            snapshot: mf3d.snapshot, mappingArtifactVersion: mf3d.mappingVersion)
+            snapshot: mf3d.snapshot, mappingArtifactVersion: mf3d.mappingVersion,
+            licence: mf3d.licence ?? "")
     }
+    let lineageLicence = CalibrationArtifact.strictestLicence(
+        perDatasetLineage.values.map(\.licence)) ?? n5kLicence
 
     let lineage = CalibrationArtifact.Lineage(
         n5kRelease: parts.first ?? "",
@@ -691,7 +762,7 @@ func runCalibration(args: Args, db: any FoodDatabase,
             ? mixtureResult.conditionNumber : -1,
         identifiablePerClass: mixtureResult.identifiablePerClass,
         pinnedIntrinsicsModel: args.intrinsicsModel,
-        licence: "CC BY 4.0",
+        licence: lineageLicence,
         renderConfig: renderConfig,
         perDataset: perDatasetLineage)
 
@@ -741,7 +812,8 @@ func runCalibration(args: Args, db: any FoodDatabase,
         artifact: CalibrationArtifact(
             merged: merged, betaPool: sdFit.betaPool,
             supportPlaneReference: CalibrateRun.fittedSupportPlaneReference,
-            lineage: lineage, runSummary: runSummary),
+            lineage: lineage, runSummary: runSummary,
+            volumeFitDiagnostic: volumeFitDiagnostic),
         routed: routed,
         mixtureObs: mixtureObs,
         mixtureResult: mixtureResult,
@@ -751,7 +823,8 @@ func runCalibration(args: Args, db: any FoodDatabase,
         ingestSummaries: ingestSummaries,
         merged: merged,
         mergedBaseline: mergedBaseline,
-        heldOutAnchor: anchor)
+        heldOutAnchor: anchor,
+        volumeFitDiagnostic: volumeFitDiagnostic)
 }
 
 func runCalibrate(args: Args) throws {
@@ -896,7 +969,8 @@ func runCalibrateAndEval(args: Args) throws {
             unvalidatedStaples: carbDelta.unvalidatedStaples,
             minEvalPlateCount: carbDelta.minEvalPlateCount,
             heldOutAnchor: outcome.heldOutAnchor
-                .map(N5kEvalJSON.CrossDatasetJSON.AnchorJSON.init))
+                .map(N5kEvalJSON.CrossDatasetJSON.AnchorJSON.init),
+            volumeFitDiagnostic: outcome.volumeFitDiagnostic)
     }
 
     try writeSnakeCaseJSON(N5kEvalJSON(report, crossDataset: crossDataset),
