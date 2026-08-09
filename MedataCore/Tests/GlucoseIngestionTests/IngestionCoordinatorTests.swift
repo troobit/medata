@@ -235,6 +235,12 @@ private struct ThrowingPersistenceStore: PersistenceStore {
     ) async throws {
         fatalError("unused")
     }
+    func updateCorrectionRecords(
+        _ records: [PbCorrectionRecord],
+        upsertingCorrection correction: PbUserCorrection?
+    ) async throws {
+        fatalError("unused")
+    }
     func upsertCorrection(mealId: UUID, correction: PbUserCorrection) async throws {
         fatalError("unused")
     }
