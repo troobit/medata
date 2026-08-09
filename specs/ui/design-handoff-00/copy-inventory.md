@@ -44,12 +44,11 @@ The verbatim contract for every user-facing string (Req 14.2). Implementation ma
 | Card toggle | `Include card this time` | `Include card` |
 | Actions | `Take 1 photo` / `Take 2 photos` | `1 photo` / `2 photos` |
 
-## Segmentation review (§5)
+## Segmentation review (§5) — screen superseded by `specs/ui/meal-review/` (Decision 23); banner strings carried to meal-review Req 1.5
 
 | Context | Handoff | Final |
 |---|---|---|
 | Title | `Review foods` | `Foods` |
-| Instruction line | `Tap a region to confirm or relabel` | *(dropped — no relabel interaction in this spec)* |
 | Class count header | `Detected (N)` | `Detected (N)` |
 | Unknown banner | `Unrecognised region.` + `A small area didn't match any known food and will be flagged as 'unknown carbs'.` | `Unknown region · counted as unknown carbs` |
 | Liquid banner | — | `Liquid · not estimated` |

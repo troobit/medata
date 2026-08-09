@@ -71,8 +71,6 @@ Content scrolls; the `Carbs` action is pinned to the bottom.
 ## Anti-patterns
 
 - Do NOT add per-class confidence chips or a σ column (Decision 16).
-- Do NOT offer a relabel / per-class exclusion interaction — that would need the
-  pipeline split this spec rejects (Decision 7).
 - Do NOT label the primary action anything that implies estimation is pending
   (`Estimate carbs` is wrong — Req 5.3).
 - Do NOT error when the photo or mask is missing — fall back to photo-only /
