@@ -84,9 +84,10 @@ metadata:
   - Done in design §5.1 (Decisions 7, 16): four ordered stop-on-fail criteria — Core ML conversion; FP16 artefact <= 24 MiB (export.py WEIGHTS_MAX_BYTES); <= 250 ms ANE-resident at 513x513 on the iPhone 16 Pro (v1 hardware floor per Decision 22, measured directly); equivalence per model-production Req 4.3 as amended (argmax > 99%, logit < 0.5).
   - Requirements: [3.1](requirements.md#3.1)
 
-- [ ] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
+- [x] 14. Code + run: spike_segformer.py autonomous half (criteria 1, 2, 4) <!-- id:2mfkxyx -->
   - Build tools/segmenter/spike_segformer.py (HF transformers added to tools/segmenter/requirements.txt as a spike-only dependency): load a public SegFormer-B0 checkpoint (accuracy irrelevant), graft a 35-channel head, coremltools FP16 export at 513x513, measure artefact size, run the equivalence oracle (oracle_agreement at export.py:401, reference_input at export.py:150). Emit build/spike_segformer.json (four booleans + measurements; latency left pending). A hard conversion failure ends the spike (criterion 1 fails, Req 3.2).
   - 2026-07-11: code half landed and unit-tested; the CONVERSION RUN is still pending — torch/transformers are not installed in the dev environment, so the script must be executed in the gated session (python tools/segmenter/spike_segformer.py) before the verdict JSON exists.
+  - 2026-08-09: conversion run executed — autonomous half PASS (Python 3.13 venv at tools/segmenter/.venv; torch 2.7.0, transformers 5.14.1, coremltools 9.0; checkpoint nvidia/segformer-b0-finetuned-ade-512-512). Criterion 1: converts to Core ML (FP16 mlprogram, 513x513, 35 channels) = true. Criterion 2: artefact 7,622,430 bytes vs 25,165,824-byte budget (7.3 MiB of 24 MiB) = true. Criterion 4: oracle max abs logit err 0.0036 (< 0.5), argmax agreement 0.9998 (> 0.99) = true. Criterion 3 (latency, ANE residency) = null, pending task 20 on the iPhone 16 Pro. Verdict JSON at tools/segmenter/build/spike_segformer.json (gitignored build/ — figures transcribed here; task 21 records the full verdict in the decision log after task 20).
   - Blocked-by: 2mfkxza (Specify the SegFormer-B0 conversion-spike procedure)
   - Requirements: [3.1](requirements.md#3.1)
 
