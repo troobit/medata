@@ -835,10 +835,11 @@ final class CaptureFlowModel: CaptureFlowDelegate {
             lastMeal = stamped
             log.info("event=estimate.end success=true mealId=\(stamped.id.uuidString, privacy: .public) capturePath=\(captureResult.capturePath.rawValue, privacy: .public)")
             state = .showingResult(stamped)
-            // Flow lands on Segmentation review first (§1.3); its Carbs action
-            // pushes `.result`. `.showingResult` holds across review → result →
-            // correction, so dismissResult/deleteAndDismiss guards still fire.
-            navigationPath.append(CaptureRoute.review(stamped))
+            // The review surface is pushed directly — no interaction sits
+            // between estimation completing and it appearing (meal-review
+            // Req 1.2). `.showingResult` holds while the surface is up, so
+            // dismissResult/deleteAndDismiss guards still fire.
+            navigationPath.append(CaptureRoute.result(stamped))
         } catch is CancellationError {
             return
         } catch let failure as EstimationFailure {

@@ -1,5 +1,7 @@
 import Benchmark
 import Persistence
+import PortableContracts
+import SwiftProtobuf
 import SwiftUI
 
 // Wraps the exported log-file URL so it can drive `.sheet(item:)` — the
@@ -25,15 +27,32 @@ struct EstimationLogView: View {
 
     var body: some View {
         List {
-            if model.rows.isEmpty {
-                Text("No attempts recorded")
-                    .foregroundStyle(Color.textSecondary)
+            Section("Attempts") {
+                if model.rows.isEmpty {
+                    Text("No attempts recorded")
+                        .foregroundStyle(Color.textSecondary)
+                }
+                ForEach(model.rows) { row in
+                    NavigationLink {
+                        EstimationOutcomeDetailView(outcome: row)
+                    } label: {
+                        OutcomeRow(outcome: row)
+                    }
+                }
             }
-            ForEach(model.rows) { row in
-                NavigationLink {
-                    EstimationOutcomeDetailView(outcome: row)
-                } label: {
-                    OutcomeRow(outcome: row)
+            // Corrections browse (meal-review Req 9.13): the correction_records
+            // corpus, browsable on-device without network access.
+            Section("Corrections") {
+                if model.correctionRows.isEmpty {
+                    Text("No corrections recorded")
+                        .foregroundStyle(Color.textSecondary)
+                }
+                ForEach(model.correctionRows, id: \.rowIdentity) { row in
+                    NavigationLink {
+                        CorrectionRecordDetailView(record: row)
+                    } label: {
+                        CorrectionRow(record: row)
+                    }
                 }
             }
             if let exportError = model.exportError {
@@ -46,8 +65,17 @@ struct EstimationLogView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await model.export() }
+                Menu {
+                    Button("Attempts (JSON)") {
+                        Task { await model.export() }
+                    }
+                    // JSONL beside the archive path (meal-review Req 9.11,
+                    // 9.13): one self-contained training example per line, no
+                    // capture imagery, segmenter_source on every row so
+                    // stub-derived corrections can be excluded downstream.
+                    Button("Corrections (JSONL)") {
+                        Task { await model.exportCorrections() }
+                    }
                 } label: {
                     if model.isExporting {
                         MedataLoadingSymbol(mode: .loop, size: 22)
@@ -64,6 +92,86 @@ struct EstimationLogView: View {
         .sheet(item: $model.exportFile) { file in
             ShareSheet(activityItems: [file.url])
         }
+    }
+}
+
+// Stable list identity for a correction record: the natural key.
+private extension PbCorrectionRecord {
+    var rowIdentity: String { "\(mealID)/\(predicted.classID)" }
+}
+
+// One correction record on the list: what it was predicted as, what became of
+// it, when, and under which segmenter.
+private struct CorrectionRow: View {
+    let record: PbCorrectionRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+            Text("\(timeString(record.updatedAtMs)) · \(record.segmenterSource)")
+                .font(.caption)
+                .foregroundStyle(Color.textSecondary)
+        }
+        .accessibilityIdentifier("estimationLog.correctionRow")
+    }
+
+    private var title: String {
+        let predicted = prettyClass(record.predicted.classID)
+        if record.rejected { return "\(predicted) — rejected" }
+        if record.absent { return "\(predicted) — not in database" }
+        if record.classCorrected, record.hasCorrected, !record.corrected.classID.isEmpty {
+            let base = "\(predicted) → \(prettyClass(record.corrected.classID))"
+            return record.amountCorrected ? "\(base) — amount" : base
+        }
+        if record.amountCorrected { return "\(predicted) — amount" }
+        if record.pickerOpenedUnchanged { return "\(predicted) — picker dismissed" }
+        if record.captureAbandoned { return "\(predicted) — capture abandoned" }
+        return "\(predicted) — unchanged"
+    }
+
+    private func prettyClass(_ raw: String) -> String {
+        let spaced = raw.replacingOccurrences(of: "_", with: " ")
+        return spaced.prefix(1).uppercased() + spaced.dropFirst()
+    }
+}
+
+// Full record detail: the protobuf-JSON blob, pretty-printed and selectable —
+// the same window the JSONL export ships (Req 9.11).
+private struct CorrectionRecordDetailView: View {
+    let record: PbCorrectionRecord
+
+    var body: some View {
+        List {
+            Section {
+                LabeledContent("Meal", value: record.mealID)
+                LabeledContent("Predicted", value: record.predicted.classID)
+                LabeledContent("Updated", value: timeString(record.updatedAtMs))
+                LabeledContent("Segmenter", value: record.segmenterSource)
+                LabeledContent("Build", value: record.buildStamp)
+            }
+            .font(.footnote)
+            Section("Record") {
+                Text(prettyRecordJSON)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(Color.textPrimary)
+                    .textSelection(.enabled)
+            }
+        }
+        .navigationTitle("Correction")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var prettyRecordJSON: String {
+        guard
+            let raw = try? record.jsonString(),
+            let object = try? JSONSerialization.jsonObject(with: Data(raw.utf8)),
+            let data = try? JSONSerialization.data(
+                withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
+            )
+        else { return (try? record.jsonString()) ?? "" }
+        return String(decoding: data, as: UTF8.self)
     }
 }
 
@@ -191,6 +299,8 @@ final class EstimationLogModel {
     static let fetchLimit = 10_000
 
     private(set) var rows: [EstimationOutcome] = []
+    // The correction corpus, newest-updated first (meal-review Req 9.13).
+    private(set) var correctionRows: [PbCorrectionRecord] = []
     private(set) var isExporting = false
     private(set) var exportError: String?
     fileprivate var exportFile: LogExportFile?
@@ -205,6 +315,36 @@ final class EstimationLogModel {
 
     func load() async {
         rows = (try? await store.estimationOutcomes(limit: Self.fetchLimit)) ?? []
+        correctionRows = (try? await store.allCorrectionRecords()) ?? []
+    }
+
+    // JSONL export of the correction corpus (meal-review Req 9.11, 9.13):
+    // one protobuf-JSON record per line, each interpretable as a training
+    // example without the app, the food database or the mask — the densities
+    // and coefficients are carried in the record itself. No capture imagery
+    // exists anywhere in it; `segmenter_source` is present per row so
+    // stub-derived corrections can be excluded from a training export
+    // (Req 9.8). `exportArchive()` shipping raw SQLite does not satisfy this.
+    func exportCorrections() async {
+        isExporting = true
+        exportError = nil
+        defer { isExporting = false }
+        do {
+            let records = try await store.allCorrectionRecords()
+            var lines: [String] = []
+            lines.reserveCapacity(records.count)
+            for record in records {
+                lines.append(try record.jsonString())
+            }
+            let data = Data((lines.joined(separator: "\n") + "\n").utf8)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("correction-records-\(Self.fileStamp()).jsonl")
+            try data.write(to: url, options: .atomic)
+            correctionRows = records
+            exportFile = LogExportFile(url: url)
+        } catch {
+            exportError = "Export failed: \(error.localizedDescription)"
+        }
     }
 
     // Serialises the outcome rows + benchmark meals (+ the computed report

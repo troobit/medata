@@ -246,6 +246,15 @@ public nonisolated struct PbCorrectionRecord: @unchecked Sendable {
     set {_uniqueStorage()._shortlistSource = newValue}
   }
 
+  /// Set when a correction dimension was applied and then reversed within
+  /// the review session, so a rejected-then-un-rejected food stays
+  /// distinguishable from a confirmed correct prediction (design
+  /// "Record lifecycle"; Decision 5's precision numerator).
+  public var wasReverted: Bool {
+    get {_storage._wasReverted}
+    set {_uniqueStorage()._wasReverted = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -348,7 +357,7 @@ nonisolated extension PbFoodDerivation: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension PbCorrectionRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CorrectionRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}meal_id\0\u{3}outcome_id\0\u{3}created_at_ms\0\u{3}updated_at_ms\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_source\0\u{3}build_stamp\0\u{1}predicted\0\u{1}corrected\0\u{3}class_corrected\0\u{1}rejected\0\u{1}absent\0\u{3}amount_corrected\0\u{3}picker_opened_unchanged\0\u{3}capture_abandoned\0\u{3}mass_source\0\u{3}shortlist_rank\0\u{3}absent_query_text\0\u{3}shortlist_source\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}schema_version\0\u{3}meal_id\0\u{3}outcome_id\0\u{3}created_at_ms\0\u{3}updated_at_ms\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_source\0\u{3}build_stamp\0\u{1}predicted\0\u{1}corrected\0\u{3}class_corrected\0\u{1}rejected\0\u{1}absent\0\u{3}amount_corrected\0\u{3}picker_opened_unchanged\0\u{3}capture_abandoned\0\u{3}mass_source\0\u{3}shortlist_rank\0\u{3}absent_query_text\0\u{3}shortlist_source\0\u{3}was_reverted\0")
 
   fileprivate class _StorageClass {
     var _schemaVersion: String = String()
@@ -372,6 +381,7 @@ nonisolated extension PbCorrectionRecord: SwiftProtobuf.Message, SwiftProtobuf._
     var _shortlistRank: Int32 = 0
     var _absentQueryText: String = String()
     var _shortlistSource: String = String()
+    var _wasReverted: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -403,6 +413,7 @@ nonisolated extension PbCorrectionRecord: SwiftProtobuf.Message, SwiftProtobuf._
       _shortlistRank = source._shortlistRank
       _absentQueryText = source._absentQueryText
       _shortlistSource = source._shortlistSource
+      _wasReverted = source._wasReverted
     }
   }
 
@@ -442,6 +453,7 @@ nonisolated extension PbCorrectionRecord: SwiftProtobuf.Message, SwiftProtobuf._
         case 19: try { try decoder.decodeSingularInt32Field(value: &_storage._shortlistRank) }()
         case 20: try { try decoder.decodeSingularStringField(value: &_storage._absentQueryText) }()
         case 21: try { try decoder.decodeSingularStringField(value: &_storage._shortlistSource) }()
+        case 22: try { try decoder.decodeSingularBoolField(value: &_storage._wasReverted) }()
         default: break
         }
       }
@@ -517,6 +529,9 @@ nonisolated extension PbCorrectionRecord: SwiftProtobuf.Message, SwiftProtobuf._
       if !_storage._shortlistSource.isEmpty {
         try visitor.visitSingularStringField(value: _storage._shortlistSource, fieldNumber: 21)
       }
+      if _storage._wasReverted != false {
+        try visitor.visitSingularBoolField(value: _storage._wasReverted, fieldNumber: 22)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -547,6 +562,7 @@ nonisolated extension PbCorrectionRecord: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._shortlistRank != rhs_storage._shortlistRank {return false}
         if _storage._absentQueryText != rhs_storage._absentQueryText {return false}
         if _storage._shortlistSource != rhs_storage._shortlistSource {return false}
+        if _storage._wasReverted != rhs_storage._wasReverted {return false}
         return true
       }
       if !storagesAreEqual {return false}

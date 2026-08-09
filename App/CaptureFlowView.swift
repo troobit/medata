@@ -75,7 +75,7 @@ struct CaptureFlowView: View {
                 .toolbar(.hidden, for: .navigationBar)
         }
         // Back-gesture soft-lock resync: popping the capture stack to empty via
-        // the edge swipe / back chevron (e.g. from Segmentation review) leaves
+        // the edge swipe / back chevron (e.g. from the review surface) leaves
         // `.showingResult` armed with no on-screen surface and a dead shutter.
         // `dismissResult()` is idempotent on an already-empty path (it only sets
         // the path to empty and returns to `.ready`), so this brings the flow
@@ -87,24 +87,22 @@ struct CaptureFlowView: View {
         }
     }
 
-    // Capture-stack routes (design: Navigation routes). runEstimation pushes
-    // `.review`; its Carbs action pushes `.result`, whose per-food rows carry
-    // the adjustment surface (serving-adjust PRD — no separate Adjust screen).
+    // Capture-stack route (design: Navigation routes, reshaped by
+    // specs/ui/meal-review). runEstimation pushes `.result` directly; the
+    // single review surface carries outlines, relabel/reject and the
+    // serving/gram/scale controls — no intermediate screen.
     @ViewBuilder
     private func captureDestination(_ route: CaptureRoute) -> some View {
         switch route {
-        case .review(let record):
-            SegmentationReviewView(record: record, store: store, onCarbs: {
-                model.navigationPath.append(CaptureRoute.result(record))
-            })
         case .result(let record):
-            ResultView(
+            MealReviewView(
                 record: record,
                 store: store,
-                mode: .justCaptured,
-                onDone: { model.dismissResult() },
+                onRecord: { model.dismissResult() },
                 // Retake and Delete both discard the just-captured meal (it is
-                // already persisted) and return to Capture (Decision 17).
+                // already persisted) and return to Capture (Decision 17). The
+                // review model has already stamped capture_abandoned on the
+                // correction rows, which survive the delete (Req 9.10).
                 onRetake: { model.deleteAndDismiss(record) },
                 onDelete: { model.deleteAndDismiss(record) }
             )

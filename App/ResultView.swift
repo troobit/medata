@@ -136,13 +136,9 @@ enum ResultFormat {
     }
 }
 
-// Controls how `ResultView` is presented. Both paths show the pinned Done
-// action row; the only difference is the ⋯ menu contents (Retake+Delete on a
-// fresh capture, Delete only from history — Decision 17).
-enum ResultPresentation: Equatable {
-    case justCaptured
-    case historyDetail
-}
+// `ResultPresentation` is gone (specs/ui/meal-review task 15): the
+// `.justCaptured` presentation is superseded by MealReviewView, so ResultView
+// now serves only the Records/Graph history read path.
 
 // Legacy portion-note convention (snaqui portion control, superseded by the
 // serving rows — serving-adjust PRD). Read-only now: `parse` keeps existing
@@ -222,21 +218,20 @@ enum PlateFraction: CaseIterable {
 }
 
 // Result screen (§6, design-system/pages/result.md, reshaped by the
-// serving-adjust PRD). Hero carb total + four-tier confidence pill, a plate
-// card where each per-food row is its own adjustment surface — serving-first
-// amounts ("≈ 1½ potatoes") with −/+ steppers in the class's household unit,
-// grams one tap away — a plate-fraction quick control for the leftovers case,
-// a summary card, and dashed macro placeholders. Keeps the calibration
-// banner, liquid flag, very-low surface, and placeholder chip.
+// serving-adjust PRD; capture-step presentation superseded by
+// specs/ui/meal-review — this is the Records/Graph history read path only).
+// Hero carb total + four-tier confidence pill, a plate card where each
+// per-food row is its own adjustment surface — serving-first amounts
+// ("≈ 1½ potatoes") with −/+ steppers in the class's household unit, grams
+// one tap away — a plate-fraction quick control for the leftovers case, a
+// summary card, and dashed macro placeholders. Keeps the calibration banner,
+// liquid flag, and placeholder chip; the very-low retake surface is gated to
+// the review path (its retake was already inert from history).
 struct ResultView: View {
     let record: MealRecord
     let store: any PersistenceStore
-    var mode: ResultPresentation = .justCaptured
-    // Done → dismiss (capture) / pop (history); Retake and Delete live in the
-    // ⋯ menu (Decision 17). All defaulted so the capture stack and the
-    // Records / Trends history stacks both compile.
+    // Done pops one level; Delete lives in the ⋯ menu (Decision 17).
     var onDone: () -> Void = {}
-    var onRetake: () -> Void = {}
     var onDelete: () -> Void = {}
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -247,10 +242,10 @@ struct ResultView: View {
     // visible, mirroring MealOverviewView (Decision 18).
     @State private var isCorrected = false
     @State private var correctedTotal: Float?
-    // Decision 17: "Keep as-is" hides the Very-Low surface for the current
-    // view session only — navigating away and back re-shows it (no persistent
-    // dismissed flag). `@State` is per-instance, so this resets on each push.
-    @State private var keepAsIsDismissed = false
+    // Predicted class id → corrected class id from the meal's corrections
+    // (meal-review Req 8.7): every surface that names a relabelled food names
+    // the corrected one, not the predicted one.
+    @State private var correctedClassIds: [String: String] = [:]
     // Serving-row state (serving-adjust PRD). `pendingGrams` holds the rows'
     // pending amounts (absent key = the original estimate); `recordedGrams`
     // mirrors the state the latest persisted correction implies. The log pill
@@ -295,9 +290,6 @@ struct ResultView: View {
         !showsPlaceholderChip
             && ResultFormat.showsLiquidOverEstimateFlag(record.macros)
     }
-    private var showsVeryLowSurface: Bool {
-        ResultFormat.showsVeryLowSurface(sigma) && !keepAsIsDismissed
-    }
     private var displayPoints: CGFloat { ResultViewLayout.displayPoints(sizeCategory) }
 
     // MARK: - Row model
@@ -318,7 +310,7 @@ struct ResultView: View {
             .map { name, macro in
                 FoodRow(
                     id: name,
-                    displayName: Self.prettify(name),
+                    displayName: Self.prettify(correctedClassIds[name] ?? name),
                     originalGrams: Double(macro.massG),
                     originalCarbsG: Double(macro.carbsG),
                     isLiquid: macro.isLiquid
@@ -403,7 +395,6 @@ struct ResultView: View {
                     case .suppressed, .none: EmptyView()
                     }
                     if showsLiquidFlag { liquidOverEstimateFlag }
-                    if showsVeryLowSurface { veryLowSurface }
                     plateCard
                     summaryCard
                     macroPlaceholders
@@ -911,51 +902,15 @@ struct ResultView: View {
         .accessibilityIdentifier("result.liquidOverEstimateFlag")
     }
 
-    // Decision 17 / Req §9.3: surfaces below σ_meal < 0.20 with two-line
-    // explanation + Retake / Keep as-is. The surface is in-session-only —
-    // navigating away and back re-shows it. The meal is already persisted by
-    // the capture pipeline, so "Keep as-is" only dismisses the surface; it
-    // does not write any "dismissed" flag.
-    private var veryLowSurface: some View {
-        VStack(spacing: 12) {
-            Text("This estimate may be wrong by orders of magnitude.")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(Color.captureChromeText)
-                .multilineTextAlignment(.center)
-            Text("Capture was at \(ResultFormat.maxDeltaThetaDeg(for: record))° from target.")
-                .font(.caption)
-                .foregroundStyle(Color.captureChromeText.opacity(0.75))
-                .multilineTextAlignment(.center)
-            HStack(spacing: 16) {
-                Button(action: onRetake) {
-                    Text("Retake")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 120, height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.captureChromeText, lineWidth: 1.5))
-                        .foregroundStyle(Color.captureChromeText)
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .accessibilityIdentifier("result.veryLow.retake")
-
-                Button { keepAsIsDismissed = true } label: {
-                    Text("Keep as-is")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 120, height: 44)
-                        .background(Color.medataAccent, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(Color.captureBackground)
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .accessibilityIdentifier("result.veryLow.keepAsIs")
-            }
-        }
-        .padding(.horizontal, 24)
-        .accessibilityIdentifier("result.veryLowSurface")
-    }
+    // The very-low retake surface moved to the review path (meal-review task
+    // 15): its retake button was already inert from history (`onRetake`
+    // defaulted to a no-op), so removing it here makes a dead affordance
+    // explicit rather than changing behaviour.
 
     // §6.6/6.7 revised by the serving-adjust PRD: Done (prominent) + ⋯ menu
-    // (Retake + Delete on a fresh capture, Delete only from history —
-    // Decision 17). The Adjust button is retired — the per-food rows above
-    // are the adjustment surface.
+    // (Delete only — the fresh-capture Retake lives on the review surface).
+    // The Adjust button is retired — the per-food rows above are the
+    // adjustment surface.
     private var actionRow: some View {
         HStack(spacing: 12) {
             Button(action: onDone) {
@@ -970,9 +925,6 @@ struct ResultView: View {
             .accessibilityIdentifier("result.done")
 
             Menu {
-                if mode == .justCaptured {
-                    Button("Retake", action: onRetake)
-                }
                 Button("Delete", role: .destructive, action: onDelete)
             } label: {
                 Image(systemName: "ellipsis")
@@ -1027,6 +979,11 @@ struct ResultView: View {
         correctedTotal = latest?.correctedTotalCarbsGOneof != nil
             ? latest?.correctedTotalCarbsG
             : nil
+        // Corrected names fold across the history: a later amount-only
+        // correction (empty map) must not erase an earlier relabel (Req 8.7).
+        correctedClassIds = corrections.reduce(into: [:]) { acc, correction in
+            acc.merge(correction.correctedClassIds) { _, newer in newer }
+        }
         recordedGrams = recordedGramsState(from: latest)
         // Seed the rows once per push (iOS Req 4: history re-entry resumes
         // from the latest correction); later refreshes only update the
