@@ -94,22 +94,34 @@ enum PipelineBridges {
 
     // MARK: - VolumeResult from single-view HeightFieldEstimate → PbVolumeResult
 
-    static func pbVolumeResult(singleView est: HeightFieldEstimate) -> PbVolumeResult {
+    static func pbVolumeResult(singleView est: HeightFieldEstimate,
+                               preBetaVolumesCm3: [String: Float]) -> PbVolumeResult {
         var out = PbVolumeResult()
         out.perClassVolumesCm3 = est.perClassVolumesCm3
         out.lidarCoverageFraction = est.lidarCoverageFraction
         out.ambiguousVoxelFraction = 0
+        out.perClassVolumesPreBetaCm3 = filteredPreBeta(preBetaVolumesCm3, to: est.perClassVolumesCm3)
         return out
     }
 
     // MARK: - VolumeResult from two-view VoxelCarveEstimate → PbVolumeResult
 
-    static func pbVolumeResult(twoView est: VoxelCarveEstimate) -> PbVolumeResult {
+    static func pbVolumeResult(twoView est: VoxelCarveEstimate,
+                               preBetaVolumesCm3: [String: Float]) -> PbVolumeResult {
         var out = PbVolumeResult()
         out.perClassVolumesCm3 = est.perClassVolumesCm3
         out.ambiguousVoxelFraction = est.ambiguousVoxelFraction
         out.voxelGridSummary = est.voxelGridSummary
+        out.perClassVolumesPreBetaCm3 = filteredPreBeta(preBetaVolumesCm3, to: est.perClassVolumesCm3)
         return out
+    }
+
+    // The estimators' VolumeStats pre-β map is pre-threshold, so it can hold
+    // classes the estimate discarded. The persisted pre-β map is keyed
+    // identically to per_class_volumes_cm3 (meal-review Decision 17).
+    private static func filteredPreBeta(_ preBeta: [String: Float],
+                                        to persisted: [String: Float]) -> [String: Float] {
+        preBeta.filter { persisted[$0.key] != nil }
     }
 
     // MARK: - BetaCalibrationStatus bridge

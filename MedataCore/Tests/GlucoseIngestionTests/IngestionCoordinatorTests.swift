@@ -226,6 +226,29 @@ private struct ThrowingPersistenceStore: PersistenceStore {
     func corrections(for mealId: UUID) async throws -> [PbUserCorrection] {
         fatalError("unused")
     }
+    func createCorrectionRecords(_ records: [PbCorrectionRecord]) async throws {
+        fatalError("unused")
+    }
+    func updateCorrectionRecord(
+        _ record: PbCorrectionRecord,
+        upsertingCorrection correction: PbUserCorrection?
+    ) async throws {
+        fatalError("unused")
+    }
+    func upsertCorrection(mealId: UUID, correction: PbUserCorrection) async throws {
+        fatalError("unused")
+    }
+    func correctionRecords(for mealId: UUID) async throws -> [PbCorrectionRecord] {
+        fatalError("unused")
+    }
+    func allCorrectionRecords() async throws -> [PbCorrectionRecord] {
+        fatalError("unused")
+    }
+    func recentCorrectedClassIds(
+        forPredictedClass classId: String, limit: Int
+    ) async throws -> [String] {
+        fatalError("unused")
+    }
     var eventsDidChange: AsyncStream<Void> { AsyncStream { _ in } }
     func isImageProcessed(hash: String) async throws -> Bool {
         fatalError("unused")

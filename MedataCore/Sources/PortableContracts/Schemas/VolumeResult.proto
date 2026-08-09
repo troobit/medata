@@ -16,4 +16,9 @@ message VolumeResult {
     float ambiguous_voxel_fraction = 2;         // two-view path only
     map<string, float> lidar_coverage_fraction = 3; // single-view path only
     VoxelGridSummary voxel_grid_summary = 4;
+    // Pre-β per-class volumes, keyed identically to per_class_volumes_cm3.
+    // A relabel derives from this value directly rather than dividing
+    // beta_used back out (meal-review Decision 17). Empty on records
+    // written before the field existed — the division fallback applies.
+    map<string, float> per_class_volumes_pre_beta_cm3 = 5;
 }
