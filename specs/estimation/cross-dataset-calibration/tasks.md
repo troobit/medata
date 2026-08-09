@@ -38,7 +38,7 @@ references:
   - Stream: 1
   - Requirements: [2.4](requirements.md#2.4)
 
-- [ ] 5. Write ingest.py tests incl. Hypothesis weight-plausibility <!-- id:fjp41xa -->
+- [x] 5. Write ingest.py tests incl. Hypothesis weight-plausibility <!-- id:fjp41xa -->
   - emits mixture fixtures: estimator_path mixture, sentinel no_segmenter, no probability tensor
   - writes run_summary.json (excluded/unmapped ids+counts) and metafood3d_truth.json {fixture_id: mesh_volume_mm3}
   - metric-scale check aborts on a mm/m unit error (unit-sanity) and on a weight-implausible k-scaled mesh (Hypothesis, Decision 14)
