@@ -384,13 +384,27 @@ public protocol PersistenceStore: Sendable {
     // Does not tick eventsDidChange — creation changes no displayed value.
     func createCorrectionRecords(_ records: [PbCorrectionRecord]) async throws
 
-    // Mutation: UPDATE against the corrected columns only, matched on
-    // (meal_id, predicted.class_id). When `upsertingCorrection` is non-nil,
-    // the meal's reconciling `corrections` row is upserted in the SAME
-    // transaction (design "the reconciling write") and eventsDidChange ticks
-    // once. Never INSERT OR REPLACE on either table.
+    // Mutation: INSERT ... ON CONFLICT (meal_id, predicted_class) DO UPDATE
+    // touching the corrected columns only — created_at and outcome_id keep
+    // their first-write values on conflict. The insert arm self-heals a row
+    // whose creation failed (that error is swallowed per Req 8.5); a bare
+    // UPDATE would silently no-op forever. When `upsertingCorrection` is
+    // non-nil, the meal's reconciling `corrections` row is upserted in the
+    // SAME transaction (design "the reconciling write") and eventsDidChange
+    // ticks once. Never INSERT OR REPLACE on either table.
     func updateCorrectionRecord(
         _ record: PbCorrectionRecord,
+        upsertingCorrection correction: PbUserCorrection?
+    ) async throws
+
+    // Batch mutation for one meal (the whole-meal scale, Req 6.3): every row
+    // update plus the reconciling corrections upsert in ONE transaction, so
+    // a force-quit mid-write cannot diverge the corpus from Records. Same
+    // per-row semantics as updateCorrectionRecord; all records must share
+    // one meal_id. Empty input is a no-op. Ticks eventsDidChange once when
+    // `upsertingCorrection` is non-nil.
+    func updateCorrectionRecords(
+        _ records: [PbCorrectionRecord],
         upsertingCorrection correction: PbUserCorrection?
     ) async throws
 

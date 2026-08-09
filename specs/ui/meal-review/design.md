@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_correction_records_meal ON correction_records(mea
 
 The primary key is the natural one, so the millisecond-collision defect in `corrections`' `PRIMARY KEY (meal_id, created_at)` cannot arise here, and a held stepper updates one row rather than appending per repeat — no debouncing is needed for correctness, only the usual UI coalescing to avoid needless writes.
 
-Creation and mutation use different statements. Creation is `INSERT … ON CONFLICT (meal_id, predicted_class) DO NOTHING`; mutation is `UPDATE` against the corrected columns only. Never `INSERT OR REPLACE`: the surface can re-appear for the same meal, and a blanket upsert would reset `created_at`, wipe `corrected`, and overwrite a `predicted` side that Req 9.2 says never changes.
+Creation and mutation use different statements. Creation is `INSERT … ON CONFLICT (meal_id, predicted_class) DO NOTHING`; mutation is `INSERT … ON CONFLICT (meal_id, predicted_class) DO UPDATE` touching the corrected columns only — `created_at` and `outcome_id` keep their first-write values on conflict, and the insert arm self-heals a row whose creation failed (that error is swallowed per Req 8.5, and a bare UPDATE would otherwise match zero rows on every later correction while the reconciling `corrections` write beside it succeeded). Never `INSERT OR REPLACE`: the surface can re-appear for the same meal, and a blanket upsert would reset `created_at`, wipe `corrected`, and overwrite a `predicted` side that Req 9.2 says never changes.
 
 The four boolean columns are denormalised copies of fields inside `record_json`, present so the corpus can be queried and browsed without decoding every blob.
 

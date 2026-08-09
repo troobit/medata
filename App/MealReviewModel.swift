@@ -46,6 +46,10 @@ struct ReviewFood: Identifiable {
     // Fixed at review-session start; re-presentation adopts the stored value
     // so created_at never resets (Req 9.2).
     var createdAtMs: Int64 = 0
+    // Session-local, never persisted: true from a user mutation until that
+    // mutation's first successful store write, so adoptStoredRows cannot
+    // clobber a change made during start()'s creation window.
+    var isDirty = false
 
     // The base the whole-meal scale multiplies (Req 6.4): the currently
     // derived mass — post-relabel — or a user-set assertion. Repeated scaling
@@ -279,6 +283,7 @@ final class MealReviewModel {
               let index = index(of: classId) else { return }
         guard !foods[index].flags.pickerOpenedUnchanged else { return }
         foods[index].flags.pickerOpenedUnchanged = true
+        foods[index].isDirty = true
         // Corpus-only fact: no displayed value changes, so no reconciling write.
         await persist(foods[index], reconcile: false)
     }
@@ -388,15 +393,24 @@ final class MealReviewModel {
         guard let index = index(of: classId) else { return }
         var food = foods[index]
         guard food.flags.classCorrected else { return }
+        clearRelabel(&food)
+        rebuildCorrectedSide(&food)
+        commit(food, at: index)
+        await persist(foods[index])
+    }
+
+    // The relabel-reversal state change shared by reverseRelabel and
+    // markAbsent: drops the relabel dimension, stamps was_reverted so the
+    // reversal stays visible to Decision 5's precision numerator, and
+    // restores the derived scale base so a later derivation cannot carry
+    // the old target's mass under another class's coefficients.
+    private func clearRelabel(_ food: inout ReviewFood) {
         food.flags.classCorrected = false
         food.flags.wasReverted = true
         food.shortlistRank = 0
         if !food.baseIsUserSet {
             food.scaleBaseMassG = food.predicted.massG
         }
-        rebuildCorrectedSide(&food)
-        commit(food, at: index)
-        await persist(foods[index])
     }
 
     // Strikes the entry out (Req 4.1): contribution removed, row leaves the
@@ -434,9 +448,14 @@ final class MealReviewModel {
         var food = foods[index]
         let trimmed = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if food.flags.absent, food.absentQueryText == trimmed { return }
+        // A standing relabel is reversed first — the reverseRelabel path —
+        // otherwise the absent row would keep the relabel-derived mass under
+        // the predicted class's coefficients and hide the reversal from
+        // Decision 5's precision numerator.
+        if food.flags.classCorrected {
+            clearRelabel(&food)
+        }
         food.flags.absent = true
-        food.flags.classCorrected = false
-        food.shortlistRank = 0
         food.absentQueryText = trimmed
         rebuildCorrectedSide(&food)
         commit(food, at: index)
@@ -474,11 +493,21 @@ final class MealReviewModel {
             rebuildCorrectedSide(&food)
             commit(food, at: index)
         }
-        // One reconciling write for the whole tap: rows first, the corrections
-        // upsert rides the final row's transaction so observers tick once.
+        // One store call for the whole tap: every row update and the
+        // reconciling corrections upsert share a single transaction, so a
+        // force-quit mid-write cannot leave some rows scaled while Records
+        // shows the unscaled total (design "the reconciling write").
         let affected = foods.filter { !$0.flags.rejected }
-        for (offset, food) in affected.enumerated() {
-            await persist(food, reconcile: offset == affected.count - 1)
+        guard !affected.isEmpty else { return }
+        do {
+            try await store.updateCorrectionRecords(
+                affected.map { correctionRecord(for: $0) },
+                upsertingCorrection: reconcilingCorrection()
+            )
+            for food in affected { markClean(food.classId) }
+        } catch {
+            // Req 8.5: never surfaced, never blocks recording.
+            log.error("event=correction.persist.failed mealId=\(self.record.id.uuidString, privacy: .public) class=scale error=\(String(describing: error), privacy: .public)")
         }
     }
 
@@ -524,6 +553,7 @@ final class MealReviewModel {
         if updated.flags.pickerOpenedUnchanged {
             updated.flags.pickerOpenedUnchanged = false
         }
+        updated.isDirty = true
         if alternativesFor == food.classId { pickerFoodChanged = true }
         foods[index] = updated
     }
@@ -535,10 +565,17 @@ final class MealReviewModel {
         let correction = reconcile ? reconcilingCorrection() : nil
         do {
             try await store.updateCorrectionRecord(record, upsertingCorrection: correction)
+            markClean(food.classId)
         } catch {
             // Req 8.5: never surfaced, never blocks recording.
             log.error("event=correction.persist.failed mealId=\(self.record.id.uuidString, privacy: .public) class=\(food.classId, privacy: .public) error=\(String(describing: error), privacy: .public)")
         }
+    }
+
+    // The stored row now carries the mutation, so adoptStoredRows may adopt it.
+    private func markClean(_ classId: String) {
+        guard let index = index(of: classId) else { return }
+        foods[index].isDirty = false
     }
 
     private func scheduleAmountPersist(_ classId: String) {
@@ -631,11 +668,24 @@ final class MealReviewModel {
 
     // Adopts rows already in the store — the re-presentation case: created_at
     // keeps its first value and a correction already made is not cleared.
+    // Merge, not overwrite: a stored row wins only when it carries state of
+    // its own or the in-memory row is untouched, so a mutation landing during
+    // start()'s creation window is not clobbered by the freshly created
+    // UNCHANGED row it raced against.
     private func adoptStoredRows() async {
         guard let stored = try? await store.correctionRecords(for: record.id) else { return }
         let byClass = Dictionary(uniqueKeysWithValues: stored.map { ($0.predicted.classID, $0) })
         for index in foods.indices {
             guard let row = byClass[foods[index].classId] else { continue }
+            let storedHasState = row.classCorrected || row.rejected || row.absent
+                || row.amountCorrected || row.pickerOpenedUnchanged
+                || row.captureAbandoned || row.wasReverted
+            guard storedHasState || !foods[index].isDirty else {
+                // Keep the pending mutation; adopt only the fixed created_at
+                // (Req 9.2) so its next persist writes the right identity.
+                foods[index].createdAtMs = row.createdAtMs
+                continue
+            }
             var food = foods[index]
             food.createdAtMs = row.createdAtMs
             food.flags.classCorrected = row.classCorrected
