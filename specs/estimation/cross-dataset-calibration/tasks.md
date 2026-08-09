@@ -146,7 +146,7 @@ references:
   - Stream: 1
   - Requirements: [6.1](requirements.md#6.1), [7.2](requirements.md#7.2)
 
-- [ ] 21. Implement generate.py meta-dict persistence <!-- id:fjp41xq -->
+- [x] 21. Implement generate.py meta-dict persistence <!-- id:fjp41xq -->
   - Blocked-by: fjp41xp (Write generate.py persistence tests), fjp41xg (Add CalibrationArtifact schema fields with serialization round-trip test)
   - Stream: 1
   - Requirements: [6.1](requirements.md#6.1), [7.2](requirements.md#7.2)
@@ -159,7 +159,7 @@ references:
   - Stream: 2
   - Requirements: [7.1](requirements.md#7.1)
 
-- [ ] 23. Write end-to-end calibrate-to-bake integration test <!-- id:fjp41xs -->
+- [x] 23. Write end-to-end calibrate-to-bake integration test <!-- id:fjp41xs -->
   - synthetic MetaFood3D fixture set to HarnessCLI calibrate to calibrate.json to generate.py bake
   - new per-class fields persist; palette lock holds
   - Blocked-by: fjp41xo (Wire HarnessCLI/main.swift for multi-dataset calibrate), fjp41xq (Implement generate.py meta-dict persistence), fjp41xb (Implement ingest.py)

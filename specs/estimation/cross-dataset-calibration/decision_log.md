@@ -417,3 +417,43 @@ Stream 1 only (`tools/metafood3d/`): `build_mapping.py` parses `v2Standard` (mar
 
 ---
 </content>
+
+## Decision 16: MetaFood3D-only mixture β stamps the food-support reference
+
+**Date**: 2026-08-09
+**Status**: accepted
+
+### Context
+
+The calibrate artifact stamps each class's `support_plane_reference`, and `generate.py` applies a β only when that stamp matches the runtime's `foodSupport` basis (support-plane-reference Req 5.4). `CalibrationArtifact.reference(for:)` stamped every mixture-provenance β `plateRegion` — correct for Nutrition5k mixture rows, whose volumes come from the flood-filled plate-region fit (Decision 17 of that spec). MetaFood3D rows enter the same mixture solve (Decision 11), so the task 23 end-to-end test surfaced that a MetaFood3D-only carb staple clearing the effective-sample and relative-SE gates was reference-skipped at bake — no MetaFood3D β could ever reach the shipped DB, contradicting Req 8.3 ("SHALL be baked ... including MetaFood3D-only carb staples").
+
+### Decision
+
+`CalibrationArtifact.reference(for:singleDominant:contributingDatasets:)` stamps a mixture-provenance β `foodSupport` when its recorded contributing datasets are non-empty and exclusively `metafood3d`; any Nutrition5k contribution, or an empty contributor record (the pre-cross-dataset two-argument merge), keeps the fail-closed `plateRegion` stamp.
+
+### Rationale
+
+A MetaFood3D β is fitted on volumes integrated above the authored plane the object rests on (Decision 13) — exact by construction, residual 0. That plane IS the object's support surface, so the volume basis is the same one the device's `foodSupport` fitter measures above at inference; `plateRegion` describes a flood-fill fit that never ran for these rows. Stamping the true basis is what lets Req 8.3 hold end-to-end while the Req 5.4 basis gate keeps genuine N5k mixture β (and mixed-basis pools) out of the bake.
+
+### Alternatives Considered
+
+- **Keep `plateRegion` for all mixture β**: no code change, maximally fail-closed — Rejected: makes Req 8.3 unsatisfiable; every MetaFood3D-only class is silently reference-skipped at bake forever.
+- **Relax the `generate.py` reference gate for MetaFood3D classes**: bake-side special case — Rejected: the artifact would keep recording a reference that is factually wrong for these β, and the bake would need dataset knowledge the artifact already encodes better per class.
+- **Record the reference per observation and propagate the exact basis into the merge**: most precise — Rejected: the merge only sees per-dataset thresholded effective samples today; a per-observation reference plumb-through is a larger change with the same outcome for every case that exists (MF3D rows are the only injected-plane rows).
+
+### Consequences
+
+**Positive:**
+- Req 8.3 holds end-to-end: a MetaFood3D-only staple clearing the statistical gates bakes, carrying `single_source_uncorroborated` provenance.
+- The stamp now states the basis the β was actually fitted on; N5k mixture β and mixed-basis pooled β keep failing closed.
+- The pre-cross-dataset two-argument merge (empty contributor records) is bit-identical, preserving the Req 7.1 golden.
+
+**Negative:**
+- The discriminator is the dataset name string, mirroring the CLI's injected-plane branch keying — a second dataset with authored planes would need to extend it.
+- A class whose N5k rows all sit below τ_eff (so `nutrition5k` never enters its contributor record) would stamp `foodSupport` despite marginal plate-region rows having entered the pooled solve; the influence is bounded by the sub-τ_eff mass shares.
+
+### Impact
+
+`HarnessCore/CalibrationArtifact.swift` (`reference(for:)` + the `ClassEntry` construction), pinned by `CalibrationReferenceGuardTests` and exercised end-to-end by `EndToEndCalibrateBakeTests`. No change to `generate.py`, the merge, or any on-device code.
+
+---

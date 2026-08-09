@@ -93,7 +93,10 @@ fixtures are stamped `palette_version="v2"`.
   Fixing it means retargeting n5k's `parse_palette` to `v2Standard` and
   regenerating its artifact from the gitignored ingredients CSV (main
   checkout only).
-- `generate.py` persistence of the cross-dataset meta dicts is
-  test-pinned (`tools/food_db/tests/test_cross_dataset_persistence.py`,
-  red) but NOT implemented: task 21 waits on the stream-2
-  CalibrationArtifact schema (task 11) for the artifact key spellings.
+- `generate.py` persists the cross-dataset meta dicts
+  (`calibration_contributing_datasets_per_class`,
+  `calibration_single_source_classes`) for APPLIED classes only — a
+  reference-skipped β is not baked, so its provenance is not recorded as
+  if it were. Pinned by
+  `tools/food_db/tests/test_cross_dataset_persistence.py` (task 21) and
+  end-to-end by `EndToEndCalibrateBakeTests` (task 23).
