@@ -732,3 +732,38 @@ The eligible universe is 25 solid classes. A five-item shortlist already covers 
 - The shortlist is worse until the estimation spec lands: recency cannot suggest a food the user has never chosen.
 - Early corpus rows carry recency-ordered ranks, so shortlist-quality analysis must partition on `shortlist_source`.
 - A second spec is now owed, and until it exists Decision 13's finding sits recorded but unremedied. Filed 2026-08-07 as [`estimation/alternative-class-candidates`](../../estimation/alternative-class-candidates/requirements.md), at its requirements gate; its Decision 3 corrects two figures used above — the tensor is 36 channels, not 33 (~99.5 M reads at 1920 × 1440), and the loop this decision proposed extending is serial, not parallelised.
+
+---
+
+## Decision 19: The shared re-derivation serves Pipeline and the review path; PaletteMigrator keeps its own arithmetic
+
+**Date**: 2026-08-09
+**Status**: accepted
+
+### Context
+
+Decision 17 and the design's β divide-out section place the shared macro re-derivation in `MedataCore/Sources/Macros/`, citing three call sites: Pipeline, the review path, and `PaletteMigrator.swift`. Implementation exposed a dependency constraint the design did not state: `Persistence` (which owns `PaletteMigrator`) depends only on `PortableContracts`, `GRDB` and `ZIPFoundation` — a documented boundary asserted in `docs/agent-notes/persistence.md` — while `Macros` depends on `Foods` and `Volume`. `PaletteMigrator` cannot call into `Macros` without pulling the food database and volume modules into every `Persistence` consumer, including the widget-adjacent link closures that boundary exists to protect.
+
+`PaletteMigrator` also derives under a different contract: per-edition lookups on both sides of a palette migration through its own narrow `PaletteFoodDatabase` protocol, per `estimation/pipeline` design §6.12, with its own tests.
+
+### Decision
+
+`Macros.reDerive(preBetaVolumeCm3:as:beta:database:edition:liquidClassIds:liquidOverEstimate:)` is the shared derivation, implemented as a thin front on `Macros.compute` — the derivation Pipeline itself uses — plus `Macros.betaCorrection(for:database:edition:)` (now also called by Pipeline's `buildBeta`) and the `Macros.preBetaVolume(storedVolumeCm3:betaUsed:)` fallback. `PaletteMigrator` keeps its §6.12 arithmetic unchanged.
+
+### Rationale
+
+Decision 8's impact clause requires the review path's recomputation to share Pipeline's derivation so a corrected meal and a re-derived one agree. Routing `reDerive` through `Macros.compute` satisfies that by construction. Extending the sharing to `PaletteMigrator` would trade a documented module boundary for the de-duplication of four lines of arithmetic that operate under a different lookup contract.
+
+### Alternatives Considered
+
+- **Add `Macros` (and transitively `Foods`, `Volume`) to `Persistence`'s dependencies**: Literal three-call-site sharing - Rejected because it breaks the documented Persistence dependency boundary and widens the link closure of every Persistence consumer.
+- **Move the pure scalar arithmetic into `PortableContracts`**: Reachable from both sides - Rejected because `PaletteMigrator`'s §6.12 formula is not the same expression, so nothing real would be shared; it would add a third place where derivation arithmetic lives.
+
+### Consequences
+
+**Positive:**
+- Review-path relabels reproduce Pipeline's computation exactly, including β status stamping.
+- No dependency-graph change; the Persistence boundary holds.
+
+**Negative:**
+- `PaletteMigrator` remains an independent derivation site; a change to the macro formula must still be mirrored there by hand.
