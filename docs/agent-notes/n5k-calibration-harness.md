@@ -205,6 +205,22 @@ router/loader/calibrator changes. Everything below is additive.
   listed as unvalidated), `heldOutSplit` (seeded shuffle of sorted ids) and
   `heldOutAnchor` (mass = V_est·β·ρ_DB MAPE; broccoli cross-check). All
   reported, none gate a bake (Decision 9).
+- Per-class `support_plane_reference` stamping (Decision 16 of the
+  cross-dataset spec): a mixture-provenance β whose contributing datasets
+  are exclusively `metafood3d` stamps `foodSupport` — its volumes were
+  integrated above the authored plane the object rests on, which is the
+  device's basis — so it APPLIES at bake (Req 8.3). Any N5k contribution,
+  or an empty contributor record (the two-argument merge), keeps the
+  fail-closed `plateRegion` stamp, so the 2026-08-05 "bake bakes nothing"
+  behaviour is unchanged for N5k-only runs.
+- `EndToEndCalibrateBakeTests` (task 23) runs the REAL chain: synthetic
+  MF3D fixture set on disk → the built `HarnessCLI` binary via Process →
+  calibrate.json → `generate.py` bake (PATH `python3`; the Apple 3.9
+  cannot evaluate the `str | None` annotations) → SQLite meta/row
+  asserts. It locates the products directory via `dladdr` on
+  `#dsohandle` — the swift-testing runner is a toolchain helper, so
+  Bundle-based lookups fail. `generate.py` runs with cwd = temp dir so
+  the relative OUTPUT_DIR keeps the committed DBs untouched.
 - `HarnessCLI` — `--ingest-summary` is now REPEATABLE (one per dataset) and
   `--heldout-frac` selects the MetaFood3D anchor holdout. A run with
   MetaFood3D fixtures REQUIRES the MF3D summary to carry

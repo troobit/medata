@@ -671,10 +671,24 @@ public struct CalibrationArtifact: Codable {
     // the food-support plane (Decision 17). Pooled/unity classes carry no fit of
     // their own, so they ride the pool's reference — which is what `betaPool` is
     // fitted under, and what a consumer applying them would be applying.
+    //
+    // Exception (cross-dataset-calibration Decision 16, Req 8.3): a mixture β
+    // whose contributing datasets are exclusively MetaFood3D was integrated
+    // above the AUTHORED plane the object rests on (Decision 13) — the
+    // food-support basis, not a flood-filled plate region — so it stamps
+    // `foodSupport` and is applicable at bake. Any Nutrition5k contribution,
+    // or an empty contributor record (the pre-cross-dataset merge), keeps the
+    // fail-closed `plateRegion` stamp.
     static func reference(for provenance: BetaProvenance,
-                          singleDominant: SupportPlaneReference?) -> String {
+                          singleDominant: SupportPlaneReference?,
+                          contributingDatasets: [String: Int] = [:]) -> String {
         switch provenance {
-        case .n5kMixture: return SupportPlaneReference.plateRegion.rawValue
+        case .n5kMixture:
+            let metaFood3DOnly = !contributingDatasets.isEmpty
+                && contributingDatasets.keys.allSatisfy { $0 == "metafood3d" }
+            return metaFood3DOnly
+                ? SupportPlaneReference.foodSupport.rawValue
+                : SupportPlaneReference.plateRegion.rawValue
         case .n5kSingleDominant, .gravimetric, .none:
             return singleDominant?.rawValue ?? ""
         }
@@ -695,7 +709,8 @@ public struct CalibrationArtifact: Codable {
                 effectiveSample: c.effectiveSample,
                 clamped: c.clamped,
                 supportPlaneReference: Self.reference(
-                    for: c.provenance, singleDominant: supportPlaneReference),
+                    for: c.provenance, singleDominant: supportPlaneReference,
+                    contributingDatasets: c.contributingDatasets),
                 contributingDatasets: c.contributingDatasets,
                 singleSourceUncorroborated: c.singleSourceUncorroborated)
         }
