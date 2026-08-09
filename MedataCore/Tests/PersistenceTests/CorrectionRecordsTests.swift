@@ -135,6 +135,121 @@ final class CorrectionRecordsTests: XCTestCase {
                       "re-creation must not clear a correction already made")
     }
 
+    // MARK: - Self-healing mutation (Req 8.5 hardening)
+    //
+    // updateCorrectionRecord is an upsert, not a bare UPDATE: when the
+    // creation INSERT failed (its error is swallowed per Req 8.5), the first
+    // mutation must materialise the row rather than matching zero rows on
+    // every later correction while the reconciling corrections write beside
+    // it succeeds.
+
+    func testUpdateWithoutPriorCreateInsertsTheRow() async throws {
+        let mealId = UUID()
+        var record = makeCorrectionRecord(mealId: mealId)
+        record.classCorrected = true
+        record.corrected = makeDerivation(classId: "couscous")
+        try await store.updateCorrectionRecord(record, upsertingCorrection: nil)
+
+        let rows = try await store.correctionRecords(for: mealId)
+        XCTAssertEqual(rows.count, 1, "mutation must self-heal a missing row")
+        XCTAssertTrue(rows[0].classCorrected)
+        XCTAssertEqual(rows[0].corrected.classID, "couscous")
+    }
+
+    func testBatchUpdateWritesEveryRowAndTheCorrectionTogether() async throws {
+        let mealId = UUID()
+        var rice = makeCorrectionRecord(mealId: mealId)
+        var peas = makeCorrectionRecord(mealId: mealId)
+        peas.predicted = makeDerivation(classId: "peas")
+        try await store.createCorrectionRecords([rice, peas])
+
+        rice.amountCorrected = true
+        rice.updatedAtMs = rice.createdAtMs + 1_000
+        peas.amountCorrected = true
+        peas.updatedAtMs = peas.createdAtMs + 1_000
+        var correction = PbUserCorrection()
+        correction.createdAtMs = rice.createdAtMs
+        correction.correctedTotalCarbsG = 18
+        try await store.updateCorrectionRecords(
+            [rice, peas], upsertingCorrection: correction
+        )
+
+        let rows = try await store.correctionRecords(for: mealId)
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertTrue(rows.allSatisfy(\.amountCorrected),
+                      "every row of the batch must carry the update")
+        let stored = try await store.corrections(for: mealId)
+        XCTAssertEqual(stored.count, 1)
+        XCTAssertEqual(stored[0].correctedTotalCarbsG, 18, accuracy: 1e-6,
+                       "the reconciling upsert rides the same call")
+    }
+
+    // MARK: - No-eviction exemptions (Req 9.9)
+    //
+    // The corpus admits no deletion path: the Debug reset clears every event
+    // table but leaves correction_records, and the artefact sweep exempts
+    // meals holding an actual correction while never touching the corpus.
+
+    func testDeleteAllDataLeavesCorrectionRecordsIntact() async throws {
+        let meal = makeMealRecord()
+        try await store.save(meal, artefacts: [])
+        var record = makeCorrectionRecord(mealId: meal.id)
+        try await store.createCorrectionRecords([record])
+        record.rejected = true
+        record.updatedAtMs = record.createdAtMs + 1_000
+        try await store.updateCorrectionRecord(record, upsertingCorrection: nil)
+
+        try await store.deleteAllData()
+
+        let meals = try await store.allMeals()
+        XCTAssertTrue(meals.isEmpty, "the Debug reset clears every meal")
+        let survivors = try await store.correctionRecords(for: meal.id)
+        XCTAssertEqual(survivors.count, 1)
+        XCTAssertTrue(survivors[0].rejected,
+                      "the Debug reset must not touch the corpus")
+    }
+
+    func testDeleteArtefactsExemptsCorrectedMealsAndKeepsCorpus() async throws {
+        // Two old meals: one holding an ACTUAL correction, one holding only
+        // the UNCHANGED row every reviewed meal has (Req 8.4: mere row
+        // existence is not an exemption).
+        let old = Date(timeIntervalSinceNow: -60 * 24 * 60 * 60)
+        let correctedMeal = makeMealRecord(createdAt: old)
+        let unchangedMeal = makeMealRecord(createdAt: old)
+        let artefact = MealArtefact(
+            kind: "mask", viewId: "nadir", filename: "nadir.mask",
+            bytesSize: 4, sha256Hex: "abc"
+        )
+        for meal in [correctedMeal, unchangedMeal] {
+            try await store.save(meal, artefacts: [])
+            try await store.writeArtefact(mealId: meal.id, artefact: artefact,
+                                          data: Data([1, 2, 3, 4]))
+        }
+        var corrected = makeCorrectionRecord(mealId: correctedMeal.id)
+        try await store.createCorrectionRecords([corrected])
+        corrected.amountCorrected = true
+        corrected.updatedAtMs = corrected.createdAtMs + 1_000
+        try await store.updateCorrectionRecord(corrected, upsertingCorrection: nil)
+        try await store.createCorrectionRecords(
+            [makeCorrectionRecord(mealId: unchangedMeal.id)]
+        )
+
+        try await store.deleteArtefacts(
+            olderThan: Date(timeIntervalSinceNow: -30 * 24 * 60 * 60)
+        )
+
+        let keptBytes = try await store.artefactData(mealId: correctedMeal.id, kind: "mask")
+        XCTAssertNotNil(keptBytes,
+                        "a meal holding an actual correction is exempt from the sweep")
+        let sweptBytes = try await store.artefactData(mealId: unchangedMeal.id, kind: "mask")
+        XCTAssertNil(sweptBytes, "mere row existence is not an exemption")
+        // The corpus itself is untouched on both sides (Req 9.9).
+        let correctedRows = try await store.correctionRecords(for: correctedMeal.id)
+        XCTAssertEqual(correctedRows.count, 1)
+        let unchangedRows = try await store.correctionRecords(for: unchangedMeal.id)
+        XCTAssertEqual(unchangedRows.count, 1)
+    }
+
     // MARK: - The reconciling write (Req 8.5, design "the reconciling write")
 
     func testUpsertCorrectionToleratesSameMillisecondWrites() async throws {
@@ -211,7 +326,7 @@ final class CorrectionRecordsTests: XCTestCase {
         return r
     }
 
-    private func makeMealRecord() -> MealRecord {
+    private func makeMealRecord(createdAt: Date = Date()) -> MealRecord {
         var perClassEntry = PbPerClassMacros()
         perClassEntry.volumeCm3 = 108
         perClassEntry.massG = 113.4
@@ -231,7 +346,7 @@ final class CorrectionRecordsTests: XCTestCase {
         confidence.sigmaMeal = 0.8
 
         return MealRecord(
-            createdAt: Date(),
+            createdAt: createdAt,
             capturePath: .singleViewLidar,
             databaseEdition: "CoFID 2024",
             paletteVersion: "v2",

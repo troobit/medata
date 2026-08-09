@@ -362,25 +362,24 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         _ record: PbCorrectionRecord,
         upsertingCorrection correction: PbUserCorrection?
     ) async throws {
-        let recordJSON = try record.jsonString()
+        try await updateCorrectionRecords([record], upsertingCorrection: correction)
+    }
+
+    public func updateCorrectionRecords(
+        _ records: [PbCorrectionRecord],
+        upsertingCorrection correction: PbUserCorrection?
+    ) async throws {
+        guard let first = records.first else { return }
+        // Encode before the transaction so a bad record aborts before any write.
+        let rows: [(record: PbCorrectionRecord, json: String)] = try records.map {
+            ($0, try $0.jsonString())
+        }
         let correctionJSON = try correction.map { try $0.jsonString() }
-        let mealID = record.mealID
+        let mealID = first.mealID
         try await queue.write { db in
-            // Mutation touches the corrected columns only — created_at and
-            // the row identity never change (Req 9.2, 9.3).
-            try db.execute(
-                sql: """
-                    UPDATE correction_records
-                    SET updated_at = ?, class_corrected = ?, rejected = ?,
-                        absent = ?, amount_corrected = ?, record_json = ?
-                    WHERE meal_id = ? AND predicted_class = ?
-                    """,
-                arguments: [
-                    record.updatedAtMs, record.classCorrected, record.rejected,
-                    record.absent, record.amountCorrected, recordJSON,
-                    mealID, record.predicted.classID
-                ]
-            )
+            for (record, json) in rows {
+                try Self.upsertCorrectionRecordRow(db, record: record, json: json)
+            }
             // The reconciling PbUserCorrection write shares this transaction
             // (design "the reconciling write"): a session killed mid-review
             // must not leave the corpus holding a relabel while Records shows
@@ -395,6 +394,42 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             // The meal's displayed value changed (appendCorrection precedent).
             changeBroadcaster.notify()
         }
+    }
+
+    // Mutation is a self-healing upsert, not a bare UPDATE: if the creation
+    // INSERT failed — its error is swallowed per Req 8.5 — a bare UPDATE
+    // would match zero rows on every later correction while the reconciling
+    // corrections upsert beside it succeeded, leaving Records showing a
+    // corrected meal the corpus never recorded. On conflict only the
+    // corrected columns are touched: created_at and outcome_id keep their
+    // first-write values and the row identity never changes (Req 9.2, 9.3).
+    private static func upsertCorrectionRecordRow(
+        _ db: Database, record: PbCorrectionRecord, json: String
+    ) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO correction_records
+                    (meal_id, predicted_class, outcome_id, created_at,
+                     updated_at, class_corrected, rejected, absent,
+                     amount_corrected, record_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (meal_id, predicted_class) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    class_corrected = excluded.class_corrected,
+                    rejected = excluded.rejected,
+                    absent = excluded.absent,
+                    amount_corrected = excluded.amount_corrected,
+                    record_json = excluded.record_json
+                """,
+            arguments: [
+                record.mealID, record.predicted.classID,
+                record.outcomeID.isEmpty ? nil : record.outcomeID,
+                record.createdAtMs, record.updatedAtMs,
+                record.classCorrected, record.rejected,
+                record.absent, record.amountCorrected,
+                json
+            ]
+        )
     }
 
     public func upsertCorrection(mealId: UUID, correction: PbUserCorrection) async throws {
