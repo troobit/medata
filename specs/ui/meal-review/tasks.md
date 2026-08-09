@@ -103,7 +103,7 @@ references:
   - Stream: 2
   - Requirements: [1.5](requirements.md#1.5), [2.1](requirements.md#2.1), [2.8](requirements.md#2.8)
 
-- [ ] 11. MealReviewModel <!-- id:fffbfh1 -->
+- [x] 11. MealReviewModel <!-- id:fffbfh1 -->
   - @Observable @MainActor; ReviewFood holds an immutable predicted, an optional corrected, independent CorrectionFlags and a massSource. classId stays the identity key after a relabel, so relabelling two foods to the same target does not merge their rows and predicted.class_index remains a valid mask join
   - Mutators are async because the store is (PersistenceStore.swift:365); each upserts its CorrectionRecord and the reconciling PbUserCorrection in one transaction before returning, and each is idempotent per (classId, resulting state)
   - Written on every mutation, not at record(). An earlier draft deferred to the primary action; a session killed mid-review would then leave the corpus holding a relabel while Records showed the uncorrected total permanently. record() only dismisses
@@ -114,7 +114,7 @@ references:
   - Stream: 2
   - Requirements: [3.11](requirements.md#3.11), [4.1](requirements.md#4.1), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [8.5](requirements.md#8.5), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4), [9.5](requirements.md#9.5)
 
-- [ ] 12. Relabel shortlist, eligible list and the absent action <!-- id:fffbfh2 -->
+- [x] 12. Relabel shortlist, eligible list and the absent action <!-- id:fffbfh2 -->
   - Shortlist ordered by recency, read back from correction_records: rows with predicted_class = this class, ordered updated_at desc, distinct corrected class. No new store is needed — this is why task 5 adds the predicted_class index
   - shortlist_source is written as "recency" on every record made under this spec, so rows stay distinguishable from ones made later under score ordering (Decision 18). Without it shortlist_rank means two different things
   - At most five alternatives before further interaction; no score, percentage or confidence tier displayed for any of them
@@ -125,7 +125,7 @@ references:
   - Stream: 2
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.8](requirements.md#3.8), [3.9](requirements.md#3.9), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [9.7](requirements.md#9.7)
 
-- [ ] 13. MealReviewView <!-- id:fffbfh3 -->
+- [x] 13. MealReviewView <!-- id:fffbfh3 -->
   - Layout order: photo + outlines ~40% fixed, then total + confidence pill + corrected marker, primary action, and the scale control — all above the scroll boundary. Accessory signals (calibration, liquid over-estimate, unknown region) collapse to one expandable line below it, then the food rows
   - The very-low-confidence surface owns the fold when sigma < 0.20 and suspends the Req 6.6 guarantee: a retake decision precedes any adjustment. This is the one case prerequisites.md cannot treat as a pure layout check
   - Each outline carries a numbered badge at its largest contour's centroid matching its row — the non-colour identity channel, and the means by which adjacent foods stay distinguishable under Differentiate Without Colour. Stroke colour alone satisfies neither
@@ -139,7 +139,7 @@ references:
   - Stream: 2
   - Requirements: [1.1](requirements.md#1.1), [1.4](requirements.md#1.4), [1.6](requirements.md#1.6), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [2.7](requirements.md#2.7), [3.10](requirements.md#3.10), [4.2](requirements.md#4.2), [6.6](requirements.md#6.6), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.5](requirements.md#7.5), [7.8](requirements.md#7.8), [10.1](requirements.md#10.1), [10.2](requirements.md#10.2), [10.3](requirements.md#10.3), [10.4](requirements.md#10.4), [10.5](requirements.md#10.5), [10.6](requirements.md#10.6), [10.7](requirements.md#10.7)
 
-- [ ] 14. Whole-meal scale and per-food amount wiring <!-- id:fffbfh4 -->
+- [x] 14. Whole-meal scale and per-food amount wiring <!-- id:fffbfh4 -->
   - PlateFraction is reused (ResultView.swift:193-203); stops are fractions of the estimate at or below one, covering leftovers in one interaction. Correcting upward goes through the per-food serving and gram controls, which are not capped at the measured volume
   - The scale applies to each row's currently derived amount — post-relabel, pre-user-amount — and does not compound. ResultView.applyFraction (:739) scales row.originalGrams, which becomes wrong once relabelling exists: scaling the rice mass after the user said couscous discards the re-derivation
   - A row already carrying a user-set mass is scaled from that mass, and its mass_source becomes MEAL_SCALE
@@ -151,7 +151,7 @@ references:
   - Stream: 2
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [6.7](requirements.md#6.7), [6.8](requirements.md#6.8), [6.9](requirements.md#6.9), [6.10](requirements.md#6.10), [7.6](requirements.md#7.6), [7.7](requirements.md#7.7), [9.6](requirements.md#9.6)
 
-- [ ] 15. Capture-stack rewire and ResultView collapse <!-- id:fffbfh5 -->
+- [x] 15. Capture-stack rewire and ResultView collapse <!-- id:fffbfh5 -->
   - CaptureRoute loses .review; runEstimation pushes .result directly (CaptureFlowModel.swift:841), so no interaction sits between estimation completing and the surface appearing
   - SegmentationReviewView is deleted; ResultView.mode collapses to historyDetail. ResultView itself is not deleted — it remains the Records/Graph read path
   - veryLowSurface is gated to the review path and removed from historyDetail. showsVeryLowSurface (:298) checks only sigma and keepAsIsDismissed, so its retake button at :930 is not mode-gated today; it is already inert in history (onRetake defaults to {}), so this makes a dead affordance explicit rather than changing behaviour
@@ -161,7 +161,7 @@ references:
   - Stream: 2
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [7.4](requirements.md#7.4)
 
-- [ ] 16. Corrected food names on every display surface <!-- id:fffbfh6 -->
+- [x] 16. Corrected food names on every display surface <!-- id:fffbfh6 -->
   - Read PbUserCorrection.corrected_class_ids at ResultView.swift:316-330, MealOverviewView.swift:226, MealHistoryModel.swift:81, RecordsModel.swift:105-121 and TrendsModel.swift:108
   - MealOverviewView composes its own display and is one of only two surfaces that names foods
   - The meal total keeps the stored-total-plus-per-class-delta rule (ResultView.swift:363-367) so historic records do not jump when the database edition changes: Macros.compute is called per corrected food and its totalCarbsG used only as that food's contribution, never as the meal total
@@ -170,7 +170,7 @@ references:
   - Stream: 2
   - Requirements: [8.6](requirements.md#8.6), [8.7](requirements.md#8.7)
 
-- [ ] 17. Corrections browse and JSONL export in EstimationLogView <!-- id:fffbfh7 -->
+- [x] 17. Corrections browse and JSONL export in EstimationLogView <!-- id:fffbfh7 -->
   - A corrections section reading correction_records, and a JSONL export beside the existing share-sheet path
   - exportArchive() shipping raw SQLite does not satisfy interpretable as a training example without the app
   - No capture imagery in the export; segmenter_source present per row so stub-derived corrections can be excluded from a training export

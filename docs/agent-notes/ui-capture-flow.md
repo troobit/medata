@@ -1,13 +1,20 @@
 # UI capture flow (App/)
 
 > **Post-capture flow re-merged by `specs/ui/meal-review/` (2026-08-09, superseding
-> design-handoff-00 §5 and the capture-step Result).** The two-screen split —
-> `SegmentationReviewView` then `ResultView(.justCaptured)` — is replaced by one review
-> surface (`MealReviewView` + `MealReviewModel`): `CaptureRoute` loses `.review`, estimation
-> completion pushes the surface directly, `SegmentationReviewView` is deleted, and
-> `ResultView.mode` collapses to `historyDetail` (the Records/Graph read path only). The
-> surface permits relabel, reject, absent-food and amount corrections; each is persisted per
-> detected food in the **`correction_records`** table the moment it is made.
+> design-handoff-00 §5 and the capture-step Result; implemented on the App side in the
+> same cycle).** The two-screen split — `SegmentationReviewView` then
+> `ResultView(.justCaptured)` — is replaced by one review surface (`MealReviewView` +
+> `MealReviewModel`, both registered in the four pbxproj places): `CaptureRoute` is the
+> single `.result` case, estimation completion pushes the surface directly,
+> `SegmentationReviewView` is deleted, and `ResultView` serves only the Records/Graph
+> history read path (the `ResultPresentation` enum, `onRetake`, and the very-low retake
+> surface are gone from it — the very-low surface lives on `MealReviewView`, where it owns
+> the fold below σ 0.20). The surface permits relabel, reject, absent-food and amount
+> corrections; each is persisted per detected food in the **`correction_records`** table
+> the moment it is made (mutators call `updateCorrectionRecord(_:upsertingCorrection:)` so
+> the corpus row and the reconciling `corrections` row share one transaction; amount edits
+> debounce the store write 500 ms per food; `discard()` stamps `capture_abandoned` with NO
+> corrections upsert so an abandoned meal never gains the corrected marker).
 > **`correction_records` is the one store exempt from every deletion path** — no
 > `deleteMeal`/`deleteRecords` cascade, no age or count bound, excluded from the artefact
 > sweep's reach, and **must never be added to the Settings Debug reset

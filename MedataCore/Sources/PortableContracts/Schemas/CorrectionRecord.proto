@@ -79,4 +79,9 @@ message CorrectionRecord {
     // candidate matrix lands (Decision 18). Without it shortlist_rank
     // would silently mean two different things.
     string shortlist_source = 21;
+    // Set when a correction dimension was applied and then reversed within
+    // the review session, so a rejected-then-un-rejected food stays
+    // distinguishable from a confirmed correct prediction (design
+    // "Record lifecycle"; Decision 5's precision numerator).
+    bool   was_reverted = 22;
 }

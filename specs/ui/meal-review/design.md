@@ -276,6 +276,8 @@ message CorrectionRecord {
     string shortlist_source = 21;       // Req 3.3 — "recency" now, "score" after the
                                         // estimation-domain candidate matrix lands
     string absent_query_text = 20;      // Req 5.2
+    bool   was_reverted = 22;           // a reversed correction is not a confirmed
+                                        // prediction (Record lifecycle; Decision 20)
 }
 ```
 
