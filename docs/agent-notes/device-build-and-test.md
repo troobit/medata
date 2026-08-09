@@ -19,9 +19,14 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
     overlapping in time — e.g. in two worktrees — clobber each other's log, so
     the printed totals can belong to the *other* run (observed 2026-08-08: both
     orbit variant runs reported an identical XCTest line down to the timing
-    stamp). Pass/fail from the live stream and the exit code are still per-run
-    truth; only the grepped summary lines are unreliable under concurrency.
-    Never run two `make test` invocations concurrently if the totals matter.
+    stamp). Pass/fail from the live stream is per-run truth; only the grepped
+    summary lines are unreliable under concurrency. Never run two `make test`
+    invocations concurrently if the totals matter.
+  - **Exit code**: fixed 2026-08-09 — the target sets `pipefail`, so
+    `make test` now exits non-zero on a failing suite. Before the fix the exit
+    status was tee's (always 0), so any gate that trusted the exit code alone
+    proved nothing; a red test survived one such gate on 2026-08-09 and was
+    caught only by reading the log's failure markers.
 - `make deploy-device` — Debug build + install + launch. Makefile DEFAULTS point at `you` (iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`), the current primary device — no override needed. To target another device, override per invocation: `make deploy-device DEVICE_UDID=<devicectl-id> DEVICE_NAME=<name>` (same overrides for `deploy-release-stub` / `logs-device`; `logs-device` needs sudo for tethered collection). UI/non-capture work only.
 - `make deploy-release-stub` — the automated Path B below (capture testing).
 - `make logs-device` — pulls the last `LOG_LAST` (default 10m) of device logs

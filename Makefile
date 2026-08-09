@@ -71,8 +71,12 @@ build:
 # Print BOTH totals: XCTest ("Executed N tests") and swift-testing
 # ("Test run with N tests"). An agent once read only the swift-testing line and
 # concluded the suite was 16 tests when it was 313 + 16.
+# pipefail: without it the target's exit status was tee's (always 0), so a
+# failing suite still "passed" by exit code — discovered 2026-08-09 when a red
+# test survived the gate. Concurrent runs still share the log path (totals can
+# cross-contaminate); see docs/agent-notes/device-build-and-test.md.
 test:
-	swift test 2>&1 | tee /tmp/medata-swift-test.log
+	set -o pipefail; swift test 2>&1 | tee /tmp/medata-swift-test.log
 	@echo ""
 	@echo "---- Test totals (two frameworks — report BOTH) ----"
 	@echo "XCTest:        $$(grep -E 'Executed [0-9]+ tests' /tmp/medata-swift-test.log | tail -1 | sed 's/^[[:space:]]*//')"
