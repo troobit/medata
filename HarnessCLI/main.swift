@@ -12,6 +12,7 @@ import Foundation
 import HarnessCore
 import PortableContracts
 import Segmentation
+import SupportPlane
 import SwiftProtobuf
 
 // MARK: - Argument Parsing
@@ -27,9 +28,15 @@ struct Args {
     var seed: UInt64 = 42
     var mappingVersion: String = ""
     var intrinsicsModel: String = "realsense_d435_factory"
-    // Ingestion run_summary.json (Req 4.1): carries the unmapped-mass mixture
-    // exclusions the harness cannot derive from fixtures, plus skip counts.
-    var ingestSummaryPath: String = ""
+    // Ingestion run_summary.json files (Req 4.1): carry the unmapped-mass
+    // mixture exclusions the harness cannot derive from fixtures, plus skip
+    // counts. Repeatable — one per dataset (cross-dataset-calibration
+    // Req 10.1): the MetaFood3D summary additionally carries the render
+    // configuration the injected-plane branch needs.
+    var ingestSummaryPaths: [String] = []
+    // Fraction of MetaFood3D objects held out of the fit for the Req 10.2
+    // accuracy anchor. 0 = no holdout (the anchor is then not measured).
+    var heldoutFrac: Float = 0
 }
 
 func parseArgs() -> Args? {
@@ -53,7 +60,10 @@ func parseArgs() -> Args? {
             if let s = it.next(), let v = UInt64(s) { result.seed = v }
         case "--mapping-version":   result.mappingVersion   = it.next() ?? ""
         case "--intrinsics-model":  result.intrinsicsModel  = it.next() ?? ""
-        case "--ingest-summary":    result.ingestSummaryPath = it.next() ?? ""
+        case "--ingest-summary":
+            if let path = it.next() { result.ingestSummaryPaths.append(path) }
+        case "--heldout-frac":
+            if let s = it.next(), let f = Float(s) { result.heldoutFrac = f }
         default: break
         }
     }
@@ -227,6 +237,57 @@ struct N5kEvalJSON: Encodable {
         let effectiveSamplesByPath: [String: [String: Int]]
         let insufficientClasses: [String]
     }
+    // Cross-dataset reporting block (cross-dataset-calibration Req 8.2/10).
+    // Optional and omitted when nil, so an N5k-only run's output keeps its
+    // pre-feature shape (Req 7.2).
+    struct CrossDatasetJSON: Encodable {
+        struct CoverageJSON: Encodable {
+            let betaBefore: Float; let betaAfter: Float; let betaDelta: Float
+            let effectiveSampleBefore: Int; let effectiveSampleAfter: Int
+            let statusBefore: String; let statusAfter: String
+            init(_ d: BetaCoverageDelta) {
+                betaBefore = d.betaBefore; betaAfter = d.betaAfter
+                betaDelta = d.betaDelta
+                effectiveSampleBefore = d.effectiveSampleBefore
+                effectiveSampleAfter = d.effectiveSampleAfter
+                statusBefore = d.statusBefore; statusAfter = d.statusAfter
+            }
+        }
+        struct ClassDeltaJSON: Encodable {
+            let mapeBaseline: Float; let mapeCombined: Float
+            let maeBaseline: Float; let maeCombined: Float
+            let evalPlateCount: Int
+            init(_ d: CarbDeltaReport.ClassDelta) {
+                mapeBaseline = d.mapeBaseline; mapeCombined = d.mapeCombined
+                maeBaseline = d.maeBaseline; maeCombined = d.maeCombined
+                evalPlateCount = d.evalPlateCount
+            }
+        }
+        struct AnchorJSON: Encodable {
+            let massMapePercent: Float?
+            let sampleCount: Int
+            let perClassMape: [String: Float]
+            let broccoliCrossCheckMape: Float?
+            let unscoredCount: Int
+            let reportedNotGating: Bool
+            init(_ a: HeldOutAnchorReport) {
+                massMapePercent = a.massMAPEPercent
+                sampleCount = a.sampleCount
+                perClassMape = a.perClassMAPE
+                broccoliCrossCheckMape = a.broccoliCrossCheckMAPE
+                unscoredCount = a.unscoredCount
+                reportedNotGating = true
+            }
+        }
+        let betaCoverageDelta: [String: CoverageJSON]
+        let carbDeltaOverall: ClassDeltaJSON
+        let carbDeltaPerClass: [String: ClassDeltaJSON]
+        let carbDeltaSuppressedBelowMinCount: [String: Int]
+        let unvalidatedStaples: [String]
+        let minEvalPlateCount: Int
+        let heldOutAnchor: AnchorJSON?
+    }
+
     let seed: UInt64
     let folds: Int
     let mapeTargetPercent: Float
@@ -239,8 +300,10 @@ struct N5kEvalJSON: Encodable {
     let dispersionPerClass: [String: Float]
     let officialSplit: OfficialJSON
     let pool: PoolJSON
+    let crossDataset: CrossDatasetJSON?
 
-    init(_ r: CalibrationReport) {
+    init(_ r: CalibrationReport, crossDataset: CrossDatasetJSON? = nil) {
+        self.crossDataset = crossDataset
         seed = r.seed
         folds = r.foldCount
         mapeTargetPercent = r.mapeTargetPercent
@@ -371,9 +434,25 @@ struct CalibrationOutcome {
     let mixtureResult: MixtureBetaCalibrator.Result
     let sdResult: CalibrationResult
     let admittedInputs: [MealCalibrationInput]
-    // True when any fixture carries an estimator_path stamp (an N5k run).
+    // True when any fixture carries an estimator_path stamp from a
+    // Nutrition5k (or legacy synthetic) source. MetaFood3D fixtures do not
+    // count: an MF3D-only run has no official split to exclude.
     let hasN5k: Bool
-    let ingestSummary: CalibrateRun.IngestSummary?
+    let ingestSummaries: [CalibrateRun.IngestSummary]
+    // Cross-dataset reporting inputs (cross-dataset-calibration Req 8.2/10):
+    // the combined merge, the N5k-only baseline merge (nil when the run has
+    // no MetaFood3D rows), and the held-out anchor report (nil when
+    // --heldout-frac is 0 or nothing was held out).
+    let merged: [String: CalibrationMerge.ClassCalibration]
+    let mergedBaseline: [String: CalibrationMerge.ClassCalibration]?
+    let heldOutAnchor: HeldOutAnchorReport?
+}
+
+// β map the eval applies: calibrated classes only — pooled/unity classes ride
+// the default β = 1 exactly as the estimator would apply them.
+func calibratedBetaMap(_ merged: [String: CalibrationMerge.ClassCalibration])
+    -> [String: Float] {
+    merged.filter { $0.value.status == .calibrated }.mapValues(\.beta)
 }
 
 // Route fixtures per estimator_path, run both calibrators, merge, and build
@@ -388,13 +467,20 @@ func runCalibration(args: Args, db: any FoodDatabase,
         ? Set<String>()
         : try CalibrateRun.loadDepthTestSplit(
             from: URL(fileURLWithPath: args.depthTestSplitPath))
-    let ingestSummary = args.ingestSummaryPath.isEmpty
-        ? nil
-        : try CalibrateRun.loadIngestSummary(
-            from: URL(fileURLWithPath: args.ingestSummaryPath))
+    // One --ingest-summary per dataset (cross-dataset-calibration Req 10.1):
+    // exclusion sets merge across datasets; per-dataset skip counts stay
+    // attributable in the run-summary buckets.
+    let ingestSummaries = try args.ingestSummaryPaths.map {
+        try CalibrateRun.loadIngestSummary(from: URL(fileURLWithPath: $0))
+    }
+    let mergedUnmapped = ingestSummaries.reduce(into: Set<String>()) {
+        $0.formUnion($1.unmappedExcluded)
+    }
     let routed = CalibrateRun.route(fixtures: fixtures, depthTestSplit: split,
-                                    unmappedExcluded: ingestSummary?.unmappedExcluded ?? [])
-    let hasN5k = fixtures.contains { !$0.estimatorPath.isEmpty }
+                                    unmappedExcluded: mergedUnmapped)
+    let hasN5k = fixtures.contains {
+        !$0.estimatorPath.isEmpty && CalibrateRun.dataset(of: $0) != "metafood3d"
+    }
     // Req 4.4 is a SHALL: an N5k run without the official depth-test split
     // would silently calibrate on held-out dishes — fail loudly instead.
     if hasN5k && split.isEmpty {
@@ -406,10 +492,23 @@ func runCalibration(args: Args, db: any FoodDatabase,
     // Fixtures carry mapped masses only, so without the ingestion run summary
     // the >10%-unmapped-mass exclusion (Req 4.1) cannot be applied and those
     // plates would bias co-occurring β downward.
-    if hasN5k && ingestSummary == nil {
+    if hasN5k && ingestSummaries.isEmpty {
         fputs("calibrate: WARNING — no --ingest-summary; unmapped-heavy "
             + "plates (Req 4.1) cannot be excluded from the mixture fit\n",
             stderr)
+    }
+    // MetaFood3D fixtures integrate against the AUTHORED support plane
+    // (Decision 13) — the plane depth rides the MF3D ingestion summary's
+    // render_config. Without it the only alternative is the plate-region
+    // RANSAC, which silently fits the food surface on steep foods, so a
+    // MetaFood3D run without the summary fails loudly instead.
+    let mf3dSummary = ingestSummaries.first { $0.dataset == "metafood3d" }
+    let hasMF3D = fixtures.contains { CalibrateRun.dataset(of: $0) == "metafood3d" }
+    if hasMF3D && mf3dSummary?.renderPlaneDepthMm == nil {
+        fputs("calibrate: MetaFood3D fixtures require an --ingest-summary "
+            + "carrying render_config.plane_depth_mm — the injected support "
+            + "plane (Decision 13) is authored from it\n", stderr)
+        exit(1)
     }
 
     // Single-dominant (and legacy) fixtures via FixtureRunner; plates whose
@@ -447,16 +546,50 @@ func runCalibration(args: Args, db: any FoodDatabase,
     let (sdResult, _) = BetaCalibrator.calibrateWithFit(meals: admittedInputs)
     let sdFit = BetaCalibrator.bakeFit(meals: admittedInputs)
 
-    // Mixture fixtures: plate-region plane + depth-threshold hull volume. The
+    // Mixture fixtures: plate-region plane + depth-threshold hull volume for
+    // N5k; the authored injected plane for MetaFood3D (Decision 13). The
     // skips are counted SEPARATELY from the single-dominant ones: this site
     // swallows a `fitPlateRegionPlane` throw, so a broken flood fill would empty
     // the mixture corpus while the run still reported success (Decision 17).
+    //
+    // The Req 10.2 held-out MetaFood3D objects are excluded from the fit but
+    // still measured — they are the anchor's out-of-sample pool.
+    let mf3dIDs = routed.mixture
+        .filter { CalibrateRun.dataset(of: $0) == "metafood3d" }
+        .map(\.fixtureID)
+    let heldOutIDs = AccuracyHarness.heldOutSplit(
+        ids: mf3dIDs, fraction: args.heldoutFrac, seed: args.seed)
+
     var mixtureObs: [MixtureBetaCalibrator.PlateObservation] = []
+    var obsDataset: [String: String] = [:]          // fixtureID → dataset
+    var heldOutObs: [SingleFoodObservation] = []
     var mixturePlaneFitSkipped: [String] = []
     for fx in routed.mixture {
         guard fx.hasNadirDepth else { mixturePlaneFitSkipped.append(fx.fixtureID); continue }
+        let dataset = CalibrateRun.dataset(of: fx)
+        let injectedPlane: SupportPlane? = dataset == "metafood3d"
+            ? mf3dSummary?.renderPlaneDepthMm.map {
+                CalibrateRun.authoredSupportPlane(gravity: Vec3(pb: fx.gravity),
+                                                  planeDepthMm: $0)
+            } ?? nil
+            : nil
         do {
-            mixtureObs.append(try CalibrateRun.mixtureObservation(fixture: fx))
+            let obs = try CalibrateRun.mixtureObservation(
+                fixture: fx, injectedSupportPlane: injectedPlane)
+            if heldOutIDs.contains(fx.fixtureID) {
+                // Single-food by construction: the one mapped class carries
+                // the whole GT mass.
+                if let (className, massG) = fx.groundTruthClassMassG
+                    .max(by: { $0.value < $1.value }) {
+                    heldOutObs.append(SingleFoodObservation(
+                        fixtureID: fx.fixtureID, className: className,
+                        estimatedVolumeCm3: obs.totalHullVolumeCm3,
+                        groundTruthMassG: massG))
+                }
+            } else {
+                mixtureObs.append(obs)
+                obsDataset[fx.fixtureID] = dataset.isEmpty ? "nutrition5k" : dataset
+            }
         } catch {
             mixturePlaneFitSkipped.append(fx.fixtureID)
         }
@@ -464,19 +597,86 @@ func runCalibration(args: Args, db: any FoodDatabase,
     planeFitSkipped.append(contentsOf: mixturePlaneFitSkipped)
     let liquidClasses = Set(palette.liquidClasses)
     var densityByClass: [String: Float] = [:]
-    for c in Set(mixtureObs.flatMap { $0.massByClassG.keys }) {
+    let fitClasses = Set(mixtureObs.flatMap { $0.massByClassG.keys })
+        .union(heldOutObs.map(\.className))
+    for c in fitClasses {
         densityByClass[c] = db.entry(for: c)?.densityGPerCm3
     }
     let mixtureResult = MixtureBetaCalibrator.fit(
         mixtureObs, densityByClass: densityByClass, liquidClasses: liquidClasses)
 
-    let merged = CalibrationMerge.merge(singleDominant: sdFit, mixture: mixtureResult)
+    // Standalone per-dataset solves (Req 5.1): the skew guard and the
+    // corroboration flag read these; the baked β always comes from the shared
+    // pooled solve above. A single-dataset run is the identity through this
+    // path (Req 7.1).
+    var obsByDataset: [String: [MixtureBetaCalibrator.PlateObservation]] = [:]
+    for obs in mixtureObs {
+        obsByDataset[obsDataset[obs.fixtureID] ?? "nutrition5k", default: []].append(obs)
+    }
+    let datasetFits = obsByDataset.sorted { $0.key < $1.key }.map { dataset, obs in
+        CalibrationMerge.DatasetFit(
+            dataset: dataset,
+            result: MixtureBetaCalibrator.fit(obs, densityByClass: densityByClass,
+                                              liquidClasses: liquidClasses))
+    }
+
+    let merged = CalibrationMerge.merge(singleDominant: sdFit, mixture: mixtureResult,
+                                        perDataset: datasetFits)
+
+    // N5k-only baseline merge (Req 8.2/10.1): what this run would have baked
+    // without the MetaFood3D rows, for the before/after coverage report.
+    var mergedBaseline: [String: CalibrationMerge.ClassCalibration]?
+    if hasMF3D {
+        let n5kObs = mixtureObs.filter { obsDataset[$0.fixtureID] != "metafood3d" }
+        let n5kResult = MixtureBetaCalibrator.fit(
+            n5kObs, densityByClass: densityByClass, liquidClasses: liquidClasses)
+        mergedBaseline = CalibrationMerge.merge(singleDominant: sdFit, mixture: n5kResult)
+    }
+
+    // Held-out anchor (Req 10.2): predicted mass = V_est·β·ρ_DB on the
+    // objects excluded from the fit. Reported, never a bake gate (Decision 9).
+    let anchor: HeldOutAnchorReport? = heldOutObs.isEmpty ? nil
+        : AccuracyHarness.heldOutAnchor(
+            observations: heldOutObs,
+            beta: calibratedBetaMap(merged),
+            densityByClass: densityByClass)
+    if let anchor {
+        fputs("held-out MetaFood3D anchor (reported, not gating): "
+            + "mass MAPE \(anchor.massMAPEPercent.map { "\($0)%" } ?? "not measured") "
+            + "over \(anchor.sampleCount) object(s)"
+            + (anchor.broccoliCrossCheckMAPE.map { "; broccoli cross-check \($0)%" } ?? "")
+            + "\n", stderr)
+    }
 
     // Lineage (Req 5.5). Release/metadata identifiers ride the fixtures'
     // source_dataset stamp: "nutrition5k@<release>/<metaver>".
-    let source = fixtures.first(where: { !$0.sourceDataset.isEmpty })?.sourceDataset ?? ""
+    let source = fixtures.first(where: {
+        !$0.sourceDataset.isEmpty && CalibrateRun.dataset(of: $0) != "metafood3d"
+    })?.sourceDataset ?? ""
     let afterAt = source.split(separator: "@").last.map(String.init) ?? ""
     let parts = afterAt.split(separator: "/").map(String.init)
+
+    // Cross-dataset lineage (Req 9.1): the pinned render configuration and
+    // each contributing dataset's snapshot + mapping-artifact version.
+    var renderConfig: CalibrationArtifact.RenderConfig?
+    if let mf3d = mf3dSummary, let planeDepthMm = mf3d.renderPlaneDepthMm {
+        renderConfig = CalibrationArtifact.RenderConfig(
+            intrinsicsModel: mf3d.renderIntrinsicsModel ?? args.intrinsicsModel,
+            planeDepthMm: planeDepthMm,
+            imageWidth: mf3d.renderImageWidth ?? 0,
+            imageHeight: mf3d.renderImageHeight ?? 0,
+            seatingRule: mf3d.renderSeatingRule ?? "")
+    }
+    var perDatasetLineage: [String: CalibrationArtifact.DatasetLineage] = [:]
+    if hasN5k {
+        perDatasetLineage["nutrition5k"] = .init(
+            snapshot: afterAt, mappingArtifactVersion: args.mappingVersion)
+    }
+    if let mf3d = mf3dSummary, hasMF3D {
+        perDatasetLineage["metafood3d"] = .init(
+            snapshot: mf3d.snapshot, mappingArtifactVersion: mf3d.mappingVersion)
+    }
+
     let lineage = CalibrationArtifact.Lineage(
         n5kRelease: parts.first ?? "",
         n5kMetadataVersion: parts.count > 1 ? parts[1] : "",
@@ -491,7 +691,9 @@ func runCalibration(args: Args, db: any FoodDatabase,
             ? mixtureResult.conditionNumber : -1,
         identifiablePerClass: mixtureResult.identifiablePerClass,
         pinnedIntrinsicsModel: args.intrinsicsModel,
-        licence: "CC BY 4.0")
+        licence: "CC BY 4.0",
+        renderConfig: renderConfig,
+        perDataset: perDatasetLineage)
 
     // Run summary (Req 3.8/4.2/4.3/4.7): every excluded/dropped plate is
     // recorded, with the drop reasons distinguished.
@@ -509,6 +711,20 @@ func runCalibration(args: Args, db: any FoodDatabase,
           liquid excluded: \(mixtureResult.liquidExcludedPlates)\n
         """, stderr)
 
+    // Per-dataset exclusion buckets (cross-dataset-calibration Req 1.4): the
+    // N5k depth-test-split drops and each dataset's ingestion skips stay
+    // attributable in a multi-dataset run.
+    func countByDataset(_ fixtures: [PbMealFixture]) -> [String: Int] {
+        fixtures.reduce(into: [:]) { counts, fx in
+            let ds = CalibrateRun.dataset(of: fx)
+            counts[ds.isEmpty ? "nutrition5k" : ds, default: 0] += 1
+        }
+    }
+    let ingestionSkippedByDataset = ingestSummaries.reduce(into: [String: Int]()) {
+        let ds = $1.dataset.isEmpty ? "nutrition5k" : $1.dataset
+        $0[ds, default: 0] += $1.ingestionSkipCount
+    }
+
     let runSummary = CalibrationArtifact.RunSummary(
         depthTestSplitExcluded: routed.depthTestExcluded.map(\.fixtureID).sorted(),
         unmappedExcluded: routed.unmappedExcluded.map(\.fixtureID).sorted(),
@@ -516,7 +732,10 @@ func runCalibration(args: Args, db: any FoodDatabase,
         planeFitSkipped: planeFitSkipped.sorted(),
         stackingExcluded: mixtureResult.excludedPlates.sorted(),
         liquidExcluded: mixtureResult.liquidExcludedPlates.sorted(),
-        supportPlaneReferenceExcluded: referenceGated.excluded.sorted())
+        supportPlaneReferenceExcluded: referenceGated.excluded.sorted(),
+        depthTestSplitExcludedByDataset: countByDataset(routed.depthTestExcluded),
+        unmappedExcludedByDataset: countByDataset(routed.unmappedExcluded),
+        ingestionSkippedByDataset: ingestionSkippedByDataset)
 
     return CalibrationOutcome(
         artifact: CalibrationArtifact(
@@ -529,7 +748,10 @@ func runCalibration(args: Args, db: any FoodDatabase,
         sdResult: sdResult,
         admittedInputs: admittedInputs,
         hasN5k: hasN5k,
-        ingestSummary: ingestSummary)
+        ingestSummaries: ingestSummaries,
+        merged: merged,
+        mergedBaseline: mergedBaseline,
+        heldOutAnchor: anchor)
 }
 
 func runCalibrate(args: Args) throws {
@@ -646,10 +868,39 @@ func runCalibrateAndEval(args: Args) throws {
         pool: PoolCounts(
             rgbdDishCount: calibrationPlates.count + officialPlates.count + unmappedCount,
             depthTestSplitCount: outcome.routed.depthTestExcluded.count,
-            ingestionSkipCount: outcome.ingestSummary?.ingestionSkipCount ?? 0,
+            ingestionSkipCount: outcome.ingestSummaries
+                .reduce(0) { $0 + $1.ingestionSkipCount },
             unmappedExcludedCount: unmappedCount))
 
-    try writeSnakeCaseJSON(N5kEvalJSON(report), to: args.outputPath)
+    // Cross-dataset block (Req 8.2/10.1/10.2): only when the run carried
+    // MetaFood3D rows — an N5k-only output keeps its pre-feature shape.
+    var crossDataset: N5kEvalJSON.CrossDatasetJSON?
+    if let baseline = outcome.mergedBaseline {
+        let coverage = AccuracyHarness.betaCoverageDelta(
+            before: baseline, after: outcome.merged)
+        // The carb delta is measurable only on the N5k eval pool: staples
+        // absent from it are named as having no in-harness validation.
+        let carbDelta = AccuracyHarness.carbAccuracyDelta(
+            plates: calibrationPlates,
+            baselineBeta: calibratedBetaMap(baseline),
+            combinedBeta: calibratedBetaMap(outcome.merged),
+            composition: composition,
+            liquidClasses: config.liquidClasses,
+            staples: config.carbPriorityStaples)
+        crossDataset = N5kEvalJSON.CrossDatasetJSON(
+            betaCoverageDelta: coverage.mapValues(N5kEvalJSON.CrossDatasetJSON.CoverageJSON.init),
+            carbDeltaOverall: .init(carbDelta.overall),
+            carbDeltaPerClass: carbDelta.perClass
+                .mapValues(N5kEvalJSON.CrossDatasetJSON.ClassDeltaJSON.init),
+            carbDeltaSuppressedBelowMinCount: carbDelta.suppressedBelowMinCount,
+            unvalidatedStaples: carbDelta.unvalidatedStaples,
+            minEvalPlateCount: carbDelta.minEvalPlateCount,
+            heldOutAnchor: outcome.heldOutAnchor
+                .map(N5kEvalJSON.CrossDatasetJSON.AnchorJSON.init))
+    }
+
+    try writeSnakeCaseJSON(N5kEvalJSON(report, crossDataset: crossDataset),
+                           to: args.outputPath)
 }
 
 func runLegacyEval(outcome: CalibrationOutcome, args: Args) throws {

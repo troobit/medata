@@ -41,32 +41,84 @@ public enum CalibrateRun {
         public let unmappedExcluded: [PbMealFixture]
     }
 
-    // The ingestion run summary (tools/nutrition5k/ingest.py). Fixtures carry
-    // mapped masses only, so the >10%-unmapped-mass mixture-fit exclusion
-    // (design §Unmapped-volume bias) can only come from this file — the
-    // harness consumes it rather than re-deriving it.
+    // An ingestion run summary (tools/nutrition5k/ingest.py, and
+    // tools/metafood3d/ingest.py once cross-dataset-calibration stream 1
+    // lands). Fixtures carry mapped masses only, so the >10%-unmapped-mass
+    // mixture-fit exclusion (design §Unmapped-volume bias) can only come from
+    // this file — the harness consumes it rather than re-deriving it.
+    //
+    // Multi-dataset keys (all optional, absent on pre-feature N5k summaries):
+    //   dataset          — e.g. "metafood3d"; "" reads as nutrition5k.
+    //   snapshot         — dataset snapshot identifier (Req 9.1).
+    //   mapping_version  — the dataset's mapping-artifact version.
+    //   render_config    — the pinned MetaFood3D render camera configuration;
+    //                      `plane_depth_mm` is what the injected-plane branch
+    //                      (Decision 13) authors the SupportPlane from.
     public struct IngestSummary: Sendable {
+        public let dataset: String
+        public let snapshot: String
+        public let mappingVersion: String
         public let unmappedExcluded: Set<String>
         public let liquidExcluded: Set<String>
         public let ingestionSkipCount: Int
+        public let renderPlaneDepthMm: Float?
+        public let renderIntrinsicsModel: String?
+        public let renderImageWidth: Int?
+        public let renderImageHeight: Int?
+        public let renderSeatingRule: String?
     }
 
     public static func loadIngestSummary(from url: URL) throws -> IngestSummary {
-        struct Doc: Decodable {
-            let skipped: [String: [String]]
-            let mixtureFitExcludedUnmapped: [String]
-            let liquidExcluded: [String]
+        struct RenderDoc: Decodable {
+            let planeDepthMm: Float
+            let intrinsicsModel: String?
+            let imageWidth: Int?
+            let imageHeight: Int?
+            let seatingRule: String?
             enum CodingKeys: String, CodingKey {
-                case skipped
+                case planeDepthMm = "plane_depth_mm"
+                case intrinsicsModel = "intrinsics_model"
+                case imageWidth = "image_width"
+                case imageHeight = "image_height"
+                case seatingRule = "seating_rule"
+            }
+        }
+        struct Doc: Decodable {
+            let dataset: String?
+            let snapshot: String?
+            let mappingVersion: String?
+            let skipped: [String: [String]]?
+            let mixtureFitExcludedUnmapped: [String]?
+            let liquidExcluded: [String]?
+            let renderConfig: RenderDoc?
+            enum CodingKeys: String, CodingKey {
+                case dataset, snapshot, skipped
+                case mappingVersion = "mapping_version"
                 case mixtureFitExcludedUnmapped = "mixture_fit_excluded_unmapped"
                 case liquidExcluded = "liquid_excluded"
+                case renderConfig = "render_config"
             }
         }
         let doc = try JSONDecoder().decode(Doc.self, from: Data(contentsOf: url))
         return IngestSummary(
-            unmappedExcluded: Set(doc.mixtureFitExcludedUnmapped),
-            liquidExcluded: Set(doc.liquidExcluded),
-            ingestionSkipCount: doc.skipped.values.reduce(0) { $0 + $1.count })
+            dataset: doc.dataset ?? "",
+            snapshot: doc.snapshot ?? "",
+            mappingVersion: doc.mappingVersion ?? "",
+            unmappedExcluded: Set(doc.mixtureFitExcludedUnmapped ?? []),
+            liquidExcluded: Set(doc.liquidExcluded ?? []),
+            ingestionSkipCount: (doc.skipped ?? [:]).values.reduce(0) { $0 + $1.count },
+            renderPlaneDepthMm: doc.renderConfig?.planeDepthMm,
+            renderIntrinsicsModel: doc.renderConfig?.intrinsicsModel,
+            renderImageWidth: doc.renderConfig?.imageWidth,
+            renderImageHeight: doc.renderConfig?.imageHeight,
+            renderSeatingRule: doc.renderConfig?.seatingRule)
+    }
+
+    // The dataset a fixture belongs to: the `source_dataset` stamp before the
+    // "@" (e.g. "nutrition5k@<release>/<metaver>" → "nutrition5k"). Legacy
+    // fixtures carry no stamp and read "".
+    public static func dataset(of fixture: PbMealFixture) -> String {
+        fixture.sourceDataset.split(separator: "@").first.map(String.init) ?? ""
     }
 
     // Depth-test-split exclusion FIRST — before any selection (Req 4.4) —
@@ -182,21 +234,46 @@ public enum CalibrateRun {
     // Build a mixture PlateObservation from a fixture: plate-region plane fit
     // (Req 3.6) + depth-threshold total hull volume. Throws on a poor plate
     // plane so the CLI can skip and record the plate (Req 3.4/3.8).
+    //
+    // MetaFood3D branch (cross-dataset-calibration Decision 13): the render
+    // authors its support plane exactly, and a nadir render of a steep-sided
+    // food presents a > 5 mm edge cliff the centre-seeded flood fill cannot
+    // cross — RANSAC would fit the FOOD surface, a silent shape-dependent
+    // volume error. Passing `injectedSupportPlane` bypasses the plate-region
+    // refit entirely and integrates against the authored plane. N5k fixtures
+    // pass nil and keep the existing refit path.
     public static func mixtureObservation(
-        fixture: PbMealFixture
+        fixture: PbMealFixture,
+        injectedSupportPlane: SupportPlane? = nil
     ) throws -> MixtureBetaCalibrator.PlateObservation {
         let intrinsics = CameraIntrinsics(pb: fixture.nadirIntrinsics)
         let depth = DepthMap(pb: fixture.nadirDepth)
-        let plane = try FixtureRunner.fitPlateRegionPlane(
-            depth: depth, intrinsics: intrinsics,
-            gravity: Vec3(pb: fixture.gravity),
-            fixtureID: fixture.fixtureID)
+        let plane: SupportPlane
+        if let injected = injectedSupportPlane {
+            plane = injected
+        } else {
+            plane = try FixtureRunner.fitPlateRegionPlane(
+                depth: depth, intrinsics: intrinsics,
+                gravity: Vec3(pb: fixture.gravity),
+                fixtureID: fixture.fixtureID)
+        }
         let hull = TotalHullVolume.integrate(TotalHullVolume.Inputs(
             depth: depth, intrinsics: intrinsics, supportPlane: plane))
         return MixtureBetaCalibrator.PlateObservation(
             fixtureID: fixture.fixtureID,
             totalHullVolumeCm3: hull,
             massByClassG: fixture.groundTruthClassMassG)
+    }
+
+    // The authored MetaFood3D support plane from the render configuration:
+    // gravity-aligned normal (n̂·gravity > 0, matching the LiDARPlaneFitter
+    // orientation convention) at the pinned plane depth. Residual 0 — the
+    // plane is exact by construction, not fitted (Decision 13).
+    public static func authoredSupportPlane(
+        gravity: Vec3, planeDepthMm: Float
+    ) -> SupportPlane {
+        SupportPlane(normal: gravity.normalised(), distanceMm: planeDepthMm,
+                     residualMm: 0, convergedIterations: nil)
     }
 
     // Build an eval plate from a mixture observation. GT macros come from the
@@ -240,8 +317,8 @@ public enum CalibrateRun {
 // (existing consumers of the CalibrationJSON shape); the per-class
 // provenance/SE fields, the lineage block (Req 5.5), and the run summary
 // extend the same writer rather than adding a parallel output path.
-public struct CalibrationArtifact: Encodable {
-    public struct ClassEntry: Encodable {
+public struct CalibrationArtifact: Codable {
+    public struct ClassEntry: Codable {
         public let beta: Float
         public let status: String
         public let provenance: String
@@ -254,12 +331,36 @@ public struct CalibrationArtifact: Encodable {
         // fill (Decision 17), so a single artifact carries `plateRegion` and
         // `foodSupport` β side by side and nothing may mix them.
         public let supportPlaneReference: String
+        // Cross-dataset provenance (cross-dataset-calibration Req 4.3, 6.2):
+        // dataset → weighted sample contribution feeding this β, and the
+        // corroboration flag — true unless ≥ 2 datasets each yielded an
+        // independently identifiable standalone β AND those TOST-agree.
+        public let contributingDatasets: [String: Int]
+        public let singleSourceUncorroborated: Bool
 
         enum CodingKeys: String, CodingKey {
             case beta, status, provenance, clamped
             case standardError = "standard_error"
             case effectiveSample = "effective_sample"
             case supportPlaneReference = "support_plane_reference"
+            case contributingDatasets = "contributing_datasets"
+            case singleSourceUncorroborated = "single_source_uncorroborated"
+        }
+
+        init(beta: Float, status: String, provenance: String,
+             standardError: Float?, effectiveSample: Int, clamped: Bool,
+             supportPlaneReference: String,
+             contributingDatasets: [String: Int] = [:],
+             singleSourceUncorroborated: Bool = false) {
+            self.beta = beta
+            self.status = status
+            self.provenance = provenance
+            self.standardError = standardError
+            self.effectiveSample = effectiveSample
+            self.clamped = clamped
+            self.supportPlaneReference = supportPlaneReference
+            self.contributingDatasets = contributingDatasets
+            self.singleSourceUncorroborated = singleSourceUncorroborated
         }
 
         // Encode a null standard_error explicitly so the bake reads a stable
@@ -273,10 +374,92 @@ public struct CalibrationArtifact: Encodable {
             try c.encode(effectiveSample, forKey: .effectiveSample)
             try c.encode(clamped, forKey: .clamped)
             try c.encode(supportPlaneReference, forKey: .supportPlaneReference)
+            try c.encode(contributingDatasets, forKey: .contributingDatasets)
+            try c.encode(singleSourceUncorroborated, forKey: .singleSourceUncorroborated)
+        }
+
+        // Pre-cross-dataset artifacts lack the two provenance keys; absent
+        // decodes to the additive defaults (no recorded contributors, flag
+        // false) so older artifacts round-trip unchanged.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            beta = try c.decode(Float.self, forKey: .beta)
+            status = try c.decode(String.self, forKey: .status)
+            provenance = try c.decode(String.self, forKey: .provenance)
+            standardError = try c.decodeIfPresent(Float.self, forKey: .standardError)
+            effectiveSample = try c.decode(Int.self, forKey: .effectiveSample)
+            clamped = try c.decode(Bool.self, forKey: .clamped)
+            supportPlaneReference = try c.decode(String.self, forKey: .supportPlaneReference)
+            contributingDatasets = try c.decodeIfPresent(
+                [String: Int].self, forKey: .contributingDatasets) ?? [:]
+            singleSourceUncorroborated = try c.decodeIfPresent(
+                Bool.self, forKey: .singleSourceUncorroborated) ?? false
         }
     }
 
-    public struct Lineage: Encodable {
+    // The pinned MetaFood3D render configuration (Req 2.4, 9.1): recorded in
+    // lineage so β is reproducible from lineage alone. `noiseFreeRenderNote`
+    // is the Req 2.5 statement that β is fit on noise-free rendered depth and
+    // corrects geometric bias only.
+    public struct RenderConfig: Codable, Equatable, Sendable {
+        public static let defaultNoiseFreeRenderNote =
+            "beta fit on noise-free rendered depth; corrects geometric bias "
+            + "only, not sensor-noise-induced bias (Decision 8)"
+
+        public let intrinsicsModel: String
+        public let planeDepthMm: Float
+        public let imageWidth: Int
+        public let imageHeight: Int
+        public let seatingRule: String
+        public let skewDelta: Float
+        public let skewAlpha: Float
+        public let noiseFreeRenderNote: String
+
+        enum CodingKeys: String, CodingKey {
+            case intrinsicsModel = "intrinsics_model"
+            case planeDepthMm = "plane_depth_mm"
+            case imageWidth = "image_width"
+            case imageHeight = "image_height"
+            case seatingRule = "seating_rule"
+            case skewDelta = "skew_delta"
+            case skewAlpha = "skew_alpha"
+            case noiseFreeRenderNote = "noise_free_render_note"
+        }
+
+        public init(intrinsicsModel: String, planeDepthMm: Float,
+                    imageWidth: Int, imageHeight: Int, seatingRule: String,
+                    skewDelta: Float = Float(CrossDatasetSkew.defaultDelta),
+                    skewAlpha: Float = Float(CrossDatasetSkew.defaultAlpha),
+                    noiseFreeRenderNote: String = defaultNoiseFreeRenderNote) {
+            self.intrinsicsModel = intrinsicsModel
+            self.planeDepthMm = planeDepthMm
+            self.imageWidth = imageWidth
+            self.imageHeight = imageHeight
+            self.seatingRule = seatingRule
+            self.skewDelta = skewDelta
+            self.skewAlpha = skewAlpha
+            self.noiseFreeRenderNote = noiseFreeRenderNote
+        }
+    }
+
+    // Per-contributing-dataset lineage (Req 6.1, 9.1): snapshot identifier and
+    // mapping-artifact version, keyed by dataset name.
+    public struct DatasetLineage: Codable, Equatable, Sendable {
+        public let snapshot: String
+        public let mappingArtifactVersion: String
+
+        enum CodingKeys: String, CodingKey {
+            case snapshot
+            case mappingArtifactVersion = "mapping_artifact_version"
+        }
+
+        public init(snapshot: String, mappingArtifactVersion: String) {
+            self.snapshot = snapshot
+            self.mappingArtifactVersion = mappingArtifactVersion
+        }
+    }
+
+    public struct Lineage: Codable {
         public let n5kRelease: String              // SHA-256 manifest id (Req 1.4)
         public let n5kMetadataVersion: String
         public let mappingArtifactVersion: String
@@ -296,6 +479,11 @@ public struct CalibrationArtifact: Encodable {
         public let identifiablePerClass: [String: Bool]
         public let pinnedIntrinsicsModel: String   // nominal camera model (Req 3.3)
         public let licence: String                 // "CC BY 4.0" (Req 1.5)
+        // cross-dataset-calibration Req 9.1: the MetaFood3D render camera
+        // configuration (nil on an N5k-only run — no render happened) and the
+        // per-contributing-dataset snapshot + mapping-artifact version.
+        public let renderConfig: RenderConfig?
+        public let perDataset: [String: DatasetLineage]
 
         enum CodingKeys: String, CodingKey {
             case n5kRelease = "n5k_release"
@@ -315,6 +503,38 @@ public struct CalibrationArtifact: Encodable {
             case identifiablePerClass = "identifiable_per_class"
             case pinnedIntrinsicsModel = "pinned_intrinsics_model"
             case licence
+            case renderConfig = "render_config"
+            case perDataset = "per_dataset"
+        }
+
+        // Pre-cross-dataset artifacts lack the two new keys; absent decodes to
+        // the additive defaults so older artifacts round-trip unchanged.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            n5kRelease = try c.decode(String.self, forKey: .n5kRelease)
+            n5kMetadataVersion = try c.decode(String.self, forKey: .n5kMetadataVersion)
+            mappingArtifactVersion = try c.decode(String.self, forKey: .mappingArtifactVersion)
+            tauRoute = try c.decode(Float.self, forKey: .tauRoute)
+            tauPurity = try c.decode(Float.self, forKey: .tauPurity)
+            tauEff = try c.decode(Float.self, forKey: .tauEff)
+            kappaStacking = try c.decode(Float.self, forKey: .kappaStacking)
+            liquidSignificantFraction = try c.decode(
+                Float.self, forKey: .liquidSignificantFraction)
+            unmappedSignificantFraction = try c.decode(
+                Float.self, forKey: .unmappedSignificantFraction)
+            relativeSEBound = try c.decode(Float.self, forKey: .relativeSEBound)
+            effectiveSampleMin = try c.decode(Int.self, forKey: .effectiveSampleMin)
+            seed = try c.decode(UInt64.self, forKey: .seed)
+            effectiveSamplePerClass = try c.decode(
+                [String: Int].self, forKey: .effectiveSamplePerClass)
+            conditionNumber = try c.decode(Float.self, forKey: .conditionNumber)
+            identifiablePerClass = try c.decode(
+                [String: Bool].self, forKey: .identifiablePerClass)
+            pinnedIntrinsicsModel = try c.decode(String.self, forKey: .pinnedIntrinsicsModel)
+            licence = try c.decode(String.self, forKey: .licence)
+            renderConfig = try c.decodeIfPresent(RenderConfig.self, forKey: .renderConfig)
+            perDataset = try c.decodeIfPresent(
+                [String: DatasetLineage].self, forKey: .perDataset) ?? [:]
         }
 
         public init(n5kRelease: String, n5kMetadataVersion: String,
@@ -328,7 +548,9 @@ public struct CalibrationArtifact: Encodable {
                     effectiveSampleMin: Int = CalibrationMerge.effectiveSampleMin,
                     seed: UInt64, effectiveSamplePerClass: [String: Int],
                     conditionNumber: Float, identifiablePerClass: [String: Bool],
-                    pinnedIntrinsicsModel: String, licence: String) {
+                    pinnedIntrinsicsModel: String, licence: String,
+                    renderConfig: RenderConfig? = nil,
+                    perDataset: [String: DatasetLineage] = [:]) {
             self.n5kRelease = n5kRelease
             self.n5kMetadataVersion = n5kMetadataVersion
             self.mappingArtifactVersion = mappingArtifactVersion
@@ -346,11 +568,13 @@ public struct CalibrationArtifact: Encodable {
             self.identifiablePerClass = identifiablePerClass
             self.pinnedIntrinsicsModel = pinnedIntrinsicsModel
             self.licence = licence
+            self.renderConfig = renderConfig
+            self.perDataset = perDataset
         }
     }
 
     // Skip/drop accounting for the run summary (Req 3.4/3.8/4.1/4.2/4.3/4.7).
-    public struct RunSummary: Encodable {
+    public struct RunSummary: Codable {
         public let depthTestSplitExcluded: [String]
         public let unmappedExcluded: [String]
         public let purityDropped: [String]
@@ -362,6 +586,13 @@ public struct CalibrationArtifact: Encodable {
         // merely dropped: a run where most plates land here is measuring the
         // fallback rate, not calibrating.
         public let supportPlaneReferenceExcluded: [String]
+        // Per-dataset exclusion buckets (cross-dataset-calibration Req 1.4,
+        // design §Data Models): counts keyed by dataset so N5k depth-test-split
+        // drops and MetaFood3D scale/unmapped drops stay attributable in a
+        // multi-dataset run.
+        public let depthTestSplitExcludedByDataset: [String: Int]
+        public let unmappedExcludedByDataset: [String: Int]
+        public let ingestionSkippedByDataset: [String: Int]
 
         enum CodingKeys: String, CodingKey {
             case depthTestSplitExcluded = "depth_test_split_excluded"
@@ -371,13 +602,19 @@ public struct CalibrationArtifact: Encodable {
             case stackingExcluded = "stacking_excluded"
             case liquidExcluded = "liquid_excluded"
             case supportPlaneReferenceExcluded = "support_plane_reference_excluded"
+            case depthTestSplitExcludedByDataset = "depth_test_split_excluded_by_dataset"
+            case unmappedExcludedByDataset = "unmapped_excluded_by_dataset"
+            case ingestionSkippedByDataset = "ingestion_skipped_by_dataset"
         }
 
         public init(depthTestSplitExcluded: [String], unmappedExcluded: [String] = [],
                     purityDropped: [String],
                     planeFitSkipped: [String], stackingExcluded: [String],
                     liquidExcluded: [String],
-                    supportPlaneReferenceExcluded: [String] = []) {
+                    supportPlaneReferenceExcluded: [String] = [],
+                    depthTestSplitExcludedByDataset: [String: Int] = [:],
+                    unmappedExcludedByDataset: [String: Int] = [:],
+                    ingestionSkippedByDataset: [String: Int] = [:]) {
             self.depthTestSplitExcluded = depthTestSplitExcluded
             self.unmappedExcluded = unmappedExcluded
             self.purityDropped = purityDropped
@@ -385,6 +622,31 @@ public struct CalibrationArtifact: Encodable {
             self.stackingExcluded = stackingExcluded
             self.liquidExcluded = liquidExcluded
             self.supportPlaneReferenceExcluded = supportPlaneReferenceExcluded
+            self.depthTestSplitExcludedByDataset = depthTestSplitExcludedByDataset
+            self.unmappedExcludedByDataset = unmappedExcludedByDataset
+            self.ingestionSkippedByDataset = ingestionSkippedByDataset
+        }
+
+        // Pre-cross-dataset artifacts lack the by-dataset buckets; absent
+        // decodes to empty so older artifacts round-trip unchanged.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            depthTestSplitExcluded = try c.decode(
+                [String].self, forKey: .depthTestSplitExcluded)
+            unmappedExcluded = try c.decodeIfPresent(
+                [String].self, forKey: .unmappedExcluded) ?? []
+            purityDropped = try c.decode([String].self, forKey: .purityDropped)
+            planeFitSkipped = try c.decode([String].self, forKey: .planeFitSkipped)
+            stackingExcluded = try c.decode([String].self, forKey: .stackingExcluded)
+            liquidExcluded = try c.decode([String].self, forKey: .liquidExcluded)
+            supportPlaneReferenceExcluded = try c.decodeIfPresent(
+                [String].self, forKey: .supportPlaneReferenceExcluded) ?? []
+            depthTestSplitExcludedByDataset = try c.decodeIfPresent(
+                [String: Int].self, forKey: .depthTestSplitExcludedByDataset) ?? [:]
+            unmappedExcludedByDataset = try c.decodeIfPresent(
+                [String: Int].self, forKey: .unmappedExcludedByDataset) ?? [:]
+            ingestionSkippedByDataset = try c.decodeIfPresent(
+                [String: Int].self, forKey: .ingestionSkippedByDataset) ?? [:]
         }
     }
 
@@ -433,13 +695,25 @@ public struct CalibrationArtifact: Encodable {
                 effectiveSample: c.effectiveSample,
                 clamped: c.clamped,
                 supportPlaneReference: Self.reference(
-                    for: c.provenance, singleDominant: supportPlaneReference))
+                    for: c.provenance, singleDominant: supportPlaneReference),
+                contributingDatasets: c.contributingDatasets,
+                singleSourceUncorroborated: c.singleSourceUncorroborated)
         }
         self.betaPool = betaPool
         self.classes = classes
         self.lineage = lineage
         self.runSummary = runSummary
         self.supportPlaneReference = supportPlaneReference?.rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        betaPool = try c.decode(Float.self, forKey: .betaPool)
+        classes = try c.decode([String: ClassEntry].self, forKey: .classes)
+        lineage = try c.decodeIfPresent(Lineage.self, forKey: .lineage)
+        runSummary = try c.decodeIfPresent(RunSummary.self, forKey: .runSummary)
+        supportPlaneReference = try c.decodeIfPresent(
+            String.self, forKey: .supportPlaneReference)
     }
 
     // Encode a null support_plane_reference explicitly. The bake distinguishes
