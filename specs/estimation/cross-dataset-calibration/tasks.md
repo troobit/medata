@@ -46,7 +46,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.5](requirements.md#1.5)
 
-- [ ] 6. Implement ingest.py <!-- id:fjp41xb -->
+- [x] 6. Implement ingest.py <!-- id:fjp41xb -->
   - mirror tools/nutrition5k/ingest.py; reuse build_fixture_bytes
   - authored SupportPlane params carried for the injected-plane branch
   - Blocked-by: fjp41xa (Write ingest.py tests incl. Hypothesis weight-plausibility), fjp41x7 (Implement build_mapping.py + mapping_metafood3d_to_palette.json), fjp41x9 (Implement render.py trimesh CPU ray-cast)
