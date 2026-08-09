@@ -23,7 +23,7 @@ references:
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4)
 
-- [ ] 3. Write render.py tests incl. Hypothesis determinism property <!-- id:fjp41x8 -->
+- [x] 3. Write render.py tests incl. Hypothesis determinism property <!-- id:fjp41x8 -->
   - same mesh+config yields byte-identical depth (Hypothesis)
   - nadir perspective at pinned RealSense-D435 640x480 intrinsics
   - output Float32 LE mm, 0 = miss

@@ -1,0 +1,18 @@
+# tools/metafood3d — MetaFood3D ingestion toolchain
+# (cross-dataset-calibration stream 1). Create the venv as
+#   python3 -m venv tools/metafood3d/.venv
+#   tools/metafood3d/.venv/bin/pip install -r tools/metafood3d/requirements.txt
+# The mapping tests run on system python without trimesh; render/ingest
+# tests importorskip trimesh (segmenter torch-free-subset convention).
+numpy>=1.26
+trimesh>=4.4        # CPU ray-cast render + mesh volume (Decision 12)
+scipy>=1.13         # trimesh convex hulls + stable resting poses
+networkx>=3.2       # trimesh stable-pose graph support
+
+# fixture serialisation (reuses tools/segmenter/make_fixtures.py, which
+# compiles the protos with the system protoc)
+protobuf>=5.27
+
+# dev/test only
+pytest>=8.0
+hypothesis>=6.100
