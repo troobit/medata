@@ -163,6 +163,63 @@ lineage into `meta`, which the DB v2 rebake had dropped.
 - Official-split dishes skipped from the whole-dish eval (non-mixture path,
   no depth, plane-fit failure) are enumerated to stderr (Req 6.8).
 
+## Cross-dataset additions (cross-dataset-calibration stream 2, 2026-08)
+
+Swift side of specs/estimation/cross-dataset-calibration (tasks 7–19, 22).
+MetaFood3D objects enter as degenerate single-class MIXTURE rows (Decision
+11): `estimator_path="mixture"`, sentinel SHA, no probability tensor — zero
+router/loader/calibrator changes. Everything below is additive.
+
+- `CrossDatasetSkew` — TOST equivalence (Decision 10): the (1−2α) CI of
+  (β_A−β_B) with SE_Δ=√(SE_A²+SE_B²) must lie within ±δ·β̄ (δ=0.20, α=0.05
+  defaults, both in lineage). Fails closed on degenerate inputs, and on wide
+  SEs even when the point estimates agree — under-powered is "not
+  corroborated", never "corroborated by default".
+- `VolumeFitDiagnostic` — β_geom = V_mesh_true/V_est mean per class from the
+  `metafood3d_truth.json` sidecar ({fixture_id: mesh_volume_mm3}). Reported,
+  never baked.
+- `CalibrateRun.mixtureObservation(fixture:injectedSupportPlane:)` — the
+  MetaFood3D branch (Decision 13). The authored plane bypasses
+  `fitPlateRegionPlane`: on a steep-sided nadir render the flood fill cannot
+  cross the >5 mm edge cliff and RANSAC fits the FOOD surface (pinned by
+  `InjectedPlaneTests`). `CalibrateRun.authoredSupportPlane(gravity:planeDepthMm:)`
+  builds it (n̂ = normalised gravity, positive distance, residual 0).
+- `CalibrationMerge.merge(singleDominant:mixture:perDataset:)` — per-dataset
+  standalone solves feed corroboration + skew. A class is corroborated only
+  when ≥2 datasets are each independently identifiable (own solve clears
+  eff ≥ 30 AND identifiable) AND all pairs TOST-agree; otherwise calibrated
+  classes carry `single_source_uncorroborated=true`. Skew-inconsistent (≥2
+  identifiable, TOST-fail) demotes to the POOL β with
+  `crossDatasetInconsistent=true` even when the pooled fit qualifies
+  (Req 5.3). The two-argument `merge` forwards with `perDataset: []` and is
+  the Req 7.1 identity — pinned bit-for-bit by `BackwardsCompatGoldenTests`.
+- `CalibrationArtifact` — now Codable (round-trip tested). ClassEntry +=
+  `contributing_datasets`/`single_source_uncorroborated`; lineage +=
+  `render_config` (incl. the Req 2.5 noise-free-render note) + `per_dataset`;
+  RunSummary += `*_excluded_by_dataset` count buckets. All additive with
+  absent-tolerant decoding.
+- `AccuracyHarness` extensions (`CrossDatasetReporting.swift`):
+  `betaCoverageDelta` (before/after eff+status+β), `carbAccuracyDelta`
+  (baseline-vs-combined β on the N5k eval pool; per-class only at ≥ 10 scored
+  plates, thinner classes suppressed-with-count, staples absent from the pool
+  listed as unvalidated), `heldOutSplit` (seeded shuffle of sorted ids) and
+  `heldOutAnchor` (mass = V_est·β·ρ_DB MAPE; broccoli cross-check). All
+  reported, none gate a bake (Decision 9).
+- `HarnessCLI` — `--ingest-summary` is now REPEATABLE (one per dataset) and
+  `--heldout-frac` selects the MetaFood3D anchor holdout. A run with
+  MetaFood3D fixtures REQUIRES the MF3D summary to carry
+  `render_config.plane_depth_mm` (exit 1 otherwise — the alternative is the
+  silently-wrong RANSAC refit). MetaFood3D fixtures are recognised by the
+  `source_dataset` stamp prefix before "@" (`CalibrateRun.dataset(of:)`).
+
+**Contract stream 1's `tools/metafood3d/ingest.py` run_summary.json must
+match** (all keys optional on N5k summaries, which decode unchanged):
+`dataset` ("metafood3d"), `snapshot`, `mapping_version`,
+`skipped: {reason: [ids]}`, `mixture_fit_excluded_unmapped`,
+`liquid_excluded`, and `render_config: {plane_depth_mm, intrinsics_model,
+image_width, image_height, seating_rule}`. The truth sidecar is a flat
+`{fixture_id: mesh_volume_mm3}` JSON.
+
 ## Gotchas
 
 - `CalibrateRun.applyPurityGate` drops inputs with no entry in
