@@ -174,6 +174,10 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             )
             try db.execute(sql: "DELETE FROM meal_artefacts WHERE meal_id = ?",
                            arguments: [id.uuidString])
+            // `corrections` cascades — it is the meal's current display value
+            // and a deleted meal has no display value. `correction_records`
+            // deliberately does NOT (meal-review Req 9.10): the corpus
+            // survives deletion of the meal it refers to.
             try db.execute(sql: "DELETE FROM corrections WHERE meal_id = ?",
                            arguments: [id.uuidString])
         }
@@ -301,6 +305,188 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             } catch {
                 throw PersistenceError.corruptRecord("corrupt correction JSON: \(error)")
             }
+        }
+    }
+
+    // MARK: - Correction records (specs/ui/meal-review)
+    //
+    // One row per detected food per capture, keyed by the natural
+    // (meal_id, predicted_class) — so the millisecond-collision defect in
+    // `corrections`' PRIMARY KEY (meal_id, created_at) cannot arise, and a
+    // held stepper updates one row rather than appending per repeat. The
+    // four boolean columns are denormalised copies of fields inside
+    // record_json so the corpus is queryable without decoding every blob.
+    //
+    // No eviction, ever (Req 9.9): no delete in deleteMeal, deleteRecords
+    // or deleteAllData, no count bound, no age sweep. The corpus is the
+    // deliverable; this is the one store deliberately exempt from the
+    // bounding estimation_outcomes applies.
+
+    public func createCorrectionRecords(_ records: [PbCorrectionRecord]) async throws {
+        guard !records.isEmpty else { return }
+        // Encode before the transaction so a bad record aborts before any write.
+        let rows: [(record: PbCorrectionRecord, json: String)] = try records.map {
+            ($0, try $0.jsonString())
+        }
+        try await queue.write { db in
+            for (record, json) in rows {
+                // INSERT ... DO NOTHING, never a blanket upsert: the review
+                // surface can re-appear for the same meal, and a second
+                // creation must not reset created_at or overwrite a
+                // predicted side that never changes (Req 9.2).
+                try db.execute(
+                    sql: """
+                        INSERT INTO correction_records
+                            (meal_id, predicted_class, outcome_id, created_at,
+                             updated_at, class_corrected, rejected, absent,
+                             amount_corrected, record_json)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (meal_id, predicted_class) DO NOTHING
+                        """,
+                    arguments: [
+                        record.mealID, record.predicted.classID,
+                        record.outcomeID.isEmpty ? nil : record.outcomeID,
+                        record.createdAtMs, record.updatedAtMs,
+                        record.classCorrected, record.rejected,
+                        record.absent, record.amountCorrected,
+                        json
+                    ]
+                )
+            }
+        }
+        // Corpus writes never tick eventsDidChange (quick_presets convention);
+        // creation changes no displayed value.
+    }
+
+    public func updateCorrectionRecord(
+        _ record: PbCorrectionRecord,
+        upsertingCorrection correction: PbUserCorrection?
+    ) async throws {
+        let recordJSON = try record.jsonString()
+        let correctionJSON = try correction.map { try $0.jsonString() }
+        let mealID = record.mealID
+        try await queue.write { db in
+            // Mutation touches the corrected columns only — created_at and
+            // the row identity never change (Req 9.2, 9.3).
+            try db.execute(
+                sql: """
+                    UPDATE correction_records
+                    SET updated_at = ?, class_corrected = ?, rejected = ?,
+                        absent = ?, amount_corrected = ?, record_json = ?
+                    WHERE meal_id = ? AND predicted_class = ?
+                    """,
+                arguments: [
+                    record.updatedAtMs, record.classCorrected, record.rejected,
+                    record.absent, record.amountCorrected, recordJSON,
+                    mealID, record.predicted.classID
+                ]
+            )
+            // The reconciling PbUserCorrection write shares this transaction
+            // (design "the reconciling write"): a session killed mid-review
+            // must not leave the corpus holding a relabel while Records shows
+            // the uncorrected total permanently.
+            if let correction, let correctionJSON {
+                try Self.upsertCorrectionRow(
+                    db, mealId: mealID, correction: correction, json: correctionJSON
+                )
+            }
+        }
+        if correction != nil {
+            // The meal's displayed value changed (appendCorrection precedent).
+            changeBroadcaster.notify()
+        }
+    }
+
+    public func upsertCorrection(mealId: UUID, correction: PbUserCorrection) async throws {
+        let json = try correction.jsonString()
+        try await queue.write { db in
+            try Self.upsertCorrectionRow(
+                db, mealId: mealId.uuidString, correction: correction, json: json
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    // One corrections row per meal, created_at fixed at review-session start
+    // (design "the reconciling write"). appendCorrection stays a plain INSERT
+    // for its existing callers; the review path upserts so a held stepper or
+    // a scale tap in the same millisecond cannot raise a constraint violation
+    // that would roll back the correction_records write beside it (Req 8.5).
+    private static func upsertCorrectionRow(
+        _ db: Database, mealId: String, correction: PbUserCorrection, json: String
+    ) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO corrections (meal_id, created_at, correction_json)
+                VALUES (?, ?, ?)
+                ON CONFLICT (meal_id, created_at)
+                DO UPDATE SET correction_json = excluded.correction_json
+                """,
+            arguments: [mealId, correction.createdAtMs, json]
+        )
+    }
+
+    public func correctionRecords(for mealId: UUID) async throws -> [PbCorrectionRecord] {
+        let rows = try await queue.read { db in
+            try Row.fetchAll(db,
+                sql: """
+                    SELECT record_json FROM correction_records
+                    WHERE meal_id = ?
+                    ORDER BY predicted_class ASC
+                    """,
+                arguments: [mealId.uuidString])
+        }
+        return try rows.map(Self.decodeCorrectionRecord)
+    }
+
+    public func allCorrectionRecords() async throws -> [PbCorrectionRecord] {
+        let rows = try await queue.read { db in
+            try Row.fetchAll(db,
+                sql: """
+                    SELECT record_json FROM correction_records
+                    ORDER BY updated_at DESC, meal_id ASC, predicted_class ASC
+                    """)
+        }
+        return try rows.map(Self.decodeCorrectionRecord)
+    }
+
+    public func recentCorrectedClassIds(
+        forPredictedClass classId: String, limit: Int
+    ) async throws -> [String] {
+        guard limit > 0 else { return [] }
+        // Recency shortlist (meal-review Req 3.1, Decision 18): corrected
+        // classes the user has recently chosen for a food of this kind.
+        // The corrected class lives inside record_json; the scan is bounded
+        // because the candidate universe is the palette (≤ 33 classes).
+        let rows = try await queue.read { db in
+            try Row.fetchAll(db,
+                sql: """
+                    SELECT record_json FROM correction_records
+                    WHERE predicted_class = ? AND class_corrected = 1
+                    ORDER BY updated_at DESC
+                    LIMIT 100
+                    """,
+                arguments: [classId])
+        }
+        var seen: Set<String> = []
+        var out: [String] = []
+        for row in rows {
+            let record = try Self.decodeCorrectionRecord(row)
+            let corrected = record.corrected.classID
+            guard !corrected.isEmpty, corrected != classId,
+                  seen.insert(corrected).inserted else { continue }
+            out.append(corrected)
+            if out.count == limit { break }
+        }
+        return out
+    }
+
+    private static func decodeCorrectionRecord(_ row: Row) throws -> PbCorrectionRecord {
+        let json: String = row["record_json"]
+        do {
+            return try PbCorrectionRecord(jsonString: json)
+        } catch {
+            throw PersistenceError.corruptRecord("corrupt correction record JSON: \(error)")
         }
     }
 
@@ -532,6 +718,8 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 )
             }
             // Meal cascade mirrors deleteMeal — events row plus side tables.
+            // As in deleteMeal, `correction_records` is exempt from the
+            // cascade (meal-review Req 9.10).
             for id in mealIDs {
                 try db.execute(
                     sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
@@ -659,18 +847,42 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
 
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
+        // Meals holding an ACTUAL correction are exempt (meal-review Req 8.4):
+        // their mask is pixel-level supervision for a retained training
+        // example. "Actual" means any of the four correction facts — every
+        // reviewed meal holds rows, so exempting on mere row existence would
+        // make this an unconditional no-op rather than a retention policy.
         let ids: [String] = try await queue.read { db in
             try String.fetchAll(db,
                 sql: """
                     SELECT id FROM events
                     WHERE event_type = ? AND timestamp < ?
+                      AND id NOT IN (
+                        SELECT meal_id FROM correction_records
+                        WHERE class_corrected OR rejected
+                           OR absent OR amount_corrected
+                      )
                     """,
                 arguments: [EventType.meal, cutoffMs])
         }
+        guard !ids.isEmpty else { return }
         let mealsRoot = artefactsBaseURL.appendingPathComponent("meals", isDirectory: true)
         for id in ids {
             let url = mealsRoot.appendingPathComponent(id, isDirectory: true)
             try? FileManager.default.removeItem(at: url)
+        }
+        // The meal_artefacts rows go with the directories (meal-review
+        // Req 8.4): a dangling row would make artefactData report an
+        // artefact that no longer exists on disk.
+        try await queue.write { db in
+            for chunk in stride(from: 0, to: ids.count, by: Self.deleteChunkSize)
+                .map({ Array(ids[$0..<min($0 + Self.deleteChunkSize, ids.count)]) }) {
+                let placeholders = repeatElement("?", count: chunk.count).joined(separator: ",")
+                try db.execute(
+                    sql: "DELETE FROM meal_artefacts WHERE meal_id IN (\(placeholders))",
+                    arguments: StatementArguments(chunk)
+                )
+            }
         }
     }
 
@@ -820,23 +1032,41 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 db_edition    TEXT    NOT NULL,
                 fidelity      TEXT    NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS correction_records (
+                meal_id          TEXT NOT NULL,
+                predicted_class  TEXT NOT NULL,
+                outcome_id       TEXT,
+                created_at       INTEGER NOT NULL,
+                updated_at       INTEGER NOT NULL,
+                class_corrected  INTEGER NOT NULL,
+                rejected         INTEGER NOT NULL,
+                absent           INTEGER NOT NULL,
+                amount_corrected INTEGER NOT NULL,
+                record_json      BLOB NOT NULL,
+                PRIMARY KEY (meal_id, predicted_class)
+            );
+            CREATE INDEX IF NOT EXISTS idx_correction_records_meal
+                ON correction_records(meal_id);
+            CREATE INDEX IF NOT EXISTS idx_correction_records_predicted
+                ON correction_records(predicted_class);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '6')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '7')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '6' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 6 adds
-    // estimation_outcomes AND benchmark_meals (specs/estimation/snaq-parity
-    // Decision 7, design "Data Models"); version 5 added quick_presets
-    // (specs/data/manual-carb-intake). The CREATE IF NOT EXISTS above
-    // retrofits all of them onto older DBs — including a dev DB stamped '6'
-    // before benchmark_meals landed — matching the processed_images/v4
-    // precedent exactly. No DDL on legacy tables (Decision 10).
+    // Idempotent: re-stamps schema_version to '7' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 7 adds
+    // correction_records (specs/ui/meal-review, design "Correction store");
+    // version 6 added estimation_outcomes AND benchmark_meals
+    // (specs/estimation/snaq-parity Decision 7, design "Data Models");
+    // version 5 added quick_presets (specs/data/manual-carb-intake). The
+    // CREATE IF NOT EXISTS above retrofits all of them onto older DBs —
+    // matching the processed_images/v4 precedent exactly. No DDL on legacy
+    // tables (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '6')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '7')"
         )
     }
 
@@ -1206,6 +1436,10 @@ public extension GRDBPersistenceStore {
     // processed-image ledger, then removes the on-disk artefact tree. Keeps the
     // `meta` row so `schema_version` survives — the DB stays valid, just empty.
     // DEBUG-only reset for the developer test loop; there is no undo.
+    //
+    // `correction_records` is deliberately NOT in this list and must not be
+    // added (meal-review Req 9.9): the corpus admits no deletion path, and
+    // it is not test data.
     func deleteAllData() async throws {
         try await queue.write { db in
             try db.execute(sql: "DELETE FROM events")

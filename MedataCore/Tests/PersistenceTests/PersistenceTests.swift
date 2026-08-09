@@ -83,7 +83,7 @@ final class PersistenceTests: XCTestCase {
                 db,
                 sql: "SELECT v FROM meta WHERE k = 'schema_version'"
             )
-            XCTAssertEqual(version, "6")
+            XCTAssertEqual(version, "7")
         }
     }
 

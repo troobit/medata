@@ -51,6 +51,10 @@ public final class BundlePaletteMigrator: PaletteMigrator, @unchecked Sendable {
         let oldEdition = meal.databaseEdition
         var newVolumes = meal.volumes
         var newPerClassVols: [String: Float] = [:]
+        // Pre-β volumes are geometric, independent of class identity — the map
+        // is re-keyed through the migration unchanged in value (meal-review
+        // Decision 17). Empty on records written before the field existed.
+        var newPreBetaVols: [String: Float] = [:]
         var newPerClassMacros: [String: PbPerClassMacros] = [:]
         var newPerClassCalibration: [String: PbBetaCalibrationStatus] = [:]
         var newTotalCarbsG: Float = 0
@@ -62,6 +66,9 @@ public final class BundlePaletteMigrator: PaletteMigrator, @unchecked Sendable {
             if mapping.toClassIDOrUnmappable == "unmappable" {
                 // Retain as-is under old edition label.
                 newPerClassVols[oldClassId] = volumeCm3
+                if let preBeta = meal.volumes.perClassVolumesPreBetaCm3[oldClassId] {
+                    newPreBetaVols[oldClassId] = preBeta
+                }
                 if let entry = meal.macros.perClass[oldClassId] {
                     newPerClassMacros[oldClassId] = entry
                     newTotalCarbsG += entry.carbsG
@@ -86,6 +93,9 @@ public final class BundlePaletteMigrator: PaletteMigrator, @unchecked Sendable {
                 let carbsNew = massNew * kappaNew / 100.0
 
                 newPerClassVols[newClassId] = volumeCm3
+                if let preBeta = meal.volumes.perClassVolumesPreBetaCm3[oldClassId] {
+                    newPreBetaVols[newClassId] = preBeta
+                }
                 var entry = PbPerClassMacros()
                 entry.volumeCm3 = volumeCm3
                 entry.massG = massNew
@@ -99,6 +109,7 @@ public final class BundlePaletteMigrator: PaletteMigrator, @unchecked Sendable {
         }
 
         newVolumes.perClassVolumesCm3 = newPerClassVols
+        newVolumes.perClassVolumesPreBetaCm3 = newPreBetaVols
         var newMacros = meal.macros
         newMacros.perClass = newPerClassMacros
         newMacros.totalCarbsG = newTotalCarbsG

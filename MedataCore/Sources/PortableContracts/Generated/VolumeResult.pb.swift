@@ -80,6 +80,12 @@ public nonisolated struct PbVolumeResult: Sendable {
   /// Clears the value of `voxelGridSummary`. Subsequent reads from it will return its default value.
   public mutating func clearVoxelGridSummary() {self._voxelGridSummary = nil}
 
+  /// Pre-β per-class volumes, keyed identically to per_class_volumes_cm3.
+  /// A relabel derives from this value directly rather than dividing
+  /// beta_used back out (meal-review Decision 17). Empty on records
+  /// written before the field existed — the division fallback applies.
+  public var perClassVolumesPreBetaCm3: Dictionary<String,Float> = [:]
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -97,7 +103,7 @@ nonisolated extension PbCapturePath: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension PbVolumeResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VolumeResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}per_class_volumes_cm3\0\u{3}ambiguous_voxel_fraction\0\u{3}lidar_coverage_fraction\0\u{3}voxel_grid_summary\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}per_class_volumes_cm3\0\u{3}ambiguous_voxel_fraction\0\u{3}lidar_coverage_fraction\0\u{3}voxel_grid_summary\0\u{3}per_class_volumes_pre_beta_cm3\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -109,6 +115,7 @@ nonisolated extension PbVolumeResult: SwiftProtobuf.Message, SwiftProtobuf._Mess
       case 2: try { try decoder.decodeSingularFloatField(value: &self.ambiguousVoxelFraction) }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &self.lidarCoverageFraction) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._voxelGridSummary) }()
+      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &self.perClassVolumesPreBetaCm3) }()
       default: break
       }
     }
@@ -131,6 +138,9 @@ nonisolated extension PbVolumeResult: SwiftProtobuf.Message, SwiftProtobuf._Mess
     try { if let v = self._voxelGridSummary {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
+    if !self.perClassVolumesPreBetaCm3.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: self.perClassVolumesPreBetaCm3, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -139,6 +149,7 @@ nonisolated extension PbVolumeResult: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.ambiguousVoxelFraction != rhs.ambiguousVoxelFraction {return false}
     if lhs.lidarCoverageFraction != rhs.lidarCoverageFraction {return false}
     if lhs._voxelGridSummary != rhs._voxelGridSummary {return false}
+    if lhs.perClassVolumesPreBetaCm3 != rhs.perClassVolumesPreBetaCm3 {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
