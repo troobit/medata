@@ -140,7 +140,7 @@ references:
   - Stream: 2
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2)
 
-- [ ] 20. Write generate.py persistence tests <!-- id:fjp41xp -->
+- [x] 20. Write generate.py persistence tests <!-- id:fjp41xp -->
   - persists calibration_contributing_datasets_per_class + calibration_single_source_classes meta dicts
   - palette-to-DB edition lock still holds
   - Stream: 1
