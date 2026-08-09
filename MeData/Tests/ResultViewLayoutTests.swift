@@ -30,11 +30,10 @@ struct ResultViewLayoutTests {
         }
     }
 
-    @Test("action row hidden in historyDetail (Req §19.4 / design.md)")
-    func actionRowHiddenInHistoryDetail() {
-        #expect(!ResultPresentation.historyDetail.showsActionRow)
-        #expect(ResultPresentation.justCaptured.showsActionRow)
-    }
+    // The presentation-mode contract is superseded: `ResultPresentation` was
+    // removed by specs/ui/meal-review task 15 — ResultView now serves only
+    // the Records/Graph history read path, and the capture-step surface is
+    // MealReviewView.
 }
 
 private func dynamicTypeSizes() -> [ContentSizeCategory] {

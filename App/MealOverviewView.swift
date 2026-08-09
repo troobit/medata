@@ -18,6 +18,9 @@ struct MealOverviewView: View {
     @State private var photo: UIImage?
     @State private var isCorrected = false
     @State private var correctedTotal: Float?
+    // Predicted class id → corrected class id (meal-review Req 8.7): a
+    // relabelled food is named as corrected on every surface that names it.
+    @State private var correctedClassIds: [String: String] = [:]
     @State private var showDeleteConfirm = false
 
     private var displayTotal: Int {
@@ -177,7 +180,7 @@ struct MealOverviewView: View {
             .map { name, macro in
                 PerClassRow(
                     name: name,
-                    displayName: MealOverviewView.prettify(name),
+                    displayName: MealOverviewView.prettify(correctedClassIds[name] ?? name),
                     massG: Int(macro.massG.rounded()),
                     volumeCm3: Int(macro.volumeCm3.rounded()),
                     carbsG: Int(macro.carbsG.rounded())
@@ -226,6 +229,11 @@ struct MealOverviewView: View {
         let corrections = (try? await store.corrections(for: record.id)) ?? []
         isCorrected = !corrections.isEmpty
         correctedTotal = corrections.last { $0.correctedTotalCarbsGOneof != nil }?.correctedTotalCarbsG
+        // Fold in order so a later amount-only correction (empty map) never
+        // erases an earlier relabel (meal-review Req 8.7).
+        correctedClassIds = corrections.reduce(into: [:]) { acc, correction in
+            acc.merge(correction.correctedClassIds) { _, newer in newer }
+        }
     }
 
     private func deleteMeal() {
