@@ -12,9 +12,9 @@ metadata CSV to enumerate against by default. Two build modes:
 - **Curated-only** (no ``--categories-file``): the artifact's category
   universe is the rules themselves; ``categories_source`` records the
   ``curated_rules_only`` sentinel. Ingest excludes and counts any dataset
-  category the artifact does not know (Req 1.4) and aborts on a rule that
-  names a category the snapshot lacks (stale-rule check deferred to the
-  first contact with real data).
+  category the artifact does not know (Req 1.4); the stale-rule check
+  runs only here, when the artifact is regenerated against a real
+  enumeration (ingest must tolerate partial snapshots).
 - **Enumerated** (``--categories-file``, one category per line — regenerate
   once the dataset lands): all snapshot categories are recorded (unmapped
   ones included), a stale rule aborts the build (curation typo, n5k
