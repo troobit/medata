@@ -371,4 +371,49 @@ The check must use ground truth the dataset actually provides. Gramme weight is 
 **Negative:** Weaker than a direct dimension check per object; a scale error that happens to keep bbox-volume×density inside the weight band would pass.
 
 ---
+
+## Decision 15: MetaFood3D mapping targets the palette v2 content list; v1 references superseded
+
+**Date**: 2026-08-09
+**Status**: accepted
+
+### Context
+
+This spec was planned 2026-07-04 against `ClassPalette.v1Standard` (35 channels), and its requirements and tasks state that target explicitly (Req 1.3 "35-channel palette v1", Non-Goals "the 35-channel palette and its ordering are fixed", tasks 1–2 "target ClassPalette.v1Standard ordering (load-bearing)"). On 2026-07-25 the myfoodrepo-bridge work shipped palette **v2**: `cereal` appended after the existing 24 solids (index 24), liquids shifted to 25–32, sentinels to 33/34/35, 36 channels; the bundled model is the 36-channel `ab812dc3aa9d`, and `tools/food_db/generate.py` now locks the DB bake against `v2Standard` (`PALETTE_VERSION = "v2"`, `_PALETTE_MARKER = "v2Standard"`). This spec's documents predate v2 and never mention it, so the target had to be re-verified before any mapping code was written.
+
+### Decision
+
+Target the **palette v2 content list** (`ClassPalette.v2Standard`: 25 solid + 8 liquid class names, sentinels excluded) for `mapping_metafood3d_to_palette.json` and all stream-1 tooling. The v1 references in requirements.md (Non-Goals, Req 1.3) and tasks.md (tasks 1–2) are marked superseded in place by this decision.
+
+### Rationale
+
+Evidence gathered 2026-08-09 shows β is keyed by **class name**, not channel index, end-to-end, so the "load-bearing ordering" concern does not bind the MetaFood3D data path — but the palette *content* lock must reference the palette that actually ships:
+
+- The fixture contract carries GT masses as `map<string, float>` (`ground_truth_class_mass_g`, MealFixture.proto field 17); mixture fixtures — the shape MetaFood3D uses (Decision 11) — carry **no probability tensor**, which is the only place channel ordering is load-bearing.
+- `MixtureBetaCalibrator` consumes `massByClassG: [String: …]` and `densityByClass: [String: Float]`; `CalibrationArtifact.classes` is name-keyed; `generate.py::_apply_calibration` bakes via `UPDATE foods SET beta … WHERE class_id = ?` with class-name strings. No index survives into the bake.
+- `generate.py` locks the DB against `v2Standard` content; a calibrate artifact naming a class absent from the v2 DB fails its unknown-class check. A v1-locked mapping artifact could never map `cereal`, and its fail-loud content lock would validate against a superseded palette while the shipped model and DB moved on — exactly the drift the lock exists to catch.
+- v2 is a pure append (all v1 names retained, first 8 carb-staple solids index-stable), so pooling with Nutrition5k fixtures (whose committed mapping artifact still carries the 32-name v1 content list) is unaffected: pooled rows join on class names, which are identical across v1/v2. The N5k artifact's own lock is per-tool and out of scope here.
+
+### Alternatives Considered
+
+- **Target v1Standard as planned**: literal spec compliance — Rejected: locks new tooling to a superseded palette, forecloses mapping MetaFood3D cereal-type categories into the live `cereal` class, and makes the artifact's palette-content lock validate against a declaration retained only for persisted-meal migration.
+- **Key the mapping by v2 channel indices**: makes ordering explicit — Rejected: nothing in the mixture calibrate path consumes indices; index keying adds a brittle coupling the name-keyed fixture/artifact/DB contract deliberately avoids.
+- **Support both palettes behind a flag**: maximal flexibility — Rejected: there is exactly one live bake target (v2); a dual-target mapping doubles the lock surface for no consumer.
+
+### Consequences
+
+**Positive:**
+- The mapping artifact's fail-loud content lock guards the palette that actually ships (36-channel model, v2-locked DB bake).
+- MetaFood3D cereal-type categories can be mapped rather than force-excluded.
+- No migration machinery: name keying means zero changes to fixtures, calibrator, merge, or bake for this retarget.
+
+**Negative:**
+- The spec's Req 1.3 / Non-Goals / task text needed superseding annotations, and stream-2 readers must not take the "v1" task wording literally.
+- The metafood3d and nutrition5k mapping artifacts temporarily reference different palette content lists (33 vs 32 names) until the N5k artifact is regenerated — acceptable because each lock is per-tool, but mildly confusing to auditors.
+
+### Impact
+
+Stream 1 only (`tools/metafood3d/`): `build_mapping.py` parses `v2Standard` (marker-scoped, mirroring `generate.py`), the artifact records the v2 content list, and tests assert mapped categories target valid v2 class names. No Swift change; stream 2's palette use in the mixture path is limited to `palette.liquidClasses` names, identical in v1/v2.
+
+---
 </content>
