@@ -83,6 +83,38 @@ struct CalibrationReferenceGuardTests {
         #expect(classes["peas"]?["support_plane_reference"] as? String == "foodSupport")
     }
 
+    // Cross-dataset-calibration Decision 16 (Req 8.3): a mixture β contributed
+    // EXCLUSIVELY by MetaFood3D was integrated above the authored plane the
+    // object rests on — the food-support basis — so it stamps `foodSupport`
+    // and is applicable at bake. Any Nutrition5k contribution keeps the
+    // fail-closed `plateRegion` stamp, as does an empty contributor record
+    // (pinned above via chips_fries).
+    @Test("a MetaFood3D-only mixture beta stamps the food-support reference")
+    func metaFood3DOnlyMixtureBetaStampsFoodSupport() throws {
+        let merged: [String: CalibrationMerge.ClassCalibration] = [
+            "pasta": .init(className: "pasta", beta: 0.8,
+                           status: .calibrated, provenance: .n5kMixture,
+                           standardError: 0.01, effectiveSample: 34, clamped: false,
+                           contributingDatasets: ["metafood3d": 34],
+                           singleSourceUncorroborated: true),
+            "broccoli": .init(className: "broccoli", beta: 0.9,
+                              status: .calibrated, provenance: .n5kMixture,
+                              standardError: 0.02, effectiveSample: 66, clamped: false,
+                              contributingDatasets: ["nutrition5k": 34,
+                                                     "metafood3d": 32]),
+        ]
+        let json = try encoded(CalibrationArtifact(
+            merged: merged, betaPool: 1.0, supportPlaneReference: .foodSupport,
+            lineage: nil, runSummary: nil))
+        let classes = try #require(json["classes"] as? [String: [String: Any]])
+        #expect(classes["pasta"]?["support_plane_reference"] as? String
+                == "foodSupport",
+                "an MF3D-only β is fitted above the authored support plane")
+        #expect(classes["broccoli"]?["support_plane_reference"] as? String
+                == "plateRegion",
+                "pooling with N5k mixture rows mixes bases — fail closed")
+    }
+
     // An artefact produced before this feature records none. Encoding the null
     // explicitly is what lets the bake distinguish "recorded no reference" from
     // "carries an unexpected shape" and refuse the first (Req 5.3).

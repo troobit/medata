@@ -521,11 +521,27 @@ def _read_prior_provenance(db_path: str) -> dict:
 def _apply_calibration(conn: sqlite3.Connection, cal: dict,
                        prior_provenance: dict) -> None:
     """Write per-row β/status/provenance (device_verified stays 0 — only the
-    device-spot-check spec flips it, Req 5.4) and the lineage meta rows."""
+    device-spot-check spec flips it, Req 5.4) and the lineage meta rows.
+
+    Cross-dataset provenance (cross-dataset-calibration Req 6.1/7.2): entries
+    carrying ``contributing_datasets`` / ``single_source_uncorroborated``
+    persist as the ``calibration_contributing_datasets_per_class`` and
+    ``calibration_single_source_classes`` meta JSON dicts. Additive: an
+    artifact without those keys (the pre-cross-dataset N5k-only shape) writes
+    neither meta key.
+    """
     clamped = []
     supersessions = []
     standard_errors = {}
     reference_skipped = []
+    contributing_by_class = {}
+    single_source_classes = []
+    # Presence is an artifact-shape question (did the harness emit the
+    # cross-dataset fields at all?), judged on the raw entries — persisted
+    # VALUES below still honour the support-plane-reference gate.
+    cross_dataset_artifact = any(
+        "contributing_datasets" in e or "single_source_uncorroborated" in e
+        for e in cal["classes"].values())
     for class_id, entry in sorted(cal["classes"].items()):
         # Req 5.4: β fitted under another reference is NOT applied. A single
         # artifact spans two references by construction — the mixture path keeps
@@ -540,6 +556,13 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
             "WHERE class_id = ?",
             (entry["beta"], entry["status"], entry["provenance"], class_id))
         standard_errors[class_id] = entry.get("standard_error")
+        # Cross-dataset provenance travels only for APPLIED classes: a
+        # reference-skipped β is not baked, so its provenance must not be
+        # recorded as if it were (Req 6.1 attributes the baked β).
+        if "contributing_datasets" in entry:
+            contributing_by_class[class_id] = entry["contributing_datasets"]
+        if entry.get("single_source_uncorroborated"):
+            single_source_classes.append(class_id)
         if entry.get("clamped"):
             clamped.append(class_id)
             print(
@@ -586,6 +609,11 @@ def _apply_calibration(conn: sqlite3.Connection, cal: dict,
         "calibration_clamped_classes": json.dumps(clamped),
         "calibration_supersessions": json.dumps(supersessions),
     }
+    if cross_dataset_artifact:
+        meta_rows["calibration_contributing_datasets_per_class"] = \
+            json.dumps(contributing_by_class)
+        meta_rows["calibration_single_source_classes"] = \
+            json.dumps(sorted(single_source_classes))
     conn.executemany(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)",
         [(k, str(v)) for k, v in meta_rows.items() if v is not None])
