@@ -8,7 +8,7 @@ references:
 
 ## Ingestion toolchain (Python)
 
-- [ ] 1. Write tests for the MetaFood3D-to-palette mapping builder <!-- id:fjp41x6 -->
+- [x] 1. Write tests for the MetaFood3D-to-palette mapping builder <!-- id:fjp41x6 -->
   - pytest under tools/metafood3d/tests/
   - assert every mapped category targets a valid 35-class palette v1 id in order [superseded by Decision 15: valid class name in the palette v2 content list]
   - ambiguous cooking-method categories (potato_boiled/mashed/chips) excluded, not guessed
@@ -49,7 +49,7 @@ references:
 - [ ] 6. Implement ingest.py <!-- id:fjp41xb -->
   - mirror tools/nutrition5k/ingest.py; reuse build_fixture_bytes
   - authored SupportPlane params carried for the injected-plane branch
-  - Blocked-by: fjp41xa (Write ingest.py tests incl. Hypothesis weight-plausibility), fjp41x7 (Implement build_mapping.py + mapping_metafood3d_to_palette.json), fjp41x9 (Implement render.py (trimesh CPU ray-cast))
+  - Blocked-by: fjp41xa (Write ingest.py tests incl. Hypothesis weight-plausibility), fjp41x7 (Implement build_mapping.py + mapping_metafood3d_to_palette.json), fjp41x9 (Implement render.py trimesh CPU ray-cast)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.5](requirements.md#1.5), [3.1](requirements.md#3.1)
 
