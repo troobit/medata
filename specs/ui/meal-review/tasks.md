@@ -197,7 +197,7 @@ references:
   - Add a serving-adjust decision-log entry recording what was superseded and why
   - Stream: 3
 
-- [ ] 20. New design-system/pages/meal-review.md; retire segmentation-review.md <!-- id:fffbfha -->
+- [x] 20. New design-system/pages/meal-review.md; retire segmentation-review.md <!-- id:fffbfha -->
   - The page is the written target this surface is iterated against (PROCESS §5) — layout zones, outline and badge treatment, row metrics restated on the capture palette, the above-the-fold rule and its sigma < 0.20 exception
   - segmentation-review.md gains a superseded marker pointing here, matching the photo-tab.md / meals-tab.md precedent
   - result.md is scoped to historyDetail only; its .justCaptured content moves here
