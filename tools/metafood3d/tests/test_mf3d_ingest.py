@@ -135,9 +135,21 @@ class TestFixtureEmission:
         summary = json.loads((out / "run_summary.json").read_text())
         assert summary["dataset"] == "metafood3d"
         assert summary["licence"] == "CC BY-NC 4.0"
-        # Req 2.4/2.5/9.1: recorded camera config incl. the noise-free note.
+        # Req 9.1 lineage keys, canonical Swift-decoder names (Decision 17):
+        # `snapshot` + `mapping_version`, never `snapshot_identifier`.
+        assert summary["snapshot"]
+        assert summary["source_dataset"] == \
+            f"metafood3d@{summary['snapshot'][:12]}"
+        mapping_artifact = ingest.mapping.DEFAULT_ARTIFACT
+        assert summary["mapping_version"] == \
+            ingest.mapping_artifact_version(mapping_artifact)
+        # Req 2.4/2.5/9.1: recorded camera config incl. the noise-free note,
+        # under the canonical key names the Swift decoder reads.
         rc = summary["render_config"]
         assert rc["plane_depth_mm"] == SMALL.plane_depth_mm
+        assert rc["image_width"] == SMALL.width
+        assert rc["image_height"] == SMALL.height
+        assert rc["seating_rule"] == ingest.SEATING_RULE
         assert rc["noise"] == "noise_free_render"
         # Decision 13: authored plane parameters for the injected-plane
         # branch (stream 2 consumes these; the fixture proto has no
@@ -153,6 +165,44 @@ class TestFixtureEmission:
                                _box_mm((50.0, 50.0, 40.0)))])
         truth = json.loads((out / "metafood3d_truth.json").read_text())
         assert truth["obj001"] == pytest.approx(50.0 * 50.0 * 40.0, rel=1e-6)
+
+
+class TestRunSummaryContract:
+    """Decision 17: the committed contract fixture is emitter-generated.
+
+    ``fixtures/run_summary_contract.json`` is the SAME file the Swift
+    end-to-end test (EndToEndCalibrateBakeTests) feeds to the built
+    HarnessCLI binary, whose loader exits 1 on missing contract keys. This
+    test regenerates the document through the real emitter and diffs it,
+    so an emitter change that would break the Swift decoder goes red here
+    before it ships a summary the harness cannot read."""
+
+    def test_committed_fixture_matches_emitter_output(self):
+        import make_contract_fixture
+
+        committed = make_contract_fixture.FIXTURE_PATH.read_text()
+        regenerated = make_contract_fixture.contract_text()
+        assert committed == regenerated, (
+            "run_summary_contract.json no longer matches ingest.py's "
+            "emitter. If the contract change is intentional, regenerate "
+            "with tools/metafood3d/tests/make_contract_fixture.py AND "
+            "update the Swift decoder + EndToEndCalibrateBakeTests "
+            "(Decision 17)."
+        )
+
+    def test_committed_fixture_carries_the_swift_decoder_keys(self):
+        import make_contract_fixture
+
+        doc = json.loads(make_contract_fixture.FIXTURE_PATH.read_text())
+        # The exact keys CalibrateRun.loadIngestSummary requires on a
+        # metafood3d summary (exit 1 when absent).
+        assert doc["dataset"] == "metafood3d"
+        for key in ("snapshot", "mapping_version", "licence"):
+            assert doc[key], key
+        rc = doc["render_config"]
+        for key in ("plane_depth_mm", "intrinsics_model", "image_width",
+                    "image_height", "seating_rule"):
+            assert rc[key], key
 
 
 class TestMetricScaleGates:

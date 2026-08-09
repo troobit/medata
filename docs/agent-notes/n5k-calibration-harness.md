@@ -227,14 +227,41 @@ router/loader/calibrator changes. Everything below is additive.
   `render_config.plane_depth_mm` (exit 1 otherwise — the alternative is the
   silently-wrong RANSAC refit). MetaFood3D fixtures are recognised by the
   `source_dataset` stamp prefix before "@" (`CalibrateRun.dataset(of:)`).
+- `--mesh-truth <metafood3d_truth.json>` wires the Req 2.3 volume-fit
+  diagnostic: β_geom per class lands in the calibrate artifact's
+  `volume_fit_diagnostic` block (omitted when the flag is absent — the
+  N5k-only artifact shape is unchanged) and in the calibrate-and-eval
+  cross-dataset block, each row pairing β_geom with the baked mass-fit β
+  and a `diverges_from_mass_fit` flag at the skew δ (0.20). Reported,
+  never baked — `generate.py` does not read the block. An MF3D run
+  without the flag warns to stderr.
+- Licence provenance (cross-dataset Decision 17): `lineage.per_dataset`
+  entries carry each dataset's `licence` (N5k's known CC BY 4.0;
+  MetaFood3D's read from its summary, load-required), and the top-level
+  `lineage.licence` is the STRICTEST contributing licence
+  (`CalibrationArtifact.strictestLicence`; unknown strings rank
+  strictest). A MetaFood3D-contributing bake therefore persists
+  `calibration_licence = CC BY-NC 4.0`.
+- `CalibrationMerge` Rule 1 (single-dominant win) records the ACTUAL fit
+  source — `contributingDatasets = ["nutrition5k": sd.effectiveSample]`,
+  never the mixture per-dataset presence (an MF3D row that never fed the
+  SD fit must not be attributed, Req 6.1) — and carries
+  `crossDatasetInconsistent` through even though the SD fit still bakes
+  (Req 5.3 record; the SD β is not the blended pool value the guard
+  blocks).
 
 **Contract stream 1's `tools/metafood3d/ingest.py` run_summary.json must
-match** (all keys optional on N5k summaries, which decode unchanged):
-`dataset` ("metafood3d"), `snapshot`, `mapping_version`,
+match** (all keys optional on N5k summaries, which decode unchanged;
+REQUIRED on any other dataset's summary — `loadIngestSummary` exits 1 on
+a missing key rather than defaulting to "", Decision 17): `dataset`
+("metafood3d"), `snapshot`, `mapping_version`, `licence`,
 `skipped: {reason: [ids]}`, `mixture_fit_excluded_unmapped`,
 `liquid_excluded`, and `render_config: {plane_depth_mm, intrinsics_model,
-image_width, image_height, seating_rule}`. The truth sidecar is a flat
-`{fixture_id: mesh_volume_mm3}` JSON.
+image_width, image_height, seating_rule}`. The contract is pinned by the
+emitter-generated fixture `tools/metafood3d/tests/fixtures/
+run_summary_contract.json`, which pytest diffs against the Python emitter
+and `EndToEndCalibrateBakeTests` feeds to the built binary. The truth
+sidecar is a flat `{fixture_id: mesh_volume_mm3}` JSON.
 
 ## Gotchas
 

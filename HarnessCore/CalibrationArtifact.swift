@@ -47,10 +47,13 @@ public enum CalibrateRun {
     // mixture-fit exclusion (design §Unmapped-volume bias) can only come from
     // this file — the harness consumes it rather than re-deriving it.
     //
-    // Multi-dataset keys (all optional, absent on pre-feature N5k summaries):
+    // Multi-dataset keys (optional on pre-feature N5k summaries, REQUIRED on
+    // any other dataset's summary — see the contract check below):
     //   dataset          — e.g. "metafood3d"; "" reads as nutrition5k.
     //   snapshot         — dataset snapshot identifier (Req 9.1).
     //   mapping_version  — the dataset's mapping-artifact version.
+    //   licence          — the dataset's licence (cross-dataset Decision 17;
+    //                      MetaFood3D is CC BY-NC 4.0, not N5k's CC BY 4.0).
     //   render_config    — the pinned MetaFood3D render camera configuration;
     //                      `plane_depth_mm` is what the injected-plane branch
     //                      (Decision 13) authors the SupportPlane from.
@@ -58,6 +61,7 @@ public enum CalibrateRun {
         public let dataset: String
         public let snapshot: String
         public let mappingVersion: String
+        public let licence: String?
         public let unmappedExcluded: Set<String>
         public let liquidExcluded: Set<String>
         public let ingestionSkipCount: Int
@@ -66,6 +70,23 @@ public enum CalibrateRun {
         public let renderImageWidth: Int?
         public let renderImageHeight: Int?
         public let renderSeatingRule: String?
+    }
+
+    // A non-N5k summary missing a Req 9.1 lineage key (cross-dataset
+    // Decision 17): thrown so the CLI exits 1 rather than baking an
+    // artifact whose per-dataset lineage is silently empty — the exact
+    // defect this feature shipped with once.
+    public struct IngestSummaryContractError: Error, CustomStringConvertible {
+        public let path: String
+        public let dataset: String
+        public let missingKeys: [String]
+
+        public var description: String {
+            "ingest summary \(path) (dataset \"\(dataset)\") is missing "
+            + "required lineage key(s): \(missingKeys.joined(separator: ", "))"
+            + " — a bake must be reproducible from lineage alone (Req 9.1); "
+            + "regenerate the summary with tools/\(dataset)/ingest.py"
+        }
     }
 
     public static func loadIngestSummary(from url: URL) throws -> IngestSummary {
@@ -87,12 +108,13 @@ public enum CalibrateRun {
             let dataset: String?
             let snapshot: String?
             let mappingVersion: String?
+            let licence: String?
             let skipped: [String: [String]]?
             let mixtureFitExcludedUnmapped: [String]?
             let liquidExcluded: [String]?
             let renderConfig: RenderDoc?
             enum CodingKeys: String, CodingKey {
-                case dataset, snapshot, skipped
+                case dataset, snapshot, licence, skipped
                 case mappingVersion = "mapping_version"
                 case mixtureFitExcludedUnmapped = "mixture_fit_excluded_unmapped"
                 case liquidExcluded = "liquid_excluded"
@@ -100,10 +122,41 @@ public enum CalibrateRun {
             }
         }
         let doc = try JSONDecoder().decode(Doc.self, from: Data(contentsOf: url))
+
+        // Contract check (Decision 17): an N5k summary predates these keys
+        // and decodes unchanged, but any OTHER dataset's summary must carry
+        // its full Req 9.1 lineage. Defaulting to "" here once let a real
+        // ingest → calibrate run bake per-dataset lineage of empty strings —
+        // unreproducible, with no loud failure anywhere.
+        let dataset = doc.dataset ?? ""
+        if !dataset.isEmpty && dataset != "nutrition5k" {
+            var missing: [String] = []
+            if (doc.snapshot ?? "").isEmpty { missing.append("snapshot") }
+            if (doc.mappingVersion ?? "").isEmpty { missing.append("mapping_version") }
+            if (doc.licence ?? "").isEmpty { missing.append("licence") }
+            if let rc = doc.renderConfig {
+                if (rc.intrinsicsModel ?? "").isEmpty {
+                    missing.append("render_config.intrinsics_model")
+                }
+                if rc.imageWidth == nil { missing.append("render_config.image_width") }
+                if rc.imageHeight == nil { missing.append("render_config.image_height") }
+                if (rc.seatingRule ?? "").isEmpty {
+                    missing.append("render_config.seating_rule")
+                }
+            } else {
+                missing.append("render_config")
+            }
+            if !missing.isEmpty {
+                throw IngestSummaryContractError(
+                    path: url.path, dataset: dataset, missingKeys: missing)
+            }
+        }
+
         return IngestSummary(
-            dataset: doc.dataset ?? "",
+            dataset: dataset,
             snapshot: doc.snapshot ?? "",
             mappingVersion: doc.mappingVersion ?? "",
+            licence: doc.licence,
             unmappedExcluded: Set(doc.mixtureFitExcludedUnmapped ?? []),
             liquidExcluded: Set(doc.liquidExcluded ?? []),
             ingestionSkipCount: (doc.skipped ?? [:]).values.reduce(0) { $0 + $1.count },
@@ -442,20 +495,57 @@ public struct CalibrationArtifact: Codable {
         }
     }
 
-    // Per-contributing-dataset lineage (Req 6.1, 9.1): snapshot identifier and
-    // mapping-artifact version, keyed by dataset name.
+    // Per-contributing-dataset lineage (Req 6.1, 9.1): snapshot identifier,
+    // mapping-artifact version and licence, keyed by dataset name. The
+    // licence rides per dataset (cross-dataset Decision 17) because the
+    // sources genuinely differ — N5k is CC BY 4.0, MetaFood3D CC BY-NC 4.0 —
+    // and a single top-level string cannot attribute that.
     public struct DatasetLineage: Codable, Equatable, Sendable {
         public let snapshot: String
         public let mappingArtifactVersion: String
+        public let licence: String
 
         enum CodingKeys: String, CodingKey {
-            case snapshot
+            case snapshot, licence
             case mappingArtifactVersion = "mapping_artifact_version"
         }
 
-        public init(snapshot: String, mappingArtifactVersion: String) {
+        public init(snapshot: String, mappingArtifactVersion: String,
+                    licence: String) {
             self.snapshot = snapshot
             self.mappingArtifactVersion = mappingArtifactVersion
+            self.licence = licence
+        }
+
+        // Artifacts written before Decision 17 lack the licence key; absent
+        // decodes to "" so they round-trip (the CLI always writes it now).
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            snapshot = try c.decode(String.self, forKey: .snapshot)
+            mappingArtifactVersion = try c.decode(
+                String.self, forKey: .mappingArtifactVersion)
+            licence = try c.decodeIfPresent(String.self, forKey: .licence) ?? ""
+        }
+    }
+
+    // The top-level lineage licence is the STRICTEST licence among the
+    // contributing datasets (cross-dataset Decision 17): the bake persists
+    // one `calibration_licence` (Req 1.5 of nutrition5k-calibration), and
+    // the honest single value for a mixed-licence pool is the most
+    // restrictive one. An unrecognised licence string ranks strictest of
+    // all — fail-strict, never silently permissive.
+    static let licenceStrictness: [String: Int] = [
+        "CC0 1.0": 0,
+        "CC BY 4.0": 1,
+        "CC BY-SA 4.0": 2,
+        "CC BY-NC 4.0": 3,
+    ]
+
+    public static func strictestLicence(_ licences: [String]) -> String? {
+        licences.filter { !$0.isEmpty }.max { a, b in
+            let ra = licenceStrictness[a] ?? Int.max
+            let rb = licenceStrictness[b] ?? Int.max
+            return ra == rb ? a < b : ra < rb
         }
     }
 
@@ -573,6 +663,74 @@ public struct CalibrationArtifact: Codable {
         }
     }
 
+    // Volume-fit diagnostic block (cross-dataset-calibration Req 2.3,
+    // Decision 7): β_geom per class from the metafood3d_truth.json sidecar,
+    // alongside the baked mass-fit β and a divergence flag. REPORTED, NEVER
+    // BAKED — generate.py does not read this block; a large gap between the
+    // two β flags a density-draw problem in the mass fit.
+    public struct VolumeFitDiagnosticBlock: Codable, Equatable, Sendable {
+        public struct ClassRow: Codable, Equatable, Sendable {
+            public let betaGeom: Float
+            public let sampleCount: Int
+            // The baked mass-fit β — null when the class did not calibrate.
+            public let betaBaked: Float?
+            // |β_baked/β_geom − 1| > divergenceDelta (only measurable when a
+            // baked β exists).
+            public let divergesFromMassFit: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case betaGeom = "beta_geom"
+                case sampleCount = "sample_count"
+                case betaBaked = "beta_baked"
+                case divergesFromMassFit = "diverges_from_mass_fit"
+            }
+
+            // Encode a null beta_baked explicitly — absent-vs-null matters
+            // to a reader distinguishing "uncalibrated" from "old artifact".
+            public func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(betaGeom, forKey: .betaGeom)
+                try c.encode(sampleCount, forKey: .sampleCount)
+                try c.encode(betaBaked, forKey: .betaBaked)
+                try c.encode(divergesFromMassFit, forKey: .divergesFromMassFit)
+            }
+        }
+
+        public let perClass: [String: ClassRow]
+        public let missingTruth: [String]
+        public let invalidVolume: [String]
+        // The practical divergence bound — reuses the skew guard's δ
+        // (CrossDatasetSkew.defaultDelta) so "diverges" means the same
+        // "beyond practical equivalence" the TOST uses.
+        public let divergenceDelta: Float
+
+        enum CodingKeys: String, CodingKey {
+            case perClass = "per_class"
+            case missingTruth = "missing_truth"
+            case invalidVolume = "invalid_volume"
+            case divergenceDelta = "divergence_delta"
+        }
+
+        public init(report: VolumeFitDiagnostic.Report,
+                    bakedBeta: [String: Float],
+                    delta: Float = Float(CrossDatasetSkew.defaultDelta)) {
+            var rows: [String: ClassRow] = [:]
+            for (className, d) in report.perClass {
+                let baked = bakedBeta[className]
+                let diverges = baked.map {
+                    abs($0 / d.betaGeom - 1) > delta
+                } ?? false
+                rows[className] = ClassRow(
+                    betaGeom: d.betaGeom, sampleCount: d.sampleCount,
+                    betaBaked: baked, divergesFromMassFit: diverges)
+            }
+            self.perClass = rows
+            self.missingTruth = report.missingTruth
+            self.invalidVolume = report.invalidVolume
+            self.divergenceDelta = delta
+        }
+    }
+
     // Skip/drop accounting for the run summary (Req 3.4/3.8/4.1/4.2/4.3/4.7).
     public struct RunSummary: Codable {
         public let depthTestSplitExcluded: [String]
@@ -654,6 +812,10 @@ public struct CalibrationArtifact: Codable {
     public let classes: [String: ClassEntry]
     public let lineage: Lineage?
     public let runSummary: RunSummary?
+    // Req 2.3 diagnostic — present only when the run computed it
+    // (--mesh-truth); omitted entirely otherwise so an N5k-only artifact
+    // keeps its pre-feature shape (Req 7.2). Reported, never baked.
+    public let volumeFitDiagnostic: VolumeFitDiagnosticBlock?
     // The reference `betaPool` was fitted under, and the one that gates
     // application (Req 5.3). The bake refuses an artifact that records none:
     // every artifact produced before this feature records none, and those are
@@ -664,6 +826,7 @@ public struct CalibrationArtifact: Codable {
     enum CodingKeys: String, CodingKey {
         case betaPool, classes, lineage
         case runSummary = "run_summary"
+        case volumeFitDiagnostic = "volume_fit_diagnostic"
         case supportPlaneReference = "support_plane_reference"
     }
 
@@ -698,7 +861,8 @@ public struct CalibrationArtifact: Codable {
                 betaPool: Float,
                 supportPlaneReference: SupportPlaneReference?,
                 lineage: Lineage?,
-                runSummary: RunSummary? = nil) {
+                runSummary: RunSummary? = nil,
+                volumeFitDiagnostic: VolumeFitDiagnosticBlock? = nil) {
         var classes: [String: ClassEntry] = [:]
         for (name, c) in merged {
             classes[name] = ClassEntry(
@@ -718,6 +882,7 @@ public struct CalibrationArtifact: Codable {
         self.classes = classes
         self.lineage = lineage
         self.runSummary = runSummary
+        self.volumeFitDiagnostic = volumeFitDiagnostic
         self.supportPlaneReference = supportPlaneReference?.rawValue
     }
 
@@ -727,19 +892,24 @@ public struct CalibrationArtifact: Codable {
         classes = try c.decode([String: ClassEntry].self, forKey: .classes)
         lineage = try c.decodeIfPresent(Lineage.self, forKey: .lineage)
         runSummary = try c.decodeIfPresent(RunSummary.self, forKey: .runSummary)
+        volumeFitDiagnostic = try c.decodeIfPresent(
+            VolumeFitDiagnosticBlock.self, forKey: .volumeFitDiagnostic)
         supportPlaneReference = try c.decodeIfPresent(
             String.self, forKey: .supportPlaneReference)
     }
 
     // Encode a null support_plane_reference explicitly. The bake distinguishes
     // "recorded no reference" from "carries an unexpected shape", and a key that
-    // is sometimes missing collapses those two into one.
+    // is sometimes missing collapses those two into one. The diagnostic block,
+    // by contrast, is omitted when absent: it is optional reporting, and its
+    // absence must leave the pre-feature artifact shape untouched (Req 7.2).
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(betaPool, forKey: .betaPool)
         try c.encode(classes, forKey: .classes)
         try c.encode(lineage, forKey: .lineage)
         try c.encode(runSummary, forKey: .runSummary)
+        try c.encodeIfPresent(volumeFitDiagnostic, forKey: .volumeFitDiagnostic)
         try c.encode(supportPlaneReference, forKey: .supportPlaneReference)
     }
 

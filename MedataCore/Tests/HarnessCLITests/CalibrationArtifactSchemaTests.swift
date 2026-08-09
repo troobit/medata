@@ -46,9 +46,11 @@ struct CalibrationArtifactSchemaTests {
             renderConfig: render,
             perDataset: [
                 "nutrition5k": .init(snapshot: "3fa8c1d2e4b5",
-                                     mappingArtifactVersion: "1"),
+                                     mappingArtifactVersion: "1",
+                                     licence: "CC BY 4.0"),
                 "metafood3d": .init(snapshot: "mf3d_snap_01",
-                                    mappingArtifactVersion: "a1b2c3d4e5f6"),
+                                    mappingArtifactVersion: "a1b2c3d4e5f6",
+                                    licence: "CC BY-NC 4.0"),
             ])
         let runSummary = CalibrationArtifact.RunSummary(
             depthTestSplitExcluded: ["dish_1"],
@@ -89,6 +91,10 @@ struct CalibrationArtifactSchemaTests {
         #expect(render.planeDepthMm == 385)
         #expect(render.seatingRule == "stable_rest_base_on_plane")
         #expect(lineage.perDataset["metafood3d"]?.snapshot == "mf3d_snap_01")
+        // Per-dataset licence provenance (Decision 17): the differing source
+        // licences survive the round trip attributably.
+        #expect(lineage.perDataset["metafood3d"]?.licence == "CC BY-NC 4.0")
+        #expect(lineage.perDataset["nutrition5k"]?.licence == "CC BY 4.0")
 
         let summary = try #require(decoded.runSummary)
         #expect(summary.ingestionSkippedByDataset == ["nutrition5k": 5, "metafood3d": 3])
@@ -139,6 +145,60 @@ struct CalibrationArtifactSchemaTests {
         #expect(broccoli.contributingDatasets.isEmpty)
         #expect(!broccoli.singleSourceUncorroborated)
         #expect(decoded.supportPlaneReference == "foodSupport")
+        #expect(decoded.volumeFitDiagnostic == nil)
+    }
+
+    @Test("A per-dataset lineage entry without the licence key still decodes (pre-Decision-17)")
+    func preLicenceDatasetLineageDecodes() throws {
+        let legacy = """
+        {"snapshot": "3fa8c1d2e4b5", "mapping_artifact_version": "1"}
+        """
+        let decoded = try JSONDecoder().decode(
+            CalibrationArtifact.DatasetLineage.self, from: Data(legacy.utf8))
+        #expect(decoded.licence == "")
+        #expect(decoded.snapshot == "3fa8c1d2e4b5")
+    }
+
+    @Test("The volume-fit diagnostic block round-trips and is omitted when absent (Req 2.3/7.2)")
+    func volumeFitDiagnosticBlockRoundTrips() throws {
+        // Absent: the key must not appear at all — pre-feature shape.
+        let bare = try CalibrationArtifact.encoder().encode(makeArtifact())
+        let bareJSON = try #require(
+            try JSONSerialization.jsonObject(with: bare) as? [String: Any])
+        #expect(bareJSON["volume_fit_diagnostic"] == nil)
+
+        // Present: snake keys, β pairing, divergence flag survive.
+        let report = VolumeFitDiagnostic.compute(
+            observations: [
+                .init(fixtureID: "mf3d_a", className: "white_rice",
+                      estimatedVolumeCm3: 100),
+                .init(fixtureID: "mf3d_b", className: "pasta",
+                      estimatedVolumeCm3: 100),
+            ],
+            truthVolumeMm3ByFixture: ["mf3d_a": 100_000, "mf3d_b": 100_000])
+        let block = CalibrationArtifact.VolumeFitDiagnosticBlock(
+            report: report, bakedBeta: ["white_rice": 0.7])
+        let artifact = CalibrationArtifact(
+            merged: [:], betaPool: 1.0, supportPlaneReference: .foodSupport,
+            lineage: nil, runSummary: nil, volumeFitDiagnostic: block)
+        let data = try CalibrationArtifact.encoder().encode(artifact)
+
+        let decoded = try JSONDecoder().decode(CalibrationArtifact.self, from: data)
+        #expect(decoded.volumeFitDiagnostic == block)
+
+        let json = try #require(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let diag = try #require(json["volume_fit_diagnostic"] as? [String: Any])
+        let perClass = try #require(diag["per_class"] as? [String: [String: Any]])
+        let rice = try #require(perClass["white_rice"])
+        #expect(rice["beta_geom"] as? Double == 1.0)
+        #expect(rice["beta_baked"] as? Double != nil)
+        // 0.7 vs β_geom 1.0 is beyond the δ = 0.20 practical bound.
+        #expect(rice["diverges_from_mass_fit"] as? Bool == true)
+        let pasta = try #require(perClass["pasta"])
+        #expect(pasta["beta_baked"] is NSNull,
+                "an uncalibrated class records an explicit null baked β")
+        #expect(pasta["diverges_from_mass_fit"] as? Bool == false)
     }
 }
 #endif
