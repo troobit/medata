@@ -8,6 +8,7 @@ numpy>=1.26
 trimesh>=4.4        # CPU ray-cast render + mesh volume (Decision 12)
 scipy>=1.13         # trimesh convex hulls + stable resting poses
 networkx>=3.2       # trimesh stable-pose graph support
+rtree>=1.2          # trimesh ray_triangle intersector spatial index
 
 # fixture serialisation (reuses tools/segmenter/make_fixtures.py, which
 # compiles the protos with the system protoc)

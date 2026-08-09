@@ -31,7 +31,7 @@ references:
   - Stream: 1
   - Requirements: [2.4](requirements.md#2.4)
 
-- [ ] 4. Implement render.py (trimesh CPU ray-cast) <!-- id:fjp41x9 -->
+- [x] 4. Implement render.py (trimesh CPU ray-cast) <!-- id:fjp41x9 -->
   - first-hit ray depth per pixel; no GL context (Decision 12)
   - plate/plane depth ~385mm inside N5k CAMERA_TO_PLATE_BAND (250,400), below 0.4m cap
   - Blocked-by: fjp41x8 (Write render.py tests incl. Hypothesis determinism property)
