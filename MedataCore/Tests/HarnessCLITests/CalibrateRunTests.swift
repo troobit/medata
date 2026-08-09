@@ -125,6 +125,79 @@ struct CalibrateRunTests {
         #expect(summary.ingestionSkipCount == 3)
     }
 
+    // MARK: - Ingest-summary contract (cross-dataset Decision 17, Req 9.1)
+
+    @Test("A metafood3d summary missing lineage keys fails loudly, never defaults to empty")
+    func mf3dSummaryMissingKeysThrows() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("run_summary_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        // The pre-fix emitter's shape: snapshot_identifier instead of
+        // snapshot, no mapping_version, width/height instead of
+        // image_width/image_height, no seating_rule. This used to decode to
+        // empty strings and bake unreproducible per-dataset lineage.
+        try """
+        {"dataset": "metafood3d",
+         "licence": "CC BY-NC 4.0",
+         "snapshot_identifier": "abc123def456",
+         "skipped": {},
+         "render_config": {"plane_depth_mm": 385.0,
+                           "width": 640, "height": 480}}
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        #expect {
+            try CalibrateRun.loadIngestSummary(from: url)
+        } throws: { error in
+            guard let e = error as? CalibrateRun.IngestSummaryContractError
+            else { return false }
+            return e.missingKeys.contains("snapshot")
+                && e.missingKeys.contains("mapping_version")
+                && e.missingKeys.contains("render_config.image_width")
+                && e.missingKeys.contains("render_config.seating_rule")
+        }
+    }
+
+    @Test("A complete metafood3d summary parses every lineage key, licence included")
+    func mf3dSummaryParsesCompletely() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("run_summary_\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try """
+        {"dataset": "metafood3d",
+         "licence": "CC BY-NC 4.0",
+         "snapshot": "abc123def456",
+         "mapping_version": "c0ffee123456",
+         "skipped": {"no_stable_pose": ["obj_9"]},
+         "render_config": {"plane_depth_mm": 385.0,
+                           "intrinsics_model": "realsense_d435_rgb_nominal",
+                           "image_width": 640, "image_height": 480,
+                           "seating_rule": "stable_pose_base_on_plane"}}
+        """.write(to: url, atomically: true, encoding: .utf8)
+
+        let summary = try CalibrateRun.loadIngestSummary(from: url)
+        #expect(summary.dataset == "metafood3d")
+        #expect(summary.snapshot == "abc123def456")
+        #expect(summary.mappingVersion == "c0ffee123456")
+        #expect(summary.licence == "CC BY-NC 4.0")
+        #expect(summary.renderPlaneDepthMm == 385.0)
+        #expect(summary.renderImageWidth == 640)
+        #expect(summary.renderImageHeight == 480)
+        #expect(summary.renderSeatingRule == "stable_pose_base_on_plane")
+        #expect(summary.ingestionSkipCount == 1)
+    }
+
+    @Test("The strictest contributing licence wins the top-level lineage field (Decision 17)")
+    func strictestLicenceWins() {
+        #expect(CalibrationArtifact.strictestLicence(
+            ["CC BY 4.0", "CC BY-NC 4.0"]) == "CC BY-NC 4.0")
+        #expect(CalibrationArtifact.strictestLicence(["CC BY 4.0"]) == "CC BY 4.0")
+        #expect(CalibrationArtifact.strictestLicence([]) == nil)
+        #expect(CalibrationArtifact.strictestLicence(["", "CC BY 4.0"]) == "CC BY 4.0")
+        // An unrecognised licence ranks strictest of all — fail-strict.
+        #expect(CalibrationArtifact.strictestLicence(
+            ["CC BY-NC 4.0", "Proprietary-X"]) == "Proprietary-X")
+    }
+
     @Test("Unmapped-heavy plates leave the mixture fit; depth-test exclusion still wins")
     func unmappedExcludedFromMixtureFit() {
         let fixtures = [

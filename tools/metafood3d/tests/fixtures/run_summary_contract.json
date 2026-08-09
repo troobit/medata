@@ -1,0 +1,57 @@
+{
+  "dataset": "metafood3d",
+  "licence": "CC BY-NC 4.0",
+  "source_dataset": "metafood3d@abc123def456",
+  "snapshot": "abc123def456",
+  "mapping_version": "c0ffee123456",
+  "mapping_categories_source": "curated_rules_only",
+  "ingested": 0,
+  "estimator_paths": {
+    "mixture": 0
+  },
+  "skipped": {
+    "missing_metadata": [],
+    "malformed_weight": [],
+    "malformed_mesh": [],
+    "no_stable_pose": [],
+    "render_miss": []
+  },
+  "unmapped_excluded": {},
+  "unmapped_excluded_count": 0,
+  "ambiguous_excluded": {},
+  "ambiguous_excluded_count": 0,
+  "render_config": {
+    "intrinsics_model": "realsense_d435_rgb_nominal",
+    "fx": 617.0,
+    "fy": 617.0,
+    "cx": 319.5,
+    "cy": 239.5,
+    "image_width": 640,
+    "image_height": 480,
+    "plane_depth_mm": 385.0,
+    "pose": "nadir",
+    "depth_convention": "z_depth_mm_float32_le_zero_miss",
+    "noise": "noise_free_render",
+    "seating_rule": "stable_pose_base_on_plane"
+  },
+  "authored_support_plane": {
+    "plane_depth_mm": 385.0,
+    "normal_camera": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "convention": "nadir camera frame, camera looks along -z (Math.proto); depth values are +z-depth mm, so the plane is the constant-depth surface at plane_depth_mm with its normal towards the camera"
+  },
+  "thresholds": {
+    "unit_sanity_median_extent_band_mm": [
+      20.0,
+      600.0
+    ],
+    "weight_bbox_density_band_g_per_cm3": [
+      0.05,
+      2.0
+    ]
+  },
+  "scale_check_failed": false
+}

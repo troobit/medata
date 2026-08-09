@@ -42,15 +42,28 @@ fixtures are stamped `palette_version="v2"`.
 
 ## Contracts stream 2 consumes
 
+*(Corrected 2026-08-09, Decision 17 — the earlier version of this table
+listed `snapshot_identifier` and a bare-`width`/`height` render_config,
+which the Swift decoder never read; that stale shape is superseded.)*
+
 - Fixtures: `estimator_path="mixture"`, sha `"no_segmenter"`, no probs,
   single-entry `ground_truth_class_mass_g`, `source_dataset=
   "metafood3d@<12-hex snapshot>"`, gravity (0,0,-1).
-- `run_summary.json`: `authored_support_plane` (plane_depth_mm 385 +
-  frame convention) for the Decision 13 injected-plane branch — the
-  fixture proto has NO support-plane field, so the plane rides the
-  summary. Also `render_config` (incl. `noise: noise_free_render`,
-  Req 2.5), `unmapped_excluded`/`ambiguous_excluded` {category: [ids]} +
-  counts, `licence`, `snapshot_identifier`.
+- `run_summary.json` — canonical keys are what
+  `CalibrateRun.loadIngestSummary` decodes, and it EXITS 1 when any is
+  missing on a metafood3d summary: `snapshot`, `mapping_version` (first
+  12 hex of the mapping artifact's SHA-256), `licence`, and
+  `render_config: {plane_depth_mm, intrinsics_model, image_width,
+  image_height, seating_rule}` (plus `noise: noise_free_render`,
+  Req 2.5). `authored_support_plane` (plane_depth_mm 385 + frame
+  convention) rides the summary for the Decision 13 injected-plane
+  branch — the fixture proto has NO support-plane field. Exclusions:
+  `unmapped_excluded`/`ambiguous_excluded` {category: [ids]} + counts.
+  The contract is pinned by the emitter-generated committed fixture
+  `tests/fixtures/run_summary_contract.json` (regenerate with
+  `tests/make_contract_fixture.py`): pytest diffs it against
+  `ingest._summary_doc`, and `EndToEndCalibrateBakeTests` feeds the same
+  file to the built HarnessCLI — change any key and one side goes red.
 - Metric-scale gates (Decision 14) abort BEFORE emitting: unit-sanity
   (median bbox max extent in [20, 600] mm) and weight plausibility
   (implied bbox density in [0.05, 2.0] g/cm³); the failure block lands

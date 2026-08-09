@@ -144,6 +144,15 @@ public enum CalibrationMerge {
             // log-residual SE is the relative SE on β. Single-dominant is an
             // N5k-only path, so its corroboration follows the mixture
             // per-dataset assessment: absent that, it is single-source.
+            //
+            // Two Req 5.3/6.1 records ride through here explicitly:
+            // - contributingDatasets names the ACTUAL fit source — the
+            //   single-dominant β is fitted from N5k plates only, so mixture
+            //   per-dataset presence (e.g. MetaFood3D rows that never fed
+            //   this fit) must not be recorded as if it had contributed;
+            // - crossDatasetInconsistent is carried even though the SD fit
+            //   still bakes (it is not the blended pooled value Req 5.3
+            //   blocks), so the per-dataset disagreement is never lost.
             if let sd, sd.effectiveSample >= effectiveSampleMin,
                let relSE = sd.logResidualSE, relSE <= relativeSEBound {
                 merged[c] = ClassCalibration(
@@ -154,9 +163,9 @@ public enum CalibrationMerge {
                     standardError: relSE * sd.beta,
                     effectiveSample: sd.effectiveSample,
                     clamped: sd.clamped,
-                    contributingDatasets: contributing.isEmpty
-                        ? ["nutrition5k": sd.effectiveSample] : contributing,
-                    singleSourceUncorroborated: !corroborated
+                    contributingDatasets: ["nutrition5k": sd.effectiveSample],
+                    singleSourceUncorroborated: !corroborated,
+                    crossDatasetInconsistent: inconsistent
                 )
                 continue
             }

@@ -74,6 +74,34 @@ struct VolumeFitDiagnosticTests {
                 VolumeFitDiagnostic.ClassDiagnostic(betaGeom: 1.0, sampleCount: 1))
     }
 
+    @Test("Divergence flags only beyond δ, and only where a baked β exists (Req 2.3)")
+    func divergenceFlagAgainstBakedBeta() throws {
+        // All three classes render at β_geom = 1.0 (100 cm³ true / 100 est).
+        let report = VolumeFitDiagnostic.compute(
+            observations: [
+                .init(fixtureID: "a", className: "white_rice", estimatedVolumeCm3: 100),
+                .init(fixtureID: "b", className: "pasta", estimatedVolumeCm3: 100),
+                .init(fixtureID: "c", className: "peas", estimatedVolumeCm3: 100),
+            ],
+            truthVolumeMm3ByFixture: ["a": 100_000, "b": 100_000, "c": 100_000])
+        let block = CalibrationArtifact.VolumeFitDiagnosticBlock(
+            report: report,
+            bakedBeta: ["white_rice": 0.7, "pasta": 0.85])  // peas uncalibrated
+
+        // |0.7/1.0 − 1| = 0.30 > δ = 0.20 → flagged.
+        let rice = try #require(block.perClass["white_rice"])
+        #expect(rice.betaBaked == 0.7)
+        #expect(rice.divergesFromMassFit)
+        // |0.85/1.0 − 1| = 0.15 ≤ δ → within practical equivalence.
+        let pasta = try #require(block.perClass["pasta"])
+        #expect(!pasta.divergesFromMassFit)
+        // No baked β → nothing to diverge from; the flag must not fire.
+        let peas = try #require(block.perClass["peas"])
+        #expect(peas.betaBaked == nil)
+        #expect(!peas.divergesFromMassFit)
+        #expect(block.divergenceDelta == Float(CrossDatasetSkew.defaultDelta))
+    }
+
     @Test("The truth sidecar parses the flat {fixture_id: mesh_volume_mm3} shape")
     func truthSidecarParses() throws {
         let url = FileManager.default.temporaryDirectory
