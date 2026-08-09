@@ -43,11 +43,17 @@ class RenderConfig:
     plane_depth_mm: float
 
     def as_lineage(self) -> dict:
-        """Recorded verbatim in the ingest run summary (Req 2.4/9.1)."""
+        """Recorded verbatim in the ingest run summary (Req 2.4/9.1).
+
+        Key names are the canonical run_summary contract the Swift harness
+        decodes (``CalibrateRun.loadIngestSummary``): ``image_width`` /
+        ``image_height``, never bare ``width``/``height`` (Decision 17 —
+        the two sides drifted once; the committed contract fixture under
+        tools/metafood3d/tests/fixtures/ pins this shape)."""
         return {
             "intrinsics_model": "realsense_d435_rgb_nominal",
             "fx": self.fx, "fy": self.fy, "cx": self.cx, "cy": self.cy,
-            "width": self.width, "height": self.height,
+            "image_width": self.width, "image_height": self.height,
             "plane_depth_mm": self.plane_depth_mm,
             "pose": "nadir",
             "depth_convention": "z_depth_mm_float32_le_zero_miss",
