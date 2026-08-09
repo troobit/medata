@@ -34,7 +34,7 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 1. <a name="1.1"></a>WHEN the app launches, THEN it SHALL present the Graph screen full-screen as the navigation root, with no tab bar (amended per Decision 20 — Capture is no longer the launch screen).  
 2. <a name="1.2"></a>The Capture, Data (meal log), and Settings screens SHALL each be reachable from Graph-screen controls and SHALL present as full screens (not partial-height modals), each with an explicit close control returning to Graph (Decisions 19–20). The Capture control SHALL be the most prominent.  
-3. <a name="1.3"></a>WHEN the shutter fires, THEN the app SHALL enter an estimating state — the existing draw-on Medata loading mark shown, shutter and mode controls locked — and WHEN estimation completes, THEN the flow SHALL push Segmentation review (§5), then Result (§6), then optionally Manual correction (§7), returning to Capture on dismissal.  
+3. <a name="1.3"></a>WHEN the shutter fires, THEN the app SHALL enter an estimating state — the existing draw-on Medata loading mark shown, shutter and mode controls locked — and WHEN estimation completes, THEN the flow SHALL push the single post-capture review surface owned by `specs/ui/meal-review/`, returning to Capture on dismissal (amended per Decision 23 — the former Segmentation review (§5) → Result (§6) → Manual correction (§7) sequence is superseded).  
 4. <a name="1.4"></a>Backgrounding during estimation SHALL behave as it does today (iphone-experience 8.3 remains binding); estimation failure SHALL return to Capture with the §4 error state.  
 5. <a name="1.5"></a>The AR session SHALL run only while the Capture surface is presented: armed on presentation through the existing initialising state, released within 200 ms of the surface closing or the app backgrounding (Decision 20).  
 6. <a name="1.6"></a>Existing shell behaviours SHALL be preserved: portrait-only, and the camera-permission refusal state still reachable and recoverable, with the Capture surface's close control remaining usable from the refusal state.
@@ -77,9 +77,9 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 **Acceptance Criteria:**
 
-1. <a name="5.1"></a>The review screen SHALL show the captured photo with the completed estimate's per-class mask overlays and a class list with per-class mask-colour swatches (post-hoc display; the pipeline is not split — Decision 7; no per-class confidence exists — Decision 16).  
-2. <a name="5.2"></a>WHEN the estimate contains unknown regions or unsupported liquids, THEN an amber banner (icon + text, not colour alone) SHALL say so in minimal wording.  
-3. <a name="5.3"></a>The primary action SHALL advance to Result; its label is owned by the copy inventory (§14.2) and SHALL NOT imply estimation is still pending.
+1. <a name="5.1"></a>*Removed (Decision 23):* superseded by `specs/ui/meal-review/` Req 1–3 — the post-capture surface shows the detected areas and permits relabel and reject; it is no longer a separate read-only step.  
+2. <a name="5.2"></a>*Carried (Decision 23):* the unknown-region / unsupported-liquid banner behaviour now lives at `specs/ui/meal-review/` Req 1.5, unchanged in substance.  
+3. <a name="5.3"></a>*Removed (Decision 23):* there is no separate step to advance from; the pass-through primary action is gone with the screen.
 
 ### 6. Result
 
@@ -94,7 +94,7 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 5. <a name="6.5"></a>Dashed, disabled `Protein — soon` and `Fat — soon` capsules SHALL hold layout space so nothing shifts when macros land.  
 6. <a name="6.6"></a>The meal is persisted when estimation completes (existing behaviour). WHEN Result is reached from a fresh capture, THEN actions SHALL be `Adjust` (bordered) and `Done` (prominent), with Retake and Delete in a ⋯ menu — Delete is the discard path (Decision 17).  
 7. <a name="6.7"></a>WHEN Result is reached from Meal overview (§9), THEN actions SHALL be `Adjust` and `Done`, with Delete (no Retake) in the ⋯ menu.  
-8. <a name="6.8"></a>WHEN the photo asset is unavailable (Photos authorisation denied, asset deleted, or `photoAssetID` empty), THEN thumbnail slots (here, §8.2, §9.1) SHALL show a neutral placeholder; WHEN mask artefacts are unavailable, THEN mask-overlay surfaces (§5.1, §9.1) SHALL show the photo (or placeholder) without overlays. Neither case SHALL error.
+8. <a name="6.8"></a>WHEN the photo asset is unavailable (Photos authorisation denied, asset deleted, or `photoAssetID` empty), THEN thumbnail slots (here, §8.2, §9.1) SHALL show a neutral placeholder; WHEN mask artefacts are unavailable, THEN mask-overlay surfaces (§9.1; the review surface per `specs/ui/meal-review/` Req 1.6) SHALL show the photo (or placeholder) without overlays. Neither case SHALL error.
 
 ### 7. Manual correction
 
@@ -102,7 +102,7 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 **Acceptance Criteria:**
 
-1. <a name="7.1"></a>The correction screen SHALL offer a total-carbs stepper, per-food value edits, and an optional note field.  
+1. <a name="7.1"></a>*Removed (Decision 23):* the separate correction screen is gone — `specs/serving-adjust/` §iOS app item 5 retired `ManualCorrectionView` and the free-text note, and relabel/reject now belong to `specs/ui/meal-review/` Req 3–4; amount adjustment lives on the review surface (`serving-adjust` items 1 and 3; meal-review Req 6).  
 2. <a name="7.2"></a>Saving a correction SHALL store it alongside the original estimate; the original values SHALL remain retrievable unchanged.  
 3. <a name="7.3"></a>Corrected meals SHALL carry a visible `user-corrected` marker wherever the meal is shown (§8, §9).
 
@@ -126,7 +126,7 @@ The first external design handoff (handoff 00) redesigns the app's user-facing s
 
 1. <a name="9.1"></a>The overview SHALL show the captured photo with mask overlays (fallbacks per §6.8), a compact carb total with confidence chip (size owned by the design-system page), and a capture-metadata line.  
 2. <a name="9.2"></a>Per-class rows SHALL show a mask-colour swatch, mass (g), volume (cm³), and carbs (g) (no σ — Decision 16); a `corrected` marker SHALL appear when a correction exists.  
-3. <a name="9.3"></a>Actions SHALL be `Adjust` (bordered → Manual correction) and `Full result` (prominent → Result per §6.7); delete SHALL be available via a ⋯ menu with confirmation.
+3. <a name="9.3"></a>Actions SHALL be `Full result` (prominent → Result per §6.7); delete SHALL be available via a ⋯ menu with confirmation (`Adjust` retired with the separate correction screen — `specs/serving-adjust/` §iOS app item 5; Decision 23).
 
 ### 10. Graph (renamed from Trends — Decision 21; `Graph` everywhere in UI)
 

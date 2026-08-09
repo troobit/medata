@@ -708,3 +708,37 @@ A confidence badge is a property of the estimate, not of the food. Next to a gra
 - The earlier "only confidence surface" wording must now be read alongside this entry.
 
 ---
+
+## Decision 23: Segmentation review and the correction screen are superseded by meal-review
+
+**Date**: 2026-08-09
+**Status**: accepted
+
+### Context
+
+`specs/ui/meal-review/` collapses the post-capture flow's two screens — the read-only Segmentation review (§5) and the editable Result reached from it — into one review surface that shows the detected areas and permits relabel, reject and amount adjustment (meal-review Decisions 2 and 3). Its supersession register names this spec's Req 5.1 and 5.3, Req 7.1, and the copy inventory's segmentation-review relabel row. Req 7.1 was already partly stale: `specs/serving-adjust/` §iOS app item 5 retired `ManualCorrectionView` and the free-text note without amending it here.
+
+### Decision
+
+Req 5.1, 5.3 and 7.1 are removed from `requirements.md`, each replaced by a removal marker pointing at `specs/ui/meal-review/`. Req 5.2's banner behaviour is carried to meal-review Req 1.5. The §1.3 flow clause, the §6.8 overlay-fallback reference and the §9.3 action list are amended so no requirement references the removed screens. The copy inventory's segmentation-review "Instruction line" row — which recorded the relabel instruction as dropped — is removed; relabelling is reinstated post-hoc by meal-review Req 3.
+
+### Rationale
+
+Per the practice recorded in meal-review Decision 1 and its supersession register, superseded text is edited out of the document that holds it so the spec set holds one answer; the removal markers and this entry preserve the trail (the same shape as Req 10.7's earlier removal under Decision 21). Decision 7 remains in force: correction stays post-hoc, the pipeline is not split, and no user-visible segmentation phase precedes the completed estimate — meal-review edits a completed estimate's output, a case Decision 7's rationale never reached.
+
+### Alternatives Considered
+
+- **Annotate the superseded requirements in place, keeping the text**: More visible history - Rejected because two live answers for the same surface is what the supersession register exists to prevent, and this document already records removals as markers (Req 10.7).
+- **Leave this spec untouched and let meal-review's register carry the supersession**: No edits here - Rejected because a reader of this spec alone would still build the read-only review screen, and Req 15.3 makes the derived design-system pages normative, so the contradiction would be live.
+
+### Consequences
+
+**Positive:**
+- One answer per surface across the spec set; the relabel prohibition and the read-only review step can no longer be implemented from a stale document.
+- The serving-adjust debt on Req 7.1 and §9.3 is recorded and cleared in the same pass.
+
+**Negative:**
+- A spec whose implementation shipped is amended again post-hoc, so its §5 and §7.1 now read as tombstones rather than requirements.
+- Residual `Adjust` action references in §6.6–6.7 remain as serving-adjust-era staleness outside this supersession's scope.
+
+---
