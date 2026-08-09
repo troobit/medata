@@ -8,20 +8,19 @@ enum CaptureStage: Equatable, Sendable {
 // Route enums replace `navigationDestination(for: MealRecord.self)` (design:
 // Navigation routes). Each navigation stack keys exactly one enum.
 //
-// The capture stack (rooted in `CaptureFlowView`) drives a fresh capture through
-// review → result. The `.correction` route is retired with
-// ManualCorrectionView (serving-adjust PRD Req 5) — the result screen's
-// per-food rows are the adjustment surface.
+// The capture stack (rooted in `CaptureFlowView`) pushes the single review
+// surface directly when estimation completes (specs/ui/meal-review Req 1.2) —
+// the `.review` pass-through and SegmentationReviewView are retired, and the
+// review surface's rows carry relabel, reject and amount correction.
 enum CaptureRoute: Hashable {
-    case review(MealRecord)      // → SegmentationReviewView
-    case result(MealRecord)      // → ResultView(.justCaptured)
+    case result(MealRecord)      // → MealReviewView
 }
 
 // The Records and Trends sheet stacks share this enum: a day/list row pushes
 // `.overview`, which can push the full `.result`.
 enum MealRoute: Hashable {
     case overview(MealRecord)    // → MealOverviewView
-    case result(MealRecord)      // → ResultView(.historyDetail)
+    case result(MealRecord)      // → ResultView (history read path)
 }
 
 enum PermissionSubject: Equatable, Sendable {

@@ -767,3 +767,36 @@ Decision 8's impact clause requires the review path's recomputation to share Pip
 
 **Negative:**
 - `PaletteMigrator` remains an independent derivation site; a change to the macro formula must still be mirrored there by hand.
+
+---
+
+## Decision 20: `was_reverted` is persisted on the correction record
+
+**Date**: 2026-08-09
+**Status**: accepted
+
+### Context
+
+The design's record lifecycle states that when a correction dimension is reversed, `was_reverted` is set "so a rejected-then-un-rejected food is distinguishable from a confirmed correct prediction rather than contaminating the per-class precision numerator Decision 5 exists to enable". `ReviewFood.flags` lists `wasReverted` accordingly. The `CorrectionRecord` proto shipped by the contracts stream, however, carried no such field — the fact existed only in memory, so it would have been discarded the moment the review session ended, which is precisely the store the spec exists to make lossless.
+
+### Decision
+
+Add `bool was_reverted = 22` to `CorrectionRecord.proto` and regenerate. The field is set by any per-dimension reversal (relabel or rejection) and never cleared.
+
+### Rationale
+
+The distinguishability the design demands is a corpus property, not a screen property: per-class precision is computed from stored rows long after the session. A flag that is not persisted cannot serve it. The field is additive with a `false` default, so every existing row and reader stays valid.
+
+### Alternatives Considered
+
+- **Keep `wasReverted` in-memory only**: No contract change - Rejected because the signal exists solely for later corpus analysis; an unpersisted flag serves nothing.
+- **Infer reversal from `updated_at` churn on an unchanged corrected side**: No schema change - Rejected as indistinguishable from an amount edit that landed back on the original value, and from the re-presentation no-op path.
+
+### Consequences
+
+**Positive:**
+- A reversed correction is separable from a confirmed prediction in every export.
+- Additive field; no migration, no reader changes.
+
+**Negative:**
+- One more field the future clinical track's shared schema must mirror (estimation/pipeline Req 14.4).

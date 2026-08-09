@@ -22,7 +22,7 @@ Five tables: `meals`, `meal_classes`, `meal_artefacts`, `corrections`, `meta`. C
 
 ## Correction records (ui/meal-review)
 
-`correction_records` (schema v7; `CREATE IF NOT EXISTS` retrofits onto v6 DBs): one row per detected food per capture, PRIMARY KEY (meal_id, predicted_class), `record_json` = protobuf-JSON of `PbCorrectionRecord`. Four denormalised bool columns (`class_corrected`, `rejected`, `absent`, `amount_corrected`) mirror fields inside the blob for queryability.
+`correction_records` (schema v7; `CREATE IF NOT EXISTS` retrofits onto v6 DBs): one row per detected food per capture, PRIMARY KEY (meal_id, predicted_class), `record_json` = protobuf-JSON of `PbCorrectionRecord`. Four denormalised bool columns (`class_corrected`, `rejected`, `absent`, `amount_corrected`) mirror fields inside the blob for queryability. `PbCorrectionRecord` field 22 `was_reverted` (meal-review Decision 20) marks per-dimension reversals so a corrected-then-uncorrected food is separable from a confirmed prediction; blob-only, no column.
 
 **Never pruned.** Exempt from `deleteMeal`/`deleteRecords` cascades, from `deleteAllData()` (the Debug reset), and from every sweep — the corpus is the deliverable (meal-review Req 9.9/9.10). Do not add it to any delete path.
 

@@ -33,7 +33,6 @@ func mealRouteDestination(
         ResultView(
             record: record,
             store: store,
-            mode: .historyDetail,
             onDone: { popOne(path) },
             onDelete: {
                 Task { try? await store.deleteMeal(id: record.id) }
