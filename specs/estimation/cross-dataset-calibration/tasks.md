@@ -8,22 +8,22 @@ references:
 
 ## Ingestion toolchain (Python)
 
-- [ ] 1. Write tests for the MetaFood3D-to-palette mapping builder <!-- id:fjp41x6 -->
+- [x] 1. Write tests for the MetaFood3D-to-palette mapping builder <!-- id:fjp41x6 -->
   - pytest under tools/metafood3d/tests/
-  - assert every mapped category targets a valid 35-class palette v1 id in order
+  - assert every mapped category targets a valid 35-class palette v1 id in order [superseded by Decision 15: valid class name in the palette v2 content list]
   - ambiguous cooking-method categories (potato_boiled/mashed/chips) excluded, not guessed
   - unmapped categories counted
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4)
 
-- [ ] 2. Implement build_mapping.py + mapping_metafood3d_to_palette.json <!-- id:fjp41x7 -->
+- [x] 2. Implement build_mapping.py + mapping_metafood3d_to_palette.json <!-- id:fjp41x7 -->
   - mirror tools/nutrition5k/build_mapping.py + mapping_n5k_to_palette.json
-  - target ClassPalette.v1Standard ordering (load-bearing)
+  - target ClassPalette.v1Standard ordering (load-bearing) [superseded by Decision 15: target v2Standard content; β is name-keyed, ordering is not load-bearing on the mixture path]
   - Blocked-by: fjp41x6 (Write tests for the MetaFood3D-to-palette mapping builder)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4)
 
-- [ ] 3. Write render.py tests incl. Hypothesis determinism property <!-- id:fjp41x8 -->
+- [x] 3. Write render.py tests incl. Hypothesis determinism property <!-- id:fjp41x8 -->
   - same mesh+config yields byte-identical depth (Hypothesis)
   - nadir perspective at pinned RealSense-D435 640x480 intrinsics
   - output Float32 LE mm, 0 = miss
@@ -31,14 +31,14 @@ references:
   - Stream: 1
   - Requirements: [2.4](requirements.md#2.4)
 
-- [ ] 4. Implement render.py (trimesh CPU ray-cast) <!-- id:fjp41x9 -->
+- [x] 4. Implement render.py (trimesh CPU ray-cast) <!-- id:fjp41x9 -->
   - first-hit ray depth per pixel; no GL context (Decision 12)
   - plate/plane depth ~385mm inside N5k CAMERA_TO_PLATE_BAND (250,400), below 0.4m cap
   - Blocked-by: fjp41x8 (Write render.py tests incl. Hypothesis determinism property)
   - Stream: 1
   - Requirements: [2.4](requirements.md#2.4)
 
-- [ ] 5. Write ingest.py tests incl. Hypothesis weight-plausibility <!-- id:fjp41xa -->
+- [x] 5. Write ingest.py tests incl. Hypothesis weight-plausibility <!-- id:fjp41xa -->
   - emits mixture fixtures: estimator_path mixture, sentinel no_segmenter, no probability tensor
   - writes run_summary.json (excluded/unmapped ids+counts) and metafood3d_truth.json {fixture_id: mesh_volume_mm3}
   - metric-scale check aborts on a mm/m unit error (unit-sanity) and on a weight-implausible k-scaled mesh (Hypothesis, Decision 14)
@@ -46,10 +46,10 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.5](requirements.md#1.5)
 
-- [ ] 6. Implement ingest.py <!-- id:fjp41xb -->
+- [x] 6. Implement ingest.py <!-- id:fjp41xb -->
   - mirror tools/nutrition5k/ingest.py; reuse build_fixture_bytes
   - authored SupportPlane params carried for the injected-plane branch
-  - Blocked-by: fjp41xa (Write ingest.py tests incl. Hypothesis weight-plausibility), fjp41x7 (Implement build_mapping.py + mapping_metafood3d_to_palette.json), fjp41x9 (Implement render.py (trimesh CPU ray-cast))
+  - Blocked-by: fjp41xa (Write ingest.py tests incl. Hypothesis weight-plausibility), fjp41x7 (Implement build_mapping.py + mapping_metafood3d_to_palette.json), fjp41x9 (Implement render.py trimesh CPU ray-cast)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.5](requirements.md#1.5), [3.1](requirements.md#3.1)
 
@@ -140,7 +140,7 @@ references:
   - Stream: 2
   - Requirements: [10.1](requirements.md#10.1), [10.2](requirements.md#10.2)
 
-- [ ] 20. Write generate.py persistence tests <!-- id:fjp41xp -->
+- [x] 20. Write generate.py persistence tests <!-- id:fjp41xp -->
   - persists calibration_contributing_datasets_per_class + calibration_single_source_classes meta dicts
   - palette-to-DB edition lock still holds
   - Stream: 1
