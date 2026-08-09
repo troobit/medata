@@ -23,8 +23,10 @@ from pathlib import Path
 
 import pytest
 
-import build_mapping
-import mapping
+from mf3d_testkit import load_tool
+
+mapping = load_tool("mapping")
+build_mapping = load_tool("build_mapping")
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _CLASS_PALETTE_SWIFT = (

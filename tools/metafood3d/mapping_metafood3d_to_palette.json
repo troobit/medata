@@ -1,0 +1,351 @@
+{
+  "palette_class_list": [
+    "white_rice",
+    "brown_rice",
+    "pasta",
+    "bread_white",
+    "bread_wholemeal",
+    "potato_boiled",
+    "potato_mashed",
+    "chips_fries",
+    "chicken",
+    "beef",
+    "pork",
+    "fish_white",
+    "egg",
+    "cheese",
+    "salad_leaves",
+    "broccoli",
+    "carrot",
+    "peas",
+    "beans_baked",
+    "lentils",
+    "apple",
+    "banana",
+    "tomato",
+    "mixed_vegetables",
+    "cereal",
+    "water",
+    "coffee",
+    "tea",
+    "milk",
+    "fruit_juice",
+    "soup",
+    "beer",
+    "wine"
+  ],
+  "categories_source": "curated_rules_only",
+  "mappings": [
+    {
+      "category": "apple",
+      "class_id": "apple",
+      "status": "mapped"
+    },
+    {
+      "category": "baby_carrots",
+      "class_id": "carrot",
+      "status": "mapped"
+    },
+    {
+      "category": "baked_beans",
+      "class_id": "beans_baked",
+      "status": "mapped"
+    },
+    {
+      "category": "banana",
+      "class_id": "banana",
+      "status": "mapped"
+    },
+    {
+      "category": "beef",
+      "class_id": "beef",
+      "status": "mapped"
+    },
+    {
+      "category": "boiled_egg",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "category": "boiled_potato",
+      "class_id": "potato_boiled",
+      "status": "mapped"
+    },
+    {
+      "category": "boiled_potatoes",
+      "class_id": "potato_boiled",
+      "status": "mapped"
+    },
+    {
+      "category": "bread",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "bread_white",
+        "bread_wholemeal"
+      ]
+    },
+    {
+      "category": "broccoli",
+      "class_id": "broccoli",
+      "status": "mapped"
+    },
+    {
+      "category": "brown_rice",
+      "class_id": "brown_rice",
+      "status": "mapped"
+    },
+    {
+      "category": "carrot",
+      "class_id": "carrot",
+      "status": "mapped"
+    },
+    {
+      "category": "carrots",
+      "class_id": "carrot",
+      "status": "mapped"
+    },
+    {
+      "category": "cereal",
+      "class_id": "cereal",
+      "status": "mapped"
+    },
+    {
+      "category": "cheddar_cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "category": "cheese",
+      "class_id": "cheese",
+      "status": "mapped"
+    },
+    {
+      "category": "cherry_tomatoes",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "category": "chicken",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "category": "chicken_breast",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "category": "cod",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "category": "cornflakes",
+      "class_id": "cereal",
+      "status": "mapped"
+    },
+    {
+      "category": "egg",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "category": "eggs",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "category": "french_fries",
+      "class_id": "chips_fries",
+      "status": "mapped"
+    },
+    {
+      "category": "fries",
+      "class_id": "chips_fries",
+      "status": "mapped"
+    },
+    {
+      "category": "granola",
+      "class_id": "cereal",
+      "status": "mapped"
+    },
+    {
+      "category": "green_peas",
+      "class_id": "peas",
+      "status": "mapped"
+    },
+    {
+      "category": "grilled_chicken",
+      "class_id": "chicken",
+      "status": "mapped"
+    },
+    {
+      "category": "haddock",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "category": "hard_boiled_egg",
+      "class_id": "egg",
+      "status": "mapped"
+    },
+    {
+      "category": "lentils",
+      "class_id": "lentils",
+      "status": "mapped"
+    },
+    {
+      "category": "lettuce",
+      "class_id": "salad_leaves",
+      "status": "mapped"
+    },
+    {
+      "category": "macaroni",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "category": "mashed_potato",
+      "class_id": "potato_mashed",
+      "status": "mapped"
+    },
+    {
+      "category": "mashed_potatoes",
+      "class_id": "potato_mashed",
+      "status": "mapped"
+    },
+    {
+      "category": "mixed_greens",
+      "class_id": "salad_leaves",
+      "status": "mapped"
+    },
+    {
+      "category": "mixed_vegetables",
+      "class_id": "mixed_vegetables",
+      "status": "mapped"
+    },
+    {
+      "category": "muesli",
+      "class_id": "cereal",
+      "status": "mapped"
+    },
+    {
+      "category": "noodles",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "category": "oatmeal",
+      "class_id": "cereal",
+      "status": "mapped"
+    },
+    {
+      "category": "pasta",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "category": "peas",
+      "class_id": "peas",
+      "status": "mapped"
+    },
+    {
+      "category": "penne",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "category": "pork",
+      "class_id": "pork",
+      "status": "mapped"
+    },
+    {
+      "category": "pork_chop",
+      "class_id": "pork",
+      "status": "mapped"
+    },
+    {
+      "category": "porridge",
+      "class_id": "cereal",
+      "status": "mapped"
+    },
+    {
+      "category": "potato",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "potato_boiled",
+        "potato_mashed"
+      ]
+    },
+    {
+      "category": "potatoes",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "potato_boiled",
+        "potato_mashed"
+      ]
+    },
+    {
+      "category": "rice",
+      "class_id": null,
+      "status": "ambiguous",
+      "ambiguous_between": [
+        "white_rice",
+        "brown_rice"
+      ]
+    },
+    {
+      "category": "sourdough_bread",
+      "class_id": "bread_white",
+      "status": "mapped"
+    },
+    {
+      "category": "spaghetti",
+      "class_id": "pasta",
+      "status": "mapped"
+    },
+    {
+      "category": "steak",
+      "class_id": "beef",
+      "status": "mapped"
+    },
+    {
+      "category": "tilapia",
+      "class_id": "fish_white",
+      "status": "mapped"
+    },
+    {
+      "category": "tomato",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "category": "tomatoes",
+      "class_id": "tomato",
+      "status": "mapped"
+    },
+    {
+      "category": "wheat_bread",
+      "class_id": "bread_wholemeal",
+      "status": "mapped"
+    },
+    {
+      "category": "white_bread",
+      "class_id": "bread_white",
+      "status": "mapped"
+    },
+    {
+      "category": "white_rice",
+      "class_id": "white_rice",
+      "status": "mapped"
+    },
+    {
+      "category": "whole_wheat_bread",
+      "class_id": "bread_wholemeal",
+      "status": "mapped"
+    }
+  ]
+}

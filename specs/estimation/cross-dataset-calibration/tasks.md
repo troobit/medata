@@ -16,7 +16,7 @@ references:
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4)
 
-- [ ] 2. Implement build_mapping.py + mapping_metafood3d_to_palette.json <!-- id:fjp41x7 -->
+- [x] 2. Implement build_mapping.py + mapping_metafood3d_to_palette.json <!-- id:fjp41x7 -->
   - mirror tools/nutrition5k/build_mapping.py + mapping_n5k_to_palette.json
   - target ClassPalette.v1Standard ordering (load-bearing) [superseded by Decision 15: target v2Standard content; β is name-keyed, ordering is not load-bearing on the mixture path]
   - Blocked-by: fjp41x6 (Write tests for the MetaFood3D-to-palette mapping builder)
