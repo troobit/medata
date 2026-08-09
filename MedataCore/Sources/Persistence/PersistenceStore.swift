@@ -325,6 +325,12 @@ public protocol PersistenceStore: Sendable {
     func save(_ record: MealRecord, artefacts: [MealArtefact]) async throws
     func appendCorrection(mealId: UUID, correction: PbUserCorrection) async throws
     func meal(id: UUID) async throws -> MealRecord
+    // Age sweep over per-meal artefact directories. Meals holding a
+    // correction_records row with an actual correction (class_corrected,
+    // rejected, absent or amount_corrected) are exempt regardless of caller
+    // (meal-review Req 8.4): the mask is pixel-level supervision for a
+    // retained training example. Deletes the meal_artefacts rows alongside
+    // the directories.
     func deleteArtefacts(olderThan date: Date) async throws
     func exportArchive() async throws -> String    // returns file path; UI wraps in URL
     func sweepIfDue() async throws
@@ -363,6 +369,48 @@ public protocol PersistenceStore: Sendable {
     // `created_at ASC`. Empty array when none. The meal event's `value` is
     // unaffected; overlay composition is the caller's job.
     func corrections(for mealId: UUID) async throws -> [PbUserCorrection]
+
+    // MARK: Correction records (specs/ui/meal-review)
+    //
+    // One row per detected food per capture, keyed (meal_id, predicted_class):
+    // the predicted side never changes after creation (Req 9.2), the corrected
+    // side is updated in place (Req 9.3). The store is never pruned — no age,
+    // count or sweep deletion, exempt from deleteMeal/deleteRecords cascades
+    // and from the Debug reset (Req 9.9, 9.10).
+
+    // Creation: INSERT ... DO NOTHING per row, one transaction. Re-presenting
+    // the review surface for the same meal must not reset created_at or
+    // overwrite a predicted side (Req 9.2); repeats are silent no-ops.
+    // Does not tick eventsDidChange — creation changes no displayed value.
+    func createCorrectionRecords(_ records: [PbCorrectionRecord]) async throws
+
+    // Mutation: UPDATE against the corrected columns only, matched on
+    // (meal_id, predicted.class_id). When `upsertingCorrection` is non-nil,
+    // the meal's reconciling `corrections` row is upserted in the SAME
+    // transaction (design "the reconciling write") and eventsDidChange ticks
+    // once. Never INSERT OR REPLACE on either table.
+    func updateCorrectionRecord(
+        _ record: PbCorrectionRecord,
+        upsertingCorrection correction: PbUserCorrection?
+    ) async throws
+
+    // One `corrections` row per meal, `created_at` fixed at review-session
+    // start, ON CONFLICT (meal_id, created_at) DO UPDATE. Every reader takes
+    // the latest row, so one row satisfies them all. `appendCorrection` is
+    // untouched for its existing callers. Ticks eventsDidChange.
+    func upsertCorrection(mealId: UUID, correction: PbUserCorrection) async throws
+
+    // Reads for the review surface, browse and export (Req 9.13). `for:` is
+    // ordered predicted_class ASC; the unscoped read is newest-updated first.
+    func correctionRecords(for mealId: UUID) async throws -> [PbCorrectionRecord]
+    func allCorrectionRecords() async throws -> [PbCorrectionRecord]
+
+    // Recency shortlist input (Req 3.1, meal-review Decision 18): distinct
+    // corrected class ids previously chosen for this predicted class, newest
+    // first, excluding the predicted class itself. Empty when never corrected.
+    func recentCorrectedClassIds(
+        forPredictedClass classId: String, limit: Int
+    ) async throws -> [String]
 
     // Req 4.5. Emits after every successful event-row write or delete
     // (`save`, `deleteMeal`, `updatePhotoAssetID`, and `ingestBsl` when it

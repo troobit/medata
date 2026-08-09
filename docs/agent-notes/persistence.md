@@ -18,7 +18,19 @@ Native Swift types used: `UUID` (id), `Date` (createdAt), `CapturePath` (Portabl
 
 ## Schema (design §4.1)
 
-Five tables: `meals`, `meal_classes`, `meal_artefacts`, `corrections`, `meta`. Created with `CREATE TABLE IF NOT EXISTS` for idempotent startup. Corrections are immutable (never UPDATE, always INSERT, PRIMARY KEY = meal_id + created_at).
+Five tables: `meals`, `meal_classes`, `meal_artefacts`, `corrections`, `meta`. Created with `CREATE TABLE IF NOT EXISTS` for idempotent startup. Corrections are immutable for `appendCorrection` callers (INSERT, PRIMARY KEY = meal_id + created_at); the meal-review path instead uses `upsertCorrection` — one row per meal, `created_at` fixed at review-session start, ON CONFLICT DO UPDATE — so same-millisecond mutations cannot raise a constraint violation.
+
+## Correction records (ui/meal-review)
+
+`correction_records` (schema v7; `CREATE IF NOT EXISTS` retrofits onto v6 DBs): one row per detected food per capture, PRIMARY KEY (meal_id, predicted_class), `record_json` = protobuf-JSON of `PbCorrectionRecord`. Four denormalised bool columns (`class_corrected`, `rejected`, `absent`, `amount_corrected`) mirror fields inside the blob for queryability.
+
+**Never pruned.** Exempt from `deleteMeal`/`deleteRecords` cascades, from `deleteAllData()` (the Debug reset), and from every sweep — the corpus is the deliverable (meal-review Req 9.9/9.10). Do not add it to any delete path.
+
+- Creation: `createCorrectionRecords` — INSERT ... DO NOTHING; re-presenting the surface must not reset `created_at` or overwrite the predicted side. Never tick `eventsDidChange` on creation.
+- Mutation: `updateCorrectionRecord(_:upsertingCorrection:)` — UPDATE against corrected columns only; when the reconciling `PbUserCorrection` is passed it is upserted into `corrections` in the SAME transaction and `eventsDidChange` ticks once.
+- Reads: `correctionRecords(for:)`, `allCorrectionRecords()`, `recentCorrectedClassIds(forPredictedClass:limit:)` (recency shortlist; decodes blobs, bounded scan LIMIT 100).
+
+`deleteArtefacts(olderThan:)` skips meals whose correction_records row carries an actual correction (any of the four flags — not mere row existence), and now also deletes the `meal_artefacts` rows alongside the directories.
 
 ## PaletteMigrator
 
@@ -27,8 +39,9 @@ Formula: `m_c' = V_c · ρ_new · β_new / (ρ_old · β_old)` where:
 - ρ_old, β_old = looked up from PaletteFoodDatabase for the old class + old edition
 - ρ_new, β_new = looked up from PaletteFoodDatabase for the new class + new edition
 - Unmappable classes are retained under their old class id
+- `perClassVolumesPreBetaCm3` (VolumeResult field 5, meal-review Decision 17) is re-keyed through the migration with values unchanged — pre-β volume is geometric, class-independent. Empty on records written before the field existed.
 
-`BundlePaletteMigrator` looks up mapping URLs by key `"\(fromPalette)→\(toPalette)"`.
+`BundlePaletteMigrator` looks up mapping URLs by key `"\(fromPalette)→\(toPalette)"`. It cannot import `Macros`/`Foods` (dependency boundary), so its §6.12 arithmetic stays independent of `Macros.reDerive` — meal-review Decision 19.
 
 ## Archive Export
 

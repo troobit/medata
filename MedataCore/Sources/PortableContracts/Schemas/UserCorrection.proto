@@ -10,4 +10,10 @@ message UserCorrection {
     }
     map<string, float> corrected_per_class = 3;
     string note = 4;
+    // Predicted class id → corrected class id (meal-review Decision 15).
+    // Additive with an empty default so existing readers stay valid —
+    // required by estimation/pipeline Req 14.4 (schema shared verbatim
+    // with the future clinical track). Every surface that names a food
+    // resolves through this map (meal-review Req 8.7).
+    map<string, string> corrected_class_ids = 5;
 }

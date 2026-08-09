@@ -102,6 +102,7 @@ final class PaletteMigratorTests: XCTestCase {
     func testMixedMappingCorrectTotals() async throws {
         var volumes = PbVolumeResult()
         volumes.perClassVolumesCm3 = ["rice": 100, "legacy_item": 80]
+        volumes.perClassVolumesPreBetaCm3 = ["rice": 111.1, "legacy_item": 80]
         var entry1 = PbPerClassMacros(); entry1.volumeCm3 = 100; entry1.massG = 105; entry1.carbsG = 33.6; entry1.betaUsed = 0.9
         var entry2 = PbPerClassMacros(); entry2.volumeCm3 = 80;  entry2.massG = 72;  entry2.carbsG = 15.0; entry2.betaUsed = 1.0
         var macros = PbMacroResult(); macros.totalCarbsG = 48.6; macros.perClass = ["rice": entry1, "legacy_item": entry2]
@@ -130,6 +131,15 @@ final class PaletteMigratorTests: XCTestCase {
         XCTAssertEqual(retainedEntry.carbsG, 15.0, accuracy: 0.01)
         let expectedTotal = reDerivedEntry.carbsG + retainedEntry.carbsG
         XCTAssertEqual(shadow.macros.totalCarbsG, expectedTotal, accuracy: 0.01)
+
+        // Pre-β volumes re-key through the migration with values unchanged
+        // (meal-review Decision 17): geometric facts carry no class identity.
+        XCTAssertEqual(shadow.volumes.perClassVolumesPreBetaCm3["brown_rice"] ?? 0,
+                       111.1, accuracy: 0.001)
+        XCTAssertEqual(shadow.volumes.perClassVolumesPreBetaCm3["legacy_item"] ?? 0,
+                       80, accuracy: 0.001)
+        XCTAssertNil(shadow.volumes.perClassVolumesPreBetaCm3["rice"],
+                     "old key must not survive a remap")
     }
 
     // MARK: - T47.7 Missing mapping file throws mappingFileMissing

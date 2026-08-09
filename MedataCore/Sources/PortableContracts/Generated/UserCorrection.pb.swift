@@ -42,6 +42,13 @@ public nonisolated struct PbUserCorrection: Sendable {
 
   public var note: String = String()
 
+  /// Predicted class id → corrected class id (meal-review Decision 15).
+  /// Additive with an empty default so existing readers stay valid —
+  /// required by estimation/pipeline Req 14.4 (schema shared verbatim
+  /// with the future clinical track). Every surface that names a food
+  /// resolves through this map (meal-review Req 8.7).
+  public var correctedClassIds: Dictionary<String,String> = [:]
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_CorrectedTotalCarbsGOneof: Equatable, Sendable {
@@ -58,7 +65,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UserCorrection"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}created_at_ms\0\u{3}corrected_total_carbs_g\0\u{3}corrected_per_class\0\u{1}note\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}created_at_ms\0\u{3}corrected_total_carbs_g\0\u{3}corrected_per_class\0\u{1}note\0\u{3}corrected_class_ids\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -77,6 +84,7 @@ nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._Me
       }()
       case 3: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &self.correctedPerClass) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.note) }()
+      case 5: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.correctedClassIds) }()
       default: break
       }
     }
@@ -99,6 +107,9 @@ nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.note.isEmpty {
       try visitor.visitSingularStringField(value: self.note, fieldNumber: 4)
     }
+    if !self.correctedClassIds.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.correctedClassIds, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -107,6 +118,7 @@ nonisolated extension PbUserCorrection: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.correctedTotalCarbsGOneof != rhs.correctedTotalCarbsGOneof {return false}
     if lhs.correctedPerClass != rhs.correctedPerClass {return false}
     if lhs.note != rhs.note {return false}
+    if lhs.correctedClassIds != rhs.correctedClassIds {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

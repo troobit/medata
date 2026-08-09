@@ -393,7 +393,10 @@ public struct Pipeline: Sendable {
                 #endif
                 throw Self.estimationFailure(fromVolumeRefusal: outcome.refusal)
             }
-            pbVolumes = PipelineBridges.pbVolumeResult(singleView: est)
+            pbVolumes = PipelineBridges.pbVolumeResult(
+                singleView: est,
+                preBetaVolumesCm3: outcome.stats.perClassVolumesPreBetaCm3
+            )
             interClassOcclusion = est.interClassOcclusionDetected
             if interClassOcclusion {
                 delegate?.didDetectInterClassOcclusion()
@@ -476,7 +479,10 @@ public struct Pipeline: Sendable {
                 #endif
                 throw Self.estimationFailure(fromVolumeRefusal: outcome.refusal)
             }
-            pbVolumes = PipelineBridges.pbVolumeResult(twoView: est)
+            pbVolumes = PipelineBridges.pbVolumeResult(
+                twoView: est,
+                preBetaVolumesCm3: outcome.stats.perClassVolumesPreBetaCm3
+            )
             interClassOcclusion = false
             viewCoverage = matching.singleViewOnlyClasses.isEmpty ? .twoViewFull : .twoViewPartial
         }
@@ -780,12 +786,8 @@ public struct Pipeline: Sendable {
     }
 
     private func buildBeta(palette: ClassPalette, edition: String) -> BetaCorrection {
-        var entries: [String: Float] = [:]
-        for className in palette.foodClasses {
-            if let entry = database.entry(for: className, edition: edition) {
-                entries[className] = entry.beta
-            }
-        }
-        return BetaCorrection(entries: entries)
+        // Shared with the review path's relabel re-derivation (meal-review
+        // Decision 8's impact clause) so both apply the same β table.
+        Macros.betaCorrection(for: palette.foodClasses, database: database, edition: edition)
     }
 }

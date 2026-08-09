@@ -9,7 +9,7 @@ references:
 
 ## Contracts and derivation (MedataCore)
 
-- [ ] 1. Persist the pre-beta per-class volumes on PbVolumeResult <!-- id:fffbfgr -->
+- [x] 1. Persist the pre-beta per-class volumes on PbVolumeResult <!-- id:fffbfgr -->
   - VolumeResult.proto: map<string, float> per_class_volumes_pre_beta_cm3 = 5 (fields 1-4 are in use); regenerate VolumeResult.pb.swift
   - VolumeEstimate.perClassVolumesPreBetaCm3 (VolumeTypes.swift:84) is already produced by both estimators (HeightFieldEstimator.swift:190,197; VoxelCarveEstimator.swift:244) and reaches PipelineDiagnostics:128 — it is simply dropped before the meal record is written. Carry it through to the persisted record
   - PaletteMigrator must copy the map through a v1 to v2 migration (Decision 17)
@@ -17,14 +17,14 @@ references:
   - Stream: 1
   - Requirements: [3.5](requirements.md#3.5), [8.2](requirements.md#8.2)
 
-- [ ] 2. PbUserCorrection gains corrected_class_ids <!-- id:fffbfgs -->
+- [x] 2. PbUserCorrection gains corrected_class_ids <!-- id:fffbfgs -->
   - map<string, string> corrected_class_ids = 5 — predicted class id to corrected class id; regenerate
   - Additive with an empty default, so existing readers stay valid — this engages estimation/pipeline Req 14.4 (correction schema shared verbatim with the future clinical track)
   - Without it, every history surface renders record.macros.perClass keys and a rice to couscous relabel displays Rice for the life of the record
   - Stream: 1
   - Requirements: [8.7](requirements.md#8.7)
 
-- [ ] 3. CorrectionRecord, FoodDerivation and MassSource contracts <!-- id:fffbfgt -->
+- [x] 3. CorrectionRecord, FoodDerivation and MassSource contracts <!-- id:fffbfgt -->
   - New proto per design.md Data Models; Pb prefix per the PortableContracts convention
   - outcome_id joins the record to its estimation_outcomes row and through it to a capture bundle where one survives; where none does the record stays valid for macro re-derivation on its own (Req 8.3) — re-running segmentation under a later model is explicitly not a retention obligation
   - Four independent booleans, not one state enum — corrections compose, and a whole-meal scale writes a mass to every row
@@ -35,7 +35,7 @@ references:
   - Stream: 1
   - Requirements: [9.1](requirements.md#9.1), [9.2](requirements.md#9.2), [8.3](requirements.md#8.3), [9.11](requirements.md#9.11), [9.12](requirements.md#9.12)
 
-- [ ] 4. Extract the shared macro re-derivation into MedataCore/Sources/Macros <!-- id:fffbfgu -->
+- [x] 4. Extract the shared macro re-derivation into MedataCore/Sources/Macros <!-- id:fffbfgu -->
   - Three call sites now need it: PaletteMigrator.swift:83-86 already computes volumeCm3 * rhoNew * betaNew / (rhoOld * betaOld), Pipeline has its own, and the review path is the third. Decision 8's Impact clause requires sharing rather than reimplementing
   - Takes a pre-beta volume and a target class; applies BetaCorrection.entries[class], density and coefficient through Macros.compute, which stamps betaUsed and betaStatus from the DB row (Macros.swift:132-133) — that is what carries Req 3.7's calibration indication for free
   - Pass liquidClassIds: and liquidOverEstimate: so a liquid's over-read flag is not silently dropped
@@ -47,7 +47,7 @@ references:
 
 ## Correction store (MedataCore)
 
-- [ ] 5. correction_records table with create, update and read <!-- id:fffbfgv -->
+- [x] 5. correction_records table with create, update and read <!-- id:fffbfgv -->
   - Schema per design.md: PRIMARY KEY (meal_id, predicted_class) — the natural key, so the millisecond-collision defect in corrections' PRIMARY KEY (meal_id, created_at) cannot arise, and a held stepper updates one row rather than appending per repeat
   - Creation is INSERT ... ON CONFLICT DO NOTHING; mutation is UPDATE against the corrected columns only. Never INSERT OR REPLACE — the surface can re-appear for the same meal and a blanket upsert would reset created_at and overwrite a predicted side that never changes
   - The four boolean columns are denormalised copies of fields inside record_json so the corpus is queryable and browsable without decoding every blob
@@ -56,7 +56,7 @@ references:
   - Stream: 1
   - Requirements: [9.1](requirements.md#9.1), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4)
 
-- [ ] 6. No-eviction guarantees and the cascade break <!-- id:fffbfgw -->
+- [x] 6. No-eviction guarantees and the cascade break <!-- id:fffbfgw -->
   - correction_records gains no delete in deleteMeal (GRDBPersistenceStore.swift:177) or deleteRecords (:542). corrections keeps its cascade — it is the meal's current display value and a deleted meal has no display value
   - Exempt from deleteAllData() (:1209, reached from SettingsView.swift:243) — it enumerates its tables by hand and correction_records must not be added to that list. The corpus is not test data
   - No count bound, no age sweep, no pruning anywhere. This is the one store deliberately exempt from the bounding estimation_outcomes (:940-1010) applies
@@ -65,7 +65,7 @@ references:
   - Stream: 1
   - Requirements: [9.9](requirements.md#9.9), [9.10](requirements.md#9.10)
 
-- [ ] 7. Artefact-retention exemption on deleteArtefacts(olderThan:) <!-- id:fffbfgx -->
+- [x] 7. Artefact-retention exemption on deleteArtefacts(olderThan:) <!-- id:fffbfgx -->
   - The exemption belongs on deleteArtefacts(olderThan:) (:660, public on PersistenceStore.swift:328), not sweepIfDue() (:733) which has no production caller today
   - Skip meals holding a row with an actual correction — class_corrected OR rejected OR absent OR amount_corrected — not merely holding a row, which every meal does; that would make the function an unconditional no-op rather than a retention policy
   - Also delete the meal_artefacts rows alongside the directory, which it does not do today
@@ -74,7 +74,7 @@ references:
   - Stream: 1
   - Requirements: [8.4](requirements.md#8.4)
 
-- [ ] 8. upsertCorrection(mealId:) — the reconciling write <!-- id:fffbfgy -->
+- [x] 8. upsertCorrection(mealId:) — the reconciling write <!-- id:fffbfgy -->
   - One row per meal, created_at fixed at review-session start, ON CONFLICT (meal_id, created_at) DO UPDATE
   - appendCorrection (:122-137) is left untouched for existing callers: it is a plain INSERT into PRIMARY KEY (meal_id, created_at) at millisecond granularity, so a held stepper or a scale tap rewriting every row raises a constraint violation — and because both stores share one transaction that would roll back the correction_records write too, silently, in the one store the spec exists to make lossless
   - Every reader already takes the latest row (MealHistoryModel.swift:84, TrendsModel.swift:109, RecordsModel.swift:111, ResultView.swift:1026, MealOverviewView.swift:226), so one row satisfies them all
@@ -83,7 +83,7 @@ references:
   - Stream: 1
   - Requirements: [8.6](requirements.md#8.6), [8.7](requirements.md#8.7)
 
-- [ ] 9. MedataCore tests: beta re-derivation, cascade, row identity <!-- id:fffbfgz -->
+- [x] 9. MedataCore tests: beta re-derivation, cascade, row identity <!-- id:fffbfgz -->
   - Three tests only, per design.md Testing Strategy and the CLAUDE.md gate — no new app-target scaffolding
   - Beta re-derivation equality: relabel(rice to couscous) on a stored PerClassMacros equals Macros.compute([couscous: preBeta * beta_couscous], ...). A deterministic equality, not a property test — it catches a factor inversion
   - Cascade: deleteMeal removes the meal and its artefacts and leaves correction_records intact. This is the regression test for the defect the spec exists to fix
