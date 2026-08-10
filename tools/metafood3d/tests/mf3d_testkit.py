@@ -67,14 +67,15 @@ def write_dataset(root: Path, objects) -> Path:
     """Materialise a synthetic MetaFood3D-layout dataset directory.
 
     ``objects``: iterable of (object_id, category, weight_g, trimesh mesh).
-    Layout per the ingest docstring: ``meshes/<category>/<object_id>.obj``
-    plus ``metadata.csv`` (object_id, category, weight_g)."""
+    Rigid layout per the ingest docstring (Decision 19):
+    ``3D_Mesh/<category>/<object_id>/<object_id>.obj`` plus
+    ``metadata.csv`` (object_id, category, weight_g)."""
     root.mkdir(parents=True, exist_ok=True)
     rows = []
     for object_id, category, weight_g, mesh in objects:
-        mesh_dir = root / "meshes" / category
-        mesh_dir.mkdir(parents=True, exist_ok=True)
-        (mesh_dir / f"{object_id}.obj").write_text(
+        object_dir = root / "3D_Mesh" / category / object_id
+        object_dir.mkdir(parents=True, exist_ok=True)
+        (object_dir / f"{object_id}.obj").write_text(
             mesh.export(file_type="obj"))
         rows.append((object_id, category, weight_g))
     with open(root / "metadata.csv", "w", newline="") as fh:
