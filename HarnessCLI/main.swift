@@ -381,12 +381,17 @@ func paletteForFixture(_ fixture: PbMealFixture) -> ClassPalette {
     ClassPalette.standard(for: fixture.paletteVersion)
 }
 
-func buildCalInputs(fixtures: [PbMealFixture], db: any FoodDatabase,
-                    edgeMm: Float) -> [MealCalibrationInput] {
-    fixtures.compactMap { fx in
-        try? FixtureRunner.run(
+// A fixture the pipeline cannot process is a reported skip, never a silent
+// drop (calibrate-silently-drops-unreadable-fixtures): the old `try?` +
+// `compactMap` here computed the accuracy report over an unstated subset.
+func buildCalInputs(
+    fixtures: [PbMealFixture], db: any FoodDatabase, edgeMm: Float
+) -> (inputs: [MealCalibrationInput], skips: [FixtureBatch.Skip]) {
+    let (results, skips) = FixtureBatch.partition(fixtures: fixtures) { fx in
+        try FixtureRunner.run(
             fixture: fx, palette: paletteForFixture(fx), database: db, voxelEdgeMm: edgeMm)
     }
+    return (results, skips)
 }
 
 // Decode FP16 LE HWC prob tensor and return per-pixel argmax.
@@ -418,7 +423,18 @@ func runAccuracy(args: Args) throws {
     }
     let db = try GRDBFoodDatabase.bundled()
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
-    let calInputs = buildCalInputs(fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm)
+    let (calInputs, skips) = buildCalInputs(fixtures: fixtures, db: db, edgeMm: args.voxelEdgeMm)
+    for skip in skips {
+        fputs("accuracy: fixture skipped \(skip.fixtureID): \(skip.reason)\n", stderr)
+    }
+    // Report the count even when it is zero, so its absence is a measurement
+    // rather than a silence (same rule as the calibrate-and-eval skips).
+    fputs("accuracy: pipeline skips \(skips.count) of \(fixtures.count) fixtures\n", stderr)
+    if calInputs.isEmpty && !fixtures.isEmpty {
+        fputs("accuracy: every fixture failed the pipeline — refusing to emit "
+            + "a report over zero meals\n", stderr)
+        exit(1)
+    }
     let evalMeals: [MealEvalInput] = calInputs.map { m in
         MealEvalInput(
             fixtureID: m.fixtureID, capturePath: m.capturePath,
