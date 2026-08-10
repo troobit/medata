@@ -259,7 +259,7 @@ class TestEmission:
 
         assert fx.fixture_id == "dish_1"
         assert fx.capture_path_canonical == "single_view_lidar"
-        assert fx.palette_version == "v1"
+        assert fx.palette_version == "v2"
 
         # Req 3.7 pre-checkpoint default: mixture stamp, sentinel SHA, and
         # NO probability tensor or argmax.

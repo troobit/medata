@@ -60,9 +60,16 @@ def metadata_version(ingredients_csv: str | Path) -> str:
     return hashlib.sha256(Path(ingredients_csv).read_bytes()).hexdigest()
 
 
+# The palette declaration parse_palette scopes to. v2Standard since the
+# v2 promotion (n5k-mapping-artifact-stale-v1-palette): the artifact was
+# still being built against the superseded v1 content list while
+# generate.py's FOOD_DATA had moved to v2 (cereal at index 24).
+PALETTE_MARKER = "v2Standard"
+
+
 @dataclass(frozen=True)
 class PaletteClasses:
-    """Ordered palette content parsed from ClassPalette.swift v1Standard."""
+    """Ordered palette content parsed from ClassPalette.swift v2Standard."""
     food: list[str]
     liquid: list[str]
 
@@ -77,7 +84,7 @@ def parse_palette(
     class_palette_swift: str | Path = DEFAULT_CLASS_PALETTE_SWIFT,
 ) -> PaletteClasses:
     """Regex-read the ordered class lists from ClassPalette.swift's
-    ``v1Standard`` (the same source-of-truth pattern generate.py's palette
+    ``v2Standard`` (the same source-of-truth pattern generate.py's palette
     lock uses). Fails loudly if the palette cannot be parsed."""
     path = Path(class_palette_swift)
     try:
@@ -85,9 +92,9 @@ def parse_palette(
     except OSError as exc:
         raise MappingError(f"could not read ClassPalette.swift at {path}: {exc}")
 
-    marker = text.find("v1Standard")
+    marker = text.find(PALETTE_MARKER)
     if marker < 0:
-        raise MappingError(f"no v1Standard palette found in {path}")
+        raise MappingError(f"no {PALETTE_MARKER} palette found in {path}")
     body = text[marker:]
 
     def class_array(name: str) -> list[str]:

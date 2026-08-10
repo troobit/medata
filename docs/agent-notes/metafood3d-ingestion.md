@@ -135,14 +135,11 @@ which the Swift decoder never read; that stale shape is superseded.)*
   render/ingest tests `importorskip("trimesh")` and skip there — run the
   full set with `tools/metafood3d/.venv/bin/python -m pytest
   tools/metafood3d/tests`.
-- **Pre-existing red (not this stream):**
-  `tools/nutrition5k/tests/test_mapping.py::TestArtifactContent::
-  test_palette_class_list_preserves_food_data_channel_order` fails on
-  the base branch — the committed n5k artifact still carries the v1
-  content list while `generate.py` FOOD_DATA moved to v2 (cereal).
-  Fixing it means retargeting n5k's `parse_palette` to `v2Standard` and
-  regenerating its artifact from the gitignored ingredients CSV (main
-  checkout only).
+- **The former pre-existing red is fixed** (2026-08-10,
+  `specs/bugfixes/n5k-mapping-artifact-stale-v1-palette/`): n5k's
+  `parse_palette` targets `v2Standard`, its artifact is regenerated
+  against the v2 content list, and its ingest stamps
+  `palette_version="v2"`.
 - `generate.py` persists the cross-dataset meta dicts
   (`calibration_contributing_datasets_per_class`,
   `calibration_single_source_classes`) for APPLIED classes only — a

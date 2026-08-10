@@ -23,12 +23,14 @@ import mapping
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _GENERATE_PY = _REPO_ROOT / "tools" / "food_db" / "generate.py"
 
+# Palette v2 content (n5k-mapping-artifact-stale-v1-palette): 25 solids
+# with cereal appended at index 24, then 8 liquids.
 EXPECTED_SOLIDS = [
     "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
     "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
     "pork", "fish_white", "egg", "cheese", "salad_leaves",
     "broccoli", "carrot", "peas", "beans_baked", "lentils",
-    "apple", "banana", "tomato", "mixed_vegetables",
+    "apple", "banana", "tomato", "mixed_vegetables", "cereal",
 ]
 EXPECTED_LIQUIDS = [
     "water", "coffee", "tea", "milk", "fruit_juice", "soup", "beer", "wine",

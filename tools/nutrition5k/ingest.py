@@ -111,6 +111,11 @@ UNMAPPED_SIGNIFICANT_FRACTION = 0.10  # mixture-fit admission (Req 4.1)
 SENTINEL_SHA = "no_segmenter"
 ESTIMATOR_MIXTURE = "mixture"
 ESTIMATOR_SINGLE_DOMINANT = "single_dominant"
+# Fixtures are stamped with the palette the parse targets
+# (n5k-mapping-artifact-stale-v1-palette): parse_palette reads v2Standard,
+# so leaving make_fixtures' "v1" default would resolve a 35-class palette
+# in the harness against tensors sized for 36.
+PALETTE_VERSION = "v2"
 
 # Required files under --n5k-dir (Req 1.2/1.3; prerequisites.md layout).
 _METADATA_FILES = (
@@ -623,6 +628,7 @@ def main(argv: list[str] | None = None) -> int:
             nadir_image_png=rgb_bytes,
             checkpoint_sha256=sha,
             schema_dir=schema_dir,
+            palette_version=PALETTE_VERSION,
             depth_mm_hw=depth_mm,
             intrinsics=PINNED_INTRINSICS,
             gravity=GRAVITY_NADIR,
