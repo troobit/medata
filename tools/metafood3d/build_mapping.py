@@ -5,20 +5,19 @@ Curation rules live here as reviewable category -> class tables; the
 committed artifact is their deterministic output. Targets the palette v2
 content list (``ClassPalette.v2Standard``, Decision 15).
 
-MetaFood3D ships no public category enumeration (access is request-gated,
-CC BY-NC 4.0), so unlike tools/nutrition5k/build_mapping.py there is no
-metadata CSV to enumerate against by default. Two build modes:
+Two build modes:
 
 - **Curated-only** (no ``--categories-file``): the artifact's category
   universe is the rules themselves; ``categories_source`` records the
-  ``curated_rules_only`` sentinel. Ingest excludes and counts any dataset
-  category the artifact does not know (Req 1.4); the stale-rule check
-  runs only here, when the artifact is regenerated against a real
-  enumeration (ingest must tolerate partial snapshots).
-- **Enumerated** (``--categories-file``, one category per line — regenerate
-  once the dataset lands): all snapshot categories are recorded (unmapped
-  ones included), a stale rule aborts the build (curation typo, n5k
-  semantics), and ``categories_source`` records the enumeration's SHA-256.
+  ``curated_rules_only`` sentinel. This was the committed mode while the
+  dataset was inaccessible; it remains for tests.
+- **Enumerated** (``--categories-file``, one category per line): all
+  snapshot categories are recorded (unmapped ones included), a stale rule
+  aborts the build (curation typo, n5k semantics), and
+  ``categories_source`` records the enumeration's SHA-256. The COMMITTED
+  artifact is built this way since Decision 20, against
+  ``data/metafood3d/categories.txt`` as written by ``derive_metadata.py``
+  from the real nutrition workbook (637 objects / 108 categories).
 
 Curation policy (mirrors tools/nutrition5k/build_mapping.py):
 - Conservative identity: a category maps only when its preparation and
@@ -64,80 +63,47 @@ def _import_sibling(name: str):
 mapping = _import_sibling("mapping")
 
 # MetaFood3D category (normalised) -> palette class name (v2 content).
+#
+# Rewritten against the REAL 108-category enumeration from the v2
+# nutrition workbook (Decision 20) — the earlier blind-written rules
+# named categories that do not exist in the dataset. Everything not
+# listed here or in AMBIGUOUS_RULES is unmapped: overwhelmingly
+# composite dishes (burger, lasagna, sushi), battered/fried items
+# (breaded_fish, chicken_nugget, falafel), desserts, and single foods
+# the palette has no class for. Notable conservative exclusions:
+# bacon/sausages (cured/processed, not the plain pork row),
+# chicken_wings/whole_chicken (skin/bone-heavy, unlike the meat row),
+# fried_egg/omelet (added fat vs the plain egg row), baked_potato
+# (a stated method neither potato class covers), sweet_potato
+# (different species), cottage_cheese (unlike the hard-cheese row),
+# fried_rice/pasta_mixed_dishes/mac (composites, not plain staples).
 MAPPED_RULES: dict[str, str] = {
     # --- carb-priority staples ---
-    "white_rice": "white_rice",
-    "brown_rice": "brown_rice",
-    "pasta": "pasta",
-    "spaghetti": "pasta",
-    "macaroni": "pasta",
-    "penne": "pasta",
-    "noodles": "pasta",          # wheat noodles; rice noodles stay unmapped
-    "white_bread": "bread_white",
-    "sourdough_bread": "bread_white",
-    "whole_wheat_bread": "bread_wholemeal",
-    "wheat_bread": "bread_wholemeal",
-    "boiled_potato": "potato_boiled",
-    "boiled_potatoes": "potato_boiled",
+    "french_fry": "chips_fries",
     "mashed_potato": "potato_mashed",
-    "mashed_potatoes": "potato_mashed",
-    "french_fries": "chips_fries",
-    "fries": "chips_fries",
-    # cereal is the v2-only class (Decision 15): breakfast cereals per the
-    # myfoodrepo-bridge PRD (porridge/muesli/granola/cornflakes).
-    "cereal": "cereal",
-    "oatmeal": "cereal",
-    "porridge": "cereal",
-    "granola": "cereal",
-    "muesli": "cereal",
-    "cornflakes": "cereal",
 
     # --- proteins ---
-    "chicken": "chicken",
     "chicken_breast": "chicken",
-    "grilled_chicken": "chicken",
-    "beef": "beef",
+    "chicken_thighs": "chicken",   # plain cooked chicken meat; dark vs
+                                   # light is within-class variation
     "steak": "beef",
-    "pork": "pork",
     "pork_chop": "pork",
-    # fish_white = "Fish (white, baked)"; oily fish (salmon, tuna) and
-    # generic "fish" stay unmapped.
-    "cod": "fish_white",
-    "tilapia": "fish_white",
-    "haddock": "fish_white",
     "egg": "egg",
-    "eggs": "egg",
-    "boiled_egg": "egg",
-    "hard_boiled_egg": "egg",
-    "cheese": "cheese",
-    "cheddar_cheese": "cheese",
 
     # --- vegetables and fruit ---
-    "lettuce": "salad_leaves",
-    "mixed_greens": "salad_leaves",
     "broccoli": "broccoli",
     "carrot": "carrot",
-    "carrots": "carrot",
-    "baby_carrots": "carrot",
-    "peas": "peas",
-    "green_peas": "peas",
-    "baked_beans": "beans_baked",
-    "lentils": "lentils",
     "apple": "apple",
     "banana": "banana",
     "tomato": "tomato",
-    "tomatoes": "tomato",
-    "cherry_tomatoes": "tomato",
-    "mixed_vegetables": "mixed_vegetables",
+    "tomato_slice": "tomato",      # same food, cut — composition identical
 }
 
 # Category -> the MeData class pair the category name cannot distinguish
 # (Req 1.3). Recorded ambiguous, excluded from BOTH sides, never guessed.
 AMBIGUOUS_RULES: dict[str, tuple[str, str]] = {
     "rice": ("white_rice", "brown_rice"),
-    "potato": ("potato_boiled", "potato_mashed"),
-    "potatoes": ("potato_boiled", "potato_mashed"),
-    "bread": ("bread_white", "bread_wholemeal"),
+    "yeast_bread": ("bread_white", "bread_wholemeal"),
 }
 
 

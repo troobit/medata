@@ -70,11 +70,11 @@ class TestFixtureEmission:
 
     def test_emits_single_class_mixture_fixture(self, tmp_path):
         # 50x50x40 mm box = 100 cm3 bbox at 60 g — inside the density band.
-        out = _run(tmp_path, [("obj001", "pasta", 60.0, _box_mm())])
+        out = _run(tmp_path, [("obj001", "steak", 60.0, _box_mm())])
         # Decision 19: fixture ids are "<Category>__<object>" — object
         # directory names repeat across categories in the real snapshot,
         # so bare stems cannot key fixtures.
-        fixture_path = out / "pasta__obj001.fixture"
+        fixture_path = out / "steak__obj001.fixture"
         assert fixture_path.is_file()
         fx = parse_fixture(fixture_path.read_bytes())
 
@@ -88,7 +88,7 @@ class TestFixtureEmission:
         assert fx.palette_version == "v2"
 
         # Single-class GT mass map keyed by the mapped palette class name.
-        assert dict(fx.ground_truth_class_mass_g) == {"pasta": pytest.approx(60.0)}
+        assert dict(fx.ground_truth_class_mass_g) == {"beef": pytest.approx(60.0)}
 
         # Provenance stamp (Req 9.1).
         assert fx.source_dataset.startswith("metafood3d@")
@@ -97,8 +97,8 @@ class TestFixtureEmission:
         assert (fx.gravity.x, fx.gravity.y, fx.gravity.z) == (0.0, 0.0, -1.0)
 
     def test_depth_is_composited_food_on_authored_plane(self, tmp_path):
-        out = _run(tmp_path, [("obj001", "pasta", 60.0, _box_mm())])
-        fx = parse_fixture((out / "pasta__obj001.fixture").read_bytes())
+        out = _run(tmp_path, [("obj001", "steak", 60.0, _box_mm())])
+        fx = parse_fixture((out / "steak__obj001.fixture").read_bytes())
         h, w = fx.nadir_depth.height, fx.nadir_depth.width
         assert (h, w) == (SMALL.height, SMALL.width)
         depth = np.frombuffer(fx.nadir_depth.depth_bytes_mm,
@@ -118,23 +118,23 @@ class TestFixtureEmission:
 
     def test_run_summary_counts_unmapped_and_ambiguous(self, tmp_path):
         out = _run(tmp_path, [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
             ("obj002", "pizza", 60.0, _box_mm()),     # no palette mapping
-            ("obj003", "potato", 60.0, _box_mm()),    # cooking-method ambiguous
+            ("obj003", "rice", 60.0, _box_mm()),     # cooking-method ambiguous
         ])
-        assert (out / "pasta__obj001.fixture").is_file()
+        assert (out / "steak__obj001.fixture").is_file()
         assert not (out / "pizza__obj002.fixture").exists()
-        assert not (out / "potato__obj003.fixture").exists()
+        assert not (out / "rice__obj003.fixture").exists()
 
         summary = json.loads((out / "run_summary.json").read_text())
         assert summary["ingested"] == 1
         assert summary["unmapped_excluded"] == {"pizza": ["pizza__obj002"]}
-        assert summary["ambiguous_excluded"] == {"potato": ["potato__obj003"]}
+        assert summary["ambiguous_excluded"] == {"rice": ["rice__obj003"]}
         assert summary["unmapped_excluded_count"] == 1
         assert summary["ambiguous_excluded_count"] == 1
 
     def test_run_summary_carries_render_config_plane_and_licence(self, tmp_path):
-        out = _run(tmp_path, [("obj001", "pasta", 60.0, _box_mm())])
+        out = _run(tmp_path, [("obj001", "steak", 60.0, _box_mm())])
         summary = json.loads((out / "run_summary.json").read_text())
         assert summary["dataset"] == "metafood3d"
         assert summary["licence"] == "CC BY-NC 4.0"
@@ -164,10 +164,10 @@ class TestFixtureEmission:
         assert summary["mapping_categories_source"]
 
     def test_truth_sidecar_records_mesh_volume_mm3(self, tmp_path):
-        out = _run(tmp_path, [("obj001", "pasta", 60.0,
+        out = _run(tmp_path, [("obj001", "steak", 60.0,
                                _box_mm((50.0, 50.0, 40.0)))])
         truth = json.loads((out / "metafood3d_truth.json").read_text())
-        assert truth["pasta__obj001"] == pytest.approx(
+        assert truth["steak__obj001"] == pytest.approx(
             50.0 * 50.0 * 40.0, rel=1e-6)
 
 
@@ -214,7 +214,7 @@ class TestMetricScaleGates:
         # The same box authored in metres (0.05 m) read as mm: the bbox
         # distribution collapses to toy scale — Decision 14 gate (a).
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm((0.05, 0.05, 0.04))),
+            ("obj001", "steak", 60.0, _box_mm((0.05, 0.05, 0.04))),
         ])
         out_dir = tmp_path / "out"
         with pytest.raises(SystemExit, match="unit"):
@@ -229,7 +229,7 @@ class TestMetricScaleGates:
         # 100 cm3 bbox claiming 2 kg: no food density reaches 20 g/cm3 —
         # Decision 14 gate (b).
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 2000.0, _box_mm()),
+            ("obj001", "steak", 2000.0, _box_mm()),
         ])
         out_dir = tmp_path / "out"
         with pytest.raises(SystemExit, match="obj001"):
@@ -267,11 +267,11 @@ class TestRigidLayout:
         # categories (almond_3 under both Almond(bowl) and Almonds) —
         # the category-qualified identity keeps them distinct.
         out = _run(tmp_path, [
-            ("almond_3", "pasta", 60.0, _box_mm()),
-            ("almond_3", "white_rice", 60.0, _box_mm()),
+            ("almond_3", "steak", 60.0, _box_mm()),
+            ("almond_3", "carrot", 60.0, _box_mm()),
         ])
-        assert (out / "pasta__almond_3.fixture").is_file()
-        assert (out / "white_rice__almond_3.fixture").is_file()
+        assert (out / "steak__almond_3.fixture").is_file()
+        assert (out / "carrot__almond_3.fixture").is_file()
         summary = json.loads((out / "run_summary.json").read_text())
         assert summary["ingested"] == 2
 
@@ -295,7 +295,7 @@ class TestRigidLayout:
 
     def test_stray_file_at_category_level_is_a_hard_error(self, tmp_path):
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
         (data_dir / "3D_Mesh" / ".DS_Store").write_text("junk")
         with pytest.raises(SystemExit, match="DS_Store"):
@@ -304,18 +304,18 @@ class TestRigidLayout:
 
     def test_object_dir_without_a_mesh_is_a_hard_error(self, tmp_path):
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
-        (data_dir / "3D_Mesh" / "pasta" / "obj_empty").mkdir()
+        (data_dir / "3D_Mesh" / "steak" / "obj_empty").mkdir()
         with pytest.raises(SystemExit, match="obj_empty"):
             ingest.main(["--mf3d-dir", str(data_dir),
                          "--out", str(tmp_path / "out")])
 
     def test_object_dir_with_two_meshes_is_a_hard_error(self, tmp_path):
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
-        obj_dir = data_dir / "3D_Mesh" / "pasta" / "obj001"
+        obj_dir = data_dir / "3D_Mesh" / "steak" / "obj001"
         (obj_dir / "second.ply").write_text("ply")
         with pytest.raises(SystemExit, match="exactly one mesh"):
             ingest.main(["--mf3d-dir", str(data_dir),
@@ -325,20 +325,20 @@ class TestRigidLayout:
         # The shipped archives carry textured meshes — .mtl and image
         # siblings beside the mesh file are part of the layout, not extras.
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
-        obj_dir = data_dir / "3D_Mesh" / "pasta" / "obj001"
+        obj_dir = data_dir / "3D_Mesh" / "steak" / "obj001"
         (obj_dir / "obj001.mtl").write_text("newmtl m")
         (obj_dir / "texture_0.png").write_bytes(b"\x89PNG junk")
         out_dir = tmp_path / "out"
         rc = ingest.main(["--mf3d-dir", str(data_dir),
                           "--out", str(out_dir)])
         assert rc == 0
-        assert (out_dir / "pasta__obj001.fixture").is_file()
+        assert (out_dir / "steak__obj001.fixture").is_file()
 
     def test_metadata_missing_columns_is_a_hard_error(self, tmp_path):
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
         (data_dir / "metadata.csv").write_text("id,weight\nx,1\n")
         with pytest.raises(SystemExit, match="derive_metadata.py"):
@@ -350,7 +350,7 @@ class TestRepoHygiene:
     def test_out_inside_the_repo_is_refused(self, tmp_path):
         # Req 1.2: MetaFood3D imagery/metadata never lands in the repo.
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
         repo_out = mf3d_testkit._REPO_ROOT / "build" / "mf3d_test_out"
         with pytest.raises(SystemExit, match="repo"):
@@ -360,11 +360,11 @@ class TestRepoHygiene:
 
     def test_dataset_dir_is_read_only_to_ingest(self, tmp_path):
         data_dir = write_dataset(tmp_path / "mf3d", [
-            ("obj001", "pasta", 60.0, _box_mm()),
+            ("obj001", "steak", 60.0, _box_mm()),
         ])
         before = sorted(p.relative_to(data_dir).as_posix()
                         for p in data_dir.rglob("*"))
-        _run(tmp_path, [("obj001", "pasta", 60.0, _box_mm())])
+        _run(tmp_path, [("obj001", "steak", 60.0, _box_mm())])
         after = sorted(p.relative_to(data_dir).as_posix()
                        for p in data_dir.rglob("*"))
         assert before == after

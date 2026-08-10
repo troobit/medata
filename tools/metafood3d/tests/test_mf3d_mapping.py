@@ -6,15 +6,16 @@ class list parsed from ClassPalette.swift ``v2Standard``), and mapped
 categories target palette class NAMES — β is name-keyed end-to-end, so the
 content lock (not channel ordering) is what the artifact preserves.
 
-Category names cannot be verified against the real dataset here (MetaFood3D
-access is request-gated and the data is never on disk in CI), so the curated
-rules define the committed artifact's category universe and the stale-rule
-check fires only when a categories enumeration is supplied (at build time
-with ``--categories-file``, or at ingest time against the real snapshot).
+Since Decision 20 the rules are written against the REAL 108-category
+enumeration (derived from the v2 nutrition workbook by
+derive_metadata.py), and the committed artifact is built in enumerated
+mode — ``categories_source`` records the enumeration's SHA-256 and all
+108 categories are recorded. The raw dataset stays out of the repo
+(Req 1.2); these tests pin the committed artifact's shape without it.
 
 A category whose cooking method is ambiguous for a split class (generic
-rice / potato / bread) is recorded status=ambiguous and excluded from BOTH
-sides, never guessed (Req 1.3).
+``rice``, ``yeast_bread``) is recorded status=ambiguous and excluded from
+BOTH sides, never guessed (Req 1.3).
 """
 
 import hashlib
@@ -121,11 +122,10 @@ class TestBuildArtifact:
 
     def test_ambiguous_cooking_method_categories_excluded_not_guessed(self, artifact):
         by_cat = {e["category"]: e for e in artifact["mappings"]}
-        # Generic categories that MetaFood3D's taxonomy cannot split for us.
+        # The real taxonomy's generic categories that cannot split for us.
         expected_pairs = {
             "rice": ["white_rice", "brown_rice"],
-            "potato": ["potato_boiled", "potato_mashed"],
-            "bread": ["bread_white", "bread_wholemeal"],
+            "yeast_bread": ["bread_white", "bread_wholemeal"],
         }
         for cat, pair in expected_pairs.items():
             entry = by_cat[cat]
@@ -135,21 +135,24 @@ class TestBuildArtifact:
 
     def test_stated_preparations_map_unambiguously(self, artifact):
         by_cat = {e["category"]: e for e in artifact["mappings"]}
-        assert by_cat["french_fries"]["class_id"] == "chips_fries"
-        assert by_cat["mashed_potatoes"]["class_id"] == "potato_mashed"
+        assert by_cat["french_fry"]["class_id"] == "chips_fries"
+        assert by_cat["mashed_potato"]["class_id"] == "potato_mashed"
 
-    def test_cereal_v2_class_is_exercised(self, artifact):
-        # The v2-only class must be reachable (Decision 15) — MetaFood3D's
-        # cereal-type categories are the reason the retarget matters.
-        cereal = [e for e in artifact["mappings"] if e["class_id"] == "cereal"]
-        assert cereal
-
-    def test_carb_staples_have_mapped_categories(self, artifact):
+    def test_real_enumeration_coverage_is_exactly_eleven_classes(self, artifact):
+        # Decision 20: the real dataset covers LESS than the blind rules
+        # hoped. No cereal-type category exists (Decision 15's cereal
+        # reachability is void), no plain pasta (only pasta_mixed_dishes,
+        # composite), no lentils; rice and bread appear only as
+        # method-ambiguous generics. This pins the honest coverage.
         mapped_classes = {e["class_id"] for e in artifact["mappings"]
                           if e["status"] == "mapped"}
-        for staple in ("white_rice", "pasta", "bread_white",
-                       "potato_mashed", "chips_fries"):
-            assert staple in mapped_classes, staple
+        assert mapped_classes == {
+            "apple", "banana", "beef", "broccoli", "carrot", "chicken",
+            "chips_fries", "egg", "pork", "potato_mashed", "tomato",
+        }
+        for absent in ("cereal", "pasta", "lentils", "white_rice",
+                       "bread_white"):
+            assert absent not in mapped_classes, absent
 
     def test_unmapped_categories_counted(self, tmp_path):
         # Req 1.4: categories with no palette mapping are excluded and the
@@ -209,6 +212,22 @@ class TestCommittedArtifact:
             expected_palette_class_list=palette.class_list,
         )
         assert loaded.palette_class_list == palette.class_list
+
+    def test_committed_artifact_is_enumerated_not_curated_only(self):
+        # Decision 20: the committed artifact is built against the real
+        # 108-category enumeration; categories_source is its SHA-256, and
+        # every snapshot category is recorded (unmapped included). The
+        # enumeration file itself is gitignored NC-adjacent data, so this
+        # pins shape and counts, not the digest value.
+        doc = json.loads(mapping.DEFAULT_ARTIFACT.read_text())
+        source = doc["categories_source"]
+        assert source != "curated_rules_only"
+        assert len(source) == 64 and set(source) <= set("0123456789abcdef")
+        counts: dict[str, int] = {}
+        for e in doc["mappings"]:
+            counts[e["status"]] = counts.get(e["status"], 0) + 1
+        assert len(doc["mappings"]) == 108
+        assert counts == {"mapped": 13, "ambiguous": 2, "unmapped": 93}
 
 
 class TestLoaderGuards:

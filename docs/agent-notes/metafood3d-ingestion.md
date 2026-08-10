@@ -19,14 +19,19 @@ fixtures are stamped `palette_version="v2"`.
 
 - `mapping.py` — loader for `mapping_metafood3d_to_palette.json`; fails
   loudly on palette-content mismatch. Categories are compared in
-  normalised snake_case (`normalise_category`) because the gated
-  dataset's exact folder spellings are unverified.
-- `build_mapping.py` — curated category→class rules. **Curated-only
-  artifact**: MetaFood3D has no public category enumeration, so the
-  committed artifact's universe is the rules themselves
-  (`categories_source: "curated_rules_only"`). Regenerate with
-  `--categories-file` when the dataset lands — that enables the
-  stale-rule abort and records the enumeration SHA-256. Ingest tolerates
+  normalised snake_case (`normalise_category`; parens survive:
+  `Almond(bowl)` → `almond(bowl)`).
+- `build_mapping.py` — curated category→class rules, written against the
+  **real 108-category enumeration** since Decision 20. The committed
+  artifact is built in enumerated mode (`--categories-file
+  data/metafood3d/categories.txt`): `categories_source` = enumeration
+  SHA-256, all 108 categories recorded, stale-rule abort armed. Coverage
+  is **13 rules → 11 classes, 80 objects** (apple, banana, beef,
+  broccoli, carrot, chicken, chips_fries, egg, pork, potato_mashed,
+  tomato); `Rice`/`Yeast_bread` ambiguous; 93 categories unmapped
+  (composites, battered, desserts). The dataset does NOT cover the
+  thin-sample carb staples (no plain pasta, no lentils, no cereal-type
+  category) — the spec's motivating gap stays open. Ingest tolerates
   partial snapshots: artifact-unknown categories are excluded + counted
   (Req 1.4), never aborted on.
 - `render.py` — CPU ray-cast (trimesh pure-numpy intersector, Decision
@@ -106,9 +111,10 @@ which the Swift decoder never read; that stale shape is superseded.)*
   workbook IS the category enumeration `build_mapping.py
   --categories-file` needs.
 - Real category names carry parentheses and case (`Almond(bowl)`);
-  `normalise_category` keeps parens (`almond(bowl)`), so curated rules
-  written without them won't match those categories until the mapping is
-  regenerated against the real enumeration.
+  `normalise_category` keeps parens (`almond(bowl)`). The mapping is
+  regenerated against the real enumeration (Decision 20) — the workbook's
+  distinct `Object_name` values, via `derive_metadata.py` →
+  `categories.txt`.
 - Downloads live in gitignored `data/` (never committed, Req 1.2):
   mesh + point-cloud tarballs, the v2 workbook, `_MetaFood3D_Readme.txt`.
   Only meshes + workbook + readme have consumers; renders/videos/point
