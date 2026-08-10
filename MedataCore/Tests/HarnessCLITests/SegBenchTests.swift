@@ -1,6 +1,7 @@
 #if HARNESS_ENABLED
-import XCTest
+import PortableContracts
 import Segmentation
+import XCTest
 @testable import HarnessCore
 
 // Tests for SegBench — task 63: segmenter mIoU bench (Req 8.9).
@@ -141,6 +142,52 @@ final class SegBenchTests: XCTestCase {
     // MARK: - Helpers
 
     // Two food classes (0, 1), background = 2, unknownFood = 3, unsupportedLiquid = 4.
+    // MARK: - Sample building (seg-bench-silently-drops-mis-sized-fixtures)
+    // runSegBench used to drop a mis-sized fixture via a compactMap guard —
+    // no message, no count. The builder now throws so the batch driver can
+    // carry the skip.
+
+    func testMisSizedProbsThrowsWithFixtureIDAndCounts() {
+        var fx = PbMealFixture()
+        fx.fixtureID = "bad_bundle"
+        fx.nadirIntrinsics.imageWidth = 2
+        fx.nadirIntrinsics.imageHeight = 1
+        fx.nadirProbs = Data(count: 6)  // expected 1*2*5*2 = 20 for C=5
+        XCTAssertThrowsError(
+            try SegBench.sample(from: fx, palette: makeTestPalette())
+        ) { error in
+            guard case FixtureRunner.Error.probsSizeMismatch(
+                let id, let expected, let got) = error else {
+                return XCTFail("wrong error: \(error)")
+            }
+            XCTAssertEqual(id, "bad_bundle")
+            XCTAssertEqual(expected, 20)
+            XCTAssertEqual(got, 6)
+        }
+    }
+
+    func testWellFormedFixtureBuildsSampleWithDecodedArgmax() throws {
+        // 1x2 image, C=5 (2 food + background/unknown/unsupported).
+        // Pixel 0 peaks class 3, pixel 1 peaks class 0.
+        var probs = [Float16](repeating: 0.01, count: 10)
+        probs[3] = 0.9
+        probs[5] = 0.9
+        var fx = PbMealFixture()
+        fx.fixtureID = "good_bundle"
+        fx.nadirIntrinsics.imageWidth = 2
+        fx.nadirIntrinsics.imageHeight = 1
+        fx.nadirProbs = probs.withUnsafeBytes { Data($0) }
+        fx.nadirArgmax = Data([3, 0])
+
+        let sample = try SegBench.sample(from: fx, palette: makeTestPalette())
+
+        XCTAssertEqual(sample.fixtureID, "good_bundle")
+        XCTAssertEqual(sample.predictedArgmax, [3, 0])
+        XCTAssertEqual(sample.groundTruthArgmax, [3, 0])
+        XCTAssertEqual(sample.width, 2)
+        XCTAssertEqual(sample.height, 1)
+    }
+
     private func makeTestPalette() -> ClassPalette {
         ClassPalette(
             foodClasses: ["rice", "pasta"],

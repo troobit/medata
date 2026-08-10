@@ -1,5 +1,6 @@
 #if HARNESS_ENABLED
 import Foundation
+import PortableContracts
 import Segmentation
 
 // One sample for the segmenter mIoU bench: predicted argmax vs ground-truth argmax.
@@ -98,6 +99,57 @@ public enum SegBench {
             confusionMatrix: confusion,
             classCount: C
         )
+    }
+}
+
+extension SegBench {
+    // Build one bench sample from a fixture, throwing (never silently
+    // dropping) on a mis-sized probability tensor
+    // (seg-bench-silently-drops-mis-sized-fixtures): the old call site
+    // guarded the byte count inside a compactMap, so every mis-palletted
+    // bundle vanished from the bench with no message. The batch driver
+    // (FixtureBatch.partition) carries the throw as a reported skip.
+    public static func sample(
+        from fixture: PbMealFixture, palette: ClassPalette
+    ) throws -> SegBenchSample {
+        let W = Int(fixture.nadirIntrinsics.imageWidth)
+        let H = Int(fixture.nadirIntrinsics.imageHeight)
+        let C = palette.totalClasses
+        let expected = H * W * C * 2
+        guard fixture.nadirProbs.count == expected else {
+            throw FixtureRunner.Error.probsSizeMismatch(
+                fixture.fixtureID, expected: expected, got: fixture.nadirProbs.count)
+        }
+        return SegBenchSample(
+            fixtureID: fixture.fixtureID,
+            predictedArgmax: argmaxFromFP16Probs(
+                probsData: fixture.nadirProbs, width: W, height: H, classes: C),
+            groundTruthArgmax: [UInt8](fixture.nadirArgmax),
+            width: W, height: H)
+    }
+
+    // Decode FP16 LE HWC prob tensor and return per-pixel argmax.
+    // (Moved from HarnessCLI/main.swift — this is its only caller.)
+    static func argmaxFromFP16Probs(
+        probsData: Data, width: Int, height: Int, classes: Int
+    ) -> [UInt8] {
+        probsData.withUnsafeBytes { raw -> [UInt8] in
+            let buf = raw.bindMemory(to: Float16.self)
+            var out = [UInt8](repeating: 0, count: height * width)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let base = (y * width + x) * classes
+                    var maxIdx = 0
+                    var maxVal = Float16(-Float.infinity)
+                    for c in 0..<classes {
+                        let v = buf[base + c]
+                        if v > maxVal { maxVal = v; maxIdx = c }
+                    }
+                    out[y * width + x] = UInt8(clamping: maxIdx)
+                }
+            }
+            return out
+        }
     }
 }
 #endif

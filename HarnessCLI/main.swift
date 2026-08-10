@@ -394,27 +394,6 @@ func buildCalInputs(
     return (results, skips)
 }
 
-// Decode FP16 LE HWC prob tensor and return per-pixel argmax.
-func argmaxFromFP16Probs(probsData: Data, width: Int, height: Int, classes: Int) -> [UInt8] {
-    probsData.withUnsafeBytes { raw -> [UInt8] in
-        let buf = raw.bindMemory(to: Float16.self)
-        var out = [UInt8](repeating: 0, count: height * width)
-        for y in 0..<height {
-            for x in 0..<width {
-                let base = (y * width + x) * classes
-                var maxIdx = 0
-                var maxVal = Float16(-Float.infinity)
-                for c in 0..<classes {
-                    let v = buf[base + c]
-                    if v > maxVal { maxVal = v; maxIdx = c }
-                }
-                out[y * width + x] = UInt8(clamping: maxIdx)
-            }
-        }
-        return out
-    }
-}
-
 // MARK: - accuracy (task 60)
 
 func runAccuracy(args: Args) throws {
@@ -1024,21 +1003,21 @@ func runSegBench(args: Args) throws {
         fputs("seg-bench requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
-    // Same per-fixture resolution as buildCalInputs. This path already guarded
-    // the byte count and so degraded to silently dropping every v2 bundle
-    // rather than trapping — a quieter failure, equally wrong.
     let palette = fixtures.first.map(paletteForFixture) ?? .v1Standard
-    let samples: [SegBenchSample] = fixtures.compactMap { fx in
-        let intr = CameraIntrinsics(pb: fx.nadirIntrinsics)
-        let fxPalette = paletteForFixture(fx)
-        let W = intr.imageWidth; let H = intr.imageHeight; let C = fxPalette.totalClasses
-        guard fx.nadirProbs.count == H * W * C * 2 else { return nil }
-        let predicted = argmaxFromFP16Probs(probsData: fx.nadirProbs,
-                                            width: W, height: H, classes: C)
-        return SegBenchSample(fixtureID: fx.fixtureID,
-                              predictedArgmax: predicted,
-                              groundTruthArgmax: [UInt8](fx.nadirArgmax),
-                              width: W, height: H)
+    // Same per-fixture resolution as buildCalInputs, and the same rule
+    // (seg-bench-silently-drops-mis-sized-fixtures): a fixture the bench
+    // cannot decode is a reported skip, never a silent drop.
+    let (samples, skips) = FixtureBatch.partition(fixtures: fixtures) { fx in
+        try SegBench.sample(from: fx, palette: paletteForFixture(fx))
+    }
+    for skip in skips {
+        fputs("seg-bench: fixture skipped \(skip.fixtureID): \(skip.reason)\n", stderr)
+    }
+    fputs("seg-bench: pipeline skips \(skips.count) of \(fixtures.count) fixtures\n", stderr)
+    if samples.isEmpty && !fixtures.isEmpty {
+        fputs("seg-bench: every fixture failed — refusing to emit a report "
+            + "over zero samples\n", stderr)
+        exit(1)
     }
     let report = SegBench.evaluate(samples: samples, palette: palette)
     let perClassIoU = report.perClassIoU.reduce(into: [String: Float]()) { d, kv in
