@@ -251,3 +251,211 @@ Req 8.4's first-versus-repeat split follows directly: if the gap the evidence fi
 - A combination rule is now a design obligation with its own justification, where superseding needed none.
 - Two signals ordering one list makes an individual shortlist harder to explain after the fact; `shortlist_source` (Req 7.6) records which ordering ran, not why a given entry placed where it did.
 - The recency prior stays on the read path permanently, so its cost is never recovered even if candidate evidence proves dominant.
+
+---
+
+## Decision 7: Recency first, evidence fills the remaining slots
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+Decision 6 made the combination rule a design obligation: fixed, stated, deterministic (Req 7.5), with recency never regressing. Two candidate shapes survived: evidence fills only the slots recency leaves empty, or an interleave in which evidence can promote a candidate above a recency item subject to a "no recency item ends lower than its recency-alone position" floor.
+
+### Decision
+
+*(Amended same day after design-critic review: the shipped shortlist is not recency alone — `buildShortlist` tops up from the eligible list after recency. The rule below states all three layers.)*
+
+The combined ordering has three layers: (1) recency entries in their exact shipped positions; (2) candidate evidence fills, in descending mean-probability order with ties broken by palette declaration order, skipping entries already present; (3) the shipped eligible top-up for any slots still empty. Evidence displaces only the blind top-up, never a recency entry; with no evidence the result is byte-identical to the shipped list. `shortlist_source` takes a new value (`recency_plus_candidates`) exactly when the record's produced-marker is true — the ordering that ran, independent of whether the fills changed anything.
+
+### Rationale
+
+The worst case is literally the shipped shortlist, which makes Req 7.2 and 7.4 verifiable by construction rather than by argument. The interleave's extra power serves repeat foods — exactly the population recency already wins (Decision 6) — while its cost lands on the same population when a promotion is wrong. The gap this spec exists to close is first corrections, and fills address precisely that gap. Tying the source value to the marker rather than to "did a fill land" keeps the Req 8.2 partition well-defined: an empty evidence set under the combined ordering is a combined-population row, not a recency row.
+
+### Alternatives Considered
+
+- **Interleave with a recency floor**: more room for the model signal - Rejected: harder to state and verify, spends its power on the population recency already serves, and a mis-promotion costs a repeat-food correction an extra glance on every meal.
+- **Source value only when a fill landed**: partitions by observable difference - Rejected: makes the partition depend on plate content rather than on the code path, so identical builds produce mixed populations and Req 8.3's baseline comparison muddies.
+
+### Consequences
+
+**Positive:**
+- Req 7.2/7.4 hold by construction; the Req 7.4 byte-identity check is a trivial test.
+- The acceptance measurement isolates one question: do evidence fills get chosen.
+
+**Negative:**
+- Evidence can never outrank recency even when the model is near-certain; if the corpus later shows strong fills being chosen from low slots, an interleave revisit is a new decision against real data.
+
+---
+
+## Decision 8: Stride-4 sampled accumulation with an eight-class cap
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+Decision 3 left the pass's grid open: full resolution is ~99.5 M reads (1920 × 1440 × 36), comparable to the argmax pass — one of the two dominant passes in post-processing — and Req 3.1 allows 50 ms median on the hardware floor, with Req 3.3 requiring the pass be abandonable. Separately, Req 4.4's 1 KB record budget cannot survive a pathological plate (25 detected classes × 5 candidates).
+
+### Decision
+
+The pass samples the regularised label map on a fixed stride-4 grid in both axes, anchored at (0,0) — ~6.2 M reads, 1/16 of full resolution. Candidate sets are retained for at most the eight detected classes with the most sampled pixels (ties by declaration order). Both bounds are deterministic and identical on device and replay.
+
+### Rationale
+
+The budget is met by construction, so no timeout machinery runs on the capture path and Req 3.3's escape reduces to the structural case (no tensor available). A ranking needs relative means, not exact ones: at stride 4 a food still contributes one sample per 16 pixels, and a food too small to sample meaningfully carries no usable evidence anyway — its absence is the honest output. Determinism (Req 7.5) and replay parity (Req 6.1) fall out of a fixed grid where a timeout-based abandon would break both. The eight-class cap bounds the record at ~960 B worst case while covering any realistic plate.
+
+### Alternatives Considered
+
+- **Full-resolution parallel pass with an elapsed-time abandon**: exact means - Rejected: rivals the argmax pass's cost on every capture, and the abandon path makes evidence presence timing-dependent — a replay could produce evidence the device abandoned, violating Req 6.1's spirit and making the Req 8 population depend on device load.
+- **Resolution-adaptive stride targeting a fixed sample count**: bounds work for any future camera - Rejected for now: one more parameter to state and replay; the capture resolution is pinned in the pipeline today, and a future resolution change fails loudly in the latency measurement rather than silently.
+
+### Consequences
+
+**Positive:**
+- No timing dependence anywhere in the evidence path; device and harness agree bit-for-bit.
+- Worst-case capture cost and record size are both fixed at design time.
+
+**Negative:**
+- Means are estimates over 1/16 of the pixels; a genuinely borderline candidate ranking can differ from the full-resolution answer (unobservable in practice — both are valid orderings of an estimate).
+- Foods smaller than the stride can carry no evidence; the record shows a produced marker with no entry for them, which consumers must treat as "nothing usable", not "error".
+
+---
+
+## Decision 9: One shared compute function; harness parity by construction, not by pipeline reuse
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+Req 6.1 requires a replayed capture to produce the device's evidence given the same tensor and palette. The device computes evidence inside `PostProcessing`; the harness does not run `PostProcessing` at all — `FixtureRunner` synthesises a `SegmentationResult` directly from a fixture's cached probabilities and argmax. Any design that puts the evidence computation only inside the device pipeline makes replay parity impossible without duplicating code, and duplicated accumulation loops are exactly how the Decision 17 (cross-dataset-calibration) class of drift starts.
+
+### Decision
+
+The computation is one pure static function, `CandidateEvidence.compute(probabilities:labelMap:palette:)`, in the Segmentation module. `PostProcessing` calls it with the regularised map on device; harness replay paths call it with the fixture's tensor and persisted argmax. `SegmentationResult` gains an optional `candidateEvidence` field (default nil) so every existing constructor and hand-built test result is untouched.
+
+### Rationale
+
+Parity by construction is the only kind that survives maintenance: there is no second implementation to drift. The function is pure over value types already shared by both sides (`ProbabilityTensor`, `ArgmaxMap`, `ClassPalette`), so the seam costs nothing. The optional field keeps Req 2.2's blast radius flat — nil means "not produced" and doubles as the source for the Decision 4 marker at record-assembly time.
+
+### Alternatives Considered
+
+- **Run the full PostProcessing in the harness**: one pipeline - Rejected: the harness deliberately consumes cached segmenter outputs (no Core ML on macOS runners, and fixtures pin the tensor); rerunning post-processing would recompute σ_seg and the label map, changing replayed figures that are currently byte-stable.
+- **Compute in the harness from the persisted meal record instead of recomputing**: no harness call site - Rejected: Req 6.1 is a parity check of the computation; reading the answer back verifies nothing.
+
+### Consequences
+
+**Positive:**
+- One implementation; the parity test is two calls to the same function plus a golden.
+- Hand-built `SegmentationResult`s across the test suites compile unchanged.
+
+**Negative:**
+- The function's inputs must stay expressible in fixture terms; any future dependence on device-only state (e.g. capture timing) would break the seam and must be refused at review.
+
+---
+
+## Decision 10: Parallel-array permille encoding and a five-set cap, sized against the persisted JSON
+
+**Date**: 2026-08-10
+**Status**: accepted, amends Decision 8
+
+### Context
+
+Design-critic review caught the Req 4.4 arithmetic being computed in an encoding the record is not stored in. Meal records persist as protobuf-**JSON** (the persistence layer's Decision 31; `MealRecord.jsonString()`), where a nested per-candidate object (`{"className":"mixed_vegetables","meanProb":0.123456}`) costs ~50 B — Decision 8's eight-set cap lands at ~2.2 KB worst case, over double the budget. Worse, Req 1.1's unconditional "each detected food", Req 1.5's five candidates, and Req 4.4's 1 KB are jointly unsatisfiable on a pathological 25-class plate in any reasonable JSON shape: the requirements needed an amendment, not just a smaller constant.
+
+### Decision
+
+`CandidateSet` persists as parallel arrays — `repeated string class_names` (ranked) plus `repeated uint32 mean_permille` (0…1000) — and evidence is retained for at most the **five** detected classes with the greatest sampled-pixel support (ties by declaration order). Requirements amended at the gate: Req 1.8 sanctions the budget cap explicitly; Req 4.4 binds the budget to the persisted encoding. Worst case (5 sets × 5 longest-name candidates) ≈ 1.0 KB of JSON, asserted by a test rather than assumed. Equal-length arrays are a writer-enforced, reader-checked invariant; a mismatch reads as no evidence for that class.
+
+### Rationale
+
+The budget is only real in the bytes that actually land in SQLite. Parallel arrays remove the per-candidate object framing (the dominant JSON cost), and permille quantisation both shortens the literal and honestly reflects the magnitude's role — it exists to order five entries, not to carry six significant figures into a corpus analysis. Five sets cover any realistic plate; the cap binds only on plates whose long tail of tiny detections carries no usable evidence anyway, and Req 1.8 makes the truncation deterministic and observable rather than an undocumented exception to Req 1.1.
+
+### Alternatives Considered
+
+- **Keep nested candidate objects, cap at three sets**: fits the budget without a new shape - Rejected: three sets is below a realistic plate's detected-class count, so the cap would bind routinely rather than pathologically.
+- **Store ranked names only, no magnitude**: smallest possible (~0.9 KB at eight sets) - Rejected: Req 1.3 requires each candidate carry a magnitude, and the margins are the only signal a future corpus analysis of "how close was the second guess" could use.
+- **Re-scope Req 4.4 to binary proto**: makes Decision 8's arithmetic true - Rejected: the record is not stored in binary proto; a budget met in an encoding not in use protects nothing.
+
+### Consequences
+
+**Positive:**
+- The Req 4.4 bound holds in the bytes that exist, with a test asserting it on the worst case.
+- The requirements are again jointly satisfiable, with the cap visible in the spec rather than smuggled in by design.
+
+**Negative:**
+- Parallel arrays are uglier than nested messages and need the length-invariant check at every reader.
+- Permille quantisation caps future analysis resolution at 0.1 %; margins tighter than that are indistinguishable in the corpus.
+
+---
+
+## Decision 11: A pre-implementation probe fixes the ranking statistic; a 64-sample floor guards small foods
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+Peer review of the design identified the ranking statistic as the load-bearing risk that no prior decision argued. Mean probability over a food's region has two plausible degenerate modes: boundary bleed (a ±2 px band around every mask edge contributes more mass to the physically adjacent class than a genuine confusion contributes to the right answer, so rank 1 tends to be whatever touches the food) and prior domination (after the winner takes its share, the residual simplex is shaped by the model's marginal class prior, so every plate gets the same top-5). Either mode reproduces the `perClassMeanProb` failure `ui/meal-review` Decision 13 diagnosed — a plausible number answering the wrong question — and either would send Req 8 to a neutral verdict for reasons unrelated to whether retained evidence can help. Separately, the frame-wide coverage gate (`minimumFoodCoverageFraction`) does not bound per-food sample counts: a 200-pixel second class yields ~12 stride samples, and a top-5 selected from ~34 noisy means is selection bias presented as evidence.
+
+### Decision
+
+Implementation is gated on an offline probe: run the compute over admissible real tensors and report top-5 set constancy across plates, the adjacency share of rank-1 candidates, and both figures under a second-argmax-share statistic (fraction of sampled pixels where the channel is the top non-winner) beside the mean. The statistic ships only after this evidence picks it, recorded as a further decision; a probe showing neither statistic carries plate-specific signal is a valid early exit for the spec. Independently, a detected class with fewer than 64 sampled pixels receives no evidence entry — honest absence, extending Req 2.3's zero-pixel case.
+
+### Rationale
+
+The probe costs one offline script and answers the only question that matters before code is written into the capture path, the record schema, and the migrator: does the model's discarded mass vary by plate, or is it a popularity list. Choosing the statistic from data rather than argument is the same discipline Decision 5 applies to the feature as a whole, one level down. The floor converts "too small to measure" from a confident wrong answer into a recorded absence, which consumers already must handle (Req 2.3), and 64 samples (~1,024 px at stride 4) is the point below which a max over 30-odd near-identical means is noise by construction.
+
+### Alternatives Considered
+
+- **Ship the mean and let the Req 8 corpus decide**: no probe needed - Rejected: a corpus verdict costs months of captures and, if the statistic is degenerate, returns neutral without saying why; the probe answers the same question offline this week.
+- **Adopt second-argmax share now on the boundary-bleed argument alone**: plausible fix, no data - Rejected: it trades one unmeasured statistic for another; the probe measures both for the same price.
+- **Persist per-class sample counts instead of a floor**: lets analysis stratify later - Rejected: it spends record budget to defer a judgement the pipeline can make now, and a shortlist consumer cannot be expected to re-derive "was this evidence meaningful" per read.
+
+### Consequences
+
+**Positive:**
+- The degenerate-statistic failure mode is detected for the price of a script, before any schema or capture-path cost is paid.
+- Small foods can no longer manufacture confident evidence; their absence is observable and honest.
+
+**Negative:**
+- The design phase does not fully fix the algorithm; one decision (the statistic) is deliberately deferred to probe evidence, and tasks must sequence the probe first.
+- The 64-sample floor is a judgement constant of exactly the kind the support-plane-reference sweeps exist to interrogate; it ships marked as such.
+
+---
+
+## Decision 12: The Req 8 comparison is intention-to-treat with a stated temporal confound and its mitigations
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+`shortlist_source` partitions the corpus by code path, and the two arms are separated in time: every recency-only row predates the feature, every combined row postdates it, and the recency prior strengthens monotonically as the corpus grows. A naive arm comparison is therefore biased in the flattering direction — the exact class of measurement error Decision 4 refuses elsewhere. Two further facts shape what analysis is possible: the as-offered shortlist is not reconstructible offline (`updated_at` on correction rows is rewritten by later mutations, destroying the ordering recency used at offer time), and the produced-marker is meal-level while evidence is per-class, so the combined arm contains rows whose shortlist was byte-identical to the control arm's.
+
+### Decision
+
+The primary Req 8.3 comparison is intention-to-treat by code path, as the requirements state. The design records the temporal confound and mandates two mitigations in the measurement: stratification by reconstructed recency depth (the count of distinct earlier predicted-to-corrected pairs at each record's timestamp, which survives `updated_at` mutation even though order does not), and an as-treated secondary analysis using the meal record's persisted evidence map to identify combined-arm rows whose evidence was empty for the predicted class.
+
+### Rationale
+
+Intention-to-treat keeps the partition a property of the build, not of plate content or history depth — the same reasoning as Decision 7's marker-tying, extended honestly to its cost. Depth stratification addresses the confound with a quantity the corpus can actually reconstruct; pretending the full counterfactual re-ranking is available would found the analysis on data the store provably destroys. The as-treated secondary is possible only because Decision 4 put the evidence on the meal record — the attenuation the meal-level marker introduces is boundable, not merely acknowledged.
+
+### Alternatives Considered
+
+- **Persist the as-offered shortlist on the correction record**: exact reconstruction - Rejected: Req 4.2 forbids changing the correction-record schema shared verbatim with the clinical track; the offered list is derivable at write time only at that cost.
+- **Freeze `updated_at` semantics so recency is replayable**: fixes reconstruction at the source - Rejected: a persistence-layer behaviour change owned by `ui/meal-review`'s store, with consumers beyond this spec; out of scope here, though worth its own consideration if the depth stratification proves too coarse.
+
+### Consequences
+
+**Positive:**
+- The confound is in the spec where the analyst will find it, with the two analyses that survive the store's actual semantics.
+- No schema changes beyond the two meal-record fields already decided.
+
+**Negative:**
+- Req 8.4's first-correction cell, already the smallest, shrinks further under depth stratification; the verdict may need meaningfully more corpus than the aggregate number would.
+- The as-offered list remains unrecoverable; any future analysis wanting it must change store semantics first.
+
+---
