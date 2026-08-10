@@ -536,6 +536,6 @@ Removal is mechanical by construction — the calibrate pool is just the set of 
 
 ### Impact
 
-Governs the calibration pool composition for any commercial release; no code changes. Release-time check: `calibration_licence` and `calibration_contributing_datasets_per_class` meta rows in `cofid_db.sqlite`/`afcd_db.sqlite`. Resolves the "MetaFood3D licence" open decision; the dataset-access request (form submission, mapping regeneration via `build_mapping.py --categories-file`) remains open.
+Governs the calibration pool composition for any commercial release; no code changes. Release-time check: `calibration_licence` and `calibration_contributing_datasets_per_class` meta rows in `cofid_db.sqlite`/`afcd_db.sqlite`. Resolves the "MetaFood3D licence" open decision. Dataset access is request-gated (form + password) — a property of the source, recorded in the root README's data-sources section; when a snapshot lands, the mapping regenerates via `build_mapping.py --categories-file`.
 
 ---
