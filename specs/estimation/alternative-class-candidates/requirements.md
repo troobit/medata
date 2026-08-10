@@ -1,6 +1,6 @@
 # Requirements: Alternative Class Candidates
 
-**Status:** requirements — awaiting approval gate before design
+**Status:** approved 2026-08-10, amended same day at the design gate (Req 1.8 added; Req 4.4 bound to the persisted encoding — Decision 10) — design approved, tasks phase next
 **Owed by:** `ui/meal-review` [Decision 18](../../ui/meal-review/decision_log.md), which deferred this work and shipped recency ordering in its place.
 
 ## Introduction
@@ -49,6 +49,7 @@ This spec retains the discarded evidence: for each detected food, the ranked alt
 5. <a name="1.5"></a>The system SHALL retain at most five candidates per detected food, and WHERE fewer classes carry any support, SHALL retain only those.
 6. <a name="1.6"></a>A candidate set SHALL NOT mix solid and liquid classes: WHERE the detected food is a liquid class the candidates SHALL be liquid classes, and WHERE it is solid they SHALL be solid.
 7. <a name="1.7"></a>Candidates SHALL be identified by a name that resolves without the palette in force at the time of reading.
+8. <a name="1.8"></a>WHERE retaining evidence for every detected food would exceed the persistence budget ([4.4](#4.4)), THE SYSTEM SHALL retain sets for the detected foods with the greatest persisted-mask support, deterministically, and none for the rest. *(Amended 2026-08-10 at the design gate: [1.1](#1.1), [1.5](#1.5) and [4.4](#4.4) are jointly unsatisfiable on a pathological plate in the persisted encoding — Decision 10.)*
 
 ### 2. <a name="2"></a>Agreement With The Estimate As Shown
 
@@ -80,7 +81,7 @@ This spec retains the discarded evidence: for each detected food, the ranked alt
 1. <a name="4.1"></a>Candidate evidence SHALL be persisted on the meal record, keyed by detected class, and SHALL survive an app restart.
 2. <a name="4.2"></a>It SHALL be carried in the portable meal-record contract (`MedataCore/Sources/PortableContracts`), additive such that an existing reader of that contract remains valid, and SHALL NOT require a change to the correction-record schema that `estimation/pipeline` Req 14.4 shares verbatim with the clinical track.
 3. <a name="4.3"></a>A meal record written before this spec SHALL remain readable, and the **absence** of candidate evidence on a record SHALL be distinguishable from a computed but **empty** candidate set.
-4. <a name="4.4"></a>Candidate evidence SHALL contain no imagery, and SHALL add no more than 1 KB to a meal record.
+4. <a name="4.4"></a>Candidate evidence SHALL contain no imagery, and SHALL add no more than 1 KB to a meal record **in its persisted encoding**. *(Amended 2026-08-10: records persist as protobuf-JSON — Decision 31 of `ui/meal-review`'s persistence lineage — so the budget binds the JSON bytes, not a binary-proto estimate.)*
 
 ### 5. <a name="5"></a>Palette Migration
 
