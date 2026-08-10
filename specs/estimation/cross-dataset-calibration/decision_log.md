@@ -498,3 +498,44 @@ The decoder's names win because they are the richer, self-describing set (`image
 `tools/metafood3d/ingest.py` + `render.py` (canonical keys, `mapping_version`, `seating_rule`), `tools/metafood3d/tests/` (contract fixture + regeneration script + diff tests), `HarnessCore/CalibrationArtifact.swift` (`loadIngestSummary` contract check, `DatasetLineage.licence`, `strictestLicence`), `HarnessCLI/main.swift` (licence wiring), `EndToEndCalibrateBakeTests` (consumes the committed fixture), and the two agent notes' contract tables. No on-device code.
 
 ---
+
+## Decision 18: MetaFood3D (CC BY-NC 4.0) may contribute to research calibration; commercial ship requires an NC-free re-bake or a commercial licence
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+MetaFood3D is licensed CC BY-NC 4.0 (non-commercial), unlike Nutrition5k's CC BY 4.0, and the question of whether NC-derived βs may ship commercially had been left open. As of this date nothing NC has shipped: the dataset is request-gated and no snapshot has been obtained, no MetaFood3D fixtures exist in the repo, and both bundled databases record `calibration_licence = CC BY 4.0` with Nutrition5k-only lineage. MetaFood3D touches nothing outside the calibration pool — segmenter training and estimation-quality make no reference to it. The Decision 17 provenance machinery (per-fixture `source_dataset=metafood3d@<snapshot>` stamps, baked `calibration_contributing_datasets_per_class`, strictest-licence top-level `calibration_licence`) makes any future NC contribution visible per class in the shipped artefact.
+
+### Decision
+
+MetaFood3D data may contribute freely to research and MVP-phase calibration. Before any commercial release, either (a) re-run calibrate with all MetaFood3D fixtures excluded from the pool and re-bake, verifying `calibration_licence = CC BY 4.0` in the output meta rows, or (b) obtain a commercial licence from the dataset authors. The gate is auditable: a commercial build's databases must not list `metafood3d` in `calibration_contributing_datasets_per_class` unless option (b) was taken.
+
+### Rationale
+
+Removal is mechanical by construction — the calibrate pool is just the set of fixture directories passed in, so an NC-free bake is a re-run without the MetaFood3D fixtures, and the baked provenance meta rows prove the result is NC-free without trusting process discipline. Deferring the commercial question therefore carries no entanglement risk, while blocking MetaFood3D now would forfeit its sample-size boost for exactly the classes where Nutrition5k is thinnest (lentils n=1, pasta n=1, brown_rice n=2 in the current bake) during the phase where accuracy iteration matters most.
+
+### Alternatives Considered
+
+- **Bar MetaFood3D from the pool entirely until the commercial question is settled**: zero licence exposure — Rejected: forfeits the accuracy gains for thin-sample classes during the research phase, and the provenance machinery already makes later removal clean, so pre-emptive exclusion buys nothing.
+- **Treat βs as uncopyrightable facts not bound by CC BY-NC**: scalar regression coefficients are arguably not "adapted material" — Rejected as the load-bearing position: the question is legally unsettled, and the repo's fail-strict posture (strictest licence wins) is the defensible default. It remains available as a fallback argument, not the plan.
+- **Ship commercially with NC βs and rely on the NC clause applying only to redistribution of the dataset itself**: Rejected: CC BY-NC restricts use of the licensed material in commercial contexts, not just redistribution; this reading invites exactly the dispute the provenance machinery exists to avoid.
+
+### Consequences
+
+**Positive:**
+- Research calibration can use MetaFood3D immediately when the snapshot lands, with no licensing pre-work.
+- The commercialisation path is a re-run plus a meta-row check, not an untangling exercise.
+- The decision is enforceable from the artefact alone (`calibration_licence`, `calibration_contributing_datasets_per_class`), independent of who runs the bake.
+
+**Negative:**
+- A commercial re-bake reverts thin-sample classes to the weaker Nutrition5k-only βs unless another CC BY source has been found by then — the cost of removal is accuracy, not mechanics.
+- The gated request form may impose terms beyond CC BY-NC 4.0; those terms must be reviewed at submission time and could tighten this decision.
+- Two β sets (research vs commercial) must not be confused; the meta rows are the guard, but release tooling must actually check them.
+
+### Impact
+
+Governs the calibration pool composition for any commercial release; no code changes. Release-time check: `calibration_licence` and `calibration_contributing_datasets_per_class` meta rows in `cofid_db.sqlite`/`afcd_db.sqlite`. Resolves the "MetaFood3D licence" open decision; the dataset-access request (form submission, mapping regeneration via `build_mapping.py --categories-file`) remains open.
+
+---
