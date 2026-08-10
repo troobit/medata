@@ -80,6 +80,18 @@ class TestDerivation:
         ])
         assert rows[0]["weight_g"] == ""
 
+    def test_writes_the_category_enumeration_beside_the_csv(self, tmp_path):
+        # categories.txt is the build_mapping.py --categories-file input:
+        # sorted unique raw category names, one per line.
+        _derive(tmp_path, [
+            V2_HEADER,
+            ["Steak", "steak_1", 1, 100, 0, 0, 0, 0, 0],
+            ["Apple", "apple_1", 1, 80, 0, 0, 0, 0, 0],
+            ["Steak", "steak_2", 1, 120, 0, 0, 0, 0, 0],
+        ])
+        enumeration = (tmp_path / "categories.txt").read_text()
+        assert enumeration == "Apple\nSteak\n"
+
     def test_duplicate_object_names_in_distinct_categories_pass(self, tmp_path):
         # The real snapshot repeats Food_Type across categories.
         rows = _derive(tmp_path, [

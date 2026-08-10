@@ -580,3 +580,44 @@ A tolerant loader that adapts to layout variants accumulates guessing code for e
 `tools/metafood3d/ingest.py` (layout verification, `discover_objects`, `MeshEntry`, keyed metadata), `tools/metafood3d/derive_metadata.py` (new), `tools/metafood3d/tests/` (`mf3d_testkit.write_dataset` new layout, `TestRigidLayout`, `test_mf3d_derive_metadata.py` new), agent note `docs/agent-notes/metafood3d-ingestion.md`. No Swift-side changes; the Decision 17 contract fixture is byte-identical.
 
 ---
+
+## Decision 20: Mapping regenerated against the real enumeration; coverage is 11 classes, not the hoped-for carb staples
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+The blind-written curated rules (the artifact's universe since the spec closed) named categories that do not exist in the real dataset: the v2 nutrition workbook's enumeration (637 objects / 108 categories, written to `categories.txt` by `derive_metadata.py`) shares almost no spellings with them. More materially, the real taxonomy undercuts the spec's motivating premise. There is no cereal-type category (no oatmeal, porridge, or breakfast cereal — Decision 15's "cereal reachability" rationale is void on real data), no plain pasta (`Pasta_mixed_dishes` is composite), no lentils, and rice and bread appear only as method-ambiguous generics (`Rice`, `Yeast_bread`). The dataset skews heavily to composite dishes (burger, lasagna, sushi, tacos), battered/fried items, and desserts — 93 of 108 categories are unmappable under the conservative-identity policy.
+
+### Decision
+
+Rewrite `MAPPED_RULES`/`AMBIGUOUS_RULES` against the real enumeration and commit the artifact built in enumerated mode: `categories_source` records the enumeration's SHA-256, all 108 categories are recorded, and the stale-rule abort is now armed. The curation maps 13 categories to 11 classes (80 objects): apple 7, banana 7, beef 4 (Steak), broccoli 9, carrot 12, chicken 10 (breast + thighs), chips_fries 6 (French_Fry), egg 5, pork 5 (Pork_Chop), potato_mashed 4, tomato 11 (Tomato + Tomato_slice). `Rice` (8 objects) and `Yeast_bread` (9) are recorded ambiguous. Conservative exclusions include bacon/sausages (cured), chicken wings/whole chicken (skin/bone-heavy), fried egg/omelet (added fat), baked potato (a stated method neither potato class covers), and sweet potato (different species). `derive_metadata.py` now also writes `categories.txt` so one derivation step feeds both consumers.
+
+### Rationale
+
+The curation policy is unchanged — conservative identity, ambiguity never guessed — only applied to real names instead of guessed ones. The honest outcome is that MetaFood3D's calibration value shifts from "boost the thin carb staples" to "add three classes the N5k pool lacks entirely (banana, chips_fries, potato_mashed) and corroborate eight it has." The thin classes that motivated the spec (lentils n=1, pasta n=1, brown_rice n=2) get nothing; recording that plainly now prevents the corpus run from being read as a fix for them.
+
+### Alternatives Considered
+
+- **Map aggressively (bacon→pork, baked_potato→potato_boiled, omelet→egg) to lift coverage**: more βs — Rejected: the curation policy exists because a β fitted against compositionally wrong ground truth bakes a silent bias; coverage bought with wrong identity is negative value.
+- **Disambiguate `Rice`/`Yeast_bread` per object via the workbook's FNDDS food code**: 17 additional objects, including the rice classes we actually want — Deferred, not rejected: the mapping artifact is category-level by design (Req 1.3), and per-object disambiguation is a contract change to ingest. Worth its own decision if the corpus run shows the 11-class pool is worth extending; the FNDDS column is already preserved in the workbook.
+- **Keep the committed artifact curated-only until meshes arrive**: no churn — Rejected: the enumeration is snapshot data we already hold; committing the enumerated artifact now arms the stale-rule abort and makes ingest one command when meshes land.
+
+### Consequences
+
+**Positive:**
+- The committed artifact records the full real universe; unknown-category counts at ingest time now mean snapshot drift, not curation blindness.
+- Three palette classes gain their first calibration source; eight gain a second (cross-dataset corroboration per the merge rules).
+- The stale-rule abort is armed: a future snapshot renaming categories fails the build loudly.
+
+**Negative:**
+- The spec's motivating gap (pasta, lentils, rice βs) remains open — MetaFood3D does not close it, and another CC BY source would be needed for those classes.
+- 15 % of the dataset's objects are usable (95 of 637 counting the ambiguous 17); the download is mostly unusable for calibration.
+- Per-class samples are modest (4–12 objects); single-source classes (banana, chips_fries, potato_mashed) bake only if they clear the statistical gates alone.
+
+### Impact
+
+`tools/metafood3d/build_mapping.py` (rules rewritten, docstring), `tools/metafood3d/mapping_metafood3d_to_palette.json` (regenerated, enumerated mode), `tools/metafood3d/derive_metadata.py` (+`categories.txt`), tests (mapping coverage pins, ingest category names, derivation enumeration), agent note. No Swift-side changes; `mapping_version` lineage changes with the artifact hash, as designed.
+
+---

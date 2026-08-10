@@ -22,6 +22,11 @@ Column mapping (the workbook's names are inverted from what you'd guess):
 - ``Weight (g)``   -> ``weight_g``  (written through verbatim; ingest.py
   judges malformed weights, this tool does not)
 
+Beside the CSV it writes ``categories.txt`` (sorted unique raw category
+names, one per line) — the enumeration ``build_mapping.py
+--categories-file`` consumes to regenerate the mapping artifact with the
+stale-rule abort armed.
+
 Usage::
 
     python3 tools/metafood3d/derive_metadata.py \\
@@ -146,9 +151,12 @@ def main(argv: list[str] | None = None) -> int:
         writer = csv.writer(fh)
         writer.writerow(OUTPUT_HEADER)
         writer.writerows(triples)
-    categories = {c for _o, c, _w in triples}
+    categories = sorted({c for _o, c, _w in triples})
+    categories_path = out_path.parent / "categories.txt"
+    categories_path.write_text("\n".join(categories) + "\n")
     print(f"[derive_metadata] wrote {len(triples)} objects "
           f"({len(categories)} categories) -> {out_path}")
+    print(f"[derive_metadata] wrote enumeration -> {categories_path}")
     return 0
 
 
