@@ -9,7 +9,43 @@ First and foremost - this work is built on, and made possible by, the incredibly
   - Sam McLeod (`sammcj`)
     - mcp-devtools — <https://github.com/sammcj/mcp-devtools> — Once MCP server to rule them all... Seriously. It's good. It's simple. It is immensely useful.
 
-Academic and dataset [references are here](docs/references.md). Without public data and research, none of this is even feasible. The core of the project relies on the free exchange of information and academic research - to leave their credits to last would be an eggregious disservice.
+Without public data and research, none of this is even feasible. The core of the project relies on the free exchange of information and academic research - to leave their credits to last would be an eggregious disservice. The full credits document (including software, standards, and prior art) is [docs/references.md](docs/references.md); the academic references and data sources are below.
+
+## Academic references
+
+### Methods and clinical foundations
+
+1. Laurentini, A., 'The Visual Hull Concept for Silhouette-Based Image Understanding', *IEEE Transactions on Pattern Analysis and Machine Intelligence*, vol. 16, no. 2 (1994), pp. 150–162. DOI: [10.1109/34.273735](https://doi.org/10.1109/34.273735). — Theoretical basis for the shape-from-silhouette visual-hull volume reconstruction.
+2. Dehais, J., Anthimopoulos, M., Shevchik, S. and Mougiakakou, S., 'Two-View 3D Reconstruction for Food Volume Estimation', *IEEE Transactions on Multimedia*, vol. 19, no. 5 (2017), pp. 1090–1099. DOI: [10.1109/TMM.2016.2642792](https://doi.org/10.1109/TMM.2016.2642792); preprint [arXiv:1701.03330](https://arxiv.org/abs/1701.03330). — Two-view canonical capture path and the bulk-correction factors.
+3. Anthimopoulos, M., Gianola, L., Scarnato, L., Diem, P. and Mougiakakou, S., 'A Food Recognition System for Diabetic Patients Based on an Optimized Bag-of-Features Model', *IEEE Journal of Biomedical and Health Informatics*, vol. 18, no. 4 (2014), pp. 1261–1271. DOI: [10.1109/JBHI.2014.2308928](https://doi.org/10.1109/JBHI.2014.2308928). — Food-recognition design patterns and density-calibration methodology.
+4. Anthimopoulos, M., Dehais, J., Shevchik, S., Ransford, B. H., Duke, D., Diem, P. and Mougiakakou, S., 'Computer Vision-Based Carbohydrate Estimation for Type 1 Patients With Diabetes Using Smartphones', *Journal of Diabetes Science and Technology*, vol. 9, no. 3 (2015), pp. 507–515. DOI: [10.1177/1932296815580159](https://doi.org/10.1177/1932296815580159). — GoCARB clinical-validation methodology for carbohydrate estimation.
+
+### Dataset papers
+
+5. Wu, X., Fu, X., Liu, Y., Lim, E.-P., Hoi, S. C. H. and Sun, Q., 'A Large-Scale Benchmark for Food Image Segmentation', in *Proceedings of the 29th ACM International Conference on Multimedia (MM '21)*, 2021. DOI: [10.1145/3474085.3475201](https://doi.org/10.1145/3474085.3475201); preprint [arXiv:2105.05409](https://arxiv.org/abs/2105.05409). — The FoodSeg103 benchmark used to transfer-learn the food-region segmenter.
+6. Thames, Q., Karpur, A., Norris, W., Xia, F., Panait, L., Weyand, T. and Sim, J., 'Nutrition5k: Towards Automatic Nutritional Understanding of Generic Food', in *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)*, 2021, pp. 8903–8911. Preprint [arXiv:2103.03375](https://arxiv.org/abs/2103.03375). — Gravimetric RGB-D dishes used for per-class β (bulk-correction) calibration.
+7. Kawano, Y. and Yanai, K., 'Automatic Expansion of a Food Image Dataset Leveraging Existing Categories with Domain Adaptation', in *Proceedings of the ECCV Workshop on Transferring and Adapting Source Knowledge in Computer Vision (TASK-CV)*, 2014. — The UECFOOD-256 dataset, an optional supplement for undersampled classes.
+8. Chen, Y., He, J., Czarnecki, C., Vinod, G., Mahmud, T. I., Raghavan, S., Ma, J., Mao, D., Nair, S., Xi, P., Wong, A., Delp, E. and Zhu, F., 'MetaFood3D: Large 3D Food Object Dataset with Nutrition Values', preprint [arXiv:2409.01966](https://arxiv.org/abs/2409.01966) (2024). — Single-food 3D meshes and per-object nutrition values used for cross-dataset β calibration.
+
+## Data sources
+
+### Bundled food-composition databases
+
+- **CoFID — Composition of Foods Integrated Dataset.** McCance & Widdowson / Food Standards Agency (UK). Crown Copyright, Open Government Licence v3. <https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid>. Primary nutrition source (CoFID-wins merge); bundled as `cofid_db.sqlite`.
+- **AFCD — Australian Food Composition Database.** Food Standards Australia New Zealand (FSANZ). CC BY 4.0. <https://www.foodstandards.gov.au/science/monitoringnutrients/afcd>. Regional supplement covering classes CoFID omits; bundled as `afcd_db.sqlite`.
+
+### Training and calibration datasets
+
+- **FoodSeg103.** Wu et al. (ref. 5). Apache 2.0. <https://xiongweiwu.github.io/foodseg103.html>. Primary segmenter training set (7,118 image–mask pairs, 103 classes).
+- **Nutrition5k.** Google Research (ref. 6). CC BY 4.0. <https://github.com/google-research-datasets/Nutrition5k>. Overhead RGB-D + per-ingredient gravimetric labels; drives β calibration only.
+- **UECFOOD-256.** Kawano & Yanai (ref. 7). Per-image permissive licences. <http://foodcam.mobi/dataset256.html>. Optional supplement — not currently used.
+- **MetaFood3D.** Chen et al. (ref. 8). CC BY-NC 4.0 (non-commercial). <https://lorenz.ecn.purdue.edu/~food3d/>. Single-food 3D meshes + nutrition values for cross-dataset β calibration. Access is request-gated (form + password); access obtained 2026-08-10. Only the 3D meshes and nutrition values (plus the dataset README) are collected — depth is rendered deterministically from the meshes, so the Blender renders, RGBD videos, and point clouds are not used. Commercial use is governed by cross-dataset-calibration Decision 18: research βs may use it freely; a commercial ship requires an NC-free re-bake or a commercial licence.
+
+### Supporting reference data
+
+- **FAO/INFOODS Density Database for Cooked Foods (v2.0, 2012).** Food and Agriculture Organization of the United Nations. Served-portion bulk-density fallback values.
+- **Carbohydrate as Monosaccharide-Equivalents Guidance.** Food Safety Authority of Ireland (FSAI). Conversion factors (starch→glucose 1.05, sucrose split 1.10).
+- **USDA FoodData Central.** U.S. Department of Agriculture. Public domain. <https://fdc.nal.usda.gov/>. Liquid serving volumes and carbohydrate values.
 
 Finally - for a more complete view of the app context, need, and general aspirations for the broader project, read the [project document here](docs/drivers.md).
 

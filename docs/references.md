@@ -66,10 +66,21 @@ This codebase was made possible by, and builds on the work of others, detailed b
    Vision (TASK-CV)*, 2014.
    — The UECFOOD-256 dataset, an optional supplement for undersampled classes.
 
-8. Chen, Y. *et al.*, 'MetaFood3D: 3D Food Dataset with Nutrition Values',
-   preprint [arXiv:2409.01966](https://arxiv.org/abs/2409.01966) (2024).
-   — Single-food 3D meshes earmarked for future cross-dataset calibration (not
-   yet integrated).
+8. Chen, Y., He, J., Czarnecki, C., Vinod, G., Mahmud, T. I., Raghavan, S.,
+   Ma, J., Mao, D., Nair, S., Xi, P., Wong, A., Delp, E. and Zhu, F.,
+   'MetaFood3D: Large 3D Food Object Dataset with Nutrition Values', preprint
+   [arXiv:2409.01966](https://arxiv.org/abs/2409.01966) (2024).
+   — Single-food 3D meshes and per-object nutrition values used for
+   cross-dataset β calibration. The dataset's required citation form:
+
+   ```bibtex
+   @article{chen2024metafood3d,
+       title={MetaFood3D: Large 3D Food Object Dataset with Nutrition Values},
+       author={Chen, Yuhao and He, Jiangpeng and Czarnecki, Chris and Vinod, Gautham and Mahmud, Talha Ibn and Raghavan, Siddeshwar and Ma, Jinge and Mao, Dayou and Nair, Saeejith and Xi, Pengcheng and Wong, Alexander and Delp, Edward and Zhu, Fengqing},
+       journal={arXiv preprint arXiv:2409.01966},
+       year={2024}
+   }
+   ```
 
 ---
 
@@ -109,9 +120,15 @@ This codebase was made possible by, and builds on the work of others, detailed b
   <http://foodcam.mobi/dataset256.html>. Optional supplement — not currently
   used. Cited in `docs/ml-training.md`.
 
-- **MetaFood3D** (planned). Chen et al. (ref. 8).
-  <https://lorenz.ecn.purdue.edu/~food3d/>. Future cross-dataset calibration.
-  Cited in `specs/OVERVIEW.md`.
+- **MetaFood3D.** Chen et al. (ref. 8). CC BY-NC 4.0 (non-commercial).
+  <https://lorenz.ecn.purdue.edu/~food3d/>. Single-food 3D meshes + nutrition
+  values for cross-dataset β calibration. Access is request-gated (form +
+  password); access obtained 2026-08-10. Of the distributed components, only
+  the 3D meshes and nutrition values (plus the dataset README) are collected —
+  depth is rendered deterministically from the meshes by
+  `tools/metafood3d/render.py`, so the Blender renders, RGBD videos, and point
+  clouds are not used. Commercial use is governed by cross-dataset-calibration
+  Decision 18. Cited in `specs/OVERVIEW.md`.
 
 ### Supporting reference data
 
