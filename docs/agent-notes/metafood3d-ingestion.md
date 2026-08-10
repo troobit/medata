@@ -33,12 +33,37 @@ fixtures are stamped `palette_version="v2"`.
   12). Camera at origin, +z = depth axis; **z-depth**, not ray length
   (intrinsics unprojection assumes z-depth); Float32 LE mm, 0 = miss.
   Pinned config = N5k D435 nominal 640x480, plane 385 mm.
+- `derive_metadata.py` — stdlib-only (zipfile + ElementTree, no
+  openpyxl) workbook → `metadata.csv` derivation. RIGID (Decision 19):
+  accepts exactly the known nine-column v2 header, aborts showing
+  found-vs-expected otherwise. Column names are inverted:
+  `Object_name` = category, `Food_Type` = object. Weights pass through
+  verbatim — ingest judges malformedness.
 - `ingest.py` — seats each mesh in its most probable
   `compute_stable_poses` pose, flips it under the camera (rotation about
   x, so no reflection), renders, composites misses to the plane, emits
   via the shared `make_fixtures.build_fixture_bytes`. Writes
   `run_summary.json` + `metafood3d_truth.json` ({fixture_id:
   mesh_volume_mm3}, for the Req 2.3 volume-fit diagnostic).
+
+## Rigid snapshot layout (Decision 19)
+
+The required `--mf3d-dir` layout is the shipped mesh archive extracted
+verbatim plus the derived metadata — nothing rearranged:
+
+    <mf3d-dir>/3D_Mesh/<Category>/<object>/   # exactly ONE mesh file
+                                              # (.obj|.ply|.glb|.off);
+                                              # .mtl/texture siblings OK
+    <mf3d-dir>/metadata.csv                   # derive_metadata.py output
+
+Structural deviations (stray files at category/object level, 0 or >1
+mesh files in an object dir, missing/mis-headed metadata.csv) are HARD
+errors that print the expected tree + the exact fix commands — never
+silent skips, never tolerant discovery. Object identity is the directory
+pair: object dir names repeat across categories in the real snapshot
+(`almond_3` under both `Almond(bowl)` and `Almonds`), so every emitted
+id (fixture filename, skip lists, truth sidecar) is
+`<Category>__<object>` in raw on-disk names.
 
 ## Contracts stream 2 consumes
 
@@ -69,21 +94,27 @@ which the Swift decoder never read; that stale shape is superseded.)*
   (implied bbox density in [0.05, 2.0] g/cm³); the failure block lands
   in `run_summary.json` under `scale_check_failed`.
 
-## Dataset facts (verified 2026-08-09)
+## Dataset facts (verified 2026-08-10, real snapshot)
 
-- Access is **request-gated** (Google Form + password) at
-  <https://lorenz.ecn.purdue.edu/~food3d/> (TLS cert of that host fails
-  verification — fetch with care). Licence is **CC BY-NC 4.0
-  (non-commercial)** — unlike N5k's CC BY 4.0; recorded in the run
-  summary, and worth a user-level decision before any commercial ship.
-- The site says 637 objects / 108 categories; the arXiv v-latest
-  (2409.01966) says 743 / 131. No public category list exists — hence
-  the curated-only mapping artifact.
-- Expected local layout (documented in ingest.py, reconcile on first
-  contact): `meshes/<category>/<object_id>.obj|ply|glb|off` +
-  `metadata.csv` (object_id, category, weight_g). Meshes assumed
-  millimetres; a metre/centimetre snapshot trips unit-sanity and the
-  conversion belongs in the metadata derivation step.
+- Access **obtained 2026-08-10** (request-gated: Google Form + password)
+  at <https://lorenz.ecn.purdue.edu/~food3d/> (TLS cert of that host
+  fails verification — fetch with care). Licence is **CC BY-NC 4.0
+  (non-commercial)**; commercial use governed by Decision 18 (research
+  βs free; commercial ship = NC-free re-bake or commercial licence).
+- The v2 nutrition workbook holds **637 objects / 108 categories** —
+  the site's claimed counts, not the arXiv paper's 743/131. The
+  workbook IS the category enumeration `build_mapping.py
+  --categories-file` needs.
+- Real category names carry parentheses and case (`Almond(bowl)`);
+  `normalise_category` keeps parens (`almond(bowl)`), so curated rules
+  written without them won't match those categories until the mapping is
+  regenerated against the real enumeration.
+- Downloads live in gitignored `data/` (never committed, Req 1.2):
+  mesh + point-cloud tarballs, the v2 workbook, `_MetaFood3D_Readme.txt`.
+  Only meshes + workbook + readme have consumers; renders/videos/point
+  clouds are unused.
+- Meshes assumed millimetres; a metre/centimetre snapshot trips
+  unit-sanity and the conversion belongs in `derive_metadata.py`.
 
 ## Gotchas
 

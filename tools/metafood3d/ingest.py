@@ -30,21 +30,33 @@ is emitted, recording the failure in ``run_summary.json``:
   uniform scale error is a pure multiplicative volume error that would
   bake silently into β).
 
-Expected gitignored local layout (``--mf3d-dir``; the dataset is
+Required gitignored local layout (``--mf3d-dir``; the dataset is
 request-gated — https://lorenz.ecn.purdue.edu/~food3d/ — and licensed
-CC BY-NC 4.0, never written into the repository, Req 1.2)::
+CC BY-NC 4.0, never written into the repository, Req 1.2). The layout is
+RIGID (Decision 19): it is the shipped mesh archive extracted verbatim
+plus one derived file, and any structural deviation is a hard error whose
+message tells the user exactly how to fix the tree — this tool does not
+adapt to layout variants::
 
-    <mf3d-dir>/meshes/<category>/<object_id>.(obj|ply|glb|off)
-    <mf3d-dir>/metadata.csv     # object_id, category, weight_g
-                                # (derived from the shipped nutrition
-                                # sheet when the snapshot lands)
+    <mf3d-dir>/3D_Mesh/<Category>/<object>/   # exactly one mesh file
+                                              # (.obj|.ply|.glb|.off) per
+                                              # object directory; textures
+                                              # and .mtl siblings ignored
+    <mf3d-dir>/metadata.csv                   # object_id, category,
+                                              # weight_g — derived from the
+                                              # shipped nutrition workbook
+                                              # by derive_metadata.py
+
+An object's identity is its directory pair ``<Category>/<object>`` —
+object directory names repeat across categories in the real snapshot
+(``almond_3`` exists under both ``Almond(bowl)`` and ``Almonds``), so
+file stems alone cannot key anything. Fixture ids are
+``<Category>__<object>`` (the raw on-disk names, double-underscore
+joined) everywhere: fixture filenames, skip lists, and the truth sidecar.
 
 Meshes are read in millimetres; if the real snapshot ships metre- or
 centimetre-unit meshes the unit-sanity gate fails loudly and a documented
-conversion belongs in the metadata derivation step, not in silence here.
-Reconcile this layout (and regenerate the mapping artifact with
-``build_mapping.py --categories-file``) on first contact with the real
-snapshot.
+conversion belongs in derive_metadata.py, not in silence here.
 
 Usage::
 
@@ -227,55 +239,130 @@ def check_metric_scale(candidates: list[ScaleCandidate]) -> None:
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class ObjectRecord:
-    object_id: str
+    object_id: str         # "<Category>__<object>" — raw on-disk names
     category: str          # normalised
     weight_g: float
     mesh_path: Path
 
 
+@dataclass(frozen=True)
+class MeshEntry:
+    """One object directory in the rigid 3D_Mesh tree."""
+    category_dir: str      # raw on-disk category directory name
+    object_dir: str        # raw on-disk object directory name
+    mesh_path: Path
+
+    @property
+    def object_id(self) -> str:
+        return f"{self.category_dir}__{self.object_dir}"
+
+
+_LAYOUT_HELP = """\
+Required layout (rigid — rearrange the data, the tool does not adapt):
+
+    {root}/
+    |-- 3D_Mesh/<Category>/<object>/   exactly one .obj/.ply/.glb/.off
+    |                                  per object directory
+    `-- metadata.csv                   object_id, category, weight_g
+
+Create it from the shipped downloads:
+
+    mkdir -p {root}
+    tar -xzf _MetaFood3D_new_3D_Mesh.tar.gz -C {root}
+    python3 tools/metafood3d/derive_metadata.py \\
+        --xlsx _MetaFood3D_new_complete_dataset_nutrition_v2.xlsx \\
+        --out {root}/metadata.csv"""
+
+
+def _layout_error(mf3d_dir: Path, problem: str) -> SystemExit:
+    return SystemExit(
+        f"[ingest] {problem}\n\n{_LAYOUT_HELP.format(root=mf3d_dir)}")
+
+
 def verify_required_files(mf3d_dir: Path) -> None:
     if not mf3d_dir.is_dir():
-        raise SystemExit(
-            f"[ingest] MetaFood3D directory not found: {mf3d_dir} — "
-            f"expected the gitignored layout documented in this module's "
-            f"docstring (the dataset is request-gated; see "
-            f"https://lorenz.ecn.purdue.edu/~food3d/)."
-        )
-    missing = [rel for rel in ("meshes", "metadata.csv")
-               if not (mf3d_dir / rel).exists()]
-    if missing:
-        raise SystemExit(
-            f"[ingest] MetaFood3D directory {mf3d_dir} is missing "
-            f"required entr(ies): {', '.join(missing)}"
-        )
+        raise _layout_error(
+            mf3d_dir,
+            f"MetaFood3D directory not found: {mf3d_dir} (the dataset is "
+            f"request-gated; see https://lorenz.ecn.purdue.edu/~food3d/).")
+    if not (mf3d_dir / "3D_Mesh").is_dir():
+        raise _layout_error(
+            mf3d_dir, f"{mf3d_dir} has no 3D_Mesh/ directory.")
+    if not (mf3d_dir / "metadata.csv").is_file():
+        raise _layout_error(
+            mf3d_dir, f"{mf3d_dir} has no metadata.csv.")
 
 
-def load_metadata(mf3d_dir: Path) -> tuple[dict[str, tuple[str, float]], set[str]]:
-    """metadata.csv rows: object_id -> (normalised category, weight_g);
-    plus the malformed-weight object ids."""
-    rows: dict[str, tuple[str, float]] = {}
-    malformed: set[str] = set()
+MetadataKey = tuple[str, str]  # (normalised category, object_dir)
+
+
+def load_metadata(
+    mf3d_dir: Path,
+) -> tuple[dict[MetadataKey, float], set[MetadataKey]]:
+    """metadata.csv rows keyed by (normalised category, object_id):
+    key -> weight_g, plus the malformed-weight keys."""
+    rows: dict[MetadataKey, float] = {}
+    malformed: set[MetadataKey] = set()
     with open(mf3d_dir / "metadata.csv", newline="") as fh:
-        for row in csv.DictReader(fh):
+        reader = csv.DictReader(fh)
+        expected = {"object_id", "category", "weight_g"}
+        if not expected.issubset(reader.fieldnames or []):
+            raise _layout_error(
+                mf3d_dir,
+                f"metadata.csv header {reader.fieldnames} is missing "
+                f"column(s) {sorted(expected - set(reader.fieldnames or []))}"
+                f" — regenerate it with derive_metadata.py.")
+        for row in reader:
             object_id = (row.get("object_id") or "").strip()
-            if not object_id:
-                continue
             category = mapping.normalise_category(row.get("category") or "")
+            if not object_id or not category:
+                continue
+            key = (category, object_id)
             try:
                 weight = float(row.get("weight_g") or "")
                 if not np.isfinite(weight) or weight <= 0:
                     raise ValueError
             except ValueError:
-                malformed.add(object_id)
+                malformed.add(key)
                 continue
-            rows[object_id] = (category, weight)
+            rows[key] = weight
     return rows, malformed
 
 
-def discover_meshes(mf3d_dir: Path) -> list[Path]:
-    return sorted(
-        p for p in (mf3d_dir / "meshes").rglob("*")
-        if p.is_file() and p.suffix.lower() in MESH_SUFFIXES)
+def discover_objects(mf3d_dir: Path) -> list[MeshEntry]:
+    """Walk the rigid 3D_Mesh tree. Structural deviations are hard errors
+    naming the offending path — never silent skips (Decision 19)."""
+    entries: list[MeshEntry] = []
+    mesh_root = mf3d_dir / "3D_Mesh"
+    for category_path in sorted(mesh_root.iterdir()):
+        if not category_path.is_dir():
+            raise _layout_error(
+                mf3d_dir,
+                f"stray file in the category level: {category_path} — "
+                f"3D_Mesh/ holds only <Category>/ directories; delete or "
+                f"move the file.")
+        for object_path in sorted(category_path.iterdir()):
+            if not object_path.is_dir():
+                raise _layout_error(
+                    mf3d_dir,
+                    f"stray file in the object level: {object_path} — "
+                    f"3D_Mesh/<Category>/ holds only <object>/ "
+                    f"directories; delete or move the file.")
+            meshes = sorted(
+                p for p in object_path.iterdir()
+                if p.is_file() and p.suffix.lower() in MESH_SUFFIXES)
+            if len(meshes) != 1:
+                found = ", ".join(p.name for p in meshes) or "none"
+                raise _layout_error(
+                    mf3d_dir,
+                    f"{object_path} must hold exactly one mesh file "
+                    f"({'|'.join(MESH_SUFFIXES)}); found: {found}. "
+                    f"Remove the extras or supply the missing mesh.")
+            entries.append(MeshEntry(
+                category_dir=category_path.name,
+                object_dir=object_path.name,
+                mesh_path=meshes[0]))
+    return entries
 
 
 def snapshot_identifier(mf3d_dir: Path, mesh_paths: list[Path]) -> str:
@@ -437,11 +524,12 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"[ingest] {exc}")
 
     metadata, malformed_weight = load_metadata(mf3d_dir)
-    mesh_paths = discover_meshes(mf3d_dir)
+    entries = discover_objects(mf3d_dir)
     if args.limit is not None:
-        mesh_paths = mesh_paths[:args.limit]
+        entries = entries[:args.limit]
 
-    snapshot_id = snapshot_identifier(mf3d_dir, mesh_paths)
+    snapshot_id = snapshot_identifier(
+        mf3d_dir, [e.mesh_path for e in entries])
     mapping_version = mapping_artifact_version(Path(args.mapping))
     source_dataset = f"{DATASET_NAME}@{snapshot_id[:12]}"
     cfg = RENDER_CONFIG
@@ -455,18 +543,19 @@ def main(argv: list[str] | None = None) -> int:
     # BEFORE emitting anything (Req 1.5).
     loaded: list[tuple[ObjectRecord, object]] = []
     candidates: list[ScaleCandidate] = []
-    for mesh_path in mesh_paths:
-        object_id = mesh_path.stem
-        if object_id in malformed_weight:
+    for entry in entries:
+        object_id = entry.object_id
+        category = mapping.normalise_category(entry.category_dir)
+        key = (category, entry.object_dir)
+        if key in malformed_weight:
             summary.skipped["malformed_weight"].append(object_id)
             continue
-        meta = metadata.get(object_id)
-        if meta is None:
+        weight_g = metadata.get(key)
+        if weight_g is None:
             summary.skipped["missing_metadata"].append(object_id)
             continue
-        category, weight_g = meta
         try:
-            mesh = trimesh.load(mesh_path, force="mesh")
+            mesh = trimesh.load(entry.mesh_path, force="mesh")
             extents = tuple(float(e) for e in mesh.extents)
             if len(mesh.faces) == 0 or not all(np.isfinite(extents)):
                 raise ValueError("degenerate mesh")
@@ -474,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
             summary.skipped["malformed_mesh"].append(object_id)
             continue
         record = ObjectRecord(object_id=object_id, category=category,
-                              weight_g=weight_g, mesh_path=mesh_path)
+                              weight_g=weight_g, mesh_path=entry.mesh_path)
         loaded.append((record, mesh))
         candidates.append(ScaleCandidate(object_id, extents, weight_g))
 

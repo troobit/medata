@@ -71,7 +71,10 @@ class TestFixtureEmission:
     def test_emits_single_class_mixture_fixture(self, tmp_path):
         # 50x50x40 mm box = 100 cm3 bbox at 60 g — inside the density band.
         out = _run(tmp_path, [("obj001", "pasta", 60.0, _box_mm())])
-        fixture_path = out / "obj001.fixture"
+        # Decision 19: fixture ids are "<Category>__<object>" — object
+        # directory names repeat across categories in the real snapshot,
+        # so bare stems cannot key fixtures.
+        fixture_path = out / "pasta__obj001.fixture"
         assert fixture_path.is_file()
         fx = parse_fixture(fixture_path.read_bytes())
 
@@ -95,7 +98,7 @@ class TestFixtureEmission:
 
     def test_depth_is_composited_food_on_authored_plane(self, tmp_path):
         out = _run(tmp_path, [("obj001", "pasta", 60.0, _box_mm())])
-        fx = parse_fixture((out / "obj001.fixture").read_bytes())
+        fx = parse_fixture((out / "pasta__obj001.fixture").read_bytes())
         h, w = fx.nadir_depth.height, fx.nadir_depth.width
         assert (h, w) == (SMALL.height, SMALL.width)
         depth = np.frombuffer(fx.nadir_depth.depth_bytes_mm,
@@ -119,14 +122,14 @@ class TestFixtureEmission:
             ("obj002", "pizza", 60.0, _box_mm()),     # no palette mapping
             ("obj003", "potato", 60.0, _box_mm()),    # cooking-method ambiguous
         ])
-        assert (out / "obj001.fixture").is_file()
-        assert not (out / "obj002.fixture").exists()
-        assert not (out / "obj003.fixture").exists()
+        assert (out / "pasta__obj001.fixture").is_file()
+        assert not (out / "pizza__obj002.fixture").exists()
+        assert not (out / "potato__obj003.fixture").exists()
 
         summary = json.loads((out / "run_summary.json").read_text())
         assert summary["ingested"] == 1
-        assert summary["unmapped_excluded"] == {"pizza": ["obj002"]}
-        assert summary["ambiguous_excluded"] == {"potato": ["obj003"]}
+        assert summary["unmapped_excluded"] == {"pizza": ["pizza__obj002"]}
+        assert summary["ambiguous_excluded"] == {"potato": ["potato__obj003"]}
         assert summary["unmapped_excluded_count"] == 1
         assert summary["ambiguous_excluded_count"] == 1
 
@@ -164,7 +167,8 @@ class TestFixtureEmission:
         out = _run(tmp_path, [("obj001", "pasta", 60.0,
                                _box_mm((50.0, 50.0, 40.0)))])
         truth = json.loads((out / "metafood3d_truth.json").read_text())
-        assert truth["obj001"] == pytest.approx(50.0 * 50.0 * 40.0, rel=1e-6)
+        assert truth["pasta__obj001"] == pytest.approx(
+            50.0 * 50.0 * 40.0, rel=1e-6)
 
 
 class TestRunSummaryContract:
@@ -251,6 +255,95 @@ class TestMetricScaleGates:
         with pytest.raises(ingest.ScaleError):
             ingest.check_metric_scale(
                 [ingest.ScaleCandidate("scaled", scaled, 50.0)])
+
+
+class TestRigidLayout:
+    """Decision 19: the layout is the shipped archive extracted verbatim;
+    structural deviations are hard errors that tell the user how to fix
+    the tree, never silent skips or tolerant discovery."""
+
+    def test_duplicate_object_names_across_categories_both_ingest(self, tmp_path):
+        # The real snapshot repeats object directory names across
+        # categories (almond_3 under both Almond(bowl) and Almonds) —
+        # the category-qualified identity keeps them distinct.
+        out = _run(tmp_path, [
+            ("almond_3", "pasta", 60.0, _box_mm()),
+            ("almond_3", "white_rice", 60.0, _box_mm()),
+        ])
+        assert (out / "pasta__almond_3.fixture").is_file()
+        assert (out / "white_rice__almond_3.fixture").is_file()
+        summary = json.loads((out / "run_summary.json").read_text())
+        assert summary["ingested"] == 2
+
+    def test_missing_mesh_root_names_the_fix(self, tmp_path):
+        data_dir = tmp_path / "mf3d"
+        data_dir.mkdir()
+        (data_dir / "metadata.csv").write_text(
+            "object_id,category,weight_g\n")
+        with pytest.raises(SystemExit, match="3D_Mesh") as exc:
+            ingest.main(["--mf3d-dir", str(data_dir),
+                         "--out", str(tmp_path / "out")])
+        assert "tar -xzf" in str(exc.value)
+
+    def test_missing_metadata_names_the_derive_tool(self, tmp_path):
+        data_dir = tmp_path / "mf3d"
+        (data_dir / "3D_Mesh").mkdir(parents=True)
+        with pytest.raises(SystemExit, match="metadata.csv") as exc:
+            ingest.main(["--mf3d-dir", str(data_dir),
+                         "--out", str(tmp_path / "out")])
+        assert "derive_metadata.py" in str(exc.value)
+
+    def test_stray_file_at_category_level_is_a_hard_error(self, tmp_path):
+        data_dir = write_dataset(tmp_path / "mf3d", [
+            ("obj001", "pasta", 60.0, _box_mm()),
+        ])
+        (data_dir / "3D_Mesh" / ".DS_Store").write_text("junk")
+        with pytest.raises(SystemExit, match="DS_Store"):
+            ingest.main(["--mf3d-dir", str(data_dir),
+                         "--out", str(tmp_path / "out")])
+
+    def test_object_dir_without_a_mesh_is_a_hard_error(self, tmp_path):
+        data_dir = write_dataset(tmp_path / "mf3d", [
+            ("obj001", "pasta", 60.0, _box_mm()),
+        ])
+        (data_dir / "3D_Mesh" / "pasta" / "obj_empty").mkdir()
+        with pytest.raises(SystemExit, match="obj_empty"):
+            ingest.main(["--mf3d-dir", str(data_dir),
+                         "--out", str(tmp_path / "out")])
+
+    def test_object_dir_with_two_meshes_is_a_hard_error(self, tmp_path):
+        data_dir = write_dataset(tmp_path / "mf3d", [
+            ("obj001", "pasta", 60.0, _box_mm()),
+        ])
+        obj_dir = data_dir / "3D_Mesh" / "pasta" / "obj001"
+        (obj_dir / "second.ply").write_text("ply")
+        with pytest.raises(SystemExit, match="exactly one mesh"):
+            ingest.main(["--mf3d-dir", str(data_dir),
+                         "--out", str(tmp_path / "out")])
+
+    def test_texture_siblings_are_not_meshes(self, tmp_path):
+        # The shipped archives carry textured meshes — .mtl and image
+        # siblings beside the mesh file are part of the layout, not extras.
+        data_dir = write_dataset(tmp_path / "mf3d", [
+            ("obj001", "pasta", 60.0, _box_mm()),
+        ])
+        obj_dir = data_dir / "3D_Mesh" / "pasta" / "obj001"
+        (obj_dir / "obj001.mtl").write_text("newmtl m")
+        (obj_dir / "texture_0.png").write_bytes(b"\x89PNG junk")
+        out_dir = tmp_path / "out"
+        rc = ingest.main(["--mf3d-dir", str(data_dir),
+                          "--out", str(out_dir)])
+        assert rc == 0
+        assert (out_dir / "pasta__obj001.fixture").is_file()
+
+    def test_metadata_missing_columns_is_a_hard_error(self, tmp_path):
+        data_dir = write_dataset(tmp_path / "mf3d", [
+            ("obj001", "pasta", 60.0, _box_mm()),
+        ])
+        (data_dir / "metadata.csv").write_text("id,weight\nx,1\n")
+        with pytest.raises(SystemExit, match="derive_metadata.py"):
+            ingest.main(["--mf3d-dir", str(data_dir),
+                         "--out", str(tmp_path / "out")])
 
 
 class TestRepoHygiene:

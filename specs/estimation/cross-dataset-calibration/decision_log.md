@@ -539,3 +539,44 @@ Removal is mechanical by construction — the calibrate pool is just the set of 
 Governs the calibration pool composition for any commercial release; no code changes. Release-time check: `calibration_licence` and `calibration_contributing_datasets_per_class` meta rows in `cofid_db.sqlite`/`afcd_db.sqlite`. Resolves the "MetaFood3D licence" open decision. Dataset access is request-gated (form + password) — a property of the source, recorded in the root README's data-sources section; when a snapshot lands, the mapping regenerates via `build_mapping.py --categories-file`.
 
 ---
+
+## Decision 19: Rigid native-archive layout for MetaFood3D ingest; category-qualified object identity
+
+**Date**: 2026-08-10
+**Status**: accepted
+
+### Context
+
+The real MetaFood3D snapshot arrived (access obtained 2026-08-10) and contradicted two assumptions the pre-contact ingest carried. First, the planned layout (`meshes/<category>/<object_id>.<ext>`, flat files under category directories) does not exist in the shipped archives: the native shape is `3D_Mesh/<Category>/<object>/` with one textured mesh per object *directory*, categories named like `Almond(bowl)`, and inconsistent file-stem capitalisation. Second, ingest keyed object identity on the mesh file stem alone — and object directory names repeat across categories in the real data (`almond_3` exists under both `Almond(bowl)` and `Almonds`), so stem keying would silently collide fixtures, metadata rows, and truth entries. The nutrition workbook (`complete_dataset_nutrition_v2.xlsx`, 637 objects / 108 categories, matching the site's claims) is the metadata source; its `Object_name` column holds the category and `Food_Type` the object — inverted from what the names suggest.
+
+### Decision
+
+Ingest requires exactly one rigid layout — the shipped mesh archive extracted verbatim plus one derived file: `<mf3d-dir>/3D_Mesh/<Category>/<object>/` containing exactly one mesh file (`.obj|.ply|.glb|.off`; texture and `.mtl` siblings ignored), and `<mf3d-dir>/metadata.csv` produced by the new stdlib-only `derive_metadata.py` from the v2 workbook. Any structural deviation — a stray file at category or object level, zero or multiple mesh files in an object directory, a missing or mis-headed metadata.csv — is a hard error whose message prints the expected tree and the exact commands to create it. Object identity is the directory pair; every emitted id (fixture filenames, skip lists, truth sidecar) is `<Category>__<object>` in raw on-disk names. `derive_metadata.py` is equally rigid: it accepts exactly the known nine-column v2 header and aborts showing found-versus-expected on any deviation.
+
+### Rationale
+
+A tolerant loader that adapts to layout variants accumulates guessing code for eventualities that may never occur, and each guess is a place the real data can be misread silently. A rigid contract inverts the cost: the code stays small and single-shaped, and when a future snapshot deviates, a human reads an error that names the deviation and reshapes the data (or deliberately extends the tool) — data problems surface as instructions to the user, not as parser behaviour. Choosing the native archive shape as the contract means the user's setup is `tar -xzf` plus one derivation command, with nothing to rearrange. Directory-pair identity is forced by the data: stems collide across categories, and directory names are the only stable, unique handle the snapshot provides.
+
+### Alternatives Considered
+
+- **Keep the planned flat layout and require the user to rearrange the archive to fit**: no code change — Rejected: flattening 637 object directories (with cross-category name collisions to manually resolve) is exactly the kind of error-prone busywork the tool should absorb; "easy to recreate the structure" must mean minutes, not scripting.
+- **Tolerant discovery (rglob for meshes anywhere, fuzzy metadata matching)**: survives any layout — Rejected: silently wrong on the real data (stem collisions), and every tolerance is an undocumented contract nobody can audit; the Decision 17 lesson is that contracts drift unless one side pins them.
+- **Read the nutrition workbook directly from ingest.py (no metadata.csv intermediary)**: one fewer step — Rejected: it drags xlsx parsing into the render-venv tool and couples ingest to workbook cosmetics; a committed-format CSV keeps the ingest contract inspectable with `head`, and the derivation step is where a unit-conversion note would live if a future snapshot ships non-gram weights.
+
+### Consequences
+
+**Positive:**
+- Setup from downloads is two commands, both printed verbatim by the error messages when anything is missing.
+- Cross-category name collisions are structurally impossible in fixture ids, skip lists, and the truth sidecar.
+- The real workbook derives cleanly: 637 objects, 108 categories — the first on-data validation of the site's claimed counts.
+- The `run_summary.json` contract (Decision 17) is untouched: summary keys, the committed contract fixture, and the Swift decoder are all unchanged.
+
+**Negative:**
+- A future snapshot that renames `3D_Mesh/` or reshapes the workbook header stops the pipeline until a human reconciles it — deliberate friction, the same trade Decision 17 made.
+- Fixture ids carry raw directory names (parentheses, mixed case: `Almond(bowl)__almond_3`) — traceable to disk, but cosmetically uneven downstream.
+
+### Impact
+
+`tools/metafood3d/ingest.py` (layout verification, `discover_objects`, `MeshEntry`, keyed metadata), `tools/metafood3d/derive_metadata.py` (new), `tools/metafood3d/tests/` (`mf3d_testkit.write_dataset` new layout, `TestRigidLayout`, `test_mf3d_derive_metadata.py` new), agent note `docs/agent-notes/metafood3d-ingestion.md`. No Swift-side changes; the Decision 17 contract fixture is byte-identical.
+
+---
