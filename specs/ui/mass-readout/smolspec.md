@@ -13,22 +13,32 @@ Motivating session (2026-07-26, field truth): 208 g white rice estimated as
 if the app shows 440 g at the moment of capture.
 
 ## Requirements
-- The Result hero MUST show the estimated total plate mass ("≈ N g on
-  plate") directly beneath the carb total, visible without scrolling, and it
-  MUST track row adjustments live (pending grams sum; equals the original
+
+*(Reconciled 2026-08-10 against the shipped meal-review architecture —
+Decision 1. Meal-review replaced the review/result split: `MealReviewView`
+is now the at-capture surface, `ResultView` the history read path.)*
+
+- The at-capture surface (`MealReviewView`) MUST show the estimated total
+  plate mass ("≈ N g on plate") beside the running carb total, visible
+  without scrolling, and it MUST track corrections live (serving/gram
+  steppers, reject/restore, whole-meal scaling; equals the original
   estimate until adjusted).
+- The history surface (`ResultView`) MUST show the same line in its hero
+  stack. **Shipped** with meal-review (`result.massLine`).
 - Records meal rows MUST show the estimated mass beside the carb figure
-  ("N g carbs · ≈ M g").
-- Per-class grams stay as-is (already shown in the Result plate-card rows and
-  the meal-overview per-class rows).
+  ("N g carbs · ≈ M g"). **Shipped** with meal-review.
+- Per-class grams stay as-is (already shown in the plate-card rows and the
+  meal-overview per-class rows).
 - No schema or pipeline change — display-only over the persisted `massG`.
 
 ## Implementation Approach
-- `App/ResultView.swift` — `pendingTotalMassG` (sum of `pendingGramsFor` over
-  `foodRows`) rendered in the `carbTotal` hero stack with the established
-  `contentTransition`/`animation` treatment; accessibility id
-  `result.massLine`.
-- `App/RecordsView.swift` — `MealRecordRow` gains a `massG` computed from
+- `App/MealReviewView.swift` — render `model.pendingTotalMassG` (already on
+  `MealReviewModel`, currently viewless) in the running-total header with
+  the established `contentTransition`/`animation` treatment; accessibility
+  id `review.massLine` (the view's ids use the `review.` prefix).
+- `App/ResultView.swift` — done: `pendingTotalMassG` rendered in the
+  `carbTotal` hero stack, accessibility id `result.massLine`.
+- `App/RecordsView.swift` — done: `MealRecordRow` computes `massG` from
   `record.macros.perClass` and renders it beside the carb text.
 - **Out of Scope:** correcting the mass estimate itself (β_c calibration is
   deferred past MVP — the readout exists precisely to collect that evidence).

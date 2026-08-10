@@ -325,18 +325,29 @@ struct MealReviewView: View {
     // MARK: - Total row (Req 1.4, 8.6)
 
     private var totalRow: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 10) {
-            Text("\(Int(model.pendingTotalCarbsG.rounded()))")
-                .font(.system(size: 44, weight: .heavy).monospacedDigit())
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .lastTextBaseline, spacing: 10) {
+                Text("\(Int(model.pendingTotalCarbsG.rounded()))")
+                    .font(.system(size: 44, weight: .heavy).monospacedDigit())
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalCarbsG)
+                    .foregroundStyle(Color.captureChromeText)
+                Text("g carbs")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.captureChromeText.opacity(0.7))
+                if model.hasActualCorrections { correctedMarker }
+                Spacer()
+                ConfidencePill(sigmaMeal: sigma)
+            }
+            // Field validation reads a kitchen scale, and a scale reads mass
+            // not carbs — the total must be visible at the moment of capture
+            // (mass-readout smolspec; same treatment as result.massLine).
+            Text("≈ \(Int(model.pendingTotalMassG.rounded())) g on plate")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Color.captureChromeText.opacity(0.75))
                 .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalCarbsG)
-                .foregroundStyle(Color.captureChromeText)
-            Text("g carbs")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.captureChromeText.opacity(0.7))
-            if model.hasActualCorrections { correctedMarker }
-            Spacer()
-            ConfidencePill(sigmaMeal: sigma)
+                .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalMassG)
+                .accessibilityIdentifier("review.massLine")
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("review.total")
