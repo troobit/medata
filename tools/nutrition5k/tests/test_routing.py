@@ -123,7 +123,7 @@ class TestRoutingDecision:
 # --------------------------------------------------------------------------- #
 # Checkpoint-mode CLI (--checkpoint; segmenter monkeypatched).
 # --------------------------------------------------------------------------- #
-NUM_CLASSES = 35        # 24 solids + 8 liquids + 3 sentinels
+NUM_CLASSES = 36        # 25 solids (v2, cereal at 24) + 8 liquids + 3 sentinels
 TARGET_SIZE = 513
 
 
