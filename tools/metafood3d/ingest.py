@@ -91,7 +91,7 @@ DATASET_NAME = "metafood3d"
 LICENCE = "CC BY-NC 4.0"
 SENTINEL_SHA = "no_segmenter"
 ESTIMATOR_MIXTURE = "mixture"
-PALETTE_VERSION = "v2"  # Decision 15
+PALETTE_VERSION = "v0"  # single pre-release palette (pipeline Decision 50)
 GRAVITY_NADIR = (0.0, 0.0, -1.0)
 # Recorded in run_summary.json render_config (Req 2.4/9.1): the seat_mesh
 # rule — most probable trimesh stable pose, base resting on the authored

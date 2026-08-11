@@ -220,7 +220,7 @@ private struct BenchmarkMealEditorSheet: View {
     // sentinels — the same surface the segmenter emits and Macros resolves
     // against (v2 since the ab812dc3aa9d promotion, adding cereal).
     private static let classIDs =
-        ClassPalette.v2Standard.foodClasses + ClassPalette.v2Standard.liquidClasses
+        ClassPalette.standard.foodClasses + ClassPalette.standard.liquidClasses
 
     struct EditorItem: Identifiable {
         let id = UUID()

@@ -2,8 +2,8 @@
 
 ``build_external_co_stats.py`` ingests a Recipe1M+-style ingredient corpus,
 maps ingredients onto the 35-class palette via the committed
-``ingredient_mapping_recipe1m_v1.json`` (reviewable, like the class mapping),
-and emits the ``co_stats.v2`` shape amended with ``source: "recipe1m"``,
+``ingredient_mapping_recipe1m.json`` (reviewable, like the class mapping),
+and emits the ``co_stats`` shape amended with ``source: "recipe1m"``,
 ``split_seed: null``, the ingredient-mapping SHA-256, and the palette-coverage
 lists (Decision 13). ``loss_config.load_co_stats`` accepts a null seed ONLY
 when the source is external; palette identity (``class_mapping_sha256``),
@@ -28,10 +28,10 @@ import train  # torch-free import: heavy deps are lazy
 
 _TOOLS = Path(__file__).resolve().parent.parent
 FIXTURE_CORPUS = Path(__file__).resolve().parent / "fixtures" / "recipe_corpus_fixture_v1.json"
-INGREDIENT_MAPPING = _TOOLS / "ingredient_mapping_recipe1m_v1.json"
-CLASS_MAPPING = _TOOLS / "class_mapping_foodseg103_v1.json"
+INGREDIENT_MAPPING = _TOOLS / "ingredient_mapping_recipe1m.json"
+CLASS_MAPPING = _TOOLS / "class_mapping_foodseg103.json"
 
-# Palette facts (class_mapping_foodseg103_v1.json, palette v2 — MD-29).
+# Palette facts (class_mapping_foodseg103.json — MD-29).
 CHANNEL_COUNT = 36
 SPECIALS = [33, 34, 35]
 WHITE_RICE, CHICKEN, CARROT = 0, 8, 16
@@ -52,9 +52,9 @@ def _food_names() -> list[str]:
 
 def test_ingredient_mapping_is_committed_and_names_its_source():
     d = json.loads(INGREDIENT_MAPPING.read_text())
-    assert d["schema"] == "ingredient_mapping_recipe1m_v1"
+    assert d["schema"] == "ingredient_mapping_recipe1m"
     assert d["source"] == "recipe1m"
-    assert d["palette_version"] == "v2"
+    assert d["palette_version"] == "v0"
     assert d["channel_count"] == CHANNEL_COUNT
 
 
@@ -126,7 +126,7 @@ def fixture_stats():
 
 def test_output_is_co_stats_v2_with_the_external_amendments(fixture_stats):
     s = fixture_stats
-    assert s["schema"] == "co_stats.v2"
+    assert s["schema"] == "co_stats"
     assert s["source"] == "recipe1m"
     assert s["split_seed"] is None
     assert s["channel_count"] == CHANNEL_COUNT
@@ -203,7 +203,7 @@ def test_cli_output_round_trips_through_load_co_stats(tmp_path):
 
 def _stats(source=None, split_seed=42, mapping_sha="ab" * 32):
     stats = {
-        "schema": "co_stats.v2",
+        "schema": "co_stats",
         "split_seed": split_seed,
         "class_mapping_sha256": mapping_sha,
         "channel_count": 6,

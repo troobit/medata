@@ -1,12 +1,12 @@
-"""Palette-lock CONTENT check (Req 5.7/7.2, Decision 23).
+"""Palette-lock CONTENT check (Req 5.7/7.2, Decision 23 / pipeline Decision 50).
 
-Decision 23 established that a palette label can be redefined in place — the
-label alone no longer changes when the palette does, so the label-only lock
+Pre-release a palette change redefines the single standard declaration in
+place — the label never changes when the palette does, so a label-only lock
 cannot detect a stale artifact. The lock therefore has a content check: the
-ordered class list parsed from ClassPalette.swift's current standard palette
+ordered class list parsed from ClassPalette.swift's standard palette
 (foodClasses then liquidClasses, declaration order, sentinels excluded) must
 equal FOOD_DATA's class ids exactly. A stale pre-cereal list must fail on
-CONTENT while the label still reads "v2".
+CONTENT while the label still reads "v0".
 """
 
 import pytest
@@ -16,11 +16,12 @@ import generate
 LIQUID_CLASSES = ["water", "coffee", "tea", "milk",
                   "fruit_juice", "soup", "beer", "wine"]
 
-# A stale v2Standard: the label says "v2" but the content predates the cereal
-# class (and the liquids) — exactly the drift the label-only lock cannot see.
+# A stale standard palette: the label says "v0" but the content predates the
+# cereal class (and the liquids) — exactly the drift a label-only lock cannot
+# see.
 STALE_PRECEREAL_SWIFT = """
 public extension ClassPalette {
-    static let v2Standard = ClassPalette(
+    static let standard = ClassPalette(
         foodClasses: [
             "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
             "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
@@ -31,7 +32,7 @@ public extension ClassPalette {
         background: 24,
         unknownFood: 25,
         unsupportedLiquid: 26,
-        version: "v2"
+        version: "v0"
     )
 }
 """
@@ -39,8 +40,8 @@ public extension ClassPalette {
 
 def test_palette_class_list_reads_food_then_liquid():
     # Canonical order per design §DB bake: foodClasses then liquidClasses,
-    # declaration order, sentinels excluded. Palette v2: 25 solids (cereal
-    # appended at index 24) + 8 liquids at [25:].
+    # declaration order, sentinels excluded: 25 solids (cereal appended at
+    # index 24) + 8 liquids at [25:].
     class_list = generate.palette_class_list()
     assert len(class_list) == 33
     assert class_list == [row[0] for row in generate.FOOD_DATA]
@@ -56,13 +57,13 @@ def test_stale_precereal_palette_fails_on_content(tmp_path, monkeypatch):
     stale = tmp_path / "ClassPalette.swift"
     stale.write_text(STALE_PRECEREAL_SWIFT)
     monkeypatch.setattr(generate, "_CLASS_PALETTE_SWIFT", stale)
-    # The label matches ("v2") — the CONTENT mismatch must abort the bake.
+    # The label matches ("v0") — the CONTENT mismatch must abort the bake.
     with pytest.raises(SystemExit, match="class list"):
-        generate.verify_palette_lock("v2")
+        generate.verify_palette_lock("v0")
 
 
 def test_reordered_palette_fails_on_content(tmp_path, monkeypatch):
-    # Same v2 members, different order: channel order is load-bearing, so a
+    # Same members, different order: channel order is load-bearing, so a
     # reorder is drift the lock must catch too.
     reordered = STALE_PRECEREAL_SWIFT.replace(
         '"white_rice", "brown_rice"', '"brown_rice", "white_rice"'
@@ -82,4 +83,4 @@ def test_reordered_palette_fails_on_content(tmp_path, monkeypatch):
     swift.write_text(reordered)
     monkeypatch.setattr(generate, "_CLASS_PALETTE_SWIFT", swift)
     with pytest.raises(SystemExit, match="class list"):
-        generate.verify_palette_lock("v2")
+        generate.verify_palette_lock("v0")

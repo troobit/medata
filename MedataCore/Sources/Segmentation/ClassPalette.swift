@@ -56,35 +56,18 @@ public struct ClassPalette: Sendable, Equatable {
 }
 
 public extension ClassPalette {
-    // The v1 palette (design §3.5, coarse liquid classes per Decisions 23/24),
-    // retained for the v1 → v2 persisted-meal migration (PaletteMigrator).
-    // Indices 0–23: solid food classes; 24–31: liquid classes; 32: background;
-    // 33: unknown_food; 34: unsupported_liquid.
-    static let v1Standard = ClassPalette(
-        foodClasses: [
-            "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
-            "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
-            "pork", "fish_white", "egg", "cheese", "salad_leaves",
-            "broccoli", "carrot", "peas", "beans_baked", "lentils",
-            "apple", "banana", "tomato", "mixed_vegetables"
-        ],
-        liquidClasses: [
-            "water", "coffee", "tea", "milk",
-            "fruit_juice", "soup", "beer", "wine"
-        ],
-        background: 32,
-        unknownFood: 33,
-        unsupportedLiquid: 34,
-        version: "v1"
-    )
-
-    // The v2 palette matching tools/food_db/generate.py: v1 plus the `cereal`
-    // solid class (breakfast cereals — porridge/muesli/granola/cornflakes;
-    // myfoodrepo-bridge PRD). Cereal appends after the existing 24 solids so
-    // the carb-priority staple channels (first 8 solids) keep their indices.
+    // The palette: design §3.5 solids, coarse liquid classes per Decisions
+    // 23/24, plus `cereal` (breakfast cereals — porridge/muesli/granola/
+    // cornflakes; myfoodrepo-bridge PRD) appended after the original 24 solids
+    // so the carb-priority staple channels (first 8 solids) keep their indices.
+    // Pre-release there is exactly ONE palette, stamped "v0" until the first
+    // main release: a palette change redefines this declaration in place; no
+    // superseded palette is retained and no migration path exists before then
+    // (pipeline Decision 50). PaletteMigrator stays dormant until a released
+    // palette actually changes.
     // Indices 0–24: solid food classes; 25–32: liquid classes; 33: background;
     // 34: unknown_food; 35: unsupported_liquid.
-    static let v2Standard = ClassPalette(
+    static let standard = ClassPalette(
         foodClasses: [
             "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
             "potato_boiled", "potato_mashed", "chips_fries", "chicken", "beef",
@@ -99,17 +82,8 @@ public extension ClassPalette {
         background: 33,
         unknownFood: 34,
         unsupportedLiquid: 35,
-        version: "v2"
+        version: "v0"
     )
-
-    // Resolves a persisted `paletteVersion` label to its standard palette —
-    // the read-side counterpart of the per-record `paletteVersion` column, so
-    // display code renders v1-era meals with v1 indices and v2 meals with v2
-    // (bugfix app-palette-drift-after-v2-promotion). Unrecognised labels fall
-    // back to v1, preserving pre-resolver behaviour for e.g. "uitest".
-    static func standard(for version: String) -> ClassPalette {
-        version == "v2" ? .v2Standard : .v1Standard
-    }
 }
 
 public extension ClassPalette {

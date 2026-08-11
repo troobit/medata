@@ -26,7 +26,9 @@ public protocol PaletteMigrator: Sendable {
 // Algorithm per design §6.12: m_c' = V_c · ρ_new · β_new / (ρ_old · β_old)
 public final class BundlePaletteMigrator: PaletteMigrator, @unchecked Sendable {
 
-    // Keys are "\(fromPalette)→\(toPalette)" e.g. "v1→v2".
+    // Keys are "\(fromPalette)→\(toPalette)". Dormant until a released palette
+    // changes: pre-release there is a single palette (v0) and no mapping files
+    // are bundled (pipeline Decision 50).
     private let mappingURLs: [String: URL]
     private let foodDB: any PaletteFoodDatabase
 

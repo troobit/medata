@@ -14,7 +14,7 @@
 
 **The original MVP blocker is gone.** The gap analysis verdict — "there is no trained CoreML
 segmenter" — no longer holds. A model is bundled and promoted (`coreml_ab812dc3aa9d`, 36 channels,
-palette v2, myfoodrepo-bridge Decision 27); export gates passed at 22,169,442 B with oracle argmax
+36-channel palette, myfoodrepo-bridge Decision 27); export gates passed at 22,169,442 B with oracle argmax
 parity 0.9999. Runbook steps 0–5 are complete; **only step 6, the on-device verification, is
 outstanding.**
 
@@ -66,7 +66,7 @@ needs **root** on this machine (`log collect --device-name` refuses otherwise) �
 | 0 | `myfoodrepo-bridge` | 6 `[-]` | **One capture on the current build** (its new estimation-log row carries the live lineage) **or `sudo make logs-device`**. The 2026-08-04 estimation-log reading was historical — rows show each attempt's own `modelVersion`, newest was 3 Aug — so it proved the 2–3 Aug builds, not this one. Closes task 6, unblocks 7 and 8 |
 | 1 | `estimation/model-production` | prerequisites Stage 7 | **ANE residency** in Xcode's Core ML performance report — the MVP gate; needs Xcode, not the phone |
 | 2 | `myfoodrepo-bridge` | 7, 8 | Point the phone at real meals including a cereal bowl; confirm overlay and carb readings. Tick both ledgers with the model-production prerequisites |
-| 3 | `capture-bundle-recorder` | 4 `[-]` | **Replay half DONE 2026-08-05** — two harness defects found and fixed (palette v1/v2 trap; precondition → throw), device-vs-replay divergence measured at -4.6 %. Device half (Files app, timings, no OOM kill) outstanding |
+| 3 | `capture-bundle-recorder` | 4 `[-]` | **Replay half DONE 2026-08-05** — two harness defects found and fixed (palette-shape trap; precondition → throw), device-vs-replay divergence measured at -4.6 %. Device half (Files app, timings, no OOM kill) outstanding |
 | 4 | `estimation-quality` | 7 | ~~Overlay speckle gone, readings stable~~ — **speckle confirmed gone 2026-08-04**, but from the shipped `PostProcessing` cleanup, not the retrain. Task 7 gates the *new recipe* and task 6 has not run, so it stays open (`agent-notes/field-truth-sessions.md`). Accuracy is "hugely improved, not yet as hoped" — an impression, not a measurement, until §4 lands |
 | 5 | `bugfixes/no-food-pixels-on-fruit-plate-mvp` | 8 | Single **and** Double mode (currently BLOCKED behind the next row) |
 | 6 | `bugfixes/lidar-plane-fit-degenerate-on-clean-capture` | 8 | Single and Double; unblocks the row above |
@@ -138,7 +138,7 @@ Landed in `specs/bugfixes/accuracy-harness-scores-untruthed-fixtures-as-zero/`. 
 Two adjacent defects were found and **not** fixed here, both recorded in the bugfix report:
 `perClassStats` reports `mape: 0` and `mae` = mean predicted grams for every class by construction
 (same category of defect, pre-existing and documented); and `runAccuracy` still builds
-`ClassPalette.v1Standard` while the promoted bundled model is 36-channel palette v2.
+a superseded 35-class palette while the promoted bundled model is 36-channel.
 
 ---
 

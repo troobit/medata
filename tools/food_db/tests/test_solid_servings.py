@@ -31,7 +31,7 @@ SOLID_COUNT = 25
 BDA_URL = "bda.uk.com/resource/food-facts-portion-sizes"
 CRAWLEY_SOURCE = "Crawley Food Portion Sizes (unverified figure)"
 # cereal: BDA quotes dry oats only; the as-served spoon figure is unverified
-# (myfoodrepo-bridge PRD, palette v2).
+# (myfoodrepo-bridge PRD).
 CRAWLEY_CLASSES = {"potato_mashed", "lentils", "chips_fries", "salad_leaves",
                    "cereal"}
 

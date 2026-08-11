@@ -1,7 +1,7 @@
 # Food Recognition 2022 → 36-channel coverage audit
 
 Generated 2026-07-26 by the myfoodrepo-bridge dataset-bridge context
-(task 2, amended by MD-30) from `class_mapping_foodrec2022_v1.json`
+(task 2, amended by MD-30) from `class_mapping_foodrec2022.json`
 applied to the dataset's own `annotations.json`. Counts are images
 containing at least one annotation routed to the channel.
 

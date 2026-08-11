@@ -7,7 +7,7 @@ bridging N5k overhead RGB-D into `.fixture` files.
 
 - `mapping.py` — loader for `mapping_n5k_to_palette.json`; fails loudly on
   palette-content or metadata-version mismatch (Req 2.5). `parse_palette()`
-  regex-reads `ClassPalette.swift` `v1Standard` (same source-of-truth pattern
+  regex-reads `ClassPalette.swift`'s standard declaration (same source-of-truth pattern
   as `generate.py`'s lock).
 - `build_mapping.py` — curated name→class rules; regenerates the committed
   artifact from the gitignored `data/metadata/ingredients_metadata.csv`.

@@ -11,7 +11,7 @@ final class SegmentationModuleTests: XCTestCase {
             foodClasses: ["rice", "potato"],
             liquidClasses: ["water", "milk"],
             background: 4, unknownFood: 5, unsupportedLiquid: 6,
-            version: "v1"
+            version: "test"
         )
         let pb = palette.pb
         let recovered = ClassPalette(pb: pb)
@@ -24,7 +24,7 @@ final class SegmentationModuleTests: XCTestCase {
             foodClasses: ["rice", "potato"],
             liquidClasses: ["water"],
             background: 3, unknownFood: 4, unsupportedLiquid: 5,
-            version: "v1"
+            version: "test"
         )
         XCTAssertTrue(palette.isFoodClass(0))
         XCTAssertTrue(palette.isFoodClass(1))
@@ -41,7 +41,7 @@ final class SegmentationModuleTests: XCTestCase {
             foodClasses: ["rice", "potato"],
             liquidClasses: ["water", "milk"],
             background: 4, unknownFood: 5, unsupportedLiquid: 6,
-            version: "v1"
+            version: "test"
         )
         XCTAssertFalse(palette.isLiquidClass(0))
         XCTAssertFalse(palette.isLiquidClass(1))
@@ -54,50 +54,33 @@ final class SegmentationModuleTests: XCTestCase {
         XCTAssertFalse(palette.isLiquidClass(7))
     }
 
-    func testV1StandardAppendsLiquidsThenSentinels() {
-        let palette = ClassPalette.v1Standard
-        XCTAssertEqual(palette.foodClasses.count, 24)
-        XCTAssertEqual(palette.liquidClasses, [
-            "water", "coffee", "tea", "milk",
-            "fruit_juice", "soup", "beer", "wine"
-        ])
-        // Sentinels follow the liquids: 24 solids + 8 liquids → 32/33/34.
-        XCTAssertEqual(palette.background, 32)
-        XCTAssertEqual(palette.unknownFood, 33)
-        XCTAssertEqual(palette.unsupportedLiquid, 34)
-        XCTAssertEqual(palette.totalClasses,
-                       palette.foodClasses.count + palette.liquidClasses.count + 3)
-        XCTAssertEqual(palette.totalClasses, 35)
-        // Retained as the migration source palette (myfoodrepo-bridge PRD).
-        XCTAssertEqual(palette.version, "v1")
-    }
-
-    func testV2StandardAppendsCerealThenLiquidsThenSentinels() {
-        let palette = ClassPalette.v2Standard
+    func testStandardPaletteAppendsLiquidsThenSentinels() {
+        let palette = ClassPalette.standard
         XCTAssertEqual(palette.foodClasses.count, 25)
-        // Carb-priority staple channels (first 8 solids) keep their v1 indices.
-        XCTAssertEqual(Array(palette.foodClasses.prefix(8)),
-                       Array(ClassPalette.v1Standard.foodClasses.prefix(8)))
-        // Cereal appends after the 24 v1 solids — nothing before it moves.
-        XCTAssertEqual(Array(palette.foodClasses.prefix(24)),
-                       ClassPalette.v1Standard.foodClasses)
+        // Carb-priority staple channels are the first 8 solids.
+        XCTAssertEqual(Array(palette.foodClasses.prefix(8)), [
+            "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
+            "potato_boiled", "potato_mashed", "chips_fries"
+        ])
+        // Cereal sits after the original 24 solids (myfoodrepo-bridge PRD).
         XCTAssertEqual(palette.foodClasses[24], "cereal")
         XCTAssertEqual(palette.liquidClasses, [
             "water", "coffee", "tea", "milk",
             "fruit_juice", "soup", "beer", "wine"
         ])
-        // Sentinels follow the liquids: 25 solids + 8 liquids → 33/34/35.
+        // Sentinels follow the liquids: 25 solids + 8 liquids -> 33/34/35.
         XCTAssertEqual(palette.background, 33)
         XCTAssertEqual(palette.unknownFood, 34)
         XCTAssertEqual(palette.unsupportedLiquid, 35)
         XCTAssertEqual(palette.totalClasses,
                        palette.foodClasses.count + palette.liquidClasses.count + 3)
         XCTAssertEqual(palette.totalClasses, 36)
-        XCTAssertEqual(palette.version, "v2")
+        // Single pre-release palette (pipeline Decision 50): "v0" until main.
+        XCTAssertEqual(palette.version, "v0")
     }
 
-    func testV2StandardProtoBridgeRoundTripsAll36Channels() {
-        let palette = ClassPalette.v2Standard
+    func testStandardPaletteProtoBridgeRoundTripsAll36Channels() {
+        let palette = ClassPalette.standard
         let pb = palette.pb
         let recovered = ClassPalette(pb: pb)
         XCTAssertEqual(recovered, palette)
@@ -107,38 +90,25 @@ final class SegmentationModuleTests: XCTestCase {
         XCTAssertEqual(pb.background, 33)
         XCTAssertEqual(pb.unknownFood, 34)
         XCTAssertEqual(pb.unsupportedLiquid, 35)
-        XCTAssertEqual(pb.version, "v2")
+        XCTAssertEqual(pb.version, "v0")
     }
 
     func testStandardPalettePredicatesOverFullIndexRange() {
-        for palette in [ClassPalette.v1Standard, ClassPalette.v2Standard] {
-            let version = palette.version
-            for classId in 0..<palette.foodClasses.count {
-                XCTAssertTrue(palette.isFoodClass(classId), "\(version) solid \(classId)")
-                XCTAssertFalse(palette.isLiquidClass(classId), "\(version) solid \(classId)")
-            }
-            let liquidRange = palette.foodClasses.count
-                ..< (palette.foodClasses.count + palette.liquidClasses.count)
-            for classId in liquidRange {
-                XCTAssertFalse(palette.isFoodClass(classId), "\(version) liquid \(classId)")
-                XCTAssertTrue(palette.isLiquidClass(classId), "\(version) liquid \(classId)")
-            }
-            for classId in [palette.background, palette.unknownFood,
-                            palette.unsupportedLiquid, -1, palette.totalClasses] {
-                XCTAssertFalse(palette.isFoodClass(classId), "\(version) sentinel/out \(classId)")
-                XCTAssertFalse(palette.isLiquidClass(classId), "\(version) sentinel/out \(classId)")
-            }
+        let palette = ClassPalette.standard
+        for classId in 0..<palette.foodClasses.count {
+            XCTAssertTrue(palette.isFoodClass(classId), "solid \(classId)")
+            XCTAssertFalse(palette.isLiquidClass(classId), "solid \(classId)")
         }
-    }
-
-    // Bugfix app-palette-drift-after-v2-promotion: the persisted
-    // paletteVersion label must resolve to the matching standard palette;
-    // unrecognised labels (e.g. "uitest") fall back to v1, preserving
-    // pre-resolver display behaviour.
-    func testStandardForVersionResolvesLabelToPalette() {
-        XCTAssertEqual(ClassPalette.standard(for: "v1"), .v1Standard)
-        XCTAssertEqual(ClassPalette.standard(for: "v2"), .v2Standard)
-        XCTAssertEqual(ClassPalette.standard(for: "uitest"), .v1Standard)
-        XCTAssertEqual(ClassPalette.standard(for: ""), .v1Standard)
+        let liquidRange = palette.foodClasses.count
+            ..< (palette.foodClasses.count + palette.liquidClasses.count)
+        for classId in liquidRange {
+            XCTAssertFalse(palette.isFoodClass(classId), "liquid \(classId)")
+            XCTAssertTrue(palette.isLiquidClass(classId), "liquid \(classId)")
+        }
+        for classId in [palette.background, palette.unknownFood,
+                        palette.unsupportedLiquid, -1, palette.totalClasses] {
+            XCTAssertFalse(palette.isFoodClass(classId), "sentinel/out \(classId)")
+            XCTAssertFalse(palette.isLiquidClass(classId), "sentinel/out \(classId)")
+        }
     }
 }

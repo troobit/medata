@@ -2,7 +2,7 @@
 
 Req 1.3/1.4 (specs/estimation/cross-dataset-calibration), as amended by
 Decision 15: the artifact is keyed to the palette **v2** CONTENT (ordered
-class list parsed from ClassPalette.swift ``v2Standard``), and mapped
+class list parsed from ClassPalette.swift's standard palette), and mapped
 categories target palette class NAMES — β is name-keyed end-to-end, so the
 content lock (not channel ordering) is what the artifact preserves.
 
@@ -81,9 +81,9 @@ class TestParsePalette:
         assert palette.food == EXPECTED_SOLIDS
         assert palette.liquid == EXPECTED_LIQUIDS
 
-    def test_reads_v2standard_not_the_retained_v1_declaration(self, palette):
-        # v1Standard is retained in ClassPalette.swift for the persisted-meal
-        # migration; the parse must scope to v2Standard (Decision 15).
+    def test_reads_the_single_standard_declaration(self, palette):
+        # The parse must scope to the single standard declaration
+        # (Decision 15, amended by pipeline Decision 50).
         assert "cereal" in palette.food
         assert palette.food.index("cereal") == 24
 
@@ -110,7 +110,7 @@ class TestNormalisation:
 
 class TestBuildArtifact:
     def test_palette_class_list_is_the_live_v2_content_in_order(self, artifact):
-        # Decision 15: the content lock targets v2Standard.
+        # Decision 15: the content lock targets the standard palette.
         assert artifact["palette_class_list"] == EXPECTED_SOLIDS + EXPECTED_LIQUIDS
 
     def test_every_mapped_category_targets_a_valid_v2_class_name(self, artifact):

@@ -68,8 +68,8 @@ final class PipelineFactoryTests: XCTestCase {
             cardDetector: NullDetector(),
             segmenter: CoreMLSegmenter(
                 modelPath: "/dev/null",
-                palette: .v1Standard,
-                engine: StubInferenceEngine(palette: .v1Standard)
+                palette: .standard,
+                engine: StubInferenceEngine(palette: .standard)
             ),
             database: EmptyFoodDatabase(),
             store: store,

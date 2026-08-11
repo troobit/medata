@@ -5,7 +5,7 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
-## 2026-07-26 — staged plate, model `coreml_ab812dc3aa9d` (palette v2)
+## 2026-07-26 — staged plate, model `coreml_ab812dc3aa9d` (36-channel palette)
 
 Build: PRE-gate binary for all four attempts (the unrecognised-food gate and
 palette fixes deployed 18:39, after this session). Scale truth from the user;

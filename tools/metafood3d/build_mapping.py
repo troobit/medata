@@ -2,8 +2,8 @@
 """Build mapping_metafood3d_to_palette.json (Req 1.3/1.4, Decision 15).
 
 Curation rules live here as reviewable category -> class tables; the
-committed artifact is their deterministic output. Targets the palette v2
-content list (``ClassPalette.v2Standard``, Decision 15).
+committed artifact is their deterministic output. Targets the palette
+content list (``ClassPalette.standard``, Decision 15).
 
 Two build modes:
 

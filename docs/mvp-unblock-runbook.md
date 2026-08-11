@@ -61,7 +61,7 @@ uv pip install -r tools/segmenter/requirements.txt
 
 **Confirm the palette is locked at 35 classes before training** — training on the wrong channel count
 forces a full retrain. The count must be **24 solid + 8 liquid + 3 special = 35**, matching
-`MedataCore/Sources/Segmentation/ClassPalette.swift` (`v1Standard`) and `tools/food_db/generate.py`
+`MedataCore/Sources/Segmentation/ClassPalette.swift` (`standard`) and `tools/food_db/generate.py`
 (`FOOD_DATA`). Channel ordering is load-bearing — never reorder. Detail:
 [`ml-training.md` §2](ml-training.md#2-the-class-palette),
 [`agent-notes/class-palette.md`](agent-notes/class-palette.md).
@@ -86,10 +86,10 @@ mkdir -p data/foodseg103
 python tools/segmenter/build_class_mapping.py \
     --foodseg-labels data/foodseg103/category_id.txt \
     --palette tools/food_db/generate.py \
-    --out tools/segmenter/class_mapping_foodseg103_v1.json
+    --out tools/segmenter/class_mapping_foodseg103.json
 
 python tools/segmenter/prepare_dataset.py \
-    --src data/foodseg103 --mapping tools/segmenter/class_mapping_foodseg103_v1.json \
+    --src data/foodseg103 --mapping tools/segmenter/class_mapping_foodseg103.json \
     --out data/foodseg103_remapped --heldout-frac 0.12 --seed 1234
 ```
 
@@ -216,7 +216,7 @@ build is where you confirm they compile clean. Detail:
 
 Each new checkpoint repeats steps 3–6; the mapping (step 2) and dataset (step 1) only change when you
 add data or revise the palette. **Record per release**, so the run is reproducible: the checkpoint
-SHA-256, the `class_mapping_foodseg103_v1.json` version, the dataset snapshot/archive SHA, and the
+SHA-256, the `class_mapping_foodseg103.json` version, the dataset snapshot/archive SHA, and the
 `seg-bench` JSON. The palette and food DB ship as a **versioned pair** — never reorder classes without a
 new palette version. The full iteration loop and coupling notes:
 [`ml-training.md` §11](ml-training.md#11-iteration-loop-and-segmenter-coupling).

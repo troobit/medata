@@ -53,7 +53,7 @@ CARB_PRIORITY_CLASSES: tuple[str, ...] = (
     "potato_boiled", "potato_mashed", "chips_fries",
 )
 
-_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103_v1.json")
+_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103.json")
 
 
 def _mapping() -> dict[str, Any]:
@@ -67,7 +67,7 @@ def special_channel_names() -> tuple[str, ...]:
 
 
 def food_class_names() -> tuple[str, ...]:
-    """The 33 food-class names in palette/index order (the 36-channel v2 palette
+    """The 33 food-class names in palette/index order (the 36-channel palette
     minus the 3 special channels)."""
     specials = set(special_channel_names())
     channels = sorted(_mapping()["target_channels"], key=lambda c: c["index"])

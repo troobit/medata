@@ -402,11 +402,11 @@ The spike method is already designed, reviewed, and half-implemented — candida
 
 ### Context
 
-The `co_stats.v2` contract fail-fasts on `split_seed` and `class_mapping_sha256` — correct for a split-derived matrix, impossible for a corpus-derived one (Req 6.1). Separately, Req 6.3 bans the inverse-frequency weighting Decision 25 attributed as the staple-killer, and the co-occurrence criterion currently hard-wires it.
+The `co_stats` contract fail-fasts on `split_seed` and `class_mapping_sha256` — correct for a split-derived matrix, impossible for a corpus-derived one (Req 6.1). Separately, Req 6.3 bans the inverse-frequency weighting Decision 25 attributed as the staple-killer, and the co-occurrence criterion currently hard-wires it.
 
 ### Decision
 
-`build_external_co_stats.py` emits the `co_stats.v2` shape with `source: "recipe1m"` and `split_seed: null`; `loss_config.load_co_stats` accepts a null seed only when `source` is external, all other checks (mapping SHA, 35 channels, food-channels-only) unchanged; palette coverage is recorded in the file and in lineage. The ingredient→class mapping is a committed, reviewable JSON. In `train.py`, class weighting becomes `--class-weighting {none, sqrt_inverse}` with default `none`; the inverse-frequency option is removed entirely.
+`build_external_co_stats.py` emits the `co_stats` shape with `source: "recipe1m"` and `split_seed: null`; `loss_config.load_co_stats` accepts a null seed only when `source` is external, all other checks (mapping SHA, 35 channels, food-channels-only) unchanged; palette coverage is recorded in the file and in lineage. The ingredient→class mapping is a committed, reviewable JSON. In `train.py`, class weighting becomes `--class-weighting {none, sqrt_inverse}` with default `none`; the inverse-frequency option is removed entirely.
 
 ### Rationale
 

@@ -117,11 +117,12 @@ CO_STATS_FILENAME = "co_stats.json"
 # split-derived kind and keeps the full seed fail-fast contract.
 EXTERNAL_CO_STATS_SOURCES = ("recipe1m",)
 
-# Required co_stats schema. v2 (Decision 20) restricts the presence /
+# Required co_stats schema. Decision 20 restricts the presence /
 # joint-presence counts to the FOOD channels and records the excluded
-# ``special_channel_indices``; a v1 file (which counted background into the
-# priors) must not silently feed the criterion, so load_co_stats rejects it.
-CO_STATS_SCHEMA = "co_stats.v2"
+# ``special_channel_indices``; a stale file from before that exclusion (which
+# counted background into the priors) must not silently feed the criterion,
+# so load_co_stats rejects any other schema tag.
+CO_STATS_SCHEMA = "co_stats"
 
 # Regeneration command template for the fail-fast messages (design §4.3): a
 # silent fallback to unweighted CE or stats from a different split would
@@ -129,7 +130,7 @@ CO_STATS_SCHEMA = "co_stats.v2"
 _CO_STATS_REGENERATE = (
     "regenerate with: python tools/segmenter/prepare_dataset.py "
     "--src <foodseg103 root> "
-    "--mapping tools/segmenter/class_mapping_foodseg103_v1.json "
+    "--mapping tools/segmenter/class_mapping_foodseg103.json "
     "--out <data root> --seed <split seed>"
 )
 

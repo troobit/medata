@@ -20,7 +20,7 @@ Files are symlinked, not copied (the corpus lives only in the main checkout's
 gitignored ``data/`` tree). Food-Recognition entries are prefixed ``fr22_`` so
 their numeric stems can never collide with FoodSeg103's zero-padded ids.
 
-``co_stats.json`` (schema ``co_stats.v2``, food-channels-only presence) is
+``co_stats.json`` (schema ``co_stats``, food-channels-only presence) is
 rebuilt over the MERGED train split via ``prepare_dataset.build_co_stats``.
 The stamped ``class_mapping_sha256`` is the FoodSeg103 mapping's (what
 ``train.py`` hashes by default); the Food-Recognition mapping's SHA-256 is
@@ -121,9 +121,9 @@ def main(argv=None) -> int:
     parser.add_argument("--anchor",
                         default="/Users/r/repos/medata/data/foodseg103_remapped/heldout_leakfree")
     parser.add_argument("--foodseg-mapping",
-                        default="/Users/r/repos/medata/tools/segmenter/class_mapping_foodseg103_v1.json")
+                        default="/Users/r/repos/medata/tools/segmenter/class_mapping_foodseg103.json")
     parser.add_argument("--foodrec-mapping",
-                        default="/Users/r/repos/medata/tools/segmenter/class_mapping_foodrec2022_v1.json")
+                        default="/Users/r/repos/medata/tools/segmenter/class_mapping_foodrec2022.json")
     parser.add_argument("--out",
                         default="/Users/r/repos/medata/data/merged_foodseg_foodrec2022")
     args = parser.parse_args(argv)

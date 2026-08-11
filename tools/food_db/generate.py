@@ -36,12 +36,14 @@ AFCD_DB = os.path.join(OUTPUT_DIR, "afcd_db.sqlite")
 # Palette edition this bake stamps into meta.palette_version. It MUST equal
 # ClassPalette.version (the Swift single source of truth); verify_palette_lock
 # enforces that before any DB is written (Req 8.4 / design §3.6 bake lock).
-PALETTE_VERSION = "v2"
+# Pre-release there is exactly one palette, stamped "v0" until the first main
+# release (pipeline Decision 50).
+PALETTE_VERSION = "v0"
 
-# The current standard palette declaration in ClassPalette.swift this bake is
-# locked against. v1Standard remains in that file as the migration source
-# (PaletteMigrator v1 -> v2), so the lock must anchor on the v2 declaration.
-_PALETTE_MARKER = "v2Standard"
+# The single standard palette declaration in ClassPalette.swift this bake is
+# locked against. The full declaration text keeps the find() anchor unambiguous
+# (the bare word "standard" appears in prose comments too).
+_PALETTE_MARKER = "static let standard"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CLASS_PALETTE_SWIFT = _REPO_ROOT / "MedataCore/Sources/Segmentation/ClassPalette.swift"
@@ -52,9 +54,9 @@ def class_palette_version() -> str:
     (_PALETTE_MARKER) in ClassPalette.swift.
 
     The lock tracks the Swift source directly rather than a duplicated constant so
-    a future palette bump there forces this bake to be reconciled rather than
+    a future palette change there forces this bake to be reconciled rather than
     silently shipping a stale-edition DB. The search anchors AFTER the marker so
-    the retained v1Standard declaration's version string is never matched.
+    only the standard declaration's version string can match.
     """
     text = _CLASS_PALETTE_SWIFT.read_text()
     marker = text.find(_PALETTE_MARKER)
@@ -104,9 +106,11 @@ def verify_palette_lock(baked_palette_version: str) -> None:
     (Req 8.4). A mismatch means the class indexing the DB is keyed by no longer
     matches the palette the model emits — shipping it would mis-key every lookup.
 
-    Decision 23 redefined v1 in place, so the label alone can no longer detect
-    palette drift: the lock also asserts FOOD_DATA's class ids equal the ordered
-    class list in ClassPalette.swift exactly (Req 5.7/7.2 content check).
+    Pre-release the label is fixed at "v0" and a palette change redefines the
+    declaration in place (pipeline Decision 50), so the label alone cannot
+    detect palette drift: the lock also asserts FOOD_DATA's class ids equal the
+    ordered class list in ClassPalette.swift exactly (Req 5.7/7.2 content
+    check).
     """
     expected = class_palette_version()
     if baked_palette_version != expected:
@@ -120,8 +124,8 @@ def verify_palette_lock(baked_palette_version: str) -> None:
     if baked_classes != expected_classes:
         raise SystemExit(
             "palette/DB content mismatch: FOOD_DATA's class ids do not match "
-            f"the ordered class list in {_CLASS_PALETTE_SWIFT} (the 'v1' label "
-            "no longer changes when the palette does — Decision 23). "
+            f"the ordered class list in {_CLASS_PALETTE_SWIFT} (the label "
+            "does not change when the palette does — pipeline Decision 50). "
             "Bake aborted (Req 5.7/7.2)."
         )
 
@@ -192,7 +196,7 @@ CREATE TABLE IF NOT EXISTS liquid_subclasses (
 SCHEMA_AFCD = SCHEMA_FOODS  # AFCD uses the same schema as CoFID; values may differ
 
 # 25 solid food classes + 8 coarse liquid classes co-curated with the
-# segmenter palette (ClassPalette.v2Standard: foodClasses then liquidClasses,
+# segmenter palette (ClassPalette.standard: foodClasses then liquidClasses,
 # declaration order — the channel order is load-bearing).
 # Values: (class_id, name, density g/cm³, energy kJ/100g, carbs_mono g/100g,
 #          protein g/100g, fat g/100g, fibre g/100g, beta, beta_status,
@@ -254,7 +258,7 @@ FOOD_DATA = [
     ("banana",           "Banana (raw)",                   0.87, 403.0,  20.0,  1.2,  0.3,  1.1,  1.0, "uncalibrated_unity", "EST_SOLID", "CoFID", "none", 0),
     ("tomato",           "Tomato (raw)",                   0.65, 73.0,    3.0,  0.7,  0.3,  1.0,  1.0, "uncalibrated_unity", "EST_SOLID", "CoFID", "none", 0),
     ("mixed_vegetables", "Mixed vegetables",               0.65, 150.0,   4.5,  2.5,  0.5,  2.0,  1.0, "uncalibrated_unity", "MEASURED",  "CoFID", "none", 0),
-    # Breakfast cereal class appended at palette v2 (myfoodrepo-bridge PRD).
+    # Breakfast cereal class (myfoodrepo-bridge PRD).
     # Coarse family row covering porridge/muesli/granola/cornflakes as served
     # in a bowl. Representative: CoFID 11-1108 "Porridge, made with whole milk"
     # — the as-served basis matching this table's cooked/as-served contract

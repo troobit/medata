@@ -25,7 +25,7 @@ struct FixtureLoaderGuardTests {
                      withProbs: Bool) -> PbMealFixture {
         var fx = PbMealFixture()
         fx.fixtureID = id
-        fx.paletteVersion = "v1"
+        fx.paletteVersion = "v0"
         fx.segmenterCheckpointSha256 = sha
         fx.estimatorPath = path
         fx.capturePathCanonical = "single_view_lidar"

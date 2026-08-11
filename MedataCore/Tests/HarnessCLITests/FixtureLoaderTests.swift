@@ -94,7 +94,7 @@ final class FixtureLoaderTests: XCTestCase {
         var fx = PbMealFixture()
         fx.fixtureID = id
         fx.fixtureRevision = "rev-1"
-        fx.paletteVersion = "v1"
+        fx.paletteVersion = "v0"
         fx.databaseEdition = "CoFID 2024 + IFCDB 2023"
         fx.segmenterCheckpointSha256 = sha256
         fx.nadirImage = Data([0xDE, 0xAD, 0xBE, 0xEF])

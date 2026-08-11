@@ -210,7 +210,7 @@ struct FoodCoverageGateTests {
         background: 3,
         unknownFood: 4,
         unsupportedLiquid: 5,
-        version: "v1"
+        version: "v0"
     )
 
     private static func makeArgmax(labelAt: (Int, Int) -> UInt8) -> ArgmaxMap {
@@ -298,7 +298,7 @@ struct RecognisedFoodDominanceGateTests {
         background: 3,
         unknownFood: 4,
         unsupportedLiquid: 5,
-        version: "v1"
+        version: "v0"
     )
 
     private static func makeArgmax(labelAt: (Int, Int) -> UInt8) -> ArgmaxMap {

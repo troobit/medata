@@ -6,8 +6,9 @@ not match what it was built against (Req 2.5):
 
 - ``palette_class_list`` — the palette CONTENT (ordered class list: the 24
   solid classes in ``generate.py`` FOOD_DATA channel order, then the 8 coarse
-  liquid classes). Decision 23 keeps the ``"v1"`` label when the palette
-  changes, so the label alone cannot detect drift — content is the key.
+  liquid classes). Pre-release the palette label is fixed at ``"v0"``
+  (pipeline Decision 50) and a palette change redefines the single declaration
+  in place, so the label alone cannot detect drift — content is the key.
 - ``n5k_metadata_version`` — SHA-256 of ``ingredients_metadata.csv``.
 
 Statuses form a closed vocabulary:
@@ -60,16 +61,17 @@ def metadata_version(ingredients_csv: str | Path) -> str:
     return hashlib.sha256(Path(ingredients_csv).read_bytes()).hexdigest()
 
 
-# The palette declaration parse_palette scopes to. v2Standard since the
-# v2 promotion (n5k-mapping-artifact-stale-v1-palette): the artifact was
-# still being built against the superseded v1 content list while
-# generate.py's FOOD_DATA had moved to v2 (cereal at index 24).
-PALETTE_MARKER = "v2Standard"
+# The palette declaration parse_palette scopes to: the single standard
+# palette. The full declaration text keeps the find() anchor unambiguous
+# (bugfix n5k-mapping-artifact-stale-v1-palette showed what a mis-scoped
+# parse costs: the artifact was silently rebuilt against superseded content).
+PALETTE_MARKER = "static let standard"
 
 
 @dataclass(frozen=True)
 class PaletteClasses:
-    """Ordered palette content parsed from ClassPalette.swift v2Standard."""
+    """Ordered palette content parsed from ClassPalette.swift's standard
+    palette declaration."""
     food: list[str]
     liquid: list[str]
 
@@ -84,8 +86,8 @@ def parse_palette(
     class_palette_swift: str | Path = DEFAULT_CLASS_PALETTE_SWIFT,
 ) -> PaletteClasses:
     """Regex-read the ordered class lists from ClassPalette.swift's
-    ``v2Standard`` (the same source-of-truth pattern generate.py's palette
-    lock uses). Fails loudly if the palette cannot be parsed."""
+    single ``standard`` declaration (the same source-of-truth pattern
+    generate.py's palette lock uses). Fails loudly if the palette cannot be parsed."""
     path = Path(class_palette_swift)
     try:
         text = path.read_text()
@@ -157,7 +159,7 @@ def load_mapping(
     if palette_class_list != list(expected_palette_class_list):
         raise MappingError(
             f"mapping artifact {path} was built against a different palette "
-            f"content (Req 2.5 / Decision 23 — the 'v1' label does not change "
+            f"content (Req 2.5 / pipeline Decision 50 — the label does not change "
             f"when the palette does).\n  artifact: {palette_class_list}\n"
             f"  current:  {list(expected_palette_class_list)}"
         )

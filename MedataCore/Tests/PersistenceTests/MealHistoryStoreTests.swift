@@ -183,7 +183,7 @@ private func makeMealRecord(
         createdAt: createdAt,
         capturePath: .singleViewLidar,
         databaseEdition: "CoFID 2024",
-        paletteVersion: "v1",
+        paletteVersion: "v0",
         photoAssetID: photoAssetID,
         segmenterSource: segmenterSource,
         calibration: PbCameraIntrinsics(),

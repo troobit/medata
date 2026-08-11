@@ -15,7 +15,7 @@ func makePalette(numFood: Int = 2) -> ClassPalette {
         background: numFood,
         unknownFood: numFood + 1,
         unsupportedLiquid: numFood + 2,
-        version: "test_v1"
+        version: "test"
     )
 }
 

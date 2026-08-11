@@ -1,4 +1,4 @@
-"""FoodSeg103 remap over the v2 palette (Req 7.2, Decisions 23/24, MD-29).
+"""FoodSeg103 remap over the palette (Req 7.2, Decisions 23/24, MD-29).
 
 Palette v2 adds cereal as solid index 24, shifting the liquids to 25-32 and
 the sentinels to background=33 / unknown_food=34 / unsupported_liquid=35.
@@ -7,7 +7,7 @@ juice/soup FoodSeg103 categories route to the coarse liquid classes instead
 of collapsing to unsupported_liquid. (FoodSeg103 has no beer category and no
 cereal category; milkshake has no palette home and stays unsupported_liquid.)
 
-The committed class_mapping_foodseg103_v1.json is palette-locked and must be
+The committed class_mapping_foodseg103.json is palette-locked and must be
 regenerated in the same change (Decision 23 consequence).
 """
 
@@ -20,7 +20,7 @@ import build_class_mapping as bcm
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GENERATE_PY = REPO_ROOT / "tools" / "food_db" / "generate.py"
-COMMITTED_MAPPING = REPO_ROOT / "tools" / "segmenter" / "class_mapping_foodseg103_v1.json"
+COMMITTED_MAPPING = REPO_ROOT / "tools" / "segmenter" / "class_mapping_foodseg103.json"
 
 LIQUID_CLASSES = ["water", "coffee", "tea", "milk",
                   "fruit_juice", "soup", "beer", "wine"]

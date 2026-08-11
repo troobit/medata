@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Remap FoodSeg103 masks to the 35-channel palette and cut splits (ml-training §3c).
+"""Remap FoodSeg103 masks to the 36-channel palette and cut splits (ml-training §3c).
 
 This is step 3c of the segmenter training pipeline. It consumes the class-mapping
 JSON produced by ``build_class_mapping.py`` (§3b) and applies it to every
 FoodSeg103 PNG mask, remapping each source category-id pixel value to the medata
-35-channel palette:
+36-channel palette:
 
-    channels 0-23  : the 24 solid food classes (ClassPalette.v1Standard order)
-    channels 24-31 : the 8 coarse liquid classes
-    channel  32    : background
-    channel  33    : unknown_food
-    channel  34    : unsupported_liquid
+    channels 0-24  : the 25 solid food classes (ClassPalette.standard order)
+    channels 25-32 : the 8 coarse liquid classes
+    channel  33    : background
+    channel  34    : unknown_food
+    channel  35    : unsupported_liquid
 
 Mapping entries with ``target_index: null`` (rule ``curated_drop``) are remapped
 to background (channel 32) so dropped source classes never pollute a food class.
@@ -53,7 +53,7 @@ Usage::
 
     python tools/segmenter/prepare_dataset.py \\
         --src data/foodseg103 \\
-        --mapping tools/segmenter/class_mapping_foodseg103_v1.json \\
+        --mapping tools/segmenter/class_mapping_foodseg103.json \\
         --out data/foodseg103_remapped \\
         --heldout-frac 0.12 --val-frac 0.1 --seed 1234
 
@@ -472,10 +472,10 @@ def build_co_stats(
     would give any class's false presence a compatibility floor near its
     marginal frequency and dilute the implausible-pair contrast the loss
     exists to create. The special channels' rows/columns stay in the matrix as
-    zeros so indices remain palette indices. Schema ``co_stats.v2``; the split
+    zeros so indices remain palette indices. Schema ``co_stats``; the split
     seed and class-mapping SHA-256 are stamped in so ``train.py`` can fail
-    fast when the statistics are missing, stale, or in the pre-exclusion v1
-    format; the file's own SHA-256 joins the build lineage when the loss
+    fast when the statistics are missing, stale, or in a superseded
+    pre-release format; the file's own SHA-256 joins the build lineage when the loss
     consumes it.
     """
     specials = {int(c) for c in special_channel_indices}
@@ -488,7 +488,7 @@ def build_co_stats(
             for k in classes:
                 joint[c][k] += 1
     return {
-        "schema": "co_stats.v2",
+        "schema": "co_stats",
         "split_seed": split_seed,
         "class_mapping_sha256": class_mapping_sha256,
         "channel_count": channel_count,
@@ -508,7 +508,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--src", required=True,
                         help="FoodSeg103 root (contains Images/img_dir + ann_dir).")
     parser.add_argument("--mapping", required=True,
-                        help="class_mapping_foodseg103_v1.json from §3b.")
+                        help="class_mapping_foodseg103.json from §3b.")
     parser.add_argument("--out", required=True,
                         help="Output root for remapped masks + splits.")
     parser.add_argument("--heldout-frac", type=float, default=0.12,

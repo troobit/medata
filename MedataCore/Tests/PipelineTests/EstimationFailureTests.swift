@@ -82,7 +82,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadir,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             preShutterFoodMask: mask
         )
         do {
@@ -134,7 +134,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadir,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             preShutterFoodMask: makeNonEmptyMask(width: width, height: height)
         )
         do {
@@ -176,7 +176,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadirWithDepth,
             obliqueFrame: nil,          // triggers arWorldTrackingLost
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1"
+            paletteVersion: "v0"
         )
         do {
             _ = try await pipeline.estimate(captureResult: captureResult, mode: .double)
@@ -209,7 +209,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadirNoDepth,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1"
+            paletteVersion: "v0"
         )
         do {
             _ = try await pipeline.estimate(captureResult: captureResult, mode: .single)
@@ -256,7 +256,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadirWithDepth,
             obliqueFrame: oblique,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             nadirAngleAtCaptureDeg: 0,
             obliqueAngleAtCaptureDeg: 60   // |60 − 25| = 35 > 30
         )
@@ -298,7 +298,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadirWithDepth,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             preShutterFoodMask: mask
         )
         do {
@@ -334,7 +334,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadirNoDepth,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             preShutterFoodMask: mask
         )
         do {
@@ -367,7 +367,7 @@ final class EstimationFailureTests: XCTestCase {
             nadirFrame: nadirWithDepth,
             obliqueFrame: oblique,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             nadirAngleAtCaptureDeg: 0,
             obliqueAngleAtCaptureDeg: 55   // |55 − 25| = 30 — at the cap, accepts
         )
@@ -532,7 +532,7 @@ private func makeStubSegmenter() -> CoreMLSegmenter {
         background: 2,
         unknownFood: 3,
         unsupportedLiquid: 4,
-        version: "v1"
+        version: "v0"
     )
     return CoreMLSegmenter(
         modelPath: "/dev/null",

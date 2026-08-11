@@ -38,7 +38,7 @@ F_GRAVITY = 16
 
 # Solid-food class count per palette version (ClassPalette.swift). A pixel is food
 # when its argmax index is below this — liquids and the three sentinels are not.
-FOOD_CLASS_COUNT = {"v1": 24, "v2": 25}
+FOOD_CLASS_COUNT = {"v0": 25}
 
 
 def read_varint(buf, i):

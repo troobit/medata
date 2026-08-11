@@ -6,14 +6,14 @@ render + `ingest.py` bridging MetaFood3D single-food meshes into
 
 ## Palette target (Decision 15 — load-bearing)
 
-The spec was planned against palette v1 but everything here targets the
-**v2 content list** (`ClassPalette.v2Standard`: 25 solids with `cereal`
+The spec predates the cereal class but everything here targets the
+**current content list** (`ClassPalette.standard`: 25 solids with `cereal`
 at index 24, 8 liquids). β is keyed by class NAME end-to-end (fixture
 GT-mass map, `MixtureBetaCalibrator` dicts, `generate.py`
 UPDATE-by-class_id), so channel ordering only matters for probability
 tensors — which mixture fixtures never carry. `mapping.py` parses the
-`v2Standard` marker (same scoping pattern as `generate.py`'s lock);
-fixtures are stamped `palette_version="v2"`.
+`static let standard` marker (same scoping pattern as `generate.py`'s lock);
+fixtures are stamped `palette_version="v0"` (pipeline Decision 50).
 
 ## Layout
 
@@ -137,9 +137,9 @@ which the Swift decoder never read; that stale shape is superseded.)*
   tools/metafood3d/tests`.
 - **The former pre-existing red is fixed** (2026-08-10,
   `specs/bugfixes/n5k-mapping-artifact-stale-v1-palette/`): n5k's
-  `parse_palette` targets `v2Standard`, its artifact is regenerated
-  against the v2 content list, and its ingest stamps
-  `palette_version="v2"`.
+  `parse_palette` targets the standard declaration, its artifact is regenerated
+  against the current content list, and its ingest stamps
+  `palette_version="v0"` (pipeline Decision 50).
 - `generate.py` persists the cross-dataset meta dicts
   (`calibration_contributing_datasets_per_class`,
   `calibration_single_source_classes`) for APPLIED classes only — a

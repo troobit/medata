@@ -375,7 +375,7 @@ The check must use ground truth the dataset actually provides. Gramme weight is 
 ## Decision 15: MetaFood3D mapping targets the palette v2 content list; v1 references superseded
 
 **Date**: 2026-08-09
-**Status**: accepted
+**Status**: accepted (amended by pipeline Decision 50, 2026-08-10: the "v2"/"v1" labels this decision navigates were internal pre-release iteration and are expunged — there is one palette, `ClassPalette.standard`, stamped "v0". The substantive ruling stands: the mapping targets the live palette *content* list, and the parser scopes to the single standard declaration.)
 
 ### Context
 

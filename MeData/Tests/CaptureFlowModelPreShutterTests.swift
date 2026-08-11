@@ -417,7 +417,7 @@ private func makeMealRecord(capturePath: CapturePath = .singleViewLidar) -> Meal
     return MealRecord(
         capturePath: capturePath,
         databaseEdition: "CoFID 2024",
-        paletteVersion: "v1",
+        paletteVersion: "v0",
         calibration: PbCameraIntrinsics(),
         supportPlane: PbSupportPlane(),
         scale: PbMetricScale(),

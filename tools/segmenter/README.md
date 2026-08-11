@@ -1,24 +1,25 @@
 # Segmenter training & export pipeline
 
-Builds the 35-class semantic segmenter the iOS app runs on-device. Full
+Builds the 36-class semantic segmenter the iOS app runs on-device. Full
 end-to-end recipe (env, dataset, bars, iteration loop) lives in
 [`docs/ml-training.md`](../../docs/ml-training.md) — that is the source of truth;
 this README is the per-script index.
 
 Architecture: DeepLabV3 + MobileNetV3-Large at 513×513 input, FP16 weights
-(decision 25). Output: 35-class semantic segmenter — 24 solid food + 8 coarse
-liquid + background + unknown_food + unsupported_liquid (the redefined v1
-palette, nutrition5k-calibration Decisions 23/24); channel order is fixed by
-`tools/food_db/generate.py` FOOD_DATA / `ClassPalette.v1Standard` and must never
-be reordered. The class list must be locked at this final v1 before the
-training run starts — the checkpoint's output-channel count must match the
-shipped palette (nutrition5k-calibration Req 9.4, Decisions 22–23).
+(decision 25). Output: 36-class semantic segmenter — 25 solid food (incl.
+cereal at index 24) + 8 coarse liquid + background + unknown_food +
+unsupported_liquid (nutrition5k-calibration Decisions 23/24 plus the
+myfoodrepo-bridge cereal class); channel order is fixed by
+`tools/food_db/generate.py` FOOD_DATA / `ClassPalette.standard` and must never
+be reordered. The class list must be locked before a training run starts —
+the checkpoint's output-channel count must match the shipped palette
+(nutrition5k-calibration Req 9.4, Decisions 22–23).
 
 ## Scripts (run in order)
 
 | Script | Step | Does |
 | --- | --- | --- |
-| `build_class_mapping.py` | §3b | FoodSeg103 (103 classes) → 35-channel palette JSON (`class_mapping_foodseg103_v1.json`). Foundational — every later script consumes it. |
+| `build_class_mapping.py` | §3b | FoodSeg103 (103 classes) → 36-channel palette JSON (`class_mapping_foodseg103.json`). Foundational — every later script consumes it. |
 | `prepare_dataset.py` | §3c | Remap FoodSeg103 PNG masks via the mapping + cut train/val/held-out splits (fixed seed). |
 | `train.py` | §4 | Transfer-learn DeepLabV3+MobileNetV3-Large → `build/checkpoint.pt`. Needs a GPU + dataset. |
 | `make_fixtures.py` | §5a | Run a checkpoint over the held-out split → `HarnessCLI seg-bench` fixtures + the export `reference.png`. |
@@ -79,7 +80,7 @@ download date, generated at first ingestion.
 ```sh
 python tools/segmenter/export.py \
     --checkpoint path/to/fine-tuned.pt \
-    --num-classes 35 \
+    --num-classes 36 \
     --target-size 513 \
     --reference-image tests/fixtures/segmenter/reference.png \
     --out-coreml MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage \

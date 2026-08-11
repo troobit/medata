@@ -1,6 +1,6 @@
 {
-  "schema": "foodseg103_to_palette_v1",
-  "palette_version": "v2",
+  "schema": "foodseg103_to_palette",
+  "palette_version": "v0",
   "source_dataset": "FoodSeg103",
   "channel_count": 36,
   "special_channels": {

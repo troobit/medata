@@ -26,25 +26,25 @@ references:
 
 ## Mapping and merge
 
-- [x] 3. Build class_mapping_foodrec2022_v1.json and update FoodSeg103 mapping to v2 <!-- id:vbs7lh6 -->
+- [x] 3. Build class_mapping_foodrec2022.json and update FoodSeg103 mapping to v2 <!-- id:vbs7lh6 -->
   - AMENDED 2026-07-26 (MD-30): the new mapping targets the 2022 ontology; artefact renamed from class_mapping_myfoodrepo273_v1.json
   - Curated-rules script in the build_class_mapping.py style; unmapped categories route to unknown_food
   - v2 channel order is pinned by the PRD: cereal index 24, liquids 25-32, sentinels background 33 / unknown_food 34 / unsupported_liquid 35, channel_count 36
-  - PARTIALLY DONE at integration 2026-07-25 (main-checkout commit after context merges): build_class_mapping.py constants moved to v2 (SOLID 25, TOTAL 33, PALETTE_VERSION v2), class_mapping_foodseg103_v1.json regenerated at 36 channels, test_class_mapping.py updated, ingredient_mapping_recipe1m_v1.json gained cereal terms + v2 metadata, fixture corpus gained two cereal recipes
-  - REMAINING for this task: the 2022 mapping itself (class_mapping_foodrec2022_v1.json + curated rules + its tests) once the dataset is on disk
+  - PARTIALLY DONE at integration 2026-07-25 (main-checkout commit after context merges): build_class_mapping.py constants moved to v2 (SOLID 25, TOTAL 33, PALETTE_VERSION v2), class_mapping_foodseg103.json regenerated at 36 channels, test_class_mapping.py updated, ingredient_mapping_recipe1m.json gained cereal terms + v2 metadata, fixture corpus gained two cereal recipes
+  - REMAINING for this task: the 2022 mapping itself (class_mapping_foodrec2022.json + curated rules + its tests) once the dataset is on disk
   - Blocked-by: vbs7lh5 (Publish the source-category to 36-channel coverage audit)
 
-- [x] 4. Rasterise COCO polygons to PNG semantic masks in v2 palette space <!-- id:vbs7lh7 -->
+- [x] 4. Rasterise COCO polygons to PNG semantic masks in palette space <!-- id:vbs7lh7 -->
   - DONE 2026-07-26 (tool + tests; the run over the real annotations waits on acquisition): tools/segmenter/rasterise_myfoodrepo.py — mapping-driven (source_id -> target_index, any COCO source), deterministic overlap rule documented in the module docstring (area-descending paint order, smaller instance wins, id tie-break, shoelace area), curated_drop -> background, unmapped category and RLE segmentation are hard errors, images without annotations recorded and skipped
   - 11 torch-free tests green in tools/segmenter/tests/test_rasterise_myfoodrepo.py (synthetic COCO fixtures)
-  - Blocked-by: vbs7lh6 (Build class_mapping_foodrec2022_v1.json and update FoodSeg103 mapping to v2)
+  - Blocked-by: vbs7lh6 (Build class_mapping_foodrec2022.json and update FoodSeg103 mapping to v2)
 
 - [x] 5. Produce the merged FoodSeg103 + Food-Recognition-2022 corpus with frozen-seed splits <!-- id:vbs7lh8 -->
   - Stratified train/val/heldout with the seed recorded in splits.json
   - The 182-image leak-free anchor (data/foodseg103_remapped/heldout_leakfree/) stays byte-identical and none of its images enter merged train/val
-  - Regenerate co_stats.json food-channels-only (schema co_stats.v2) for the merged corpus
+  - Regenerate co_stats.json food-channels-only (schema co_stats) for the merged corpus
   - PARTIALLY DONE 2026-07-26: FoodSeg103 masks re-remapped to v2 channel order at data/foodseg103_remapped_v2/ (seed 20260715, split membership verified identical to v1, sentinels 33/34/35 verified in-mask); the v2 chain was smoke-proven end-to-end the same day (1-epoch train at 36 classes + export gates: 22.17 MB weights, 36 channels, argmax parity 1.0000)
-  - Blocked-by: vbs7lh7 (Rasterise COCO polygons to PNG semantic masks in v2 palette space)
+  - Blocked-by: vbs7lh7 (Rasterise COCO polygons to PNG semantic masks in palette space)
 
 ## Docs
 

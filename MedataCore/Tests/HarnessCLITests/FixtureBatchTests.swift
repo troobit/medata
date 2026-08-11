@@ -70,7 +70,7 @@ struct FixtureBatchTests {
         fx.capturePathCanonical = ""
         let db = StubFoodDatabase()
         let (results, skips) = FixtureBatch.partition(fixtures: [fx]) { fx in
-            try FixtureRunner.run(fixture: fx, palette: .v1Standard,
+            try FixtureRunner.run(fixture: fx, palette: .standard,
                                   database: db, voxelEdgeMm: 3.0)
         }
         #expect(results.isEmpty)

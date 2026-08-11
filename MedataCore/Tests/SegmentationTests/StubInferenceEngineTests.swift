@@ -16,7 +16,7 @@ final class StubInferenceEngineTests: XCTestCase {
             background: numFoodClasses,
             unknownFood: numFoodClasses + 1,
             unsupportedLiquid: numFoodClasses + 2,
-            version: "v1"
+            version: "v0"
         )
     }
 

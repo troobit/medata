@@ -14,10 +14,10 @@ import pytest
 import export
 
 
-# The authoritative v2 palette order (mirrors the ClassPalette standard palette:
+# The authoritative palette order (mirrors the ClassPalette standard palette:
 # 25 solids with cereal appended at index 24, liquids at 25–32, sentinels at
 # 33/34/35 — myfoodrepo-bridge PRD). The gate reads this from
-# class_mapping_foodseg103_v1.json; locking it here guards against a silent
+# class_mapping_foodseg103.json; locking it here guards against a silent
 # reorder of the mapping file (Req 4.4 "in palette order").
 EXPECTED_PALETTE = [
     "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",
@@ -55,7 +55,7 @@ def test_expected_palette_is_36_channel_v2():
 
 @pytest.mark.skipif(
     not _COMMITTED_MAPPING_IS_V2,
-    reason="class_mapping_foodseg103_v1.json still v1/35-channel — the "
+    reason="class_mapping_foodseg103.json still v1/35-channel — the "
            "dataset-bridge context regenerates it to v2; lock activates on "
            "integration",
 )

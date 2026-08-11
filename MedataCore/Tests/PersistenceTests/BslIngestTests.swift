@@ -244,7 +244,7 @@ private func makeBslTestMealRecord() -> MealRecord {
         createdAt: Date(),
         capturePath: .singleViewLidar,
         databaseEdition: "CoFID 2024",
-        paletteVersion: "v1",
+        paletteVersion: "v0",
         photoAssetID: "",
         segmenterSource: "",
         calibration: PbCameraIntrinsics(),

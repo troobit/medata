@@ -207,7 +207,7 @@ def test_train_help_lists_class_weighting(capsys):
 # ── Criterion wiring for combined and co_occurrence (torch-gated) ───────────────
 
 def _co_stats(channel_count):
-    """Minimal schema-complete co_stats.v2 (the test_co_occurrence_loss shape)."""
+    """Minimal schema-complete co_stats (the test_co_occurrence_loss shape)."""
     presence = [0] * channel_count
     joint = [[0] * channel_count for _ in range(channel_count)]
     for image in ({0, 3}, {0, 3}, {5}):
@@ -216,7 +216,7 @@ def _co_stats(channel_count):
             for k in image:
                 joint[c][k] += 1
     return {
-        "schema": "co_stats.v2",
+        "schema": "co_stats",
         "split_seed": 42,
         "class_mapping_sha256": "ab" * 32,
         "channel_count": channel_count,

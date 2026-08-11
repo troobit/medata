@@ -369,16 +369,16 @@ func loadFixtures(dir: String, sha256: String) throws -> [PbMealFixture] {
     try FixtureLoader.load(from: URL(fileURLWithPath: dir), checkpointSHA256: sha256)
 }
 
-// The palette is resolved PER FIXTURE from its own `paletteVersion`, not taken
-// from the caller: a device bundle recorded against the promoted 36-channel v2
-// model was being run through a hard-coded v1 palette, so `C` was 35 while the
-// probability tensor held 36 channels and `ProbabilityTensor`'s size
-// precondition trapped the whole run (found replaying a real bundle,
-// capture-bundle-recorder task 4). `ClassPalette.standard(for:)` falls back to
-// v1 for an empty or unrecognised label, so N5k and legacy fixtures behave
-// exactly as before — only v2 bundles change, and today they cannot run at all.
+// Pre-release there is exactly one palette (pipeline Decision 50), so every
+// fixture resolves to `ClassPalette.standard`. The learning that led here
+// stands: a fixture whose tensors were recorded against a different palette
+// shape must fail loudly, never trap — the batch size guards
+// (seg-bench-silently-drops-mis-sized-fixtures) report such fixtures as
+// mis-sized skips. Fixtures stamped with a superseded pre-release palette are
+// scratch and must be regenerated, not resolved.
 func paletteForFixture(_ fixture: PbMealFixture) -> ClassPalette {
-    ClassPalette.standard(for: fixture.paletteVersion)
+    _ = fixture
+    return ClassPalette.standard
 }
 
 // A fixture the pipeline cannot process is a reported skip, never a silent
@@ -827,7 +827,7 @@ func runCalibrate(args: Args) throws {
         fputs("calibrate requires --fixtures-dir\n", stderr); exit(1)
     }
     let db = try GRDBFoodDatabase.bundled()
-    let outcome = try runCalibration(args: args, db: db, palette: .v1Standard)
+    let outcome = try runCalibration(args: args, db: db, palette: .standard)
     let data = try CalibrationArtifact.encoder().encode(outcome.artifact)
     if args.outputPath.isEmpty {
         print(String(data: data, encoding: .utf8) ?? "{}")
@@ -860,7 +860,7 @@ func runCalibrateAndEval(args: Args) throws {
         fputs("calibrate-and-eval requires --fixtures-dir\n", stderr); exit(1)
     }
     let db = try GRDBFoodDatabase.bundled()
-    let palette = ClassPalette.v1Standard
+    let palette = ClassPalette.standard
     let outcome = try runCalibration(args: args, db: db, palette: palette)
 
     guard outcome.hasN5k else {
@@ -1003,7 +1003,7 @@ func runSegBench(args: Args) throws {
         fputs("seg-bench requires --fixtures-dir and --checkpoint-sha256\n", stderr); exit(1)
     }
     let fixtures = try loadFixtures(dir: args.fixturesDir, sha256: args.checkpointSHA256)
-    let palette = fixtures.first.map(paletteForFixture) ?? .v1Standard
+    let palette = fixtures.first.map(paletteForFixture) ?? .standard
     // Same per-fixture resolution as buildCalInputs, and the same rule
     // (seg-bench-silently-drops-mis-sized-fixtures): a fixture the bench
     // cannot decode is a reported skip, never a silent drop.

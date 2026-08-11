@@ -1,24 +1,33 @@
 # ClassPalette and the portable contracts
 
-## v2 is live (myfoodrepo-bridge, 2026-07-25)
+## One palette, version "v0" until main (pipeline Decision 50)
 
-`v2Standard` = v1 plus `cereal` appended at solid index 24 (liquids
-25–32, sentinels 33/34/35, totalClasses 36). `generate.py` locks against
-the `v2Standard` marker (`PALETTE_VERSION = "v2"`, 25 solid + 8 liquid)
-and the bundled model is 36-channel. `ClassPalette.standard(for:)`
-resolves persisted `paletteVersion` labels. β stays keyed by class NAME
-throughout the calibration path, so v1→v2 required no β migration
-(cross-dataset-calibration Decision 15). Known drift: the committed
-`tools/nutrition5k/mapping_n5k_to_palette.json` still carries the v1
-content list and its `parse_palette` still reads `v1Standard` — one
-pre-existing n5k test failure until that artifact is regenerated;
-`tools/metafood3d/` already targets v2.
+There is exactly one palette declaration: `ClassPalette.standard`
+(`MedataCore/Sources/Segmentation/ClassPalette.swift`) — 25 solid food
+classes (indices 0–24, `cereal` at 24), then 8 coarse liquid classes
+(25–32: water, coffee, tea, milk, fruit_juice, soup, beer, wine), then
+the sentinels background=33, unknown_food=34, unsupported_liquid=35.
+`totalClasses = foodClasses.count + liquidClasses.count + 3 = 36`.
 
-## Layout (redefined v1, nutrition5k-calibration — superseded by v2 above)
+**The `version` label is `"v0"` and stays `"v0"` until the first main
+release.** Pre-release, a palette change redefines `standard` in place
+(Decision 23's original ruling, reaffirmed and extended by pipeline
+Decision 50 after the "v2" episode): no superseded palette declaration is
+retained, no internal version is minted, and every palette-locked
+artifact is regenerated in the same change. Consequence: the label cannot
+detect palette drift — the DB bake's palette lock asserts palette
+*content* (ordered class list vs `FOOD_DATA`), and the mapping artifacts
+key on `palette_class_list`, not the label.
 
-`ClassPalette.v1Standard` (`MedataCore/Sources/Segmentation/ClassPalette.swift`) is 24 solid food classes (indices 0–23), then 8 coarse liquid classes (24–31: water, coffee, tea, milk, fruit_juice, soup, beer, wine), then the sentinels background=32, unknown_food=33, unsupported_liquid=34. `totalClasses = foodClasses.count + liquidClasses.count + 3`.
+Tool parsers (`tools/food_db/generate.py`, `tools/nutrition5k/mapping.py`,
+`tools/metafood3d/mapping.py`) anchor their regex reads on the marker
+`static let standard` — the full declaration text, so prose comments
+containing "standard" can never satisfy the `find()`.
 
-**The `version` label is still `"v1"`** even though the layout changed (Decision 23: the app never shipped, nothing was trained against the 24-class layout). Consequence: the label cannot detect palette drift — the DB bake's palette lock gains a *content* check (ordered class list vs FOOD_DATA) in stream C of the spec. History readers must compare class lists, not labels.
+`PaletteMigrator` (Persistence) is dormant designed machinery for
+*released* palette changes (pipeline Decision 24): it stays, but no
+mapping files are bundled and nothing constructs it in production before
+the first release.
 
 ## Predicate contract (load-bearing)
 
@@ -28,7 +37,7 @@ pre-existing n5k test failure until that artifact is regenerated;
 
 ## Gotchas
 
-- `segmenter.mlpackage` output-channel count must equal `totalClasses` (now 35); the final class list must be locked before the FoodSeg103 training run (Decision 22, model-production prerequisite).
-- `tools/food_db/generate.py` and `tools/segmenter/build_class_mapping.py` now assert the redefined totals (stream C landed): `generate.py` checks `len(FOOD_DATA) == 24 solid + 8 liquid`, and `build_class_mapping.py` targets the 35-channel palette.
+- `segmenter.mlpackage` output-channel count must equal `totalClasses` (36); the final class list must be locked before a training run (Decision 22, model-production prerequisite).
+- `tools/food_db/generate.py` and `tools/segmenter/build_class_mapping.py` assert the totals: `generate.py` checks `FOOD_DATA` equals the ordered class list parsed from the Swift declaration, and `build_class_mapping.py` targets the 36-channel palette.
 - `.pb.swift` under `PortableContracts/Generated/` is checked in but generated — edit the `.proto` in `Schemas/` and run `Schemas/generate.sh` (needs protoc + protoc-gen-swift, both in Homebrew).
 - `MealFixture.estimator_path` (`"single_dominant"` | `"mixture"`) is the authoritative fixture load-path selector; any other value is malformed. The sentinel SHA `"no_segmenter"` alone must never select the path (Decision 17).

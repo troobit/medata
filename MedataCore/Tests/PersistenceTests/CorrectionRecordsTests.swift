@@ -318,7 +318,7 @@ final class CorrectionRecordsTests: XCTestCase {
         r.mealID = mealId.uuidString
         r.createdAtMs = 1_750_000_000_000
         r.updatedAtMs = r.createdAtMs
-        r.paletteVersion = "v2"
+        r.paletteVersion = "v0"
         r.databaseEdition = "CoFID 2024"
         r.segmenterSource = "test"
         r.buildStamp = "test"
@@ -349,7 +349,7 @@ final class CorrectionRecordsTests: XCTestCase {
             createdAt: createdAt,
             capturePath: .singleViewLidar,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v2",
+            paletteVersion: "v0",
             calibration: PbCameraIntrinsics(),
             supportPlane: PbSupportPlane(),
             scale: PbMetricScale(),

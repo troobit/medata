@@ -1,6 +1,6 @@
 {
-  "schema": "foodrec2022_to_palette_v1",
-  "palette_version": "v2",
+  "schema": "foodrec2022_to_palette",
+  "palette_version": "v0",
   "source_dataset": "Food Recognition Benchmark 2022 (release 2.0)",
   "channel_count": 36,
   "special_channels": {

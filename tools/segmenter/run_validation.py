@@ -44,7 +44,7 @@ def _load_sibling(name: str):
 
 def _channel_names() -> list[str]:
     """Palette names in channel-index order from the committed class mapping."""
-    mapping_path = Path(__file__).resolve().with_name("class_mapping_foodseg103_v1.json")
+    mapping_path = Path(__file__).resolve().with_name("class_mapping_foodseg103.json")
     mapping = json.loads(mapping_path.read_text())
     channels = sorted(mapping["target_channels"], key=lambda c: c["index"])
     return [c["name"] for c in channels]

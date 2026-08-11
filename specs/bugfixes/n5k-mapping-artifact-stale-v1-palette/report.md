@@ -84,3 +84,13 @@ The v2 palette promotion updated `generate.py` and `ClassPalette.swift` but not 
 - `specs/estimation/cross-dataset-calibration/` Decision 15 — the mf3d palette v2 retarget this mirrors.
 - `specs/bugfixes/app-palette-drift-after-v2-promotion/` — the app-side drift from the same promotion.
 - `specs/bugfixes/seg-bench-silently-drops-mis-sized-fixtures/` — why a stamp/tensor mismatch is now a reported skip rather than a silent drop.
+
+---
+
+**Postscript (2026-08-10, pipeline Decision 50)**: the retained `v1Standard`
+declaration this parser mis-scoped to has been expunged along with the whole
+v1/v2 iteration; the palette is the single `ClassPalette.standard`, stamped
+"v0" until the first main release. The retained learning: a tool that
+regex-parses a source file must anchor on an unambiguous declaration marker
+(`static let standard`), and artifacts must lock on palette *content*, not
+labels — both now hold across food_db, nutrition5k, and metafood3d tooling.

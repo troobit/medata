@@ -33,8 +33,8 @@ public struct ClassColourTable: Sendable, Equatable {
         self.version = version
     }
 
-    // The v1 table, matching `ClassPalette.v1Standard.version`.
-    public static let v1 = ClassColourTable(version: "v1")
+    // The table matching `ClassPalette.standard.version`.
+    public static let standard = ClassColourTable(version: "v0")
 
     // Fixed saturation/brightness give consistently legible swatches; only the
     // hue varies by class id.

@@ -642,7 +642,7 @@ The licence and hash facts are static and were verifiable without downloading an
 
 ---
 
-## Decision 20: Co-occurrence statistics restricted to food channels (`co_stats.v2`)
+## Decision 20: Co-occurrence statistics restricted to food channels (`co_stats`)
 
 **Date**: 2026-07-14
 **Status**: accepted
@@ -653,7 +653,7 @@ Decision 15's `co_stats.json` counted image-level presence and joint presence ov
 
 ### Decision
 
-Restrict the presence and joint-presence counts to the FOOD channels: `prepare_dataset.build_co_stats` excludes the mapping's `special_channels` from the counting pass (their rows/columns stay in the matrix as zeros so indices remain palette indices), records the excluded `special_channel_indices`, and stamps schema `co_stats.v2`. `loss_config.load_co_stats` rejects any schema other than `co_stats.v2` with the regeneration command, and the trainer's criterion restricts the priors, both presence vectors, and the pair weights to `loss_config.food_channel_indices(co_stats)`. Per-class pixel counts stay all-channel — they are descriptive, not consumed by the criterion.
+Restrict the presence and joint-presence counts to the FOOD channels: `prepare_dataset.build_co_stats` excludes the mapping's `special_channels` from the counting pass (their rows/columns stay in the matrix as zeros so indices remain palette indices), records the excluded `special_channel_indices`, and stamps schema `co_stats`. `loss_config.load_co_stats` rejects any schema other than `co_stats` with the regeneration command, and the trainer's criterion restricts the priors, both presence vectors, and the pair weights to `loss_config.food_channel_indices(co_stats)`. Per-class pixel counts stay all-channel — they are descriptive, not consumed by the criterion.
 
 ### Rationale
 
@@ -689,7 +689,7 @@ Counting background poisons the pair weighting at its core: the max-over-ground-
 
 ### Context
 
-Task 17 (Req 2.6, design §3.2a) required the stratified held-out re-cut with a new frozen seed, then a re-measurement of the pinned baseline (`checkpoint_letterbox.pt`, model `24e0b022241a`) whose per-class table anchors every later uplift delta. The re-cut ran on 2026-07-15: `prepare_dataset.py --heldout-frac 0.12 --seed 20260715` over the 7118 FoodSeg103 pairs → train 5553 / val 711 / heldout 854, `splits.json` stratification block and `co_stats.json` (`schema: co_stats.v2`, Decision 20) written. Two findings frame this entry. First, three staples (`brown_rice`, `bread_wholemeal`, `potato_mashed`) have **zero images in the dataset**: `class_mapping_foodseg103_v1.json` routes no FoodSeg103 source category to those channels, so their absence from the old held-out split was never a carving artefact and no seed can make them measurable — the design §3.5 zero-image warning path fired for all three. Second, the pinned baseline was trained on the seed-1234 train split, and the re-shuffle moved 672 of the new 854 held-out images (78.7%) out of that old training set's complement — i.e. the pinned model has TRAINED ON 78.7% of the new held-out split, so its re-measured score there is leakage-inflated.
+Task 17 (Req 2.6, design §3.2a) required the stratified held-out re-cut with a new frozen seed, then a re-measurement of the pinned baseline (`checkpoint_letterbox.pt`, model `24e0b022241a`) whose per-class table anchors every later uplift delta. The re-cut ran on 2026-07-15: `prepare_dataset.py --heldout-frac 0.12 --seed 20260715` over the 7118 FoodSeg103 pairs → train 5553 / val 711 / heldout 854, `splits.json` stratification block and `co_stats.json` (`schema: co_stats`, Decision 20) written. Two findings frame this entry. First, three staples (`brown_rice`, `bread_wholemeal`, `potato_mashed`) have **zero images in the dataset**: `class_mapping_foodseg103.json` routes no FoodSeg103 source category to those channels, so their absence from the old held-out split was never a carving artefact and no seed can make them measurable — the design §3.5 zero-image warning path fired for all three. Second, the pinned baseline was trained on the seed-1234 train split, and the re-shuffle moved 672 of the new 854 held-out images (78.7%) out of that old training set's complement — i.e. the pinned model has TRAINED ON 78.7% of the new held-out split, so its re-measured score there is leakage-inflated.
 
 ### Decision
 
@@ -714,7 +714,7 @@ A baseline anchor exists to measure uplift on unseen data; a table where the mod
 ### Consequences
 
 **Positive:**
-- The split is frozen and fully stratified for the five staples that exist; `co_stats.v2` statistics match seed 20260715, so the task 18 fail-fast contract is satisfiable.
+- The split is frozen and fully stratified for the five staples that exist; `co_stats` statistics match seed 20260715, so the task 18 fail-fast contract is satisfiable.
 - The contamination is caught and documented BEFORE any judging run, with an unbiased (if small) baseline table recorded alongside the inflated one.
 - The dataset-level absence of brown_rice/bread_wholemeal/potato_mashed is now established fact with a mapping-level cause, not a split-level suspicion.
 
@@ -778,7 +778,7 @@ The first task-18 run used the Decision 19 fallback init (torchvision `IMAGENET1
 
 ### Decision
 
-The V2-init run was killed at epoch 21 and task 18 relaunched on torchvision `DEFAULT` (COCO-seg) weights — Decision 17 outcome 3 — retaining every other recipe upgrade: co-occurrence loss (`co_stats.v2`, seed 20260715), inverse-frequency weighting, photometric augmentation, and the stratified re-cut. Artifacts of the abandoned run are preserved as `tools/segmenter/build/train_v2init_abandoned_20260715.log` and `checkpoint_v2init_abandoned.resume.pt`.
+The V2-init run was killed at epoch 21 and task 18 relaunched on torchvision `DEFAULT` (COCO-seg) weights — Decision 17 outcome 3 — retaining every other recipe upgrade: co-occurrence loss (`co_stats`, seed 20260715), inverse-frequency weighting, photometric augmentation, and the stratified re-cut. Artifacts of the abandoned run are preserved as `tools/segmenter/build/train_v2init_abandoned_20260715.log` and `checkpoint_v2init_abandoned.resume.pt`.
 
 ### Rationale
 
@@ -808,7 +808,7 @@ Twenty epochs (~3.5 h) bought a definitive empirical answer to Decision 19's ope
 
 ### Context
 
-The task-18 recipe run (DEFAULT init per Decision 23, co-occurrence loss with `co_stats.v2` seed 20260715, inverse-frequency weighting, photometric augment) completed 60 epochs (final val food-class mIoU 0.3280) and was judged per task 19 and Decision 21's procedure. On the full 854-image heldout (clean for this model by construction): mean food-class IoU **0.3459** vs the ≥ 0.4076 uplift target — a miss. Because Decision 21's anchor (0.3776) was measured on a different image set (the 182-image leak-free subset), a same-set diagnostic was added: the subset was reconstructed exactly (new heldout ∩ old val∪heldout via `carve_splits(pairs, 0.12, 0.1, 1234, None)`, materialised as `data/foodseg103_remapped/heldout_leakfree/` symlinks) and the new checkpoint measured on it.
+The task-18 recipe run (DEFAULT init per Decision 23, co-occurrence loss with `co_stats` seed 20260715, inverse-frequency weighting, photometric augment) completed 60 epochs (final val food-class mIoU 0.3280) and was judged per task 19 and Decision 21's procedure. On the full 854-image heldout (clean for this model by construction): mean food-class IoU **0.3459** vs the ≥ 0.4076 uplift target — a miss. Because Decision 21's anchor (0.3776) was measured on a different image set (the 182-image leak-free subset), a same-set diagnostic was added: the subset was reconstructed exactly (new heldout ∩ old val∪heldout via `carve_splits(pairs, 0.12, 0.1, 1234, None)`, materialised as `data/foodseg103_remapped/heldout_leakfree/` symlinks) and the new checkpoint measured on it.
 
 ### Decision
 
@@ -921,7 +921,7 @@ The user's priority is availability: the tool should reach as many devices as po
 ## Decision 27: Merged-corpus verdict — palette v2 model promoted (myfoodrepo-bridge)
 
 **Date**: 2026-07-26
-**Status**: accepted
+**Status**: accepted (amended by pipeline Decision 50, 2026-08-10: the promotion verdict and the `ab812dc3aa9d` model stand; the "palette v2" label does not — there is one palette, `ClassPalette.standard`, stamped "v0" until the first main release)
 
 ### Context
 

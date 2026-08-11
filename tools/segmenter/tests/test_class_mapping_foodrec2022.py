@@ -1,8 +1,8 @@
-"""Food Recognition 2022 remap over the v2 palette (myfoodrepo-bridge
+"""Food Recognition 2022 remap over the palette (myfoodrepo-bridge
 dataset-bridge task 3, MD-30 substitution).
 
 Torch-free and dataset-free: routing tests drive ``route_2022`` with names
-directly; artefact tests read the COMMITTED ``class_mapping_foodrec2022_v1.json``
+directly; artefact tests read the COMMITTED ``class_mapping_foodrec2022.json``
 (regenerating it needs the dataset's annotations.json, which lives only in the
 main checkout's gitignored ``data/`` tree).
 """
@@ -18,7 +18,7 @@ import build_class_mapping_foodrec2022 as b22
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GENERATE_PY = REPO_ROOT / "tools" / "food_db" / "generate.py"
 COMMITTED_MAPPING = (REPO_ROOT / "tools" / "segmenter"
-                     / "class_mapping_foodrec2022_v1.json")
+                     / "class_mapping_foodrec2022.json")
 
 TOTAL_CLASSES = 33
 CHANNEL_COUNT = 36
@@ -102,8 +102,8 @@ def committed():
 
 
 def test_committed_mapping_shape(committed):
-    assert committed["schema"] == "foodrec2022_to_palette_v1"
-    assert committed["palette_version"] == "v2"
+    assert committed["schema"] == "foodrec2022_to_palette"
+    assert committed["palette_version"] == "v0"
     assert committed["channel_count"] == CHANNEL_COUNT
     assert committed["special_channels"] == {
         "background": TOTAL_CLASSES,

@@ -2,7 +2,7 @@
 
 Req 2.1-2.5 (specs/estimation/nutrition5k-calibration): the artifact is keyed
 to the palette CONTENT (ordered class list) and the ingredient-metadata
-version, not the static "v1" label (Decision 23). Unmapped ingredients are
+version, not the version label (pipeline Decision 50). Unmapped ingredients are
 excluded, never reassigned; pair-ambiguous ingredients (generic rice /
 potatoes / bread) are recorded status=ambiguous and excluded from both sides.
 
@@ -263,7 +263,7 @@ class TestLoaderGuards:
             self._load(path)
 
     def test_palette_content_mismatch_fails_loudly(self, tmp_path):
-        # Req 2.5 / Decision 23: the "v1" label no longer changes, so a stale
+        # Req 2.5 / pipeline Decision 50: the label does not change, so a stale
         # artifact must fail on CONTENT — here a reordered class list.
         reordered = list(self.PALETTE)
         reordered[0], reordered[1] = reordered[1], reordered[0]

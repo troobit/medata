@@ -130,7 +130,7 @@ final class MealReviewModel {
         self.record = record
         self.store = store
         self.database = database
-        self.palette = ClassPalette.standard(for: record.paletteVersion)
+        self.palette = ClassPalette.standard
         self.sessionStartMs = Int64(Date().timeIntervalSince1970 * 1000)
         let plistStamp = Bundle.main.object(forInfoDictionaryKey: "MedataBuildStamp") as? String
         self.buildStamp = (plistStamp?.isEmpty ?? true) ? "unstamped" : plistStamp!
@@ -138,7 +138,7 @@ final class MealReviewModel {
         // Row order fixed at init (Req 6.10): carbs descending, id tie-break —
         // the ResultView convention, so the surfaces agree.
         let preBeta = record.volumes.perClassVolumesPreBetaCm3
-        let palette = ClassPalette.standard(for: record.paletteVersion)
+        let palette = ClassPalette.standard
         self.foods = record.macros.perClass
             .map { classId, macro -> ReviewFood in
                 var food = ReviewFood(

@@ -38,7 +38,7 @@ held-out image, or a deterministic synthetic plate if none is available::
 The held-out split is the directory ``prepare_dataset.py`` writes:
 ``<heldout>/images/<stem>.{png,jpg,jpeg}`` paired with
 ``<heldout>/masks/<stem>.png`` (single-channel UInt8 class IDs already remapped
-to the v1 palette per §3b). As a fallback, a flat directory whose masks sit
+to the palette per §3b). As a fallback, a flat directory whose masks sit
 beside the images as ``<stem>_mask.png`` / ``<stem>.mask.png`` / ``<stem>_gt.png``
 is also accepted. Images with no matching mask are skipped with a warning.
 
@@ -60,9 +60,9 @@ from pathlib import Path
 
 import numpy as np
 
-# Special-class layout of the v2 palette: 25 solid (incl. cereal at 24) +
+# Special-class layout of the palette: 25 solid (incl. cereal at 24) +
 # 8 liquid classes + background + unknown_food + unsupported_liquid = 36
-# (mirrors ClassPalette.v2Standard, totalClasses = foodClasses.count +
+# (mirrors ClassPalette.standard, totalClasses = foodClasses.count +
 # liquidClasses.count + 3; Decisions 23/24, MD-29). Pass --num-classes 35
 # when running a v1-era checkpoint.
 DEFAULT_NUM_CLASSES = 36
@@ -202,7 +202,7 @@ def build_fixture_bytes(
     checkpoint_sha256: str,
     schema_dir: Path,
     fixture_revision: str = "rev-1",
-    palette_version: str = "v1",
+    palette_version: str = "v0",
     database_edition: str = "CoFID 2024 + IFCDB 2023",
     capture_path_canonical: str = "single_view_lidar",
     depth_mm_hw: np.ndarray | None = None,

@@ -11,16 +11,16 @@ struct ClassColourTableTests {
 
     @Test("Same class id yields the same colour across independent constructions")
     func deterministicAcrossConstructions() {
-        let a = ClassColourTable.v1
-        let b = ClassColourTable(version: "v1")
-        for id in 0..<ClassPalette.v1Standard.totalClasses {
+        let a = ClassColourTable.standard
+        let b = ClassColourTable(version: "v0")
+        for id in 0..<ClassPalette.standard.totalClasses {
             #expect(a.colour(forClassId: id) == b.colour(forClassId: id))
         }
     }
 
     @Test("Colour is a pure function of the id (repeat calls are stable)")
     func stableRepeatCalls() {
-        let table = ClassColourTable.v1
+        let table = ClassColourTable.standard
         for id in 0..<40 {
             #expect(table.colour(forClassId: id) == table.colour(forClassId: id))
         }
@@ -28,7 +28,7 @@ struct ClassColourTableTests {
 
     @Test("Components stay within the unit range")
     func componentsInRange() {
-        let table = ClassColourTable.v1
+        let table = ClassColourTable.standard
         for id in 0..<40 {
             let c = table.colour(forClassId: id)
             #expect(c.red >= 0 && c.red <= 1)
@@ -39,13 +39,13 @@ struct ClassColourTableTests {
 
     @Test("Neighbouring class ids get distinguishable colours")
     func neighboursDiffer() {
-        let table = ClassColourTable.v1
+        let table = ClassColourTable.standard
         #expect(table.colour(forClassId: 0) != table.colour(forClassId: 1))
         #expect(table.colour(forClassId: 5) != table.colour(forClassId: 6))
     }
 
     @Test("Table carries its palette version")
     func carriesVersion() {
-        #expect(ClassColourTable.v1.version == "v1")
+        #expect(ClassColourTable.standard.version == "v0")
     }
 }

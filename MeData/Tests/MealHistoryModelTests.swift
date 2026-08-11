@@ -220,7 +220,7 @@ private func makeMealRecord() -> MealRecord {
     return MealRecord(
         capturePath: .singleViewLidar,
         databaseEdition: "CoFID 2024",
-        paletteVersion: "v1",
+        paletteVersion: "v0",
         calibration: PbCameraIntrinsics(),
         supportPlane: PbSupportPlane(),
         scale: PbMetricScale(),

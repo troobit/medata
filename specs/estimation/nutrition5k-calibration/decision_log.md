@@ -670,7 +670,7 @@ The sequencing costs nothing today (training has not started) and avoids a guara
 ## Decision 23: Liquid classes land in a redefined palette v1 — no v2
 
 **Date**: 2026-07-02
-**Status**: accepted (amends Req 2.5, 7.2, 9.4; refines Decision 22 and all palette-v2 references)
+**Status**: accepted (amends Req 2.5, 7.2, 9.4; refines Decision 22 and all palette-v2 references. Reaffirmed and extended by pipeline Decision 50, 2026-08-10, after the myfoodrepo-bridge work violated this ruling by minting "palette v2": the single palette is now `ClassPalette.standard`, labelled "v0" until the first main release.)
 
 ### Context
 
