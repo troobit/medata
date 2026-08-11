@@ -38,7 +38,10 @@ F_GRAVITY = 16
 
 # Solid-food class count per palette version (ClassPalette.swift). A pixel is food
 # when its argmax index is below this — liquids and the three sentinels are not.
-FOOD_CLASS_COUNT = {"v0": 25}
+# "v2" is the expunged pre-release label (pipeline Decision 50): bundles recorded
+# by pre-expunge binaries carry it immutably and describe the SAME 25-solid
+# palette. Reading them is not baking — the bake lock still rejects "v2".
+FOOD_CLASS_COUNT = {"v0": 25, "v2": 25}
 
 
 def read_varint(buf, i):
