@@ -21,7 +21,7 @@ references:
 - [x] 2. Fix the ranking statistic and record it as a decision <!-- id:67qnbf4 -->
   - Decision 13 added to decision_log.md: mean over eligible channels ships; second-argmax share, interior-only sampling and early exit all rejected with measured reasons
   - design.md behavioural-contract row no longer marked provisional; the Testing Strategy gate is marked discharged and carries the corpus caveats
-  - Boundary bleed ships unmitigated and is named as the first place to look if Req 8 returns neutral — Decision 5 removal obligation (task 19) applies
+  - Boundary bleed ships unmitigated and is named as the first place to look if Req 8 returns neutral — see "Mitigate boundary bleed in the candidate ranking" and, failing that, the removal gate
   - Blocked-by: 67qnbf3 (Offline probe of the ranking statistic over real tensors)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3)
@@ -160,15 +160,29 @@ references:
   - Hit rate is shortlist_rank > 0 on relabel correction records (rank 0 means full-list or no relabel); partition by shortlist_source; the same metric over both arms is the baseline comparison
   - First-vs-repeat: a corrected class X for predicted class P is a repeat iff an earlier correction record by timestamp corrects P to X — the same relation recency ranks from
   - Decision 12 mitigations are part of the deliverable, not optional: stratify by reconstructed recency depth (count of distinct earlier P-to-X corrections at each record's timestamp), and run an as-treated secondary that identifies combined-arm rows whose evidence set was empty for the predicted class
+  - BOUNDARY-BLEED PARTITION (Decision 13), also not optional: split the combined-arm hit rate by whether the corrected class was ADJACENT to the predicted region on that plate. The probe measured rank-1 adjacency at 69.7% against a 9.1% chance baseline and erosion does not remove it, so the shortlist is substantially ordered by what touches the food. This partition is what says whether that helps or hurts: if adjacent corrections hit and non-adjacent ones miss, bleed is crowding genuine confusions out of the five slots and "Mitigate boundary bleed in the candidate ranking" fires
+  - Adjacency is recoverable offline for meals whose capture bundle survives (recompute from the persisted argmax); where no bundle survives the row is reported as unknown rather than assumed non-adjacent, and the unknown count is printed beside the figure
   - The output states the temporal confound: the two arms are separated in time and recency strengthens as the corpus grows, so a naive comparison flatters the combined arm
   - Emit the per-arm counts alongside every figure, so a verdict is never read off cells too small to carry one
   - Blocked-by: 67qnbfg (MealReviewModel consumes the combined ordering)
   - Stream: 1
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
 
+- [ ] 17. Mitigate boundary bleed in the candidate ranking (conditional) <!-- id:67qnbfm -->
+  - Fires only if the boundary-bleed partition in "Build the shortlist hit-rate analysis over the corrections corpus" shows bleed is HURTING — adjacent corrections hitting the shortlist while non-adjacent ones miss, meaning what touches the food is crowding genuine confusions out of the five slots. A partition showing the opposite closes this task as no-change-needed
+  - Evidence that put it here (Decision 13, probe 2026-08-11): rank-1 candidates physically touch the food 69.7% of the time against a 9.1% chance baseline. Intrinsic, not an edge artefact — eroding each region before accumulating reaches only 57.7% at 16 px and costs 27% of scored foods, so interior-only sampling is already measured and rejected as the remedy
+  - Why it ships unmitigated: the same probe found the true class in the top five on 78.2% of the segmenter wrong regions, consistent with bleed BECAUSE the adjacent class is frequently the correct one — a mislabelled region has usually had a neighbour label smeared across it. Bleed and signal are the same measurement until corrections separate them
+  - Candidate mitigations, none yet evidenced: subtract a co-occurrence baseline so a candidate ranks by how far it exceeds what mere adjacency predicts; weight sampled pixels by distance from the region boundary instead of excluding a hard margin; or drop candidates whose support sits only on pixels bordering that class own region
+  - Measure any mitigation against the committed baseline with tools/candidate_probe.py — it takes --erode and prints adjacency beside the chance floor, so a change is one command
+  - Not the same lever as "Remove the pass and the retained field if the verdict is negative": that removes the feature on a negative Req 8 verdict, this repairs the ranking while keeping it. Removal is the fallback if this fails or is not worth its cost
+  - See docs/agent-notes/candidate-evidence.md for the probe mechanics and the full figures
+  - Blocked-by: 67qnbfi (Build the shortlist hit-rate analysis over the corrections corpus)
+  - Stream: 1
+  - Requirements: [1.3](requirements.md#1.3), [8.1](requirements.md#8.1)
+
 ## Acceptance gates (not agent-executable)
 
-- [ ] 17. Capture-path cost on the hardware floor (STOP) <!-- id:67qnbfj -->
+- [ ] 18. Capture-path cost on the hardware floor (STOP) <!-- id:67qnbfj -->
   - NOT agent-executable. Human-gated tethered session on the iPhone 16 Pro; an autonomous run halts here rather than attempting it
   - Match the launch buildStamp before trusting any device output
   - Read the median end-to-end capture duration off the existing capture timing log with and without the pass; the added median must be <= 50 ms
@@ -177,17 +191,17 @@ references:
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
 
-- [ ] 18. Record the acceptance verdict against the recency baseline (STOP) <!-- id:67qnbfk -->
+- [ ] 19. Record the acceptance verdict against the recency baseline (STOP) <!-- id:67qnbfk -->
   - NOT agent-executable. Waits on real use of the surface — Decision 5 gates spec closure, not implementation, and no session can manufacture the corrections the verdict reads from
-  - Run task 16's analysis once both shortlist_source arms carry enough rows, and record the outcome as a decision in decision_log.md
+  - Run the "Build the shortlist hit-rate analysis over the corrections corpus" analysis once both shortlist_source arms carry enough rows, and record the outcome as a decision in decision_log.md
   - The first-correction split is the measurement that matters most; aggregate hit rate is dominated by repeat foods where recency already wins
   - A neutral or negative result is a valid outcome and is recorded as such rather than tuned around — the repository precedent is segmenter-foundation Decision 24, which recorded a negative verdict and kept the incumbent
   - Blocked-by: 67qnbfi (Build the shortlist hit-rate analysis over the corrections corpus)
   - Stream: 1
   - Requirements: [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
 
-- [ ] 19. Remove the pass and the retained field if the verdict is negative (STOP) <!-- id:67qnbfl -->
-  - NOT agent-executable as a standing task — conditional on task 18's verdict, and a no-op if the verdict is positive
+- [ ] 20. Remove the pass and the retained field if the verdict is negative (STOP) <!-- id:67qnbfl -->
+  - NOT agent-executable as a standing task — conditional on the "Record the acceptance verdict against the recency baseline" outcome, and a no-op if the verdict is positive
   - Decision 5 states the obligation: a neutral result still leaves the retained field on the record and the pass on the capture path until a removal is done. This task is where that lands rather than going unrecorded
   - Reverting costs the two record fields, the compute pass and its call site; no correction path regresses because the recency prior stayed a live component of the ordering throughout
   - Records already written keep fields 16/17 — removal drops the writer, not the reader, so historical rows stay decodable
