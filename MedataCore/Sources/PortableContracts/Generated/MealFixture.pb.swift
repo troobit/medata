@@ -201,6 +201,26 @@ public nonisolated struct PbMealFixture: @unchecked Sendable {
     set {_uniqueStorage()._groundTruthClassFatG = newValue}
   }
 
+  /// capture-bundle-recorder task 5: the pre-shutter preview-resolution food
+  /// mask, UInt8 [H, W] row-major, non-zero = food. On an emptyFoodMask
+  /// refusal the pipeline short-circuits before segmentation, so the bundle
+  /// carries no probs/argmax and this mask is the only record of the decision
+  /// the live preview segmenter made. Absent on pre-recorder bundles.
+  public var preShutterMask: Data {
+    get {_storage._preShutterMask}
+    set {_uniqueStorage()._preShutterMask = newValue}
+  }
+
+  public var preShutterMaskWidth: Int32 {
+    get {_storage._preShutterMaskWidth}
+    set {_uniqueStorage()._preShutterMaskWidth = newValue}
+  }
+
+  public var preShutterMaskHeight: Int32 {
+    get {_storage._preShutterMaskHeight}
+    set {_uniqueStorage()._preShutterMaskHeight = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -214,7 +234,7 @@ fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
 nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MealFixture"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}fixture_id\0\u{3}fixture_revision\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_checkpoint_sha256\0\u{3}nadir_image\0\u{3}oblique_image\0\u{3}nadir_depth\0\u{3}nadir_probs\0\u{3}oblique_probs\0\u{3}nadir_argmax\0\u{3}oblique_argmax\0\u{3}nadir_intrinsics\0\u{3}oblique_intrinsics\0\u{3}t_1_to_2\0\u{1}gravity\0\u{3}ground_truth_class_mass_g\0\u{3}ground_truth_total_carbs_g\0\u{3}capture_path_canonical\0\u{3}ground_truth_protein_g\0\u{3}ground_truth_fat_g\0\u{3}source_dataset\0\u{3}estimator_path\0\u{3}ground_truth_class_carbs_g\0\u{3}ground_truth_class_protein_g\0\u{3}ground_truth_class_fat_g\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}fixture_id\0\u{3}fixture_revision\0\u{3}palette_version\0\u{3}database_edition\0\u{3}segmenter_checkpoint_sha256\0\u{3}nadir_image\0\u{3}oblique_image\0\u{3}nadir_depth\0\u{3}nadir_probs\0\u{3}oblique_probs\0\u{3}nadir_argmax\0\u{3}oblique_argmax\0\u{3}nadir_intrinsics\0\u{3}oblique_intrinsics\0\u{3}t_1_to_2\0\u{1}gravity\0\u{3}ground_truth_class_mass_g\0\u{3}ground_truth_total_carbs_g\0\u{3}capture_path_canonical\0\u{3}ground_truth_protein_g\0\u{3}ground_truth_fat_g\0\u{3}source_dataset\0\u{3}estimator_path\0\u{3}ground_truth_class_carbs_g\0\u{3}ground_truth_class_protein_g\0\u{3}ground_truth_class_fat_g\0\u{3}pre_shutter_mask\0\u{3}pre_shutter_mask_width\0\u{3}pre_shutter_mask_height\0")
 
   fileprivate class _StorageClass {
     var _fixtureID: String = String()
@@ -243,6 +263,9 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
     var _groundTruthClassCarbsG: Dictionary<String,Float> = [:]
     var _groundTruthClassProteinG: Dictionary<String,Float> = [:]
     var _groundTruthClassFatG: Dictionary<String,Float> = [:]
+    var _preShutterMask: Data = Data()
+    var _preShutterMaskWidth: Int32 = 0
+    var _preShutterMaskHeight: Int32 = 0
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -279,6 +302,9 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
       _groundTruthClassCarbsG = source._groundTruthClassCarbsG
       _groundTruthClassProteinG = source._groundTruthClassProteinG
       _groundTruthClassFatG = source._groundTruthClassFatG
+      _preShutterMask = source._preShutterMask
+      _preShutterMaskWidth = source._preShutterMaskWidth
+      _preShutterMaskHeight = source._preShutterMaskHeight
     }
   }
 
@@ -323,6 +349,9 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
         case 24: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassCarbsG) }()
         case 25: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassProteinG) }()
         case 26: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: &_storage._groundTruthClassFatG) }()
+        case 27: try { try decoder.decodeSingularBytesField(value: &_storage._preShutterMask) }()
+        case 28: try { try decoder.decodeSingularInt32Field(value: &_storage._preShutterMaskWidth) }()
+        case 29: try { try decoder.decodeSingularInt32Field(value: &_storage._preShutterMaskHeight) }()
         default: break
         }
       }
@@ -413,6 +442,15 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
       if !_storage._groundTruthClassFatG.isEmpty {
         try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufFloat>.self, value: _storage._groundTruthClassFatG, fieldNumber: 26)
       }
+      if !_storage._preShutterMask.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._preShutterMask, fieldNumber: 27)
+      }
+      if _storage._preShutterMaskWidth != 0 {
+        try visitor.visitSingularInt32Field(value: _storage._preShutterMaskWidth, fieldNumber: 28)
+      }
+      if _storage._preShutterMaskHeight != 0 {
+        try visitor.visitSingularInt32Field(value: _storage._preShutterMaskHeight, fieldNumber: 29)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -448,6 +486,9 @@ nonisolated extension PbMealFixture: SwiftProtobuf.Message, SwiftProtobuf._Messa
         if _storage._groundTruthClassCarbsG != rhs_storage._groundTruthClassCarbsG {return false}
         if _storage._groundTruthClassProteinG != rhs_storage._groundTruthClassProteinG {return false}
         if _storage._groundTruthClassFatG != rhs_storage._groundTruthClassFatG {return false}
+        if _storage._preShutterMask != rhs_storage._preShutterMask {return false}
+        if _storage._preShutterMaskWidth != rhs_storage._preShutterMaskWidth {return false}
+        if _storage._preShutterMaskHeight != rhs_storage._preShutterMaskHeight {return false}
         return true
       }
       if !storagesAreEqual {return false}

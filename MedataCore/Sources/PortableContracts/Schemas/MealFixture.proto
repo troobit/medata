@@ -53,4 +53,13 @@ message MealFixture {
     map<string, float> ground_truth_class_carbs_g = 24;
     map<string, float> ground_truth_class_protein_g = 25;
     map<string, float> ground_truth_class_fat_g = 26;
+
+    // capture-bundle-recorder task 5: the pre-shutter preview-resolution food
+    // mask, UInt8 [H, W] row-major, non-zero = food. On an emptyFoodMask
+    // refusal the pipeline short-circuits before segmentation, so the bundle
+    // carries no probs/argmax and this mask is the only record of the decision
+    // the live preview segmenter made. Absent on pre-recorder bundles.
+    bytes pre_shutter_mask = 27;
+    int32 pre_shutter_mask_width = 28;
+    int32 pre_shutter_mask_height = 29;
 }

@@ -5,6 +5,7 @@ import Foundation
 import ImageIO
 import PortableContracts
 import Segmentation
+import SupportPlane
 @testable import HarnessCore
 @testable import Pipeline
 
@@ -68,6 +69,27 @@ final class CaptureBundleRecorderTests: XCTestCase {
         XCTAssertEqual(loaded[0].fixtureID, "1752800000001-refused")
         XCTAssertTrue(loaded[0].nadirProbs.isEmpty)
         XCTAssertFalse(loaded[0].nadirImage.isEmpty)
+    }
+
+    // Task 5: an emptyFoodMask refusal short-circuits before segmentation, so
+    // the recorded bundle's only trace of the decision is the pre-shutter mask
+    // itself. Assert it round-trips with its dimensions.
+    func testRefusedAttemptRecordsPreShutterMask() async throws {
+        let dir = makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let mask = BinaryMask(pixels: [UInt8](repeating: 0, count: 6), width: 3, height: 2)
+        let recorder = CaptureBundleRecorder(directoryURL: dir)
+        await recorder.record(makePayload(
+            timestampMs: 1_752_800_000_002, outcome: "refused",
+            withSegmentation: false, preShutterMask: mask
+        ))
+
+        let loaded = try FixtureLoader.load(from: dir, checkpointSHA256: segmenterVersion)
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded[0].preShutterMask, Data(count: 6))
+        XCTAssertEqual(loaded[0].preShutterMaskWidth, 3)
+        XCTAssertEqual(loaded[0].preShutterMaskHeight, 2)
     }
 
     // Same-timestamp attempts must both survive: numeric suffix, no overwrite.
@@ -135,7 +157,8 @@ final class CaptureBundleRecorderTests: XCTestCase {
     }
 
     private func makePayload(
-        timestampMs: Int64, outcome: String, withSegmentation: Bool = true
+        timestampMs: Int64, outcome: String, withSegmentation: Bool = true,
+        preShutterMask: BinaryMask? = nil
     ) -> CaptureBundleRecorder.Payload {
         let width = 4, height = 3
         let frame = makeFrame(
@@ -147,7 +170,8 @@ final class CaptureBundleRecorderTests: XCTestCase {
             nadirFrame: frame,
             obliqueFrame: nil,
             databaseEdition: "CoFID Test",
-            paletteVersion: "test-palette"
+            paletteVersion: "test-palette",
+            preShutterFoodMask: preShutterMask
         )
         let segmentation: SegmentationResult? = withSegmentation ? SegmentationResult(
             probabilities: ProbabilityTensor(

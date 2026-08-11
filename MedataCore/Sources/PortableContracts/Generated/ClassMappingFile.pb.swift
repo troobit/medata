@@ -43,7 +43,7 @@ public nonisolated struct PbClassMappingFile: Sendable {
   /// e.g. "v1"
   public var fromPalette: String = String()
 
-  /// e.g. "v2"
+  /// target palette label
   public var toPalette: String = String()
 
   /// v1_class_id → mapping

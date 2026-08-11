@@ -113,6 +113,15 @@ public actor CaptureBundleRecorder {
         if let depth = nadir.depth {
             fx.nadirDepth = depth.pb
         }
+        // On an emptyFoodMask refusal the pipeline short-circuits before
+        // segmentation, so the bundle carries no probs/argmax and this
+        // preview-resolution mask is the only record of the decision the live
+        // segmenter made (task 5). Recorded whenever present — a few KB.
+        if let mask = capture.preShutterFoodMask {
+            fx.preShutterMask = Data(mask.pixels)
+            fx.preShutterMaskWidth = Int32(mask.width)
+            fx.preShutterMaskHeight = Int32(mask.height)
+        }
         // Probs/argmax copy byte-for-byte: ProbabilityTensor.bytes is already
         // FP16 LE HWC at camera resolution (post-processing resizes to the
         // frame dims the intrinsics declare — the FixtureRunner sizing
