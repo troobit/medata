@@ -8,7 +8,7 @@ references:
 
 ## Probe gate (Decision 11)
 
-- [ ] 1. Offline probe of the ranking statistic over real tensors <!-- id:67qnbf3 -->
+- [-] 1. Offline probe of the ranking statistic over real tensors <!-- id:67qnbf3 -->
   - Standalone offline script (tools/, not shipped code) — runs a prototype of the compute over admissible tensors only: device capture bundles and segmenter validation outputs. Nutrition5k fixtures are excluded, their argmax field carries the ground-truth mask, not a persisted prediction
   - Report (a) top-5 set constancy across foods and plates, (b) adjacency share of rank-1 candidates — how often rank 1 is a class physically adjacent on the same plate, (c) both figures again under a second-argmax-share statistic (fraction of the food's sampled pixels where the channel is the top non-winner)
   - Use the same sampling the design fixes: stride-4 in both axes anchored at (0,0), FP16 tensor decode, regularised label map, 64-sample floor per detected class
