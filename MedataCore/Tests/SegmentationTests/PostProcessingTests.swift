@@ -252,4 +252,86 @@ final class PostProcessingTests: XCTestCase {
         XCTAssertEqual(out.perClassMeanProb["food_1"]!, 0.99999, accuracy: 1e-3)
         XCTAssertNil(out.perClassMeanProb["background"])
     }
+
+    // MARK: - Non-interference of the candidate-evidence pass
+    //
+    // alternative-class-candidates Req 2.2: the spec adds a retained quantity
+    // and corrects none. Every figure the pipeline already reads off this
+    // post-processor must be identical whether or not the pass runs, so these
+    // comparisons are exact, not approximate.
+
+    /// Two food regions with a known probability structure, large enough that
+    /// both clear the pass's 64-sample floor on the stride-4 grid (128 sampled
+    /// pixels each) — so the "with" run does real work and the comparison is
+    /// not vacuous.
+    private func makeTwoRegionLogits(size: Int, classes: Int) -> [Float] {
+        // food_0, food_1, food_2, food_3, bg, unknown, unsupported — each row
+        // sums to 1, so softmax over the logarithms recovers it exactly.
+        let left: [Float] = [0.55, 0.20, 0.10, 0.05, 0.05, 0.025, 0.025]
+        let right: [Float] = [0.10, 0.50, 0.25, 0.05, 0.05, 0.025, 0.025]
+        var logits = [Float](repeating: 0, count: size * size * classes)
+        for y in 0..<size {
+            for x in 0..<size {
+                let target = x < size / 2 ? left : right
+                let off = (y * size + x) * classes
+                for c in 0..<classes { logits[off + c] = Foundation.log(target[c]) }
+            }
+        }
+        return logits
+    }
+
+    func testCandidateEvidencePassLeavesEveryExistingFigureUnchanged() throws {
+        let palette = makeTestPalette(numFoodClasses: 4)
+        let size = 64
+        let classes = palette.totalClasses
+        let logits = makeTwoRegionLogits(size: size, classes: classes)
+
+        func run(retaining: Bool) throws -> PostProcessedOutput {
+            try SegmenterPostProcessor.process(
+                logitsFP32: logits, targetSize: size, classes: classes,
+                scaledWidth: size, scaledHeight: size,
+                originalWidth: size, originalHeight: size,
+                palette: palette,
+                retainCandidateEvidence: retaining
+            )
+        }
+
+        let with = try run(retaining: true)
+        let without = try run(retaining: false)
+
+        // The pass ran and produced something in the "with" arm, and did not run
+        // at all in the "without" arm — otherwise the equalities below are empty.
+        XCTAssertNil(without.candidateEvidence)
+        let evidence = try XCTUnwrap(with.candidateEvidence)
+        XCTAssertFalse(evidence.isEmpty, "both regions clear the sample floor")
+
+        XCTAssertEqual(with.argmax.pixels, without.argmax.pixels)
+        XCTAssertEqual(with.sigmaSeg, without.sigmaSeg)
+        XCTAssertEqual(with.perClassMeanProb, without.perClassMeanProb)
+        // The probability tensor feeds the volume stage; it is read-only to the
+        // pass for the same reason.
+        XCTAssertEqual(with.probabilities.bytes, without.probabilities.bytes)
+    }
+
+    func testCandidateEvidencePassLeavesTheRefusalOutcomeUnchanged() throws {
+        // Pure background → the silhouette is empty and `process` refuses. The
+        // pass must not turn that into a different error, or into a success.
+        let palette = makeTestPalette()
+        let targetSize = 4
+        let classes = palette.totalClasses
+        let logits = makeOneHotLogits(targetSize: targetSize, classes: classes) { _, _ in
+            palette.background
+        }
+        for retaining in [true, false] {
+            XCTAssertThrowsError(try SegmenterPostProcessor.process(
+                logitsFP32: logits, targetSize: targetSize, classes: classes,
+                scaledWidth: targetSize, scaledHeight: targetSize,
+                originalWidth: targetSize, originalHeight: targetSize,
+                palette: palette,
+                retainCandidateEvidence: retaining
+            ), "retainCandidateEvidence: \(retaining)") { error in
+                XCTAssertEqual(error as? SegmentationError, .noFoodPixels)
+            }
+        }
+    }
 }

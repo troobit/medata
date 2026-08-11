@@ -64,17 +64,25 @@ public struct SegmentationResult: Sendable {
     public let timings: SegmentationTimings?
     // Argmax food-pixel share (0–100), from the segment-time coverage scan.
     public let foodCoveragePercent: Float?
+    // Alternative-class evidence keyed by detected class name. nil means the
+    // pass did not run (no probability tensor, hand-built result); non-nil
+    // however empty means it ran and nothing qualified — the meal record's
+    // `candidate_evidence_produced` marker carries that distinction forward
+    // (alternative-class-candidates Decision 4).
+    public let candidateEvidence: [String: [CandidateEvidence.Candidate]]?
 
     public init(probabilities: ProbabilityTensor, argmax: ArgmaxMap,
                 perClassMeanProb: [String: Float], sigmaSeg: Float,
                 timings: SegmentationTimings? = nil,
-                foodCoveragePercent: Float? = nil) {
+                foodCoveragePercent: Float? = nil,
+                candidateEvidence: [String: [CandidateEvidence.Candidate]]? = nil) {
         self.probabilities = probabilities
         self.argmax = argmax
         self.perClassMeanProb = perClassMeanProb
         self.sigmaSeg = sigmaSeg
         self.timings = timings
         self.foodCoveragePercent = foodCoveragePercent
+        self.candidateEvidence = candidateEvidence
     }
 }
 

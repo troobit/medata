@@ -28,7 +28,7 @@ references:
 
 ## The evidence pass (MedataCore Segmentation)
 
-- [ ] 3. CandidateEvidence.compute over a strided FP16 accessor <!-- id:67qnbf5 -->
+- [x] 3. CandidateEvidence.compute over a strided FP16 accessor <!-- id:67qnbf5 -->
   - New file MedataCore/Sources/Segmentation/CandidateEvidence.swift — one pure enum with Candidate (className: String, meanPermille: UInt32) and compute(probabilities:labelMap:palette:) -> [String: [Candidate]]
   - Decode the FP16 ProbabilityTensor through a per-pixel strided accessor, never FP16Bytes.decode (whole-tensor, ~398 MB of FP32 for a full frame) and never the pipeline's intermediate FP32 buffer — the FP32 low bits differ from the FP16 bytes a replayed bundle carries and could flip a borderline ranking
   - Stride 4 in both axes anchored at (0,0); serial raster accumulation so Float sum order is fixed and replay parity needs no deterministic-reduction machinery
@@ -42,7 +42,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [1.8](requirements.md#1.8), [2.1](requirements.md#2.1), [2.3](requirements.md#2.3), [3.2](requirements.md#3.2)
 
-- [ ] 4. Call the pass from PostProcessing and surface it on SegmentationResult <!-- id:67qnbf6 -->
+- [x] 4. Call the pass from PostProcessing and surface it on SegmentationResult <!-- id:67qnbf6 -->
   - Call site is PostProcessing.swift after regulariseLabelMap (:201), on the regularised map — not a pre-regularisation assignment
   - The ProbabilityTensor is currently constructed at :209; reorder so it exists before the pass, so the FP16 contract is not accidentally satisfied from the FP32 resized buffer
   - New field on PostProcessedOutput (PostProcessing.swift:14-19), surfaced by CoreMLSegmenter onto SegmentationResult.candidateEvidence: [String: [Candidate]]? — a new optional defaulting to nil, so every existing constructor and hand-built test result compiles unchanged
@@ -52,7 +52,7 @@ references:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
 
-- [ ] 5. CandidateEvidenceTests <!-- id:67qnbf7 -->
+- [x] 5. CandidateEvidenceTests <!-- id:67qnbf7 -->
   - Synthetic FP16 tensors with known per-channel structure asserting exact expected rankings
   - Exclusion of self, background, sentinel and cross-phase channels; strictly-positive-support filter; a class that won no pixel anywhere can still appear
   - The 5-set cap picks the largest sampled foods; the 64-sample floor yields honest absence
@@ -63,7 +63,7 @@ references:
   - Stream: 1
   - Requirements: [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.8](requirements.md#1.8), [2.3](requirements.md#2.3), [7.5](requirements.md#7.5)
 
-- [ ] 6. Non-interference test for the existing figures <!-- id:67qnbf8 -->
+- [x] 6. Non-interference test for the existing figures <!-- id:67qnbf8 -->
   - Run PostProcessing with and without the pass on the same input; assert the argmax bytes, sigma_seg, perClassMeanProb and the refusal outcome are identical
   - This is the guard on the hard invariant — the spec adds a retained quantity and corrects none
   - Blocked-by: 67qnbf6 (Call the pass from PostProcessing and surface it on SegmentationResult)

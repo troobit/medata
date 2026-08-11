@@ -25,6 +25,35 @@ fraction of the food's sampled pixels where the channel is the top non-winner"
 returns an empty set for every food, for the reason above. Decision 13 records
 this; do not reintroduce the literal form.
 
+## Where it lives, and the two ordering constraints
+
+`MedataCore/Sources/Segmentation/CandidateEvidence.swift` — one pure enum,
+`compute(probabilities:labelMap:palette:)`. Called from
+`SegmenterPostProcessor.process` and surfaced on `SegmentationResult.candidateEvidence`
+(optional, defaulting to `nil`, so every existing constructor and hand-built test
+result still compiles). `nil` means the pass did not run; non-nil however empty
+means it ran and nothing qualified — that is the distinction the persisted marker
+carries.
+
+Two orderings in `PostProcessing.swift` are load-bearing and look arbitrary:
+
+- The `ProbabilityTensor` is built **before** the pass, not at its original
+  position further down. The pass must read the FP16 bytes a replayed bundle
+  carries, not the intermediate `resized` FP32 buffer — the low bits differ and
+  could flip a borderline ranking, breaking harness replay parity.
+- The pass runs **after** `regulariseLabelMap`, on the regularised map, because
+  those are the pixels the persisted mask assigns.
+
+Inside `compute`, the tensor is read through a strided per-pixel accessor.
+`FP16Bytes.decode` is the whole-tensor path (~398 MB of FP32 for a full frame)
+and must not be used here.
+
+`process` takes `retainCandidateEvidence: Bool = true`. It exists for the Req 2.2
+non-interference test in `PostProcessingTests` (`with` vs `without` on the same
+input, exact equality on the argmax bytes, σ_seg, `perClassMeanProb`, the tensor
+bytes and the refusal outcome) — not as a product switch. Nothing else should
+pass `false`.
+
 ## The known defect: boundary bleed
 
 Rank-1 candidates physically touch the food **69.7%** of the time against a
