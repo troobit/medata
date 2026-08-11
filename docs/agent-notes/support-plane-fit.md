@@ -1276,3 +1276,108 @@ are rejected by then; #210 → #236, where 192 of 236 are).
 **Not repaired.** Adding adaptive stopping here is what the measurement recommends and it moves
 the shipped fallback plane — the plane Decision 36 prices `fallbackPenalty` against and the one
 that feeds `lidarMmPerPx` on the legacy path.
+
+## The headrooms, and why the corpus is the worst case for all of them (Decision 63)
+
+Decision 62 found `ringMinSamples`'s "5.6–7.0× margin" reading **2.64×** on a capture 61 mm
+further away, and left the obvious follow-up open: every other headroom in this feature was
+read at 336.9 and 338.9 mm too. This is that re-check, over all four committed slices at the
+shipped constants — `theQuotedHeadroomsAreReadingsAtTheCorpusRange`.
+
+| Reading | 272.9 mm | 336.9 mm | 338.9 mm | 399.9 mm |
+|---|---|---|---|---|
+| Smear envelope | 73.995 % | 91.963 % | **93.078 %** | **110.054 %** |
+| Ring band margin | 5.950× | 6.470× | 5.600× | **2.640×** |
+| Pass depth (cap lifted) | 2 | 3 | 3 | 2 |
+| Residue left | 0.000 % | 9.202 % | **78.695 %** | 1.146 % |
+| Iteration headroom | 204.800× | 49.951× | **8.192×** | 341.333× |
+| Polish depth to fixed point | 6 | 5 | **17** | 4 |
+| Selected tilt | 0.920° | 1.639° | **8.309°** | 0.755° |
+| Smallest admitted extent | 109.513 mm | **47.821 mm** | 141.479 mm | 50.625 mm |
+
+**Nothing recorded has to move.** Every headroom that transfers has its *worst* reading on the
+corpus, so the figures Decisions 29–57 quote are worst cases rather than typical ones. Read the
+bold column entries: they are the binding value for their row in every case but the two
+`mmPerPx` rows.
+
+**Caps transfer; millimetre-denominated quantities need checking.** A cap bounds a *loop*, and
+loops count draws and passes, so `maxCandidatePlanes` never fires (extraction stops **starved**
+on all four), `maxIterationsPerPass` never fires, and `consensusPolishMaxPasses` always binds —
+all three findings intact across 1.5× of range and a different plate.
+
+**The two re-denominations are both evidenced now, by different experiments.**
+`minAcceptedExtentMm` holds because extent is a pixel count × `mmPerPx` and the pixel count of a
+fixed surface falls as `mmPerPx` rises — the terms cancel, which is exactly why Decision 37
+converted it out of pixels. Decision 62 proved the same for `minResidueAreaMm2` across a grid
+halving; this proves the extent one across range.
+
+**The two failures are not the same failure.** The smear envelope *is* `mmPerPx` up to a
+constant, so it is linear in range and orders by it exactly. The ring band margin is denominated
+in `mmPerPx` and is **not a function of it** — 5.600× at 338.9 mm against 5.950× at 272.9 mm,
+while two captures 2 mm apart read 5.600× and 6.470×. Perimeter is in that sample count as much
+as resolution. Decision 62 flagged this as a caveat; it is now measured non-monotonicity, and
+the test asserts it (a future slice making the margin monotone in range fails there on purpose).
+
+**Two things the pair makes look safer without measuring.** The cone margin's binding capture is
+the corpus's 8.309°; the pair's plates are an order flatter, so `gravityAngleMaxRad` is still
+owed to a capture that tilts the plate deliberately. And the polish depth reads 17, 5, 6, 4 — so
+Decision 54's 17 is one capture, and a ceiling set from it is set from an outlier.
+
+**`rangeCaptures`'s admission is now a rule, not a list.** Decision 62 admitted the pair for
+"the grid-transfer measurements only"; Decision 63 widens that to "any measurement that reads no
+owed constant **as a bar**". The audit reads distances from *shipped* values, so it
+re-denominates nothing in Decisions 40–57 — which was the actual condition, the grid being
+incidental to it. Harder to check mechanically; check what a new test reads before adding the
+pair to it.
+
+## The degeneracy gate, and why it works on one leg and not the other (Decision 64)
+
+`LiDARPlaneFitter.stabilityRatioMin = 1e-6` was the last constant in either file with no
+marker and no sweep. It is `refine`'s refusal — σ_min(A)/σ_max(A) for the centred 3×n
+sample matrix, computed through the 3×3 scatter matrix — and both fitters reach it:
+extraction calls `refine` through `try?` so a refusal silently drops a candidate, the
+fallback leg throws `.lidarFitDegenerate`.
+
+**It is disabled by sample count.** On an exactly planar set (σ_min zero by construction):
+
+| n | shipped σ_min/σ_max | gate |
+|---|---|---|
+| 1,000 – 50,000 | 0.0 | REFUSES |
+| 100,000 | 1.43e-3 | admits |
+| 200,000 | 1.80e-2 | admits |
+| 640,000 | 2.94e-2 | admits |
+| 1,300,000 | 3.22e-2 | admits |
+
+Extraction refines annulus sets of **1,752–9,087** samples; the fallback leg refines
+colour-grid sets of **641,694** and **1,298,233**. The crossover is between them, so one
+fitter's degeneracy guard works and the other's does not, and nothing distinguishes them
+but how many samples each hands to the same function. Consistent with a Float running sum
+losing exactness past 2²⁴ (n ≈ 47,934 at a 350 mm standoff) — which makes the crossover
+range-dependent, the `mmPerPx` family again.
+
+**The cause is the centroid, not the normal-equations squaring.** Forming M = AᵀA squares
+the condition number and is the obvious suspect; moving the scatter *and* the
+decomposition to Double while keeping the shipped Float centroid reproduces the shipped
+reading on every rung, so it is not. What is left is Decision 58's three Float
+`reduce(0, +)` sums. **An offset centroid displaces every centred sample by a constant, and
+a constant displacement is indistinguishable from thickness along the thin axis** — so that
+defect manufactures the conditioning this gate reads as healthy. On the corpus: 1.0001×
+inflation on the extraction sets, 1.0752× and 1.2631× on the two fallback sets.
+
+**σ_min/σ_max is not the rank discriminant, so there is no floor to find.** An exactly
+planar set and a collinear one both drive it to zero (9.5e-9 and 0.0); σ_2/σ_max separates
+them (0.99999 against 0.0) and the gate does not read it. A strip carrying the corpus's own
+3.44 mm of per-sample noise is admitted at every width down to 0.02 mm — reading 1e-4, a
+hundred times the bar — and only exactly zero refuses. Firing at the shipped value needs a
+strip under 0.2 µm. Bracketed **0…0.0113** by the corpus: a ceiling only. First owed
+constant recorded as unsettleable rather than bracketed.
+
+**The scenes' claim is true at the scenes' scale.** `SupportRegionScenes.makeDepth` derives
+its ±0.3 mm from this gate; at its 1,964- and 2,420-sample surfaces an exactly planar scene
+really does yield zero candidates. The same sentence at 200,000 samples is false. The
+margin is not delicate — at 0.05 mm the surfaces read 602× and 995× the bar — so any
+nonzero noise clears it and 0.3 mm is not a tuned value.
+
+**Not repaired**, on Decisions 52–58's precedent: reading σ_2/σ_max, or accumulating the
+centroid in Double, changes which candidates survive `try? refine` and moves the fallback
+plane — the one Decision 36 prices `fallbackPenalty` against.

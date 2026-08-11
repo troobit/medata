@@ -3862,3 +3862,324 @@ on `residueAreaTransfersAcrossAGridHalving`),
 note's open question closes), `tasks.md` task 26. No shipped code changes.
 
 ---
+
+## Decision 63: Every headroom that transfers is tightest on the corpus, and the two that do not are denominated in mmPerPx alone
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 62 closed with a negative it could not discharge itself. It had just
+found that Decision 29's `ringMinSamples` margin — "5.6–7.0× ", recorded as
+settled — reads **2.64–3.00×** on a capture 61 mm further away, and noted that
+"any other headroom quoted in Decisions 29–57 from the two original captures
+carries the same unstated qualifier and has not been re-checked."
+
+That negative is load-bearing. Seven decisions rest a constant on a headroom:
+`ringInnerMm` on the smear envelope's 8 % (Decision 39), `maxCandidatePlanes`
+on "the cap never fires" (Decision 48), `maxIterationsPerPass` on its 8× spare
+budget (Decision 51) — which is also where Decision 61 defers the
+`ransacSuccessProbability` tightening to be paid from — `consensusPolishMaxPasses`
+on "the cap always binds" (Decision 54), `gravityAngleMaxRad` on 6.100° of
+margin (Decision 55), and `minAcceptedExtentMm` on 3.8 mm above the shipped bar
+(Decision 37). Each was read at 336.9 and 338.9 mm and nowhere else.
+
+### Decision
+
+Re-read every one of them on all four committed slices at the shipped
+constants, and classify each as the algorithm's or as the corpus's. **No
+recorded value moves**: the four headrooms that survive leaving the corpus's
+range all have their *worst* reading inside it, so the corpus is a worst case
+and the pair confirms rather than qualifies. The two that do not survive are
+the two denominated in `mmPerPx` alone, and they fail differently from each
+other.
+
+`rangeCaptures`'s admission widens from Decision 62's "read by the grid-transfer
+measurements **only**" to **"read by any measurement that reads no owed constant
+as a bar"**. ~~Grid transfer only.~~ The audit is not a grid-transfer
+measurement, and every figure in it is a distance from a *shipped* value, so it
+sets and re-denominates nothing Decisions 40–57 bracket — which was the
+condition that admission was granted under, not the grid.
+
+### Rationale
+
+| Reading | 1786450130307 | 1785901032716 | 1785135663727 | 1786439141215 |
+|---|---|---|---|---|
+| Range | 272.9 mm | 336.9 mm | 338.9 mm | 399.9 mm |
+| Smear envelope | 73.995 % | 91.963 % | **93.078 %** | **110.054 %** |
+| Ring band margin | 5.950× | 6.470× | 5.600× | **2.640×** |
+| Pass depth (cap lifted) | 2 | 3 | 3 | 2 |
+| Residue left | 0.000 % | 9.202 % | **78.695 %** | 1.146 % |
+| Iteration headroom | 204.800× | 49.951× | **8.192×** | 341.333× |
+| Polish depth to fixed point | 6 | 5 | **17** | 4 |
+| Selected tilt | 0.920° | 1.639° | **8.309°** | 0.755° |
+| Smallest admitted extent | 109.513 mm | **47.821 mm** | 141.479 mm | 50.625 mm |
+
+**The three caps hold, and they hold for a reason that is not luck.** A cap
+bounds a *loop*, and the loops count draws and passes rather than millimetres,
+so nothing in them is denominated in `mmPerPx`. Extraction stops **starved on
+every slice** — the residue floor ends it, never `maxCandidatePlanes`
+(Decision 48). `maxIterationsPerPass` **never fires on any slice**
+(Decision 51). `consensusPolishMaxPasses` **binds on every slice**
+(Decision 54). All three findings transfer intact across a 1.5× range change, a
+different session and a different plate.
+
+**And their magnitudes move in the safe direction every time.** The iteration
+headroom is **8.192×** on the corpus against 49.951–341.333× elsewhere; the
+residue left after the last pass is **78.695 %** of the floor on the corpus
+against 0.000–9.202 %. Decision 61 defers the `ransacSuccessProbability`
+tightening to be paid out of the first of these, and the pair says that budget
+is 6–42× larger than the figure the deferral was written against.
+
+**The extent bar holds because Decision 37 re-denominated it.** Extent is a
+pixel count *times* `mmPerPx`, and the pixel count of a fixed surface falls as
+`mmPerPx` rises, so the two cancel and the millimetre reading is a physical
+size. The prediction is that this headroom does not move with range, and it does
+not: the pair admits 109.513 mm and 50.625 mm against the corpus's **47.821 mm**,
+so the corpus still sets the ceiling and Decision 37's 22.3…47.8 mm bracket is
+unchanged. Decision 62 proved the same property for `minResidueAreaMm2` across a
+grid halving; this is the other re-denominated constant, proved across range.
+**Both re-denominations are now evidenced, and by different experiments.**
+
+**The two that fail are both `mmPerPx` and they fail differently.** The smear
+envelope *is* `mmPerPx` up to a constant, so it is linear in range and orders by
+it exactly — 73.995, 91.963, 93.078, 110.054 % — with one committed slice
+**past its own bound**. The ring band margin is denominated in `mmPerPx` too and
+is **not a function of it**: 5.600× at 338.9 mm against 5.950× at 272.9 mm, a
+24 % nearer capture buying 6 % of margin, while two captures 2 mm apart read
+5.600× and 6.470×. Perimeter is in that count as much as resolution — the ring
+is a band around the food *boundary* — so it moves for two reasons at once and
+range alone does not order it. Decision 62 recorded this as a caveat on a
+consistency check; it is now a measured non-monotonicity.
+
+**Two findings survive as the corpus's own, and stay owed.** The cone margin
+read on the selected plane is **6.691°**, and the binding capture is the
+corpus's: 8.309° against 1.639, 0.920 and 0.755°. The pair's plates are an order
+flatter, so they widen the margin and settle nothing — Decision 55's constant is
+still owed to a capture that tilts the plate on purpose. (This is the *selected
+plane*, not Decision 55's 8.900° *hypothesis*; the two are different quantities
+and are not compared as one.) And the polish depth reads 17, 5, 6, 4: the cap
+binds everywhere, which is Decision 54's finding, but **17 is one capture** and
+the other three sit just above the shipped 3, so a ceiling set from 17 would be
+set from an outlier.
+
+### Alternatives Considered
+
+- **Re-read the headrooms only where a decision calls one settled**: the audit
+  shrinks to Decisions 29 and 39, which Decision 62 had already reached —
+  Rejected: the value here is the *contrast*. That the caps hold and the two
+  `mmPerPx` quantities do not is a statement about denomination, and it is only
+  visible with both families in the same table.
+- **Admit the pair to `captures` and let every existing test re-read itself**:
+  every bracket would be re-measured rather than audited, which is strictly more
+  information — Rejected for Decision 61's reason, unchanged: it re-denominates
+  Decisions 40–57 days before the sitting reads against them. The audit gets the
+  qualifier without paying that.
+- **Re-run the full sweeps at the pair's range rather than reading shipped
+  values**: it would bracket each constant on four slices instead of two —
+  Rejected because a sweep reads owed constants *as bars*, which is exactly the
+  condition `rangeCaptures` is excluded under. Reading a distance from a shipped
+  value is not.
+- **Record the polish outlier by setting a ceiling of 17**: the corpus's
+  deepest fixed point is a real measurement and the cap's own derivation is met
+  there — Rejected: 17 against 4, 5 and 6 is one capture, and Req 3.7 forbids
+  setting a bar from a single reading. The ceiling is still owed to Req 7.6's
+  latency measurement in task 27.
+
+### Consequences
+
+**Positive:**
+- Decision 62's open negative is discharged. Every headroom in Decisions 29–57
+  now carries a range qualifier or a measurement saying it does not need one.
+- Nothing recorded has to move: the corpus is the binding case for all four
+  transferring headrooms, so every figure quoted beside a constant is a worst
+  case rather than a typical one.
+- The `ransacSuccessProbability` tightening Decision 61 defers has 6–42× more
+  budget than the deferral assumed.
+- Both of the feature's re-denominations — `minAcceptedExtentMm` (Decision 37)
+  and `minResidueAreaMm2` (Decision 38) — are now evidenced by experiment rather
+  than by construction, and by two different experiments.
+- The ring band margin's non-monotonicity is measured rather than suspected,
+  which is a bound on how far Decision 29's constant can be reasoned about
+  without a perimeter term.
+
+**Negative:**
+- The cone margin and the polish depth are re-confirmed as owed, and the pair
+  makes both *look* safer while measuring nothing about either — a reader taking
+  the widened figures at face value would draw the wrong conclusion.
+- Four slices is still four, and two of them are one plate on one day. "The
+  corpus is the worst case" is a statement about the evidence in hand.
+- The audit reads the shipped constants only, so a headroom that would move
+  under a different owed setting is invisible to it.
+- `rangeCaptures`'s admission is now a rule about what a measurement reads
+  rather than a list of which measurements may read it, which is harder to check
+  mechanically.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theQuotedHeadroomsAreReadingsAtTheCorpusRange`, `HeadroomReading`,
+`polishFixedPointCeiling`, and the widened `rangeCaptures` comment),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---
+
+## Decision 64: The degeneracy gate is disabled by sample count, and it reads a quantity that cannot answer the question
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+`LiDARPlaneFitter.stabilityRatioMin = 1e-6` was the last constant in either
+file this feature audits with no provenance marker and no sweep. Decision 51
+closed with "every constant in `SupportRegion` now carries a provenance
+marker"; Decision 52 found four of those markers terminating in
+`inlierBandMm`, one file outside, and Decisions 53–58 swept that file's own
+constants one by one. This is what was left: a bare `static let` with no
+comment, read at one place — `refine`'s refusal
+
+    √(M.s[2]) / √(M.s[0]) ≥ stabilityRatioMin,   M = Σ (pᵢ − c)(pᵢ − c)ᵀ
+
+which is σ_min(A)/σ_max(A) for the centred 3×n sample matrix A, computed
+through the 3×3 scatter matrix. Both fitters reach it: `SupportRegion`'s
+extraction calls `refine` per pass and per polish iteration through `try?`, so
+a refusal silently drops a candidate; the fallback leg throws
+`.lidarFitDegenerate` out of `fitOutcome`. Two committed tests name it —
+`SupportRegionScenes.makeDepth` derives its ±0.3 mm of noise from it, and the
+`lidar-plane-fit-degenerate-on-clean-capture` bugfix narrows that to 0.05 mm.
+
+### Decision
+
+Measure it, and record that it is **owed differently from every constant
+before it**: the sweep does not bracket a value, it finds the gate reading a
+quantity that cannot answer the question it is asked. Bracketed 0…0.0113 by
+the corpus — a ceiling only, and no floor exists to be found. Not repaired.
+
+### Rationale
+
+Five measurements, in `theStabilityGateIsBelowTheResolutionOfItsOwnInput`.
+
+**It is disabled by SAMPLE COUNT, and the two legs sit either side.** On an
+exactly planar set — σ_min zero by construction — the shipped expression
+refuses up to 50,000 samples and **admits** from 100,000. Extraction refines
+annulus inlier sets of 1,752–9,087 samples and the gate works there; the
+fallback leg refines colour-grid sets of 641,694 and 1,298,233 and it does
+not. Nothing distinguishes the two legs but how many samples each hands to the
+same function. The crossover is consistent with a Float running sum losing
+exactness past 2²⁴, which at a 350 mm standoff is n ≈ 47,934 — reported beside
+the measured bracket rather than in place of it, and it means the crossover
+**moves with range**, like the two quantities Decision 63 found denominated in
+`mmPerPx`.
+
+**The cause is the centroid, not the normal-equations squaring.** Forming
+M = AᵀA squares the condition number and is the obvious suspect. It is wrong:
+moving the scatter accumulation *and* the eigen-decomposition to Double while
+keeping the shipped Float centroid reproduces the shipped reading on every
+rung of the thickness ladder. What is left is the centroid — three Float
+`reduce(0, +)` sums, exactly the quantity Decision 58 measured on `d`. An
+offset centroid displaces every centred sample by a constant, and **a constant
+displacement is indistinguishable from thickness along the thin axis**. So the
+defect that puts the fallback plane 1.184 mm off its own minimiser
+manufactures the conditioning this gate then reads as healthy. Measured on the
+corpus: 1.0001× inflation on the extraction sets, 1.0752× and 1.2631× on the
+two fallback sets — the synthetic split reproduced on real depth.
+
+**σ_min/σ_max is not the rank discriminant.** An exactly planar set (the plane
+is exact) and a collinear one (no plane exists at all) both drive it to zero —
+9.5e-9 and 0.0. What separates them is σ_2/σ_max, 0.99999 against 0.0, which
+this gate does not read. So **no value of this bar** distinguishes a perfect
+fit from a degenerate one, and the better the fit the closer it comes to being
+refused. This is why there is no floor to measure: the ceiling is a corpus
+fact, the floor would have to come from the degenerate side, and the statistic
+does not order that side.
+
+**On the case the guard is actually for, only exactly zero fires it.** A strip
+carrying the corpus's own 3.44 mm of per-sample noise (Decision 29) is
+admitted at every width down to 0.02 mm, where it reads 1e-4 — a hundred times
+the bar — and only a width of exactly 0 refuses. Firing at the shipped value
+needs a strip under 0.2 µm. Note the shipped reading is *accurate* on the
+strips and inaccurate on the ladder, and the difference is measured rather
+than assumed: the ladder's two largest axes are equal (σ_2/σ_max = 0.99999)
+and the strip's are not (0.0172), and a near-equal pair is where the smallest
+eigenvalue is least well determined. The ladder's shape — a square patch — is
+the shape a plate is.
+
+**It cannot fire on the corpus by four orders.** Both legs on both captures
+read 0.0113–0.0480, so the bar is 11,292–47,989× below every committed
+reading. Swept, no bar at or below 0.01 refuses anything and 0.1 refuses
+everything.
+
+**The committed scenes' derivation holds, at their scale.**
+`SupportRegionScenes.makeDepth` states that "an exactly-planar sample set has a
+rank-2 scatter matrix, which `refine`'s σ_min/σ_max stability gate rejects as
+degenerate". At the scenes' own 1,964- and 2,420-sample surfaces that is
+**true** — noise 0 yields zero candidates and no fit. The same sentence at
+200,000 samples is false. It is the first finding read from the other side,
+and it is the reason a claim can sit in a test helper for months and be both
+correct and unable to travel. The margin is not delicate either: at 0.05 mm
+the surfaces read 602× and 995× the bar, so any nonzero noise clears it and
+the shipped 0.3 mm is not a tuned value.
+
+### Alternatives Considered
+
+- **Set the bar from the corpus ceiling** (anything in 0…0.0113 passes every
+  committed fit): it is the only bound that exists, so this looks like the
+  same move Decisions 44–57 made — Rejected: the third finding says the
+  statistic does not separate the two populations at any value, so choosing
+  one asserts that a bar exists. Req 3.7 forbids exactly that.
+- **Repair it here — read σ_2/σ_max, or accumulate the centroid in Double**:
+  both are what the measurement recommends and the second is already written
+  (`refineDoubleAccumulated`) — Rejected on Decisions 52–58's precedent. Either
+  changes which candidates survive `try? refine` and moves the shipped plane,
+  and the fallback plane is what Decision 36 prices `fallbackPenalty` against
+  and what feeds `lidarMmPerPx` on the legacy path.
+- **Attribute the reading to the normal-equations squaring and stop there**:
+  the squaring is real and the arithmetic argument is sound — Rejected because
+  it is measurably not the cause. The Double-scatter column reproduces the
+  shipped one on every rung; stopping at the plausible mechanism would have
+  recorded the wrong defect and pointed the repair at the wrong line.
+- **Delete the gate**: it fires on nothing the corpus contains and on no strip
+  of nonzero width — Rejected: it *does* refuse the exactly-degenerate sets at
+  extraction's sample counts, which is where the
+  `lidar-plane-fit-degenerate-on-clean-capture` bugfix lives, and deleting it
+  would remove the one place it works.
+
+### Consequences
+
+**Positive:**
+- Every constant in both files now carries a provenance marker and a sweep.
+  This was the last one.
+- Decision 58's centroid defect gains a second consequence, measured on the
+  corpus rather than argued: it does not only displace `d`, it disables the
+  degeneracy guard on the leg with more samples.
+- The scenes' ±0.3 mm is now checkable rather than prose, and its margin is
+  known to be 600–6,000× rather than assumed to be tight.
+- The gate is confirmed working where the bugfix that motivated it lives.
+
+**Negative:**
+- A constant is recorded as unsettleable rather than bracketed, which is a
+  first for this feature and gives the sitting nothing to measure against.
+- The fallback leg ships with no effective degeneracy guard, and that is
+  recorded rather than fixed.
+- The crossover is range-dependent and only one standoff has been measured, so
+  the 50,000…100,000 bracket carries the qualifier Decision 62 introduced.
+- Two of the findings rest on synthetic sets. The corpus can confirm that the
+  gate does not fire; it contains nothing degenerate, so it cannot confirm
+  what happens when it should.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (the marker on
+`stabilityRatioMin` and on `minPoints`),
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theStabilityGateIsBelowTheResolutionOfItsOwnInput`, `StabilityReading`,
+`symmetricEigenvalues3`, `stabilityReading`, `lattice`),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---
