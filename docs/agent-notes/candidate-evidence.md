@@ -86,6 +86,33 @@ Two things about the call site in `App/MealReviewModel.swift` are worth knowing:
   as-treated cut (Decision 12) is recoverable offline because the meal record
   persists the evidence map.
 
+## Replay parity, and what it actually claims
+
+`MedataCore/Tests/HarnessCLITests/CandidateEvidenceReplayParityTests.swift` is
+the **only** harness caller of `compute`. There is no candidate-evidence code in
+`HarnessCore` or `HarnessCLI`: the harness runs no `PostProcessing`, writes no
+meal record and sets no marker, so parity is structural — device and replay
+reach one function with the same bytes. Req 6.1's coverage is that shared
+function plus this test's golden, and nothing more is claimed.
+
+The golden is a literal in the same file as the synthetic fixture that produces
+it, not a separate committed artifact. Each figure is `round(FP16(v) × 1000)`
+over a region whose pixels all carry the same declared vector, so the expected
+values are arithmetic rather than a recording of what the code last did.
+
+One channel in the fixture is load-bearing: `pasta` is declared **0.2005**, which
+quantises to **200** per mille read as FP16 and **201** read as FP32. A ranking
+taken off the post-processor's intermediate FP32 buffer instead of the bytes a
+replayed bundle carries fails on that one slot and nothing else — which is the
+whole point of it being there. Do not "tidy" it to a round number.
+
+**Admissible fixtures are capture-bundle-derived and synthetic only.** A bundle
+records the cleaned prediction, so its argmax IS the persisted mask; a fixture
+with `source_dataset` set is Nutrition5k-derived and carries the ground-truth
+mask in that same field, so evidence computed over truth regions would be a
+plausible-looking wrong number. The test's `admissible` predicate makes the same
+refusal `tools/candidate_probe.py` does.
+
 ## The known defect: boundary bleed
 
 Rank-1 candidates physically touch the food **69.7%** of the time against a
