@@ -8,18 +8,20 @@ references:
 
 ## Probe gate (Decision 11)
 
-- [-] 1. Offline probe of the ranking statistic over real tensors <!-- id:67qnbf3 -->
+- [x] 1. Offline probe of the ranking statistic over real tensors <!-- id:67qnbf3 -->
   - Standalone offline script (tools/, not shipped code) — runs a prototype of the compute over admissible tensors only: device capture bundles and segmenter validation outputs. Nutrition5k fixtures are excluded, their argmax field carries the ground-truth mask, not a persisted prediction
-  - Report (a) top-5 set constancy across foods and plates, (b) adjacency share of rank-1 candidates — how often rank 1 is a class physically adjacent on the same plate, (c) both figures again under a second-argmax-share statistic (fraction of the food's sampled pixels where the channel is the top non-winner)
+  - Report (a) top-5 set constancy across foods and plates, (b) adjacency share of rank-1 candidates, (c) both figures again under a second-argmax-share statistic
   - Use the same sampling the design fixes: stride-4 in both axes anchored at (0,0), FP16 tensor decode, regularised label map, 64-sample floor per detected class
-  - A verdict that neither statistic carries plate-specific signal is a valid early exit for the whole spec — record it and stop rather than proceeding
+  - DONE 2026-08-11: tools/candidate_probe.py. The five device bundles are single-food plates (four bread, one rice), so adjacency is unmeasurable there and constancy rests on n=2 — the deciding run is the validation leg Decision 11 permits (checkpoint ab812dc3aa9d, 200 plates, 676 scored foods, 27 distinct foods, 160 multi-food plates)
+  - Findings: rank-1 adjacency 69.7% vs 9.1% chance and erosion does not remove it (57.7% at 16 px, -27% scored foods); prior domination absent at the top (rank 1 matches the corpus prior 15.7%, 29 distinct rank-1 classes); the true class is in the top five on 78.2% of the segmenter wrong regions under mean vs 68.6% under second-argmax share
+  - The literal second-argmax definition returns nothing — background is the top non-winner at 99-100% of food pixels, so eligibility must be applied before the statistic, not after ranking
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3)
 
-- [ ] 2. Fix the ranking statistic and record it as a decision <!-- id:67qnbf4 -->
-  - Add Decision 13 to decision_log.md: which statistic ships (mean-over-region or second-argmax share), justified from the probe figures, with the rejected one as a documented alternative
-  - Amend design.md's behavioural-contract table row so the statistic is no longer marked provisional
-  - No implementation task below starts before this lands — Decision 11 sequences the probe first
+- [x] 2. Fix the ranking statistic and record it as a decision <!-- id:67qnbf4 -->
+  - Decision 13 added to decision_log.md: mean over eligible channels ships; second-argmax share, interior-only sampling and early exit all rejected with measured reasons
+  - design.md behavioural-contract row no longer marked provisional; the Testing Strategy gate is marked discharged and carries the corpus caveats
+  - Boundary bleed ships unmitigated and is named as the first place to look if Req 8 returns neutral — Decision 5 removal obligation (task 19) applies
   - Blocked-by: 67qnbf3 (Offline probe of the ranking statistic over real tensors)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3)
@@ -31,6 +33,7 @@ references:
   - Decode the FP16 ProbabilityTensor through a per-pixel strided accessor, never FP16Bytes.decode (whole-tensor, ~398 MB of FP32 for a full frame) and never the pipeline's intermediate FP32 buffer — the FP32 low bits differ from the FP16 bytes a replayed bundle carries and could flip a borderline ranking
   - Stride 4 in both axes anchored at (0,0); serial raster accumulation so Float sum order is fixed and replay parity needs no deterministic-reduction machinery
   - Exclusions: the food's own channel, background, unknown_food, unsupported_liquid, and cross-phase channels — isFoodClass/isLiquidClass decide phase
+  - Decision 13: apply eligibility to the channel set BEFORE taking the statistic, not by ranking all channels and filtering after. The two differ whenever a sentinel would otherwise occupy a slot, and background outscores every food channel at ~100% of food pixels
   - Rank descending by the statistic pre-quantisation, ties broken by channel declaration order; retain the top 5 with strictly positive support
   - Floor: a detected class with fewer than 64 sampled pixels gets no entry at all (Decision 11)
   - Cap: retain sets for at most the 5 detected classes with the most sampled pixels, ties by declaration order (Decision 10, the persisted-encoding budget bound)
