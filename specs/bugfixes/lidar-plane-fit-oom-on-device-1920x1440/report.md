@@ -1,7 +1,7 @@
 # Bugfix Report: LiDAR Plane Fit OOM on Device 1920×1440
 
 **Date:** 2026-06-04
-**Status:** Fixed (automated); on-device verification pending
+**Status:** Fixed — on-device verified 2026-08-11 (iPhone 16 Pro, retargeted from the 13 Pro Max per user directive; 383,543-inlier refine completed in-place)
 
 ## Description of the Issue
 
@@ -162,6 +162,25 @@ xcodebuild test \
 
 - [ ] The `Fatal error: failed to allocate ...` line must NOT appear. (A different downstream failure such as `noFoodVolumeRecovered` is acceptable for Phase 1, since the dev-stub segmenter does not produce real food classes.)
 - [ ] Append the captured on-device log block to this report's Verification section once the run is observed.
+
+### On-device verification (2026-08-11, iPhone 16 Pro — closes the report)
+
+Per the 2026-08-11 user directive, remaining iPhone 13 Pro Max verifications are
+retargeted to the current primary device (iPhone 16 Pro). The scene is a bread plate
+rather than the fruit plate — the load that matters is the full-resolution candidate
+and inlier counts, not the food. Evidence is the persisted `estimation_outcomes` store
+(Release build `9509b27-20260811-185011`, real Core ML segmenter):
+
+| Stem | Path | planeCandidateCount | planeInlierCount | planeResidualMm | Outcome |
+|---|---|---|---|---|---|
+| `1786439141215` | `single_view_lidar` | 4,968 | 4,433 | 1.81 | success |
+| `1786439234576` | `two_view_sfs` | 30,706 | 30,330 | 1.26 | success |
+| `1786439300420` | `two_view_sfs` | 1,055,573 | **383,543** | 2.12 | success |
+
+The third capture put 383,543 inliers through `refine`. Pre-fix, the 3×n SVD's n×n
+V^T buffer at that n would be ~588 TB — the run could not have completed at any
+memory budget. It completed with a finite 2.12 mm residual and the app never crashed
+across 15 attempts. The `Fatal error: failed to allocate` abort does not reproduce.
 
 ## Prevention
 

@@ -1,7 +1,7 @@
 # Bugfix Report: LiDAR Plane Fit Degenerate on Clean Capture
 
-**Date:** 2026-06-03 (original fix), re-opened 2026-06-16
-**Status:** Fixed (automated, both passes); on-device verification pending for the 2026-06-16 re-open
+**Date:** 2026-06-03 (original fix), re-opened 2026-06-16, closed 2026-08-11
+**Status:** Fixed (real-mask path) — on-device verified 2026-06-19 (single-view, iPhone 13 Pro Max) and 2026-08-11 (single-view + two-view, iPhone 16 Pro)
 
 > **Re-opened 2026-06-16**: The original fix below (centre-rectangle `roughMask` at `Pipeline.fitSupportPlane`) was retired by `specs/estimation/pipeline-real-device-correctness/` once the real `PreShutterSegmenter` mask was wired through `CaptureResult.preShutterFoodMask`. The real-mask path then re-tripped `lidarFitDegenerate` because `LiDARPlaneFitter.collectCandidatePoints` only scanned the band BELOW the food bbox; centred capture envelopes whose bbox extends to (or near) the image's bottom edge starved that single band. Fix: scan four edge bands (top, bottom, left, right) around the bbox. See `smolspec.md` (`## Re-open 2026-06-16`), `decision_log.md` Decision 2, and `tasks.md` (tasks 6-9). The all-ones-mask `SupportPlaneRoughMaskTests` sentinel from the original fix is preserved.
 
@@ -195,6 +195,30 @@ collinear inliers) the moment it next fires.
 **Instrumentation restored (this commit):**
 - `Pipeline.fitSupportPlane` — DEBUG `event=supportplane.end success=false failure=<case> candidates=N inliers=M bboxX=.. bboxY=.. bboxW=.. bboxH=..` on the failure path, preserving the exact `SupportPlaneError → EstimationFailure` mapping.
 - `LiDARPlaneFitter` — DEBUG `debugLastFoodBBox{X,Y,W,H}` statics populated in `collectCandidatePoints`, so the failure trace reports whether a degenerate/full-frame bbox starved the four-edge scan.
+
+### On-device verification (2026-08-11, iPhone 16 Pro — closes the re-open)
+
+The 2026-06-19 observation left the **two-view SfS path unverified**. Per the 2026-08-11
+user directive, remaining iPhone 13 Pro Max verifications are retargeted to the current
+primary device (iPhone 16 Pro, the v1 hardware floor — segmenter-foundation Decision 22).
+Evidence is the persisted `estimation_outcomes` store rather than a Console trail — the
+store records per-attempt success/failure and stage measurements for every attempt
+(`docs/agent-notes/device-build-and-test.md`, field-triage section), which is the same
+fact the log lines carry.
+
+Session: Release build `9509b27-20260811-185011`, model `coreml_ab812dc3aa9d`,
+one slice of bread (58 g weighed) on a white plate, 15 attempts 19:05–19:08 local:
+
+| Stem | Path | Outcome |
+|---|---|---|
+| `1786439141215` | `single_view_lidar` | **success** — planeResidualMm 1.81, planeReference `foodSupport` |
+| `1786439234576` | `two_view_sfs` | **success** — planeResidualMm 1.26, planeReference `edgeBand` |
+| `1786439300420` | `two_view_sfs` | **success** — planeResidualMm 2.12, planeReference `edgeBand` |
+| 12 further attempts | `two_view_sfs` | typed refusals only: `noFoodPixels` ×7, `worldTrackingDegraded` ×5 |
+
+`lidarFitDegenerate` appears **zero** times across all 15 attempts, on either path.
+Both capture paths complete end-to-end with a successful plane fit; the failure the
+re-open tracked does not reproduce on the real-mask code.
 
 ## Prevention
 

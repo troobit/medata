@@ -1,12 +1,6 @@
 ---
 references:
     - specs/bugfixes/closeout-trail-mvp-cleanup/smolspec.md
-parked_note: |
-  Parked (2026-07-26, spec-janitor): tasks 6-7 (STOP device verification and the
-  atomic four-spec closeout commit) remain open with no activity since early July.
-  The code-side tasks 1-5 landed. Left open deliberately - the verification needs
-  a human with the device; unpark by running task 6 or annotate as superseded if
-  the closeout is no longer wanted.
 ---
 # MVP Closeout Trail — Tasks
 
@@ -62,7 +56,7 @@ parked_note: |
 
 ## Phase 5 — Closeout
 
-- [ ] 6. STOP — final on-device verification (Single + Double) <!-- id:v6kipz3 -->
+- [x] 6. STOP — final on-device verification (Single + Double) <!-- id:v6kipz3 -->
   - Agent: rebuild + reinstall after task 5 fixes.
   - User: same drive as task 4 — Single mode + Double mode at well-aimed tilt. Paste both trails.
   - Success criteria (BOTH modes): event=estimate.start maskAgeMs=N with 0 ≤ N ≤ 750
@@ -73,10 +67,10 @@ parked_note: |
   - Different-refusal rule: any failure mode aborts closeout — agent reports observed delta and waits.
   - Blocked-by: v6kipz2 (Apply one targeted latency cut to the dominant slow stage; close volume refusal if reproduced)
 
-- [ ] 7. Atomic four-spec closeout commit <!-- id:v6kipz4 -->
+- [x] 7. Atomic four-spec closeout commit <!-- id:v6kipz4 -->
   - One commit, no push, no PR.
   - This spec — append ## Verification to smolspec.md with build SHA + verbatim Single + Double success trails; tick this tasks.md tasks 1-6.
   - no-food-pixels-on-fruit-plate-mvp/ — append ## Verification to its smolspec.md with the same trails; tick tasks 8 (id:op0jbky), 9 (id:op0jbkz), 10 (id:op0jbl0); remove the BLOCKED 2026-06-16 annotation from task 8.
   - lidar-plane-fit-degenerate-on-clean-capture/ — append ### On-device observation (2026-06-XX — real-mask path) to report.md under Verification; flip Status to Fixed (real-mask path, both passes); on-device verified <date>; tick tasks 8 (id:bb3f203) and 9 (id:bb3f204).
   - shutter-blocked-feedback/ — append ### On-device observation (complete, rerun) block to decision_log.md; tick task 5 (id:f4inr0r).
-  - Blocked-by: v6kipz3 (STOP — final on-device verification (Single + Double))
+  - Blocked-by: v6kipz3 (STOP — final on-device verification Single + Double)

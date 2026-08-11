@@ -36,9 +36,9 @@ references:
   - Confirm the diagnostic identifies which gate is failing (e.g. `distanceCm=…` outside 25–50 cm, or — on the oblique stage — tilt outside the ±15°-around-25° cap). Note: `tiltInRange` is logged but the **nadir** tilt does not gate the shutter (research Decision 43 / UI Decision 18), so a nadir `tiltInRange=false` with `canShutter=true` is expected, not a bug.
   - Confirm taps during `.capturing` produce no haptic and no log entry.
   - Update `MeData/Tests/CaptureFlowModelTabSelectionTests.swift` only if an existing test broke from the new wiring; otherwise leave unchanged.
-  - Blocked-by: f4inr0n (LiveIndicatorBadge visibility and auto-hide policy live on LiveIndicatorModel), f4inr0o (ShutterButton routes disabled taps to a callback with haptic and accessibility trait), f4inr0p (CaptureFlowModel emits gating diagnostic on blocked + fired + pipeline-stage boundaries)
+  - Blocked-by: f4inr0n (LiveIndicatorBadge visibility and auto-hide policy live on LiveIndicatorModel), f4inr0o (ShutterButton routes disabled taps to a callback with haptic and accessible disabled value), f4inr0p (CaptureFlowModel emits gating diagnostic on blocked + fired + pipeline-stage boundaries)
 
-- [ ] 5. On-device verify the success path: tap fires, baseline estimation completes, result view appears <!-- id:f4inr0r -->
+- [x] 5. On-device verify the success path: tap fires, baseline estimation completes, result view appears <!-- id:f4inr0r -->
   - Goal: confirm that when gates ARE satisfied, the dev-stub baseline estimation (`Pipeline.makeForDevice` under `DEV_STUB_SEGMENTER`, per `App/App.swift:41`) completes end-to-end and the `ResultView` renders for both `CaptureMode.single` (if LiDAR available) and `CaptureMode.double`.
   - Pre-conditions: tasks 1–3 landed; app built and running on the attached device.
   - In Console.app, subscribe with predicate `subsystem == "ie.medata.app" && category == "Shutter"`.

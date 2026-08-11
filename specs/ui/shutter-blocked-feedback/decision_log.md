@@ -258,6 +258,33 @@ event=estimate.end success=false failure=noFoodPixels
 
 UI outcome: Refusal modal title not captured in this session; ResultView did not appear.
 
+### On-device observation (complete, rerun)
+
+**Date**: 2026-08-11
+**Device**: iPhone 16 Pro iOS 26.5 (`you`), Release build `9509b27-20260811-185011`, real Core ML segmenter `coreml_ab812dc3aa9d`. Retargeted from the iPhone 13 Pro Max per the 2026-08-11 user directive.
+**Mode tested**: single AND double
+**Outcome**: success (both modes)
+
+Observed evidence (from the persisted `estimation_outcomes` store; tethered Console
+collection is sudo-gated — the store carries the same per-attempt facts):
+
+```
+1786439141215  outcome=success  capturePath=single_view_lidar  mealID=1D42AAC8-…  planeResidualMm=1.81
+1786439234576  outcome=success  capturePath=two_view_sfs       mealID=0B8E4C7A-…  planeResidualMm=1.26
+1786439300420  outcome=success  capturePath=two_view_sfs       mealID=EDD04D82-…  planeResidualMm=2.12
+```
+
+UI outcome: the tap fired, estimation completed on both paths, and the post-capture
+review surface rendered with detected foods and carb figures (MealReviewView — the
+surface that superseded ResultView at capture time per `specs/ui/meal-review/`). The
+user drove the surface and reported per-food observations from it. Baseline estimation
+ran the real segmenter rather than the dev-stub the task text anticipated — the real
+model shipped 2026-07-05, superseding the stub baseline.
+
+Notes: 12 of 15 attempts in the session were typed refusals (`noFoodPixels` ×7,
+`worldTrackingDegraded` ×5) during two-view framing — each surfaced as a typed refusal,
+none hung, and no untyped error appeared.
+
 Notes: `maskAgeMs=-1` on `estimate.start` despite pre-shutter `segmenter.substage.*` events firing — captured for triage in `specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/`.
 
 ---

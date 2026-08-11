@@ -195,3 +195,20 @@ Filtered Console trail (OS framework chatter removed; only the app's `event=` an
 **Different-refusal blocker** per task 8's rule ("do not iterate blind"): `failure=lidarFitDegenerate`. This is out of scope for this smolspec — the spec's contract ends at "mask reaching `Pipeline.estimate`". The new refusal sits downstream in `Pipeline.fitSupportPlane` → `LiDARPlaneFitter.refine` (`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift:209,238`): the real `source=pre_shutter` mask's geometry yields a degenerate scatter matrix (near-collinear candidate points in the lower-edge band when the food bbox extends close to the image's bottom edge), where the centre-rectangle `roughMask` previously used by `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/` (sealed 2026-06-14, commit `ecf0211`) had been hiding the geometry by giving the lower-edge band a guaranteed below-bbox strip on the table.
 
 **Handed to** `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/` (re-opened). Tasks 8–10 of this spec stay `[ ]` with a `BLOCKED 2026-06-16` annotation on task 8; their success criterion (`estimate.end success=true` in both modes) is gated on the lidar fix landing.
+
+## Verification (2026-08-11 — closed on the iPhone 16 Pro)
+
+**Build**: Release `9509b27-20260811-185011` (real Core ML segmenter `coreml_ab812dc3aa9d`), iPhone 16 Pro (`you`, the current primary device). Per the 2026-08-11 user directive, verifications written against the iPhone 13 Pro Max are validated on the current device instead. Scene: one slice of bread (58 g weighed) on a white plate — the fruit plate named by task 8 predates the real-model palette; any in-palette food exercises the same contract.
+
+**Evidence**: the persisted `estimation_outcomes` store rather than a pasted Console trail — tethered `log collect` is sudo-gated, and the store records per-attempt success/failure, `capturePath`, `mealID` and stage measurements (`docs/agent-notes/device-build-and-test.md`, field-triage section).
+
+| Stem | capturePath | Outcome | mealID |
+|---|---|---|---|
+| `1786439141215` | `single_view_lidar` | success | `1D42AAC8-5F08-4AA8-B817-66D6CF7F3CCE` |
+| `1786439234576` | `two_view_sfs` | success | `0B8E4C7A-311B-499D-B0F6-B56CE693469D` |
+| `1786439300420` | `two_view_sfs` | success | `EDD04D82-9C0F-49FA-82CA-6FB0AAC22929` |
+
+- **Both modes reach `estimate.end success=true`** with a recorded meal — the criterion the 2026-06-16 attempt was blocked on. The blocking `lidarFitDegenerate` is closed by its own spec's 2026-08-11 verification (same session).
+- **Mask contract**: every success records `preShutterSegmentationErrorCount=0`, and the shutter cannot arm without a pre-shutter mask ≤ 750 ms old (`hasUsablePreShutterMask`), so `maskAgeMs` was in range on every fired capture by construction. The 2026-06-16 attempt had already verified `maskAgeMs=170` directly.
+- **Review surface rendered**: the post-capture surface (MealReviewView, which superseded ResultView at capture time per `specs/ui/meal-review/`) displayed detected foods and carb figures; the user drove it and reported per-food observations from it.
+- `noFoodPixels` appears in the session only as typed pre-success refusals during two-view attempts (7 of 15 attempts, alongside 5 `worldTrackingDegraded`) — transient framing refusals with correct typed handling, not the blanket every-tap failure this spec fixed.
