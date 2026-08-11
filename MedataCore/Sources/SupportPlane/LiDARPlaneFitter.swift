@@ -181,7 +181,50 @@ public enum LiDARPlaneFitter {
     // `SupportPlaneCorpusMeasurementTests.refineDoubleAccumulated` moves the shipped fallback
     // plane 1.184 mm, which is the plane Decision 36 prices `fallbackPenalty` against.
     public static let residualMaxMm: Float = 20
+    // The degeneracy gate `refine` refuses on: σ_min(A)/σ_max(A) for the centred 3×n sample
+    // matrix, computed through the 3×3 scatter matrix below. It was the LAST constant in
+    // either file with no provenance marker and no sweep.
+    //
+    // `[owed]` to support-plane-reference task 26 as of its Decision 64, and owed
+    // differently from every constant before it — the measurement does not bracket a value,
+    // it finds the gate reading a quantity that cannot answer the question. Five things that
+    // decision measured and this comment must not lose:
+    //
+    // 1. It is DISABLED BY SAMPLE COUNT, and the two legs sit either side. On an exactly
+    //    planar set — σ_min zero by construction — the gate refuses up to 50,000 samples and
+    //    ADMITS from 100,000. Extraction refines annulus sets of 1,752-9,087 and the gate
+    //    works there; the fallback leg refines colour-grid sets of 641,694 and 1,298,233 and
+    //    it does not. Nothing distinguishes the two but how many samples each hands here.
+    // 2. The cause is the CENTROID, not the normal-equations squaring. Accumulating the
+    //    scatter and the decomposition in Double while keeping the shipped Float centroid
+    //    reproduces the shipped reading on every rung. An offset centroid displaces every
+    //    centred sample by a constant, and a constant displacement is indistinguishable from
+    //    THICKNESS along the thin axis — so Decision 58's defect manufactures the very
+    //    conditioning this gate then reads as healthy. On the corpus: 1.0001× inflation on
+    //    the extraction sets, 1.0752× and 1.2631× on the two fallback sets.
+    // 3. σ_min/σ_max IS NOT THE RANK DISCRIMINANT. An exactly planar set (the plane is
+    //    exact) and a collinear one (no plane exists) both drive it to zero — measured at
+    //    9.5e-9 and 0.0. What separates them is σ_2/σ_max, 0.99999 against 0.0, which this
+    //    gate does not read. So no value of this bar distinguishes a perfect fit from a
+    //    degenerate one, and the better the fit the closer it comes to being refused.
+    // 4. On the case the guard is actually FOR — a strip carrying real sensor noise — only
+    //    an exactly zero width is refused. A band 0.02 mm across reads 1e-4, a hundred times
+    //    the bar; firing at the shipped value needs a strip under 0.2 µm.
+    // 5. It cannot fire on the corpus by four orders. Both legs on both captures read
+    //    0.0113-0.0480, so the bar is 11,292-47,989× below every committed reading.
+    //
+    // Bracketed 0…0.0113 by the corpus, and the ceiling is the only bound that exists: no
+    // floor can be measured because (3) says none is there to find. NOT repaired — reading
+    // σ_2/σ_max instead, or accumulating the centroid in Double, changes which candidates
+    // survive and moves the shipped plane, which is Decisions 52-58's precedent.
+    //
+    // `SupportRegionScenes.makeDepth`'s ±0.3 mm of noise is derived from this gate and the
+    // derivation HOLDS — at the scenes' own few-thousand-sample surfaces an exactly planar
+    // scene yields no candidate at all. It is (1) read from the other side, and the same
+    // sentence is false at the fallback leg's scale.
     static let stabilityRatioMin: Float = 1e-6
+    // Structural: a plane is three points. The only constant in this file the feature has
+    // not had to measure — there is no smaller number that names a plane.
     static let minPoints: Int = 3
     // Upper bound on the deterministic consensus-polish passes after the RANSAC
     // winner is refined (estimation-runtime-consistency, PRD estimation-quality).

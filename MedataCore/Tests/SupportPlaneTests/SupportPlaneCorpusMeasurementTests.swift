@@ -60,7 +60,9 @@ struct SupportPlaneCorpusMeasurementTests {
     static let rejectedCaptures = ["1785054950406"]
 
     // The 2026-08-11 weighed-bread pair, committed and read by the grid-transfer
-    // measurements ONLY (Decision 62). They are deliberately not in `captures`: every
+    // measurements (Decision 62) and by the headroom audit (Decision 63), which widened
+    // that admission from "grid transfer only" to "any measurement that reads no owed
+    // constant as a bar". They are deliberately not in `captures`: every
     // owed-constant bracket in Decisions 40-57 is a reading over that list, so admitting
     // a slice there re-denominates all of them, and Decision 61 froze the sitting's
     // reading frame precisely so those numbers stay comparable. What these two DO carry
@@ -9069,6 +9071,920 @@ struct SupportPlaneCorpusMeasurementTests {
             + " by \(fmt(closestMarginMm)) mm — the sub-millimetre margin Decision 42"
             + " records has widened and the finding should be restated"
         #expect(closestMarginMm < 1, "\(widened)")
+    }
+
+    // MARK: - The headrooms quoted beside the settled constants
+
+    // What every headroom this feature quotes reads at one capture, at the SHIPPED
+    // constants and on the native grid. Each field is one figure some decision states as a
+    // property of the algorithm; the audit is whether it survives leaving the corpus's
+    // 2 mm range window.
+    struct HeadroomReading {
+        let name: String
+        let rangeMm: Float
+        let mmPerPx: Float
+        // Decision 39. The smear envelope, expressed as the fraction of itself the capture
+        // stands at: `4 · mmPerPx ÷ ringInnerMm`, which bites at 1. Quoted as 93.1 % and
+        // 92.0 % — "the headroom is under 8 % on the most favourable scenes the feature has".
+        let smearFraction: Float
+        // Decision 29. The ring band floor's margin: the thinnest band over `ringMinSamples`.
+        // Quoted as "5.6-7.0x margin", and the first headroom Decision 62 caught moving.
+        let ringBandMargin: Float
+        // Decision 48. What stops extraction once the pass cap is lifted, and by how much.
+        let naturalDepth: Int
+        let starved: Bool
+        let residueLeftShare: Float
+        // Decision 51. `maxIterationsPerPass` never fires; the largest draw any pass needs
+        // is 250 against a cap of 2048, which is the 8x headroom Decision 61 defers the
+        // `ransacSuccessProbability` tightening into.
+        let passIterations: [Int]
+        let iterationHeadroom: Float
+        // Decision 54. `consensusPolishMaxPasses` always binds, and the corpus needs 17
+        // passes to reach the fixed point the cap's own derivation is stated about.
+        let polishBinds: Bool
+        let polishToFixedPoint: Int?
+        // Decision 55. The cone's margin over the hypothesis that produces the fit: 6.100°
+        // at the shipped 15°, on a worst intended hypothesis of 8.900°.
+        let selectedTiltDeg: Float
+        // Decision 37. The extent bar's headroom: 3.8 mm above `minAcceptedExtentMm` on the
+        // corpus, "the same 2 px as before, restated".
+        let smallestAdmittedExtentMm: Float?
+    }
+
+    // How deep the polish is allowed to run when the question is what depth the fixed point
+    // needs rather than what the cap allows. Decision 54 swept to 64 and found 17; this is
+    // above that with room, and the sweep costs one extraction per capture.
+    static let polishFixedPointCeiling = 48
+
+    // Decision 63. Decision 62 closed with a negative it could not discharge itself:
+    // "Decision 29's margin figure is now known to be range-dependent, so any other
+    // headroom quoted in Decisions 29-57 from the two original captures carries the same
+    // unstated qualifier and has not been re-checked."
+    //
+    // This is that re-check. Every headroom in the feature, read at the shipped constants
+    // on all four committed slices, so each is classified as the algorithm's or as the
+    // corpus's. It reads no owed constant AS A BAR — every figure is a distance from a
+    // SHIPPED value — so it neither sets nor re-denominates anything Decisions 40-57
+    // bracket, which is the condition Decision 62 admitted `rangeCaptures` under. It is not
+    // a grid-transfer measurement, though, so Decision 63 widens that admission from
+    // "the grid-transfer measurements only" to "any measurement that reads no owed constant
+    // as a bar", and records the widening rather than leaving the earlier word standing.
+    //
+    // Both directions matter. A headroom that holds across a 1.5x range is evidence the
+    // constant beside it is settled for a reason; one that halves is a figure that has been
+    // quoted as a property and is a reading.
+    @Test("the quoted headrooms are re-read off the corpus's range, and the caps do not move with them")
+    func theQuotedHeadroomsAreReadingsAtTheCorpusRange() throws {
+        var readings: [HeadroomReading] = []
+
+        for name in Self.captures + Self.rangeCaptures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let gravity = slice.gravity.normalised()
+            let pixelAreaMm2 = g.mmPerPx * g.mmPerPx
+            let residueFloor = SupportRegion.minResidueSamples(mmPerPx: g.mmPerPx)
+
+            // Decision 48's reading: the cap lifted, then the removal chain replayed so the
+            // residue a further pass would have drawn from is a number and not an inference.
+            let sweepTop = try #require(Self.maxCandidatePlanesSweep.max())
+            var depthRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let deep = Self.extractCandidates(annulus: samples.annulus, geometry: g,
+                                              gravity: gravity, rng: &depthRng,
+                                              maxPasses: sweepTop)
+            var residue = samples.annulus
+            let removalBandMm = SupportRegion.inlierRemovalMultiple * LiDARPlaneFitter.inlierBandMm
+            for c in deep {
+                residue = residue.filter { abs(c.normal.dot(g.points[$0]) - c.d) >= removalBandMm }
+            }
+
+            // Decision 51's reading: what each pass spends against the cap it is given.
+            var spendRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let spent = Self.extractCandidates(
+                annulus: samples.annulus, geometry: g, gravity: gravity, rng: &spendRng,
+                maxIterations: SupportRegion.maxIterationsPerPass)
+            let largestSpend = spent.spends.map(\.iterations).max() ?? 0
+
+            // Decision 54's reading, in two runs. The first asks whether the SHIPPED cap
+            // truncates any pass; the second asks what depth the fixed point needs. They
+            // cannot be one run — a shallower polish leaves a different plane, so it removes
+            // a different shell and the RNG stream diverges after pass 1.
+            var shippedTrace: [PolishTrace] = []
+            var shippedPolishRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            _ = Self.extractCandidates(
+                annulus: samples.annulus, geometry: g, gravity: gravity,
+                rng: &shippedPolishRng,
+                polishPasses: LiDARPlaneFitter.consensusPolishMaxPasses, trace: &shippedTrace)
+            var deepTrace: [PolishTrace] = []
+            var deepPolishRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            _ = Self.extractCandidates(
+                annulus: samples.annulus, geometry: g, gravity: gravity, rng: &deepPolishRng,
+                polishPasses: Self.polishFixedPointCeiling, trace: &deepTrace)
+            let reached = deepTrace.filter { $0.stop == .fixedPoint }.map(\.iterations)
+
+            // Decisions 55 and 37, read off the candidate the design intends to select:
+            // highest inner-band support, taken before admissibility as everywhere else here.
+            let best = deep.max {
+                Self.innerSupportFraction(samples: samples, geometry: g,
+                                          normal: $0.normal, d: $0.d)
+                    < Self.innerSupportFraction(samples: samples, geometry: g,
+                                                normal: $1.normal, d: $1.d)
+            }
+            let admittedExtents = deep.map(\.extentMm)
+                .filter { $0 >= SupportRegion.minAcceptedExtentMm }
+
+            readings.append(HeadroomReading(
+                name: name,
+                rangeMm: g.mmPerPx * g.intrinsics.fx,
+                mmPerPx: g.mmPerPx,
+                smearFraction: 4 * g.mmPerPx / SupportRegion.ringInnerMm,
+                ringBandMargin: Float(Self.bandCounts(geometry: g,
+                                                      innerMm: SupportRegion.ringInnerMm).min() ?? 0)
+                    / Float(SupportRegion.ringMinSamples),
+                naturalDepth: deep.count,
+                starved: residue.count < residueFloor,
+                residueLeftShare: Float(residue.count) * pixelAreaMm2 / SupportRegion.minResidueAreaMm2,
+                passIterations: spent.spends.map(\.iterations),
+                iterationHeadroom: largestSpend == 0
+                    ? .infinity
+                    : Float(SupportRegion.maxIterationsPerPass) / Float(largestSpend),
+                polishBinds: shippedTrace.contains { $0.stop == .cap },
+                polishToFixedPoint: reached.max(),
+                selectedTiltDeg: best.map { Self.angleDeg($0.normal, gravity) } ?? .nan,
+                smallestAdmittedExtentMm: admittedExtents.min()))
+        }
+
+        for r in readings {
+            let corpus = Self.captures.contains(r.name) ? "corpus" : "range"
+            print("=== \(r.name) (\(corpus)) at \(fmt(r.rangeMm)) mm,"
+                  + " mmPerPx \(fmt(r.mmPerPx))")
+            print("  smear envelope        \(fmt(100 * r.smearFraction)) % of the bound")
+            print("  ring band margin      \(fmt(r.ringBandMargin))x over ringMinSamples")
+            print("  natural pass depth    \(r.naturalDepth) (cap \(SupportRegion.maxCandidatePlanes)),"
+                  + " \(r.starved ? "STARVED" : "the CAP stopped it"),"
+                  + " residue left \(fmt(100 * r.residueLeftShare)) % of the floor")
+            print("  pass iterations       \(r.passIterations) against"
+                  + " \(SupportRegion.maxIterationsPerPass), headroom \(fmt(r.iterationHeadroom))x")
+            print("  polish                cap \(r.polishBinds ? "BINDS" : "is idle"),"
+                  + " fixed point at \(r.polishToFixedPoint.map(String.init) ?? "never")"
+                  + " against \(LiDARPlaneFitter.consensusPolishMaxPasses)")
+            print("  selected tilt         \(fmt(r.selectedTiltDeg))° against"
+                  + " \(fmt(LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi))°")
+            print("  smallest admitted extent"
+                  + " \(r.smallestAdmittedExtentMm.map { fmt($0) } ?? "none")"
+                  + " mm against \(fmt(SupportRegion.minAcceptedExtentMm)) mm")
+        }
+
+        let corpus = readings.filter { Self.captures.contains($0.name) }
+        let range = readings.filter { Self.rangeCaptures.contains($0.name) }
+        #expect(corpus.count == 2 && range.count == 2)
+
+        // MARK: the range the audit is read over
+
+        // The premise, stated as an assertion so a future slice admitted to either list
+        // cannot quietly collapse it. Decision 62's whole point is that the corpus varies
+        // range by 2 mm and therefore varies `mmPerPx` by nothing worth the name.
+        let corpusRange = (corpus.map(\.rangeMm).max() ?? 0) - (corpus.map(\.rangeMm).min() ?? 0)
+        let allRange = (readings.map(\.rangeMm).max() ?? 0) - (readings.map(\.rangeMm).min() ?? 0)
+        print("range spread: corpus \(fmt(corpusRange)) mm, all four \(fmt(allRange)) mm")
+        #expect(corpusRange < 5, "the corpus no longer sits inside a 5 mm range window")
+        #expect(allRange > 100, "the committed slices no longer span a range worth auditing over")
+
+        // MARK: THE FIRST FINDING — the two headrooms denominated in mmPerPx alone both
+        // move, and only one of them moves with range.
+
+        // The smear envelope IS `mmPerPx`, up to a constant: `4 · mmPerPx ÷ ringInnerMm`,
+        // and `mmPerPx` is `z / f_d`. So it is linear in range and reads 73.995, 91.963,
+        // 93.078 and 110.054 % in range order — a clean ramp with one committed slice past
+        // its own bound. The ring band margin is denominated in `mmPerPx` too but is NOT a
+        // function of it: 5.600x at 338.9 mm against 5.950x at 272.9 mm, a 24 % nearer
+        // capture buying 6 % of margin, while the two captures 2 mm apart read 5.600x and
+        // 6.470x. Perimeter is in that count as much as resolution — the ring is a band
+        // around the food BOUNDARY (Decision 62) — so it moves for two reasons at once and
+        // range alone does not order it. Both are quoted in Decisions 29 and 39 as settled
+        // figures. Neither is, and they are not unsettled the same way.
+        for r in readings {
+            #expect(r.smearFraction > 0 && r.ringBandMargin > 0)
+        }
+        let smearSpread = (readings.map(\.smearFraction).max() ?? 0)
+            / (readings.map(\.smearFraction).min() ?? 1)
+        let marginSpread = (readings.map(\.ringBandMargin).max() ?? 0)
+            / (readings.map(\.ringBandMargin).min() ?? 1)
+        print("smear fraction spans \(fmt(smearSpread))x across the four,"
+              + " ring band margin \(fmt(marginSpread))x")
+        // The corpus alone shows neither: 2 mm of range cannot move a quantity linear in it.
+        let corpusSmearSpread = (corpus.map(\.smearFraction).max() ?? 0)
+            / (corpus.map(\.smearFraction).min() ?? 1)
+        let notFlat = "the corpus now spreads the smear fraction by \(corpusSmearSpread)x,"
+            + " so it is no longer the flat window this audit is against"
+        #expect(corpusSmearSpread < 1.05, "\(notFlat)")
+        let notSpread = "the committed slices no longer spread the smear fraction, so the"
+            + " range-dependence Decision 39 records cannot be read here"
+        #expect(smearSpread > 1.3, "\(notSpread)")
+        // The envelope orders by range exactly; the band margin does not order by it at all.
+        // Stated as an assertion because it is the difference between the two, and a future
+        // slice that made the band margin monotone would make the finding wrong.
+        let byRange = readings.sorted { $0.rangeMm < $1.rangeMm }
+        let envelopeOrdered = zip(byRange, byRange.dropFirst())
+            .allSatisfy { $0.smearFraction < $1.smearFraction }
+        let marginOrdered = zip(byRange, byRange.dropFirst())
+            .allSatisfy { $0.ringBandMargin > $1.ringBandMargin }
+        print("ordered by range: smear fraction monotone \(envelopeOrdered),"
+              + " ring band margin monotone \(marginOrdered)")
+        #expect(envelopeOrdered, "the smear envelope is no longer linear in range")
+        #expect(!marginOrdered,
+                "the ring band margin now orders by range alone, so perimeter has left it")
+        // And one committed slice is PAST the envelope, which is the state Decision 62
+        // located between the two bounds. The audit exists because that capture reads clean
+        // on every headroom below while its ring measure is food-edge contaminated.
+        #expect(readings.contains { $0.smearFraction > 1 },
+                "no committed slice sits outside the smear envelope any more")
+
+        // MARK: THE SECOND FINDING — every headroom denominated in a CAP holds.
+
+        // The three caps this feature has measured — the pass cap, the per-pass iteration
+        // cap, the polish cap — read the same way at 272.9 mm as at 338.9 mm, including on
+        // the slice whose ring measure is contaminated. A cap is a bound on a LOOP, and the
+        // loops count draws and passes rather than millimetres, so nothing in them is
+        // denominated in `mmPerPx`. That is why these transfer and the two above do not.
+        //
+        // The MAGNITUDES still move, and in the safe direction every time. The iteration
+        // headroom reads 8.192x on the corpus and 49.951, 204.800 and 341.333x on the rest;
+        // the residue left after the last pass is 78.695 % of the floor on the corpus and
+        // 0.000-9.202 % elsewhere. Both of Decision 51's and Decision 48's quoted figures
+        // are therefore the WORST case in hand, not a typical one — which is the opposite of
+        // Decision 62's finding about the band margin and the reason these need no qualifier.
+        for r in readings {
+            // Decision 48, confirmed on the pair by Decision 62 and now stated with its
+            // margin: extraction stops on the residue floor, never on the cap.
+            let capFires = "\(r.name) needs \(r.naturalDepth) passes — the pass cap now FIRES,"
+                + " and Decision 48's reading was that it never does"
+            #expect(r.naturalDepth <= SupportRegion.maxCandidatePlanes, "\(capFires)")
+            let notStarved = "\(r.name) stops with \(fmt(100 * r.residueLeftShare)) % of the"
+                + " residue floor left, so the cap stopped it rather than the floor"
+            #expect(r.starved, "\(notStarved)")
+            // Decision 51, and the headroom Decision 61's deferred tightening is to be paid
+            // out of. It is quoted at 8x; the bar is 4x so a capture needing twice the
+            // corpus's largest draw still passes and a tightening that eats it does not.
+            let spentDown = "\(r.name) spends \(r.passIterations) iterations against"
+                + " \(SupportRegion.maxIterationsPerPass) — the headroom Decision 61"
+                + " defers the ransacSuccessProbability tightening into is now"
+                + " \(fmt(r.iterationHeadroom))x"
+            #expect(r.iterationHeadroom > 4, "\(spentDown)")
+            // Decision 54, the one cap that binds, still binding.
+            let idle = "\(r.name) reaches the polish fixed point inside"
+                + " \(LiDARPlaneFitter.consensusPolishMaxPasses) passes, so Decision 54's"
+                + " 'the cap always binds' no longer holds"
+            #expect(r.polishBinds, "\(idle)")
+            if let depth = r.polishToFixedPoint {
+                let shallow = "\(r.name) reaches the fixed point in \(depth) passes, inside"
+                    + " the shipped cap — Decision 54's finding was that it does not"
+                #expect(depth > LiDARPlaneFitter.consensusPolishMaxPasses, "\(shallow)")
+            }
+        }
+        // The polish cap's FINDING transfers and its NUMBER does not. Decision 54 records
+        // "the corpus needs 17 passes"; the four slices need 17, 5, 6 and 4, so 17 is one
+        // capture and the other three sit just above the shipped 3. The cap binds everywhere
+        // — that is the finding, and it is what refutes the derivation in the source — but a
+        // ceiling set from 17 would be set from an outlier.
+        let depths = readings.compactMap(\.polishToFixedPoint)
+        print("polish depth to the fixed point: \(depths.sorted()) against a cap of"
+              + " \(LiDARPlaneFitter.consensusPolishMaxPasses)")
+        let unbounded = "a committed slice never reaches the polish fixed point inside"
+            + " \(Self.polishFixedPointCeiling) passes, so the depth is unbounded here"
+        #expect(depths.count == readings.count, "\(unbounded)")
+        let converged = "the polish depths have converged, so Decision 54's 17 is no longer"
+            + " the outlier this finding rests on"
+        #expect((depths.max() ?? 0) > 2 * depths.sorted()[depths.count / 2], "\(converged)")
+
+        // MARK: THE THIRD FINDING — the cone margin is the corpus's, and the pair widens it.
+
+        // Decision 55 rests the shipped 15° on "6.100° of margin over the 8.900° hypothesis
+        // that produces the corpus's one correct fit, which is one plate at one tilt". The
+        // pair is a different plate on a different day, so it is the first evidence that
+        // says whether that number is a property of the scene or of the plate.
+        //
+        // Read on the SELECTED plane rather than on the hypothesis — a different quantity
+        // from Decision 55's, and stated as such so the two are not compared as one — the
+        // margin is 6.691° and the binding capture is the corpus's again: 8.309° against
+        // 1.639, 0.920 and 0.755°. The pair's plates are an order flatter, so they widen the
+        // margin and settle nothing about the cone. This is a headroom that transfers in the
+        // safe direction and is still owed to a capture that tilts the plate on purpose.
+        for r in readings {
+            #expect(r.selectedTiltDeg.isFinite, "\(r.name) selected no candidate")
+        }
+        let coneDeg = LiDARPlaneFitter.gravityAngleMaxRad * 180 / .pi
+        let worstTilt = readings.map(\.selectedTiltDeg).max() ?? 0
+        print("cone margin over the selected plane: \(fmt(coneDeg - worstTilt))° at the"
+              + " shipped \(fmt(coneDeg))° (worst selected tilt \(fmt(worstTilt))°)")
+        let outsideCone = "a committed slice now selects a plane at \(fmt(worstTilt))°,"
+            + " outside the \(fmt(coneDeg))° cone — the gate would reject the fit it is"
+            + " supposed to admit"
+        #expect(worstTilt < coneDeg, "\(outsideCone)")
+
+        // MARK: THE FOURTH FINDING — the extent bar's 3.8 mm holds, and it holds for the
+        // reason Decision 37 re-denominated it.
+
+        // Decision 37 brackets `minAcceptedExtentMm` at 22.3…47.8 mm and records 3.8 mm of
+        // headroom above the shipped 44. Extent is a pixel count TIMES `mmPerPx`, and the
+        // pixel count of a fixed surface falls as `mmPerPx` rises, so the two cancel and the
+        // millimetre reading is a physical size — which is the whole of Decision 37 and the
+        // reason it converted the bar out of pixels in the first place. The prediction is
+        // therefore that this headroom does NOT move with range, and it does not: the pair
+        // admits 109.513 mm and 50.625 mm against the corpus's 47.821 mm, so the corpus is
+        // still the ceiling and the bracket is unchanged. Decision 62 proved the same thing
+        // for `minResidueAreaMm2` across a grid halving; this is the other re-denominated
+        // constant, proved across range instead.
+        let admitted = readings.compactMap { r in r.smallestAdmittedExtentMm.map { (r.name, $0) } }
+        print("smallest admitted extent per slice:"
+              + " \(admitted.map { "\($0.0) \(fmt($0.1)) mm" }.joined(separator: ", "))")
+        #expect(admitted.count == readings.count,
+                "a committed slice admits no candidate on extent at all")
+        for (name, extentMm) in admitted {
+            let belowBar = "\(name) admits a \(fmt(extentMm)) mm extent below the"
+                + " \(fmt(SupportRegion.minAcceptedExtentMm)) mm bar"
+            #expect(extentMm >= SupportRegion.minAcceptedExtentMm, "\(belowBar)")
+        }
+        // Stated as a bound rather than an equality, in the direction that matters: the
+        // corpus's 3.8 mm is the TIGHTEST reading among the four, so the bracket Decision 37
+        // records is not widened by leaving the corpus's range and nothing has to move.
+        let corpusHeadroom = corpus.compactMap(\.smallestAdmittedExtentMm)
+            .map { $0 - SupportRegion.minAcceptedExtentMm }.min() ?? .infinity
+        let allHeadroom = admitted.map { $0.1 - SupportRegion.minAcceptedExtentMm }.min() ?? .infinity
+        print("extent headroom: corpus \(fmt(corpusHeadroom)) mm, all four \(fmt(allHeadroom)) mm")
+        let negative = "the extent bar's headroom has gone negative at \(fmt(allHeadroom)) mm,"
+            + " so a committed slice's admitted surface no longer clears the shipped value"
+        #expect(allHeadroom >= 0, "\(negative)")
+        let widened = "the extent headroom is \(fmt(allHeadroom)) mm over all four against"
+            + " \(fmt(corpusHeadroom)) mm on the corpus — a range capture now sets the"
+            + " ceiling Decision 37 brackets, and that bracket has to be re-read"
+        #expect(allHeadroom == corpusHeadroom, "\(widened)")
+
+        // MARK: THE HEADLINE — every headroom that transfers is TIGHTEST on the corpus.
+
+        // Which is why nothing recorded in Decisions 29-57 has to move. The four figures
+        // that survive leaving the corpus's range all have their worst reading there: the
+        // iteration headroom (8.192x against 49.951-341.333x), the residue left after the
+        // last pass (78.695 % of the floor against 0.000-9.202 %), the cone margin over the
+        // selected plane (6.691°, against 13.361° on the other corpus capture and 14.080 and
+        // 14.245° on the pair) and the extent headroom (3.821 mm, which the pair does not
+        // approach: 65.513 and 6.625 mm). The corpus is a worst case for all of them,
+        // so the pair confirms rather than qualifies. Only the two denominated in `mmPerPx`
+        // alone go the other way, and the one committed slice that is outside the smear
+        // envelope is outside it in the direction the corpus could not see.
+        let corpusIsTightest = [
+            ("iteration headroom",
+             corpus.map(\.iterationHeadroom).min() ?? .infinity
+                <= range.map(\.iterationHeadroom).min() ?? .infinity),
+            ("residue left",
+             corpus.map(\.residueLeftShare).max() ?? 0 >= range.map(\.residueLeftShare).max() ?? 0),
+            ("cone margin",
+             corpus.map(\.selectedTiltDeg).max() ?? 0 >= range.map(\.selectedTiltDeg).max() ?? 0),
+            ("extent headroom", allHeadroom == corpusHeadroom),
+        ]
+        print("corpus is the binding case for:"
+              + " \(corpusIsTightest.filter(\.1).map(\.0).joined(separator: ", "))"
+              + "; NOT for: \(corpusIsTightest.filter { !$0.1 }.map(\.0).joined(separator: ", "))")
+        for (what, tightest) in corpusIsTightest {
+            let loosened = "the corpus is no longer the binding case for \(what), so the"
+                + " figure Decisions 29-57 quote for it is not the worst reading in hand"
+                + " and the decision that quotes it has to be re-read"
+            #expect(tightest, "\(loosened)")
+        }
+    }
+
+    // MARK: - The degeneracy gate
+
+    // `LiDARPlaneFitter.stabilityRatioMin` is the last constant in either file with no
+    // provenance marker and no sweep. It is the refusal `refine` makes:
+    //
+    //     √(M.s[2]) / √(M.s[0]) ≥ stabilityRatioMin,   M = Σ (pᵢ − c)(pᵢ − c)ᵀ
+    //
+    // which is σ_min(A)/σ_max(A) for the centred 3×n sample matrix A — computed through
+    // the 3×3 normal-equations matrix M, whose formation SQUARES the condition number, and
+    // accumulated and decomposed in Float throughout. So the first question is not what
+    // value the bar should take but what the arithmetic underneath it can resolve.
+    //
+    // One inlier set read three ways. `shipped` is the gate expression line for line: the
+    // same Float centroid, the same Float scatter, the same `svdFull`. `doubleScatter`
+    // keeps that centroid and moves only the accumulation and the decomposition to Double,
+    // which separates the two arithmetic effects — Decision 58 measured the centroid's
+    // error on `d` and this is the same error read on the gate. `exact` is Double
+    // throughout and is the reference.
+    struct StabilityReading {
+        let label: String
+        let n: Int
+        let shipped: Float
+        let doubleScatter: Double
+        let exact: Double
+        // The discriminant the gate does NOT read: σ_2/σ_max, which is what separates a
+        // rank-1 set (collinear — no plane exists) from a rank-2 one (planar — the plane
+        // is exact). σ_min/σ_max goes to zero on both.
+        let rankRatio: Double
+        // Whether the shipped expression refuses at the shipped bar.
+        var refuses: Bool { shipped < LiDARPlaneFitter.stabilityRatioMin }
+    }
+
+    // Eigenvalues of a symmetric 3×3, descending, in Double — the closed form, so the
+    // reference is not produced by the arithmetic under test. `m` is
+    // (m00, m01, m02, m11, m12, m22); a scatter matrix is positive semi-definite, so its
+    // eigenvalues are its singular values.
+    static func symmetricEigenvalues3(
+        _ m: (Double, Double, Double, Double, Double, Double)
+    ) -> (Double, Double, Double) {
+        let (m00, m01, m02, m11, m12, m22) = m
+        let p1 = m01 * m01 + m02 * m02 + m12 * m12
+        let q = (m00 + m11 + m22) / 3
+        guard p1 > 0 else {
+            let d = [m00, m11, m22].sorted(by: >)
+            return (d[0], d[1], d[2])
+        }
+        let p2 = (m00 - q) * (m00 - q) + (m11 - q) * (m11 - q) + (m22 - q) * (m22 - q) + 2 * p1
+        let p = (p2 / 6).squareRoot()
+        guard p > 0 else { return (q, q, q) }
+        let b00 = (m00 - q) / p, b11 = (m11 - q) / p, b22 = (m22 - q) / p
+        let b01 = m01 / p, b02 = m02 / p, b12 = m12 / p
+        let det = b00 * (b11 * b22 - b12 * b12)
+            - b01 * (b01 * b22 - b12 * b02)
+            + b02 * (b01 * b12 - b11 * b02)
+        let r = Swift.min(1, Swift.max(-1, det / 2))
+        let phi = Foundation.acos(r) / 3
+        let e1 = q + 2 * p * Foundation.cos(phi)
+        let e3 = q + 2 * p * Foundation.cos(phi + 2 * Double.pi / 3)
+        return (e1, 3 * q - e1 - e3, e3)
+    }
+
+    static func stabilityReading(_ label: String, inliers: [Vec3]) -> StabilityReading? {
+        let n = inliers.count
+        guard n >= LiDARPlaneFitter.minPoints else { return nil }
+
+        // `LiDARPlaneFitter.refine`, verbatim, up to the gate.
+        let cx = inliers.map { $0.x }.reduce(0, +) / Float(n)
+        let cy = inliers.map { $0.y }.reduce(0, +) / Float(n)
+        let cz = inliers.map { $0.z }.reduce(0, +) / Float(n)
+        let centroid = Vec3(cx, cy, cz)
+        var f00: Float = 0, f01: Float = 0, f02: Float = 0
+        var f11: Float = 0, f12: Float = 0, f22: Float = 0
+        for idx in 0..<n {
+            let p = inliers[idx] - centroid
+            f00 += p.x * p.x; f01 += p.x * p.y; f02 += p.x * p.z
+            f11 += p.y * p.y; f12 += p.y * p.z; f22 += p.z * p.z
+        }
+        let mCol: [Float] = [f00, f01, f02, f01, f11, f12, f02, f12, f22]
+        guard let svd = try? LinearAlgebra.svdFull(mCol, rows: 3, cols: 3) else { return nil }
+        let sMaxA = svd.s[0].squareRoot(), sMinA = svd.s[2].squareRoot()
+
+        // The same centroid, everything after it in Double.
+        var s00 = 0.0, s01 = 0.0, s02 = 0.0, s11 = 0.0, s12 = 0.0, s22 = 0.0
+        for p in inliers {
+            let x = Double(p.x) - Double(cx)
+            let y = Double(p.y) - Double(cy)
+            let z = Double(p.z) - Double(cz)
+            s00 += x * x; s01 += x * y; s02 += x * z
+            s11 += y * y; s12 += y * z; s22 += z * z
+        }
+        let scattered = Self.symmetricEigenvalues3((s00, s01, s02, s11, s12, s22))
+
+        // Double throughout.
+        var ex = 0.0, ey = 0.0, ez = 0.0
+        for p in inliers { ex += Double(p.x); ey += Double(p.y); ez += Double(p.z) }
+        ex /= Double(n); ey /= Double(n); ez /= Double(n)
+        var e00 = 0.0, e01 = 0.0, e02 = 0.0, e11 = 0.0, e12 = 0.0, e22 = 0.0
+        for p in inliers {
+            let x = Double(p.x) - ex, y = Double(p.y) - ey, z = Double(p.z) - ez
+            e00 += x * x; e01 += x * y; e02 += x * z
+            e11 += y * y; e12 += y * z; e22 += z * z
+        }
+        let exact = Self.symmetricEigenvalues3((e00, e01, e02, e11, e12, e22))
+
+        // M's eigenvalues are A's SQUARED, so every ratio is rooted — the same conversion
+        // the shipped gate makes, and the reason the comment beside it says "compare
+        // √-magnitudes to keep the existing 1e-6 gate".
+        func rooted(_ small: Double, _ large: Double) -> Double {
+            large > 0 ? (Swift.max(0, small) / large).squareRoot() : 0
+        }
+        return StabilityReading(
+            label: label, n: n,
+            shipped: sMaxA > 0 ? sMinA / sMaxA : 0,
+            doubleScatter: rooted(scattered.2, scattered.0),
+            exact: rooted(exact.2, exact.0),
+            rankRatio: rooted(exact.1, exact.0))
+    }
+
+    // A point set with each principal axis' extent set by construction, at the corpus's
+    // own standoff. The coordinates come from three additive low-discrepancy sequences on
+    // algebraically unrelated irrationals, so the axes are decorrelated and the scatter
+    // matrix is near-diagonal. The NOMINAL ratio is only a knob; what the set actually
+    // carries is `exact` in the reading above, which is what every finding is stated on.
+    static func lattice(n: Int, extentMm: (Double, Double, Double),
+                        standoffMm: Double = 350) -> [Vec3] {
+        let a = (2.0.squareRoot() - 1, 3.0.squareRoot() - 1, 5.0.squareRoot() - 2)
+        var points: [Vec3] = []
+        points.reserveCapacity(n)
+        for i in 0..<n {
+            let t = Double(i)
+            let u = (t * a.0).truncatingRemainder(dividingBy: 1) - 0.5
+            let v = (t * a.1).truncatingRemainder(dividingBy: 1) - 0.5
+            let w = (t * a.2).truncatingRemainder(dividingBy: 1) - 0.5
+            points.append(Vec3(Float(extentMm.0 * u), Float(extentMm.1 * v),
+                               Float(standoffMm + extentMm.2 * w)))
+        }
+        return points
+    }
+
+    // Thickness-to-extent ratios spanning the shipped bar by two orders either side. 200 mm
+    // of extent is the corpus's own admitted surface size; the thin axis runs from a plate
+    // that is visibly domed down past a Float ulp at the standoff.
+    static let stabilityThicknessMm: [Double] = [
+        20, 2, 0.2, 0.02, 0.002, 2e-4, 2e-5, 2e-6, 2e-7, 0,
+    ]
+
+    // Bars either side of the shipped 1e-6, including 0 (the gate disabled) and the
+    // √(Float ulp) ≈ 3.45e-4 the squaring puts the resolution floor at.
+    static let stabilityBarSweep: [Float] = [
+        0, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 3.45e-4, 1e-3, 1e-2, 1e-1,
+    ]
+
+    // How many points the ladder is read over. Large enough that the Float centroid's own
+    // error is in the reading — Decision 58 measured it at 641,694 and 1,298,233 inliers on
+    // the fallback leg — and small enough that ten rungs cost a second.
+    static let stabilityLatticeCount = 200_000
+
+    // Band widths, from a square patch down to a line. The third axis carries the corpus's
+    // own per-sample noise throughout, so every rung is a set a depth sensor could produce.
+    static let stabilityStripWidthMm: [Double] = [200, 20, 2, 0.2, 0.02, 0]
+
+    // Decision 29's measured per-sample spread on a flat surface, `1785135663727`.
+    static let corpusSampleSigmaMm = 3.44
+
+    // Sample counts spanning both legs. Extraction refines annulus inlier sets of a few
+    // thousand; the fallback leg refines colour-grid sets of 641,694 and 1,298,233
+    // (Decision 58). The sweep has to straddle them to say where the gate stops working.
+    static let stabilityCountSweep = [1_000, 10_000, 50_000, 100_000, 200_000, 640_000, 1_300_000]
+
+    @Test("the degeneracy gate is set below what its own arithmetic can resolve")
+    func theStabilityGateIsBelowTheResolutionOfItsOwnInput() throws {
+        let bar = LiDARPlaneFitter.stabilityRatioMin
+
+        // MARK: THE FIRST FINDING — the gate's resolution floor, and the bar is under it.
+
+        // Forming M = AᵀA squares the condition number, so M's own smallest eigenvalue is
+        // lost to rounding once it falls below a Float ulp of its largest — and the gate
+        // takes a square root afterwards, which puts the floor on the RATIO IT COMPARES at
+        // √(ulp) rather than at ulp. The ladder measures where that happens rather than
+        // asserting it: the reference reading tracks the construction all the way down,
+        // and the shipped one departs from it and then saturates.
+        print("=== the ladder: what the shipped gate reads against what the set carries ===")
+        print("  ulpOfOne \(Float.ulpOfOne), √ulpOfOne \(Float.ulpOfOne.squareRoot())")
+        var ladder: [StabilityReading] = []
+        for thickness in Self.stabilityThicknessMm {
+            let points = Self.lattice(n: Self.stabilityLatticeCount,
+                                      extentMm: (200, 200, thickness))
+            guard let r = Self.stabilityReading("thickness \(thickness) mm", inliers: points)
+            else { continue }
+            ladder.append(r)
+            print("  \(r.label): shipped \(r.shipped), double-scatter \(r.doubleScatter),"
+                  + " exact \(r.exact), rank σ₂/σ₀ \(r.rankRatio),"
+                  + " gate \(r.refuses ? "REFUSES" : "admits")")
+        }
+        #expect(ladder.count == Self.stabilityThicknessMm.count,
+                "a rung of the ladder no longer produces a reading at all")
+
+        // The floor, read off the ladder: the smallest ratio at which the shipped
+        // expression still agrees with the reference to within a factor of two. Everything
+        // below it is the shipped path reporting a conditioning it cannot see.
+        let agreeing = ladder.filter {
+            $0.exact > 0 && Double($0.shipped) / $0.exact < 2 && Double($0.shipped) / $0.exact > 0.5
+        }
+        let resolved = agreeing.map(\.exact).min() ?? 0
+        print("the shipped expression tracks the reference down to \(resolved),"
+              + " and the bar is \(bar)")
+        let underBar = "the shipped gate now resolves ratios at or below its own"
+            + " \(bar) bar, so the floor that sits above it has been repaired and this"
+            + " decision's headline no longer holds"
+        #expect(resolved > Double(bar), "\(underBar)")
+        // Stated in the direction that matters: the floor is ABOVE the bar by orders, and
+        // a repair that narrows the gap to nothing should fail here rather than silently.
+        print("the resolution floor is \(resolved / Double(bar))× the bar")
+
+        // AND THE FLOOR IS NOT THE SQUARING. Forming M = AᵀA squares the condition number,
+        // which is the obvious suspect and is wrong: `doubleScatter` moves the accumulation
+        // AND the decomposition to Double while keeping the shipped Float centroid, and it
+        // reads the same as `shipped` on every rung. What is left is the centroid — three
+        // Float `reduce(0, +)` sums, which is exactly the quantity Decision 58 measured on
+        // `d`. An offset centroid displaces every centred sample by a constant, and a
+        // constant displacement is INDISTINGUISHABLE FROM THICKNESS along the thin axis. So
+        // the same defect that puts the fallback plane 1.184 mm off its own minimiser
+        // manufactures the conditioning the gate then reads as healthy.
+        let scatterIsInnocent = ladder.allSatisfy {
+            $0.doubleScatter > 0
+                && abs(Double($0.shipped) - $0.doubleScatter) / $0.doubleScatter < 0.05
+        }
+        print("the Double scatter and decomposition reproduce the shipped reading"
+              + " on every rung: \(scatterIsInnocent) — so the error is the CENTROID,"
+              + " not the squaring")
+        let squaringAfterAll = "the Double scatter no longer reproduces the shipped reading,"
+            + " so the normal-equations squaring is contributing after all and this"
+            + " decision's attribution to the centroid is wrong"
+        #expect(scatterIsInnocent, "\(squaringAfterAll)")
+
+        // MARK: THE SECOND FINDING — the gate is disabled by SAMPLE COUNT, and the two
+        // legs sit either side of where that happens.
+
+        // If the centroid is what manufactures the apparent thickness, then the gate's
+        // behaviour on a genuinely degenerate set is a function of how many samples it is
+        // given: few enough and the sum is accurate and the gate fires, many enough and it
+        // does not. Swept on an EXACTLY planar set — σ_min is zero by construction, so any
+        // reading above zero is the arithmetic's.
+        print("=== an exactly planar set, swept over sample count ===")
+        var byCount: [(n: Int, reading: StabilityReading)] = []
+        for n in Self.stabilityCountSweep {
+            guard let r = Self.stabilityReading(
+                "n = \(n)", inliers: Self.lattice(n: n, extentMm: (200, 200, 0)))
+            else { continue }
+            byCount.append((n, r))
+            // σ_max is √n · extent/√12; the apparent per-sample thickness the centroid
+            // manufactures is the ratio times that, back in millimetres.
+            print("  n = \(n): shipped \(r.shipped), exact \(r.exact),"
+                  + " gate \(r.refuses ? "REFUSES" : "ADMITS")")
+        }
+        let firesUpTo = byCount.last { $0.reading.refuses }?.n
+        let admitsFrom = byCount.first { !$0.reading.refuses }?.n
+        print("the gate refuses an exactly planar set up to n = \(firesUpTo.map(String.init) ?? "never")"
+              + " and admits it from n = \(admitsFrom.map(String.init) ?? "never")")
+        let alwaysFires = "the gate now refuses an exactly planar set at every sample count,"
+            + " so the centroid no longer hides degeneracy from it"
+        #expect(admitsFrom != nil, "\(alwaysFires)")
+        let neverFires = "the gate no longer refuses an exactly planar set at any sample"
+            + " count, so it cannot fire at all and the finding is stronger than recorded"
+        #expect(firesUpTo != nil, "\(neverFires)")
+        // Where the crossover sits is consistent with the mechanism and is NOT derived from
+        // it: a Float running sum stops being exact once it passes 2²⁴, and at this standoff
+        // that is n ≈ 2²⁴ / 350 mm. Reported beside the measured bracket rather than in
+        // place of it — and it means the crossover MOVES WITH RANGE, like the two
+        // quantities Decision 63 found denominated in `mmPerPx`.
+        print("  Float exactness in the centroid sum runs out near n ="
+              + " \(Int(Double(1 << 24) / 350)) at a 350 mm standoff")
+        // The two legs sit either side. This is the whole of the finding: one fitter's
+        // degeneracy guard works and the other's does not, and nothing distinguishes them
+        // but how many samples each hands to the same function.
+        let extractionCounts = 1_752...9_087
+        let fallbackCounts = 641_694...1_298_233
+        print("  extraction refines \(extractionCounts) samples; the fallback leg refines"
+              + " \(fallbackCounts) — the crossover is between them")
+        let straddled = (firesUpTo ?? 0) >= extractionCounts.upperBound
+            && (admitsFrom ?? .max) <= fallbackCounts.lowerBound
+        let notStraddled = "the sample-count crossover no longer separates the two legs, so"
+            + " the guard is not selectively disabled on one of them"
+        #expect(straddled, "\(notStraddled)")
+
+        // MARK: THE THIRD FINDING — the gate does not distinguish a good plane from a
+        // degenerate one, because σ_min/σ_max is not the rank discriminant.
+
+        // A rank-1 set (collinear — no plane exists at all) and a rank-2 set (exactly
+        // planar — the plane is exact) BOTH drive σ_min/σ_max to zero. The quantity that
+        // separates them is σ_2/σ_max, which the gate does not read. So the better the fit,
+        // the closer the gate comes to refusing it, and the guard is oriented against the
+        // outcome it exists to protect.
+        let planar = try #require(Self.stabilityReading(
+            "rank 2, exactly planar", inliers: Self.lattice(
+                n: Self.stabilityLatticeCount, extentMm: (200, 200, 0))))
+        let collinear = try #require(Self.stabilityReading(
+            "rank 1, collinear", inliers: Self.lattice(
+                n: Self.stabilityLatticeCount, extentMm: (200, 0, 0))))
+        print("=== the rank discriminant ===")
+        for r in [planar, collinear] {
+            print("  \(r.label): σ_min/σ_max exact \(r.exact) (shipped \(r.shipped)),"
+                  + " σ₂/σ_max \(r.rankRatio), gate \(r.refuses ? "REFUSES" : "admits")")
+        }
+        let notSeparated = "σ_min/σ_max now separates the collinear set from the exactly"
+            + " planar one, so the gate reads a rank discriminant after all"
+        #expect(abs(planar.exact - collinear.exact) < Double(bar), "\(notSeparated)")
+        let notDiscriminating = "σ₂/σ_max no longer separates rank 1 from rank 2, so the"
+            + " repair this decision names does not work either"
+        #expect(planar.rankRatio > 0.1 && collinear.rankRatio < Double(bar),
+                "\(notDiscriminating)")
+
+        // And the case the guard is FOR, which neither extreme is: a strip. Exactly
+        // collinear is a construction; what a depth sensor produces when a surface is
+        // nearly edge-on is a long thin band carrying real per-sample noise — Decision 29
+        // measured that noise at 3.44 mm on `1785135663727`. Narrow the band and the set
+        // stops determining a plane long before any coordinate becomes exactly constant.
+        print("=== the strip: rank-deficient WITH sensor noise, which is the guard's case ===")
+        var strips: [StabilityReading] = []
+        for widthMm in Self.stabilityStripWidthMm {
+            let points = Self.lattice(n: Self.stabilityLatticeCount,
+                                      extentMm: (200, widthMm, Self.corpusSampleSigmaMm))
+            guard let r = Self.stabilityReading("strip \(widthMm) mm wide", inliers: points)
+            else { continue }
+            strips.append(r)
+            print("  \(r.label): shipped \(r.shipped), exact \(r.exact),"
+                  + " σ₂/σ_max \(r.rankRatio), gate \(r.refuses ? "REFUSES" : "admits")")
+        }
+        #expect(strips.count == Self.stabilityStripWidthMm.count)
+        // The finding, asserted: only the rung whose width is EXACTLY zero is refused. A
+        // band two hundredths of a millimetre across — a line of depth samples to any
+        // tolerance a sensor can express — reads 1e-4, a hundred times the bar. Fired from
+        // the shipped value, the gate would need a strip narrower than 0.2 µm.
+        //
+        // Note the shipped reading is ACCURATE here where the ladder's was not, and the
+        // difference is measured rather than assumed: the ladder's two largest axes are
+        // equal (σ₂/σ_max = 0.99999), the strip's are not (0.0172), and a near-equal pair
+        // is where the smallest eigenvalue is least well determined. So the floor from the
+        // first finding is a property of SQUARE patches — which is the shape a plate is.
+        let admittedStrips = strips.filter { !$0.refuses }
+        print("strips admitted: \(admittedStrips.count) of \(strips.count);"
+              + " narrowest admitted \(admittedStrips.map(\.label).last ?? "none")")
+        let caught = "the shipped gate now refuses a strip of nonzero width, so it does"
+            + " discriminate on σ_min/σ_max and this decision's third finding is wrong"
+        #expect(strips.dropLast().allSatisfy { !$0.refuses }, "\(caught)")
+        let zeroWidthAdmitted = "a strip of exactly zero width is now admitted, so the gate"
+            + " refuses nothing at all"
+        #expect(strips.last?.refuses == true, "\(zeroWidthAdmitted)")
+
+        // MARK: THE FOURTH FINDING — the claim the committed scenes rest on.
+
+        // `SupportRegionScenes.makeDepth` adds ±0.3 mm of noise with a stated derivation:
+        // "an exactly-planar sample set has a rank-2 scatter matrix, which
+        // `LiDARPlaneFitter.refine`'s σ_min/σ_max stability gate rejects as degenerate".
+        // Every scene in the committed suite is built on it, and the bugfix test
+        // `cleanCaptureIsNotRejectedAsDegenerate` narrows it to 0.05 mm. Measured on the
+        // shipped expression rather than argued, at the noise levels the suite uses.
+        print("=== the scenes' own claim, measured ===")
+        let grid = SPRScene.plateAboveTable()
+        var sceneCandidateCounts: [Int] = []
+        var sceneCandidateRatios: [Double] = []
+        for noiseMm in [Float(0), 0.01, 0.05, 0.3] {
+            let depth = SPRScene.makeDepth(grid, noiseMm: noiseMm)
+            let fit = SupportRegion.fitFoodSupportPlane(
+                depth: depth, colourIntrinsics: SPRScene.colourIntrinsics,
+                foodRegionMask: SPRScene.makeColourMask(grid), gravityCamera: SPRScene.gravity)
+            guard let g = SupportRegion.prepare(
+                depth: depth, colourIntrinsics: SPRScene.colourIntrinsics,
+                foodRegionMask: SPRScene.makeColourMask(grid))
+            else {
+                print("  noise \(fmt(noiseMm)) mm: the scene does not prepare")
+                continue
+            }
+            let samples = SupportRegion.ringSamples(geometry: g)
+            // The refusal has to be attributed, not inferred: a scene that produces no fit
+            // may have produced no CANDIDATE, and the stability gate is only one of the
+            // ways `extractCandidates` can come back empty.
+            var sceneRng = SplitMix64(seed: Fnv1a64.hash(depth.depthBytesMm))
+            let candidates = Self.extractCandidates(
+                annulus: samples.annulus, geometry: g, gravity: SPRScene.gravity.normalised(),
+                rng: &sceneRng, maxPasses: SupportRegion.maxCandidatePlanes)
+            // Read on the candidates' own inlier sets rather than on the whole annulus: the
+            // annulus spans the plate AND the table, so its σ_min/σ_max is the 20 mm step
+            // between them and says nothing about either surface's conditioning.
+            let perCandidate = candidates.map { c -> String in
+                let members = samples.annulus.filter {
+                    abs(c.normal.dot(g.points[$0]) - c.d) < LiDARPlaneFitter.inlierBandMm
+                }
+                guard let r = Self.stabilityReading("", inliers: members.map { g.points[$0] })
+                else { return "n/a" }
+                sceneCandidateRatios.append(Double(r.shipped))
+                return "\(r.shipped) over \(r.n)\(r.refuses ? " REFUSED" : "")"
+            }
+            sceneCandidateCounts.append(candidates.count)
+            print("  noise \(fmt(noiseMm)) mm: fit \(fit == nil ? "REFUSED" : "produced"),"
+                  + " \(candidates.count) candidates,"
+                  + " per-candidate σ_min/σ_max [\(perCandidate.joined(separator: ", "))]")
+        }
+        // The scenes' derivation HOLDS, and the second finding says why it holds only here.
+        // A scene surface carries a few thousand annulus samples, which is below the
+        // crossover, so an exactly-planar one really is refused — noise 0 yields no
+        // candidate at all and no fit. The same claim read at the fallback leg's sample
+        // count is false: `planar` above is the identical construction at 200,000 samples
+        // and the gate admits it. One sentence in a test helper, true at one scale.
+        let scenesClaimHolds = !sceneCandidateCounts.isEmpty && sceneCandidateCounts[0] == 0
+        print("the scenes' claim at their own sample count: an exactly-planar scene yields"
+              + " \(sceneCandidateCounts.first.map(String.init) ?? "?") candidates"
+              + " — the gate \(scenesClaimHolds ? "REFUSES, as SupportRegionScenes states" : "ADMITS")."
+              + " The same construction at \(Self.stabilityLatticeCount) samples: the gate"
+              + " \(planar.refuses ? "REFUSES" : "ADMITS") it")
+        let sceneUnrefused = "an exactly-planar scene now produces a candidate, so the ±0.3 mm"
+            + " SupportRegionScenes.makeDepth adds is no longer load-bearing for the reason"
+            + " it states"
+        #expect(scenesClaimHolds, "\(sceneUnrefused)")
+        let sameAtBothScales = "the exactly-planar set is now refused at"
+            + " \(Self.stabilityLatticeCount) samples too, so the claim no longer depends on"
+            + " scale and this decision's second finding is wrong"
+        #expect(!planar.refuses, "\(sameAtBothScales)")
+        // And the margin the scenes buy is not delicate: at 0.05 mm — the level the bugfix
+        // test `cleanCaptureIsNotRejectedAsDegenerate` narrows to — the surfaces read
+        // hundreds of times the bar, so any nonzero noise clears it and the shipped 0.3 mm
+        // is not a tuned value.
+        print("scene surface readings against the \(bar) bar:"
+              + " \(sceneCandidateRatios.map { "\($0 / Double(bar))×" }.joined(separator: ", "))")
+
+        // MARK: THE FIFTH FINDING — what the corpus reads, on both legs.
+
+        // Every quantity above is synthetic. These are the sets the two fitters actually
+        // refine on the committed captures: the extraction leg's per-pass inlier sets and
+        // the fallback leg's final one. The gate's distance from firing on real depth is
+        // what any bracket has to be stated on.
+        print("=== the corpus, both legs ===")
+        var corpusReadings: [StabilityReading] = []
+        for name in Self.captures {
+            let slice = try DepthSlice.load(name)
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let gravity = slice.gravity.normalised()
+
+            var rng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let candidates = Self.extractCandidates(
+                annulus: samples.annulus, geometry: g, gravity: gravity, rng: &rng,
+                maxPasses: SupportRegion.maxCandidatePlanes)
+            for (i, c) in candidates.enumerated() {
+                let members = samples.annulus.filter {
+                    abs(c.normal.dot(g.points[$0]) - c.d) < LiDARPlaneFitter.inlierBandMm
+                }
+                if let r = Self.stabilityReading("\(name) extraction pass \(i + 1)",
+                                                 inliers: members.map { g.points[$0] }) {
+                    corpusReadings.append(r)
+                }
+            }
+
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            if let reading = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace),
+               let r = Self.stabilityReading(
+                "\(name) fallback final set",
+                inliers: Self.inlierSet(points: points, reading: reading)) {
+                corpusReadings.append(r)
+            }
+        }
+        for r in corpusReadings {
+            print("  \(r.label) (\(r.n) samples): shipped \(r.shipped),"
+                  + " double-scatter \(r.doubleScatter), exact \(r.exact),"
+                  + " \(Double(r.shipped) / Double(bar))× the bar")
+        }
+        #expect(corpusReadings.count >= 6,
+                "the corpus no longer produces a reading on both legs")
+        for r in corpusReadings {
+            let fires = "\(r.label) reads \(r.shipped) against the \(bar) bar — the"
+                + " degeneracy gate now FIRES on a committed capture"
+            #expect(!r.refuses, "\(fires)")
+        }
+
+        // MARK: THE BRACKET — and its ceiling is the corpus's, not an argument's.
+
+        // The gate fires when the ratio falls BELOW the bar, so what the corpus supplies is
+        // a CEILING: the smallest ratio any committed fit reads. There is no floor from the
+        // corpus at all — nothing in it is degenerate, so no value is too low — and no
+        // FLOOR exists to be found, because the third finding is that a bar on
+        // σ_min/σ_max does not separate the sets this guard is for at any value.
+        let ceiling = corpusReadings.map(\.shipped).min() ?? 0
+        print("=== the bar swept over the corpus ===")
+        for candidateBar in Self.stabilityBarSweep {
+            let refused = corpusReadings.filter { $0.shipped < candidateBar }
+            print("  bar \(candidateBar): \(refused.count) of \(corpusReadings.count)"
+                  + " committed fits refused"
+                  + (refused.isEmpty ? "" : " (\(refused.map(\.label).joined(separator: ", ")))"))
+        }
+        print("bracketed 0…\(ceiling), shipped \(bar), which is"
+              + " \(Double(ceiling) / Double(bar))× the bar below the ceiling")
+        let onTheEdge = "the corpus ceiling \(ceiling) has come down onto the shipped"
+            + " \(bar), so the bar is no longer strictly inside its own bracket"
+        #expect(ceiling > bar, "\(onTheEdge)")
+
+        // MARK: - the coupling with Decision 58, read on the corpus itself
+
+        // The centroid Decision 58 measured is the same centroid this gate's scatter matrix
+        // is built around, and every finding above is that defect seen from a second side:
+        // an error in it displaces every centred sample by a constant, and a constant
+        // displacement is indistinguishable from thickness along the thin axis. On the
+        // corpus the inflation is 1.0001x on the extraction sets (a few thousand samples,
+        // under the crossover) and 1.0752x and 1.2631x on the two fallback sets (641,694 and
+        // 1,298,233, over it) — the same split as the synthetic sweep, on real depth.
+        //
+        // The direction is the SAFE one for the plane the fitter ships, and that is what
+        // makes it hard to see: the guard reads healthier than the geometry warrants rather
+        // than refusing a fit it should keep.
+        let inflation = corpusReadings.filter { $0.exact > 0 }
+            .map { (label: $0.label, n: $0.n, ratio: Double($0.shipped) / $0.exact) }
+        let inflationText = inflation
+            .map { "\($0.n) samples " + String(format: "%.4f", $0.ratio) + "x" }
+            .joined(separator: ", ")
+        print("shipped ÷ exact over the corpus: \(inflationText)")
+        let big = inflation.filter { $0.n > 100_000 }.map(\.ratio).max() ?? 1
+        let small = inflation.filter { $0.n < 100_000 }.map(\.ratio).max() ?? 1
+        let notSplit = "the centroid's inflation no longer separates the two legs on the"
+            + " corpus, so Decision 58's defect has been repaired or the sets have changed"
+        #expect(big > 1.05 && small < 1.01, "\(notSplit)")
     }
 
     // MARK: - Helpers
