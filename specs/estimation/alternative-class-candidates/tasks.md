@@ -1,0 +1,193 @@
+---
+references:
+    - specs/estimation/alternative-class-candidates/requirements.md
+    - specs/estimation/alternative-class-candidates/design.md
+    - specs/estimation/alternative-class-candidates/decision_log.md
+---
+# Alternative Class Candidates
+
+## Probe gate (Decision 11)
+
+- [ ] 1. Offline probe of the ranking statistic over real tensors <!-- id:67qnbf3 -->
+  - Standalone offline script (tools/, not shipped code) — runs a prototype of the compute over admissible tensors only: device capture bundles and segmenter validation outputs. Nutrition5k fixtures are excluded, their argmax field carries the ground-truth mask, not a persisted prediction
+  - Report (a) top-5 set constancy across foods and plates, (b) adjacency share of rank-1 candidates — how often rank 1 is a class physically adjacent on the same plate, (c) both figures again under a second-argmax-share statistic (fraction of the food's sampled pixels where the channel is the top non-winner)
+  - Use the same sampling the design fixes: stride-4 in both axes anchored at (0,0), FP16 tensor decode, regularised label map, 64-sample floor per detected class
+  - A verdict that neither statistic carries plate-specific signal is a valid early exit for the whole spec — record it and stop rather than proceeding
+  - Stream: 1
+  - Requirements: [1.3](requirements.md#1.3)
+
+- [ ] 2. Fix the ranking statistic and record it as a decision <!-- id:67qnbf4 -->
+  - Add Decision 13 to decision_log.md: which statistic ships (mean-over-region or second-argmax share), justified from the probe figures, with the rejected one as a documented alternative
+  - Amend design.md's behavioural-contract table row so the statistic is no longer marked provisional
+  - No implementation task below starts before this lands — Decision 11 sequences the probe first
+  - Blocked-by: 67qnbf3 (Offline probe of the ranking statistic over real tensors)
+  - Stream: 1
+  - Requirements: [1.3](requirements.md#1.3)
+
+## The evidence pass (MedataCore Segmentation)
+
+- [ ] 3. CandidateEvidence.compute over a strided FP16 accessor <!-- id:67qnbf5 -->
+  - New file MedataCore/Sources/Segmentation/CandidateEvidence.swift — one pure enum with Candidate (className: String, meanPermille: UInt32) and compute(probabilities:labelMap:palette:) -> [String: [Candidate]]
+  - Decode the FP16 ProbabilityTensor through a per-pixel strided accessor, never FP16Bytes.decode (whole-tensor, ~398 MB of FP32 for a full frame) and never the pipeline's intermediate FP32 buffer — the FP32 low bits differ from the FP16 bytes a replayed bundle carries and could flip a borderline ranking
+  - Stride 4 in both axes anchored at (0,0); serial raster accumulation so Float sum order is fixed and replay parity needs no deterministic-reduction machinery
+  - Exclusions: the food's own channel, background, unknown_food, unsupported_liquid, and cross-phase channels — isFoodClass/isLiquidClass decide phase
+  - Rank descending by the statistic pre-quantisation, ties broken by channel declaration order; retain the top 5 with strictly positive support
+  - Floor: a detected class with fewer than 64 sampled pixels gets no entry at all (Decision 11)
+  - Cap: retain sets for at most the 5 detected classes with the most sampled pixels, ties by declaration order (Decision 10, the persisted-encoding budget bound)
+  - Purely additive — reads the tensor and the label map, writes nothing else
+  - Blocked-by: 67qnbf4 (Fix the ranking statistic and record it as a decision)
+  - Stream: 1
+  - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [1.8](requirements.md#1.8), [2.1](requirements.md#2.1), [2.3](requirements.md#2.3), [3.2](requirements.md#3.2)
+
+- [ ] 4. Call the pass from PostProcessing and surface it on SegmentationResult <!-- id:67qnbf6 -->
+  - Call site is PostProcessing.swift after regulariseLabelMap (:201), on the regularised map — not a pre-regularisation assignment
+  - The ProbabilityTensor is currently constructed at :209; reorder so it exists before the pass, so the FP16 contract is not accidentally satisfied from the FP32 resized buffer
+  - New field on PostProcessedOutput (PostProcessing.swift:14-19), surfaced by CoreMLSegmenter onto SegmentationResult.candidateEvidence: [String: [Candidate]]? — a new optional defaulting to nil, so every existing constructor and hand-built test result compiles unchanged
+  - nil means not produced; non-nil however empty means produced — this is what feeds the Decision 4 marker
+  - No tensor (dev-stub segmenter, or any future path that drops it) leaves it nil and completes the estimate normally; no timeout, no throw, no new failure mode
+  - Blocked-by: 67qnbf5 (CandidateEvidence.compute over a strided FP16 accessor)
+  - Stream: 1
+  - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
+
+- [ ] 5. CandidateEvidenceTests <!-- id:67qnbf7 -->
+  - Synthetic FP16 tensors with known per-channel structure asserting exact expected rankings
+  - Exclusion of self, background, sentinel and cross-phase channels; strictly-positive-support filter; a class that won no pixel anywhere can still appear
+  - The 5-set cap picks the largest sampled foods; the 64-sample floor yields honest absence
+  - Stride anchoring: a food entirely off the stride grid yields no entry
+  - Determinism: two runs bit-equal
+  - One seeded-randomised invariant test, no new dependency — for arbitrary tensors every returned set has count <= 5, excludes its key class, and is sorted by descending magnitude
+  - Blocked-by: 67qnbf5 (CandidateEvidence.compute over a strided FP16 accessor)
+  - Stream: 1
+  - Requirements: [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [1.8](requirements.md#1.8), [2.3](requirements.md#2.3), [7.5](requirements.md#7.5)
+
+- [ ] 6. Non-interference test for the existing figures <!-- id:67qnbf8 -->
+  - Run PostProcessing with and without the pass on the same input; assert the argmax bytes, sigma_seg, perClassMeanProb and the refusal outcome are identical
+  - This is the guard on the hard invariant — the spec adds a retained quantity and corrects none
+  - Blocked-by: 67qnbf6 (Call the pass from PostProcessing and surface it on SegmentationResult)
+  - Stream: 1
+  - Requirements: [2.2](requirements.md#2.2)
+
+## Persistence contract (MedataCore)
+
+- [ ] 7. MealRecord.proto gains candidate_evidence and its produced marker <!-- id:67qnbf9 -->
+  - message CandidateSet { repeated string class_names = 1; repeated uint32 mean_permille = 2; } — parallel arrays, not nested per-candidate objects, which cost ~50 B each in protobuf-JSON and would blow the budget at ~2.2 KB worst case (Decision 10)
+  - On MealRecord: map<string, CandidateSet> candidate_evidence = 16 keyed by detected class name, bool candidate_evidence_produced = 17; regenerate MealRecord.pb.swift
+  - Additive only — the correction-record schema that estimation/pipeline Req 14.4 shares verbatim with the clinical track does not move
+  - Equal-length parallel arrays are a writer-enforced invariant that the reader checks; a mismatch reads as no evidence for that class, never as an error
+  - Blocked-by: 67qnbf4 (Fix the ranking statistic and record it as a decision)
+  - Stream: 1
+  - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4)
+
+- [ ] 8. Carry evidence and marker through the meal-record assembly <!-- id:67qnbfa -->
+  - Pipeline.swift MealRecord assembly (~:539, where segmenterSource and macros land) copies the evidence map and sets the marker from the segmentation result
+  - Marker true whenever segmentation ran with a tensor, independent of whether any set qualified — that is what keeps the Req 8.2 partition a property of the code path rather than of plate content
+  - Blocked-by: 67qnbf6 (Call the pass from PostProcessing and surface it on SegmentationResult), 67qnbf9 (MealRecord.proto gains candidate_evidence and its produced marker)
+  - Stream: 1
+  - Requirements: [4.1](requirements.md#4.1), [4.3](requirements.md#4.3)
+
+- [ ] 9. Member-wise copy sites in MealRecord.swift <!-- id:67qnbfb -->
+  - The pb bridge in both directions (MealRecord.swift:105-158) reconstructs member-wise and MUST carry fields 16/17 or evidence silently drops — Decision 4's wrong-in-the-direction-that-looks-fine
+  - withPhotoAssetID (:70-80) has the same hazard and runs after every capture
+  - No change needed at the JSONL export, records browse, deletion or retention paths — they serialise or operate on whole records
+  - Blocked-by: 67qnbf9 (MealRecord.proto gains candidate_evidence and its produced marker)
+  - Stream: 1
+  - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2)
+
+- [ ] 10. PersistenceTests for the round trip, back-compatibility and the size budget <!-- id:67qnbfc -->
+  - Protobuf-JSON round trip of fields 16/17 including through the pb bridge and withPhotoAssetID — the member-wise copy sites
+  - A pre-spec JSON record decodes with the marker false and no evidence, so absence stays distinguishable from a computed empty set
+  - A worst-case record (5 sets x 5 longest-name candidates) measures <= 1 KB of added JSON — asserted, not assumed
+  - Pin the JSON path specifically: SwiftProtobuf JSON decoding throws on unknown fields, so a downgraded reader would fail on a record carrying 16/17. Downgrade is not a supported path for this app; note it, do not design around it
+  - Blocked-by: 67qnbfb (Member-wise copy sites in MealRecord.swift)
+  - Stream: 1
+  - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4)
+
+- [ ] 11. Palette migration drops evidence by construction <!-- id:67qnbfd -->
+  - No PaletteMigrator code change — reDerive builds a fresh record, so evidence drops and the marker defaults false
+  - Test that reDerive output carries no evidence and a false marker while every other field matches the migration's expected transform, and that the result is indistinguishable from a record that never carried evidence
+  - Blocked-by: 67qnbfb (Member-wise copy sites in MealRecord.swift)
+  - Stream: 1
+  - Requirements: [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
+
+## Combined ordering (Foods and App)
+
+- [ ] 12. ShortlistOrdering.combined <!-- id:67qnbfe -->
+  - New file MedataCore/Sources/Foods/ShortlistOrdering.swift with recencySource = "recency" (the shipped value) and combinedSource = "recency_plus_candidates"
+  - combined(recency:candidates:topUp:limit:) -> [String] — three layers: recency entries in their exact shipped positions, then evidence fills in rank order skipping duplicates, then the shipped eligible top-up for any slots still empty
+  - Evidence displaces only the blind top-up, never a recency entry; with no evidence, layers 1+3 are byte-identical to the shipped list
+  - All three inputs are already-eligible class ids — eligibility and phase filtering stay with the caller, exactly as shipped
+  - Deterministic: same recency history plus same evidence always yields the same order
+  - Blocked-by: 67qnbf4 (Fix the ranking statistic and record it as a decision)
+  - Stream: 2
+  - Requirements: [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5)
+
+- [ ] 13. ShortlistOrderingTests <!-- id:67qnbff -->
+  - Recency positions invariant under any candidate input
+  - Evidence displaces top-up entries only
+  - Empty-candidates degeneracy: byte-identity against a shipped-shape fixture of recency + top-up
+  - Limit and duplicate handling
+  - Blocked-by: 67qnbfe (ShortlistOrdering.combined)
+  - Stream: 2
+  - Requirements: [7.2](requirements.md#7.2), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5)
+
+- [ ] 14. MealReviewModel consumes the combined ordering <!-- id:67qnbfg -->
+  - buildShortlist (App/MealReviewModel.swift:714-727) calls combined when the record's marker is true, passing the record's possibly-empty evidence for the detected class; marker false takes the shipped path and produces a byte-identical list
+  - shortlist_source on PbCorrectionRecord takes combinedSource exactly when the marker is true — the ordering that ran, not whether fills landed
+  - No score, percentage or confidence tier from the evidence reaches the screen
+  - The full eligible list stays the same set; Req 3.8/3.9 of ui/meal-review still bound what is offered — density and carbohydrate coefficient required, no relabel across the solid/liquid boundary
+  - Blocked-by: 67qnbfe (ShortlistOrdering.combined), 67qnbfa (Carry evidence and marker through the meal-record assembly)
+  - Stream: 2
+  - Requirements: [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [7.6](requirements.md#7.6), [7.7](requirements.md#7.7), [7.8](requirements.md#7.8), [7.9](requirements.md#7.9)
+
+## Replay parity
+
+- [ ] 15. HarnessCLITests replay parity against a committed golden <!-- id:67qnbfh -->
+  - The parity test is the only harness caller: compute(fixture FP16 tensor, fixture persisted argmax, palette) compared against a committed golden expected set
+  - Admissible fixtures are capture-bundle-derived and synthetic only — bundle fixtures record the cleaned prediction (PostProcessing.swift:214) so their argmax is the persisted mask. Nutrition5k fixtures carry the ground-truth mask in the same field and are excluded
+  - Pins both the ranking algorithm and the FP16-decode contract; the harness runs no PostProcessing, writes no meal records and sets no marker, and nothing beyond the shared function is claimed as parity coverage
+  - Blocked-by: 67qnbf5 (CandidateEvidence.compute over a strided FP16 accessor)
+  - Stream: 1
+  - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2)
+
+## Corpus measurement (Req 8)
+
+- [ ] 16. Build the shortlist hit-rate analysis over the corrections corpus <!-- id:67qnbfi -->
+  - Agent-executable and runnable the day it is written — the recency arm has been accumulating since ui/meal-review shipped 2026-08-09, so the analysis can be exercised and its output shape fixed before the combined arm exists
+  - No new fields — the corpus already carries what all four criteria need
+  - Hit rate is shortlist_rank > 0 on relabel correction records (rank 0 means full-list or no relabel); partition by shortlist_source; the same metric over both arms is the baseline comparison
+  - First-vs-repeat: a corrected class X for predicted class P is a repeat iff an earlier correction record by timestamp corrects P to X — the same relation recency ranks from
+  - Decision 12 mitigations are part of the deliverable, not optional: stratify by reconstructed recency depth (count of distinct earlier P-to-X corrections at each record's timestamp), and run an as-treated secondary that identifies combined-arm rows whose evidence set was empty for the predicted class
+  - The output states the temporal confound: the two arms are separated in time and recency strengthens as the corpus grows, so a naive comparison flatters the combined arm
+  - Emit the per-arm counts alongside every figure, so a verdict is never read off cells too small to carry one
+  - Blocked-by: 67qnbfg (MealReviewModel consumes the combined ordering)
+  - Stream: 1
+  - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
+
+## Acceptance gates (not agent-executable)
+
+- [ ] 17. Capture-path cost on the hardware floor (STOP) <!-- id:67qnbfj -->
+  - NOT agent-executable. Human-gated tethered session on the iPhone 16 Pro; an autonomous run halts here rather than attempting it
+  - Match the launch buildStamp before trusting any device output
+  - Read the median end-to-end capture duration off the existing capture timing log with and without the pass; the added median must be <= 50 ms
+  - Also confirm on device that a capture with no tensor completes the estimate with the marker false rather than delaying or failing
+  - Blocked-by: 67qnbfg (MealReviewModel consumes the combined ordering)
+  - Stream: 1
+  - Requirements: [3.1](requirements.md#3.1), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4)
+
+- [ ] 18. Record the acceptance verdict against the recency baseline (STOP) <!-- id:67qnbfk -->
+  - NOT agent-executable. Waits on real use of the surface — Decision 5 gates spec closure, not implementation, and no session can manufacture the corrections the verdict reads from
+  - Run task 16's analysis once both shortlist_source arms carry enough rows, and record the outcome as a decision in decision_log.md
+  - The first-correction split is the measurement that matters most; aggregate hit rate is dominated by repeat foods where recency already wins
+  - A neutral or negative result is a valid outcome and is recorded as such rather than tuned around — the repository precedent is segmenter-foundation Decision 24, which recorded a negative verdict and kept the incumbent
+  - Blocked-by: 67qnbfi (Build the shortlist hit-rate analysis over the corrections corpus)
+  - Stream: 1
+  - Requirements: [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
+
+- [ ] 19. Remove the pass and the retained field if the verdict is negative (STOP) <!-- id:67qnbfl -->
+  - NOT agent-executable as a standing task — conditional on task 18's verdict, and a no-op if the verdict is positive
+  - Decision 5 states the obligation: a neutral result still leaves the retained field on the record and the pass on the capture path until a removal is done. This task is where that lands rather than going unrecorded
+  - Reverting costs the two record fields, the compute pass and its call site; no correction path regresses because the recency prior stayed a live component of the ordering throughout
+  - Records already written keep fields 16/17 — removal drops the writer, not the reader, so historical rows stay decodable
+  - Blocked-by: 67qnbfk (Record the acceptance verdict against the recency baseline STOP)
+  - Stream: 1
+  - Requirements: [8.3](requirements.md#8.3)
