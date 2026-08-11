@@ -4,16 +4,10 @@ references:
 ---
 # MyFoodRepo-273 bridge — Palette and food DB
 
-> **Amended 2026-08-10 (pipeline Decision 50)**: the "palette v2" these completed
-> tasks minted violated nutrition5k-calibration Decision 23 and has been
-> expunged — the cereal class stands, but the palette is the single
-> `ClassPalette.standard` stamped "v0", `v1Standard`/`v2Standard` are gone, and
-> the v1→v2 migration tests were removed. Task text below is the historical
-> record.
-
 ## Swift palette v2
 
 - [x] 1. Add cereal class to ClassPalette as index 24, bump version to v2 <!-- id:zcnu90o -->
+  - **Amended 2026-08-10 (pipeline Decision 50), applies to every task in this file**: the "palette v2" these completed tasks minted violated nutrition5k-calibration Decision 23 and has been expunged — the cereal class stands, but the palette is the single `ClassPalette.standard` stamped "v0", `v1Standard`/`v2Standard` are gone, and the v1→v2 migration tests were removed. Task text throughout this file is the historical record
   - Append cereal after the 24 existing solids: liquids shift to 25-32, sentinels to 33/34/35, totalClasses 36
   - Update the hardcoded assertions in MedataCore/Tests/SegmentationTests/SegmentationModuleTests.swift:59-72
   - Carb-priority staple channels (first 8 solids) keep their indices — do not reorder anything
