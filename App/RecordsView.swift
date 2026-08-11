@@ -48,7 +48,7 @@ struct RecordsView: View {
             .environment(\.editMode, $editMode)
             .toolbar { toolbarContent }
             .confirmationDialog(
-                "Delete ^[\(selection.count) record](inflect: true)?",
+                "Delete \(recordCountLabel(selection.count))?",
                 isPresented: $showBulkDeleteConfirm,
                 titleVisibility: .visible
             ) {
@@ -56,7 +56,7 @@ struct RecordsView: View {
                 Button("Cancel", role: .cancel) {}
             }
             .confirmationDialog(
-                "Delete all ^[\(model.rows.count) record](inflect: true)?",
+                "Delete all \(recordCountLabel(model.rows.count))?",
                 isPresented: $showDeleteAllConfirm,
                 titleVisibility: .visible
             ) {
@@ -197,7 +197,7 @@ private struct DateRangePurgeSheet: View {
                 Button(role: .destructive) {
                     showConfirm = true
                 } label: {
-                    Text("Delete ^[\(inRangeCount) record](inflect: true)")
+                    Text("Delete \(recordCountLabel(inRangeCount))")
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(inRangeCount == 0)
@@ -211,7 +211,7 @@ private struct DateRangePurgeSheet: View {
                 }
             }
             .confirmationDialog(
-                "Delete ^[\(inRangeCount) record](inflect: true)?",
+                "Delete \(recordCountLabel(inRangeCount))?",
                 isPresented: $showConfirm,
                 titleVisibility: .visible
             ) {
@@ -358,6 +358,10 @@ private struct IntakeRecordRow: View {
         }
         .accessibilityIdentifier("records.row.intake")
     }
+}
+
+private func recordCountLabel(_ count: Int) -> String {
+    count == 1 ? "1 record" : "\(count) records"
 }
 
 private func timeString(_ date: Date) -> String {
