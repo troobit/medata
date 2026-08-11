@@ -133,7 +133,8 @@ public final class CoreMLSegmenter: @unchecked Sendable {
             perClassMeanProb: post.perClassMeanProb,
             sigmaSeg: post.sigmaSeg,
             timings: timings,
-            foodCoveragePercent: Float(cov.foodPercent)
+            foodCoveragePercent: Float(cov.foodPercent),
+            candidateEvidence: post.candidateEvidence
         )
     }
 

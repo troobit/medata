@@ -16,6 +16,11 @@ public struct PostProcessedOutput: Sendable {
     public let argmax: ArgmaxMap
     public let perClassMeanProb: [String: Float]
     public let sigmaSeg: Float
+    // Alternative-class evidence over the regularised map, keyed by detected
+    // class. `nil` means the pass did not run; non-nil however empty means it
+    // ran and nothing qualified — the distinction the persisted marker carries
+    // (alternative-class-candidates Decision 4).
+    public let candidateEvidence: [String: [CandidateEvidence.Candidate]]?
 }
 
 // Configuration for the deterministic spatial-regularisation (speckle-removal)
@@ -64,7 +69,8 @@ public enum SegmenterPostProcessor {
         originalWidth: Int,
         originalHeight: Int,
         palette: ClassPalette,
-        regularisation: MaskRegularisationConfig = defaultRegularisation
+        regularisation: MaskRegularisationConfig = defaultRegularisation,
+        retainCandidateEvidence: Bool = true
     ) throws -> PostProcessedOutput {
         guard logitsFP32.count == targetSize * targetSize * classes else {
             throw SegmentationError.invalidLogitsShape(
@@ -205,6 +211,9 @@ public enum SegmenterPostProcessor {
         )
 
         // Cast probabilities to FP16 LE bytes (portable §3.5 / §6.0 contract).
+        // Constructed BEFORE the candidate-evidence pass on purpose: that pass
+        // must read the FP16 bytes a replayed bundle carries, not the `resized`
+        // FP32 buffer, whose low bits differ and could flip a borderline ranking.
         let bytes = FP16Bytes.encode(resized)
         let probTensor = ProbabilityTensor(
             bytes: bytes,
@@ -212,11 +221,23 @@ public enum SegmenterPostProcessor {
             palette: palette
         )
         let argMap = ArgmaxMap(pixels: cleanedArgmax, height: originalHeight, width: originalWidth)
+
+        // Alternative-class evidence over the REGULARISED map — the pixels the
+        // persisted mask assigns (Req 2.1). Additive: everything returned below
+        // was computed before this ran.
+        let candidateEvidence: [String: [CandidateEvidence.Candidate]]? =
+            retainCandidateEvidence
+            ? CandidateEvidence.compute(
+                probabilities: probTensor, labelMap: argMap, palette: palette
+              )
+            : nil
+
         return PostProcessedOutput(
             probabilities: probTensor,
             argmax: argMap,
             perClassMeanProb: perClassMean,
-            sigmaSeg: sigmaSeg
+            sigmaSeg: sigmaSeg,
+            candidateEvidence: candidateEvidence
         )
     }
 }
