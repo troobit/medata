@@ -120,7 +120,16 @@ final class MealReviewModel {
     private var amountPersistTasks: [String: Task<Void, Never>] = [:]
 
     static let shortlistLimit = 5
-    static let shortlistSource = "recency"
+
+    // The ordering that ran, not whether any evidence fill landed
+    // (alternative-class-candidates Req 7.6): the marker partitions the corpus
+    // by code path, so Req 8.2 is a property of the build rather than of what
+    // was on the plate.
+    var shortlistSource: String {
+        record.candidateEvidenceProduced
+            ? ShortlistOrdering.combinedSource
+            : ShortlistOrdering.recencySource
+    }
 
     init(
         record: MealRecord,
@@ -623,7 +632,7 @@ final class MealReviewModel {
         out.massSource = food.massSource
         out.shortlistRank = food.shortlistRank
         out.absentQueryText = food.absentQueryText
-        out.shortlistSource = Self.shortlistSource  // Req 3.3, Decision 18
+        out.shortlistSource = shortlistSource  // Req 3.3, Decision 18
         out.wasReverted = food.flags.wasReverted
         return out
     }
@@ -709,7 +718,8 @@ final class MealReviewModel {
         }
     }
 
-    // MARK: - Shortlist (Req 3.1, 3.2 — Decision 18 recency ordering)
+    // MARK: - Shortlist (Req 3.1, 3.2 — Decision 18 recency ordering,
+    // alternative-class-candidates Req 7 combined ordering)
 
     private func buildShortlist(for classId: String) async -> [FoodCandidate] {
         let eligible = eligibleFoods(for: classId)
@@ -717,13 +727,25 @@ final class MealReviewModel {
         let recents = (try? await store.recentCorrectedClassIds(
             forPredictedClass: classId, limit: Self.shortlistLimit
         )) ?? []
-        var out = recents.compactMap { eligibleIds[$0] }
-        // Top up from the eligible list so the shortlist is useful before any
-        // history exists; recency-chosen entries always order first.
-        for candidate in eligible where out.count < Self.shortlistLimit {
-            if !out.contains(candidate) { out.append(candidate) }
-        }
-        return Array(out.prefix(Self.shortlistLimit))
+        // ShortlistOrdering takes already-eligible ids: eligibility and the
+        // solid/liquid boundary stay here, exactly as shipped (Req 7.8, 7.9).
+        // With no evidence the fills layer is empty and the result is the
+        // recency + top-up list `ui/meal-review` shipped (Req 7.4).
+        let ordered = ShortlistOrdering.combined(
+            recency: recents.filter { eligibleIds[$0] != nil },
+            candidates: candidateFills(for: classId).filter { eligibleIds[$0] != nil },
+            topUp: eligible.map(\.classId),
+            limit: Self.shortlistLimit
+        )
+        return ordered.compactMap { eligibleIds[$0] }
+    }
+
+    // Evidence-ranked alternatives for a detected food, read only where the
+    // record says the pass ran — a false marker means no evidence was produced
+    // (Decision 4), never an empty set to be filled from elsewhere.
+    private func candidateFills(for classId: String) -> [String] {
+        guard record.candidateEvidenceProduced else { return [] }
+        return record.candidateEvidence[classId]?.classNames ?? []
     }
 
     // MARK: - Derivation helpers

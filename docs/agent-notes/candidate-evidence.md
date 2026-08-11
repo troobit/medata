@@ -60,6 +60,32 @@ input, exact equality on the argmax bytes, σ_seg, `perClassMeanProb`, the tenso
 bytes and the refusal outcome) — not as a product switch. Nothing else should
 pass `false`.
 
+## The consuming ordering
+
+`MedataCore/Sources/Foods/ShortlistOrdering.swift` — `combined(recency:candidates:topUp:limit:)`,
+three layers in order: recency, evidence fills, the shipped eligible top-up.
+Evidence displaces only the blind top-up, never a recency entry, and with an
+empty `candidates` the result is the list `ui/meal-review` shipped. All three
+inputs are already-eligible class ids; eligibility and the solid/liquid boundary
+stay with the caller (`MealReviewModel.eligibleFoods`), exactly as before.
+
+Two things about the call site in `App/MealReviewModel.swift` are worth knowing:
+
+- **The marker gates the evidence, not the function.** `buildShortlist` always
+  calls `combined`; `candidateFills` returns `[]` unless
+  `record.candidateEvidenceProduced` is true. The design describes this as
+  "marker false takes the shipped path", which is the observable contract —
+  a single code path with a proven-empty fills layer delivers it without a
+  second copy of the ordering to keep in step. The degeneracy is pinned by
+  `ShortlistOrderingTests`, which reimplements the shipped loop as its reference
+  rather than asserting against a hand-written expectation.
+- **`shortlistSource` follows the marker, not the fills.** A combined-arm record
+  whose evidence set was empty for its predicted class still reads
+  `recency_plus_candidates`. That is deliberate: it keeps the Req 8.2 partition
+  a property of the code path rather than of what was on the plate, and the
+  as-treated cut (Decision 12) is recoverable offline because the meal record
+  persists the evidence map.
+
 ## The known defect: boundary bleed
 
 Rank-1 candidates physically touch the food **69.7%** of the time against a
