@@ -2,6 +2,7 @@ import ARKit
 import CaptureKit
 import OSLog
 import Pipeline
+import Segmentation
 import SwiftUI
 
 @main
@@ -122,7 +123,7 @@ struct MedataApp: App {
             interruptions: engine.interruptions,
             supportsLiDAR: ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth),
             databaseEdition: "CoFID 2024 + AFCD 2024",
-            paletteVersion: "v2",
+            paletteVersion: ClassPalette.standard.version,
             // Slim capture-stage refusal records carry the same lineage tag
             // the pipeline stamps on its own outcome records (snaq-parity).
             segmenterSource: pipeline.segmenterSource,
