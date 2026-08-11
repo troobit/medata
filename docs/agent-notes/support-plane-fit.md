@@ -1351,9 +1351,13 @@ fallback leg throws `.lidarFitDegenerate`.
 Extraction refines annulus sets of **1,752–9,087** samples; the fallback leg refines
 colour-grid sets of **641,694** and **1,298,233**. The crossover is between them, so one
 fitter's degeneracy guard works and the other's does not, and nothing distinguishes them
-but how many samples each hands to the same function. Consistent with a Float running sum
-losing exactness past 2²⁴ (n ≈ 47,934 at a 350 mm standoff) — which makes the crossover
-range-dependent, the `mmPerPx` family again.
+but how many samples each hands to the same function.
+
+~~Consistent with a Float running sum losing exactness past 2²⁴ (n ≈ 47,934 at a 350 mm
+standoff) — which makes the crossover range-dependent, the `mmPerPx` family again.~~
+**Superseded (Decision 65): that table is a reading at the NUMBER 350, not at a 350 mm
+standoff, and the crossover is not range-dependent.** See the section below before quoting
+any count from it.
 
 **The cause is the centroid, not the normal-equations squaring.** Forming M = AᵀA squares
 the condition number and is the obvious suspect; moving the scatter *and* the
@@ -1362,7 +1366,8 @@ reading on every rung, so it is not. What is left is Decision 58's three Float
 `reduce(0, +)` sums. **An offset centroid displaces every centred sample by a constant, and
 a constant displacement is indistinguishable from thickness along the thin axis** — so that
 defect manufactures the conditioning this gate reads as healthy. On the corpus: 1.0001×
-inflation on the extraction sets, 1.0752× and 1.2631× on the two fallback sets.
+inflation on the extraction sets, 1.0752× and 1.2631× on the two **largest** fallback sets
+— and 1.0034× and 1.0018× on the two smaller ones (Decision 65).
 
 **σ_min/σ_max is not the rank discriminant, so there is no floor to find.** An exactly
 planar set and a collinear one both drive it to zero (9.5e-9 and 0.0); σ_2/σ_max separates
@@ -1381,3 +1386,142 @@ nonzero noise clears it and 0.3 mm is not a tuned value.
 **Not repaired**, on Decisions 52–58's precedent: reading σ_2/σ_max, or accumulating the
 centroid in Double, changes which candidates survive `try? refine` and moves the fallback
 plane — the one Decision 36 prices `fallbackPenalty` against.
+
+## The crossover is a property of the number, not the range (Decision 65)
+
+Decision 64's crossover table above is a reading at the **number 350**, and quoting a count
+from it at any other standoff is wrong. `theCrossoverIsNotARangeBound` sweeps nine
+standoffs on the same exactly planar lattice.
+
+A Float running sum of a constant `Z` stays exact while `k × oddSignificand(Z) < 2²⁴`, so
+the crossover is **`2²⁴ / oddSignificand(Z)`** and the exponent divides out:
+
+| standoff | odd significand | 2²⁴ / odd | measured crossover |
+|---|---|---|---|
+| 150 mm | 75 | 223,696 | 223,696 |
+| 250 mm | 125 | 134,218 | 134,218 |
+| 272.949 mm | 69,875 | 240 | 240 |
+| 336.914 mm | 43,125 | 389 | 389 |
+| **338.867 mm** | 43,375 | **387** | **17,504** |
+| 350 / 700 / 1400 mm | 175 | 95,870 | 95,870 |
+| 399.902 mm | 102,375 | 164 | 164 |
+
+- **350, 700 and 1400 mm read the same count** across a 4× range span, which is what rules
+  out the 1/z law outright. Range enters only through the exponent, and the exponent
+  cancels.
+- **Eight of nine land to the rung.** The exception is `1785135663727`'s own range,
+  338.867 mm, at 45×. Past the exactness bound the sum's error is a random walk, not a
+  monotone drift, so the bound is a **floor** on the crossover rather than its location.
+- **The committed ranges cross two to three orders lower than the round ones**, because a
+  range is `mmPerPx × fx` and carries a full significand. Nothing physical distinguishes
+  336.914 from 338.867 mm; their crossovers differ 45×.
+
+**So do not read the lattice for where either leg sits.** It holds every sample at exactly
+the same z, and the corpus's per-sample spread is 3.44 mm.
+
+### What the corpus's own sets say
+
+Subsample the fallback leg's real final inlier set by stride — spatial spread held, only
+the count moving — and a **single count separates every reading across all four ranges**:
+quiet up to **581,996**, inflating from **641,694**. The largest annulus in the corpus is
+**12,551** samples, so the extraction leg is safe by count at **46×**, not the 5× the
+synthetic bracket implied.
+
+**Count alone does not set it, and the control is what proves that.** The candidate point
+set (`collectCandidatePoints`, before any inlier test) is larger than the inlier set drawn
+from it on every capture and does not inflate:
+
+| capture | inlier set | candidate set |
+|---|---|---|
+| `1785901032716` | 1,298,233 → **1.2631×**, σ ratio 0.009 | 1,475,580 → **0.9989×**, σ ratio 0.021 |
+| `1785135663727` | 641,694 → 1.0752×, σ ratio 0.016 | 1,077,427 → 0.9979×, σ ratio 0.267 |
+| `1786450130307` | 581,996 → 1.0034× | 1,177,405 → 1.0039× |
+| `1786439141215` | 282,430 → 1.0018× | 434,542 → 1.0003× |
+
+A 1.14× larger set, 2.3× thicker, and the inflation goes away. What it tracks is the
+centroid's error **over the set's own thickness**; Decision 64 recorded the numerator only.
+~~The thinness half is measured on these four controls and **not swept** — no aspect ratio
+has been varied at fixed count — so treat "error over thickness" as the shape of the account
+rather than its form.~~ **Superseded (Decision 66): swept, and the control table above is
+confounded — see below before reading a thickness attribution off it.**
+
+Two consequences worth not re-deriving:
+
+- **"The fallback leg ships with no effective degeneracy guard" is narrower than it reads.**
+  What is uniform across the corpus is that the gate cannot *fire* — four orders below the
+  bar at every capture, unchanged. Whether its reading is *inflated* is not uniform: half
+  the committed captures sit under the turn.
+- **The verdict on the constant does not move.** `stabilityRatioMin` is still `[owed]` and
+  still unsettleable, on Decision 64's third finding, which this decision does not touch.
+
+## The inflation has a closed form, and it is quadrature (Decision 66)
+
+`theInflationIsErrorOverThickness` holds the count **exactly** — the same points, with only
+their out-of-plane component scaled about their own least-squares plane — and sweeps the
+thickness over two orders either side, on all four committed captures.
+
+**The form.** An offset centroid displaces every centred sample by the same δ along the thin
+axis, so that axis' second moment gains exactly `n·δ²` (the cross term vanishes, because the
+exactly-centred coordinates sum to zero) while σ_max is set by the in-plane extent and does
+not move. So the ratio the gate compares picks up δ/σ **in quadrature**:
+
+> **inflation = √(1 + (δ/σ)²)**, δ = the Float centroid's error along the thin axis,
+> σ = the set's own RMS distance to its least-squares plane.
+
+Over **32 rungs** it predicts the measured inflation to **<1e-4** relative error. A linear
+`1 + δ/σ` reading — which is what "the error divided by the thickness" sounds like — is out
+by up to **41.4%**. Representative rungs on `1785901032716` (n = 1,298,233 throughout):
+
+| scale | thickness | δ | δ/σ | measured | quadrature | linear |
+|---|---|---|---|---|---|---|
+| ×⅛ | 0.190 mm | 1.231 mm | 6.470 | 6.5470× | 6.5470× | 7.4702× |
+| ×1 | 1.522 mm | 1.184 mm | 0.778 | 1.2671× | 1.2671× | 1.7782× |
+| ×16 | 24.352 mm | 0.383 mm | 0.016 | 1.0001× | 1.0001× | 1.0157× |
+
+**Thickness enters twice.** δ is not a constant the sweep divides by — it *falls* as the set
+thickens (**3.2×, 5.0×, 18.9×, 21.5×** across the four sweeps), because Decision 65's
+exactness bound is about adding the *same* value repeatedly and a spread is what breaks that.
+So ×128 of thickness moves δ/σ by 412–2,750×, not by 128×.
+
+### The count half is the same law, and its bracket is the corpus's
+
+Decision 65's `inflationBar` of 1.01 is **δ/σ = 0.1418** in these units. That bar classifies
+all **26** count-sweep rungs identically to the inflation bar — **0 disagreements** — so the
+count account is this law read on one variable, with the count entering only through δ.
+
+**But do not transfer the 581,996…641,694 bracket.** Its two ends are *different captures*:
+across it the count moves **1.10×** while δ moves **5.09×** and the thickness moves 1.21× the
+other way. The bracket is a fact about which two captures the corpus contains.
+
+### What this gives the extraction leg
+
+A margin in the deciding quantity rather than in a count. Annulus δ/σ against the 0.1418 bar:
+
+| capture | n | thickness | δ | δ/σ | margin |
+|---|---|---|---|---|---|
+| `1785135663727` | 10,469 | 9.969 mm | 0.011917 mm | 0.001195 | 119× |
+| `1785901032716` | 12,551 | 7.709 mm | 0.000027 mm | 0.000004 | 39,903× |
+| `1786450130307` | 12,274 | 5.577 mm | 0.008148 mm | 0.001461 | **97×** |
+| `1786439141215` | 5,276 | 3.795 mm | 0.001804 mm | 0.000475 | 298× |
+
+### Decision 65's control is confounded — read this before quoting it
+
+The candidate-point control differs from its inlier set on **both** axes, so it does not
+isolate thickness:
+
+| capture | count | thickness | δ | measured |
+|---|---|---|---|---|
+| `1785135663727` | ×1.68 | ×47.02 | ×0.237 | 1.0000× |
+| `1785901032716` | ×1.14 | ×2.16 | **×0.135** | 1.0012× |
+| `1786439141215` | ×1.54 | ×3.14 | ×0.622 | 1.0001× |
+| `1786450130307` | ×2.02 | ×7.90 | **×11.000** | 1.0040× |
+
+On the capture Decision 65 quotes (`1785901032716`) δ falls 7.4× where the thickness rises
+only 2.16×, so most of that reading is the numerator. **The conclusion survives on a capture
+it does not quote:** `1786450130307`'s candidate set carries **11× the centroid error** of its
+inlier set and is still quiet, because it is 7.9× thicker. That is the one unconfounded
+reading of the thinness half in the corpus.
+
+**Still `[owed]` and still unsettleable.** A form for the *inflation* is not a bar for
+*degeneracy* — Decision 64's third finding (σ_min/σ_max does not order the degenerate side at
+any value) is untouched. **Not repaired**, on Decisions 52–65's precedent.
