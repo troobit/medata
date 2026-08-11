@@ -171,13 +171,31 @@ admitted measured why it cannot yet be corpus evidence:
 - Sector verdicts at the shipped constants: crossed [2] supporting [6] — read
   AT the smear-contaminated ring, so not usable for `maxCrossedSectors`.
 
-What this buys the sitting: the paired-capture rule is now mandatory, not
-advisory — **re-shoot the same flat-bread scene from inside ~360 mm** (tape
-measure) and the pair separates a contaminated ring measure from a real one.
-Until that pair exists the slice stays out of `captures`, mirroring the
-`rejectedCaptures` precedent, with the reason recorded here rather than
-asserted in the suite (its disqualifier is range, which no threshold in the
-fitter reads).
+**The paired capture now exists (same day, 22:08).** The user re-shot the same
+plate (same 58 g) and the pair is committed:
+`MedataCore/Tests/SupportPlaneTests/Fixtures/1786450130307.depthslice`, bundle
+in `tmp/device_captures/`. Measured off the slices (median food depth vs
+`ringInnerMm × f_d / 4`):
+
+| Stem | Median food depth | Smear `4z/f_d` | vs 363–369 mm envelope | Estimate vs 58 g |
+|---|---|---|---|---|
+| `1786439141215` | 399.9 mm | **8.80 mm > 8** | OUTSIDE, 110.1 % | 19.4 g — 3.0× under |
+| `1786450130307` | 272.9 mm | 5.92 mm | INSIDE, 74.0 % | 30.8 g — 1.9× under |
+
+The inside-envelope capture selected `foodSupport` with a **stronger** verdict
+(8/8 supporting sectors, ring median −0.096 mm, residual 1.93 mm, 4,977 food
+samples vs 1,278) — and still under-reads 1.9× (77.1 cm³ against ~215
+expected). So the range trap accounts for the 3.0× → 1.9× difference and no
+more: **an admissible, well-ranged, 8/8-sector foodSupport fit still loses
+~60 % of a flat slice's volume.** Where the remainder lives — plane height vs
+mask under-coverage vs the height-field integration — is the first question
+the task 26 measurement pass over `1786450130307` must answer; that slice is
+the corpus-grade one of the pair. Both slices stay out of `captures` until
+that pass runs (the residue-area invariant question from the probe run stands
+for the outside-envelope slice, and admission re-denominates brackets).
+
+Its two-view companion (`1786450162911`) refused `unrecognisedFood` — the
+two-view leg of the sitting still has no post-promotion success at this range.
 
 ## Captures still needed
 
