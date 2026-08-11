@@ -184,15 +184,37 @@ in `tmp/device_captures/`. Measured off the slices (median food depth vs
 
 The inside-envelope capture selected `foodSupport` with a **stronger** verdict
 (8/8 supporting sectors, ring median −0.096 mm, residual 1.93 mm, 4,977 food
-samples vs 1,278) — and still under-reads 1.9× (77.1 cm³ against ~215
-expected). So the range trap accounts for the 3.0× → 1.9× difference and no
-more: **an admissible, well-ranged, 8/8-sector foodSupport fit still loses
-~60 % of a flat slice's volume.** Where the remainder lives — plane height vs
-mask under-coverage vs the height-field integration — is the first question
-the task 26 measurement pass over `1786450130307` must answer; that slice is
-the corpus-grade one of the pair. Both slices stay out of `captures` until
-that pass runs (the residue-area invariant question from the probe run stands
-for the outside-envelope slice, and admission re-denominates brackets).
+samples vs 1,278) — and still under-reads 1.9× by mass (30.8 g vs 58 g).
+
+**Localised same day by an independent probe, and the plane is exonerated.**
+A Python re-derivation off the committed slices — least-squares surround plane
+on a 5–26 mm non-food ring (residual σ 1.09 mm, tilt 1.0°), heights along the
+normal, per-pixel-footprint integration — reproduces the pipeline's volume on
+both captures (87.1 vs 77.1 cm³ inside-envelope; 45.1 vs 48.6 outside). Three
+suspects eliminated on the inside-envelope capture:
+
+- **Not τ_conf**: 100 % of its food samples carry HIGH confidence (the rice
+  capture's failure mode does not recur; frame-wide HIGH is 75.7 %).
+- **Not the mask**: 109.7 cm² measured area is a real slice's footprint.
+- **Not the plane or the integration**: the independent plane agrees with the
+  fitter's, and integrating over it reproduces the pipeline volume within 13 %.
+
+What remains is the depth itself: the map holds only **p50 8.8 mm / max
+12.7 mm of bread height** over that correct footprint, where a 58 g slice at
+bread's ~0.27 g/cm³ would need ~20 mm. Either ARKit's smoothed sceneDepth
+flattens a low-relief 20 mm object to ~9 mm, or the slice really is ~10–13 mm
+thick and dense (58 g / 87 cm³ = 0.67 g/cm³) — in which case the volume is
+nearly right and the error is the uncalibrated β=1 density path (30.8 g used
+0.40 g/cm³). **One ruler measurement of the slice's thickness separates the
+two**; record it with the session sheet. Either way this is not a support-plane
+defect, and Req 7.8's expectation for flat food must be set against measured
+depth relief, not nominal food thickness.
+
+The outside-envelope capture's extra shortfall (3.0× vs 1.9×) is **mask
+under-coverage at range** — 62.1 cm² segmented vs 109.7 for the same slice —
+compounding the smear contamination already recorded. Both slices stay out of
+`captures` until the task 26 pass runs (the residue-area invariant question
+stands for the outside-envelope slice, and admission re-denominates brackets).
 
 Its two-view companion (`1786450162911`) refused `unrecognisedFood` — the
 two-view leg of the sitting still has no post-promotion success at this range.
