@@ -134,6 +134,23 @@ enum PipelineBridges {
         }
     }
 
+    // MARK: - CandidateEvidence → PbCandidateSet
+
+    // Ranking is already fixed by `CandidateEvidence.compute`; this only splits
+    // each ranked set into the parallel arrays the record persists (Decision 10),
+    // written together so the reader's equal-length invariant holds by
+    // construction.
+    static func pbCandidateEvidence(
+        _ evidence: [String: [CandidateEvidence.Candidate]]
+    ) -> [String: PbCandidateSet] {
+        evidence.mapValues { candidates in
+            var out = PbCandidateSet()
+            out.classNames = candidates.map(\.className)
+            out.meanPermille = candidates.map(\.meanPermille)
+            return out
+        }
+    }
+
     // MARK: - BinaryMask from ArgmaxMap (food pixels only)
 
     static func foodMask(from argmax: ArgmaxMap, palette: ClassPalette) -> BinaryMask {

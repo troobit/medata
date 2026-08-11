@@ -155,6 +155,66 @@ final class PaletteMigratorTests: XCTestCase {
         }
     }
 
+    // MARK: - Req 5 (alternative-class-candidates): migration drops evidence
+    //
+    // There is no PaletteMigrator code for this: `reDerive` builds a fresh
+    // record, so candidate evidence drops and the marker defaults false by
+    // construction. These tests are what keeps that true — a later refactor
+    // that copied the record instead of rebuilding it would carry candidates
+    // keyed under the palette the record just left (Req 5.1).
+
+    func testMigrationDropsCandidateEvidenceAndClearsTheMarker() async throws {
+        let original = makeMeal(paletteVersion: "old", classId: "rice",
+                                volumeCm3: 100, massG: 105,
+                                candidateEvidence: ["rice": candidateSet()],
+                                candidateEvidenceProduced: true)
+        let shadow = try await migrateRiceToBrownRice(original)
+
+        XCTAssertTrue(shadow.candidateEvidence.isEmpty)
+        XCTAssertFalse(shadow.candidateEvidenceProduced)
+
+        // Req 5.2: nothing else moves — the migration's own transform still holds.
+        XCTAssertEqual(shadow.databaseEdition, "new")
+        XCTAssertEqual(shadow.paletteVersion, "new")
+        let entry = try XCTUnwrap(shadow.macros.perClass["brown_rice"])
+        let expectedMass: Float = 100.0 * 1.10 * 0.85 / (1.05 * 0.9)
+        XCTAssertEqual(entry.volumeCm3, 100, accuracy: 0.01)
+        XCTAssertEqual(entry.massG, expectedMass, accuracy: 0.01)
+        XCTAssertEqual(entry.carbsG, expectedMass * 30.0 / 100.0, accuracy: 0.01)
+        XCTAssertEqual(shadow.volumes.perClassVolumesCm3["brown_rice"], 100)
+        XCTAssertEqual(shadow.perClassCalibration["brown_rice"], .calibrated)
+    }
+
+    // Req 5.2 / Req 4.3: a migrated record must be the same record as one whose
+    // capture never produced evidence, not merely one with an empty map.
+    func testMigratedRecordIsIndistinguishableFromOneThatNeverCarriedEvidence() async throws {
+        let carried = makeMeal(paletteVersion: "old", classId: "rice",
+                               volumeCm3: 100, massG: 105,
+                               candidateEvidence: ["rice": candidateSet()],
+                               candidateEvidenceProduced: true)
+        let never = makeMeal(paletteVersion: "old", classId: "rice",
+                             volumeCm3: 100, massG: 105)
+
+        var fromCarried = try await migrateRiceToBrownRice(carried).pb
+        var fromNever = try await migrateRiceToBrownRice(never).pb
+        // reDerive stamps a fresh UUID and timestamp per call (Req 14.2), so
+        // those two are expected to differ; everything else must not.
+        fromCarried.id = ""; fromNever.id = ""
+        fromCarried.createdAtMs = 0; fromNever.createdAtMs = 0
+
+        XCTAssertEqual(try fromCarried.jsonString(), try fromNever.jsonString())
+    }
+
+    private func migrateRiceToBrownRice(_ meal: MealRecord) async throws -> MealRecord {
+        let url = try writeMappingFile(from: "old", to: "new", mappings: ["rice": "brown_rice"])
+        let migrator = BundlePaletteMigrator(
+            mappingURLs: ["old→new": url],
+            foodDB: StubFoodDB(densities: ["rice": 1.05, "brown_rice": 1.10],
+                               betas: ["rice": 0.9, "brown_rice": 0.85],
+                               carbsMonos: ["brown_rice": 30.0])
+        )
+        return try await migrator.reDerive(meal: meal, to: "new")
+    }
 }
 
 // MARK: - Helpers
@@ -174,12 +234,21 @@ private func writeMappingFile(from: String, to: String, mappings: [String: Strin
     return url
 }
 
+private func candidateSet() -> PbCandidateSet {
+    var set = PbCandidateSet()
+    set.classNames = ["brown_rice", "pasta"]
+    set.meanPermille = [412, 233]
+    return set
+}
+
 private func makeMeal(
     paletteVersion: String,
     classId: String,
     volumeCm3: Float,
     massG: Float,
-    carbsG: Float = 33.6
+    carbsG: Float = 33.6,
+    candidateEvidence: [String: PbCandidateSet] = [:],
+    candidateEvidenceProduced: Bool = false
 ) -> MealRecord {
     var vol = PbVolumeResult(); vol.perClassVolumesCm3 = [classId: volumeCm3]
     var entry = PbPerClassMacros()
@@ -192,7 +261,9 @@ private func makeMeal(
         paletteVersion: paletteVersion,
         calibration: PbCameraIntrinsics(), supportPlane: PbSupportPlane(), scale: PbMetricScale(),
         volumes: vol, macros: macros, confidence: conf,
-        perClassCalibration: [classId: .calibrated]
+        perClassCalibration: [classId: .calibrated],
+        candidateEvidence: candidateEvidence,
+        candidateEvidenceProduced: candidateEvidenceProduced
     )
 }
 

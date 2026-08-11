@@ -547,7 +547,14 @@ public struct Pipeline: Sendable {
             volumes: pbVolumes,
             macros: PipelineBridges.pbMacroResult(macros),
             confidence: PipelineBridges.pbConfidenceResult(confidence),
-            perClassCalibration: perClassCalib
+            perClassCalibration: perClassCalib,
+            candidateEvidence: PipelineBridges.pbCandidateEvidence(
+                nadirSeg.candidateEvidence ?? [:]
+            ),
+            // The marker records that the evidence pass RAN, not that anything
+            // qualified (Decision 4) — that is what keeps the Req 8.2 partition
+            // a property of the code path rather than of plate content.
+            candidateEvidenceProduced: nadirSeg.candidateEvidence != nil
         )
 
         // ── Stage L: Persistence ─────────────────────────────────────────────────

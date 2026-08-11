@@ -48,6 +48,12 @@ Inside `compute`, the tensor is read through a strided per-pixel accessor.
 `FP16Bytes.decode` is the whole-tensor path (~398 MB of FP32 for a full frame)
 and must not be used here.
 
+From there `Pipeline.swift`'s meal-record assembly copies the map onto
+`PbMealRecord` fields 16/17 through `PipelineBridges.pbCandidateEvidence`, which
+splits each ranked set into the parallel arrays the record persists. The persisted
+shape, the marker's meaning and the copy-site hazards are in
+`docs/agent-notes/persistence.md`.
+
 `process` takes `retainCandidateEvidence: Bool = true`. It exists for the Req 2.2
 non-interference test in `PostProcessingTests` (`with` vs `without` on the same
 input, exact equality on the argmax bytes, σ_seg, `perClassMeanProb`, the tensor

@@ -20,6 +20,31 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+/// Ranked alternative classes the segmenter's own output supported over one
+/// detected food's pixels (estimation/alternative-class-candidates Req 1).
+///
+/// Parallel arrays rather than one message per candidate: the record persists as
+/// protobuf-JSON (Decision 31), where per-candidate object framing costs ~50 B
+/// and would carry the worst case to ~2.2 KB, over double the Req 4.4 budget
+/// (Decision 10). Equal lengths are an invariant the writer enforces and every
+/// reader checks — a mismatch reads as no evidence for that class, never as an
+/// error.
+public nonisolated struct PbCandidateSet: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// ranked, at most 5 (Req 1.5)
+  public var classNames: [String] = []
+
+  /// parallel to class_names, 0...1000
+  public var meanPermille: [UInt32] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct PbMealRecord: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -138,6 +163,25 @@ public nonisolated struct PbMealRecord: @unchecked Sendable {
     set {_uniqueStorage()._segmenterSource = newValue}
   }
 
+  /// Retained alternative-class evidence, keyed by detected class name
+  /// (estimation/alternative-class-candidates Req 4.1). Sets are retained for
+  /// at most the five detected classes with the greatest sampled support
+  /// (Decision 10).
+  public var candidateEvidence: Dictionary<String,PbCandidateSet> {
+    get {_storage._candidateEvidence}
+    set {_uniqueStorage()._candidateEvidence = newValue}
+  }
+
+  /// Whether the evidence pass ran for this capture, independent of how many
+  /// sets qualified (Decision 4). Absence of evidence on a record that predates
+  /// the spec, lost it to a palette migration, or never ran the pass is not the
+  /// same fact as a computed but empty set, and Req 8.1's denominator is the
+  /// population where the pass ran.
+  public var candidateEvidenceProduced: Bool {
+    get {_storage._candidateEvidenceProduced}
+    set {_uniqueStorage()._candidateEvidenceProduced = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -149,9 +193,44 @@ public nonisolated struct PbMealRecord: @unchecked Sendable {
 
 fileprivate nonisolated let _protobuf_package = "medata.research.v1"
 
+nonisolated extension PbCandidateSet: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CandidateSet"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}class_names\0\u{3}mean_permille\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.classNames) }()
+      case 2: try { try decoder.decodeRepeatedUInt32Field(value: &self.meanPermille) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.classNames.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.classNames, fieldNumber: 1)
+    }
+    if !self.meanPermille.isEmpty {
+      try visitor.visitPackedUInt32Field(value: self.meanPermille, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: PbCandidateSet, rhs: PbCandidateSet) -> Bool {
+    if lhs.classNames != rhs.classNames {return false}
+    if lhs.meanPermille != rhs.meanPermille {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MealRecord"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}created_at_ms\0\u{3}capture_path\0\u{3}database_edition\0\u{1}frames\0\u{1}calibration\0\u{3}support_plane\0\u{1}scale\0\u{1}volumes\0\u{1}macros\0\u{1}confidence\0\u{3}per_class_calibration\0\u{3}user_correction\0\u{3}photo_asset_id\0\u{3}segmenter_source\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}created_at_ms\0\u{3}capture_path\0\u{3}database_edition\0\u{1}frames\0\u{1}calibration\0\u{3}support_plane\0\u{1}scale\0\u{1}volumes\0\u{1}macros\0\u{1}confidence\0\u{3}per_class_calibration\0\u{3}user_correction\0\u{3}photo_asset_id\0\u{3}segmenter_source\0\u{3}candidate_evidence\0\u{3}candidate_evidence_produced\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -169,6 +248,8 @@ nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._Messag
     var _userCorrection: PbUserCorrection? = nil
     var _photoAssetID: String = String()
     var _segmenterSource: String = String()
+    var _candidateEvidence: Dictionary<String,PbCandidateSet> = [:]
+    var _candidateEvidenceProduced: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -194,6 +275,8 @@ nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._Messag
       _userCorrection = source._userCorrection
       _photoAssetID = source._photoAssetID
       _segmenterSource = source._segmenterSource
+      _candidateEvidence = source._candidateEvidence
+      _candidateEvidenceProduced = source._candidateEvidenceProduced
     }
   }
 
@@ -227,6 +310,8 @@ nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._Messag
         case 13: try { try decoder.decodeSingularMessageField(value: &_storage._userCorrection) }()
         case 14: try { try decoder.decodeSingularStringField(value: &_storage._photoAssetID) }()
         case 15: try { try decoder.decodeSingularStringField(value: &_storage._segmenterSource) }()
+        case 16: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,PbCandidateSet>.self, value: &_storage._candidateEvidence) }()
+        case 17: try { try decoder.decodeSingularBoolField(value: &_storage._candidateEvidenceProduced) }()
         default: break
         }
       }
@@ -284,6 +369,12 @@ nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._Messag
       if !_storage._segmenterSource.isEmpty {
         try visitor.visitSingularStringField(value: _storage._segmenterSource, fieldNumber: 15)
       }
+      if !_storage._candidateEvidence.isEmpty {
+        try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMessageMap<SwiftProtobuf.ProtobufString,PbCandidateSet>.self, value: _storage._candidateEvidence, fieldNumber: 16)
+      }
+      if _storage._candidateEvidenceProduced != false {
+        try visitor.visitSingularBoolField(value: _storage._candidateEvidenceProduced, fieldNumber: 17)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -308,6 +399,8 @@ nonisolated extension PbMealRecord: SwiftProtobuf.Message, SwiftProtobuf._Messag
         if _storage._userCorrection != rhs_storage._userCorrection {return false}
         if _storage._photoAssetID != rhs_storage._photoAssetID {return false}
         if _storage._segmenterSource != rhs_storage._segmenterSource {return false}
+        if _storage._candidateEvidence != rhs_storage._candidateEvidence {return false}
+        if _storage._candidateEvidenceProduced != rhs_storage._candidateEvidenceProduced {return false}
         return true
       }
       if !storagesAreEqual {return false}
