@@ -213,7 +213,7 @@ references:
 
 ## Integration
 
-- [ ] 22. Integration gate: build, test, spell <!-- id:fffbfhc -->
+- [x] 22. Integration gate: build, test, spell <!-- id:fffbfhc -->
   - make build clean; make test green — report BOTH totals (XCTest and swift-testing); make spell clean before committing docs or strings
   - No new app-target test scaffolding: MeData/Tests and MeData/UITests are documentation contracts, not an executable suite
   - Device verification is human-gated — prerequisites.md carries the layout, interaction-cost, legibility, accessibility, durability and corpus checks
