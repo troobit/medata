@@ -27,6 +27,14 @@ public struct MealRecord: Sendable, Equatable, Hashable {
     public let confidence: PbConfidenceResult
     public let perClassCalibration: [String: PbBetaCalibrationStatus]
     public let userCorrection: PbUserCorrection?
+    // Retained alternative-class evidence, keyed by detected class name
+    // (estimation/alternative-class-candidates Req 4.1). Empty is not the same
+    // fact as never produced — `candidateEvidenceProduced` carries that.
+    public let candidateEvidence: [String: PbCandidateSet]
+    // Whether the evidence pass ran for this capture (Decision 4). False on
+    // records written before the spec, on captures with no probability tensor,
+    // and on migrated records, which drop evidence by construction (Req 5).
+    public let candidateEvidenceProduced: Bool
 
     public init(
         id: UUID = UUID(),
@@ -44,7 +52,9 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         macros: PbMacroResult,
         confidence: PbConfidenceResult,
         perClassCalibration: [String: PbBetaCalibrationStatus] = [:],
-        userCorrection: PbUserCorrection? = nil
+        userCorrection: PbUserCorrection? = nil,
+        candidateEvidence: [String: PbCandidateSet] = [:],
+        candidateEvidenceProduced: Bool = false
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -62,6 +72,8 @@ public struct MealRecord: Sendable, Equatable, Hashable {
         self.confidence = confidence
         self.perClassCalibration = perClassCalibration
         self.userCorrection = userCorrection
+        self.candidateEvidence = candidateEvidence
+        self.candidateEvidenceProduced = candidateEvidenceProduced
     }
 
     // Returns a copy of this record with photoAssetID replaced. Used after the
@@ -75,7 +87,9 @@ public struct MealRecord: Sendable, Equatable, Hashable {
             segmenterSource: segmenterSource,
             frames: frames, calibration: calibration, supportPlane: supportPlane,
             scale: scale, volumes: volumes, macros: macros, confidence: confidence,
-            perClassCalibration: perClassCalibration, userCorrection: userCorrection
+            perClassCalibration: perClassCalibration, userCorrection: userCorrection,
+            candidateEvidence: candidateEvidence,
+            candidateEvidenceProduced: candidateEvidenceProduced
         )
     }
 }
@@ -119,6 +133,8 @@ public extension MealRecord {
         out.confidence = confidence
         out.perClassCalibration = perClassCalibration
         if let uc = userCorrection { out.userCorrection = uc }
+        out.candidateEvidence = candidateEvidence
+        out.candidateEvidenceProduced = candidateEvidenceProduced
         return out
     }
 
@@ -155,6 +171,14 @@ public extension MealRecord {
         self.confidence = pb.confidence
         self.perClassCalibration = pb.perClassCalibration
         self.userCorrection = pb.hasUserCorrection ? pb.userCorrection : nil
+        // Equal-length parallel arrays are the writer's invariant (Decision 10);
+        // the reader checks it. A set whose arrays disagree reads as no evidence
+        // for that class rather than as a corrupt record — the pass is additive
+        // and must not be able to fail a load.
+        self.candidateEvidence = pb.candidateEvidence.filter {
+            $0.value.classNames.count == $0.value.meanPermille.count
+        }
+        self.candidateEvidenceProduced = pb.candidateEvidenceProduced
     }
 
     // Encodes to protobuf-JSON string per Decision 31.

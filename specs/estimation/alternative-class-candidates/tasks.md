@@ -72,7 +72,7 @@ references:
 
 ## Persistence contract (MedataCore)
 
-- [ ] 7. MealRecord.proto gains candidate_evidence and its produced marker <!-- id:67qnbf9 -->
+- [x] 7. MealRecord.proto gains candidate_evidence and its produced marker <!-- id:67qnbf9 -->
   - message CandidateSet { repeated string class_names = 1; repeated uint32 mean_permille = 2; } — parallel arrays, not nested per-candidate objects, which cost ~50 B each in protobuf-JSON and would blow the budget at ~2.2 KB worst case (Decision 10)
   - On MealRecord: map<string, CandidateSet> candidate_evidence = 16 keyed by detected class name, bool candidate_evidence_produced = 17; regenerate MealRecord.pb.swift
   - Additive only — the correction-record schema that estimation/pipeline Req 14.4 shares verbatim with the clinical track does not move
@@ -81,14 +81,14 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4)
 
-- [ ] 8. Carry evidence and marker through the meal-record assembly <!-- id:67qnbfa -->
+- [x] 8. Carry evidence and marker through the meal-record assembly <!-- id:67qnbfa -->
   - Pipeline.swift MealRecord assembly (~:539, where segmenterSource and macros land) copies the evidence map and sets the marker from the segmentation result
   - Marker true whenever segmentation ran with a tensor, independent of whether any set qualified — that is what keeps the Req 8.2 partition a property of the code path rather than of plate content
   - Blocked-by: 67qnbf6 (Call the pass from PostProcessing and surface it on SegmentationResult), 67qnbf9 (MealRecord.proto gains candidate_evidence and its produced marker)
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.3](requirements.md#4.3)
 
-- [ ] 9. Member-wise copy sites in MealRecord.swift <!-- id:67qnbfb -->
+- [x] 9. Member-wise copy sites in MealRecord.swift <!-- id:67qnbfb -->
   - The pb bridge in both directions (MealRecord.swift:105-158) reconstructs member-wise and MUST carry fields 16/17 or evidence silently drops — Decision 4's wrong-in-the-direction-that-looks-fine
   - withPhotoAssetID (:70-80) has the same hazard and runs after every capture
   - No change needed at the JSONL export, records browse, deletion or retention paths — they serialise or operate on whole records
@@ -96,7 +96,7 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2)
 
-- [ ] 10. PersistenceTests for the round trip, back-compatibility and the size budget <!-- id:67qnbfc -->
+- [x] 10. PersistenceTests for the round trip, back-compatibility and the size budget <!-- id:67qnbfc -->
   - Protobuf-JSON round trip of fields 16/17 including through the pb bridge and withPhotoAssetID — the member-wise copy sites
   - A pre-spec JSON record decodes with the marker false and no evidence, so absence stays distinguishable from a computed empty set
   - A worst-case record (5 sets x 5 longest-name candidates) measures <= 1 KB of added JSON — asserted, not assumed
@@ -105,7 +105,7 @@ references:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4)
 
-- [ ] 11. Palette migration drops evidence by construction <!-- id:67qnbfd -->
+- [x] 11. Palette migration drops evidence by construction <!-- id:67qnbfd -->
   - No PaletteMigrator code change — reDerive builds a fresh record, so evidence drops and the marker defaults false
   - Test that reDerive output carries no evidence and a false marker while every other field matches the migration's expected transform, and that the result is indistinguishable from a record that never carried evidence
   - Blocked-by: 67qnbfb (Member-wise copy sites in MealRecord.swift)

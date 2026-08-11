@@ -33,6 +33,41 @@ Five tables: `meals`, `meal_classes`, `meal_artefacts`, `corrections`, `meta`. C
 
 `deleteArtefacts(olderThan:)` skips meals whose correction_records row carries an actual correction (any of the four flags — not mere row existence), and now also deletes the `meal_artefacts` rows alongside the directories.
 
+## Candidate evidence (alternative-class-candidates)
+
+`PbMealRecord` fields 16/17 — `map<string, CandidateSet> candidate_evidence`
+keyed by detected class name, and `bool candidate_evidence_produced`. Surfaced on
+`MealRecord` as `candidateEvidence: [String: PbCandidateSet]` and
+`candidateEvidenceProduced: Bool`, both defaulted so every existing constructor
+compiles unchanged. `CandidateSet` is **parallel arrays** (`class_names` +
+`mean_permille`), not one message per candidate: the record persists as
+protobuf-JSON, where object framing costs ~50 B a candidate and would carry the
+worst case over the 1 KB budget (Decision 10). Measured worst case (5 sets × 5
+16-character names) is **920 B** of added JSON, asserted in
+`CandidateEvidenceRecordTests`.
+
+Three gotchas:
+
+- **The marker is not derivable from the map.** Empty-because-nothing-qualified
+  and never-produced are different facts, and Req 8.1's denominator is the
+  population where the pass ran (Decision 4). `Pipeline` sets it from
+  `nadirSeg.candidateEvidence != nil` — that the pass RAN, not that fills landed.
+- **The member-wise copy sites are the hazard.** The pb bridge in both directions
+  and `withPhotoAssetID` reconstruct field by field; one omission drops evidence
+  while every other value still looks right. Pinned by test, not by review.
+- **Equal array lengths are a writer invariant the reader checks.** `init(pb:)`
+  filters out any set whose arrays disagree — it reads as no evidence for that
+  class, never as a corrupt record. This pass must not be able to fail a load.
+
+`PaletteMigrator` needs no code for Req 5: `reDerive` builds a fresh record, so
+evidence drops and the marker defaults false by construction. `PaletteMigratorTests`
+asserts the migrated record is byte-identical (modulo the fresh UUID and
+timestamp) to one migrated from a record that never carried evidence.
+
+Downgrade is not a supported path: SwiftProtobuf JSON decoding throws on unknown
+fields, so a build predating 16/17 cannot read a record carrying them. Noted, not
+designed around.
+
 ## PaletteMigrator
 
 Formula: `m_c' = V_c · ρ_new · β_new / (ρ_old · β_old)` where:
