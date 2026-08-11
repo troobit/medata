@@ -140,6 +140,56 @@ task fires. Adjacency is recomputable offline from a surviving capture bundle's
 persisted argmax; rows whose bundle is gone are reported unknown, never assumed
 non-adjacent.
 
+## The Req 8 analysis: `tools/shortlist_hit_rate.py`
+
+The corpus-side measurement — how often the food the user chose was already in
+the shortlist, per `shortlist_source` arm. It adds no fields; the corrections
+corpus already carries everything the four criteria need.
+
+```
+python3 tools/shortlist_hit_rate.py tmp/device_pulls/*.sqlite --bundles tmp/device_captures
+python3 tools/shortlist_hit_rate.py corrections.jsonl
+```
+
+Reads device pulls / archive exports (`correction_records` for the corpus, the
+`events` meal rows for the as-treated cut) or the app's Corrections JSONL export
+(no meal records, so as-treated is all `unknown`). Several pulls of the same
+device can be passed at once: rows deduplicate on the store's own primary key,
+`(meal_id, predicted_class)`, newest `updated_at` winning.
+
+Four things about it are load-bearing:
+
+- **Hit is `shortlist_rank > 0` over relabel rows only** (`class_corrected`).
+  Rank 0 means the full list or no relabel, and proto3 omits defaults, so an
+  absent rank reads 0 exactly as the app's decoder reads it.
+- **First-vs-repeat and recency depth are reconstructed from `created_at`, not
+  `updated_at`.** A later edit rewrites `updated_at`, so it cannot order the
+  corpus as it stood when a shortlist was offered. Rows sharing a timestamp (the
+  several foods of one plate) are not earlier than each other. Depth is the
+  count of distinct corrected classes already recorded for the predicted class —
+  the *size* of the pool recency drew from, which is reconstructible even though
+  its order is not.
+- **The bundle join is timestamp-then-verify.** A bundle is stamped when
+  estimation starts and the meal record when it finishes, so the candidate is
+  the nearest bundle strictly before the record within `--bundle-window-ms`
+  (60 s). Timestamp alone would be a guess, so the candidate must also explain
+  the meal: every class the estimate carries must be present in the bundle's
+  argmax — not the converse, since speckle the estimate drops below its area
+  threshold is still in the mask. A meal no bundle explains reports `unknown`,
+  never non-adjacent.
+- **`bleed_verdict` is a token, not a rate**: `bleed_hurting` (adjacent
+  corrections hit while non-adjacent miss — the mitigation task fires),
+  `bleed_not_hurting`, or `insufficient` until both cells clear `--min-cell`
+  (default 10).
+
+**Corpus as of 2026-08-12: the analysis runs and answers nothing.** The device
+pulls carry 8 correction rows across 6 meals, all `shortlist_source=recency`,
+and **zero** of them are relabels — every cell is `n=0 rate=na`. The output
+shape is fixed and the arithmetic is exercised, but the verdict task waits on
+real corrections in both arms. `bundles_matched=3` of those meals, so the
+adjacency join is live rather than theoretical; adjacency itself is unexercised
+on real rows because the field plates are single-food (see below).
+
 ## The probe: `tools/candidate_probe.py`
 
 Re-runnable against a later model, palette or statistic. Two modes:

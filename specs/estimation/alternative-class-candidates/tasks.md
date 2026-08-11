@@ -154,7 +154,7 @@ references:
 
 ## Corpus measurement (Req 8)
 
-- [ ] 16. Build the shortlist hit-rate analysis over the corrections corpus <!-- id:67qnbfi -->
+- [x] 16. Build the shortlist hit-rate analysis over the corrections corpus <!-- id:67qnbfi -->
   - Agent-executable and runnable the day it is written — the recency arm has been accumulating since ui/meal-review shipped 2026-08-09, so the analysis can be exercised and its output shape fixed before the combined arm exists
   - No new fields — the corpus already carries what all four criteria need
   - Hit rate is shortlist_rank > 0 on relabel correction records (rank 0 means full-list or no relabel); partition by shortlist_source; the same metric over both arms is the baseline comparison
@@ -164,6 +164,11 @@ references:
   - Adjacency is recoverable offline for meals whose capture bundle survives (recompute from the persisted argmax); where no bundle survives the row is reported as unknown rather than assumed non-adjacent, and the unknown count is printed beside the figure
   - The output states the temporal confound: the two arms are separated in time and recency strengthens as the corpus grows, so a naive comparison flatters the combined arm
   - Emit the per-arm counts alongside every figure, so a verdict is never read off cells too small to carry one
+  - DONE 2026-08-12: tools/shortlist_hit_rate.py. Reads device pulls and archive exports (correction_records plus the events meal rows) or the app's Corrections JSONL, deduplicating on the store's own key (meal_id, predicted_class) with the newest updated_at winning, so successive pulls of one device can be passed together
+  - Cuts emitted, each with its cell count: hit rate per arm, first-vs-repeat, recency-depth strata, the as-treated states (evidence, no_evidence, marker_false, no_meal_record) and the boundary-bleed partition, whose bleed_verdict token stays insufficient until both cells clear --min-cell
+  - Adjacency joins a meal to its capture bundle by timestamp and then verifies the match against the meal's detected classes; an unverifiable row reports unknown, never non-adjacent. First-vs-repeat and recency depth are reconstructed from created_at, because updated_at is rewritten by later mutations
+  - The temporal confound is stated as data rather than prose — per-arm first and last date beside the median recency depth, next to the depth strata that are the only cut separating a better ordering from a deeper history
+  - Corpus as of 2026-08-12: 8 correction rows over 6 meals, all shortlist_source=recency, and zero of them relabels, so every cell is n=0. The output shape is fixed and the arithmetic exercised; the numbers wait on real corrections in both arms
   - Blocked-by: 67qnbfg (MealReviewModel consumes the combined ordering)
   - Stream: 1
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
@@ -176,6 +181,7 @@ references:
   - Measure any mitigation against the committed baseline with tools/candidate_probe.py — it takes --erode and prints adjacency beside the chance floor, so a change is one command
   - Not the same lever as "Remove the pass and the retained field if the verdict is negative": that removes the feature on a negative Req 8 verdict, this repairs the ranking while keeping it. Removal is the fallback if this fails or is not worth its cost
   - See docs/agent-notes/candidate-evidence.md for the probe mechanics and the full figures
+  - STILL PENDING 2026-08-12: the analysis exists and runs, but the partition it fires on returns bleed_verdict=insufficient — the corpus carries no relabels at all yet, so neither the adjacent nor the non-adjacent cell has a row. This task cannot be closed either way until corrections accumulate
   - Blocked-by: 67qnbfi (Build the shortlist hit-rate analysis over the corrections corpus)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [8.1](requirements.md#8.1)
