@@ -204,7 +204,20 @@ public enum LiDARPlaneFitter {
     //    DECISION 66: neither count nor thickness is the variable — δ/σ is, and the count
     //    enters only through δ. That bracket is the corpus's and not the law's, since
     //    across it the count moves 1.10× while δ moves 5.09×. In the deciding quantity the
-    //    annulus clears the bar by 97-39,903×, not by a count.
+    //    annulus clears the bar by 97-39,903×, not by a count. BOUNDED A PRIORI BY DECISION
+    //    67: δ/σ has a closed CEILING in the three numbers any set carries before it is
+    //    fitted — u·μ·(n−1)·|n̂_z| / 2σ — and it places both legs with no δ measured. The
+    //    annulus reads ≤ 0.0186 against the 0.1418 bar, 7.6× of margin ASSERTED rather than
+    //    measured, while all four fallback inlier sets read 1.40-9.09 and are over it. So
+    //    the extraction leg's safety no longer rests on a per-capture measurement, and the
+    //    ceiling is one-sided: it certifies safety, and it refuses all four fallback sets
+    //    where two of them measure under the bar. DECISION 69 SETTLES WHICH OF THE TWO
+    //    READINGS TO QUOTE: the MEASURED margin is a reading at the shipped scan order and
+    //    falls to 72.7× under a permutation of the same points, while the ASSERTED 7.6×
+    //    cannot move because n, μ, σ and n̂_z are all held by a permutation. Extraction is
+    //    safe under every order by both readings. And the one-sidedness above is VINDICATED
+    //    rather than merely conservative — the two fallback sets that measure under the bar
+    //    reach 0.1907 and 0.6169 in another order, so the ceiling was right to refuse them.
     // 2. The cause is the CENTROID, not the normal-equations squaring. Accumulating the
     //    scatter and the decomposition in Double while keeping the shipped Float centroid
     //    reproduces the shipped reading on every rung. An offset centroid displaces every
@@ -219,7 +232,37 @@ public enum LiDARPlaneFitter {
     //    with no effective degeneracy guard": what is uniform is that the gate cannot FIRE,
     //    not that its reading is inflated. Thickness enters TWICE — δ itself falls 3.2-21.5×
     //    as a set thickens, because the exactness bound in (1) is about adding the same
-    //    value repeatedly and a spread is what breaks that.
+    //    value repeatedly and a spread is what breaks that. DECISION 67 gives δ a BOUND and
+    //    not a form: swept over an 11× standoff at a count and a thickness held exactly, the
+    //    z mean's error sits at 0.0034-0.3117 of u·μ·(n−1)/2 over 32 rungs — the ceiling
+    //    holds everywhere and predicts nothing inside itself, the share spanning 91×. It is
+    //    DRIFT and not a walk (δ grows as n^1.17, against n^1.0 for drift and n^0.5 for
+    //    cancellation), and it grows FASTER than the standoff (μ^1.52-2.06) because a set
+    //    whose spread is small against its own standoff is nearer the constant addend the
+    //    exactness bound in (1) is about — so the cancellation that keeps δ under the
+    //    ceiling is itself what a longer standoff takes away. THAT LAST SENTENCE IS REFUTED
+    //    BY DECISION 68, which swept the ratio it names as its own knob: dilating a set
+    //    holds σ_z/μ to the last bit and moves the share 40.4×, 1353.2×, 6.1× and 6.8× on
+    //    the four captures, so the share is no function of that ratio at all. Nor of any
+    //    other shape the set carries — the best power law in (n, μ, σ_z) leaves 946.8× of a
+    //    1640.7× span, and 39.6-290.8× fitted per capture with exponents that disagree.
+    //    Decision 67's MEASUREMENTS stand (this reads μ^1.52-2.06 again, fitting no plane);
+    //    what falls is the account. So the ceiling in (1) is FINAL — the tightest statement
+    //    available before a fit — and its one-sidedness is structural rather than a gap.
+    //    What the corpus does show is that real captures sit in a narrow band, 3.6× at a
+    //    mean of 0.0648 against the family's 1640.7×: four points, and a question for the
+    //    capture session rather than a bracket. DECISION 69 CLOSES THAT NEGATIVE IN THE
+    //    GENERAL FORM — a PERMUTATION holds the multiset exactly, so every function of the
+    //    set's shape is held with it, and δ still moves 6.2-272.8× over ten orders of each
+    //    of the eight committed sets. So δ belongs to the summation ORDER and no function of
+    //    the set can predict it, whatever its shape. The spread is STRUCTURE, not chance:
+    //    six shuffles agree to 1.01-3.37× while the four structural orders span 2.8-272.8×
+    //    and hold the noisiest reading on 8 of 8 sets, so the shipped δ is set by how the
+    //    depth raster correlates with z. |z| ASCENDING, the textbook error-minimising order,
+    //    is the noisiest on 4 of 8 and the quietest on none — these addends are one surface
+    //    at one standoff, so a sort orders the RESIDUALS rather than the magnitudes. DO NOT
+    //    "FIX" THIS BY SORTING. Every per-set δ in findings (1) and (2) is therefore a
+    //    reading at the shipped scan order; the ceiling in (1) is what transfers.
     // 3. σ_min/σ_max IS NOT THE RANK DISCRIMINANT. An exactly planar set (the plane is
     //    exact) and a collinear one (no plane exists) both drive it to zero — measured at
     //    9.5e-9 and 0.0. What separates them is σ_2/σ_max, 0.99999 against 0.0, which this

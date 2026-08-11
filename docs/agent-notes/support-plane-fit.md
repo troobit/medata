@@ -1504,6 +1504,9 @@ A margin in the deciding quantity rather than in a count. Annulus δ/σ against 
 | `1786450130307` | 12,274 | 5.577 mm | 0.008148 mm | 0.001461 | **97×** |
 | `1786439141215` | 5,276 | 3.795 mm | 0.001804 mm | 0.000475 | 298× |
 
+Every one of those is a *measurement* of δ. Decision 67 below replaces the need for one: the
+same margin, at 7.6×, from (n, μ, σ) with no δ read at all.
+
 ### Decision 65's control is confounded — read this before quoting it
 
 The candidate-point control differs from its inlier set on **both** axes, so it does not
@@ -1525,3 +1528,231 @@ reading of the thinness half in the corpus.
 **Still `[owed]` and still unsettleable.** A form for the *inflation* is not a bar for
 *degeneracy* — Decision 64's third finding (σ_min/σ_max does not order the degenerate side at
 any value) is untouched. **Not repaired**, on Decisions 52–65's precedent.
+
+## δ has a ceiling, not a form (Decision 67)
+
+`theCentroidErrorIsTheSumsOwnDrift` turns the one knob the chain had not: the **standoff**.
+A rigid translation along the camera's z axis holds the count, the in-plane geometry and the
+thickness all *exactly* and moves only the magnitude the Float sum accumulates. Eight
+standoffs, 175 → 2000 mm (an 11.4× lever, against the 1.5× the four captures span), on each
+capture's fallback inlier set.
+
+**The ceiling.** A sequential Float sum rounds at each step by at most `u·|S_k|`, and
+`S_k ≈ k·μ`, so the sum is out by at most `u·μ·n(n−1)/2` and the **mean** by at most:
+
+> **δ_z ≤ u·μ·(n−1)/2**,  u = 2⁻²⁴ ≈ 5.96e-8, μ = the set's mean |z|, n = its count.
+
+This is Decision 65's exactness bound read as a *magnitude* rather than as a *count*: that
+decision measured how many addends a Float sum takes before it rounds at all, this one how
+fast it departs afterwards. Over **32 rungs** the measured error sits at **0.0034…0.3117** of
+its own ceiling. Never above it — and never near it.
+
+**Inside the ceiling, δ is cancellation and nothing predicts it.** The share spans **91.2×**
+(mean 0.0892), and 11.6–51.1× *within a single capture*. δ does not even track μ: fitted
+against the standoff it reads **μ^1.52 … μ^2.06**, super-linear where the ceiling is linear,
+because the share itself climbs with the standoff — a set whose spread is small against its
+own standoff is nearer the constant addend the exactness bound is about, so distance takes
+the cancellation away.
+
+**The count half is drift, not a walk.** Read in δ alone, the count sweep fits **n^1.065,
+n^1.143, n^1.214, n^1.258** (mean **n^1.170**) against n^1.0 for drift and n^0.5 for an
+unbiased walk. So the ceiling's linear-in-n shape is right and the corpus sits at 4.4–10.1 %
+of it at full count.
+
+### What the ceiling buys — both legs, from (n, μ, σ) alone
+
+Composed with Decision 66's form: **δ/σ ≤ u·μ·(n−1)·|n̂_z| / 2σ**. Three numbers any set
+carries before it is fitted, against the 0.1418 bar:
+
+| set | n | μ | σ | δ/σ ceiling | δ/σ measured |
+|---|---|---|---|---|---|
+| `1785135663727` annulus | 10,469 | 361.0 mm | 9.969 mm | 0.0113 | 0.001195 |
+| `1785901032716` annulus | 12,551 | 352.1 mm | 7.709 mm | 0.0171 | 0.000004 |
+| `1786439141215` annulus | 5,276 | 407.2 mm | 3.795 mm | 0.0169 | 0.000475 |
+| `1786450130307` annulus | 12,274 | 283.3 mm | 5.577 mm | **0.0185** | 0.001461 |
+| `1785135663727` fallback | 641,694 | 375.5 mm | 1.815 mm | 3.94 | 0.3991 |
+| `1785901032716` fallback | 1,298,233 | 358.0 mm | 1.522 mm | **9.09** | 0.7782 |
+| `1786439141215` fallback | 282,430 | 407.3 mm | 2.439 mm | 1.40 | 0.0619 |
+| `1786450130307` fallback | 581,996 | 290.8 mm | 2.199 mm | 2.28 | 0.0647 |
+
+The extraction leg clears the bar by **7.6× on the ceiling alone**, so its degeneracy guard
+can be asserted safe on a capture that has not been taken. The bound is not vacuous — it
+refuses all four fallback sets.
+
+**It is ONE-SIDED. Do not read "over the ceiling" as "inflated":** two of those four fallback
+sets measure *under* the bar (0.0619, 0.0647) while the ceiling refuses all four. The
+certificate is of safety only.
+
+**Still `[owed]` and still unsettleable**, on Decision 64's third finding. **Not repaired**,
+on Decisions 52–66's precedent.
+
+**Read Decision 68 before quoting "the corpus sits at 4.4–10.1 % of it at full count".**
+The count sweep prints `share.max()` over the whole sweep under the label "at the top", and
+the share is not monotone in n. At full count the four sets read **10.12 %, 8.56 %, 2.84 %
+and 4.41 %** — 2.8–10.1 %. Nothing else in Decision 67 moves.
+
+## The share has no form at all, so the ceiling is the end of the line (Decision 68)
+
+`theShareHasNoFormInTheSetsShape` closes the chain by refuting Decision 67's own account of
+why the share moves. It fits **no plane**: the ceiling and the share are both written on the
+z sum, so `SpreadReading` reads μ, σ_z and δ_z directly and four paths become affordable
+where Decision 67 could afford one. 118 rungs, 6 dropped for straddling z = 0 (ARKit puts
+the scene down the camera's **−z**, so "shares a sign" is a negative sign here and the
+ceiling is written on |μ| throughout).
+
+**The knob nobody could turn: hold the ratio, move both its ends.** A dilation about the
+camera origin scales μ and σ_z by the same factor, so `σ_z/μ` is held to the last bit.
+Powers of two are excluded from the sweep — a dilation by 2^k is exact in binary floating
+point and re-rounds nothing.
+
+| capture | ratio held | μ swept | share |
+|---|---|---|---|
+| `1785135663727` | 0.023466 | −113 → −2140 mm | 0.0030…0.1218 (**40.4×**) |
+| `1785901032716` | 0.020157 | −107 → −2040 mm | 0.0003…0.3592 (**1353.2×**) |
+| `1786450130307` | 0.034861 | −87 → −1657 mm | 0.0262…0.1608 (6.1×) |
+| `1786439141215` | 0.010729 | −122 → −2322 mm | 0.0140…0.0954 (6.8×) |
+
+One capture, one held ratio, three orders of share. **No function of `σ_z/μ` can produce
+that**, whatever its shape — which is why this path refutes more than a power law does.
+
+### And no other combination of the set's shape replaces it
+
+The whole power-law family over `(n, μ, σ_z)` fitted at once, with the ratio account as the
+one-regressor model nested inside it. Residual spread is quoted as a FACTOR, the same unit
+as the raw span, so "explained" and "left over" are comparable:
+
+| model | left of a 1640.7× span |
+|---|---|
+| the ceiling alone (intercept only) | 1640.7× |
+| the ratio account, share ∝ (σ_z/μ)^−0.543 | 1353.2× |
+| the free family, share ∝ μ^0.695 · n^0.298 · σ_z^−0.489 | **946.8×** |
+
+A three-exponent law removes a factor of **1.7 from a factor of 1641**. Per capture — four
+free parameters against 27–29 rungs, the most generous reading the corpus supports — it
+still leaves **97.8×, 290.8×, 42.3× and 39.6×**, and the exponents disagree with each other
+(μ^0.591…μ^1.372, σ_z^−0.906…σ_z^−0.399). The width is the share's, not the pooling's.
+
+### This refutes the account, not the measurement
+
+Read through the plane-free δ_z, the standoff path returns **μ^2.059, μ^1.523, μ^1.840,
+μ^1.563** — Decision 67's μ^1.52…μ^2.06 exactly, from a reading that never forms a scatter
+matrix. Those numbers are confirmed; the sentence written underneath them is what falls.
+
+### What survives, and it is a question for the sitting
+
+| set | n | μ | σ_z | σ_z/μ | share |
+|---|---|---|---|---|---|
+| `1785135663727` | 641,694 | −375.5 mm | 8.812 mm | 2.35e-02 | 0.1012 |
+| `1785901032716` | 1,298,233 | −358.0 mm | 7.216 mm | 2.02e-02 | 0.0856 |
+| `1786450130307` | 581,996 | −290.8 mm | 10.137 mm | 3.49e-02 | 0.0284 |
+| `1786439141215` | 282,430 | −407.3 mm | 4.371 mm | 1.07e-02 | 0.0441 |
+
+The four committed sets span **3.6× at a mean of 0.0648**, where the synthetic family around
+them spans 1640.7×. Real captures sit in a narrow band that nothing in the arithmetic
+predicts. **Four points — a question for the sitting, not a bracket.**
+
+`σ_z` here is the RMS of z about the mean z. It is NOT Decision 67's `σ`, which is the RMS
+about the least-squares plane; a tilted plane puts its in-plane extent into σ_z, which is why
+`1785135663727` reads 8.812 mm here and 1.815 mm there.
+
+**So the ceiling is final.** Decision 67's `δ/σ ≤ u·μ·(n−1)·|n̂_z| / 2σ` is the tightest a
+priori statement the feature can make, its 7.6× of extraction margin is the number to quote,
+and its one-sidedness is **structural**: it is one-sided because the share that would make it
+two-sided is not a function of anything the set carries. Every remaining question about
+`stabilityRatioMin` is a capture question. **Still `[owed]`, still unsettleable, still not
+repaired.**
+
+## δ belongs to the summation ORDER, not to the set (Decision 69)
+
+`theShareIsNotAPropertyOfTheSetAtAll` closes Decision 68's one remaining non-capture
+negative — "the refutation is over the power-law family; a form outside it is not excluded
+by the fits" — in the general form. Every knob in Decisions 66–68 moved the SET (thickness,
+standoff, count, dilation), so each could only refute the families its own knob separates.
+A **permutation** moves nothing the set carries: the multiset is held exactly, so n, μ, σ,
+the aspect ratio and the least-squares plane are the same numbers rather than close ones,
+and every function of the set's shape is held with them. Any movement in δ is movement no
+such function can produce.
+
+Ten orders of each of the eight committed sets (four captures × two legs, 80 readings).
+Four orders are **structural** — a raster scan, a reversed scan, and the two `|z|` sorts —
+and six are Fisher-Yates shuffles against fixed SplitMix64 seeds, so no reading is a
+property of one clever permutation.
+
+| set | n | δ span | structural span | shuffle span | noisiest order |
+|---|---|---|---|---|---|
+| `1785135663727` annulus | 10,469 | 34.3× | 34.3× | 1.82× | shipped |
+| `1785135663727` fallback | 641,694 | 30.3× | 30.3× | 1.02× | shipped |
+| `1785901032716` annulus | 12,551 | **272.8×** | 272.8× | 3.37× | `|z|` ascending |
+| `1785901032716` fallback | 1,298,233 | 6.5× | 6.5× | 1.01× | `|z|` ascending |
+| `1786439141215` annulus | 5,276 | 6.2× | 2.8× | 2.16× | `|z|` ascending |
+| `1786439141215` fallback | 282,430 | 14.3× | 3.1× | 1.12× | `|z|` ascending |
+| `1786450130307` annulus | 12,274 | 16.0× | 16.0× | 1.26× | `|z|` descending |
+| `1786450130307` fallback | 581,996 | 9.5× | 9.5× | 1.02× | `|z|` descending |
+
+**The spread is STRUCTURE, not chance.** Six independent shuffles agree to 1.01…3.37× while
+the structural orders span 2.8…272.8×, and a structural order is the noisiest on **8 of 8**
+sets. A random order gives a typical value with little variance; the orders a real scan
+produces are the outliers. So the shipped δ is set by how the depth raster correlates with
+z, and it is reproducible without being predictable.
+
+**`|z|` ascending — the classic error-minimising order for addends that share a sign — is
+the noisiest on 4 of 8 and the quietest on none.** The account: these addends are one
+surface at one standoff, so a sort does not order magnitudes, it orders the *residuals*
+about the mean and puts every below-mean sample before every above-mean one, so the partial
+sum drifts one way for the first half instead of cancelling. That is an ACCOUNT, on Decision
+68's precedent; the measurement stands without it. **Do not "fix" this by sorting.**
+
+### What survives a permutation, and what does not
+
+Decision 67's ceiling is written on n and μ, which a permutation holds by construction, so
+it does not move — and no order reaches it. The fullest any of the 80 readings fills its own
+ceiling is **0.4440** (`1785901032716` fallback, `|z|` ascending), against the 0.3117 that
+decision's own 32 rungs reached.
+
+| statement | at the shipped order | at the worst order |
+|---|---|---|
+| Decision 66's **measured** annulus margin | 97–39,903× | **72.7×** |
+| Decision 67's **asserted** annulus margin | 7.6× | **7.6×** — cannot move |
+
+The measured figure loses 549× off its headline and 1.3× off its binding end: nearly all the
+loss is in the number that was quoted, and the number that actually bounded anything barely
+moves. Extraction is safe under every order by both readings. **Quote the asserted one** —
+per-capture ceilings 0.011272, 0.017063, 0.018543 and 0.016858, identical in every order.
+
+### Decision 67's one-sidedness is vindicated on the fallback leg
+
+That decision refused all four fallback sets by the ceiling while two of them MEASURED under
+the 0.1418 bar, and read the gap as conservatism. Under permutation both go over:
+
+| set | shipped δ/σ | worst order | vs the 0.1418 bar |
+|---|---|---|---|
+| `1786439141215` fallback | 0.061936 (under) | **0.190712** | 1.3× over |
+| `1786450130307` fallback | 0.064674 (under) | **0.616915** | 4.4× over |
+
+The ceiling was right about them; what looked like slack was the shipped scan order.
+
+### The control, and where the shipped order sits
+
+The Double reference re-summed in each order moves **0.000e+00 mm** — bit-identical across
+all ten orders on all eight sets — against a smallest Float δ of 2.739e-05 mm. The multiset
+is held to the last bit and the movement is the Float sum's alone.
+
+The shipped scan order is **not systematically flattering**: it is the noisiest of the ten on
+*both* legs of `1785135663727`, the quietest on `1785901032716`'s annulus and
+`1786450130307`'s fallback set, and mid-pack (6 of 9 quieter) on both legs of
+`1786439141215`. It lands at both extremes. But δ on the capture that anchors Decision 36's
+`fallbackPenalty` pricing is the largest any order produces there — one more reason that
+pricing is a reading and not a value.
+
+### What this costs the decisions above
+
+Every per-set δ quoted in Decisions 64–68 is a reading at the shipped scan order, with
+6.2…272.8× of spread around it. Those decisions' CONCLUSIONS survive — each rests on the
+ceiling, or on a ratio taken within one order — but **no δ quoted in them transfers to a
+capture not yet taken.**
+
+**Not repaired**, on Decisions 52–68's precedent. Pairwise or Kahan accumulation would make
+δ order-independent and small at once, and it changes the centroid, hence which candidates
+survive `try? refine`, hence the shipped fallback plane Decision 36 prices against.
+`stabilityRatioMin` stays `[owed]` and unsettleable; every remaining question about it is a
+capture question.

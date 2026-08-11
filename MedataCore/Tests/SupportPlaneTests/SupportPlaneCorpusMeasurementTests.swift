@@ -10688,6 +10688,1067 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // MARK: - δ is the z sum's own drift, and it is bounded rather than predicted (Decision 67)
+
+    // The unit roundoff of the arithmetic the shipped centroid runs in. `ulpOfOne` is the
+    // spacing at 1, and a correctly-rounded operation is out by at most half a spacing, so
+    // this is the u every bound below is written in: 2⁻²⁴.
+    static let unitRoundoff = 0.5 * Double(Float.ulpOfOne)
+
+    // One reading of the centroid's error with the STANDOFF as the knob, at a count and a
+    // thickness held exactly. Decision 66 gave the inflation a form in δ/σ and closed with
+    // "δ itself has no form"; this is the reading that asks whether it has one.
+    struct DriftReading {
+        let name: String
+        let n: Int
+        let standoffMm: Double       // the set's own mean z after translation
+        let thicknessMm: Double      // RMS about the least-squares plane, in Double
+        let normalZ: Double          // |n̂_z| — how much of δ the z sum can carry
+        let centroidErrorMm: Double  // δ, exactly as Decision 66 measures it
+        let zErrorMm: Double         // the z mean's own error, before projection
+
+        // THE BOUND. A sequential Float sum rounds at every step by at most u·|S_k|, and
+        // S_k ≈ k·μ on a set whose coordinates share a sign, so the sum is out by at most
+        // u·μ·n(n−1)/2 and the MEAN by at most u·μ·(n−1)/2. This is Decision 65's exactness
+        // bound read as a magnitude rather than as a count: that decision measured how many
+        // addends a Float sum takes before it rounds at all, and this is how fast it departs
+        // once it does. It is stated on the z sum because that is the one the standoff moves
+        // — x and y are held exactly across the sweep.
+        var zCeilingMm: Double {
+            SupportPlaneCorpusMeasurementTests.unitRoundoff
+                * abs(standoffMm) * Double(n - 1) / 2
+        }
+        // Where the set sits inside its own ceiling. A share near 1 is drift; a share
+        // orders below it is cancellation, and cancellation is what makes δ unpredictable.
+        var share: Double { zCeilingMm > 0 ? abs(zErrorMm) / zCeilingMm : .infinity }
+        // The ceiling carried through to the quantity Decision 66's form reads, so the two
+        // decisions compose: δ/σ ≤ u·μ·(n−1)·|n̂_z| / 2σ, from the set's shape alone.
+        var ratioCeiling: Double {
+            thicknessMm > 0 ? zCeilingMm * normalZ / thicknessMm : .infinity
+        }
+        var ratio: Double { thicknessMm > 0 ? centroidErrorMm / thicknessMm : .infinity }
+        // Decision 66's form evaluated on the CEILING rather than on the measured δ.
+        var inflationCeiling: Double { (1 + ratioCeiling * ratioCeiling).squareRoot() }
+    }
+
+    // The same set moved along the camera's z axis. A translation is rigid, so the
+    // least-squares plane's normal does not move and the RMS about it is unchanged, and the
+    // count and the in-plane geometry are the same points — the only thing that changes is
+    // the magnitude the z sum accumulates. That makes this the one knob that isolates δ,
+    // where Decision 66's thickness knob moved the denominator and its count knob moved
+    // both. The addition itself rounds, so a translated sample is a sample a capture at that
+    // range could have carried rather than an exact shift of this one.
+    static func translatedZ(_ points: [Vec3], byMm offset: Double) -> [Vec3] {
+        let d = Float(offset)
+        return points.map { Vec3($0.x, $0.y, $0.z + d) }
+    }
+
+    static func driftReading(_ name: String, points: [Vec3],
+                             seedNormal: Vec3) -> DriftReading? {
+        guard let exact = Self.refineDoubleAccumulated(inliers: points, seedNormal: seedNormal)
+        else { return nil }
+        var ex = 0.0, ey = 0.0, ez = 0.0
+        for p in points { ex += Double(p.x); ey += Double(p.y); ez += Double(p.z) }
+        let n = Double(points.count)
+        ex /= n; ey /= n; ez /= n
+        let c = Self.floatCentroid(points)
+        let dx = Double(c.x) - ex, dy = Double(c.y) - ey, dz = Double(c.z) - ez
+        let delta = abs(Double(exact.0.x) * dx + Double(exact.0.y) * dy + Double(exact.0.z) * dz)
+        return DriftReading(
+            name: name, n: points.count, standoffMm: ez,
+            thicknessMm: Double(Self.rmsDouble(points, normal: exact.0, d: exact.1)),
+            normalZ: abs(Double(exact.0.z)), centroidErrorMm: delta, zErrorMm: dz)
+    }
+
+    // Where the sets are moved to. 350, 700 and 1400 mm are Decision 65's own significand
+    // ladder — one odd significand, 175, across a 4× span — carried onto real sets that
+    // carry a spread, which is the structure that decision says breaks the exactness bound.
+    // The span is 11.4×, well past the 1.5× the four committed captures cover between them.
+    static let driftStandoffMm: [Double] = [175, 250, 350, 500, 700, 1000, 1400, 2000]
+
+    // The slope a log-log fit returns if δ is drift — every rounding in the same direction,
+    // so the sum's error grows as n² and the mean's as n — against the slope it returns if
+    // the roundings cancel as a random walk, where the sum grows as n^1.5 and the mean as
+    // √n. The two are a factor of two apart in the exponent and the measurement separates
+    // them without needing either to be assumed.
+    static let driftExponent = 1.0
+    static let walkExponent = 0.5
+
+    // Least-squares slope of log y against log x. Both sweeps are read through it, so the
+    // exponent is fitted rather than taken from two endpoints.
+    static func logLogSlope(_ xs: [Double], _ ys: [Double]) -> Double? {
+        guard xs.count == ys.count, xs.count >= 2 else { return nil }
+        let lx = xs.map { Foundation.log($0) }, ly = ys.map { Foundation.log($0) }
+        let n = Double(xs.count)
+        let mx = lx.reduce(0, +) / n, my = ly.reduce(0, +) / n
+        var num = 0.0, den = 0.0
+        for i in 0..<lx.count {
+            num += (lx[i] - mx) * (ly[i] - my)
+            den += (lx[i] - mx) * (lx[i] - mx)
+        }
+        return den > 0 ? num / den : nil
+    }
+
+    // Decision 67. Decision 66 closed with four negatives; this discharges the first, which
+    // is the one that needs no capture: "δ itself has no form. It wanders with count and
+    // with scale — 0.0070 mm at ×8 against 0.0503 mm at ×16 on `1785135663727` — so the law
+    // is only as predictive as the δ it is handed, and δ must still be measured per set."
+    //
+    // The knob nobody has turned is the STANDOFF. Decision 66's thickness knob moved σ, its
+    // count knob moved n and δ together, and neither held the quantity the Float sum
+    // actually accumulates. A rigid translation along z holds the count, the in-plane
+    // geometry and the thickness all exactly and moves only the magnitude being summed —
+    // which is what Decision 65's exactness bound is about, so if the two halves are one
+    // mechanism this is where they meet.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63
+    // widened `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("the centroid's error is the z sum's own drift, and it is bounded rather than predicted")
+    func theCentroidErrorIsTheSumsOwnDrift() throws {
+        var corpusRanges: [(name: String, rangeMm: Double)] = []
+        for name in Self.captures + Self.rangeCaptures {
+            let g = try #require(Self.geometry(name))
+            corpusRanges.append((name, Double(g.mmPerPx * g.intrinsics.fx)))
+        }
+
+        // MARK: THE FIRST FINDING — δ has a ceiling, and it is the corpus's own standoff.
+
+        print("=== the standoff sweep: the same sets, the same counts and thicknesses,"
+              + " moved in z (u = \(Self.unitRoundoff)) ===")
+        var drifts: [DriftReading] = []
+        var natural: [String: DriftReading] = [:]
+        var countSweep: [String: [DriftReading]] = [:]
+        var annulus: [DriftReading] = []
+        for (name, rangeMm) in corpusRanges {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+            let plane = residual.leastSquares
+            guard let here = Self.driftReading(name, points: inliers, seedNormal: plane.0)
+            else { continue }
+            natural[name] = here
+
+            print("--- \(name) at \(fmt(Float(rangeMm))) mm, n = \(inliers.count),"
+                  + " thickness \(String(format: "%.4f", here.thicknessMm)) mm held ---")
+            for target in Self.driftStandoffMm {
+                let moved = Self.translatedZ(inliers, byMm: target - here.standoffMm)
+                guard let r = Self.driftReading(name, points: moved, seedNormal: plane.0)
+                else { continue }
+                drifts.append(r)
+                print("  z̄ \(String(format: "%7.1f", r.standoffMm)) mm:"
+                      + " δ \(String(format: "%.4f", r.centroidErrorMm)) mm,"
+                      + " z error \(String(format: "%.4f", abs(r.zErrorMm))) mm,"
+                      + " ceiling \(String(format: "%.4f", r.zCeilingMm)) mm,"
+                      + " share \(String(format: "%.4f", r.share)),"
+                      + " thickness \(String(format: "%.4f", r.thicknessMm)) mm")
+            }
+
+            // The count half, in the same units, so the exponent is read off the same sets.
+            let targets = Self.realDepthCountSweep.filter { $0 < inliers.count } + [inliers.count]
+            var seen: Set<Int> = []
+            var rows: [DriftReading] = []
+            for target in targets {
+                let step = Swift.max(1, inliers.count / target)
+                let subset = Swift.stride(from: 0, to: inliers.count, by: step).map { inliers[$0] }
+                guard seen.insert(subset.count).inserted else { continue }
+                guard let r = Self.driftReading(name, points: subset, seedNormal: plane.0)
+                else { continue }
+                rows.append(r)
+            }
+            countSweep[name] = rows
+
+            // And the extraction leg's own set, which is what the bound has to place.
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let pts = samples.annulus.map { g.points[$0] }
+            if let r = Self.driftReading(name, points: pts, seedNormal: Vec3(0, 0, 1)) {
+                annulus.append(r)
+            }
+        }
+        let missing = "the standoff sweep no longer produces a reading at every rung on every"
+            + " committed capture, so the bound is read on a corpus that has changed"
+        #expect(drifts.count == Self.driftStandoffMm.count * corpusRanges.count, "\(missing)")
+
+        // The translation has to be rigid for the sweep to be about the standoff alone. If
+        // the thickness moved, the reading would be Decision 66's knob in disguise.
+        for (name, here) in natural {
+            let rungs = drifts.filter { $0.name == name }
+            let spread = (rungs.map(\.thicknessMm).max() ?? 0) / (rungs.map(\.thicknessMm).min() ?? 1)
+            let moved = "\(name)'s thickness now moves across the standoff sweep"
+                + " (\(String(format: "%.4f", spread))×, natural"
+                + " \(String(format: "%.4f", here.thicknessMm)) mm), so the translation is"
+                + " not rigid in the arithmetic and the sweep is reading Decision 66's knob"
+                + " rather than this one"
+            #expect(spread < 1.01, "\(moved)")
+        }
+
+        // THE BOUND. u·μ·(n−1)/2 is what a sequential Float sum can be out by; every rung of
+        // every capture has to sit under it, or the account of the mechanism is wrong.
+        let worstShare = try #require(drifts.map(\.share).max())
+        let quietest = try #require(drifts.map(\.share).min())
+        print("the z error sits at \(String(format: "%.4f", quietest))…"
+              + "\(String(format: "%.4f", worstShare)) of its own drift ceiling"
+              + " over \(drifts.count) rungs")
+        let overCeiling = "the z mean's error has passed the drift ceiling u·μ·(n−1)/2, so a"
+            + " Float sum is out by more than one rounding per addend can account for and"
+            + " the bound Decisions 65 and 67 rest on does not hold"
+        #expect(worstShare <= 1, "\(overCeiling)")
+
+        // MARK: THE SECOND FINDING — inside the ceiling δ is not predicted, it is cancelled.
+
+        // If δ were drift the share would be near 1 and flat, and δ would be a FORM in μ. If
+        // the roundings cancel, the share is orders below 1 and moves rung to rung, and the
+        // ceiling is all there is. Which of those the corpus reads is the finding, and it is
+        // read per capture because each carries its own set.
+        for (name, _) in corpusRanges {
+            let rungs = drifts.filter { $0.name == name }.sorted { $0.standoffMm < $1.standoffMm }
+            let shares = rungs.map(\.share)
+            guard let lo = shares.min(), let hi = shares.max(), lo > 0 else { continue }
+            let slope = Self.logLogSlope(rungs.map(\.standoffMm),
+                                         rungs.map { Swift.max($0.centroidErrorMm, 1e-12) })
+            print("  \(name): share spans \(String(format: "%.4f", lo))…"
+                  + "\(String(format: "%.4f", hi)) (\(String(format: "%.1f", hi / lo))×),"
+                  + " δ against the standoff fits a slope of"
+                  + " \(String(format: "%.3f", slope ?? .nan))")
+        }
+        let allShares = drifts.map(\.share)
+        let shareSpread = worstShare / Swift.max(quietest, 1e-12)
+        let mean = allShares.reduce(0, +) / Double(allShares.count)
+        print("the share's mean over the whole sweep is \(String(format: "%.4f", mean));"
+              + " it spans \(String(format: "%.1f", shareSpread))×")
+        let isDrift = "the z error now sits at its drift ceiling across the sweep, so the"
+            + " roundings no longer cancel and δ IS a form in the standoff rather than a"
+            + " quantity the ceiling merely bounds"
+        #expect(mean < 0.5, "\(isDrift)")
+        let flat = "the share is now flat across an 11× standoff sweep, so δ is proportional"
+            + " to μ and Decision 66's first negative closes as a form rather than as a bound"
+        #expect(shareSpread > 2, "\(flat)")
+
+        // MARK: THE THIRD FINDING — the count half reads the same way, and it is not a walk.
+
+        // Decision 66 read the count sweep in δ/σ and found one bar reproduces Decision 65's
+        // turn. Read in δ alone the question is which exponent it carries: n for drift, √n
+        // for a walk. The ceiling is linear in n by construction, so an exponent at or above
+        // 1 would say the sum is drifting and the ceiling is tight.
+        print("=== the count sweep, in δ alone ===")
+        var exponents: [(String, Double)] = []
+        for (name, rows) in countSweep.sorted(by: { $0.key < $1.key }) {
+            let usable = rows.filter { $0.centroidErrorMm > 0 }
+            guard let slope = Self.logLogSlope(usable.map { Double($0.n) },
+                                               usable.map(\.centroidErrorMm))
+            else { continue }
+            exponents.append((name, slope))
+            print("  \(name): n \(usable.map(\.n).min() ?? 0)…\(usable.map(\.n).max() ?? 0),"
+                  + " δ \(String(format: "%.5f", usable.map(\.centroidErrorMm).min() ?? 0))…"
+                  + "\(String(format: "%.5f", usable.map(\.centroidErrorMm).max() ?? 0)) mm,"
+                  + " slope \(String(format: "%.3f", slope)),"
+                  + " share \(String(format: "%.4f", usable.map(\.share).max() ?? 0)) at the top")
+        }
+        let noExponent = "the count sweep no longer yields an exponent on every committed"
+            + " capture, so the two halves cannot be compared in the same units"
+        #expect(exponents.count == corpusRanges.count, "\(noExponent)")
+        let meanExponent = exponents.map(\.1).reduce(0, +) / Double(exponents.count)
+        print("δ grows as n^\(String(format: "%.3f", meanExponent)) on average, against"
+              + " n^\(Self.driftExponent) for drift and n^\(Self.walkExponent) for a walk")
+        let walks = "δ now grows as √n across the count sweep, so the roundings are an"
+            + " unbiased walk and the drift ceiling is loose by √n rather than by a constant"
+        #expect(abs(meanExponent - Self.walkExponent)
+                > abs(meanExponent - Self.driftExponent), "\(walks)")
+
+        // MARK: THE FOURTH FINDING — what the ceiling buys, which is both legs at once.
+
+        // This is the payoff and the reason a bound is worth having where a form is not.
+        // Composed with Decision 66's √(1 + (δ/σ)²) the ceiling gives an inflation bound in
+        // (n, μ, σ) — three numbers any set carries before it is fitted — so the guard's
+        // safety can be asserted rather than measured per capture. It has to place BOTH legs
+        // correctly to be worth anything: the extraction leg quiet, the fallback leg not.
+        print("=== the ceiling read as an inflation bound, in (n, μ, σ) alone ===")
+        let bar = Self.inflationRatioBar
+        for r in annulus.sorted(by: { $0.name < $1.name }) {
+            print("  \(r.name) annulus: n = \(r.n), μ \(String(format: "%.1f", r.standoffMm)) mm,"
+                  + " σ \(String(format: "%.3f", r.thicknessMm)) mm →"
+                  + " δ/σ ≤ \(String(format: "%.6f", r.ratioCeiling)),"
+                  + " measured \(String(format: "%.6f", r.ratio)),"
+                  + " inflation ≤ \(String(format: "%.4f", r.inflationCeiling))×")
+        }
+        for (name, r) in natural.sorted(by: { $0.key < $1.key }) {
+            print("  \(name) fallback inliers: n = \(r.n),"
+                  + " μ \(String(format: "%.1f", r.standoffMm)) mm,"
+                  + " σ \(String(format: "%.3f", r.thicknessMm)) mm →"
+                  + " δ/σ ≤ \(String(format: "%.4f", r.ratioCeiling)),"
+                  + " measured \(String(format: "%.4f", r.ratio)),"
+                  + " inflation ≤ \(String(format: "%.4f", r.inflationCeiling))×")
+        }
+        let unplaced = "the annulus no longer yields a reading on every committed capture,"
+            + " so the ceiling cannot be read on the leg it is supposed to protect"
+        #expect(annulus.count == corpusRanges.count, "\(unplaced)")
+
+        // The extraction leg, asserted from its shape rather than measured. Decision 66 gave
+        // it 97×…39,903× of margin in the measured δ/σ; the ceiling has to clear the same
+        // bar without reading δ at all, or it buys nothing that decision did not already own.
+        let worstAnnulusCeiling = try #require(annulus.map(\.ratioCeiling).max())
+        print("the annulus's worst CEILING is \(String(format: "%.6f", worstAnnulusCeiling))"
+              + " against the δ/σ bar \(String(format: "%.4f", bar)):"
+              + " \(String(format: "%.1f", bar / worstAnnulusCeiling))× of margin"
+              + " with no δ measured")
+        let ceilingTooLoose = "the drift ceiling no longer clears the δ/σ bar on the annulus,"
+            + " so the extraction leg's safety cannot be asserted from (n, μ, σ) and"
+            + " Decision 66's per-set measurement is still the only thing that establishes it"
+        #expect(worstAnnulusCeiling < bar, "\(ceilingTooLoose)")
+
+        // And the fallback leg, which the ceiling has to REFUSE to clear. A bound that
+        // pronounced both legs safe would be vacuous; this is what makes it a discriminant.
+        let fallbackOver = natural.values.filter { $0.ratioCeiling >= bar }
+        print("\(fallbackOver.count) of \(natural.count) fallback inlier sets are over the"
+              + " bar on the ceiling alone")
+        let vacuous = "the drift ceiling now clears the δ/σ bar on the fallback sets too, so"
+            + " it separates neither leg and pronounces safe the one Decisions 64-66 measure"
+            + " as inflated"
+        #expect(fallbackOver.count == natural.count, "\(vacuous)")
+    }
+
+    // MARK: - The share's own variable, swept as a knob rather than told as an account
+    // (Decision 68)
+
+    // One reading of where a set sits inside its own drift ceiling, with the RATIO of spread
+    // to standoff as the knob. Decision 67 closed with "the super-linear standoff exponent is
+    // an account, not a form — it says the cancellation falls as the spread shrinks against
+    // the standoff, and the ratio of the two is never swept as its own knob". This is the
+    // reading that sweeps it.
+    //
+    // Nothing here needs a plane. The ceiling is written on the z sum alone, and so is the
+    // share, so this reads the same quantity Decision 67's first two findings are about
+    // without refitting anything — which is what makes three paths affordable where that
+    // decision could afford one.
+    struct SpreadReading {
+        let name: String
+        let path: String             // which end moved: the standoff, the spread, or both
+        let knob: Double             // that path's own scale factor, for the log-log fit
+        let n: Int
+        let standoffMm: Double       // μ — the Double mean of z, which is what the sum targets
+        let zSpreadMm: Double        // σ_z — RMS of z about that mean, the addends' own spread
+        let zErrorMm: Double         // δ_z — the Float mean's error, exactly Decision 67's
+        let minZMm: Double           // the extreme addends, which is what the ceiling assumes
+        let maxZMm: Double
+
+        // The ceiling's derivation says "a set whose coordinates share a sign", because
+        // S_k ≈ k·μ only while nothing cancels. A rung that widens the spread past its own
+        // standoff breaks that, and such a rung is excluded from the fits rather than read
+        // as a set with a suspiciously quiet sum. The corpus's own z is NEGATIVE — ARKit
+        // puts the scene down the camera's −z — so this is a shared sign and not a positive
+        // one, and the ceiling is written on |μ| throughout.
+        var signed: Bool { minZMm * maxZMm > 0 }
+
+        // Decision 67's ceiling, unchanged: u·μ·(n−1)/2 on the mean.
+        var ceilingMm: Double {
+            SupportPlaneCorpusMeasurementTests.unitRoundoff
+                * abs(standoffMm) * Double(n - 1) / 2
+        }
+        var share: Double { ceilingMm > 0 ? abs(zErrorMm) / ceilingMm : .infinity }
+
+        // CANDIDATE VARIABLE 1 — the ratio Decision 67 names in prose: the set's spread
+        // against its own standoff. Dimensionless, and it carries no n.
+        var relativeSpread: Double { standoffMm != 0 ? zSpreadMm / abs(standoffMm) : .infinity }
+
+        // CANDIDATE VARIABLE 2 — the same spread measured in units of the running sum's OWN
+        // ulp at the last addend, ulp(n·μ) ≈ 2u·n·μ. This is the variable the mechanism
+        // implies rather than the one the prose names: an addend whose low bits are already
+        // below the ulp the sum has grown to cannot decorrelate the rounding, so it is the
+        // spread against THAT, not against μ, that should decide whether the roundings
+        // cancel. It differs from variable 1 by a factor of 2·u·n, so the two disagree the
+        // moment the count moves — which is what makes the count sweep able to separate them.
+        var spreadInSumUlps: Double {
+            let ulp = 2 * SupportPlaneCorpusMeasurementTests.unitRoundoff
+                * abs(standoffMm) * Double(n)
+            return ulp > 0 ? zSpreadMm / ulp : .infinity
+        }
+    }
+
+    // μ and σ_z of a set, both in Double, plus the Float sum's error on the mean. The Float
+    // sum is `reduce(0, +)` because that is what the shipped centroid runs.
+    static func spreadReading(_ name: String, path: String, knob: Double,
+                              points: [Vec3]) -> SpreadReading? {
+        guard points.count >= 2 else { return nil }
+        var sum = 0.0
+        var lowest = Double.infinity, highest = -Double.infinity
+        for p in points {
+            sum += Double(p.z)
+            lowest = Swift.min(lowest, Double(p.z))
+            highest = Swift.max(highest, Double(p.z))
+        }
+        let n = Double(points.count)
+        let mean = sum / n
+        var sumSq = 0.0
+        for p in points {
+            let d = Double(p.z) - mean
+            sumSq += d * d
+        }
+        let floatMean = Double(points.map { $0.z }.reduce(0, +) / Float(points.count))
+        return SpreadReading(
+            name: name, path: path, knob: knob, n: points.count, standoffMm: mean,
+            zSpreadMm: (sumSq / n).squareRoot(), zErrorMm: floatMean - mean,
+            minZMm: lowest, maxZMm: highest)
+    }
+
+    // Least squares for `log y = a₀ + Σ aᵢ·xᵢ`, solved on the normal equations by Gaussian
+    // elimination with partial pivoting. The design rows carry their own intercept column, so
+    // the same routine fits the one-regressor account and the three-regressor family that
+    // contains it, and the two are then comparable on the same residuals. Four unknowns at
+    // most — small enough to solve in the open rather than reach for a decomposition.
+    static func leastSquares(design: [[Double]], targets: [Double]) -> [Double]? {
+        let k = design.first?.count ?? 0
+        guard k > 0, design.count == targets.count, design.count >= k else { return nil }
+        var a = [[Double]](repeating: [Double](repeating: 0, count: k + 1), count: k)
+        for (row, t) in zip(design, targets) {
+            guard row.count == k else { return nil }
+            for i in 0..<k {
+                for j in 0..<k { a[i][j] += row[i] * row[j] }
+                a[i][k] += row[i] * t
+            }
+        }
+        for col in 0..<k {
+            var pivot = col
+            for r in (col + 1)..<k where abs(a[r][col]) > abs(a[pivot][col]) { pivot = r }
+            guard abs(a[pivot][col]) > 1e-12 else { return nil }
+            a.swapAt(col, pivot)
+            let d = a[col][col]
+            for j in col...k { a[col][j] /= d }
+            for r in 0..<k where r != col {
+                let f = a[r][col]
+                guard f != 0 else { continue }
+                for j in col...k { a[r][j] -= f * a[col][j] }
+            }
+        }
+        return (0..<k).map { a[$0][k] }
+    }
+
+    // How wide the share still is once a model has been divided out, as a FACTOR — the same
+    // unit the raw share span is quoted in, so "explained" and "left over" are comparable.
+    static func residualSpread(design: [[Double]], targets: [Double],
+                               coefficients: [Double]) -> Double? {
+        var lo = Double.infinity, hi = -Double.infinity
+        for (row, t) in zip(design, targets) {
+            var predicted = 0.0
+            for (c, x) in zip(coefficients, row) { predicted += c * x }
+            let r = t - predicted
+            lo = Swift.min(lo, r); hi = Swift.max(hi, r)
+        }
+        guard lo.isFinite, hi.isFinite else { return nil }
+        return Foundation.exp(hi - lo)
+    }
+
+    // The same set with its z spread scaled about its own MEAN z. μ is held and only σ_z
+    // moves. Decision 66's knob scaled the out-of-plane component about the least-squares
+    // PLANE, which moves the z mean whenever the plane is not frontal; this one is stated on
+    // the axis the sum is actually taken along, so it is the numerator of the ratio alone.
+    static func rescaledZSpread(_ points: [Vec3], aboutMm mean: Double,
+                                scale: Double) -> [Vec3] {
+        let m = Float(mean), k = Float(scale)
+        return points.map { Vec3($0.x, $0.y, m + k * ($0.z - m)) }
+    }
+
+    // The whole set dilated about the camera origin: μ and σ_z move by the SAME factor, so
+    // the ratio is held exactly while both of its ends move. This is the path that asks
+    // whether the ratio is the variable at all, and neither of the other two can ask it.
+    static func dilated(_ points: [Vec3], scale: Double) -> [Vec3] {
+        let k = Float(scale)
+        return points.map { Vec3($0.x * k, $0.y * k, $0.z * k) }
+    }
+
+    // Spread factors, at a held standoff and a held count. Three orders, because the corpus's
+    // own sets sit at a relative spread near 1e-2 and the standoff sweep only moves it 11×.
+    static let spreadScaleSweep: [Double] = [0.01, 0.05, 0.2, 1, 5, 20, 100]
+
+    // Dilation factors, holding the ratio exactly. NO POWERS OF TWO: a dilation by 2^k is
+    // exact in binary floating point, so it would re-round nothing and the path would read
+    // its own arithmetic rather than the set's. These are chosen with full significands.
+    static let dilationSweep: [Double] = [0.3, 0.7, 1.3, 1.7, 2.3, 3.1, 4.3, 5.7]
+
+    // Decision 68. Decision 67 closed with five negatives; this discharges the third, which
+    // is the one that needs no capture: "The super-linear standoff exponent is an account,
+    // not a form. It says the cancellation falls as the spread shrinks against the standoff,
+    // and the ratio of the two is never swept as its own knob."
+    //
+    // Three decisions have each moved ONE end of that ratio and read the share moving:
+    // Decision 66's thickness knob (δ falls 3.2-21.5× as a set thickens), Decision 67's
+    // standoff knob (δ rises as μ^1.52…2.06 where the ceiling is linear) and its count knob
+    // (δ rises as n^1.170 where the ceiling is again linear). If the account is right those
+    // are one variable read three ways, and the test of that is a COLLAPSE: the three paths
+    // must land on one curve, and holding the ratio while moving both its ends must hold the
+    // share.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63
+    // widened `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("the share has no form in the set's shape, and holding the ratio does not hold it")
+    func theShareHasNoFormInTheSetsShape() throws {
+        let names = Self.captures + Self.rangeCaptures
+        var rows: [SpreadReading] = []
+        var natural: [String: SpreadReading] = [:]
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+            guard let here = Self.spreadReading(name, path: "natural", knob: 1, points: inliers)
+            else { continue }
+            natural[name] = here
+
+            // PATH A — the standoff moves, the spread is held. Decision 67's knob, restated
+            // on the z sum alone so the three paths are read in the same units.
+            for target in Self.driftStandoffMm {
+                let moved = Self.translatedZ(inliers, byMm: target - here.standoffMm)
+                if let r = Self.spreadReading(name, path: "standoff", knob: target,
+                                              points: moved) { rows.append(r) }
+            }
+            // PATH B — the spread moves, the standoff is held. The numerator of the ratio,
+            // and the knob Decision 66 turned about the plane rather than about the mean.
+            for scale in Self.spreadScaleSweep {
+                let widened = Self.rescaledZSpread(inliers, aboutMm: here.standoffMm,
+                                                   scale: scale)
+                if let r = Self.spreadReading(name, path: "spread", knob: scale,
+                                              points: widened) { rows.append(r) }
+            }
+            // PATH C — both move together, so the ratio is held EXACTLY. The direct test.
+            for scale in Self.dilationSweep {
+                let scaled = Self.dilated(inliers, scale: scale)
+                if let r = Self.spreadReading(name, path: "dilation", knob: scale,
+                                              points: scaled) { rows.append(r) }
+            }
+            // PATH D — the count moves, and it is the path that separates the two candidate
+            // variables: it leaves the spread-against-standoff untouched and divides the
+            // spread-against-the-sum's-ulp by the same factor it divides n.
+            let targets = Self.realDepthCountSweep.filter { $0 < inliers.count } + [inliers.count]
+            var seen: Set<Int> = []
+            for target in targets {
+                let step = Swift.max(1, inliers.count / target)
+                let subset = Swift.stride(from: 0, to: inliers.count, by: step).map { inliers[$0] }
+                guard seen.insert(subset.count).inserted else { continue }
+                if let r = Self.spreadReading(name, path: "count", knob: Double(subset.count),
+                                              points: subset) { rows.append(r) }
+            }
+        }
+        let short = "the ratio sweep no longer yields a reading on every committed capture,"
+            + " so the collapse is read on a corpus that has changed"
+        #expect(natural.count == names.count, "\(short)")
+
+        // MARK: THE FIRST FINDING — the ratio held, both of its ends moved.
+
+        // If the share is a function of σ_z/μ, a dilation cannot move it: the ratio is the
+        // same to the last bit and only the magnitudes change. This is the one path that can
+        // refute the account outright, and it is the reason it is worth running before the
+        // curve is fitted.
+        print("=== path C: the ratio held exactly, both ends dilated ===")
+        for name in names {
+            let path = rows.filter { $0.name == name && $0.path == "dilation" }
+                .sorted { $0.knob < $1.knob }
+            guard let lo = path.map(\.share).min(), let hi = path.map(\.share).max(),
+                  lo > 0, let here = natural[name] else { continue }
+            print("  \(name): ratio \(String(format: "%.6f", here.relativeSpread)) held,"
+                  + " μ \(String(format: "%.0f", path.first?.standoffMm ?? 0))…"
+                  + "\(String(format: "%.0f", path.last?.standoffMm ?? 0)) mm,"
+                  + " share \(String(format: "%.4f", lo))…\(String(format: "%.4f", hi))"
+                  + " (\(String(format: "%.1f", hi / lo))×)")
+        }
+        let dilation = rows.filter { $0.path == "dilation" }
+        let dilationSpread = try #require(dilation.map(\.share).max())
+            / Swift.max(try #require(dilation.map(\.share).min()), 1e-12)
+        print("holding the ratio, the share still spans"
+              + " \(String(format: "%.1f", dilationSpread))× over the dilation sweep")
+        let ratioHolds = "the share is now held by holding σ_z/μ, so Decision 67's account is"
+            + " a form: the cancellation is set by the spread against the standoff and"
+            + " nothing else, and δ follows from the set's shape"
+        #expect(dilationSpread > 2, "\(ratioHolds)")
+
+        // MARK: THE SECOND FINDING — which of the two candidate variables the paths collapse
+        // onto, read as a slope each path agrees or disagrees on.
+
+        // A path can only place a variable it actually MOVES. The count knob is what makes
+        // that a live distinction rather than a formality: subsampling leaves σ_z and μ where
+        // they were, so it barely moves σ_z/μ at all while dividing σ_z/ulp(nμ) by the whole
+        // factor it divides n by. A slope fitted across an x that does not move is noise
+        // divided by noise, so it is reported and excluded rather than averaged in.
+        // Refuting the ratio is not the same as refuting a form, because the ratio is one
+        // combination of (n, μ, σ_z) and there are others. So the whole POWER-LAW FAMILY over
+        // those three is fitted at once — three exponents and an intercept, free — and the
+        // ratio account is fitted as the one-regressor model nested inside it. A family that
+        // cannot hold the share is a stronger negative than a guess that cannot: it says the
+        // share is not a function of the set's shape at all, rather than not a function of
+        // the shape someone happened to name.
+        let usable = rows.filter { $0.share > 0 && $0.signed }
+        let dropped = rows.count - usable.count
+        print("=== the share against the power-law family in (n, μ, σ_z)"
+              + " (\(dropped) of \(rows.count) rungs dropped: \(rows.filter { !$0.signed }.count)"
+              + " straddle z = 0, where the ceiling's own derivation does not apply) ===")
+        let logShare = usable.map { Foundation.log($0.share) }
+        let rawSpread = try #require(usable.map(\.share).max())
+            / Swift.max(try #require(usable.map(\.share).min()), 1e-12)
+
+        // The ceiling alone: an intercept, no regressor. This is Decision 67's own statement
+        // — δ bounded and nothing inside it predicted — and every model below has to beat it.
+        let flatDesign = usable.map { _ in [1.0] }
+        let flat = try #require(Self.leastSquares(design: flatDesign, targets: logShare))
+        let flatSpread = try #require(
+            Self.residualSpread(design: flatDesign, targets: logShare, coefficients: flat))
+
+        // The ratio account, exactly as Decision 67 words it.
+        let ratioDesign = usable.map { [1.0, Foundation.log($0.relativeSpread)] }
+        let ratioFit = try #require(Self.leastSquares(design: ratioDesign, targets: logShare))
+        let ratioSpread = try #require(
+            Self.residualSpread(design: ratioDesign, targets: logShare,
+                                coefficients: ratioFit))
+
+        // The whole family the ratio sits inside.
+        let freeDesign = usable.map {
+            [1.0, Foundation.log(abs($0.standoffMm)), Foundation.log(Double($0.n)),
+             Foundation.log($0.zSpreadMm)]
+        }
+        let freeFit = try #require(Self.leastSquares(design: freeDesign, targets: logShare))
+        let freeSpread = try #require(
+            Self.residualSpread(design: freeDesign, targets: logShare, coefficients: freeFit))
+
+        print("  \(usable.count) rungs, share spanning \(String(format: "%.1f", rawSpread))×")
+        print("  the ceiling alone (no regressor): \(String(format: "%.1f", flatSpread))× left")
+        print("  the ratio account, share ∝ (σ_z/μ)^\(String(format: "%.3f", ratioFit[1])):"
+              + " \(String(format: "%.1f", ratioSpread))× left")
+        print("  the free family, share ∝ μ^\(String(format: "%.3f", freeFit[1]))"
+              + " · n^\(String(format: "%.3f", freeFit[2]))"
+              + " · σ_z^\(String(format: "%.3f", freeFit[3])):"
+              + " \(String(format: "%.1f", freeSpread))× left")
+
+        // And the same family fitted PER CAPTURE, so a pooled fit cannot be blamed for the
+        // width: four free exponents against 28 rungs of one capture's own set is the most
+        // generous reading the corpus supports, and it is the one that has to fail for the
+        // negative to be about the share rather than about the pooling.
+        var perCapture: [(String, Double)] = []
+        for name in names {
+            let sel = usable.filter { $0.name == name }
+            let design = sel.map {
+                [1.0, Foundation.log(abs($0.standoffMm)), Foundation.log(Double($0.n)),
+                 Foundation.log($0.zSpreadMm)]
+            }
+            let targets = sel.map { Foundation.log($0.share) }
+            guard let fit = Self.leastSquares(design: design, targets: targets),
+                  let left = Self.residualSpread(design: design, targets: targets,
+                                                 coefficients: fit),
+                  let raw = sel.map(\.share).max(), let lo = sel.map(\.share).min(), lo > 0
+            else { continue }
+            perCapture.append((name, left))
+            print("  \(name) alone, \(sel.count) rungs: span \(String(format: "%.1f", raw / lo))×"
+                  + " → \(String(format: "%.1f", left))× left on"
+                  + " μ^\(String(format: "%.3f", fit[1])) · n^\(String(format: "%.3f", fit[2]))"
+                  + " · σ_z^\(String(format: "%.3f", fit[3]))")
+        }
+        let noPerCapture = "the per-capture fits no longer land on every committed capture,"
+            + " so the pooled fit's width cannot be separated from the pooling"
+        #expect(perCapture.count == names.count, "\(noPerCapture)")
+
+        // A model that cannot beat the intercept has explained nothing at all.
+        let ratioExplains = "the ratio account now removes most of the share's span, so"
+            + " Decision 67's prose is a form after all and δ can be predicted from σ_z/μ"
+        #expect(ratioSpread > flatSpread / 3, "\(ratioExplains)")
+        let perCaptureExplains = "a free power law fitted to ONE capture's own rungs now"
+            + " holds that capture's share inside an order of magnitude, so the share is"
+            + " predictable per capture and only the pooling was hiding it"
+        #expect(try #require(perCapture.map(\.1).max()) > 10, "\(perCaptureExplains)")
+        let familyExplains = "the free power law in (n, μ, σ_z) now holds the share to a"
+            + " narrow band, so the share IS a function of the set's shape and Decision 67's"
+            + " ceiling can be tightened to a two-sided estimate without measuring δ"
+        #expect(freeSpread > flatSpread / 10, "\(familyExplains)")
+
+        // MARK: THE THIRD FINDING — the standoff path still reads what Decision 67 read, so
+        // this is a refutation of that decision's ACCOUNT and not of its measurement.
+
+        print("=== the standoff path, re-read as Decision 67 reads it ===")
+        for name in names {
+            let path = rows.filter { $0.name == name && $0.path == "standoff" && $0.signed }
+                .sorted { abs($0.standoffMm) < abs($1.standoffMm) }
+            guard let slope = Self.logLogSlope(path.map { abs($0.standoffMm) },
+                                               path.map { Swift.max(abs($0.zErrorMm), 1e-12) })
+            else { continue }
+            print("  \(name): δ against the standoff fits μ^\(String(format: "%.3f", slope))"
+                  + " over \(path.count) rungs")
+        }
+
+        print("=== the corpus's own sets, and where the family would put them ===")
+        for name in names {
+            guard let r = natural[name] else { continue }
+            print("  \(name): n = \(r.n), μ \(String(format: "%.1f", r.standoffMm)) mm,"
+                  + " σ_z \(String(format: "%.3f", r.zSpreadMm)) mm,"
+                  + " σ_z/μ \(String(format: "%.3e", r.relativeSpread)),"
+                  + " σ_z/ulp(nμ) \(String(format: "%.3e", r.spreadInSumUlps)),"
+                  + " share \(String(format: "%.4f", r.share))")
+        }
+        let naturalShares = natural.values.map(\.share)
+        let naturalSpread = try #require(naturalShares.max())
+            / Swift.max(try #require(naturalShares.min()), 1e-12)
+        print("the four committed sets' own shares span"
+              + " \(String(format: "%.1f", naturalSpread))×, at a mean of"
+              + " \(String(format: "%.4f", naturalShares.reduce(0, +) / Double(naturalShares.count)))")
+    }
+
+    // One reading of the centroid's error with the summation ORDER as the knob. Every
+    // earlier knob in this chain changed the set: Decision 66's scaled its thickness,
+    // Decision 67's translated it and subsampled it, Decision 68's dilated it. This one
+    // changes NOTHING the set carries — it is the same multiset, so its count, its mean, its
+    // spread and its least-squares plane are the same numbers rather than merely close
+    // ones. The only thing that moves is the sequence the Float sum walks it in.
+    struct OrderReading {
+        let name: String
+        let leg: String              // "annulus" — extraction's set — or "fallback"
+        let order: String
+        let n: Int
+        let standoffMm: Double       // μ, from the baseline: identical across orders
+        let thicknessMm: Double      // σ, likewise
+        let normalZ: Double          // |n̂_z|, likewise
+        let centroidErrorMm: Double  // δ, projected onto the set's own normal — the mover
+        let zErrorMm: Double         // the z mean's own error, before projection
+        let doubleMeanZMm: Double    // the reference re-summed in THIS order, as a control
+
+        // Decision 67's ceiling. It is written on n and μ alone, both of which a
+        // permutation holds exactly, so it does not move here BY CONSTRUCTION — which is
+        // the whole reason it is worth reading a quantity that does.
+        var zCeilingMm: Double {
+            SupportPlaneCorpusMeasurementTests.unitRoundoff
+                * abs(standoffMm) * Double(n - 1) / 2
+        }
+        var share: Double { zCeilingMm > 0 ? abs(zErrorMm) / zCeilingMm : .infinity }
+        // Decision 66's deciding quantity, measured. This is what moves.
+        var ratio: Double { thicknessMm > 0 ? centroidErrorMm / thicknessMm : .infinity }
+        // And the same quantity asserted from the set's shape. This is what does not.
+        var ratioCeiling: Double {
+            thicknessMm > 0 ? zCeilingMm * normalZ / thicknessMm : .infinity
+        }
+    }
+
+    // The Double quantities of one set, computed ONCE. A permutation cannot move them —
+    // that is the premise the reading rests on — so recomputing them per order would be
+    // measuring the reference rather than the sum. The reference's own order-sensitivity is
+    // read separately, in `doubleMeanZMm`, and reported as a control.
+    struct OrderBaseline {
+        let n: Int
+        let normal: Vec3
+        let cx: Double, cy: Double, cz: Double
+        let thicknessMm: Double
+    }
+
+    static func orderBaseline(_ points: [Vec3], seedNormal: Vec3) -> OrderBaseline? {
+        guard let exact = Self.refineDoubleAccumulated(inliers: points, seedNormal: seedNormal)
+        else { return nil }
+        var cx = 0.0, cy = 0.0, cz = 0.0
+        for p in points { cx += Double(p.x); cy += Double(p.y); cz += Double(p.z) }
+        let n = Double(points.count)
+        return OrderBaseline(
+            n: points.count, normal: exact.0, cx: cx / n, cy: cy / n, cz: cz / n,
+            thicknessMm: Double(Self.rmsDouble(points, normal: exact.0, d: exact.1)))
+    }
+
+    static func orderReading(_ name: String, leg: String, order: String,
+                             points: [Vec3], baseline: OrderBaseline) -> OrderReading {
+        let c = Self.floatCentroid(points)
+        let dx = Double(c.x) - baseline.cx
+        let dy = Double(c.y) - baseline.cy
+        let dz = Double(c.z) - baseline.cz
+        let projected = Double(baseline.normal.x) * dx + Double(baseline.normal.y) * dy
+            + Double(baseline.normal.z) * dz
+        var reference = 0.0
+        for p in points { reference += Double(p.z) }
+        return OrderReading(
+            name: name, leg: leg, order: order, n: baseline.n, standoffMm: baseline.cz,
+            thicknessMm: baseline.thicknessMm, normalZ: abs(Double(baseline.normal.z)),
+            centroidErrorMm: abs(projected), zErrorMm: dz,
+            doubleMeanZMm: reference / Double(baseline.n))
+    }
+
+    // Fisher-Yates against SplitMix64, so a shuffle is a FIXED permutation of the multiset
+    // rather than a fresh draw each run — the sweep has to be reproducible for the same
+    // reason every other sweep here does.
+    static func shuffled(_ points: [Vec3], seed: UInt64) -> [Vec3] {
+        var rng = SplitMix64(seed: seed)
+        var out = points
+        var i = out.count - 1
+        while i > 0 {
+            out.swapAt(i, rng.uniformInt(i + 1))
+            i -= 1
+        }
+        return out
+    }
+
+    // The orders. Four are STRUCTURAL — what a scan, a reversed scan or a sort hands over —
+    // and six are shuffles, so no reading is a property of one clever permutation. Ascending
+    // |z| is the classic error-minimising order for addends that share a sign and descending
+    // is its opposite, so the two are expected to bracket the rest rather than to be typical.
+    static let orderShuffleSeeds: [UInt64] = [1, 2, 3, 5, 8, 13]
+
+    static func orders(of points: [Vec3]) -> [(String, [Vec3])] {
+        var out: [(String, [Vec3])] = [
+            ("shipped", points),
+            ("reversed", Array(points.reversed())),
+            ("|z| ascending", points.sorted { abs($0.z) < abs($1.z) }),
+            ("|z| descending", points.sorted { abs($0.z) > abs($1.z) }),
+        ]
+        for seed in Self.orderShuffleSeeds {
+            out.append(("shuffle \(seed)", Self.shuffled(points, seed: seed)))
+        }
+        return out
+    }
+
+    // Decision 69. Decision 68 closed with five negatives; this discharges the second, which
+    // is the one that needs no capture: "The refutation is over the POWER-LAW family. A form
+    // outside it — one that is not linear in the logs — is not excluded by the fits, only by
+    // the dilation path, which excludes functions of σ_z/μ alone and nothing wider."
+    //
+    // Four decisions have each moved the SET and read δ move with it, so each could only
+    // ever refute one candidate form at a time. The knob that answers the question in
+    // general is the one that moves nothing: a PERMUTATION. It holds the multiset exactly,
+    // so every function of the set's shape — power law, saturating curve, or anything else
+    // anyone might write — is held exactly too, and any movement in δ is movement no such
+    // function can produce.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63
+    // widened `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("δ is a property of the summation order, so no function of the set can predict it")
+    func theShareIsNotAPropertyOfTheSetAtAll() throws {
+        let names = Self.captures + Self.rangeCaptures
+        var rows: [OrderReading] = []
+        var shipped: [String: OrderReading] = [:]
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            // Both legs, because the two decisions this bears on say different things about
+            // them: Decision 66 MEASURED the annulus margin at 97-39,903× and Decision 67
+            // ASSERTED it at 7.6×, and only one of those two can survive a permutation.
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                guard let baseline = Self.orderBaseline(set, seedNormal: seed) else { continue }
+                for (order, permutation) in Self.orders(of: set) {
+                    let r = Self.orderReading(name, leg: leg, order: order,
+                                              points: permutation, baseline: baseline)
+                    rows.append(r)
+                    if order == "shipped" { shipped["\(name)/\(leg)"] = r }
+                }
+            }
+        }
+        let short = "the order sweep no longer yields a reading on both legs of every"
+            + " committed capture, so it is read on a corpus that has changed"
+        #expect(shipped.count == 2 * names.count, "\(short)")
+
+        // MARK: THE FIRST FINDING — the multiset held exactly, and δ moves anyway.
+
+        print("=== the same points, summed in a different order ===")
+        var spans: [(String, Double)] = []
+        for key in shipped.keys.sorted() {
+            let here = rows.filter { "\($0.name)/\($0.leg)" == key }
+            guard let base = shipped[key], let lo = here.map(\.centroidErrorMm).min(),
+                  let hi = here.map(\.centroidErrorMm).max(), lo > 0 else { continue }
+            spans.append((key, hi / lo))
+            print("--- \(key): n = \(base.n), μ \(String(format: "%.1f", base.standoffMm)) mm,"
+                  + " σ \(String(format: "%.4f", base.thicknessMm)) mm, all held ---")
+            for r in here {
+                print("  \(r.order.padding(toLength: 14, withPad: " ", startingAt: 0)):"
+                      + " δ \(String(format: "%.6f", r.centroidErrorMm)) mm,"
+                      + " δ/σ \(String(format: "%.6f", r.ratio)),"
+                      + " share \(String(format: "%.4f", r.share))")
+            }
+            print("  δ spans \(String(format: "%.1f", hi / lo))× over"
+                  + " \(here.count) orders of the same multiset")
+        }
+        let widest = try #require(spans.map(\.1).max())
+        let narrowest = try #require(spans.map(\.1).min())
+        print("δ spans \(String(format: "%.1f", narrowest))…"
+              + "\(String(format: "%.1f", widest))× across the eight committed sets")
+        let orderHolds = "δ is now held by holding the multiset, so it IS a function of the"
+            + " set's shape and Decision 68's negative closes the other way: a form outside"
+            + " the power-law family is worth looking for after all"
+        #expect(narrowest > 2, "\(orderHolds)")
+
+        // MARK: THE SECOND FINDING — the spread is STRUCTURE and not chance. If the shuffles
+        // spanned the range too, the reading would be "a Float sum is noisy" and the shipped
+        // order would be one draw from that noise. They do not: six independent permutations
+        // agree closely, and the four orders a real scan or a sort actually produces are what
+        // reach both extremes. So the shipped δ is set by how the raster correlates with z.
+
+        print("=== structural orders against shuffles ===")
+        var structuralWins = 0
+        for key in shipped.keys.sorted() {
+            let here = rows.filter { "\($0.name)/\($0.leg)" == key }
+            let structural = here.filter { !$0.order.hasPrefix("shuffle") }
+            let shuffles = here.filter { $0.order.hasPrefix("shuffle") }
+            guard let sLo = structural.map(\.centroidErrorMm).min(),
+                  let sHi = structural.map(\.centroidErrorMm).max(),
+                  let hLo = shuffles.map(\.centroidErrorMm).min(),
+                  let hHi = shuffles.map(\.centroidErrorMm).max(),
+                  let worst = here.max(by: { $0.centroidErrorMm < $1.centroidErrorMm }),
+                  sLo > 0, hLo > 0 else { continue }
+            if !worst.order.hasPrefix("shuffle") { structuralWins += 1 }
+            print("  \(key): structural span \(String(format: "%.1f", sHi / sLo))×,"
+                  + " shuffle span \(String(format: "%.2f", hHi / hLo))×,"
+                  + " noisiest order \(worst.order)")
+        }
+        print("  a structural order is the noisiest on \(structuralWins) of"
+              + " \(shipped.count) sets")
+        let chanceNotStructure = "the noisiest order is now a shuffle on some set, so the"
+            + " spread is a Float sum's own noise rather than the scan order's correlation"
+            + " with z, and the shipped reading is one draw from it"
+        #expect(structuralWins == shipped.count, "\(chanceNotStructure)")
+
+        // MARK: THE THIRD FINDING — the ceiling is the one statement a permutation cannot
+        // touch, and no order reaches it.
+
+        let worstShare = try #require(rows.map(\.share).max())
+        let worstOrder = try #require(rows.max { $0.share < $1.share })
+        print("=== the ceiling under every order ===")
+        print("  the fullest any order fills its own ceiling:"
+              + " \(String(format: "%.4f", worstShare)) on \(worstOrder.name)/\(worstOrder.leg)"
+              + " at \(worstOrder.order)")
+        let ceilingBreaks = "an enumeration order now drives the Float mean past"
+            + " u·μ·(n−1)/2, so Decision 67's ceiling is a reading at the shipped scan order"
+            + " rather than a bound and its certificate does not transfer"
+        #expect(worstShare < 1, "\(ceilingBreaks)")
+
+        // MARK: THE FOURTH FINDING — what that costs the two ways of placing extraction's leg.
+        // Decision 66's margin is measured, so it moves with the order; Decision 67's is
+        // asserted from (n, μ, σ), so it cannot.
+
+        print("=== extraction's leg, measured against asserted ===")
+        var measuredMargins: [Double] = []
+        for name in names {
+            let here = rows.filter { $0.name == name && $0.leg == "annulus" }
+            guard let lo = here.map(\.ratio).min(), let hi = here.map(\.ratio).max(),
+                  let base = shipped["\(name)/annulus"], lo > 0 else { continue }
+            measuredMargins.append(Self.inflationRatioBar / hi)
+            print("  \(name): δ/σ measured \(String(format: "%.6f", lo))…"
+                  + "\(String(format: "%.6f", hi)) (\(String(format: "%.1f", hi / lo))×,"
+                  + " shipped order \(String(format: "%.6f", base.ratio))),"
+                  + " ceiling \(String(format: "%.6f", base.ratioCeiling)) at every order")
+        }
+        let asserted = try #require(rows.filter { $0.leg == "annulus" }.map(\.ratioCeiling).max())
+        let worstMeasured = try #require(measuredMargins.min())
+        print("  against the \(String(format: "%.4f", Self.inflationRatioBar)) bar:"
+              + " the worst order leaves \(String(format: "%.1f", worstMeasured))×"
+              + " of measured margin and \(String(format: "%.1f", Self.inflationRatioBar / asserted))×"
+              + " of asserted margin")
+        let marginGone = "the worst summation order now carries extraction's own set past"
+            + " Decision 65's inflation bar, so the extraction leg's degeneracy guard is safe"
+            + " only in the order the shipped scan happens to produce"
+        #expect(worstMeasured > 1, "\(marginGone)")
+
+        // MARK: THE FIFTH FINDING — the fallback leg, where Decision 67 called its ceiling
+        // one-sided. That decision refused all four fallback sets while two of them MEASURED
+        // under the bar, and read the gap as conservatism. Under a permutation both of those
+        // two go over, so the ceiling was right about them and what looked like slack was the
+        // shipped scan order.
+
+        print("=== the fallback leg: which sets clear the bar, and in which orders ===")
+        var rescued = 0
+        for name in names {
+            let here = rows.filter { $0.name == name && $0.leg == "fallback" }
+            guard let lo = here.map(\.ratio).min(), let hi = here.map(\.ratio).max(),
+                  let base = shipped["\(name)/fallback"] else { continue }
+            let under = base.ratio < Self.inflationRatioBar
+            if under && hi >= Self.inflationRatioBar { rescued += 1 }
+            print("  \(name): δ/σ \(String(format: "%.6f", lo))…\(String(format: "%.6f", hi)),"
+                  + " shipped order \(String(format: "%.6f", base.ratio))"
+                  + " (\(under ? "UNDER" : "over") the bar),"
+                  + " ceiling \(String(format: "%.6f", base.ratioCeiling)) — over at every order")
+        }
+        print("  sets the shipped order puts under the bar and some other order does not:"
+              + " \(rescued)")
+        let oneSidedGap = "a fallback set the shipped order puts under the bar now stays under"
+            + " it in every order, so Decision 67's refusal of that set is slack the ceiling"
+            + " cannot justify rather than an order-dependent reading"
+        #expect(rescued == 2, "\(oneSidedGap)")
+
+        // MARK: THE CONTROL — the Double reference has an order-sensitivity of its own, and
+        // the reading is only about the Float sum if that one is far below it.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in shipped.keys.sorted() {
+            let here = rows.filter { "\($0.name)/\($0.leg)" == key }
+            guard let lo = here.map(\.doubleMeanZMm).min(),
+                  let hi = here.map(\.doubleMeanZMm).max(),
+                  let delta = here.map(\.centroidErrorMm).min() else { continue }
+            worstNoise = Swift.max(worstNoise, hi - lo)
+            tightestDelta = Swift.min(tightestDelta, delta)
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm"
+              + " across the orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm"
+              + " (\(String(format: "%.1f", tightestDelta / Swift.max(worstNoise, 1e-18)))×)")
+        let referenceMoves = "the Double reference now moves as much across the orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading"
+            + " needs and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+
+        // MARK: THE SIXTH FINDING — where the shipped scan order sits among the rest. If it
+        // were unusually quiet, the corpus's own readings would be flattering the fitter.
+
+        print("=== where the shipped scan order sits ===")
+        for key in shipped.keys.sorted() {
+            let here = rows.filter { "\($0.name)/\($0.leg)" == key }
+            guard let base = shipped[key] else { continue }
+            let below = here.filter { $0.centroidErrorMm < base.centroidErrorMm }.count
+            print("  \(key): \(below) of \(here.count - 1) alternatives are QUIETER than the"
+                  + " shipped order")
+        }
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.
