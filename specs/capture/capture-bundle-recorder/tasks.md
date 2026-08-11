@@ -29,10 +29,11 @@ references:
   - 2026-08-11 session evidence: all 15 attempts (3 successes incl. two 391 MB two-view bundles, 12 typed refusals) wrote bundles with no memory-warning kill; stems join `estimation_outcomes.timestamp` exactly (`1786439141215` ↔ its outcome row); the fresh single-view bundle pulled and replayed same-day through `make harness-accuracy` (selects `foodSupport`, reports UNSCORED as designed)
   - CLOSED 2026-08-11: user confirmed the Files app shows captures (99 items), meals and meals.sqlite on-screen; a refused two-view attempt (`1786450162911`, 199 MB) recorded its bundle too; stage timings on-record match pre-recorder sessions (segmentation predictionMs 46–56, argmax 128–161 across all successes — the recorder's write-behind adds nothing measurable); two field bundles pulled and replayed the same day with no harness changes
 
-- [ ] 5. Record the pre-shutter mask on an emptyFoodMask refusal
+- [x] 5. Record the pre-shutter mask on an emptyFoodMask refusal
   - Found 2026-08-05 (raw sweet potato session): Pipeline.estimate fits the support plane from captureResult.preShutterFoodMask BEFORE segmentation, so an empty pre-shutter mask short-circuits to noFoodPixels and the bundle carries no probs, no argmax and no mask — the refusal was decided by the live preview segmenter and NOTHING about that decision is recorded
   - Consequence: these bundles cannot be replayed through FixtureRunner (it needs probs) and the one question worth asking offline — was the pre-shutter mask right? — is unanswerable. That is the opposite of what the recorder exists for
   - A BinaryMask at preview resolution is a few KB against the 3.6 MB bundle, so cost is not the obstacle
   - Related and NOT the same bug: bugfixes/no-food-pixels-on-fruit-plate-mvp is about no mask reaching the pipeline (maskAgeMs=-1). Here a mask arrived and was legitimately empty
+  - DONE 2026-08-11: PbMealFixture gains pre_shutter_mask (+ width/height, fields 27-29), written by CaptureBundleRecorder.makeFixture whenever CaptureResult.preShutterFoodMask is present — a few KB, so recorded on every bundle, which covers the emptyFoodMask refusal by construction with no conditional. Round-trip asserted in CaptureBundleRecorderTests.testRefusedAttemptRecordsPreShutterMask; proto regenerated via Schemas/generate.sh. Old bundles simply lack the field (proto3 default), so no loader change
   - Blocked-by: 9r168ot (Bundles reachable from the Files app on device builds)
   - References: docs/agent-notes/field-truth-sessions.md
