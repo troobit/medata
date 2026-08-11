@@ -4481,3 +4481,486 @@ it is the only one that isolates the thickness half at all.
 changes.
 
 ---
+
+## Decision 67: δ has a ceiling rather than a form, and the ceiling is what places the extraction leg
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 66 closed with four negatives. Three of them need something the corpus
+does not contain — a second unconfounded thinness reading, a second confidence
+state, a degenerate capture. The first needs nothing: "δ itself has no form. It
+wanders with count and with scale — 0.0070 mm at ×8 against 0.0503 mm at ×16 on
+`1785135663727` — so the law is only as predictive as the δ it is handed, and δ
+must still be measured per set."
+
+Every knob turned so far moved δ as a side effect. Decision 66's thickness knob
+moved σ, its count knob moved n and δ together, and neither held the quantity a
+Float sum actually accumulates: the MAGNITUDE of its addends. A rigid
+translation along the camera's z axis holds the count, the in-plane geometry and
+the thickness all exactly and moves only that. It is also the quantity Decision
+65's exactness bound is written in, so if the two halves are one mechanism this
+is where they meet.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record δ as **bounded** and not as a form: `u·μ·(n−1)/2` on the mean, measured
+to hold at every rung and to predict nothing inside itself. Compose that with
+Decision 66's `√(1 + (δ/σ)²)` and record the result as the first statement about
+the degeneracy guard that reads no measurement at all — the extraction leg's
+safety asserted from (n, μ, σ). `stabilityRatioMin` stays `[owed]` and
+unsettleable on Decision 64's third finding, which this does not touch. Not
+repaired, on the same precedent.
+
+### Rationale
+
+Four measurements, in `theCentroidErrorIsTheSumsOwnDrift`. Eight standoffs from
+175 to 2000 mm — an 11.4× lever against the 1.5× the four committed captures
+cover between them, with 350, 700 and 1400 mm carried over from Decision 65's
+significand ladder — on each capture's fallback inlier set, translated rigidly
+so the thickness is identical at every rung to four decimals.
+
+**The ceiling, and it holds at every rung.** A sequential Float sum rounds at
+each step by at most `u·|S_k|`, and `S_k ≈ k·μ` on a set whose coordinates share
+a sign, so the sum is out by at most `u·μ·n(n−1)/2` and the MEAN by at most
+`u·μ·(n−1)/2`, with `u = 2⁻²⁴`. That is Decision 65's exactness bound read as a
+magnitude rather than as a count: that decision measured how many addends a
+Float sum takes before it rounds at all, and this is how fast it departs once it
+does. Over **32 rungs** the z mean's error sits at **0.0034…0.3117** of its own
+ceiling — never above it, and never near it.
+
+**Inside the ceiling δ is not predicted, it is cancelled.** The share spans
+**91.2×** over the sweep at a mean of **0.0892**, and 11.6×, 19.7×, 43.1× and
+51.1× within a single capture, so nothing about a rung follows from the rung
+beside it. δ does not even track μ: fitted against the standoff it reads
+**μ^1.52 to μ^2.06**, super-linear where the ceiling is linear, because the
+share itself climbs with the standoff. That has the same cause as everything
+else in this chain — a set whose spread is small against its own standoff is
+nearer the constant addend the exactness bound is about, so a longer standoff
+takes the cancellation away. The account is a mechanism; the number is not a
+form.
+
+**The count half is drift, not a walk.** Read in δ alone rather than in
+Decision 66's δ/σ, the count sweep fits exponents of 1.065, 1.143, 1.214 and
+1.258, a mean of **n^1.170** — against n^1.0 if every rounding goes the
+same way and n^0.5 if they cancel as an unbiased walk. So the ceiling's linear-
+in-n shape is the right one and the corpus sits at 4.4–10.1 % of it at full
+count. δ spans 0.00003…1.18443 mm across the sweep.
+
+**THE PAYOFF, and it is both legs at once.** Composed with Decision 66's form
+the ceiling gives `δ/σ ≤ u·μ·(n−1)·|n̂_z| / 2σ` — three numbers any set carries
+before it is fitted. On the annulus, which is the set the extraction leg
+refines, it reads **0.0113, 0.0169, 0.0171 and 0.0185** against Decision 65's
+δ/σ bar of 0.1418: **7.6× of margin with no δ measured**, where Decision 66 had
+to measure 97–39,903×. And it is not vacuous, because it refuses to clear on the
+other leg: all four fallback inlier sets read **1.40, 2.28, 3.94 and 9.09**,
+over the bar on the ceiling alone. The extraction leg's degeneracy guard can now
+be asserted safe on a capture that has not been taken.
+
+### Alternatives Considered
+
+- **Take the ceiling as δ's value, so the account is a form after all**: it is
+  the reading a drift account implies and it would close Decision 66's negative
+  outright — Rejected because the share spans 91× at a mean of 0.089, so the
+  ceiling over-prices δ by 3–300×. The extraction leg would still clear, but the
+  fallback sets would be asserted at 1.40–9.09 where they measure 0.06–0.78.
+- **Keep measuring δ per set, as Decisions 64–66 do**: it is exact and it is
+  already written — Rejected because it can say nothing about a capture not yet
+  taken, and a statement that survives the sitting is the whole point of asking
+  whether δ has a form.
+- **Sweep the standoff on the synthetic lattice**, which already has a standoff
+  parameter — Rejected on Decision 65's finding: a lattice holds every sample at
+  exactly one z, so its reading is a property of that standoff's significand and
+  it cannot place a real set. The corpus's own sets are swept instead.
+- **Repair the centroid in Double now that a fourth decision has measured its
+  consequences**: `refineDoubleAccumulated` is written and the ceiling prices the
+  repair in closed form — Rejected on Decisions 52–66's precedent. It changes
+  which candidates survive `try? refine` and moves the shipped plane, which is
+  what Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- The extraction leg's degeneracy guard is safe by a bound rather than by a
+  measurement — 7.6× of margin from (n, μ, σ) alone — so it does not have to be
+  re-read on every capture the sitting adds.
+- The bound is a discriminant and not a blanket: it clears the annulus and
+  refuses all four fallback sets, which is the split Decisions 64–66 measured.
+- Decisions 65 and 67 are one statement about one mechanism — how many addends a
+  Float sum takes before it rounds, and how fast it departs after — rather than
+  a count bracket and a magnitude bracket that happen to agree.
+- The count half is settled as drift rather than as a walk, so the ceiling's
+  shape is measured rather than assumed, and n^1.170 says the ceiling is tight
+  in the variable that matters most.
+
+**Negative:**
+- The ceiling is ONE-SIDED. It certifies safety and not inflation: it refuses
+  all four fallback sets while two of them measure under the bar at 0.0619 and
+  0.0647, so "over the ceiling" cannot be read as "inflated".
+- δ still has to be measured per set for any statement tighter than the ceiling.
+  The share spans 91× and nothing here narrows it.
+- The super-linear standoff exponent is an account, not a form. It says the
+  cancellation falls as the spread shrinks against the standoff, and the ratio
+  of the two is never swept as its own knob.
+- The translation is rigid in the geometry but the addition itself rounds, so a
+  moved set is a set a capture at that range could carry rather than this set at
+  another range. Four captures, one confidence state — Decision 66's third
+  negative, unchanged.
+- Decision 64's fourth negative stands untouched: nothing in the corpus is
+  degenerate, so what happens when the gate *should* fire is still synthetic.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theCentroidErrorIsTheSumsOwnDrift`, `DriftReading`, `translatedZ`,
+`driftReading`, `driftStandoffMm`, `logLogSlope`, `unitRoundoff`),
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (findings 1 and 2 of
+the `stabilityRatioMin` marker, bounded a priori),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---
+
+## Decision 68: The share has no form in the set's shape, and the ceiling is therefore final
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 67 closed with five negatives. Three of them need something the corpus
+does not contain — a degenerate capture, a second confidence state, a set that a
+capture at another range actually carried rather than a translated one. Two do
+not, and they are the same one read twice: "δ still has to be measured per set
+for any statement tighter than the ceiling — the share spans 91× and nothing
+here narrows it", and "the super-linear standoff exponent is an account, not a
+form. It says the cancellation falls as the spread shrinks against the standoff,
+and the ratio of the two is never swept as its own knob."
+
+Three decisions have each moved ONE end of that ratio and watched the share
+move: Decision 66's thickness knob, Decision 67's standoff knob, and its count
+knob. None of them held the ratio, so none could tell whether the three are one
+variable read three ways or three separate dependencies. The account says they
+are one. If that is right the share must collapse onto a single curve, and
+holding the ratio while moving both its ends must hold the share.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record the account as **REFUTED**, and record the refutation as **general**
+rather than as a failure of one guess. The share is not a function of the
+spread against the standoff, and it is not a function of any power law in
+`(n, μ, σ_z)`. Decision 67's ceiling therefore stands as the tightest a priori
+statement the feature can make about δ, and its one-sidedness is **structural**
+rather than a gap left by not having looked. `stabilityRatioMin` stays `[owed]`
+and unsettleable on Decision 64's third finding. Not repaired, on the same
+precedent.
+
+### Rationale
+
+Four measurements, in `theShareHasNoFormInTheSetsShape`, on the four committed
+captures' fallback inlier sets. Nothing here fits a plane: the ceiling and the
+share are both written on the z sum alone, so the same quantity Decision 67's
+first two findings are about is read without refitting anything, which is what
+makes four paths affordable where that decision could afford one. 118 rungs, of
+which 6 are dropped for straddling z = 0, where the ceiling's own derivation
+("a set whose coordinates share a sign") does not apply.
+
+**Holding the ratio does not hold the share.** A dilation about the camera
+origin moves μ and σ_z by the same factor, so `σ_z/μ` is held to the last bit
+while both of its ends move — the one path neither earlier decision could run.
+Over eight non-power-of-two factors (powers of two are excluded because they
+re-round nothing) the share still spans **40.4×, 1353.2×, 6.1× and 6.8×** on the
+four captures. One capture, one held ratio, three orders of share. The account
+is refuted on its own terms.
+
+**And no other combination of the set's shape replaces it.** Refuting one ratio
+is not refuting a form, so the whole power-law family over `(n, μ, σ_z)` is
+fitted at once — three free exponents and a free intercept — with the ratio
+account as the one-regressor model nested inside it. Over 112 rungs the share
+spans **1640.7×**; the ratio account leaves **1353.2×** and the free family
+leaves **946.8×**. A three-exponent law fitted to the whole sweep removes a
+factor of **1.7 from a factor of 1641**. Fitted PER CAPTURE, which is the most
+generous reading the corpus supports — four free parameters against 27–29 rungs
+of one capture's own set — it still leaves **97.8×, 290.8×, 42.3× and 39.6×**,
+and the exponents do not even agree with each other: μ^0.591…μ^1.372 and
+σ_z^−0.906…σ_z^−0.399. So the width is the share's and not the pooling's.
+
+**This refutes the account, not the measurement.** Read through this test's
+plane-free δ_z, the standoff path returns **μ^2.059, μ^1.523, μ^1.840 and
+μ^1.563** — Decision 67's μ^1.52…μ^2.06 exactly, from an independent reading
+that never forms a scatter matrix. That decision's numbers are confirmed; what
+falls is the sentence it wrote underneath them.
+
+**One correction, and it does not change that decision's conclusion.** Decision
+67 says "the corpus sits at 4.4–10.1 % of it at full count". The figure its
+count sweep prints under the label "at the top" is `share.max()` over the whole
+sweep, not the share at full count; the share is not monotone in n, which is
+this decision's own finding. Read at full count the four sets are **10.12 %,
+8.56 %, 2.84 % and 4.41 %**, so the range is 2.8–10.1 %.
+
+**What survives is an observation about real captures rather than a law.** The
+four committed sets' own shares span **3.6× at a mean of 0.0648**, where the
+synthetic family around them spans 1640.7×. The sets a capture actually produces
+sit in a narrow band that nothing in the arithmetic predicts — four points, so a
+question for the sitting and not a bracket.
+
+### Alternatives Considered
+
+- **Take `σ_z/ulp(nμ)` — the spread in units of the running sum's own ulp —
+  as the variable instead**: it is what the mechanism implies rather than what
+  the prose names, and it is the one combination the count knob separates from
+  `σ_z/μ` — Rejected because it is inside the power-law family that was fitted
+  and refuted: it is the member with exponents (−1, −1, +1), and the best member
+  of that whole family leaves 946.8× of 1640.7×.
+- **Fit a non-power-law form — a saturating curve in the relative spread**:
+  the mechanism suggests a crossover rather than a power law — Rejected because
+  the dilation path refutes any function of `σ_z/μ` whatever its shape: the
+  ratio is held exactly and the share moves 1353×, which no function of a held
+  argument can produce.
+- **Report the per-capture fits as the form, since they are the tightest**:
+  they remove 15× on the best capture — Rejected because 39.6–290.8× is left,
+  the exponents disagree capture to capture by more than a factor of two, and a
+  "form" fitted with four parameters to 28 rungs of one capture predicts
+  nothing about a capture not yet taken, which is the only thing a form here
+  would be for.
+- **Repair the centroid in Double, now that a fifth decision has measured its
+  consequences**: `refineDoubleAccumulated` is written and the ceiling prices the
+  repair in closed form — Rejected on Decisions 52–67's precedent. It changes
+  which candidates survive `try? refine` and moves the shipped plane, which is
+  what Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- Decision 67's ceiling is settled as the END of this line rather than a step
+  in it. The extraction leg's 7.6× of asserted margin is the tightest a priori
+  statement available, and no further sweep of the set's shape will improve it.
+- The ceiling's one-sidedness is explained rather than merely reported: it is
+  one-sided because the share it would need to be two-sided is not a function of
+  anything the set carries.
+- Decision 67's standoff exponents are independently confirmed by a reading that
+  fits no plane at all, so the two decisions' disagreement is confined to the
+  account and does not touch the measurements.
+- The chain's remaining open questions are now all capture questions. Nothing
+  further about `stabilityRatioMin` can be learned from the committed corpus.
+
+**Negative:**
+- This is a negative result. It removes a hope rather than adding a number, and
+  no `[owed]` constant moves.
+- The refutation is over the POWER-LAW family. A form outside it — one that is
+  not linear in the logs — is not excluded by the fits, only by the dilation
+  path, which excludes functions of `σ_z/μ` alone and nothing wider.
+- The 3.6× band the four committed sets sit in is four points. It is the kind of
+  observation the sitting could confirm or break, and it must not be quoted as a
+  bracket before it does.
+- The dilation path re-rounds every coordinate, so a dilated set is a set some
+  capture could carry rather than this set at another scale — Decision 67's
+  fourth negative, unchanged and now inherited by this decision's own knob.
+- Decision 64's fourth negative stands untouched: nothing in the corpus is
+  degenerate, so what happens when the gate *should* fire is still synthetic.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theShareHasNoFormInTheSetsShape`, `SpreadReading`, `spreadReading`,
+`rescaledZSpread`, `dilated`, `spreadScaleSweep`, `dilationSweep`,
+`leastSquares`, `residualSpread`),
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (finding 2 of the
+`stabilityRatioMin` marker, the account replaced by its refutation),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---
+
+## Decision 69: δ is a property of the summation order, so no function of the set can predict it
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 68 closed with five negatives. Three need something the corpus does not
+contain — a degenerate capture, the sitting's own sets, a set some capture
+really carried rather than a dilated one. One is the shape of a negative result
+and cannot be discharged at all. The fifth needs nothing: "the refutation is
+over the POWER-LAW family. A form outside it — one that is not linear in the
+logs — is not excluded by the fits, only by the dilation path, which excludes
+functions of `σ_z/μ` alone and nothing wider."
+
+That negative is real, and no further sweep of the kind Decisions 66–68 ran can
+close it. Each of those knobs moved the SET — Decision 66 scaled its thickness,
+Decision 67 translated and subsampled it, Decision 68 dilated it — so each could
+only ever refute the candidate forms its own knob separates, one family at a
+time. The knob that answers the question in general is the one that moves
+nothing the set carries: a **permutation**. It holds the multiset exactly, so
+its count, its mean, its spread, its aspect ratio and its least-squares plane
+are the same numbers rather than merely close ones, and every function of the
+set's shape — power law, saturating curve, or anything anyone might yet write —
+is held exactly with them. Any movement in δ is movement no such function can
+produce.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record δ as a property of the **summation order** and not of the set. Decision
+68's remaining negative closes in the general form rather than the power-law
+one: no function of the set's shape predicts δ, because a permutation holds
+every such function and δ moves **6.2…272.8×** anyway. Decision 67's ceiling —
+`δ/σ ≤ u·μ·(n−1)·|n̂_z| / 2σ` — is therefore the only statement about the
+degeneracy gate that transfers, and Decision 66's **measured** margin is
+re-classified as a reading at the shipped scan order. `stabilityRatioMin` stays
+`[owed]` and unsettleable on Decision 64's third finding. Not repaired, on
+Decisions 52–68's precedent.
+
+### Rationale
+
+Six readings, in `theShareIsNotAPropertyOfTheSetAtAll`, over ten orders of each
+of the eight committed sets — four captures × two legs — at 80 readings total.
+Four orders are **structural**, being what a raster scan, a reversed scan or a
+sort actually hands over, and six are Fisher-Yates shuffles against fixed
+SplitMix64 seeds so that no reading is a property of one clever permutation.
+
+**The multiset is held exactly and δ moves anyway.** Per set, δ spans 34.3× and
+30.3× on `1785135663727`, **272.8×** and 6.5× on `1785901032716`, 6.2× and 14.3×
+on `1786439141215`, and 16.0× and 9.5× on `1786450130307` — **6.2…272.8×**
+across the eight, annulus leg first in each pair. n, μ, σ and the least-squares
+normal are the same numbers in every row of every block. This is what Decisions
+66–68 could not do: their knobs each left a family of forms standing, and this
+one leaves none.
+
+**The spread is STRUCTURE and not chance, which is what makes it about the
+fitter rather than about Float.** Six independent shuffles agree to
+**1.01…3.37×**, and the four structural orders span **2.8…272.8×**; a structural
+order is the noisiest on **8 of 8** sets. So a random order gives a typical
+value with little variance and the orders a real scan produces are the outliers
+— the shipped δ is set by how the depth raster correlates with z, not by
+rounding noise. **`|z| ascending` — the classic error-minimising order for
+addends that share a sign — is the noisiest on 4 of the 8 sets and the quietest
+on none.** The account is that these addends are near-equal, being one surface
+at one standoff, so sorting does not order magnitudes; it orders the *residuals*
+about the mean and puts every below-mean sample before every above-mean one, so
+the partial sum drifts one way for the first half instead of cancelling. That is
+an ACCOUNT and not a form, on Decision 68's own precedent, and the measurement
+stands without it.
+
+**The ceiling is the one statement a permutation cannot touch.** Decision 67's
+`u·μ·(n−1)/2` is written on n and μ, which a permutation holds by construction,
+so it does not move — and no order reaches it. The fullest any of the 80
+readings fills its own ceiling is **0.4440**, on `1785901032716`'s fallback set
+at `|z| ascending`; Decision 67's own 32 rungs reached 0.3117, so the
+permutation fills the ceiling further than any earlier knob and still leaves 2.3×
+of headroom.
+
+**What that costs the two ways of placing extraction's leg.** Decision 66's
+margin is a MEASUREMENT, so it moves with the order: 97–39,903× at the shipped
+order becomes **72.7×** at the worst, which is 549× off that decision's headline
+and 1.3× off its binding end — the loss is nearly all in the figure that was
+quoted, and the number that actually bounded anything barely moves.
+Decision 67's is ASSERTED from `(n, μ, σ, n̂_z)`, so it does not move at all —
+**7.6×**, with per-capture ceilings of 0.011272, 0.017063, 0.018543 and 0.016858
+identical in every order. Extraction is safe under every one of the ten, by both
+readings; what changes is which of the two is a property of the capture.
+
+**And Decision 67's one-sidedness is vindicated on the fallback leg.** That
+decision refused all four fallback sets by the ceiling while two of them
+MEASURED under the 0.1418 bar (0.0619 and 0.0647), and recorded the gap as
+conservatism. Under permutation both of those two go **over**: `1786439141215`
+reaches 0.190712 and `1786450130307` reaches 0.616915, 1.3× and 4.4× past the
+bar. The ceiling was right about them, and what looked like slack was the
+shipped scan order.
+
+**The control is exact rather than merely small.** The Double reference
+re-summed in each order moves **0.000e+00 mm** — bit-identical across all ten,
+on all eight sets — against a smallest Float δ of 2.739e-05 mm. So the multiset
+is held to the last bit and the movement is the Float sum's alone.
+
+**The shipped scan order is not systematically flattering, and on one capture it
+is the worst of ten.** It is the noisiest of the ten on both legs of
+`1785135663727`, the quietest on `1785901032716`'s annulus and
+`1786450130307`'s fallback set, and mid-pack (6 of 9 quieter) on both legs of
+`1786439141215`. It lands at both extremes, so the corpus's readings are neither
+flattered nor penalised as a rule — but δ on the capture that anchors Decision
+36's `fallbackPenalty` pricing is the largest any order produces there, which is
+one more reason that pricing is a reading and not a value.
+
+### Alternatives Considered
+
+- **Sweep a non-power-law form directly — a saturating curve in `σ_z/ulp(nμ)`,
+  or any other combination the dilation path leaves standing**: it is the
+  literal reading of Decision 68's negative — Rejected because it closes one
+  more family and leaves the rest. A permutation closes all of them at once, and
+  the cost is the same sweep.
+- **Take the shuffle mean as δ's value and quote its variance as the
+  uncertainty**: the shuffles agree to 1.01–3.37×, so a mean over them is a
+  stable number — Rejected because the shipped order is not a shuffle. It is
+  structural, it is the noisiest order on 8 of 8 sets by that classification,
+  and on two sets it is 5–30× off the shuffle mean. A statistic over
+  permutations the fitter never takes describes a fitter that does not exist.
+- **Read the result as licence to sort the samples before summing**: sorting is
+  the one order under a programmer's control — Rejected on the measurement.
+  `|z| ascending`, the order the textbook rule recommends, is the noisiest on
+  half the sets and the quietest on none; sorting makes this worse rather than
+  better, for the reason in the rationale.
+- **Repair the sum — pairwise or Kahan accumulation, which would make δ
+  order-independent and small at once**: the strongest fix available and it needs
+  no capture — Rejected on Decisions 52–68's precedent. It changes the centroid,
+  hence which candidates survive `try? refine`, hence the shipped fallback plane
+  that Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- Decision 68's remaining non-capture negative is discharged in the general
+  form. No function of the set's shape can predict δ, whatever its shape, and
+  this line of sweeps is finished rather than merely paused.
+- Decision 67's ceiling is confirmed as the only transferable statement about
+  the gate by a second and independent route, and its one-sidedness is shown
+  correct on the two fallback sets that measured under the bar.
+- The extraction leg's guard is safe in every order tried — 72.7× of measured
+  margin at the worst and 7.6× asserted — so nothing about the shipped scan
+  order is load-bearing for it.
+- The corpus's own δ figures throughout Decisions 64–68 gain a stated
+  qualifier: they are readings at the shipped scan order, and the spread around
+  them is now measured rather than unknown.
+
+**Negative:**
+- This is a second negative result in a row. It removes a hope rather than
+  adding a number, and no `[owed]` constant moves.
+- The 6.2…272.8× spread makes every per-set δ in Decisions 64–68 an
+  order-dependent reading. Those decisions' CONCLUSIONS survive, because each
+  rests on the ceiling or on a ratio taken within one order, but no δ quoted in
+  them should be transferred to a capture not yet taken.
+- The `|z| ascending` account is an account. The mechanism is not measured
+  against an alternative, and Decision 68 is the precedent for how such a
+  sentence fares.
+- Ten orders is not the permutation group. Six shuffles agreeing closely is
+  evidence that the shuffle regime is narrow, not that the structural extremes
+  found here are the extremes.
+- The fallback leg's δ is now known to move past the bar under orders the fitter
+  does not take, on sets where the shipped order reads under it. That says the
+  ceiling is right; it does not say what the fallback plane would be if the sum
+  were repaired, which stays unmeasured on precedent.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theShareIsNotAPropertyOfTheSetAtAll`, `OrderReading`, `OrderBaseline`,
+`orderBaseline`, `orderReading`, `shuffled`, `orders`, `orderShuffleSeeds`),
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (findings 1 and 2 of
+the `stabilityRatioMin` marker), `docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---
