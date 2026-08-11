@@ -140,6 +140,45 @@ the food at all.
 for a single-view one: Decision 14's radial-band and support-visibility mitigations currently have
 no field evidence of any kind.
 
+## 2026-08-11 — first field firing of the promoted path, and it confirms the range trap
+
+One capture from the 2026-08-11 weighed-bread session (58 g slice, white plate,
+iPhone 16 Pro, Release `9509b27-20260811-185011`) is sliced and committed as
+`MedataCore/Tests/SupportPlaneTests/Fixtures/1786439141215.depthslice`, pulled
+bundle in `tmp/device_captures/`. It is the **first real capture the restricted
+fit admitted**: the device recorded `planeReference=foodSupport` (6/8 supporting
+sectors, ring median −0.97 mm, residual 1.81 mm), and the harness replay selects
+`foodSupport` on the same bundle (`accuracy` run, `foodSupport=1`, fallback rate
+0.0 %) — Req 5.1 parity holding on a field capture.
+
+The estimate is **3.0× UNDER by mass** (19.4 g vs 58 g; 48.6 cm³ vs ~215
+expected). A probe run of `SupportPlaneCorpusMeasurementTests` with the stem
+admitted measured why it cannot yet be corpus evidence:
+
+- **Plane-at-food is 408.97 mm** — the capture was taken from ~41 cm, past the
+  ~364 mm envelope (`ringInnerMm × f_d / 4`); the smear at that range is
+  `4z/f_d ≈ 9.0 mm > ringInnerMm = 8`. This is exactly the Decision 39 trap: the
+  inner ring band sits inside the depth smear, the ring measure is food-edge
+  contaminated, and nothing in the estimate says so — the fit reads clean
+  (probe: support 0.616, ring median −0.011 mm, crossed 2, supporting 6,
+  seed spread 0.006 mm) while the volume is 3× short.
+- **Its halved-grid extraction yields zero residues** ([5,276, 389] samples
+  native → [] halved; floor 350 → 88), so the committed residue-area invariant
+  ("the area survives a grid halving") fails on it and the test's indexing then
+  traps. The invariant was written on two inside-envelope captures; whether it
+  is a property of the algorithm or of their range is now an open question this
+  capture raises.
+- Sector verdicts at the shipped constants: crossed [2] supporting [6] — read
+  AT the smear-contaminated ring, so not usable for `maxCrossedSectors`.
+
+What this buys the sitting: the paired-capture rule is now mandatory, not
+advisory — **re-shoot the same flat-bread scene from inside ~360 mm** (tape
+measure) and the pair separates a contaminated ring measure from a real one.
+Until that pair exists the slice stays out of `captures`, mirroring the
+`rejectedCaptures` precedent, with the reason recorded here rather than
+asserted in the suite (its disqualifier is range, which no threshold in the
+fitter reads).
+
 ## Captures still needed
 
 One sitting, one plate set, roughly twenty-five minutes. Only three of the six need the scale — the
