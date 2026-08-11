@@ -231,6 +231,30 @@ And what Decision 35 settled — the two Req 5.1 figures, which are not constant
   converts through the same `mmPerPx`, and the count is 3 → 3. The residue *area* is the
   invariant: the annulus agrees to 0.3 % and 1.2 % across the halving; later passes drift
   5–23 %, because inlier removal is resolved on the grid.
+- **That invariant is the algorithm's, not the corpus's range — Decision 62.** The two
+  `captures` slices sit 2.0 mm apart in range (338.9 and 336.9 mm), so every transfer claim
+  above was varied by decimation alone. The 2026-08-11 bread pair spans 272.9–399.9 mm and
+  is committed as **`rangeCaptures`**, read by the grid-transfer measurements *only* —
+  admitting it to `captures` would re-denominate every owed bracket in Decisions 40–57,
+  which Decision 61 froze the frame to prevent. At 272.9 mm the plane moves **0.080 mm**
+  across the halving and the residue area drifts 1.34 % and **0.72 %**, its later pass an
+  order tighter than either corpus capture. `1786439141215`'s "zero residues when halved" is
+  **not** a counter-example: `ringBandsAreFeasible` is false at 128 px (bands
+  [164, 135, 132] vs 200), so extraction never runs. The invariant's **domain** is ring
+  feasibility on both grids; the test used to trap there and now reports it.
+- **The two `mmPerPx` bounds are 2.2× apart, and until Decision 62 nothing separated them.**
+  The smear envelope bites at `4 × mmPerPx > ringInnerMm`, i.e. **2.0 mm/px** (≈364 mm); the
+  ring sample floor is bracketed **3.726…4.405 mm/px** (≈678–802 mm), joint across four
+  slices whose native food-sample counts span 6.9×. Read that as a consistency check, not a
+  separation: the per-capture brackets are decimation-wide and overlap heavily, and the ring
+  is a band around the food *boundary*, so perimeter is still in its sample count. It is
+  decimation-limited — integer factors are the only resampler in hand.
+  `1786439141215` sits *between* the two at 2.201 mm/px, which is exactly why its fit reads
+  clean (support 0.616, ring median −0.011 mm) while its volume is 3× short.
+- **`ringMinSamples = 200` is settled; the margin quoted beside it is not.** Decision 29's
+  "5.6–7.0× margin" is a reading at the corpus's range *and* footprint: 5.95–6.38× on the
+  inside-envelope capture, **2.64–3.00×** on the outside-envelope one. Any headroom figure
+  in Decisions 29–57 taken from the two original slices carries the same unstated qualifier.
 - **The extent bar was the only one denominated in pixels — Decision 37 fixed that.** Pixel
   extents halve with the grid (123→61, 76→38, 155→77, 44→22) and the last of those crossed
   the old 24 px bar: same scene, same plane, opposite verdict. `minAcceptedExtentMm = 44`
