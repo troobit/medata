@@ -59,6 +59,19 @@ struct SupportPlaneCorpusMeasurementTests {
     // admitting it silently flips the sector derivation to a wrong answer (Decision 31).
     static let rejectedCaptures = ["1785054950406"]
 
+    // The 2026-08-11 weighed-bread pair, committed and read by the grid-transfer
+    // measurements ONLY (Decision 62). They are deliberately not in `captures`: every
+    // owed-constant bracket in Decisions 40-57 is a reading over that list, so admitting
+    // a slice there re-denominates all of them, and Decision 61 froze the sitting's
+    // reading frame precisely so those numbers stay comparable. What these two DO carry
+    // is range — the corpus spans 336.9 to 338.9 mm, a 2 mm spread, while the pair spans
+    // 272.9 to 399.9 mm — and range is half of `mmPerPx`, so they are the only evidence
+    // in hand that the Req 5.1 transfer claims are the algorithm's rather than the
+    // corpus's. `1786439141215` is the outside-envelope one (399.9 mm, past the ~364 mm
+    // smear bound) and is included as the counter-case: its halved grid is not
+    // ring-feasible at all.
+    static let rangeCaptures = ["1786450130307", "1786439141215"]
+
     // MARK: - The dump
 
     // Prints the pass. Assertions live in the derivation tests below; this one exists
@@ -909,6 +922,16 @@ struct SupportPlaneCorpusMeasurementTests {
             let slice = try DepthSlice.load(name)
             let native = try #require(Self.gridFit(slice, decimation: 1))
             let halved = try #require(Self.gridFit(slice, decimation: 2))
+            // The invariant's DOMAIN, stated rather than assumed (Decision 62). An
+            // infeasible halved grid runs no extraction at all, so it yields no residue
+            // to compare and the indexing below used to trap on it — a crash where the
+            // honest reading is "outside the domain". `rangeCaptures` measures what is.
+            let outsideDomain = "\(name): ring feasibility \(native.feasible) ->"
+                + " \(halved.feasible), so the halved grid runs no extraction and the"
+                + " invariant has nothing to say here —"
+                + " see residueAreaInvariantIsTheAlgorithms"
+            #expect(native.feasible && halved.feasible, "\(outsideDomain)")
+            guard native.feasible && halved.feasible else { continue }
             let nativeArea = native.mmPerPx * native.mmPerPx
             let halvedArea = halved.mmPerPx * halved.mmPerPx
             let nativeResidues = native.candidates.map { Float($0.candidate.residueCount) * nativeArea }
@@ -948,6 +971,99 @@ struct SupportPlaneCorpusMeasurementTests {
             #expect(last.candidate.residueCount < 500)
             #expect(Float(last.candidate.residueCount) * halvedArea >= SupportRegion.minResidueAreaMm2)
         }
+    }
+
+    // Decision 62. `prerequisites.md` recorded an open question against the 2026-08-11
+    // bread pair: `1786439141215`'s halved grid yields ZERO residues, so "the committed
+    // residue-area invariant fails on it", and whether that invariant "is a property of
+    // the algorithm or of their range is now an open question this capture raises".
+    //
+    // It is the algorithm's. The two committed corpus captures sit at 338.9 and 336.9 mm,
+    // a 2 mm spread, so range was genuinely unexercised and the question was fair. The
+    // bread pair spans 272.9 to 399.9 mm — 1.5x the near range, and 1.49 to 2.20 mm/px
+    // against the corpus's 1.84-1.86 — and the near one reproduces both transfer claims.
+    //
+    // The zero-residue reading is not the invariant failing, because extraction never
+    // ran: `gridFit` returns before `extractCandidates` when `ringBandsAreFeasible` is
+    // false, and at 128 px that capture's bands read [164, 135, 132] against
+    // `ringMinSamples` 200. That is Decision 35's ring-sample-floor rider firing one
+    // decimation step EARLIER than on the corpus, which is the same `mmPerPx` bound
+    // reached from RANGE rather than from the grid — Decision 29's envelope from the
+    // third side. So the invariant has a domain, and the domain is the ring's.
+    @Test("the residue-area invariant is the algorithm's, and the ring floor is its domain")
+    func residueAreaInvariantIsTheAlgorithms() throws {
+        var largestFeasible: Float = 0, smallestInfeasible: Float = .greatestFiniteMagnitude
+        for name in Self.captures + Self.rangeCaptures {
+            let slice = try DepthSlice.load(name)
+            let native = try #require(Self.gridFit(slice, decimation: 1))
+            // Every committed slice is ring-feasible on its OWN grid. The floor is a
+            // property of `mmPerPx`, and range is half of `mmPerPx`, so a capture far
+            // enough away would fail here with no decimation at all.
+            #expect(native.feasible, "\(name) is not ring-feasible natively")
+            for decimation in [1, 2, 3, 4] {
+                guard let fit = Self.gridFit(slice, decimation: decimation) else { continue }
+                if fit.feasible {
+                    largestFeasible = max(largestFeasible, fit.mmPerPx)
+                } else {
+                    smallestInfeasible = min(smallestInfeasible, fit.mmPerPx)
+                }
+                print("\(name) dec \(decimation): \(fit.widthPx)px mmPerPx \(fmt(fit.mmPerPx))"
+                      + " bands \(fit.bandCounts) feasible \(fit.feasible)"
+                      + " residues \(fit.candidates.map(\.candidate.residueCount))")
+            }
+        }
+        // Decimation is integer, so this is the tightest bracket these slices can carry
+        // without a continuous resampler. It is non-empty across all four, whose native
+        // food-sample counts span 6.9x (1,278 to 8,804) — a CONSISTENCY CHECK on a floor
+        // in `mmPerPx` alone, not a separation. The per-capture brackets overlap heavily
+        // and the ring is a band around the food BOUNDARY, so perimeter is still in its
+        // sample count and no committed evidence rules that term out.
+        print("ring feasibility floor bracketed \(fmt(largestFeasible))…\(fmt(smallestInfeasible)) mm/px")
+        let overlapped = "the feasible and infeasible readings overlap at"
+            + " \(largestFeasible) mm/px, so the floor is not a function of mmPerPx alone"
+        #expect(largestFeasible < smallestInfeasible, "\(overlapped)")
+
+        // The invariant, read on the capture the corpus lacked: a different session, a
+        // different plate and a 24 % nearer range.
+        let nearName = "1786450130307"
+        let near = try DepthSlice.load(nearName)
+        let native = try #require(Self.gridFit(near, decimation: 1))
+        let halved = try #require(Self.gridFit(near, decimation: 2))
+        try #require(native.feasible && halved.feasible)
+        let nativeArea = native.mmPerPx * native.mmPerPx
+        let halvedArea = halved.mmPerPx * halved.mmPerPx
+        #expect(native.candidates.count == halved.candidates.count,
+                "\(nearName) extracts \(native.candidates.count) -> \(halved.candidates.count)")
+        for (i, (a, b)) in zip(native.candidates, halved.candidates).enumerated() {
+            let p = Float(a.candidate.residueCount) * nativeArea
+            let q = Float(b.candidate.residueCount) * halvedArea
+            let drift = abs(p - q) / max(p, q)
+            print("\(nearName) pass \(i + 1): \(fmt(p)) -> \(fmt(q)) mm², \(fmt(drift * 100)) %")
+            // The same 25 % bar the corpus is held to. This capture reads 1.34 % and
+            // 0.72 %, so its LATER pass is an order tighter than either corpus capture's
+            // (4.94 %, 5.02 %, 6.43 %, 22.75 %) — the invariant is not being carried by
+            // the corpus's range.
+            #expect(drift < 0.25, "\(nearName) pass \(i + 1) residue \(p) -> \(q) mm²")
+            #expect(b.candidate.residueCount < a.candidate.residueCount / 2,
+                    "\(nearName) pass \(i + 1) sample count did not quarter")
+        }
+
+        // And the plane transfers with it, at a range the corpus never reached.
+        let ray = try #require(Self.foodCentroidRay(near))
+        let a = try #require(native.best), b = try #require(halved.best)
+        let moveMm = abs(Self.planeDepthMm(normal: a.candidate.normal, d: a.candidate.d, ray: ray)
+                         - Self.planeDepthMm(normal: b.candidate.normal, d: b.candidate.d, ray: ray))
+        print("\(nearName) plane at food moves \(fmt(moveMm)) mm across the halving,"
+              + " support \(fmt(a.ring.supportFraction)) -> \(fmt(b.ring.supportFraction))")
+        #expect(moveMm <= Self.gridTransferToleranceMm,
+                "\(nearName) plane moves \(moveMm) mm, outside \(Self.gridTransferToleranceMm) mm")
+        // Recorded, not consumed: this is the first field capture whose selected
+        // candidate holds the WHOLE ring, against 0.629 and 0.480 on the corpus that
+        // ceilings `ringSupportMin` at 0.362 (Decision 52). It bounds nothing here
+        // because the slice is not in `captures` — admitting it re-denominates the
+        // brackets of Decisions 40-57 and that is the sitting's work, not this test's.
+        #expect(a.ring.supportFraction > 0.9,
+                "\(nearName) best support is \(a.ring.supportFraction), not the full ring")
     }
 
     // The transfer claim's floor. Halving again refuses the fit outright, and the guard

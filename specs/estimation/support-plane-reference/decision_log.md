@@ -3694,3 +3694,171 @@ carries the probe evidence), `tasks.md` task 26 (pre-sitting half recorded
 here; the capture-dependent half remains open). No code changes.
 
 ---
+
+## Decision 62: The residue-area invariant is the algorithm's, and the ring floor is its domain
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+`prerequisites.md`'s 2026-08-11 note left one open question against the
+weighed-bread pair. `1786439141215`'s halved-grid extraction yields **zero**
+residues ([5,276, 389] samples native → [] halved), so the committed
+residue-area invariant — Decision 38's "the area survives a grid halving" —
+"fails on it and the test's indexing then traps. The invariant was written on
+two inside-envelope captures; whether it is a property of the algorithm or of
+their range is now an open question this capture raises."
+
+The question was fair, because the corpus could not answer it. Both committed
+captures sit at **338.9 mm and 336.9 mm** — a 2.0 mm spread, `mmPerPx` 1.862
+and 1.839 — so every Req 5.1 transfer claim in Decisions 35, 37 and 38 was read
+at one range and varied only by decimation. `mmPerPx` is `z/f_d` and carries
+range and grid alike (Decision 39), so a claim tested on decimation alone has
+tested half of its own denominator.
+
+The bread pair is the first evidence in hand that separates them: 272.9 mm and
+399.9 mm, `mmPerPx` 1.480 and 2.201, a different session and a different plate
+from the corpus.
+
+### Decision
+
+The residue-area invariant is a property of the **algorithm**, not of the
+corpus's range, and its **domain** is ring feasibility on both grids. The
+zero-residue reading is not a counter-example: `gridFit` returns before
+`extractCandidates` when `ringBandsAreFeasible` is false, so extraction never
+ran on that grid.
+
+The pair is committed as `rangeCaptures`, read by the grid-transfer
+measurements **only** and deliberately not added to `captures`.
+
+### Rationale
+
+Measured on `1786450130307` at 272.9 mm — 24 % nearer than the corpus, a range
+it never occupied — both transfer claims reproduce:
+
+| Reading | 1785135663727 | 1785901032716 | 1786450130307 |
+|---|---|---|---|
+| Range | 338.9 mm | 336.9 mm | **272.9 mm** |
+| Plane at food across the halving | 0.835 mm | 0.037 mm | **0.080 mm** |
+| Normal tilt | 0.945° | 0.063° | **0.020°** |
+| Candidates | 3 → 3 | 3 → 3 | **2 → 2** |
+| Pass 1 residue drift | 0.29 % | 1.17 % | **1.34 %** |
+| Later-pass drift | 5.02 %, 6.43 % | 4.94 %, 22.75 % | **0.72 %** |
+
+Its later pass drifts **0.72 %** against the 4.94–22.75 % the corpus reads, so
+the invariant is not merely surviving the new range — it holds an order tighter
+there than on the captures it was written from. Nothing about the corpus's
+2 mm range window was carrying it.
+
+`1786439141215` fails one decimation step earlier than the corpus for a reason
+already in this log. Its bands read **[164, 135, 132]** at 128 px against
+`ringMinSamples` 200, so `ringBandsAreFeasible` is false and the whole
+extraction is skipped — Decision 35's ring-sample-floor rider, reached from
+RANGE rather than from the grid. Its native `mmPerPx` is 2.201 against the
+corpus's 1.84–1.86, so it enters the halving 1.18–1.49× coarser and lands below
+a floor the others clear.
+
+**The two `mmPerPx` bounds this feature carries are 2.2× apart, and the corpus
+could not tell them apart.** Decision 29's smear envelope bites at
+`4 × mmPerPx > ringInnerMm`, i.e. `mmPerPx > 2.0` (≈364 mm at f_d 182); the
+ring sample floor is bracketed **3.726…4.405 mm/px** by all four slices jointly
+(largest feasible reading 3.726, smallest infeasible 4.405), ≈678–802 mm of
+range. `1786439141215` sits **between them** at 2.201 — outside the smear
+envelope, inside the ring floor — which is exactly the state
+`prerequisites.md` describes as "the fit reads clean while the volume is 3 ×
+short". The bracket is decimation-limited: integer factors are the only
+resampling in hand, so no tighter reading exists without a continuous one.
+
+**Footprint independence is consistent with the readings, not shown by them.**
+Every feasible reading is at or below 3.726 mm/px and every infeasible one at or
+above 4.405, across native food-sample counts spanning **6.9×** (1,278 to
+8,804) — so nothing contradicts a floor in `mmPerPx` alone. But the four
+per-capture brackets are decimation-wide and overlap heavily (the small-footprint
+capture turns infeasible at 4.405 where the largest is still feasible at 3.726,
+only 1.18× apart), so this is a consistency check and not a separation. The ring
+is a band around the food *boundary*, so its sample count carries perimeter as
+well as `mmPerPx`, and no committed evidence rules that term out.
+
+**Decision 29's margin does not transfer, though its constant does.** That
+decision settled `ringMinSamples = 200` "with 5.6–7.0× margin" on bands
+[1120, 1132, 1213] and [1294, 1347, 1392]. The inside-envelope capture reads
+[1190, 1255, 1276] — **5.95–6.38×**, inside the recorded band. The
+outside-envelope one reads [528, 530, 600] — **2.64–3.00×**, less than half the
+margin Decision 29 called settled, while still clearing the floor. The constant
+stays settled; the headroom quoted beside it is a reading at the corpus's range
+and footprint and must not be quoted as a property of the algorithm.
+
+Two smaller confirmations. `maxCandidatePlanes` still never fires (Decision 48):
+both new captures stop at **2** passes against a cap of 3, on the residue floor.
+And `1786450130307`'s selected candidate holds the **whole** ring —
+supportFraction **1.000** against the 0.629 and 0.480 the corpus's
+highest-support candidates reach — which is recorded and not consumed, because
+`ringSupportMin`'s ceiling of 0.362 (Decision 52) is a reading over `captures`
+and this slice is not in it.
+
+Keeping the pair out of `captures` is Decision 61's frame holding. Every owed
+bracket in Decisions 40–57 is a reading over that list; admitting a slice
+re-denominates all of them, and the sitting is about to be read against those
+numbers. The grid-transfer measurements are the one family that reads no owed
+constant, so the pair can serve them without touching anything the sitting
+depends on.
+
+### Alternatives Considered
+
+- **Admit both slices to `captures`**: the corpus doubles, and the range
+  question is answered by the same tests that already exist — Rejected: it
+  re-denominates every bracket in Decisions 40–57 days before the sitting reads
+  against them, which is precisely what Decision 61 froze the frame to prevent.
+  `rangeCaptures` buys the range evidence at none of that cost.
+- **Loosen the residue-area test to tolerate zero residues**: the crash goes
+  away and the corpus captures keep their assertions — Rejected: it hides the
+  distinction the capture exists to make. An infeasible halved grid is not a
+  loose reading of the invariant, it is outside its domain, and a test that
+  silently skips cannot say which.
+- **Lower `ringMinSamples` so the far capture stays feasible when halved**:
+  the invariant would then have a reading on all four slices — Rejected: the
+  floor is a statistical requirement per band (Decision 29) and the refusal at
+  128 px is the transfer's honest resolution floor, not a denomination defect
+  (Decision 38's surviving rider). Weakening it to widen a measurement's domain
+  is fitting the guard to the test.
+- **Leave the question open until the sitting**: six captures at controlled
+  ranges would settle it more thoroughly — Rejected: the two slices in hand
+  already span 1.5× in range, the answer is unambiguous, and the sitting's
+  captures are needed for constants no committed evidence can set. Spending
+  them on a question the corpus can answer wastes the scarcer resource.
+
+### Consequences
+
+**Positive:**
+- Req 5.1's transfer claims are no longer single-range readings: the plane
+  transfer and the residue-area invariant both hold at a range the corpus never
+  occupied, and the near capture's later-pass drift is the tightest in the
+  feature.
+- The measurement pass no longer crashes on a slice whose halved grid is
+  infeasible; it reports the domain instead.
+- The ring sample floor gains a number — 3.726…4.405 mm/px — where it
+  previously existed only as "the transfer floors at the RING".
+- The smear envelope and the ring floor are separated for the first time, and
+  the capture that under-reads 3.0× is located between them.
+
+**Negative:**
+- `rangeCaptures` is a second corpus list, and a future reader must check which
+  list a test iterates before quoting its numbers as corpus evidence.
+- The ring-floor bracket is decimation-limited and 0.68 mm/px wide; a
+  continuous resampler would tighten it and none exists.
+- Decision 29's margin figure is now known to be range-dependent, so any other
+  headroom quoted in Decisions 29–57 from the two original captures carries the
+  same unstated qualifier and has not been re-checked.
+- The pair still contributes nothing to any owed constant, so the sitting's
+  scope is unchanged.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`rangeCaptures`, `residueAreaInvariantIsTheAlgorithms`, and the domain guard
+on `residueAreaTransfersAcrossAGridHalving`),
+`specs/estimation/support-plane-reference/prerequisites.md` (the 2026-08-11
+note's open question closes), `tasks.md` task 26. No shipped code changes.
+
+---

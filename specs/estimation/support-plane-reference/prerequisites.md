@@ -165,9 +165,25 @@ admitted measured why it cannot yet be corpus evidence:
 - **Its halved-grid extraction yields zero residues** ([5,276, 389] samples
   native → [] halved; floor 350 → 88), so the committed residue-area invariant
   ("the area survives a grid halving") fails on it and the test's indexing then
-  traps. The invariant was written on two inside-envelope captures; whether it
-  is a property of the algorithm or of their range is now an open question this
-  capture raises.
+  traps. **ANSWERED 2026-08-12 (Decision 62) — the invariant is the
+  algorithm's, and this is not a counter-example.** Extraction never ran:
+  `ringBandsAreFeasible` is false at 128 px (bands [164, 135, 132] against
+  `ringMinSamples` 200), so `gridFit` returns before `extractCandidates`. The
+  invariant's domain is ring feasibility on both grids, and the test now says so
+  instead of trapping. Its inside-envelope pair reproduces both transfer claims
+  at 272.9 mm — plane 0.080 mm across the halving, residue drift 1.34 % and
+  **0.72 %** against the corpus's 4.94–22.75 % — so the corpus's 2 mm range
+  window was not what carried it. Both slices are committed as `rangeCaptures`,
+  read by the grid-transfer measurements only.
+- **The two `mmPerPx` bounds are 2.2× apart and this capture sits between them**
+  (Decision 62). The smear envelope bites at `mmPerPx > 2.0` (≈364 mm); the ring
+  sample floor is bracketed **3.726…4.405 mm/px** (≈678–802 mm) by all four
+  committed slices, whose native food-sample counts span 6.9×. At 2.201 mm/px
+  this capture is outside the first and inside the second — which is the state
+  described above as "the fit reads clean while the volume is 3× short".
+  Decision 29's `ringMinSamples` **margin** does not transfer with its constant:
+  5.6–7.0× on the corpus, 5.95–6.38× on the inside-envelope capture, and
+  **2.64–3.00×** here.
 - Sector verdicts at the shipped constants: crossed [2] supporting [6] — read
   AT the smear-contaminated ring, so not usable for `maxCrossedSectors`.
 
@@ -212,9 +228,12 @@ depth relief, not nominal food thickness.
 
 The outside-envelope capture's extra shortfall (3.0× vs 1.9×) is **mask
 under-coverage at range** — 62.1 cm² segmented vs 109.7 for the same slice —
-compounding the smear contamination already recorded. Both slices stay out of
-`captures` until the task 26 pass runs (the residue-area invariant question
-stands for the outside-envelope slice, and admission re-denominates brackets).
+compounding the smear contamination already recorded. **Both slices stay out of
+`captures` and are committed as `rangeCaptures` instead (Decision 62).** The
+residue-area question is closed, but admission still re-denominates every
+bracket in Decisions 40–57 — which is exactly what Decision 61 froze the
+sitting's reading frame to prevent — so the pair serves the grid-transfer
+measurements, the one family that reads no owed constant, and nothing else.
 
 Its two-view companion (`1786450162911`) refused `unrecognisedFood` — the
 two-view leg of the sitting still has no post-promotion success at this range.
