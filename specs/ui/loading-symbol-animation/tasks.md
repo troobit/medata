@@ -37,7 +37,7 @@ references:
   - Stream: 1
   - References: MeData/MeData.xcodeproj/project.pbxproj
 
-- [ ] 5. Verify on device <!-- id:ldsym05 -->
+- [x] 5. Verify on device <!-- id:ldsym05 -->
   - make deploy-device, then view the loader (via #Preview or a temporary placement) and confirm: strokes draw in order bowl -> bar -> dot; loop reads cleanly (not a jarring erase); mark is centred and uncropped at multiple sizes; colour matches the accent.
   - Toggle Reduce Motion and confirm the finished mark shows statically with no draw-on.
   - Confirm make spell passes on the new docs and comments; MedataCore swift suite stays green (make test).
@@ -45,7 +45,7 @@ references:
   - Stream: 1
   - References: specs/ui/loading-symbol-animation/smolspec.md, docs/agent-notes/device-build-and-test.md
 
-- [ ] 6. (Follow-up) Adopt the loader at the .estimating call site <!-- id:ldsym06 -->
+- [x] 6. (Follow-up) Adopt the loader at the .estimating call site <!-- id:ldsym06 -->
   - Out of scope for this spec (decision_log Decision 5). Replace/augment the hourglass Estimating hint in App/CaptureFlowView.swift (~line 234) with MedataLoadingSymbol, reviewed independently on device.
   - Stream: 1
   - References: specs/ui/loading-symbol-animation/smolspec.md, App/CaptureFlowView.swift
