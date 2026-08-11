@@ -37,9 +37,12 @@ struct SupportPlaneCorpusMeasurementTests {
     // the ~364 mm smear envelope (smear 4z/f_d ≈ 9.0 mm > ringInnerMm 8), so its
     // ring measure is food-edge contaminated exactly as Decision 39 predicted,
     // and its halved-grid extraction yields zero residues, which breaks (and then
-    // crashes) the residue-area test below. Admission is task-26 work: it needs a
-    // paired inside-envelope capture of the same scene before its readings can
-    // re-denominate any bracket. See prerequisites.md, 2026-08-11 note.
+    // crashes) the residue-area test below. Its inside-envelope pair —
+    // `1786450130307`, same plate same day at 272.9 mm (74 % of the bound),
+    // 8/8 sectors, still 1.9× under — is also committed and is the corpus-grade
+    // slice of the two. Admission of either is task-26 work: it re-denominates
+    // brackets and must answer where the residual under-read lives first. See
+    // prerequisites.md, 2026-08-11 note.
     static let captures = ["1785135663727", "1785901032716"]
 
     // Sliced, committed, and deliberately NOT in `captures`. `1785054950406` is the

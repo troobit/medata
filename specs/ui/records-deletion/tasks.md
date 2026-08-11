@@ -26,7 +26,7 @@ references:
   - Stream: 1
   - References: App/RecordsView.swift
 
-- [-] 4. Verify: build, device look, docs
+- [x] 4. Verify: build, device look, docs
   - `make test` (both totals) + `make spell`; app builds for the device; on-device check of swipe, edit-mode bulk delete, and range purge.
   - Update `docs/agent-notes/persistence.md` (new store methods, re-ingest wrinkle) and `docs/agent-notes/ui-capture-flow.md`-adjacent records note if one exists.
   - Stream: 1

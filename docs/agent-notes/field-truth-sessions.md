@@ -23,6 +23,21 @@ Interleaved refusals, all in two-view mode: `noFoodPixels` ×7,
 `worldTrackingDegraded` ×5 — the same framing-refusal pattern as the 2026-08-05
 session, roughly half the shutter presses again.
 
+Paired re-shoot at 22:08, same plate, same 58 g, build `6675525-20260811-192504`
+— taken from **inside** the ~365 mm smear envelope after the range finding below
+(median food depth 272.9 mm vs the first capture's 399.9 mm, measured off the
+committed slices):
+
+| Time | Stem | Path | Outcome | Estimate |
+|---|---|---|---|---|
+| 22:08:50 | `1786450130307` | single-view LiDAR | success (`foodSupport`, 8/8 sectors) | bread_wholemeal 77.1 cm³ → **30.8 g / 11.7 g carbs** |
+| 22:09:22 | `1786450162911` | two-view SfS | refused `unrecognisedFood` | — |
+
+The inside-envelope capture still under-reads **1.9×** with a stronger plane
+verdict than the contaminated one — range explains 3.0× → 1.9× and no more.
+Slice committed as `1786450130307.depthslice`; the residual under-read is the
+lead question for the support-plane task 26 pass.
+
 Readings:
 
 - **First field firing of the promoted support plane.** The single-view capture
