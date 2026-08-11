@@ -106,7 +106,7 @@ public enum ShortlistOrdering {
 }
 ```
 
-- `MealReviewModel.buildShortlist` calls `combined` when the record's marker is true, passing the record's (possibly empty) evidence for the detected class; marker false → shipped path, `recencySource`, byte-identical list.
+- `MealReviewModel.buildShortlist` always calls `combined`; the record's marker gates the *evidence*, not the function — marker false passes an empty `candidates` layer, which is `recencySource` and the byte-identical shipped list by Req 7.4. (An earlier reading of this line, "marker false takes a separate shipped path", is superseded: the observable contract is the byte-identical list, and one code path with a proven-empty fills layer delivers it without a second copy of the ordering to keep in step.)
 - `shortlist_source` takes `combinedSource` exactly when the marker is true — the ordering that *ran*, not whether fills landed, keeping the Req 8.2 partition a property of the code path rather than of plate content.
 
 ### Measurement (Req 8)

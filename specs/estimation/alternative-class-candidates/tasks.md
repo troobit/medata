@@ -114,7 +114,7 @@ references:
 
 ## Combined ordering (Foods and App)
 
-- [ ] 12. ShortlistOrdering.combined <!-- id:67qnbfe -->
+- [x] 12. ShortlistOrdering.combined <!-- id:67qnbfe -->
   - New file MedataCore/Sources/Foods/ShortlistOrdering.swift with recencySource = "recency" (the shipped value) and combinedSource = "recency_plus_candidates"
   - combined(recency:candidates:topUp:limit:) -> [String] — three layers: recency entries in their exact shipped positions, then evidence fills in rank order skipping duplicates, then the shipped eligible top-up for any slots still empty
   - Evidence displaces only the blind top-up, never a recency entry; with no evidence, layers 1+3 are byte-identical to the shipped list
@@ -124,7 +124,7 @@ references:
   - Stream: 2
   - Requirements: [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5)
 
-- [ ] 13. ShortlistOrderingTests <!-- id:67qnbff -->
+- [x] 13. ShortlistOrderingTests <!-- id:67qnbff -->
   - Recency positions invariant under any candidate input
   - Evidence displaces top-up entries only
   - Empty-candidates degeneracy: byte-identity against a shipped-shape fixture of recency + top-up
@@ -133,8 +133,8 @@ references:
   - Stream: 2
   - Requirements: [7.2](requirements.md#7.2), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5)
 
-- [ ] 14. MealReviewModel consumes the combined ordering <!-- id:67qnbfg -->
-  - buildShortlist (App/MealReviewModel.swift:714-727) calls combined when the record's marker is true, passing the record's possibly-empty evidence for the detected class; marker false takes the shipped path and produces a byte-identical list
+- [x] 14. MealReviewModel consumes the combined ordering <!-- id:67qnbfg -->
+  - buildShortlist (App/MealReviewModel.swift:714-727) always calls combined; the record's marker gates the evidence layer, not the function — marker false passes an empty candidates layer and produces the byte-identical shipped list (design.md, amended)
   - shortlist_source on PbCorrectionRecord takes combinedSource exactly when the marker is true — the ordering that ran, not whether fills landed
   - No score, percentage or confidence tier from the evidence reaches the screen
   - The full eligible list stays the same set; Req 3.8/3.9 of ui/meal-review still bound what is offered — density and carbohydrate coefficient required, no relabel across the solid/liquid boundary
