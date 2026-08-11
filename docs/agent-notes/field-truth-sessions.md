@@ -5,6 +5,51 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## 2026-08-11 — weighed bread slice, model `coreml_ab812dc3aa9d`, build `9509b27-20260811-185011` (Release)
+
+Scene: **1 slice of bread, 58 g total** (scale truth), white plate. Yellow bank
+card as the ID-1 reference for two-view captures. iPhone 16 Pro. 15 attempts
+19:05–19:08 local; bundles for every attempt (successes and refusals) in
+`Documents/captures/`, single-view bundle pulled to
+`tmp/device_captures/1786439141215-success.fixture`.
+
+| Time | Stem | Path | Outcome | Estimate |
+|---|---|---|---|---|
+| 19:05:41 | `1786439141215` | single-view LiDAR | success | bread_wholemeal 48.6 cm³ → **19.4 g / 7.4 g carbs** |
+| 19:07:14 | `1786439234576` | two-view SfS | success | bread_wholemeal 382.9 cm³ → 153.2 g + **cheese 43.7 g (the bank card)** = 196.9 g / 58.2 g carbs |
+| 19:08:20 | `1786439300420` | two-view SfS | success | bread_wholemeal 301.3 cm³ → **120.5 g / 45.8 g carbs** |
+
+Interleaved refusals, all in two-view mode: `noFoodPixels` ×7,
+`worldTrackingDegraded` ×5 — the same framing-refusal pattern as the 2026-08-05
+session, roughly half the shutter presses again.
+
+Readings:
+
+- **First field firing of the promoted support plane.** The single-view capture
+  selected `planeReference=foodSupport` (6/8 supporting sectors, ring median
+  −0.97 mm, residual 1.81 mm) — the first real capture where the restricted fit
+  was admissible under the shipped placeholder constants. But the estimate is
+  **3.0× UNDER** by mass (19.4 vs 58 g; ~215 cm³ expected vs 48.6 measured),
+  where the pre-feature defect was a 2–3.6× over-read. Plausible mechanism: the
+  admitted plane sits at or near the bread's top surface rather than the plate,
+  truncating the height field. The pulled bundle is the evidence for
+  support-plane task 26; slice with `tools/fixture_slice.py` and add to
+  `SupportPlaneCorpusMeasurementTests`.
+- **Two-view still over-reads over the table plane.** Both two-view successes
+  kept `planeReference=edgeBand`; capture 3's ring median is **+12.9 mm** (the
+  table), and the over-reads (2.1×, 2.6× on the bread rows) match the known
+  constant-height mechanism on flat food.
+- **The reference card is segmented as food.** The yellow bank card was
+  classified `cheese` (39.7 cm³ → 43.7 g phantom mass, EST_SOLID density) in
+  capture 2 — out-of-palette-object-as-food, same family as the brussels-sprouts
+  and pumpkin sessions, but now corrupting the two-view decomposition while the
+  card simultaneously serves scale (`scaleSource=card+lidar`). A card mask
+  exclusion zone may be worth a spec: the card's pose is already solved, so its
+  image-plane extent is known to the pipeline.
+- Weighed carb truth for the plate is ~24 g (58 g wholemeal at ~42 g/100 g), so
+  the carb errors are −69 % (single), +143 % (capture 2, incl. phantom cheese),
+  +91 % (capture 3).
+
 ## 2026-07-26 — staged plate, model `coreml_ab812dc3aa9d` (36-channel palette)
 
 Build: PRE-gate binary for all four attempts (the unrecognised-food gate and
