@@ -511,7 +511,7 @@ The eligible-channel restriction is not a tuning choice. Without it the second-a
 - `tools/candidate_probe.py` is committed and re-runnable: a later model, palette or statistic can be measured the same way in one command.
 
 **Negative:**
-- Boundary bleed is real, unmitigated, and shipping. If Req 8 returns neutral, this is the first place to look, and Decision 5's removal obligation (task 19) applies.
+- Boundary bleed is real, unmitigated, and shipping. If Req 8 returns neutral, this is the first place to look, and Decision 5's removal obligation — the "Remove the pass and the retained field if the verdict is negative" gate — applies, but the "Mitigate boundary bleed in the candidate ranking" task is tried first.
 - The deciding evidence comes from the validation leg, not the device: dataset plates under a softmax over logits and **without** the speckle regularisation the device path applies, because `regulariseLabelMap` is Swift and reimplementing it in the probe would risk divergence from what ships. The 64-sample floor absorbs most of what that filter would remove, but the two paths are not identical and the figures should not be quoted as device figures.
 - The hit rate measures the **segmenter's** errors on dataset plates, not a user's corrections on their own meals. It is an upper-bound-shaped indicator, not a substitute for Req 8.
 - The device corpus remains unable to test either Decision 11 question; closing that gap needs multi-food captures, which no session can manufacture.
