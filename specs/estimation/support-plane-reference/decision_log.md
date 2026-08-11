@@ -4183,3 +4183,301 @@ the shipped 0.3 mm is not a tuned value.
 changes.
 
 ---
+
+## Decision 65: The crossover is set by the standoff's significand, and the split is thinness as much as count
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 64 closed with a negative it could not discharge itself: "The
+crossover is range-dependent and only one standoff has been measured, so the
+50,000…100,000 bracket carries the qualifier Decision 62 introduced." Its
+second finding — the degeneracy gate is disabled by sample count, and the two
+legs sit either side of where that happens — rested entirely on that bracket,
+measured on a synthetic lattice held at exactly 350 mm, with the crossover
+attributed to a Float running sum passing 2²⁴ at n ≈ 2²⁴ / 350.
+
+This is that re-reading, in the shape Decision 63 used to discharge Decision
+62: the same measurement at every range the corpus supplies, plus a lever arm
+wide enough to separate a range effect from an arithmetic one. It reads no
+owed constant as a bar, so it sits inside the admission Decision 63 widened
+`rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record the crossover as a property of the standoff's Float **significand**
+rather than of range, and re-denominate Decision 64's second finding in a
+real-depth count. The gate's verdict on the corpus does not move —
+`stabilityRatioMin` stays `[owed]` and unsettleable on Decision 64's third
+finding — but two of that decision's five findings are amended rather than
+confirmed. Not repaired, on the same precedent.
+
+### Rationale
+
+Three measurements, in `theCrossoverIsNotARangeBound`.
+
+**The crossover does not move with range; it moves with the significand.**
+Swept at nine standoffs — the corpus's own four among them — on the same
+exactly planar lattice Decision 64 used. A Float running sum of a constant `Z`
+stays exact while `k × oddSignificand(Z) < 2²⁴`, so the bound is `2²⁴ / odd`
+and the exponent divides out. 350, 700 and 1400 mm all reduce to odd
+significand **175** and read the crossover at the same count, **95,870**,
+across a 4× range span, which no 1/z law can produce. The bound predicts the
+measured bracket to the rung at **eight of nine** standoffs: 223,696 at 150 mm
+(odd 75), 134,218 at 250 mm (odd 125), 95,870 at 350/700/1400 mm, and 240,
+389 and 164 at the committed ranges 272.949, 336.914 and 399.902 mm, whose
+significands are full. Decision 64's `2²⁴ / 350 ≈ 47,934` is the right form
+read on the wrong quantity, and it is within a factor of two of the truth at
+350 mm for a reason that does not travel: 350 is a short number.
+
+The one exception is recorded rather than smoothed. `1785135663727`'s range,
+**338.867 mm** (odd 43,375), is predicted at 387 and measured at 17,504 — a
+45× miss, and the only committed range that behaves like the round standoffs.
+Past the exactness bound the sum's error is a random walk rather than a
+monotone drift, so it can stay small; what this measurement establishes is
+that the bound is a **floor** on the crossover, not always its location.
+
+**So the ladder cannot place either leg, and the corpus's own sets are asked
+instead.** The lattice holds every sample at exactly the same z, which is a
+set no depth sensor produces — the corpus's per-sample spread is 3.44 mm
+(Decision 29) — and a spread breaks the constant-addend structure the
+exactness bound is about. Subsampling the fallback leg's real final inlier set
+by stride, so the spatial spread is held and only the count moves, a **single
+count separates every reading the corpus produces across all four ranges**:
+quiet up to **581,996** and inflating from **641,694**. Nothing in between
+contradicts it, over a 1.47× range span. That bracket, not 50,000…100,000, is
+what the legs are placed against — and the largest annulus in the corpus is
+12,551 samples, **46× below it**, so extraction's guard is safe by count with
+a margin Decision 64 quoted an order too small.
+
+**And count alone does not set it.** The candidate point set — what
+`collectCandidatePoints` returns, before any inlier test — is LARGER than the
+inlier set drawn from it on every capture and does not inflate:
+`1785901032716` reads **0.9989× at 1,475,580 points** where the 1,298,233-point
+inlier set drawn from it reads **1.2631×**. A 1.14× larger set, a 2.3× thicker
+one, and the inflation goes away. What the inflation tracks is the centroid's
+error **divided by the set's own thickness**, and Decision 64 recorded only the
+numerator. This also narrows its negative "the fallback leg ships with no
+effective degeneracy guard": two of the four committed captures top out at
+581,996 and 282,430 inliers and read 1.0034× and 1.0018×. What is uniform
+across the corpus is that the gate cannot FIRE — four orders below the bar
+everywhere, unchanged. What is not uniform is whether its reading is inflated.
+
+### Alternatives Considered
+
+- **Take the 1/z law as confirmed and record the crossover as a range bound**:
+  the first sweep at 150, 250 and 350 mm returned products of exactly 2²⁵ at
+  all three, which reads as a clean confirmation — Rejected because it is an
+  artefact of the sweep's own window. Those three standoffs share nothing but
+  short significands; widening the window to 2¹⁶…2²⁸ brought in six standoffs
+  the narrow one had silently dropped, and they refute it. Recorded because
+  the near miss is the point: a three-point sweep chosen for round numbers
+  confirms a wrong law.
+- **Attribute the real-depth split to sample count, as Decision 64 does, and
+  stop at the 581,996…641,694 bracket**: the bracket is real and holds across
+  four ranges — Rejected because the candidate-point control disproves the
+  sufficiency directly, and a count-only account would have put the extraction
+  leg's safety on the wrong quantity. The annulus is safe by count *and* is
+  not especially thin; only one of those was measured before.
+- **Repair the centroid in Double now that a second decision has measured its
+  consequences**: `refineDoubleAccumulated` is already written — Rejected on
+  Decisions 52–64's precedent. It changes which candidates survive
+  `try? refine` and moves the shipped plane, which is what Decision 36 prices
+  `fallbackPenalty` against.
+- **Set `stabilityRatioMin` from the corpus ceiling now that the corpus reads
+  at four ranges rather than two**: more evidence, same ceiling — Rejected on
+  Decision 64's third finding, which is untouched here: the statistic does not
+  order the degenerate side at any value, so choosing one asserts that a bar
+  exists.
+
+### Consequences
+
+**Positive:**
+- Decision 64's open negative is discharged, and in the direction that makes
+  the extraction leg's guard *more* clearly safe: 46× of margin on a
+  real-depth count rather than 5× on a synthetic one.
+- The crossover has an exact, checkable law — `2²⁴ / oddSignificand(z)` — that
+  predicts eight of nine standoffs to the rung, where before it had one
+  reading and an arithmetic sketch.
+- The count account is bounded by a control rather than by argument, so any
+  future statement about either leg has to name thinness as well as count.
+- Two of Decision 64's five findings are amended in place, in the source
+  marker as well as here, so the wrong denomination does not outlive it.
+
+**Negative:**
+- The 338.867 mm exception is measured and unexplained: the exactness bound is
+  a floor on the crossover rather than its location, and nothing here says
+  when the random walk keeps the sum small.
+- The real-depth turn is bracketed by only two inflating readings, both at a
+  capture's full inlier count, so its lower half rests on captures that do not
+  reach it rather than on a subsample that does.
+- The thinness half is measured on four control sets and not swept: no aspect
+  ratio has been varied at fixed count, so "error over thickness" is the shape
+  of the account and not yet its form.
+- Still nothing degenerate in the corpus, so Decision 64's fourth negative
+  stands untouched — what happens when the gate *should* fire remains
+  synthetic.
+
+### Impact
+
+`MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (findings 1 and 2 of
+the `stabilityRatioMin` marker, amended),
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theCrossoverIsNotARangeBound`, `CrossoverReading`, `RealDepthReading`,
+`oddSignificand`, `crossover`, and the four sweep constants),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---
+
+## Decision 66: The inflation is the centroid's error over the thickness, in quadrature
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 65 closed with four negatives. Three of them need something the
+corpus does not contain — an explanation for the 338.867 mm exception, a
+subsample that reaches the lower half of the real-depth turn, a degenerate
+capture. The fourth needs nothing: "The thinness half is measured on four
+control sets and not swept: no aspect ratio has been varied at fixed count,
+so 'error over thickness' is the shape of the account and not yet its form."
+
+Those four controls differ from the sets they are compared against in count
+*and* in aspect, so neither variable was ever held while the other moved. This
+is that sweep, in Decision 63's shape: the count held **exactly** — the same
+points, with only their out-of-plane component scaled about their own
+least-squares plane — and the thickness taken over two orders either side.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record the centroid's inflation as a closed form — `√(1 + (δ/σ)²)` — rather
+than as a direction, and re-denominate Decision 65's count bracket in the one
+variable that form has. `stabilityRatioMin` stays `[owed]` and unsettleable on
+Decision 64's third finding, which this does not touch. One of Decision 65's
+findings is confirmed by evidence it did not cite, and its stated evidence for
+that finding is withdrawn. Not repaired, on the same precedent.
+
+### Rationale
+
+Four measurements, in `theInflationIsErrorOverThickness`.
+
+**The form, and it is quadrature rather than a ratio.** An offset centroid
+displaces every centred sample by the same δ along the thin axis, so that
+axis' second moment gains exactly `n·δ²` — the cross term vanishes because the
+exactly-centred coordinates sum to zero — while σ_max is set by the in-plane
+extent and does not move. The ratio the gate compares therefore picks up δ/σ
+**in quadrature**. Swept at eight scales on each of the four committed
+captures, that form predicts the measured inflation to **under 1e-4 relative
+error at all 32 rungs**, where the linear `1 + δ/σ` reading — which is what
+Decision 65's own words imply — is out by up to **41.4%**. On
+`1785901032716`, held at 1,298,233 points throughout: at ×⅛ thickness the set
+reads 6.5470× measured against 6.5470× predicted and a linear 7.4702×; at ×16
+it reads 1.0001× against a linear 1.0157×.
+
+**THICKNESS ENTERS TWICE, and that is what ties the form back to Decision
+65.** δ is not a constant the sweep divides by. It **falls** as the set
+thickens — 3.2×, 5.0×, 18.9× and 21.5× across the four sweeps — because that
+decision's exactness bound is about adding the *same* value repeatedly, and a
+spread is precisely what breaks it. So ×128 of thickness moves δ/σ by
+412–2,750× rather than by 128×, and a thin set is penalised on both axes at
+once.
+
+**The count half is the same law, and its bracket is the corpus's.** Decision
+65's `inflationBar` of 1.01 is δ/σ = **0.1418** in these units. That bar
+classifies all **26** count-sweep rungs identically to the inflation bar —
+**zero disagreements** — so the count account is this law read on one
+variable, with the count entering only through δ. But the 581,996…641,694
+bracket must not be transferred: its two ends are *different captures*, and
+across it the count moves **1.10×** while δ moves **5.09×** and the thickness
+moves 1.21× the other way. Nothing about a capture that is not between those
+two follows from where it sits in that bracket.
+
+**And the extraction leg gets a two-sided number.** Decision 65 closed it with
+"only the count half protects it". In the deciding quantity the annulus reads
+δ/σ = 0.001195, 0.000004, 0.001461 and 0.000475 against the 0.1418 bar —
+**97× to 39,903× of margin**, the weakest on `1786450130307`.
+
+**Decision 65's control is confounded, and its conclusion survives on a
+capture it does not cite.** That decision separated count from thinness with
+the candidate point set: larger than the inlier set drawn from it, thicker,
+and quiet. Read with δ measured, the control moves on both axes. On the
+capture it quotes, `1785901032716` — "a 1.14× larger set, a 2.3× thicker one,
+and the inflation goes away" — δ falls **7.4×** where the thickness rises
+**2.16×**, so most of that reading is the numerator. The conclusion is right
+anyway, and `1786450130307` is why: its candidate set carries **11× the
+centroid error** of its inlier set, is 7.90× thicker, and is still quiet at
+1.0040×. That is the only reading in the corpus where the two axes oppose, so
+it is the only one that isolates the thickness half at all.
+
+### Alternatives Considered
+
+- **Take Decision 65's phrase at face value and record the inflation as
+  proportional to δ/σ**: it is the reading its own sentence implies, and it
+  gets the direction and both limits right — Rejected because the sweep
+  refutes it at 41.4% while the quadrature form is exact to 1e-4. Recorded
+  because the two are indistinguishable at the four natural-thickness rungs
+  Decision 65 had, which is why a sweep was needed to separate them.
+- **Sweep the synthetic lattice's thickness instead**, which
+  `theStabilityGateIsBelowTheResolutionOfItsOwnInput` already does at a fixed
+  200,000 points — Rejected because the lattice holds every sample at exactly
+  one z, and Decision 65 established that a lattice reading is a property of
+  that standoff's significand. It cannot place a real set, which is the whole
+  reason that decision turned to the corpus's own sets.
+- **Set `stabilityRatioMin` now that the mechanism has a closed form**: the
+  form says exactly how much of any reading is arithmetic, so a bar could be
+  set on the corrected quantity — Rejected on Decision 64's third finding,
+  untouched here: σ_min/σ_max does not order the degenerate side at any value,
+  and a form for the *inflation* is not a bar for *degeneracy*.
+- **Repair the centroid in Double, now that a third decision has measured its
+  consequences**: `refineDoubleAccumulated` is written and the form prices the
+  repair exactly — Rejected on Decisions 52–65's precedent. It changes which
+  candidates survive `try? refine` and moves the shipped plane, which is what
+  Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- The account is a form that can be checked at any rung rather than a
+  direction, and it is exact: 1e-4 relative over 32 rungs against a linear
+  reading's 41.4%.
+- The two halves Decisions 64 and 65 measured separately are one law with one
+  variable, so a future statement about either leg has one quantity to name.
+- The extraction leg's safety is stated in the quantity that decides — 97×
+  minimum — instead of in a count bracket that does not transfer.
+- Decision 65's control is corrected rather than inherited, and its conclusion
+  ends up better evidenced than it was: the one capture where the axes oppose
+  isolates the thickness half outright.
+
+**Negative:**
+- δ itself has no form. It wanders with count and with scale — 0.0070 mm at ×8
+  against 0.0503 mm at ×16 on `1785135663727` — so the law is only as
+  predictive as the δ it is handed, and δ must still be measured per set.
+- The thinness half now rests on ONE unconfounded corpus reading
+  (`1786450130307`'s candidate set) plus the synthetic sweep. Three of the
+  four controls have both axes pulling the same way.
+- The form is measured on inlier and candidate sets from four captures in one
+  confidence state, and the aspect knob is a rescaling rather than a different
+  scene, so it varies thickness without varying what produced it.
+- Decision 64's fourth negative stands untouched: nothing in the corpus is
+  degenerate, so what happens when the gate *should* fire is still synthetic.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theInflationIsErrorOverThickness`, `AspectReading`, `floatCentroid`,
+`rescaledThickness`, `aspectReading`, `aspectScaleSweep`,
+`inflationRatioBar`), `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift`
+(findings 1 and 2 of the `stabilityRatioMin` marker, re-denominated),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---

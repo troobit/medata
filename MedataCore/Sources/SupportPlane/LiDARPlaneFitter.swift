@@ -190,18 +190,36 @@ public enum LiDARPlaneFitter {
     // it finds the gate reading a quantity that cannot answer the question. Five things that
     // decision measured and this comment must not lose:
     //
-    // 1. It is DISABLED BY SAMPLE COUNT, and the two legs sit either side. On an exactly
-    //    planar set — σ_min zero by construction — the gate refuses up to 50,000 samples and
-    //    ADMITS from 100,000. Extraction refines annulus sets of 1,752-9,087 and the gate
-    //    works there; the fallback leg refines colour-grid sets of 641,694 and 1,298,233 and
-    //    it does not. Nothing distinguishes the two but how many samples each hands here.
+    // 1. It is DISABLED BY SAMPLE COUNT, and the two legs sit either side. Extraction
+    //    refines annulus sets bounded at 5,276-12,551 and the gate's reading is exact
+    //    there; the fallback leg refines colour-grid sets of 282,430-1,298,233 and on the
+    //    two largest it is not. AMENDED BY DECISION 65: the synthetic "refuses up to
+    //    50,000, admits from 100,000" is a reading at the NUMBER 350, not at a 350 mm
+    //    standoff — on an exactly planar set the crossover is 2^24 / oddSignificand(z), so
+    //    350, 700 and 1400 mm share it exactly and a real capture's 336.9 mm crosses at
+    //    389. The corpus's own turn is at 581,996…641,694 real-depth samples, 46× above
+    //    the largest annulus, and COUNT ALONE DOES NOT SET IT: a 1,475,580-point candidate
+    //    set reads 0.9989× where the 1,298,233-point inlier set drawn from it reads
+    //    1.2631×, because the inlier set is the thinner of the two. RE-DENOMINATED BY
+    //    DECISION 66: neither count nor thickness is the variable — δ/σ is, and the count
+    //    enters only through δ. That bracket is the corpus's and not the law's, since
+    //    across it the count moves 1.10× while δ moves 5.09×. In the deciding quantity the
+    //    annulus clears the bar by 97-39,903×, not by a count.
     // 2. The cause is the CENTROID, not the normal-equations squaring. Accumulating the
     //    scatter and the decomposition in Double while keeping the shipped Float centroid
     //    reproduces the shipped reading on every rung. An offset centroid displaces every
-    //    centred sample by a constant, and a constant displacement is indistinguishable from
-    //    THICKNESS along the thin axis — so Decision 58's defect manufactures the very
-    //    conditioning this gate then reads as healthy. On the corpus: 1.0001× inflation on
-    //    the extraction sets, 1.0752× and 1.2631× on the two fallback sets.
+    //    centred sample by the SAME δ along the thin axis, so that axis' second moment
+    //    gains exactly n·δ² while σ_max does not move — so Decision 58's defect manufactures
+    //    the very conditioning this gate then reads as healthy. DECISION 66 measures the
+    //    form: the reading is inflated by √(1 + (δ/σ)²), σ being the set's own RMS thickness
+    //    about its least-squares plane, exact to 1e-4 relative over 32 rungs where a linear
+    //    δ/σ account is out by 41%. On the corpus: 1.0001× inflation on the extraction sets,
+    //    1.0752× and 1.2631× on the two largest fallback sets — and 1.0034× and 1.0018× on
+    //    the two smaller ones, which is Decision 65's correction to "the fallback leg ships
+    //    with no effective degeneracy guard": what is uniform is that the gate cannot FIRE,
+    //    not that its reading is inflated. Thickness enters TWICE — δ itself falls 3.2-21.5×
+    //    as a set thickens, because the exactness bound in (1) is about adding the same
+    //    value repeatedly and a spread is what breaks that.
     // 3. σ_min/σ_max IS NOT THE RANK DISCRIMINANT. An exactly planar set (the plane is
     //    exact) and a collinear one (no plane exists) both drive it to zero — measured at
     //    9.5e-9 and 0.0. What separates them is σ_2/σ_max, 0.99999 against 0.0, which this

@@ -9987,6 +9987,707 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(big > 1.05 && small < 1.01, "\(notSplit)")
     }
 
+    // MARK: - The crossover is not a range bound (Decision 65)
+
+    // Where the gate stops refusing an exactly planar set at one standoff.
+    struct CrossoverReading {
+        let standoffMm: Double
+        // The largest swept count at which the gate still refuses, and the smallest count
+        // ABOVE it at which it admits. The crossover lies in between; the grid is
+        // quarter-octave, so the bracket is 19 % wide.
+        let lastRefusalN: Int
+        let firstAdmitN: Int
+        // What Decision 64's account predicts: a Float running sum of a constant Z stays
+        // exact while k x oddSignificand(Z) < 2^24, so the bound is a property of Z's
+        // REPRESENTATION and carries its magnitude only through the exponent, which
+        // divides out. Decision 64 read it as 2^24 / z, which is the same number at
+        // z = 350 for a reason that does not generalise.
+        var exactnessBoundN: Double {
+            let odd = SupportPlaneCorpusMeasurementTests.oddSignificand(Float(standoffMm))
+            return odd > 0 ? exp2(24) / Double(odd) : .infinity
+        }
+    }
+
+    // The odd part of a Float's significand: the significand with its trailing zero bits
+    // stripped. `k x Z` is exactly representable while `k x oddSignificand(Z) < 2^24`, so
+    // this is how many times Z can be added to a running Float sum before the sum rounds.
+    static func oddSignificand(_ x: Float) -> Int {
+        guard x.isNormal else { return 0 }
+        var m = Int(x.significandBitPattern) | (1 << 23)
+        while m.isMultiple(of: 2) { m /= 2 }
+        return m
+    }
+
+    // The lever arm, in round numbers. The four committed slices' own measured ranges are
+    // appended at run time, so the corpus is read where it sits rather than at a rounding
+    // of it — and the contrast between the two lists is the finding.
+    static let crossoverStandoffMm: [Double] = [150, 250, 350, 700, 1400]
+
+    // The count grid, laid out on a PRODUCT so that a constant n·z would put every
+    // standoff's crossover on the same rung. Quarter-octave steps over 2^16...2^28, wide
+    // enough to bracket the crossover at every standoff below rather than assuming where
+    // it is: Decision 64's own window would have missed six of the nine.
+    static let crossoverProductSweep: [Double] = (0...48).map { exp2(16 + Double($0) / 4) }
+
+    // Counts the real-depth sets are subsampled to. Spans the extraction leg's sets
+    // (1,752...9,087 inliers on an annulus of 5,276...12,551) and the fallback leg's
+    // (434,542...1,475,580 candidate points), because the whole question is where between
+    // them the arithmetic gives way.
+    static let realDepthCountSweep = [1_000, 3_000, 10_000, 30_000, 100_000, 300_000, 1_000_000]
+
+    // Decision 64's own bar for "materially inflated": its fifth finding asserts the
+    // extraction sets read under 1.01x and the fallback sets over 1.05x.
+    static let inflationBar = 1.01
+
+    // The crossover at one standoff, swept on an exactly planar set — sigma_min is zero by
+    // construction, so any reading above zero is the arithmetic's. `firstAdmitN` is reset
+    // by a later refusal, so what comes back is the first admission after the LAST refusal
+    // rather than the first admission outright.
+    static func crossover(standoffMm: Double) -> CrossoverReading? {
+        var lastRefusalN: Int?
+        var firstAdmitN: Int?
+        for product in Self.crossoverProductSweep {
+            let n = Int((product / standoffMm).rounded())
+            guard n >= LiDARPlaneFitter.minPoints else { continue }
+            let set = Self.lattice(n: n, extentMm: (200, 200, 0), standoffMm: standoffMm)
+            guard let r = Self.stabilityReading("n = \(n)", inliers: set) else { continue }
+            if r.refuses {
+                lastRefusalN = n
+                firstAdmitN = nil
+            } else if firstAdmitN == nil {
+                firstAdmitN = n
+            }
+        }
+        guard let low = lastRefusalN, let high = firstAdmitN else { return nil }
+        return CrossoverReading(standoffMm: standoffMm, lastRefusalN: low, firstAdmitN: high)
+    }
+
+    // One real-depth set, subsampled to a count, read through the shipped gate.
+    struct RealDepthReading {
+        let name: String
+        let rangeMm: Double
+        let n: Int
+        let reading: StabilityReading
+        var inflation: Double { reading.exact > 0 ? Double(reading.shipped) / reading.exact : 1 }
+    }
+
+    // Decision 65. Decision 64 closed with a negative it could not discharge itself: "The
+    // crossover is range-dependent and only one standoff has been measured, so the
+    // 50,000...100,000 bracket carries the qualifier Decision 62 introduced."
+    //
+    // This is that discharge, and it comes back as a correction rather than a confirmation.
+    // The crossover is measured at nine standoffs — the corpus's own four among them —
+    // and it does not move with range at all. It moves with the standoff's Float
+    // SIGNIFICAND, which is why 350, 700 and 1400 mm read the same count and 336.9 mm
+    // reads a hundredth of it. So the qualifier Decision 62 introduced is the wrong
+    // qualifier, and the synthetic ladder cannot say which side of the crossover either
+    // leg sits on. The corpus's own sets are asked instead.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63
+    // widened `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("the crossover is set by the standoff's significand, and the corpus's own sets are what place the legs")
+    func theCrossoverIsNotARangeBound() throws {
+        // MARK: THE FIRST FINDING — the crossover is a property of the NUMBER, not the range.
+
+        // Every committed slice's own range, so the corpus is read where it sits.
+        var corpusRanges: [(name: String, rangeMm: Double)] = []
+        for name in Self.captures + Self.rangeCaptures {
+            let g = try #require(Self.geometry(name))
+            corpusRanges.append((name, Double(g.mmPerPx * g.intrinsics.fx)))
+        }
+        let standoffs = (Self.crossoverStandoffMm + corpusRanges.map(\.rangeMm)).sorted()
+
+        print("=== the crossover, swept over standoff ===")
+        var crossings: [Double: CrossoverReading] = [:]
+        for z in standoffs {
+            guard let r = Self.crossover(standoffMm: z) else {
+                print("  standoff \(fmt(Float(z))) mm: no crossover inside the swept window")
+                continue
+            }
+            crossings[z] = r
+            print("  standoff \(fmt(Float(z))) mm: odd significand"
+                  + " \(Self.oddSignificand(Float(z))), refuses up to n = \(r.lastRefusalN),"
+                  + " admits from n = \(r.firstAdmitN); 2^24 / odd ="
+                  + " \(fmt(Float(r.exactnessBoundN)))")
+        }
+        let lost = "the crossover has stopped being bracketed at one or more standoffs, so"
+            + " the sweep no longer straddles it and the window needs widening"
+        #expect(crossings.count == standoffs.count, "\(lost)")
+
+        // It does NOT move with range. 350, 700 and 1400 mm are 2, 4 and 8 times one
+        // odd significand — 175 — so they share an exactness bound exactly, and the
+        // measured crossover is the same count at all three across a 4x range span. A 1/z
+        // law cannot produce that, and this is the negative discharged: Decision 64's
+        // bracket is not range-dependent, it is 350-dependent.
+        let ladder = [350.0, 700.0, 1400.0].compactMap { crossings[$0] }
+        print("350 / 700 / 1400 mm share odd significand"
+              + " \(Self.oddSignificand(350)) and read crossovers"
+              + " \(ladder.map(\.lastRefusalN))")
+        let moves = "the crossover count now differs across 350, 700 and 1400 mm, which"
+            + " share a significand, so it is not the significand that sets it"
+        #expect(ladder.count == 3 && Set(ladder.map(\.lastRefusalN)).count == 1, "\(moves)")
+
+        // And the exactness bound predicts the crossover to the rung. `k x Z` rounds once
+        // `k x oddSignificand(Z)` passes 2^24, so the bound is 2^24 / odd — 223,696 at
+        // 150 mm, 95,870 at 350, 700 and 1400 mm, and 164 at 399.9 mm, where the
+        // significand is full. Eight of the nine land inside their own measured bracket.
+        let predicted = standoffs.compactMap { crossings[$0] }.filter {
+            $0.exactnessBoundN >= Double($0.lastRefusalN) / 1.05
+                && $0.exactnessBoundN <= Double($0.firstAdmitN)
+        }
+        let missed = standoffs.compactMap { crossings[$0] }
+            .filter { r in !predicted.contains { $0.standoffMm == r.standoffMm } }
+        let exceptions = missed.map { r -> String in
+            let z = fmt(Float(r.standoffMm))
+            let bound = fmt(Float(r.exactnessBoundN))
+            return "\(z) mm (predicted \(bound), measured \(r.lastRefusalN))"
+        }
+        print("the exactness bound predicts \(predicted.count) of \(crossings.count)"
+              + " standoffs to the rung; the exceptions are"
+              + " \(exceptions.joined(separator: ", "))")
+        let unpredicted = "the exactness bound no longer predicts at least eight of the"
+            + " nine standoffs, so the account of the mechanism does not fit and the"
+            + " crossover is set by something this measurement has not identified"
+        #expect(predicted.count >= crossings.count - 1, "\(unpredicted)")
+
+        // The corpus's four ranges are not round numbers — a range is `mmPerPx x fx`, so it
+        // carries a full significand — and their crossovers are two to three orders lower.
+        // Whatever the ladder says about where a leg sits, it says it at a count that is a
+        // property of the arithmetic of the standoff and of nothing physical.
+        let committed = corpusRanges.compactMap { crossings[$0.rangeMm] }
+        let round = Self.crossoverStandoffMm.compactMap { crossings[$0] }
+        let committedTop = try #require(committed.map(\.lastRefusalN).max())
+        let roundBottom = try #require(round.map(\.lastRefusalN).min())
+        print("the four committed ranges cross at \(committed.map(\.lastRefusalN)) against"
+              + " \(round.map(\.lastRefusalN)) at the round standoffs")
+        let comparable = "the committed ranges now cross within a factor of four of the"
+            + " round standoffs, so the significand no longer separates them and the"
+            + " synthetic ladder can be read as a range measurement after all"
+        #expect(committedTop * 4 < roundBottom, "\(comparable)")
+
+        // MARK: THE SECOND FINDING — so the corpus's own sets are asked instead.
+
+        // The ladder holds every sample at exactly the same z, which is a set no depth
+        // sensor produces: the corpus's per-sample spread is 3.44 mm (Decision 29), and a
+        // spread breaks the constant-addend structure the exactness bound is about. These
+        // are the sets the fallback leg actually refines — its final inlier set, the one
+        // Decision 64's fifth finding read — subsampled by stride so the spatial spread is
+        // held and only the COUNT moves. The candidate point set is carried alongside as
+        // the control: it is LARGER than the inlier set and it is not thin.
+        print("=== the corpus's own fallback sets, subsampled by count ===")
+        var realDepth: [RealDepthReading] = []
+        var controls: [RealDepthReading] = []
+        for (name, rangeMm) in corpusRanges {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            if let r = Self.stabilityReading("\(name) candidate points",
+                                             inliers: points) {
+                controls.append(RealDepthReading(name: name, rangeMm: rangeMm,
+                                                 n: points.count, reading: r))
+            }
+
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+            let targets = Self.realDepthCountSweep.filter { $0 < inliers.count } + [inliers.count]
+            var seen: Set<Int> = []
+            for target in targets {
+                let step = Swift.max(1, inliers.count / target)
+                let subset = Swift.stride(from: 0, to: inliers.count, by: step).map { inliers[$0] }
+                guard seen.insert(subset.count).inserted else { continue }
+                guard let r = Self.stabilityReading("\(name) n = \(subset.count)",
+                                                    inliers: subset) else { continue }
+                realDepth.append(RealDepthReading(name: name, rangeMm: rangeMm,
+                                                  n: subset.count, reading: r))
+            }
+        }
+        for r in realDepth {
+            print("  \(r.name) at \(fmt(Float(r.rangeMm))) mm, n = \(r.n): shipped"
+                  + " \(r.reading.shipped), exact \(fmt(Float(r.reading.exact))),"
+                  + " inflation \(String(format: "%.4f", r.inflation))x,"
+                  + " gate \(r.reading.refuses ? "REFUSES" : "admits")")
+        }
+        let thin = "the corpus no longer yields a real-depth reading at every swept count"
+        #expect(realDepth.count >= 4 * Self.realDepthCountSweep.count / 2, "\(thin)")
+
+        // MARK: THE THIRD FINDING — the split is count AND aspect, not count alone.
+
+        // Decision 64's fifth finding is the one that rests on real depth: the centroid's
+        // inflation is 1.0001x on the extraction sets and 1.0752x/1.2631x on the fallback
+        // ones, "the same split as the synthetic sweep, on real depth". Subsampled across
+        // four ranges, a SINGLE count separates every reading the corpus produces — the
+        // largest quiet set and the smallest inflating one bracket it, and nothing in
+        // between contradicts. That bracket, not the ladder's 50,000...100,000, is what
+        // the two legs have to be placed against.
+        let inflating = realDepth.filter { $0.inflation >= Self.inflationBar }
+        let quiet = realDepth.filter { $0.inflation < Self.inflationBar }
+        let turnLow = try #require(quiet.map(\.n).max())
+        let turnHigh = try #require(inflating.map(\.n).min())
+        print("the inflation turns between n = \(turnLow) and n = \(turnHigh);"
+              + " inflating sets \(inflating.map { "\($0.name) \($0.n)" }),"
+              + " quiet up to \(quiet.map(\.n).max() ?? 0)")
+        let contradicted = "a quiet set is now larger than an inflating one, so no single"
+            + " count separates the corpus's four ranges and the turn is not a count"
+        #expect(turnLow < turnHigh, "\(contradicted)")
+
+        // Two of the four captures never reach it. `1786450130307` and `1786439141215`
+        // top out at 581,996 and 282,430 inliers and read 1.0034x and 1.0018x, so
+        // Decision 64's "the fallback leg ships with no effective degeneracy guard" is
+        // narrower than it reads: what is uniform across the corpus is that the gate
+        // cannot FIRE (four orders below the bar everywhere); what is not uniform is the
+        // centroid's inflation, which half the committed captures sit under.
+        for (name, rangeMm) in corpusRanges {
+            let largest = realDepth.filter { $0.name == name }.max { $0.n < $1.n }
+            guard let largest else { continue }
+            print("  \(name) at \(fmt(Float(rangeMm))) mm: largest inlier set \(largest.n),"
+                  + " inflation \(String(format: "%.4f", largest.inflation))x —"
+                  + " \(largest.inflation >= Self.inflationBar ? "over" : "under") the turn")
+        }
+
+        // And the control says the count is not sufficient. The candidate point set is
+        // LARGER than the inlier set drawn from it on every capture, and it does not
+        // inflate — because it is not thin: it carries the whole scene's relief, so the
+        // ratio the gate reads is an order above the inlier set's and the centroid's error
+        // is small against it. What the inflation tracks is the error divided by the
+        // set's own thickness, and Decision 64 recorded only the numerator.
+        print("=== the control: a LARGER set that does not inflate ===")
+        for c in controls {
+            print("  \(c.name) candidate points, n = \(c.n): exact \(fmt(Float(c.reading.exact))),"
+                  + " inflation \(String(format: "%.4f", c.inflation))x")
+        }
+        let sameSide = "the candidate point sets now inflate like the inlier sets they"
+            + " contain, so thinness is not what separates them and the count account is"
+            + " sufficient after all"
+        #expect(controls.allSatisfy { $0.inflation < Self.inflationBar }, "\(sameSide)")
+        for c in controls {
+            let biggest = realDepth.filter { $0.name == c.name }.map(\.n).max() ?? 0
+            let notLarger = "\(c.name)'s candidate point set is no longer larger than the"
+                + " inlier set drawn from it, so the control does not separate count from"
+                + " thinness"
+            #expect(c.n > biggest, "\(notLarger)")
+            let notThicker = "\(c.name)'s candidate point set is no longer thicker than"
+                + " its inlier set, so the aspect account has nothing to stand on"
+            let thinnest = realDepth.filter { $0.name == c.name }.map(\.reading.exact).min() ?? 0
+            #expect(c.reading.exact > thinnest * 2, "\(notThicker)")
+        }
+
+        // What survives for the extraction leg, and it is now a two-sided statement. Its
+        // bound is the ANNULUS — `extractCandidates` refines subsets of it and can never
+        // refine more — and the annulus is both under the turning count AND thicker than
+        // nothing in particular, so only the count half protects it.
+        var annulusCounts: [(name: String, n: Int)] = []
+        for (name, _) in corpusRanges {
+            let g = try #require(Self.geometry(name))
+            annulusCounts.append((name, SupportRegion.ringSamples(geometry: g).annulus.count))
+        }
+        let largestAnnulus = try #require(annulusCounts.map(\.n).max())
+        print("the annulus tops out at \(largestAnnulus) samples"
+              + " \(annulusCounts.map { "\($0.name) \($0.n)" }); the turn is at"
+              + " \(turnLow)...\(turnHigh), a factor of"
+              + " \(fmt(Float(Double(turnLow) / Double(largestAnnulus)))) above it")
+        let reaches = "the extraction leg's own annulus has come within a factor of ten of"
+            + " the count at which the centroid's inflation turns, so its degeneracy guard"
+            + " is no longer safe by count at the corpus's real ranges"
+        #expect(largestAnnulus * 10 < turnLow, "\(reaches)")
+    }
+
+    // MARK: - The inflation is error over thickness, in quadrature (Decision 66)
+
+    // One reading of the centroid's effect on the gate, with BOTH quantities the account
+    // names measured rather than inferred: the Float centroid's displacement along the thin
+    // axis, and the set's own RMS thickness about its least-squares plane.
+    struct AspectReading {
+        let name: String
+        let scale: Double            // what the out-of-plane component was multiplied by
+        let n: Int
+        let thicknessMm: Double      // RMS distance to the least-squares plane, in Double
+        let centroidErrorMm: Double  // |n̂ · (Float centroid − Double centroid)|
+        let tiltDeg: Float           // this set's thin axis against the unscaled set's
+        let reading: StabilityReading
+
+        // What the shipped gate reads divided by what the set carries — Decision 65's
+        // `inflation`, so the two decisions are stated on the same quantity.
+        var inflation: Double { reading.exact > 0 ? Double(reading.shipped) / reading.exact : 1 }
+        // The same ratio with the SCATTER accumulated in Double, so only the centroid is
+        // left. Decision 64 measured that these agree; the form is stated on this one
+        // because it is the one the account is about.
+        var centroidOnly: Double { reading.exact > 0 ? reading.doubleScatter / reading.exact : 1 }
+        // The account's own variable: error over thickness.
+        var ratio: Double { thicknessMm > 0 ? centroidErrorMm / thicknessMm : .infinity }
+        // THE FORM. An offset centroid displaces every centred sample by the same δ along
+        // the thin axis, so that axis' second moment gains exactly n·δ² — the cross term
+        // vanishes because the exactly-centred coordinates sum to zero. σ_max is set by the
+        // in-plane extent and does not move. So the ratio the gate compares picks up δ/σ in
+        // QUADRATURE, not linearly, and the difference between those two is the finding.
+        var predicted: Double { (1 + ratio * ratio).squareRoot() }
+        // Decision 65's phrase — "the error divided by the set's own thickness" — read as
+        // the arithmetic it sounds like, carried so the sweep can refute it.
+        var predictedLinear: Double { 1 + ratio }
+    }
+
+    // The centroid `LiDARPlaneFitter.refine` computes: three Float `reduce(0, +)` sums.
+    static func floatCentroid(_ points: [Vec3]) -> Vec3 {
+        let n = Float(points.count)
+        return Vec3(points.map { $0.x }.reduce(0, +) / n,
+                    points.map { $0.y }.reduce(0, +) / n,
+                    points.map { $0.z }.reduce(0, +) / n)
+    }
+
+    // The same set with its out-of-plane component multiplied and everything else held: the
+    // COUNT is exact, the in-plane geometry is exact, and only the thickness moves. This is
+    // the knob Decision 65 left unswept — its four control sets differ in count as well as
+    // in aspect, so neither could be held while the other was read.
+    static func rescaledThickness(_ points: [Vec3], normal: Vec3, d: Float,
+                                  scale: Double) -> [Vec3] {
+        let k = Float(scale - 1)
+        return points.map { p in p + normal * (k * (normal.dot(p) - d)) }
+    }
+
+    static func aspectReading(_ name: String, scale: Double, points: [Vec3],
+                              seedNormal: Vec3, reference: Vec3?) -> AspectReading? {
+        guard let exact = Self.refineDoubleAccumulated(inliers: points, seedNormal: seedNormal),
+              let r = Self.stabilityReading("\(name) x\(scale)", inliers: points)
+        else { return nil }
+        var ex = 0.0, ey = 0.0, ez = 0.0
+        for p in points { ex += Double(p.x); ey += Double(p.y); ez += Double(p.z) }
+        let n = Double(points.count)
+        ex /= n; ey /= n; ez /= n
+        let c = Self.floatCentroid(points)
+        let dx = Double(c.x) - ex, dy = Double(c.y) - ey, dz = Double(c.z) - ez
+        let delta = abs(Double(exact.0.x) * dx + Double(exact.0.y) * dy + Double(exact.0.z) * dz)
+        return AspectReading(
+            name: name, scale: scale, n: points.count,
+            thicknessMm: Double(Self.rmsDouble(points, normal: exact.0, d: exact.1)),
+            centroidErrorMm: delta,
+            tiltDeg: Self.angleDeg(exact.0, reference ?? exact.0),
+            reading: r)
+    }
+
+    // Out-of-plane scale factors, at FIXED count. Two orders of thickness either side of
+    // what the fallback leg's own inlier sets carry: at ×⅛ a 5 mm band reads a surface
+    // flatter than the corpus's own per-sample noise, at ×16 it reads a mound.
+    static let aspectScaleSweep: [Double] = [0.125, 0.25, 0.5, 1, 2, 4, 8, 16]
+
+    // Decision 65's `inflationBar` in the form's own units: an inflation of 1.01 is
+    // δ/σ = √(1.01² − 1). Derived from the bar rather than a second number.
+    static var inflationRatioBar: Double {
+        (Self.inflationBar * Self.inflationBar - 1).squareRoot()
+    }
+
+    // Decision 66. Decision 65 closed with three negatives; this discharges the one that
+    // needs no capture: "The thinness half is measured on four control sets and not swept:
+    // no aspect ratio has been varied at fixed count, so 'error over thickness' is the
+    // shape of the account and not yet its form."
+    //
+    // The four controls differ in count AND in aspect, so neither could be held while the
+    // other moved. Here the count is held EXACTLY — the same points, with only their
+    // out-of-plane component scaled — and the thickness is swept over two orders either
+    // side. What comes back is a closed form rather than a direction, and it is not the
+    // arithmetic Decision 65's own words imply.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63
+    // widened `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("the centroid's inflation is its error over the set's thickness, in quadrature")
+    func theInflationIsErrorOverThickness() throws {
+        var corpusRanges: [(name: String, rangeMm: Double)] = []
+        for name in Self.captures + Self.rangeCaptures {
+            let g = try #require(Self.geometry(name))
+            corpusRanges.append((name, Double(g.mmPerPx * g.intrinsics.fx)))
+        }
+
+        // MARK: THE FIRST FINDING — the form, swept at fixed count.
+
+        print("=== the aspect sweep: the same sets, the same counts, thinner and thicker ===")
+        var aspects: [AspectReading] = []
+        var natural: [String: AspectReading] = [:]
+        var countSweep: [AspectReading] = []
+        var candidateSets: [String: AspectReading] = [:]
+        for (name, rangeMm) in corpusRanges {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+            let plane = residual.leastSquares
+
+            // Decision 65's control, in these units. It read the candidate point set as
+            // "larger and thicker and it does not inflate" and attributed that to the
+            // thickness; with δ measured the attribution can be checked rather than argued.
+            candidateSets[name] = Self.aspectReading(name, scale: 1, points: points,
+                                                     seedNormal: plane.0, reference: nil)
+
+            print("--- \(name) at \(fmt(Float(rangeMm))) mm, n = \(inliers.count) held fixed ---")
+            for scale in Self.aspectScaleSweep {
+                let scaled = scale == 1 ? inliers
+                    : Self.rescaledThickness(inliers, normal: plane.0, d: plane.1, scale: scale)
+                guard let r = Self.aspectReading(name, scale: scale, points: scaled,
+                                                 seedNormal: plane.0, reference: plane.0)
+                else { continue }
+                aspects.append(r)
+                if scale == 1 { natural[name] = r }
+                print("  ×\(scale): thickness \(String(format: "%.4f", r.thicknessMm)) mm,"
+                      + " δ \(String(format: "%.4f", r.centroidErrorMm)) mm,"
+                      + " δ/σ \(String(format: "%.4f", r.ratio)),"
+                      + " measured \(String(format: "%.4f", r.centroidOnly))×,"
+                      + " quadrature \(String(format: "%.4f", r.predicted))×,"
+                      + " linear \(String(format: "%.4f", r.predictedLinear))×,"
+                      + " shipped \(String(format: "%.4f", r.inflation))×,"
+                      + " tilt \(fmt(r.tiltDeg))°")
+            }
+
+            // The count half, re-read in the same units, so the two are one measurement.
+            let targets = Self.realDepthCountSweep.filter { $0 < inliers.count } + [inliers.count]
+            var seen: Set<Int> = []
+            for target in targets {
+                let step = Swift.max(1, inliers.count / target)
+                let subset = Swift.stride(from: 0, to: inliers.count, by: step).map { inliers[$0] }
+                guard seen.insert(subset.count).inserted else { continue }
+                guard let r = Self.aspectReading(name, scale: 1, points: subset,
+                                                 seedNormal: plane.0, reference: plane.0)
+                else { continue }
+                countSweep.append(r)
+            }
+        }
+        let missing = "the aspect sweep no longer produces a reading at every rung on every"
+            + " committed capture, so the form is read on a corpus that has changed"
+        #expect(aspects.count == Self.aspectScaleSweep.count * corpusRanges.count, "\(missing)")
+
+        // The thin axis has to STAY the thin axis for the sweep to be about thickness at
+        // all. `refineDoubleAccumulated` takes the smallest singular vector unconditionally,
+        // so an eigen-ordering flip would show up as a large tilt rather than as a quiet
+        // wrong answer.
+        let worstTilt = aspects.map(\.tiltDeg).max() ?? 0
+        print("the thin axis moves at most \(fmt(worstTilt))° across the whole sweep")
+        let flipped = "the scaled sets' thin axis has moved off the unscaled set's, so at"
+            + " some rung the out-of-plane direction is no longer the smallest and the"
+            + " sweep has stopped being a thickness sweep"
+        #expect(worstTilt < 5, "\(flipped)")
+
+        // THE FORM. Quadrature against linear, over every rung of every capture.
+        func worstError(_ readings: [AspectReading],
+                        _ model: (AspectReading) -> Double) -> Double {
+            readings.map { abs(model($0) - $0.centroidOnly) / $0.centroidOnly }.max() ?? 0
+        }
+        let quadratureError = worstError(aspects) { $0.predicted }
+        let linearError = worstError(aspects) { $0.predictedLinear }
+        print("worst relative error over \(aspects.count) rungs:"
+              + " quadrature \(String(format: "%.4f", quadratureError)),"
+              + " linear \(String(format: "%.4f", linearError))")
+        let notQuadrature = "the quadrature form no longer predicts the measured inflation"
+            + " across the aspect sweep, so δ/σ is not what the centroid's error does to"
+            + " the gate and Decision 66's account is wrong"
+        #expect(quadratureError < 0.02, "\(notQuadrature)")
+        let indistinguishable = "the linear reading now predicts as well as the quadrature"
+            + " one, so the sweep no longer separates them and the form is not established"
+        #expect(linearError > quadratureError * 4, "\(indistinguishable)")
+
+        // THICKNESS ENTERS TWICE, and this is what ties the form back to Decision 65's
+        // exactness bound. δ is not a constant the sweep divides by: it FALLS as the set
+        // thickens, because the bound is about adding the SAME value repeatedly and a
+        // spread is what breaks that. So δ/σ moves faster than 1/σ does, and a thin set is
+        // penalised on both axes at once.
+        for (name, _) in corpusRanges {
+            let rungs = aspects.filter { $0.name == name }.sorted { $0.scale < $1.scale }
+            guard let thinnest = rungs.first, let thickest = rungs.last else { continue }
+            let byThickness = thickest.thicknessMm / thinnest.thicknessMm
+            let byRatio = thinnest.ratio / thickest.ratio
+            print("  \(name): ×\(byThickness.rounded()) of thickness moves δ/σ"
+                  + " \(String(format: "%.0f", byRatio))×, so δ itself falls"
+                  + " \(String(format: "%.1f", byRatio / byThickness))× across the sweep")
+            let onlyDenominator = "\(name)'s δ no longer falls as the set thickens, so"
+                + " thickness enters the form once rather than twice and the link to"
+                + " Decision 65's constant-addend bound is broken"
+            #expect(byRatio > byThickness * 1.5, "\(onlyDenominator)")
+        }
+
+        // MARK: THE SECOND FINDING — the count half is the same law, with δ as its carrier.
+
+        // Decision 65 placed the two legs against a count bracket. Read in these units the
+        // count enters ONLY through δ: subsampling by stride holds the thickness and moves
+        // the error, so one bar in δ/σ has to reproduce the turn that decision measured.
+        let bar = Self.inflationRatioBar
+        print("=== the count sweep, in the form's units (bar δ/σ = \(String(format: "%.4f", bar))) ===")
+        for r in countSweep.sorted(by: { $0.n < $1.n }) {
+            print("  \(r.name) n = \(r.n): thickness \(String(format: "%.4f", r.thicknessMm)) mm,"
+                  + " δ \(String(format: "%.4f", r.centroidErrorMm)) mm,"
+                  + " δ/σ \(String(format: "%.4f", r.ratio)),"
+                  + " measured \(String(format: "%.4f", r.centroidOnly))×")
+        }
+        let over = countSweep.filter { $0.ratio >= bar }
+        let under = countSweep.filter { $0.ratio < bar }
+        let disagreeing = countSweep.filter {
+            ($0.ratio >= bar) != ($0.centroidOnly >= Self.inflationBar)
+        }
+        print("the ratio bar and the inflation bar disagree on"
+              + " \(disagreeing.count) of \(countSweep.count) rungs;"
+              + " over the bar \(over.map(\.n).sorted()), under it up to \(under.map(\.n).max() ?? 0)")
+        let split = "the δ/σ bar no longer agrees with the inflation bar on the count sweep,"
+            + " so the two halves are not one law and the count carries something the"
+            + " centroid's error does not"
+        #expect(disagreeing.isEmpty, "\(split)")
+
+        // But the bracket is the CORPUS's and not the law's. δ is what the count moves, and
+        // it does not move with it smoothly: the two readings that set Decision 65's
+        // bracket are a factor apart in count and several factors apart in δ, so a count
+        // read off those two does not transfer to a capture that is not between them.
+        let lo = try #require(under.max { $0.n < $1.n })
+        let hi = try #require(over.min { $0.n < $1.n })
+        let countStep = Double(hi.n) / Double(lo.n)
+        let deltaStep = hi.centroidErrorMm / lo.centroidErrorMm
+        print("across Decision 65's own bracket — \(lo.name) at \(lo.n) to"
+              + " \(hi.name) at \(hi.n) — the count moves"
+              + " \(String(format: "%.2f", countStep))×, δ moves"
+              + " \(String(format: "%.2f", deltaStep))× and the thickness moves"
+              + " \(String(format: "%.2f", lo.thicknessMm / hi.thicknessMm))×")
+        let smooth = "δ now tracks the count across Decision 65's bracket, so that bracket"
+            + " is a property of the arithmetic rather than of which two captures the"
+            + " corpus happens to contain"
+        #expect(deltaStep > countStep * 2, "\(smooth)")
+
+        // MARK: THE THIRD FINDING — what it says about the extraction leg.
+
+        // Decision 65 closed the extraction leg with "the annulus is both under the turning
+        // count AND thicker than nothing in particular, so only the count half protects it".
+        // With a form there is a number for the other half: the annulus read at its own
+        // count and its own thickness, in the same units as the bar.
+        print("=== the extraction leg's own bound, the annulus, in the form's units ===")
+        var annulus: [AspectReading] = []
+        for (name, rangeMm) in corpusRanges {
+            let g = try #require(Self.geometry(name))
+            let samples = SupportRegion.ringSamples(geometry: g)
+            let pts = samples.annulus.map { g.points[$0] }
+            // The orientation is immaterial here — δ is taken in absolute value and the
+            // thickness is a distance — so the seed is a fixed axis rather than gravity.
+            guard let r = Self.aspectReading(name, scale: 1, points: pts,
+                                             seedNormal: Vec3(0, 0, 1), reference: nil)
+            else { continue }
+            annulus.append(r)
+            print("  \(name) at \(fmt(Float(rangeMm))) mm: n = \(r.n),"
+                  + " thickness \(String(format: "%.4f", r.thicknessMm)) mm,"
+                  + " δ \(String(format: "%.6f", r.centroidErrorMm)) mm,"
+                  + " δ/σ \(String(format: "%.6f", r.ratio)),"
+                  + " \(String(format: "%.1f", bar / r.ratio))× of margin")
+        }
+        let noAnnulus = "the annulus no longer yields a reading on every committed capture,"
+            + " so the extraction leg's own bound cannot be placed in the form's units"
+        #expect(annulus.count == corpusRanges.count, "\(noAnnulus)")
+        let worstAnnulus = try #require(annulus.map(\.ratio).max())
+        let reached = "the annulus has come within a factor of ten of the δ/σ bar, so the"
+            + " extraction leg's degeneracy guard is no longer safe by aspect either and"
+            + " the count half is not the only thing protecting it"
+        #expect(worstAnnulus * 10 < bar, "\(reached)")
+
+        // And the natural-thickness rung is where Decision 65's four inlier-set readings
+        // sit, so this decision's form has to reproduce them rather than replace them.
+        for (name, r) in natural.sorted(by: { $0.key < $1.key }) {
+            print("  \(name) at its own thickness: δ/σ \(String(format: "%.4f", r.ratio)),"
+                  + " measured \(String(format: "%.4f", r.centroidOnly))×,"
+                  + " Decision 65 read \(String(format: "%.4f", r.inflation))×")
+        }
+
+        // MARK: THE FOURTH FINDING — Decision 65's control was a confound.
+
+        // That decision separated count from thinness with the candidate point set: larger
+        // than the inlier set drawn from it, thicker, and it does not inflate. The
+        // conclusion — "what the inflation tracks is the error over the thickness" — is
+        // right, but the control does not establish it, because δ is not held across it
+        // either. Read in the form's units the candidate set is a different point on BOTH
+        // axes, and it is δ that carries the reading.
+        print("=== Decision 65's control, decomposed ===")
+        for (name, c) in candidateSets.sorted(by: { $0.key < $1.key }) {
+            guard let inlier = natural[name] else { continue }
+            print("  \(name): candidate n = \(c.n) vs inlier \(inlier.n)"
+                  + " (\(String(format: "%.2f", Double(c.n) / Double(inlier.n)))×),"
+                  + " thickness \(String(format: "%.3f", c.thicknessMm)) vs"
+                  + " \(String(format: "%.3f", inlier.thicknessMm)) mm"
+                  + " (\(String(format: "%.2f", c.thicknessMm / inlier.thicknessMm))×),"
+                  + " δ \(String(format: "%.4f", c.centroidErrorMm)) vs"
+                  + " \(String(format: "%.4f", inlier.centroidErrorMm)) mm"
+                  + " (\(String(format: "%.3f", c.centroidErrorMm / inlier.centroidErrorMm))×),"
+                  + " measured \(String(format: "%.4f", c.centroidOnly))×")
+        }
+        // The form applies to the control too — it is the same arithmetic — so the check is
+        // not whether it predicts, but which factor does the work. If thickness alone
+        // explained the control, δ would be of the same order on both sets.
+        let quiet = candidateSets.values.filter { $0.centroidOnly < Self.inflationBar }
+        let stillPredicted = worstError(Array(candidateSets.values)) { $0.predicted }
+        print("the form predicts the control to"
+              + " \(String(format: "%.4f", stillPredicted)) relative error;"
+              + " \(quiet.count) of \(candidateSets.count) candidate sets are quiet")
+        let breaks = "the quadrature form no longer predicts the candidate point sets, so it"
+            + " holds on inlier sets only and is a property of the selection rather than of"
+            + " the arithmetic"
+        #expect(stillPredicted < 0.02, "\(breaks)")
+        // The confound, stated as a measurement. On the capture Decision 65 quotes — "a
+        // 1.14× larger set, a 2.3× thicker one, and the inflation goes away" — δ falls
+        // further than the thickness rises, so most of that reading is the numerator and
+        // the control does not isolate the axis it was built to isolate.
+        let confounded = candidateSets.compactMap { name, c -> (String, Double, Double)? in
+            guard let inlier = natural[name], inlier.centroidErrorMm > 0 else { return nil }
+            return (name, c.thicknessMm / inlier.thicknessMm,
+                    c.centroidErrorMm / inlier.centroidErrorMm)
+        }
+        func described(_ rows: [(String, Double, Double)]) -> [String] {
+            rows.map { "\($0.0) thickness ×\(String(format: "%.2f", $0.1)),"
+                + " δ ×\(String(format: "%.3f", $0.2))" }
+        }
+        let deltaFalls = confounded.filter { $0.2 < 1 / $0.1 }
+        print("δ falls further than the thickness rises on"
+              + " \(deltaFalls.count) of \(confounded.count) captures:"
+              + " \(described(deltaFalls))")
+        let isolated = "the candidate point sets now carry the same centroid error as the"
+            + " inlier sets they contain, so Decision 65's control does isolate thinness"
+            + " after all and this finding is withdrawn"
+        #expect(!deltaFalls.isEmpty, "\(isolated)")
+
+        // And the capture it does NOT quote is the one that carries its conclusion. Where
+        // the two axes OPPOSE — δ rising while the set thickens — the thickness is what
+        // decides, and that is the reading the thinness half actually rests on. Decision
+        // 65's conclusion is confirmed; its evidence for it is not.
+        let opposing = confounded.filter { $0.2 > 1 }
+        print("the two axes oppose on \(opposing.count) of \(confounded.count) captures:"
+              + " \(described(opposing)) — and those sets are still quiet")
+        let noOpposition = "no committed capture now has its candidate set carrying MORE"
+            + " centroid error than its inlier set, so nothing isolates the thickness half"
+            + " and it rests on the confounded readings alone"
+        #expect(!opposing.isEmpty, "\(noOpposition)")
+        for row in opposing {
+            guard let c = candidateSets[row.0] else { continue }
+            let swamped = "\(row.0)'s candidate set carries more centroid error than its"
+                + " inlier set AND now inflates, so the thickness no longer absorbs it and"
+                + " the one unconfounded reading of the thinness half is gone"
+            #expect(c.centroidOnly < Self.inflationBar, "\(swamped)")
+        }
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.
