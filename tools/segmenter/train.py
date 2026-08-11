@@ -3,7 +3,7 @@
 
 Transfer-learns DeepLabV3 + MobileNetV3-Large (torchvision) at 513x513 for the
 36-class palette (25 solid + 8 coarse liquid + background + unknown_food +
-unsupported_liquid — palette v2: the redefined v1 of Decisions 23/24 plus the
+unsupported_liquid — the palette of Decisions 23/24 plus the
 cereal solid at index 24, myfoodrepo-bridge PRD),
 starting from the torchvision pretrained backbone, fine-tuning head + backbone on
 the remapped train split, and saving a single PyTorch checkpoint.
@@ -79,18 +79,18 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 
 # Palette background channel (ClassPalette standard palette / prepare_dataset.py:
 # 25 solid incl. cereal at 24 + 8 liquid at 25–32, then background at 33 —
-# palette v2). Letterbox padding is labelled background so the model learns
+# design §3.3). Letterbox padding is labelled background so the model learns
 # padded regions are not food.
 PALETTE_BACKGROUND = 33
 
 # Special (non-food) channels excluded from food-class mIoU. These mirror
-# class_mapping_foodseg103_v1.json:special_channels and §11 channel ordering.
+# class_mapping_foodseg103.json:special_channels and §11 channel ordering.
 BACKGROUND_CLASS = 33
 UNKNOWN_FOOD_CLASS = 34
 UNSUPPORTED_LIQUID_CLASS = 35
 NON_FOOD_CLASSES = (BACKGROUND_CLASS, UNKNOWN_FOOD_CLASS, UNSUPPORTED_LIQUID_CLASS)
 
-PALETTE_VERSION = "v2"
+PALETTE_VERSION = "v0"
 
 # Per-epoch poly learning-rate decay (standard DeepLab recipe); recorded in
 # checkpoint/lineage provenance. lr_e = base_lr * (1 - (e-1)/epochs) ** 0.9.
@@ -755,7 +755,7 @@ def train(args) -> int:
     if loss_spec["loss"] == "co_occurrence":
         lineage = _load_lineage_module()
         mapping_path = Path(__file__).resolve().with_name(
-            "class_mapping_foodseg103_v1.json"
+            "class_mapping_foodseg103.json"
         )
         co_stats_path = (Path(args.co_stats) if args.co_stats
                          else data_root / loss_config.CO_STATS_FILENAME)

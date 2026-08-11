@@ -12,7 +12,7 @@ Records the provenance needed to reproduce a bundled segmenter to *metric* level
   - model_version          first 12 hex of ``checkpoint_sha256``.
   - foodseg103_source      dataset source/version (FoodSeg103, Apache 2.0).
   - split_seed             dataset split seed (from ``prepare_dataset.py``).
-  - class_mapping_version  schema id of ``class_mapping_foodseg103_v1.json``.
+  - class_mapping_version  schema id of ``class_mapping_foodseg103.json``.
   - palette_version        palette edition (must match ``ClassPalette.version``).
   - train_config           epochs / lr / batch / target_size / num_classes / etc.
   - code_commit            git HEAD at build time.
@@ -44,7 +44,7 @@ from typing import Any
 # read back by CoreMLInferenceEngine.resolveModelVersion — keep both in step).
 MODEL_VERSION_HEX_LEN = 12
 DEFAULT_LINEAGE_PATH = Path("tools/segmenter/build/lineage.json")
-_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103_v1.json")
+_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103.json")
 
 
 def file_sha256(path: str | Path) -> str:

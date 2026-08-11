@@ -31,7 +31,7 @@ extension Pipeline {
     public static func makeForDevice(
         store: any PersistenceStore,
         cardDetector: any CardDetector,
-        palette: ClassPalette = .v2Standard,
+        palette: ClassPalette = .standard,
         supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter(),
         bundleRecorder: CaptureBundleRecorder? = nil
     ) throws -> Pipeline {
@@ -56,7 +56,7 @@ extension Pipeline {
     /// `specs/estimation/pipeline-real-device-correctness/`: pre-shutter and in-shutter
     /// must not share an `MLModel` instance).
     public static func makeSegmenter(
-        palette: ClassPalette = .v2Standard,
+        palette: ClassPalette = .standard,
         maskLog: CoreMLSegmenter.MaskLogCadence = .perCapture
     ) throws -> CoreMLSegmenter {
         let targetSize = SegmenterPreProcessor.defaultTargetSize

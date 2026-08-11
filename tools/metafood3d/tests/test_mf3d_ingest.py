@@ -85,7 +85,7 @@ class TestFixtureEmission:
         assert len(fx.nadir_argmax) == 0
 
         # Decision 15: fixtures are stamped with the live palette version.
-        assert fx.palette_version == "v2"
+        assert fx.palette_version == "v0"
 
         # Single-class GT mass map keyed by the mapped palette class name.
         assert dict(fx.ground_truth_class_mass_g) == {"beef": pytest.approx(60.0)}

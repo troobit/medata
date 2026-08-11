@@ -572,7 +572,7 @@ the MAPE objective; the sample-size floor keeps shipped β_c statistically defen
 ## MD-29: Palette v2 — cereal solid class on a CoFID porridge basis
 
 **Date**: 2026-07-25
-**Status**: accepted
+**Status**: accepted (amended by pipeline Decision 50, 2026-08-10: the cereal class stands; the "v2" versioning this entry minted does not. It violated nutrition5k-calibration Decision 23 — pre-release palette changes redefine the single declaration in place. `v1Standard`/`v2Standard` and the v1→v2 migration surface are expunged; the palette is `ClassPalette.standard`, stamped "v0" until the first main release.)
 **Sources**: myfoodrepo-bridge PRD (Palette and food DB, reqs 1–4); segmenter-foundation D21; bugfix/segmenter-output-stride-ignored report §Known gaps
 
 ### Context
@@ -688,7 +688,7 @@ variants), and `mashed-potatoes-prepared-with-full-fat-milk-with-butter`.
 
 Substitute the Food Recognition Benchmark 2022 release for MyFoodRepo-273
 v0.4 as the bridge dataset. The landing zone becomes `data/foodrec2022/`, the
-mapping artefact becomes `class_mapping_foodrec2022_v1.json`, and the coverage
+mapping artefact becomes `class_mapping_foodrec2022.json`, and the coverage
 audit runs over the 2022 ontology (choosing release 2.0 vs 2.1 on audit
 evidence, recorded in `SOURCE.md`). The v0.4 retry watch continues as a
 zero-cost background loop; if v0.4 ever resurfaces it may be considered as an

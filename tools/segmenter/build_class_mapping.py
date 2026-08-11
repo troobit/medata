@@ -2,10 +2,10 @@
 """Build the FoodSeg103 -> 36-channel palette class mapping (ml-training §3b).
 
 FoodSeg103 ships 103 food classes (+ a background class 0); the medata segmenter
-emits **36 channels** (Req 8.4; palette v2 — cereal added at index 24, MD-29):
+emits **36 channels** (Req 8.4; cereal at index 24, MD-29):
 
     channels 0-24  : the 25 solid food classes, in the EXACT order of
-                     ``tools/food_db/generate.py`` FOOD_DATA (== ClassPalette.v2Standard)
+                     ``tools/food_db/generate.py`` FOOD_DATA (== ClassPalette.standard)
     channels 25-32 : the 8 coarse liquid classes (water, coffee, tea, milk,
                      fruit_juice, soup, beer, wine), same FOOD_DATA order
     channel  33    : background
@@ -35,7 +35,7 @@ Usage::
     python tools/segmenter/build_class_mapping.py \\
         --foodseg-labels data/foodseg103/category_id.txt \\
         --palette tools/food_db/generate.py \\
-        --out tools/segmenter/class_mapping_foodseg103_v1.json
+        --out tools/segmenter/class_mapping_foodseg103.json
 
 ``--foodseg-labels`` is optional: omit it and the script falls back to the
 canonical FoodSeg103 category list embedded below, which makes the script
@@ -51,9 +51,9 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-PALETTE_VERSION = "v2"
+PALETTE_VERSION = "v0"
 
-# Palette layout, fixed by Req 8.4 / ClassPalette.v2Standard (v2: 25 solids
+# Palette layout, fixed by Req 8.4 / ClassPalette.standard (25 solids
 # incl. cereal at 24, then coarse liquids, then the sentinel channels — MD-29).
 SOLID_CLASS_COUNT = 25
 LIQUID_CLASS_COUNT = 8
@@ -275,7 +275,7 @@ def build_mapping(
         )
 
     return {
-        "schema": "foodseg103_to_palette_v1",
+        "schema": "foodseg103_to_palette",
         "palette_version": PALETTE_VERSION,
         "source_dataset": "FoodSeg103",
         "channel_count": len(palette) + 3,
@@ -311,7 +311,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--palette", default="tools/food_db/generate.py",
                         help="Path to generate.py (source of the 24-class order).")
     parser.add_argument("--out",
-                        default="tools/segmenter/class_mapping_foodseg103_v1.json")
+                        default="tools/segmenter/class_mapping_foodseg103.json")
     args = parser.parse_args(argv)
 
     palette = parse_palette(Path(args.palette))

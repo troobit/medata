@@ -112,10 +112,10 @@ SENTINEL_SHA = "no_segmenter"
 ESTIMATOR_MIXTURE = "mixture"
 ESTIMATOR_SINGLE_DOMINANT = "single_dominant"
 # Fixtures are stamped with the palette the parse targets
-# (n5k-mapping-artifact-stale-v1-palette): parse_palette reads v2Standard,
-# so leaving make_fixtures' "v1" default would resolve a 35-class palette
+# (n5k-mapping-artifact-stale-v1-palette): the stamp must always equal the
+# palette the tensors were emitted against, or the harness size guards reject
 # in the harness against tensors sized for 36.
-PALETTE_VERSION = "v2"
+PALETTE_VERSION = "v0"
 
 # Required files under --n5k-dir (Req 1.2/1.3; prerequisites.md layout).
 _METADATA_FILES = (

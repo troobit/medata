@@ -234,11 +234,11 @@ references:
   - References: tools/food_db/generate.py, tools/segmenter/build_class_mapping.py
 
 - [x] 26. Implement the palette-lock content check, remap update, and artifact regeneration <!-- id:i3we69j -->
-  - Regenerate every palette-locked artifact in the same change: both sqlite DBs and tools/segmenter/class_mapping_foodseg103_v1.json (Decision 23 consequence — the content lock enforces this discipline; no CI hook per PROCESS §8, fail-loud loaders instead).
+  - Regenerate every palette-locked artifact in the same change: both sqlite DBs and tools/segmenter/class_mapping_foodseg103.json (Decision 23 consequence — the content lock enforces this discipline; no CI hook per PROCESS §8, fail-loud loaders instead).
   - Blocked-by: i3we69i (Write failing tests for the palette-lock content check and FoodSeg103 remap)
   - Stream: 4
   - Requirements: [5.7](requirements.md#5.7), [7.2](requirements.md#7.2)
-  - References: tools/segmenter/build_class_mapping.py, tools/segmenter/class_mapping_foodseg103_v1.json
+  - References: tools/segmenter/build_class_mapping.py, tools/segmenter/class_mapping_foodseg103.json
 
 - [x] 27. Write failing tests for bake consumption of the calibrate JSON <!-- id:i3we69k -->
   - Hand-written calibrate-JSON fixture (do NOT depend on stream B landing first — the JSON contract in design §DB bake is the interface).

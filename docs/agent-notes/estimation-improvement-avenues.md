@@ -91,7 +91,7 @@ both the absent-staple gap and the small-set ceiling at once.
   up to **16.54% mIoU improvement when the matrix is derived from Recipe1M+** instead,
   and a 755% relative gain on the least-frequent 10% of classes (near-zero baseline).
   Directly relevant: the co_occurrence loss builds its matrix from
-  FoodSeg103 (`co_stats.v2`) — **deriving it from Recipe1M+ is a cheap, verified
+  FoodSeg103 (`co_stats`) — **deriving it from Recipe1M+ is a cheap, verified
   upgrade path**. Caveats: single unreplicated study, mid-tier journal, ambiguous
   relative-vs-absolute reporting; transfer from U-Net/EfficientNet-b7 to a compact
   mobile model is unproven.

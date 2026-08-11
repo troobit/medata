@@ -59,7 +59,7 @@ final class PipelinePerformanceTests: XCTestCase {
         let palette = ClassPalette(
             foodClasses: ["bread", "rice"],
             background: 2, unknownFood: 3, unsupportedLiquid: 4,
-            version: "v1"
+            version: "v0"
         )
         return Pipeline(
             cardDetector: NoOpCardDetector(),
@@ -80,7 +80,7 @@ final class PipelinePerformanceTests: XCTestCase {
             nadirFrame: .fixture(timestampMonotonicNs: 1, depth: makeFlatDepthMap()),
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024 + AFCD 2024",
-            paletteVersion: "v1"
+            paletteVersion: "v0"
         )
     }
 
@@ -91,7 +91,7 @@ final class PipelinePerformanceTests: XCTestCase {
             nadirFrame: .fixture(timestampMonotonicNs: 2, depth: makeFlatDepthMap()),
             obliqueFrame: .fixture(timestampMonotonicNs: 3),
             databaseEdition: "CoFID 2024 + AFCD 2024",
-            paletteVersion: "v1"
+            paletteVersion: "v0"
         )
     }
 

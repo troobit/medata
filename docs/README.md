@@ -8,7 +8,7 @@ and the **Phase 1 / 2 / 3 delivery plan**.
 **Current state:** the full pipeline runs on the iPhone 16 Pro (hardware floor since
 segmenter-foundation Decision 22). Debug builds still use the development stub in the segmenter
 slot (`DEV_STUB_SEGMENTER`, `specs/estimation/pipeline/requirements.md` §23), but Release now
-bundles a real model (`coreml_ab812dc3aa9d`, 36 channels, palette v2). The MVP gate is the
+bundles a real model (`coreml_ab812dc3aa9d`, 36 channels). The MVP gate is the
 on-device verification of that model — see [`roadmap.md`](roadmap.md).
 
 ## Documents

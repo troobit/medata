@@ -270,7 +270,7 @@ Default value preserves the existing call sites in tests; production wires throu
 public static func makeForDevice(
     store: any PersistenceStore,
     cardDetector: any CardDetector,                       // new — production passes VisionCardDetector; required (no default — see below)
-    palette: ClassPalette = .v1Standard,
+    palette: ClassPalette = .standard,
     supportPlaneFitter: any SupportPlaneFitter = LiDARSupportPlaneFitter()  // new — tests inject a probe
 ) throws -> Pipeline
 ```

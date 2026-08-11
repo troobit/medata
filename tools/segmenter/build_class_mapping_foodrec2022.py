@@ -3,7 +3,7 @@
 
 The myfoodrepo-bridge PRD (dataset-bridge task 3, amended by MD-30) bridges the
 AIcrowd Food Recognition Benchmark 2022 release — 498 fine-grained menuCH-style
-categories — into the medata v2 palette (25 solid + 8 coarse liquid channels +
+categories — into the medata palette (25 solid + 8 coarse liquid channels +
 background/unknown_food/unsupported_liquid sentinels). Channel order is read
 from ``tools/food_db/generate.py`` exactly as ``build_class_mapping.py`` does;
 the routing tiers are also identical:
@@ -28,7 +28,7 @@ Usage::
     python tools/segmenter/build_class_mapping_foodrec2022.py \\
         --annotations data/foodrec2022/raw_data/public_training_set_release_2.0/annotations.json \\
         --palette tools/food_db/generate.py \\
-        --out tools/segmenter/class_mapping_foodrec2022_v1.json
+        --out tools/segmenter/class_mapping_foodrec2022.json
 """
 
 from __future__ import annotations
@@ -428,7 +428,7 @@ def build_mapping(palette: List[str], categories: Dict[int, str]) -> dict:
         })
 
     return {
-        "schema": "foodrec2022_to_palette_v1",
+        "schema": "foodrec2022_to_palette",
         "palette_version": PALETTE_VERSION,
         "source_dataset": "Food Recognition Benchmark 2022 (release 2.0)",
         "channel_count": len(palette) + 3,
@@ -468,7 +468,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--palette", default="tools/food_db/generate.py",
                         help="Path to generate.py (source of the channel order).")
     parser.add_argument("--out",
-                        default="tools/segmenter/class_mapping_foodrec2022_v1.json")
+                        default="tools/segmenter/class_mapping_foodrec2022.json")
     args = parser.parse_args(argv)
 
     palette = parse_palette(Path(args.palette))

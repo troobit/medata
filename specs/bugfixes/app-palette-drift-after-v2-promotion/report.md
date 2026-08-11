@@ -140,3 +140,14 @@ for unrecognised labels.
 - `docs/agent-notes/class-palette.md` — predicate contract + drift warning.
 - `specs/bugfixes/unrecognised-food-estimated-as-residual-sliver/` — the
   investigation that surfaced the wrong fixture stamps.
+
+---
+
+**Postscript (2026-08-10, pipeline Decision 50)**: the v1/v2 palette duality
+this bug arose from has been expunged. There is one palette,
+`ClassPalette.standard`, stamped "v0" until the first main release; the
+`standard(for:)` resolver this fix introduced was removed with it. The
+retained learning: persisted records carry a palette stamp, and display code
+must never assume a record was written under the palette the binary ships —
+the mechanism becomes load-bearing again the first time a *released* palette
+changes.

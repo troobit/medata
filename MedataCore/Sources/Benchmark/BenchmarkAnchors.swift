@@ -27,7 +27,7 @@ public enum BenchmarkAnchors {
 // dominate the carb number. Mirrors CARB_PRIORITY_CLASSES in
 // tools/segmenter/validation.py (authoritative home:
 // specs/estimation/segmenter-foundation/decision_log.md) — names and order
-// follow ClassPalette.v1Standard indices 0–7.
+// follow ClassPalette.standard indices 0–7.
 public enum BenchmarkStaples {
     public static let classIDs = [
         "white_rice", "brown_rice", "pasta", "bread_white", "bread_wholemeal",

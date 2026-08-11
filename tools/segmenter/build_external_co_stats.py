@@ -6,11 +6,11 @@ presence priors that ``prepare_dataset.py`` derives from the FoodSeg103 train
 split — ~5.5k images, so thin classes get thin priors. This tool derives the
 same statistics from an EXTERNAL ingredient corpus (Recipe1M+ or equivalent):
 each recipe's ingredient list is mapped onto the 35-class palette through the
-committed, reviewable ``ingredient_mapping_recipe1m_v1.json`` (the
+committed, reviewable ``ingredient_mapping_recipe1m.json`` (the
 class-mapping precedent), and each recipe contributes one presence set —
 exactly the per-image presence convention of ``prepare_dataset.build_co_stats``.
 
-Output is the ``co_stats.v2`` shape amended for corpus provenance (snaq-parity
+Output is the ``co_stats`` shape amended for corpus provenance (snaq-parity
 Decision 13): ``source: "recipe1m"``, ``split_seed: null`` (corpus statistics
 are split-independent; ``loss_config.load_co_stats`` accepts the null seed
 only for an external source), the ingredient-mapping SHA-256, and the
@@ -58,8 +58,8 @@ SOURCE = "recipe1m"
 # so the default bar is deliberately high; tighten per corpus via the flag.
 DEFAULT_MAX_UNMAPPED_RATE = 0.95
 
-_MAPPING_PATH = Path(__file__).resolve().with_name("ingredient_mapping_recipe1m_v1.json")
-_CLASS_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103_v1.json")
+_MAPPING_PATH = Path(__file__).resolve().with_name("ingredient_mapping_recipe1m.json")
+_CLASS_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103.json")
 
 _NON_WORD = re.compile(r"[^a-z0-9]+")
 
@@ -152,7 +152,7 @@ def build_external_co_stats(
     ingredient_mapping_sha256: str,
     max_unmapped_rate: float = DEFAULT_MAX_UNMAPPED_RATE,
 ) -> dict[str, Any]:
-    """Assemble the external ``co_stats.v2`` dict (see module docstring).
+    """Assemble the external ``co_stats`` dict (see module docstring).
 
     Raises ``SystemExit`` when the unmapped-ingredient rate exceeds
     ``max_unmapped_rate`` or any food class has zero corpus presence — the
@@ -215,7 +215,7 @@ def build_external_co_stats(
 
     lineage = _load_lineage_module()
     return {
-        "schema": "co_stats.v2",
+        "schema": "co_stats",
         "source": str(ingredient_mapping.get("source", SOURCE)),
         "split_seed": None,  # corpus statistics are split-independent
         "class_mapping_sha256": lineage.file_sha256(_CLASS_MAPPING_PATH),
@@ -229,7 +229,7 @@ def build_external_co_stats(
             "without_statistics": without,
         },
         # A recipe corpus has no pixels and no train split — explicit nulls
-        # keep the co_stats.v2 key set while claiming nothing false.
+        # keep the co_stats key set while claiming nothing false.
         "pixel_counts": None,
         "train_images": None,
         "presence_counts": presence,
@@ -245,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
                              "'ingredients' text entries).")
     parser.add_argument("--mapping", default=str(_MAPPING_PATH),
                         help="Committed ingredient→class mapping "
-                             "(default: ingredient_mapping_recipe1m_v1.json).")
+                             "(default: ingredient_mapping_recipe1m.json).")
     parser.add_argument("--out", required=True,
                         help="Where to write the external co_stats.json; point "
                              "train.py at it with --co-stats.")

@@ -133,9 +133,9 @@ def test_palette_lock_still_gates_the_cross_dataset_bake(out_dir, monkeypatch):
         }))
 
 
-def test_palette_version_meta_stays_v2(out_dir):
+def test_palette_version_meta_stays_v0(out_dir):
     db = bake_with(out_dir, artifact({
         "white_rice": cross_dataset_entry(
             0.82, contributing={"metafood3d": 34}, single_source=True),
     }))
-    assert meta(db)["palette_version"] == "v2"
+    assert meta(db)["palette_version"] == "v0"

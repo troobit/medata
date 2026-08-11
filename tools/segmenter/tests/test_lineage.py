@@ -28,8 +28,8 @@ def test_build_lineage_fields_and_class_mapping_defaults(tmp_path):
     assert manifest["split_seed"] == 42
     assert manifest["train_config"] == {"epochs": 60, "lr": 1e-3}
     # Defaults sourced from the committed class-mapping file.
-    assert manifest["palette_version"] == "v2"
-    assert manifest["class_mapping_version"] == "foodseg103_to_palette_v1"
+    assert manifest["palette_version"] == "v0"
+    assert manifest["class_mapping_version"] == "foodseg103_to_palette"
     assert manifest["foodseg103_source"] == "FoodSeg103"
     # Metrics are placeholders until the validation step (task 9) fills them.
     assert manifest["metrics"] == {
@@ -42,10 +42,10 @@ def test_explicit_args_override_class_mapping_defaults(tmp_path):
     ckpt.write_bytes(b"y")
     manifest = lineage.build_lineage(
         ckpt, train_config={}, foodseg103_source="FoodSeg103@abc",
-        palette_version="v2", class_mapping_version="custom",
+        palette_version="v0", class_mapping_version="custom",
     )
     assert manifest["foodseg103_source"] == "FoodSeg103@abc"
-    assert manifest["palette_version"] == "v2"
+    assert manifest["palette_version"] == "v0"
     assert manifest["class_mapping_version"] == "custom"
 
 
@@ -168,7 +168,7 @@ def test_emit_lineage_preserves_recipe_keys_from_the_checkpoint(tmp_path):
             "model": {},
             "num_classes": 35,
             "target_size": 513,
-            "palette_version": "v1",
+            "palette_version": "stale",
             "epochs": 60,
             "lr": 1e-3,
             "lr_schedule": "poly",

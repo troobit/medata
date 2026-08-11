@@ -193,10 +193,10 @@ struct MealOverviewView: View {
     // by class id, so resolve the name to its palette index; unrecognised names
     // fold to a stable non-negative index so the swatch is still deterministic.
     private func swatchColour(for className: String) -> Color {
-        // Per-record palette: v2 shifts cereal/liquid indices by one, so the
-        // stored paletteVersion picks the wheel position, keeping v1-era
-        // meals' swatches stable (app-palette-drift-after-v2-promotion).
-        let palette = ClassPalette.standard(for: record.paletteVersion)
+        // Single pre-release palette (pipeline Decision 50); the per-record
+        // stamp becomes load-bearing again the first time a released palette
+        // changes (see app-palette-drift-after-v2-promotion).
+        let palette = ClassPalette.standard
         let id: Int
         if let index = palette.foodClasses.firstIndex(of: className) {
             id = index
@@ -205,7 +205,7 @@ struct MealOverviewView: View {
         } else {
             id = className.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0x7fff_ffff }
         }
-        let colour = ClassColourTable.v1.colour(forClassId: id)
+        let colour = ClassColourTable.standard.colour(forClassId: id)
         return Color(red: colour.red, green: colour.green, blue: colour.blue)
     }
 

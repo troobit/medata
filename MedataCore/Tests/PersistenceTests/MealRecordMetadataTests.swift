@@ -80,7 +80,7 @@ final class MealRecordMetadataTests: XCTestCase {
     // MARK: - Missing `record` key throws corruptRecord
 
     func testMissingRecordKeyThrowsCorruptRecord() {
-        let metadata = #"{"palette_version":"v1"}"#
+        let metadata = #"{"palette_version":"v0"}"#
         XCTAssertThrowsError(try MealRecord.from(metadata: metadata)) { error in
             guard case PersistenceError.corruptRecord = error else {
                 return XCTFail("Expected corruptRecord, got \(error)")
@@ -105,7 +105,7 @@ final class MealRecordMetadataTests: XCTestCase {
     // MARK: - Wrong-typed `record` value (number instead of string) throws
 
     func testWrongTypedRecordValueThrowsCorruptRecord() throws {
-        let outer: [String: Any] = ["record": 123, "palette_version": "v1"]
+        let outer: [String: Any] = ["record": 123, "palette_version": "v0"]
         let data = try JSONSerialization.data(withJSONObject: outer)
         let metadata = String(decoding: data, as: UTF8.self)
         XCTAssertThrowsError(try MealRecord.from(metadata: metadata)) { error in
@@ -119,7 +119,7 @@ final class MealRecordMetadataTests: XCTestCase {
 // MARK: - Fixture
 
 private func makeMealRecord(
-    paletteVersion: String = "v1",
+    paletteVersion: String = "v0",
     photoAssetID: String = "PHASSET-ABC-001",
     segmenterSource: String = "dev_stub"
 ) -> MealRecord {

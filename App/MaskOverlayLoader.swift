@@ -26,7 +26,7 @@ struct MaskOverlayLoader: View {
     let mealId: UUID
     // Single palette ships today; kept explicit so a future palette version can
     // shift the wheel without repainting old meals (ClassColourTable is versioned).
-    var paletteVersion: String = ClassColourTable.v1.version
+    var paletteVersion: String = ClassColourTable.standard.version
     var onDecode: (Set<Int>) -> Void = { _ in }
 
     @State private var overlay: CGImage?
@@ -83,7 +83,7 @@ enum MaskOverlayDecoder {
         let height = raster.height
         let labels = raster.labels
 
-        let palette = ClassPalette.standard(for: paletteVersion)
+        let palette = ClassPalette.standard
         let table = ClassColourTable(version: paletteVersion)
         let background = palette.background
 
@@ -209,7 +209,7 @@ enum MaskOverlayDecoder {
         includedClassIds: Set<Int>
     ) -> MaskContourSet? {
         guard let full = labelRaster(pngData: pngData) else { return nil }
-        let background = ClassPalette.standard(for: paletteVersion).background
+        let background = ClassPalette.standard.background
 
         // Present set from the full-resolution raster, before downsampling —
         // a small unknown region must not vanish from the banners because the

@@ -24,7 +24,7 @@ Ordered stages. "Automated" = scriptable/coding-actionable end-to-end. "Gated" =
 | # | Stage | Mode | Script / surface | Runbook | Gates produced |
 |---|---|---|---|---|---|
 | 0 | Acquire FoodSeg103 (Apache-2.0) | **gated** (download) | — | §1 | [2.4](requirements.md#2.4) |
-| 1 | Build class mapping | automated | `tools/segmenter/build_class_mapping.py` → `class_mapping_foodseg103_v1.json` | §2 | [2.1](requirements.md#2.1), [2.3](requirements.md#2.3) |
+| 1 | Build class mapping | automated | `tools/segmenter/build_class_mapping.py` → `class_mapping_foodseg103.json` | §2 | [2.1](requirements.md#2.1), [2.3](requirements.md#2.3) |
 | 2 | Dataset prep + fixed-seed splits | automated | `tools/segmenter/prepare_dataset.py` → `data/foodseg103_remapped/` | §3 | [2.2](requirements.md#2.2) |
 | 3 | Transfer-learn DeepLabV3+MobileNetV3-Large @513² | **gated** (GPU + dataset) | `tools/segmenter/train.py` → `build/checkpoint.pt` | §4 | [3.1](requirements.md#3.1) |
 | 4 | Validate held-out mIoU + per-class IoU | automated (post-train) | validation harness | §5 | [3.2](requirements.md#3.2)–[3.6](requirements.md#3.6) |
@@ -107,7 +107,7 @@ This keeps a single source of truth (the baked model), survives bundling, and ne
   "checkpoint_sha256": "a1b2c3d4e5f6…",   // full hash; 12-hex prefix → modelVersion
   "foodseg103_source": "v1.0 (release tag / archive sha)",
   "split_seed": 1337,                       // fixed seed, Req 2.2
-  "class_mapping_version": "v1",            // class_mapping_foodseg103_v1.json
+  "class_mapping_version": "v1",            // class_mapping_foodseg103.json
   "palette_version": "v1",                  // ClassPalette.version, Req 2.3
   "train_config": { "arch": "deeplabv3_mobilenetv3_large", "input": 513, "epochs": …, "lr": … },
   "code_commit": "<git rev>",

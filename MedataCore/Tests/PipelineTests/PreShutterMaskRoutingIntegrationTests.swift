@@ -36,7 +36,7 @@ struct PreShutterMaskRoutingIntegrationTests {
             nadirFrame: nadir,
             obliqueFrame: nil,
             databaseEdition: "CoFID 2024",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             preShutterFoodMask: mask
         )
 

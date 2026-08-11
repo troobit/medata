@@ -141,7 +141,7 @@ public protocol PipelineEstimator: Sendable {
 extension Pipeline {
     public static func makeForDevice(
         store: any PersistenceStore,
-        palette: ClassPalette = .v1Standard
+        palette: ClassPalette = .standard
     ) throws -> Pipeline {
         let metal = try MetalContext.default()
         #if DEV_STUB_SEGMENTER

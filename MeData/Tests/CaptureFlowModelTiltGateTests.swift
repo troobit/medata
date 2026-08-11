@@ -127,7 +127,7 @@ private final class StubPipeline: PipelineEstimator, @unchecked Sendable {
         return MealRecord(
             capturePath: mode.capturePath,
             databaseEdition: "test",
-            paletteVersion: "v1",
+            paletteVersion: "v0",
             calibration: PbCameraIntrinsics(),
             supportPlane: PbSupportPlane(),
             scale: PbMetricScale(),

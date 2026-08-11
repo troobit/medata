@@ -49,7 +49,7 @@ final class CoreMLSegmenterTests: XCTestCase {
             background: numFoodClasses,
             unknownFood: numFoodClasses + 1,
             unsupportedLiquid: numFoodClasses + 2,
-            version: "test_v1"
+            version: "test"
         )
     }
 

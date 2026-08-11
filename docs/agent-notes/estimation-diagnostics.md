@@ -193,14 +193,15 @@ two records; anything keying an error log on "segmenter sha" must pick one and n
 
 **Two defects this exposed, both now fixed:**
 
-1. `HarnessCLI` hard-coded `ClassPalette.v1Standard`, so `C = 35` against a 36-channel palette-v2
+1. `HarnessCLI` hard-coded a superseded 35-class palette, so `C = 35` against a 36-channel
    bundle. `FixtureRunner` derives the probability tensor's shape as `H*W*C*2` with `H`/`W` from
    the nadir intrinsics — those were right (1920×1440, matching the argmax byte-for-byte) — so
    only `C` was wrong, and `ProbabilityTensor`'s `precondition` **trapped the process**. No
-   report, and every other bundle in the directory lost with it. The palette is now resolved per
-   fixture from its own `paletteVersion` (`ClassPalette.standard(for:)`, which already existed for
-   the app's v1/v2 display split). `seg-bench` carried the same bug behind a size guard, so it
-   silently dropped every v2 bundle rather than trapping — quieter, equally wrong.
+   report, and every other bundle in the directory lost with it. At the time the fix resolved the
+   palette per fixture from its own `paletteVersion`; since pipeline Decision 50 there is a single
+   palette, every fixture resolves to `ClassPalette.standard`, and a mis-shaped fixture is a loud
+   size-guard skip. `seg-bench` carried the same bug behind a size guard, so it silently dropped
+   every 36-channel bundle rather than trapping — quieter, equally wrong.
 2. `FixtureRunner.run` now throws `probsSizeMismatch` rather than leaving that precondition to
    fire. A batch tool over operator-supplied files must skip a bad bundle with a message.
 

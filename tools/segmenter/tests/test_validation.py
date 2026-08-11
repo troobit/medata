@@ -43,7 +43,7 @@ def test_bars_and_carb_priority_set_match_spec():
 
 @pytest.mark.skipif(
     not _COMMITTED_MAPPING_IS_V2,
-    reason="class_mapping_foodseg103_v1.json still v1/35-channel — the "
+    reason="class_mapping_foodseg103.json still v1/35-channel — the "
            "dataset-bridge context regenerates it to v2; lock activates on "
            "integration",
 )

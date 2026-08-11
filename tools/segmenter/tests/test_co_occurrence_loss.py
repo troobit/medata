@@ -19,7 +19,7 @@ import train  # torch-free import: heavy deps are lazy
 
 def _co_stats(channel_count=35, split_seed=42, mapping_sha="ab" * 32,
               special_channel_indices=()):
-    """Synthetic but schema-complete co_stats.v2 content: three training
+    """Synthetic but schema-complete co_stats content: three training
     images {0, 3}, {0, 3}, {5} — classes 0 and 3 co-occur twice, class 5
     appears alone once, everything else absent. Special channels are excluded
     from the counts, mirroring ``prepare_dataset.build_co_stats``
@@ -34,7 +34,7 @@ def _co_stats(channel_count=35, split_seed=42, mapping_sha="ab" * 32,
             for k in classes:
                 joint[c][k] += 1
     return {
-        "schema": "co_stats.v2",
+        "schema": "co_stats",
         "split_seed": split_seed,
         "class_mapping_sha256": mapping_sha,
         "channel_count": channel_count,
@@ -144,13 +144,12 @@ def test_stale_mapping_sha_fails_with_regeneration_command(tmp_path):
         loss_config.load_co_stats(path, split_seed=42, class_mapping_sha256="cd" * 32)
 
 
-def test_v1_schema_fails_with_regeneration_command(tmp_path):
+def test_stale_schema_tag_fails_with_regeneration_command(tmp_path):
     path = tmp_path / "co_stats.json"
     stats = _co_stats(split_seed=42, mapping_sha="ab" * 32)
-    stats["schema"] = "co_stats.v1"  # pre-Decision-20 file: background counted
-    del stats["special_channel_indices"]
+    stats["schema"] = "co_stats.v2"  # superseded pre-release tag
     path.write_text(json.dumps(stats))
-    with pytest.raises(SystemExit, match=r"co_stats\.v1.*co_stats\.v2"):
+    with pytest.raises(SystemExit, match=r"co_stats\.v2.*requires 'co_stats'"):
         loss_config.load_co_stats(path, split_seed=42, class_mapping_sha256="ab" * 32)
 
 

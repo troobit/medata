@@ -839,7 +839,7 @@ A point-estimate bar is operationally simpler and matches how the literature rep
 ## Decision 24: Palette migration preserves original class assignments
 
 **Date**: 2026-05-06
-**Status**: accepted
+**Status**: accepted (scoped by Decision 50: applies to *released* palettes only — pre-release there is a single palette, "v0", and no migration)
 
 ### Context
 
@@ -1753,5 +1753,45 @@ Medium-confidence LiDAR depth on a real table is still approximately planar; it 
 ### Impact
 
 `MedataCore/Sources/SupportPlane/LiDARPlaneFitter.swift` (`confidenceThreshold`). Design §6 confidence-gate references updated to 0.40. Regression tests in `MedataCore/Tests/SupportPlaneTests/LiDARPlaneFitterTests.swift` (`testFitsMatteTableWithUniformMediumConfidence`, `testRejectsUniformLowConfidenceTable`). Bugfix report `specs/bugfixes/lidar-plane-fit-matte-table-confidence/report.md`.
+
+---
+
+## Decision 50: One pre-release palette, stamped "v0" — internal version iteration expunged
+
+**Date**: 2026-08-10
+**Status**: accepted (reaffirms and extends nutrition5k-calibration Decision 23; supersedes the palette-versioning aspect of MD-29 and the myfoodrepo-bridge PRD's "palette v2"; scopes Decision 24 to released palettes)
+
+### Context
+
+nutrition5k-calibration Decision 23 (2026-07-02) ruled, on direct review feedback, that pre-release version increments are meaningless churn: the liquid-class addition redefined the palette in place instead of minting a "v2". On 2026-07-25 the myfoodrepo-bridge work nevertheless shipped a "palette v2" (cereal appended), retained the superseded declaration as `ClassPalette.v1Standard` for a persisted-meal migration that had nothing real to migrate, and stamped "v2" across the food-DB bake, the training tool chain, the mapping artifacts, and fixtures. That duality then caused real defects: the app displayed records against the wrong palette (bugfix app-palette-drift-after-v2-promotion), the n5k mapping artifact was silently rebuilt against the retained v1 declaration (bugfix n5k-mapping-artifact-stale-v1-palette), and the harness trapped on mixed-shape fixtures (capture-bundle-recorder replay defects). Nothing has shipped; no external consumer is keyed to any palette label.
+
+### Decision
+
+Pre-release there is exactly one palette: `ClassPalette.standard`, with `version: "v0"`. The label stays "v0" until the first release to main. A palette change redefines the single declaration in place and regenerates every palette-locked artifact in the same change; no superseded declaration is retained, no internal version label is minted, and no migration path exists before the first release. The same rule applies to all internally named supporting data and schemas: version markers exist only where they will mean something to a released consumer. Provenance *mechanisms* (the `paletteVersion` record column, `MealFixture.palette_version`, the bake's `meta.palette_version`, lineage stamps) are retained — they all read "v0" and become meaningful at release.
+
+### Rationale
+
+Version identity exists to protect shipped or trained external consumers from silent divergence. With zero such consumers a second label is pure liability: two palettes to reason about, dead migration surface, and — as the three bugfixes above demonstrate — a standing source of silent drift between the retained declaration and the live one. Decision 23 already established this and was violated within a month; recording the policy at the pipeline level (where the palette is defined) makes it load-bearing for every downstream spec. Content, not labels, is what locks artifacts pre-release: the bake asserts the ordered class list, and the mapping artifacts key on `palette_class_list`.
+
+### Alternatives Considered
+
+- **Keep v1Standard + v2Standard and the v1→v2 migration**: the shipped state — Rejected: it migrates nothing (no released data exists), and the retained declaration caused two real bugs by being a plausible-but-wrong parse target.
+- **Collapse to a single palette labelled "v1"** (Decision 23's original label): Rejected — the project is pre-release; per review direction the version is 0 until main, and "v1" would collide with the meaning history already assigned to that label twice.
+- **Content-hash version labels** (`v0-<hash>`): Rejected in Decision 23 already — the content check in the bake gives the same protection without changing the label's meaning.
+
+### Consequences
+
+**Positive:**
+- One palette to reason about; the ClassPalette declaration, the DB bake, all tool parsers, artifacts, fixtures, and tests agree on a single "v0" stamp.
+- Tool parsers anchor on `static let standard` — there is no second declaration to mis-scope to.
+- `PaletteMigrator` remains as designed machinery for released palette changes (Decision 24) but is dormant and un-bundled until then.
+
+**Negative:**
+- Local training outputs stamped "v2" (existing checkpoints, `build/lineage.json`) predate this decision; the next training/export run restamps them.
+- History documents (decision logs, bugfix reports) necessarily still narrate the v1/v2 episode; amendment notes point here.
+
+### Impact
+
+`ClassPalette.swift` (single `standard`, "v0"), `ClassColourTable`, `PipelineFactory`, `HarnessCLI` fixture resolution, committed food DBs (`meta.palette_version` = "v0"), `tools/food_db/generate.py`, `tools/nutrition5k/`, `tools/metafood3d/`, `tools/segmenter/` (stamps, markers, renamed mapping artifacts without `_v1` suffixes, `co_stats` schema tag), and the Swift/python test suites.
 
 ---

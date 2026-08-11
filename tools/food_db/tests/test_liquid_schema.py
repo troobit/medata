@@ -54,7 +54,7 @@ def test_food_data_is_25_solid_plus_8_liquid():
         f"FOOD_DATA must hold 25 solid + 8 liquid classes, got {len(ids)}"
     )
     # Channel order is load-bearing: liquids append after the solids in
-    # ClassPalette.v2Standard declaration order (Decision 23/24; cereal at
+    # ClassPalette.standard declaration order (Decision 23/24; cereal at
     # index 24 per the myfoodrepo-bridge PRD).
     assert ids[SOLID_COUNT:] == LIQUID_CLASSES
     assert ids[0] == "white_rice"

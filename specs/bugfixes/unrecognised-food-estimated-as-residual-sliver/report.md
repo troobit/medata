@@ -38,7 +38,7 @@ answer presented as a right one.
 - **Code inspected:** `FoodRegionCoverage.swift` (fail-closed coverage gate),
   `Pipeline.swift` stage F/G, `HeightFieldEstimator`/`VoxelCarveEstimator`
   integration predicates, `ClassPalette` predicate contract,
-  `class_mapping_foodseg103_v1.json` / `class_mapping_foodrec2022_v1.json`.
+  `class_mapping_foodseg103.json` / `class_mapping_foodrec2022.json`.
 - **Hypotheses tested and ruled out:**
   - *Geometry/LiDAR failure* — ruled out: plane fit had 73 338 inliers at
     1.19 mm residual; scale resolved `card+lidar`.

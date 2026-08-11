@@ -100,7 +100,7 @@ struct EndToEndCalibrateBakeTests {
         var fx = scene.makeFixture(id: id, massG: massG)
         fx.groundTruthClassMassG = [className: massG]
         fx.sourceDataset = "metafood3d@\(Self.snapshot)"
-        fx.paletteVersion = "v2"
+        fx.paletteVersion = "v0"
         return fx
     }
 
@@ -298,7 +298,7 @@ struct EndToEndCalibrateBakeTests {
                 python: python, db: resources.appendingPathComponent(dbName))
             let meta = try #require(dump["meta"] as? [String: Any])
 
-            #expect(meta["palette_version"] as? String == "v2",
+            #expect(meta["palette_version"] as? String == "v0",
                     "\(dbName): palette↔DB edition lock (Req 7.2)")
 
             #expect(meta["calibration_licence"] as? String == "CC BY-NC 4.0",

@@ -30,7 +30,7 @@ struct HeightFieldLiquidTests {
         background: 3,
         unknownFood: 4,
         unsupportedLiquid: 5,
-        version: "test_v1"
+        version: "test"
     )
     let k = CameraIntrinsics(fx: 500, fy: 500, cx: 50, cy: 50,
                              distortion: [], imageWidth: 100, imageHeight: 100)

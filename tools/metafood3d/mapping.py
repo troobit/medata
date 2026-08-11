@@ -2,7 +2,7 @@
 
 The artifact (``mapping_metafood3d_to_palette.json``, built by
 ``build_mapping.py``) is versioned against the palette **v2** CONTENT — the
-ordered class list parsed from ``ClassPalette.swift`` ``v2Standard`` (25
+ordered class list parsed from ``ClassPalette.swift``'s standard palette (25
 solid classes with ``cereal`` at index 24, then 8 coarse liquid classes;
 sentinels excluded). Decision 15: β is keyed by class NAME end-to-end, so
 the content lock (not channel ordering) is what this artifact preserves,
@@ -51,10 +51,10 @@ DEFAULT_CLASS_PALETTE_SWIFT = (
     _REPO_ROOT / "MedataCore" / "Sources" / "Segmentation" / "ClassPalette.swift"
 )
 
-# Decision 15: parse the live palette declaration, never the v1Standard
+# Decision 15 (amended): parse the live palette declaration
 # retained for the persisted-meal migration (same marker-scoping pattern as
 # tools/food_db/generate.py's palette lock).
-PALETTE_MARKER = "v2Standard"
+PALETTE_MARKER = "static let standard"
 
 
 class MappingError(Exception):
@@ -74,7 +74,8 @@ def normalise_category(name: str) -> str:
 
 @dataclass(frozen=True)
 class PaletteClasses:
-    """Ordered palette content parsed from ClassPalette.swift v2Standard."""
+    """Ordered palette content parsed from ClassPalette.swift's standard
+    palette declaration."""
     food: list[str]
     liquid: list[str]
 
@@ -89,7 +90,7 @@ def parse_palette(
     class_palette_swift: str | Path = DEFAULT_CLASS_PALETTE_SWIFT,
 ) -> PaletteClasses:
     """Regex-read the ordered class lists from ClassPalette.swift's
-    ``v2Standard`` declaration. Fails loudly if the palette cannot be
+    single ``standard`` declaration. Fails loudly if the palette cannot be
     parsed or the marker is absent."""
     path = Path(class_palette_swift)
     try:
@@ -162,7 +163,7 @@ def load_mapping(
     if palette_class_list != list(expected_palette_class_list):
         raise MappingError(
             f"mapping artifact {path} was built against a different palette "
-            f"content (Decision 15 — the artifact locks v2Standard content, "
+            f"content (Decision 15 — the artifact locks the standard palette content, "
             f"and the version label alone cannot detect drift).\n"
             f"  artifact: {palette_class_list}\n"
             f"  current:  {list(expected_palette_class_list)}"

@@ -66,7 +66,7 @@ final class ProtoBinaryRoundTripTests: XCTestCase {
         palette.background = 0
         palette.unknownFood = 25
         palette.unsupportedLiquid = 26
-        palette.version = "v1"
+        palette.version = "v0"
         p.palette = palette
         let bytes = try p.serializedData()
         let decoded = try PbProbabilityTensor(serializedBytes: bytes)
@@ -100,7 +100,7 @@ final class ProtoBinaryRoundTripTests: XCTestCase {
         var fixture = PbMealFixture()
         fixture.fixtureID = "fx-0001"
         fixture.fixtureRevision = "rev-1"
-        fixture.paletteVersion = "v1"
+        fixture.paletteVersion = "v0"
         fixture.databaseEdition = "CoFID 2024 + IFCDB 2023"
         fixture.segmenterCheckpointSha256 =
             "0000000000000000000000000000000000000000000000000000000000000000"

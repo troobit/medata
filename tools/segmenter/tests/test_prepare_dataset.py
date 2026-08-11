@@ -221,7 +221,7 @@ def test_staple_channels_reject_a_palette_order_divergence():
 
 def test_compute_staple_presence_uses_raw_mask_ids(tmp_path):
     mapping = prepare_dataset.load_mapping(
-        Path(prepare_dataset.__file__).with_name("class_mapping_foodseg103_v1.json")
+        Path(prepare_dataset.__file__).with_name("class_mapping_foodseg103.json")
     )
     lut = prepare_dataset.build_lut(mapping)
     staples = prepare_dataset.staple_channels(mapping)
@@ -251,7 +251,7 @@ def test_build_co_stats_counts_food_presence_and_joint_presence():
         split_seed=42, class_mapping_sha256="ab" * 32,
         special_channel_indices=[32, 33, 34],
     )
-    assert stats["schema"] == "co_stats.v2"
+    assert stats["schema"] == "co_stats"
     assert stats["split_seed"] == 42
     assert stats["class_mapping_sha256"] == "ab" * 32
     assert stats["special_channel_indices"] == [32, 33, 34]
@@ -285,7 +285,7 @@ def test_main_end_to_end_writes_stratification_and_co_stats(tmp_path):
     _write_corpus(src, images)
 
     mapping_path = Path(prepare_dataset.__file__).with_name(
-        "class_mapping_foodseg103_v1.json"
+        "class_mapping_foodseg103.json"
     )
     rc = prepare_dataset.main([
         "--src", str(src), "--mapping", str(mapping_path), "--out", str(out),
@@ -301,7 +301,7 @@ def test_main_end_to_end_writes_stratification_and_co_stats(tmp_path):
     assert any("potato_boiled" in w for w in strat["warnings"])
 
     co = json.loads((out / "co_stats.json").read_text())
-    assert co["schema"] == "co_stats.v2"
+    assert co["schema"] == "co_stats"
     assert co["split_seed"] == 77
     assert co["class_mapping_sha256"] == prepare_dataset.file_sha256(mapping_path)
     assert co["channel_count"] == 36
@@ -323,7 +323,7 @@ def test_no_stratify_flag_omits_the_block_and_still_writes_co_stats(tmp_path):
     out = tmp_path / "out"
     _write_corpus(src, {f"m{i}": [RICE_SRC] for i in range(10)})
     mapping_path = Path(prepare_dataset.__file__).with_name(
-        "class_mapping_foodseg103_v1.json"
+        "class_mapping_foodseg103.json"
     )
     rc = prepare_dataset.main([
         "--src", str(src), "--mapping", str(mapping_path), "--out", str(out),

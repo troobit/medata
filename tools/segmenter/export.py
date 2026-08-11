@@ -3,7 +3,7 @@
 
 Trains-from / fine-tunes DeepLabV3 + MobileNetV3-Large (torchvision) on the
 36-class palette (25 solid + 8 coarse liquid + background + unknown_food +
-unsupported_liquid — palette v2: the redefined v1 of Decisions 23/24 plus the
+unsupported_liquid — the palette of Decisions 23/24 plus the
 cereal solid at index 24, myfoodrepo-bridge PRD),
 then exports the **same** PyTorch checkpoint to:
 
@@ -312,7 +312,7 @@ def read_coreml_output_channels(out_path: str) -> int:
 # architecture. 24 MiB fits FP16 with headroom and still catches an accidental
 # FP32 export (~44 MB).
 WEIGHTS_MAX_BYTES = 24 * 1024 * 1024
-# v2 palette channel count (25 solid incl. cereal at index 24 + 8 liquid at
+# Palette channel count (25 solid incl. cereal at index 24 + 8 liquid at
 # 25–32 + background/unknown_food/unsupported_liquid sentinels at 33/34/35 —
 # myfoodrepo-bridge PRD; was 35 under the redefined v1, Decisions 23/24).
 EXPECTED_CHANNEL_COUNT = 36
@@ -326,7 +326,7 @@ ORACLE_MAX_ABS_ERR = 0.5
 # Contract key shared with CoreMLInferenceEngine.modelVersionMetadataKey (Swift).
 MODEL_VERSION_METADATA_KEY = "medata.modelVersion"
 
-_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103_v1.json")
+_MAPPING_PATH = Path(__file__).resolve().with_name("class_mapping_foodseg103.json")
 
 
 class ExportGateError(RuntimeError):
@@ -334,7 +334,7 @@ class ExportGateError(RuntimeError):
 
 
 def palette_channel_names() -> list[str]:
-    """The 36 v2 channel names in palette/index order, read from the committed
+    """The 36 channel names in palette/index order, read from the committed
     class-mapping file (the single source of truth shared with the ClassPalette
     standard palette)."""
     import json

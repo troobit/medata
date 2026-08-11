@@ -92,7 +92,7 @@ struct MedataApp: App {
             // promotion) — a v1 palette against the 36-channel model misses
             // cereal in the arming predicate and misreads the sentinels
             // (bugfix app-palette-drift-after-v2-promotion).
-            palette: .v2Standard,
+            palette: .standard,
             source: Pipeline.preShutterSourceTag == "pre_shutter_stub"
                 ? .preShutterStub : .preShutterCoreML
         )

@@ -148,7 +148,7 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 - **β_c bake lock (tasks 11–12)** — `tools/food_db/generate.py`. The bake now runs
   under an `__main__` guard via `bake()`, so importing the module is
   side-effect-free (testable without rebaking). `verify_palette_lock(PALETTE_VERSION)`
-  reads `ClassPalette.version` from `ClassPalette.swift` (regex on the v1Standard
+  reads `ClassPalette.version` from `ClassPalette.swift` (regex on the standard
   literal) and aborts the bake on mismatch (Req 8.4). This only ADDS the lock; the
   baked value stays `'v1'` and `ClassPalette.version` is untouched.
 - **Segmenter-foundation phase 2 (2026-07-11)** — `prepare_dataset.py` now carves
@@ -272,8 +272,8 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   unweighted under `none`. The scheme lands in the loss spec (`weighting` key)
   and the resume drift-check.
 - **`build_external_co_stats.py`** (Req 6.1) maps a Recipe1M-style corpus onto
-  the palette via the committed `ingredient_mapping_recipe1m_v1.json`
-  (longest word-boundary term wins) and emits co_stats.v2 with
+  the palette via the committed `ingredient_mapping_recipe1m.json`
+  (longest word-boundary term wins) and emits co_stats with
   `source: recipe1m`, `split_seed: null`, the ingredient-mapping SHA, coverage
   lists, and `pixel_counts`/`train_images` null. Fails (SystemExit, no file
   written) on unmapped rate > `--max-unmapped-rate` or any zero-coverage food
@@ -295,11 +295,11 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 - `spike_segformer.py` is unchanged (historical task-20 evidence); its stale
   test expectation was updated to the Decision 22 iPhone 16 Pro floor.
 
-## myfoodrepo-bridge (2026-07-26): palette v2 model `ab812dc3aa9d` promoted
+## myfoodrepo-bridge (2026-07-26): 36-channel model `ab812dc3aa9d` promoted
 
 - Third real model shipped: `checkpoint_merged_v2.pt` -> `ab812dc3aa9d`,
   trained 12 epochs on the merged FoodSeg103 + Food Recognition 2022 corpus
-  (45,515 train images, 36-channel palette v2), plain CE / class weighting
+  (45,515 train images, 36-channel palette), plain CE / class weighting
   `none` / geometric augment only — the incumbent recipe, so the delta is
   attributable to data alone. Verdict: segmenter-foundation Decision 27.
 - Leak-free anchor: mean food-class IoU 0.3927 vs the 0.3776 incumbent
@@ -309,7 +309,7 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
 - Anchor per-staple readings carry ±0.10 cross-set noise (the same checkpoint
   scores chips_fries 0.5599 on the 182-image anchor vs 0.4586 on the 854-image
   heldout) — treat single-set per-class deltas accordingly.
-- `PipelineFactory` defaults flipped `v1Standard` -> `v2Standard` (both
+- `PipelineFactory` defaults moved to the 36-channel palette (both
   `makeForDevice` and `makeSegmenter`); `ClassColourTable` needed no change
   (id-indexed golden-angle wheel, palette-size-independent).
 - Export gates: 22,169,442 B weights (≤ 24 MiB), 36 channels, Core ML vs

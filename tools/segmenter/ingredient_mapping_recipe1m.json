@@ -1,10 +1,10 @@
 {
-  "schema": "ingredient_mapping_recipe1m_v1",
+  "schema": "ingredient_mapping_recipe1m",
   "source": "recipe1m",
-  "palette_version": "v2",
+  "palette_version": "v0",
   "channel_count": 36,
   "notes": [
-    "Recipe1M+-style ingredient terms mapped onto the 35-class v1 palette (snaq-parity Req 6.1, Decision 13).",
+    "Recipe1M+-style ingredient terms mapped onto the palette (snaq-parity Req 6.1, Decision 13).",
     "Matching: ingredient text is normalised (lowercase, punctuation stripped) and the LONGEST term appearing as a word-boundary phrase wins, so 'wholemeal bread' beats the generic 'bread' and 'chicken soup' is soup, not chicken.",
     "Targets are FOOD classes only — never background, unknown_food, or unsupported_liquid (Decision 20 food-channels-only).",
     "Deliberately no bare 'rice' term: it would capture rice vinegar / rice flour; unmapped ingredients are counted into the unmapped-ingredient rate instead."

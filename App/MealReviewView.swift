@@ -66,7 +66,7 @@ struct MealReviewView: View {
         ResultFormat.showsVeryLowSurface(sigma) && !veryLowDecided
     }
 
-    private var palette: ClassPalette { .standard(for: record.paletteVersion) }
+    private var palette: ClassPalette { .standard }
     private var colourTable: ClassColourTable { ClassColourTable(version: record.paletteVersion) }
 
     var body: some View {
