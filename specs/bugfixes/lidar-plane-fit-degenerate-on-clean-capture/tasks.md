@@ -2,13 +2,6 @@
 references:
     - specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/smolspec.md
     - specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/decision_log.md
-reopen_2026_06_16: >-
-    Re-open context for tasks 6-9: after Decision 1's centre-rectangle helper was retired by
-    specs/estimation/pipeline-real-device-correctness/ and the real PreShutterSegmenter mask
-    was wired through CaptureResult.preShutterFoodMask, on-device verification on the iPhone 13 Pro Max
-    (Double mode, build 288c5a7) surfaced lidarFitDegenerate immediately after
-    event=supportplane.start ... source=pre_shutter. Root cause + fix in smolspec.md
-    (## Re-open 2026-06-16); rationale in decision_log.md Decision 2.
 ---
 # LiDAR Plane Fit Degenerate on Clean Capture — Tasks
 
@@ -61,15 +54,17 @@ reopen_2026_06_16: >-
   - **References:** smolspec.md (`## Re-open 2026-06-16`), decision_log.md (Decision 2).
   - Blocked-by: bb3f201 (`LiDARPlaneFitter.collectCandidatePoints` scans four edge bands around the food bbox)
 
-- [ ] 8. On-device verification on the iPhone 13 Pro Max in Single AND Double modes <!-- id:bb3f203 -->
+- [x] 8. On-device verification on the iPhone 13 Pro Max in Single AND Double modes <!-- id:bb3f203 -->
   - **Outcome:** A fresh device-log capture on iPhone 13 Pro Max iOS 26.5 from a centred-plate meal capture at ~30-40 cm shows `event=estimate.end success=true` (or a different, non-`lidarFitDegenerate` downstream failure) in BOTH `single_view_lidar` and `two_view_sfs` capture paths. The Double-mode trail in `nextup.md` `# LOGS` (build `288c5a7`) is the pre-fix baseline; the post-fix trail covers both modes.
   - **Approach:** rebuild for device after the four-band fix; install via `xcrun devicectl device install app`; capture logs via Console.app with subsystem `ie.medata.app`, category `Shutter`. Drive a Single-mode tap first, then a Double-mode tap.
   - **Verification:** the captured logs show `event=supportplane.start ... source=pre_shutter` followed by `event=supportplane.end success=true` (or no `event=supportplane.end` plus a downstream stage like `Segmentation` / `Volume` failing) — and `event=estimate.end success=false failure=lidarFitDegenerate` does NOT appear.
   - **References:** smolspec.md (`## Re-open 2026-06-16` → Out of scope notes single-mode trail).
+  - CLOSED 2026-08-11, retargeted to the iPhone 16 Pro per user directive (13 Pro Max verifies validated or recreated on the current device, or dropped). Evidence is the estimation_outcomes store, Release build 9509b27-20260811-185011: success on single_view_lidar (1786439141215) AND two_view_sfs (1786439234576, 1786439300420); zero lidarFitDegenerate across 15 attempts. Full table in report.md.
   - Blocked-by: bb3f202 (Failing regression test fixates the fix)
 
-- [ ] 9. Finalise report.md with the re-open and the post-fix on-device trail <!-- id:bb3f204 -->
+- [x] 9. Finalise report.md with the re-open and the post-fix on-device trail <!-- id:bb3f204 -->
   - **Outcome:** `specs/bugfixes/lidar-plane-fit-degenerate-on-clean-capture/report.md` gains a `## Re-open 2026-06-16` section mirroring the existing report structure (Description / Root Cause / Resolution / Regression Test / Affected Files / Verification), embedding the post-fix on-device log block from task 8 under Verification, and flipping Status from "Fixed (automated); on-device verification pending" to "Fixed (real-mask path)" with both verification dates noted.
   - **Verification:** `report.md` updated; the Verification block contains the new on-device trail.
   - **References:** smolspec.md (`## Re-open 2026-06-16`), decision_log.md (Decision 2).
+  - DONE 2026-08-11: Status flipped to "Fixed (real-mask path)"; the 2026-08-11 iPhone 16 Pro outcome-store table appended under Verification (the top-of-report re-open banner already carried the re-open context).
   - Blocked-by: bb3f203 (On-device verification on the iPhone 13 Pro Max in Single AND Double modes)

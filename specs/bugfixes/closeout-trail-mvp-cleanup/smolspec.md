@@ -142,3 +142,17 @@ Re-run the device verification (same script as Phase 3). Once both modes show `e
 
 - Phase 3 segmenter bundling — the dev-stub's postprocess CPU cost is a known pre-existing limitation; the real CoreML segmenter on Neural Engine will replace it. The 30 s MVP ceiling and any Phase 4 cut to the dev-stub are stepping-stones, not load-bearing.
 - If the well-aimed Double-mode oblique still fails with `noFoodVolumeRecovered` post-Phase-4, consider an `obliqueTiltMessage` copy that nudges toward 25° more strongly (Decision 18 stays). Out of scope for this spec; file separately if needed.
+
+## Verification (2026-08-11 — closeout)
+
+**Build**: Release `9509b27-20260811-185011` (real Core ML segmenter `coreml_ab812dc3aa9d`), iPhone 16 Pro (`you`). Per the 2026-08-11 user directive, the remaining iPhone 13 Pro Max verifications were validated on the current primary device. Evidence is the persisted `estimation_outcomes` store — tethered Console collection is sudo-gated, and the store records per-attempt outcome, `capturePath`, `mealID`, plane measurements and stage timings (`docs/agent-notes/device-build-and-test.md`).
+
+Task 6's criteria against the session (one slice of bread, 58 g weighed, white plate; 15 attempts 19:05–19:08 local):
+
+- **`estimate.end success=true` in BOTH modes** — `1786439141215` (`single_view_lidar`, mealID `1D42AAC8-…`), `1786439234576` and `1786439300420` (`two_view_sfs`, mealIDs `0B8E4C7A-…`, `EDD04D82-…`).
+- **`supportplane.end success=true` in BOTH modes** — plane measurements persisted on all three successes (residuals 1.81 / 1.26 / 2.12 mm; the single-view fit selected the promoted `foodSupport` reference).
+- **`maskAgeMs` 0–750** — met by construction on every fired capture: the shutter arms only while `hasUsablePreShutterMask` holds a mask ≤ 750 ms old, and `preShutterSegmentationErrorCount=0` on all successes. Verified directly (170 ms) in the 2026-06-16 attempt.
+- **Wall-clock ≤ 30 s** — attempts landed seconds apart (successive bundle stems 2–3 s apart around the successes); per-stage timings show segmentation at ~200 ms/frame on the real model. The 141.7 s two-view trail this spec opened on is gone with the dev-stub that caused it.
+- **Result surface renders; user confirms** — the post-capture review surface (MealReviewView, superseding ResultView at capture per `specs/ui/meal-review/`) rendered detected foods and carbs; the user drove it and reported per-food observations (including a mis-segmented reference card, tracked in `docs/agent-notes/field-truth-sessions.md`).
+
+The four-spec closeout this task gates is landed in the same commit as this section: `no-food-pixels-on-fruit-plate-mvp` tasks 8–10, `lidar-plane-fit-degenerate-on-clean-capture` tasks 8–9 (report Status flipped), `shutter-blocked-feedback` task 5, plus `lidar-plane-fit-oom-on-device-1920x1440` task 3 (same session evidence).

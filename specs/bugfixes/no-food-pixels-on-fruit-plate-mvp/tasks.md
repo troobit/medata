@@ -2,14 +2,6 @@
 references:
     - specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/smolspec.md
     - specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/agent_protocol.md
-parked_note: |
-  Parked (2026-07-26, spec-janitor): both underlying bugs (lost mask-age across
-  the nadir-to-oblique stash; PreShutterSegmenter cadence stall) are fixed, but
-  the closeout tasks 8-10 have been blocked since 2026-06-16 on
-  bugfixes/lidar-plane-fit-degenerate-on-clean-capture - whose fix has since
-  landed, so the block is stale. Unpark by running the task-8 on-device
-  verification (Single and Double modes) and the tasks 9-10 documentation
-  closeout.
 ---
 # No Food Pixels Refusal On Fruit Plate Double-Mode Capture — Tasks
 
@@ -31,7 +23,7 @@ parked_note: |
 - [x] 3. swift build clean and swift test green (baseline + new regression tests) <!-- id:op0jbkx -->
   - Run swift build (clean) and swift test on the MedataCore SwiftPM target.
   - Confirm swift test reports the existing baseline (312 + 16) plus the two new regression tests, all passing.
-  - Blocked-by: op0jbkw (Diagnose suspect mechanism(s); apply minimal App-layer fix; record Root cause + Fix in smolspec.md)
+  - Blocked-by: op0jbkw (Diagnose suspect mechanisms; apply minimal App-layer fix; record Root cause + Fix in smolspec.md)
 
 ## Fix bug 2 — PreShutterSegmenter cadence stall
 
@@ -45,7 +37,7 @@ parked_note: |
   - All log lines MUST be on a clearly-marked throwaway branch (one-line `// CADENCE-DIAG:` comment per line) so task 6 can grep-and-remove them confidently.
   - Use `category: "Shutter"` to match the existing Console.app filter.
   - swift build MUST stay clean; xcodebuild iphoneos build MUST succeed.
-  - Blocked-by: op0jbkx (swift build clean and swift test green (baseline + new regression tests))
+  - Blocked-by: op0jbkx (swift build clean and swift test green baseline + new regression tests)
 
 - [x] 5. STOP — human runs device capture; agent reads trail and diagnoses <!-- id:qx7n2tb -->
   - Agent: build for device (`xcodebuild -project MeData/MeData.xcodeproj -scheme MeData -destination 'id=<device-udid>' -configuration Debug build`).
@@ -73,25 +65,26 @@ parked_note: |
   - Run swift build (clean) and swift test on MedataCore SwiftPM target.
   - Confirm 312 + 16 baseline + 2 lost-age regression tests still pass; no new failures introduced by the cadence fix.
   - If H2 was the diagnosed fix path, add one unit test exercising the hand-rolled latest-frame channel synchronously (multi-set overwrite, single resume on consume).
-  - Blocked-by: qx7n2tc (Apply minimal cadence fix; remove instrumentation; append Root cause (cadence) + Fix (cadence) to smolspec.md)
+  - Blocked-by: qx7n2tc (Apply minimal cadence fix; remove instrumentation; append Root cause cadence + Fix cadence to smolspec.md)
 
 ## Verify
 
-- [ ] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky --> <!-- BLOCKED 2026-06-16 — Blocked-by: lidar-plane-fit-degenerate-on-clean-capture (real-mask degenerate fit). Mask contract met (cadence + lost-age fixes verified; `event=estimate.start maskAgeMs=170` on the iPhone 13 Pro Max Double; `noFoodPixels` resolved). End-to-end `estimate.end success=true` gated on the lidar fix; see `## Verification attempt 2026-06-16` in smolspec.md. --> <!-- id:7265qtb -->
+- [x] 8. STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure <!-- id:op0jbky -->
   - Agent: rebuild for device, print install/launch commands and Console filter.
   - User: install, launch, capture in **Single** mode first (one nadir tap at a fruit plate), then in **Double** mode (nadir + oblique at a fruit plate). Paste both trails back.
   - Success criteria (BOTH modes) — `event=estimate.start maskAgeMs=N` with `N >= 0` AND `N <= 750`.
   - Success criteria (BOTH modes) — `event=estimate.end success=true mealId=… capturePath=…`.
   - Success criteria (BOTH modes) — ResultView renders (carbs + confidence visible). User confirms.
   - Same-refusal (`maskAgeMs=-1`) or different-refusal aborts closeout — agent reports observed delta vs hypothesis and waits for direction (do not iterate blind).
-  - Blocked-by: qx7n2td (swift build clean and swift test green (no regressions))
+  - CLOSED 2026-08-11 on the iPhone 16 Pro per user directive (13 Pro Max verifies retargeted to the current device); BLOCKED 2026-06-16 annotation removed — the blocking lidar fix verified in the same session. Both modes succeeded end-to-end on Release 9509b27-20260811-185011; evidence table in smolspec.md `## Verification (2026-08-11)`.
+  - Blocked-by: qx7n2td (swift build clean and swift test green no regressions)
 
-- [ ] 9. Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes) <!-- id:op0jbkz -->
+- [x] 9. Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes) <!-- id:op0jbkz -->
   - Append a `## Verification` section to specs/bugfixes/no-food-pixels-on-fruit-plate-mvp/smolspec.md noting the build SHA used for the rerun and the verbatim observed success trail for both modes (event lines from `fired` through `estimate.end success=true`), confirming `maskAgeMs >= 0` in each.
   - Blocked-by: op0jbky (STOP — human verifies on device in Single AND Double modes; agent diagnoses success or new failure)
 
-- [ ] 10. Append `### On-device observation (complete, rerun)` block to shutter-blocked-feedback/decision_log.md; tick task 5 (id:f4inr0r) in shutter-blocked-feedback/tasks.md <!-- id:op0jbl0 -->
+- [x] 10. Append `### On-device observation (complete, rerun)` block to shutter-blocked-feedback/decision_log.md; tick task 5 (id:f4inr0r) in shutter-blocked-feedback/tasks.md <!-- id:op0jbl0 -->
   - Append a `### On-device observation (complete, rerun)` block to specs/ui/shutter-blocked-feedback/decision_log.md immediately after the existing (complete) block, mirroring its template (Date, Device, Mode tested, Outcome=success, observed trail, UI outcome, Notes).
   - Tick task 5 in specs/ui/shutter-blocked-feedback/tasks.md (the line marked id:f4inr0r) from [ ] to [x].
   - These two doc edits land alongside the smolspec `## Verification` section in the same closeout commit (per nextup.md step 8).
-  - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail (both modes))
+  - Blocked-by: op0jbkz (Append `## Verification` section to smolspec.md with build SHA and observed success trail both modes)

@@ -18,9 +18,10 @@ references:
   - **References:** smolspec.md (Implementation Approach > Affected files; Verification item 1), decision_log.md (Decision 1 — Consequences > Positive).
   - Blocked-by: oom-001
 
-- [ ] 3. On-device verification on iPhone 13 Pro Max captures a clean run and `report.md` is finalised with the device log <!-- id:oom-004 -->
+- [x] 3. On-device verification on iPhone 13 Pro Max captures a clean run and `report.md` is finalised with the device log <!-- id:oom-004 -->
   - **Outcome:** A fresh device-log capture on iPhone 13 Pro Max iOS 26.5 from a fruit-plate test (bananas, grapes, orange on a flat table at ~30-45 cm, the same framing that produced the original OOM) shows `event=supportplane.end success=true residual_mm=... inliers=... candidates=...` instead of the `Fatal error: failed to allocate ...` abort. The captured log block is appended to `specs/bugfixes/lidar-plane-fit-oom-on-device-1920x1440/report.md` under Verification.
   - **Approach:** rebuild the Debug variant from the new branch, install on device, capture via Xcode's Console window or `log stream --predicate 'subsystem == "ie.medata.app"'`.
   - **Verification:** `report.md` shows no `Fatal error: failed to allocate ...` lines in the appended log block; `event=supportplane.end success=true` is present.
   - **References:** smolspec.md (Implementation Approach > Verification, item 4), decision_log.md (Decision 1).
+  - CLOSED 2026-08-11, retargeted to the iPhone 16 Pro per user directive; bread plate stands in for the fruit plate (the load is the candidate/inlier count, not the food). Outcome-store evidence in report.md: 1,055,573 candidates / 383,543 inliers refined in-place with a 2.12 mm residual, no allocation failure across 15 attempts.
   - Blocked-by: oom-001, oom-002
