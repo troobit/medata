@@ -144,7 +144,7 @@ references:
 
 ## Replay parity
 
-- [ ] 15. HarnessCLITests replay parity against a committed golden <!-- id:67qnbfh -->
+- [x] 15. HarnessCLITests replay parity against a committed golden <!-- id:67qnbfh -->
   - The parity test is the only harness caller: compute(fixture FP16 tensor, fixture persisted argmax, palette) compared against a committed golden expected set
   - Admissible fixtures are capture-bundle-derived and synthetic only — bundle fixtures record the cleaned prediction (PostProcessing.swift:214) so their argmax is the persisted mask. Nutrition5k fixtures carry the ground-truth mask in the same field and are excluded
   - Pins both the ranking algorithm and the FP16-decode contract; the harness runs no PostProcessing, writes no meal records and sets no marker, and nothing beyond the shared function is claimed as parity coverage
