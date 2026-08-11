@@ -1,7 +1,7 @@
 # Design: Alternative Class Candidates
 
-**Status:** approved 2026-08-10 (design gate passed after design-critic + peer review) — tasks phase next; the Decision 11 probe precedes implementation
-**Requirements:** [requirements.md](requirements.md) · Decisions 1–12 in [decision_log.md](decision_log.md) bind this design.
+**Status:** approved 2026-08-10 (design gate passed after design-critic + peer review); the Decision 11 probe ran 2026-08-11 and fixed the ranking statistic (Decision 13) — implementation unblocked from task 3
+**Requirements:** [requirements.md](requirements.md) · Decisions 1–13 in [decision_log.md](decision_log.md) bind this design.
 
 ## Overview
 
@@ -44,7 +44,7 @@ Behavioural contract (each line traces to a requirement):
 | Rule | Req |
 |---|---|
 | Accumulate per-channel probability sums per detected class over sampled pixels of the regularised map | 1.1, 2.1 |
-| Candidate magnitude = mean probability of that channel over the food's sampled pixels, quantised to permille; a class needs no argmax win anywhere. **The statistic is provisional pending the Decision 11 probe** — mean-over-region risks boundary bleed (rank 1 = whatever touches the food) and class-prior domination (a constant top-5 on every plate), the `perClassMeanProb` failure class in a new shape; the probe compares it against a second-argmax-share statistic on real tensors before any persistence code lands | 1.2, 1.3 |
+| Candidate magnitude = mean probability of that channel over the food's sampled pixels, quantised to permille; a class needs no argmax win anywhere. **Fixed by the Decision 11 probe (Decision 13)**: mean beat second-argmax share on offline hit rate (true class in the top five on 78.2% of the segmenter's wrong regions, against 68.6%). Eligibility is applied to the channel set **before** the statistic is taken, not after ranking — the two differ whenever a sentinel would otherwise occupy a slot, and the literal second-argmax definition returns nothing at all because `background` is the top non-winner at ~100% of food pixels. Boundary bleed is real and unmitigated (rank 1 touches the food 69.7% vs 9.1% by chance; erosion does not remove it) — see Decision 13 for why it ships anyway | 1.2, 1.3 |
 | Exclude: the food's own channel, background, `unknown_food`, `unsupported_liquid`, and cross-phase channels (`isFoodClass`/`isLiquidClass` decide phase) | 1.4, 1.6 |
 | Rank descending by mean (pre-quantisation); ties broken by channel declaration order (determinism) | 1.3, 7.5 |
 | Retain top 5 with strictly positive mean; fewer where fewer qualify. (In practice softmax mass never underflows, so full sets are the norm — the empty-computed case arises via the sampling floor and the no-tensor path, not this filter) | 1.5 |
@@ -159,7 +159,7 @@ No new failure modes on the capture path by design: the pass is bounded work (no
 
 ## Testing Strategy
 
-**Pre-implementation gate (Decision 11):** before any persistence, migration, or shortlist code is written, run `compute` offline over the admissible tensors (device capture bundles; segmenter validation outputs if useful) and report (a) **top-5 set constancy** across foods and plates — if a handful of classes fill most slots, the ranking is the marginal class prior and Req 8 would return neutral for reasons unrelated to the idea; (b) the **adjacency share** of rank-1 candidates — how often rank 1 is a class physically adjacent on the same plate; (c) the same two figures under a **second-argmax-share** statistic (fraction of the food's sampled pixels where the channel is the top non-winner) for comparison. The statistic is fixed from this evidence, recorded as a decision, and only then does implementation proceed. A probe verdict that neither statistic carries plate-specific signal is a valid early exit for the whole spec, at the cost of one offline script.
+**Pre-implementation gate (Decision 11): DISCHARGED 2026-08-11 — see Decision 13.** `tools/candidate_probe.py` is the probe of record and stays re-runnable against a later model, palette or statistic. Outcome: mean-over-region ships; the exit condition ("neither statistic carries plate-specific signal") was not met — rank 1 agrees with the corpus prior only 15.7% of the time across 29 distinct rank-1 classes. Two findings bind the implementation below. The device bundles are **single-food plates**, so the deciding figures come from the validation leg (200 plates, 676 scored foods, 27 distinct foods, checkpoint `ab812dc3aa9d`) and are not device figures — that leg omits speckle regularisation and reads a softmax over logits rather than an FP16 round trip. And boundary bleed is present, unmitigated, and shipping; if Req 8 returns neutral it is the first place to look.
 
 MedataCore tests only (the App-target files are documentation contracts, not an executable suite):
 

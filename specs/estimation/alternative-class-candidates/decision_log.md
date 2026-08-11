@@ -459,3 +459,65 @@ Intention-to-treat keeps the partition a property of the build, not of plate con
 - The as-offered list remains unrecoverable; any future analysis wanting it must change store semantics first.
 
 ---
+
+## Decision 13: Candidate magnitude is mean probability over eligible channels; the probe found bleed but also a usable hit rate
+
+**Date**: 2026-08-11
+**Status**: accepted, closes the Decision 11 gate
+
+### Context
+
+Decision 11 deferred the ranking statistic to evidence and gated all implementation on an offline probe (`tools/candidate_probe.py`). The probe has run. Two corpora were used, and the difference between them matters more than any single figure.
+
+The five device capture bundles turned out to be **single-food plates** — four bread, one rice. Rank-1 adjacency is unmeasurable on them (a candidate cannot touch another food class when none is present) and constancy across foods rests on n=2, so the device leg cannot answer either question Decision 11 asked. It did establish one thing: the second-argmax statistic **as literally specified** in the design — "the fraction of the food's sampled pixels where the channel is the top non-winner" — returns nothing at all, because the top non-winner is `background` at 99–100% of bread pixels. Every eligible class scores zero and the ranking is empty.
+
+The probe therefore also ran the leg Decision 11 allowed but did not require: the shipped checkpoint `ab812dc3aa9d` over 200 plates of the merged validation split — 676 scored foods, 27 distinct foods, 160 plates carrying more than one food. That split has ground-truth masks, which permits a measurement neither Decision 11 nor Req 8 anticipated being available offline: on regions the segmenter got *wrong*, is the true class in the candidate set?
+
+### Decision
+
+Candidate magnitude is the **mean probability of the channel over the food's sampled pixels**, computed over eligible channels only — the food's own class, background, both sentinels and the opposite phase are removed *before* the statistic is taken, not ranked and then filtered. The second-argmax-share alternative is rejected. Req 1.3's "derived from the same probability distribution the argmax was taken from" is satisfied unchanged; the design's provisional marking is lifted.
+
+### Rationale
+
+On the measurement that matters — the true class being present in a five-slot candidate set for a region the segmenter got wrong — mean beats second-argmax share on both counts:
+
+| statistic | true class in top-5 | true class at rank 1 |
+|---|---|---|
+| mean | **78.2%** | **46.3%** |
+| second-argmax share | 68.6% | 43.7% |
+
+over 229 wrong regions of 613 scored, against ~20.8% for a random 5-of-24 draw. That is the closest offline analogue of Req 8.1 available, and it says the discarded mass carries the right answer nearly four times in five.
+
+Both degenerate modes Decision 11 named were looked for. **Prior domination is absent at the top**: rank 1 matches the corpus-wide prior's rank 1 only 15.7% of the time, across 29 distinct rank-1 classes with a mean pairwise Jaccard of 0.205 between top-5 sets. The whole-vector Spearman against the pooled prior is high (+0.747), but that statistic is dominated by the ordering of the near-zero tail, where agreement is cheap and irrelevant to a five-slot shortlist.
+
+**Boundary bleed is present and was not explained away.** Rank 1 physically touches the food 69.7% of the time (mean) against a 9.1% chance baseline. Eroding each region before accumulating — the direct test — does not remove it: at 16 px of interior-only sampling the share falls only to 57.7% while discarding 27% of scored foods. The adjacency is intrinsic, not an edge-band artefact.
+
+What reframes it is the hit rate above. The two facts are consistent because **the adjacent class is frequently the correct one**: when the segmenter mislabels a region it has usually smeared a neighbouring food's label across it, so "what touches this food" and "what this food actually is" are the same answer in the cases that matter. The probe cannot fully separate bleed from genuine confusion — that separation needs corrections, which is Req 8's job — but a statistic that surfaces the true class 78.2% of the time is not the `perClassMeanProb` failure this gate existed to catch.
+
+The eligible-channel restriction is not a tuning choice. Without it the second-argmax statistic does not exist, and the comparison Decision 11 mandated could not have been made at all.
+
+### Alternatives Considered
+
+- **Second-argmax share (the design's stated alternative)**: fraction of sampled pixels where the channel is the strongest eligible alternative - Rejected on the evidence: 10 points worse on top-5 hit rate (68.6% vs 78.2%), and it produces very short sets — on the device bundles it returned one or two candidates where five slots were available, because a single class wins the alternative vote at almost every pixel. A shortlist input that cannot fill its slots forfeits Req 1.5.
+- **Interior-only sampling (erode the region before accumulating)**: the direct remedy for boundary bleed - Rejected: measured and it does not work. Adjacency falls 69.7% → 57.7% at 16 px, nowhere near the 9.1% chance floor, at a cost of 27% of scored foods and a new judgement constant. Paying samples for a partial fix to something the hit rate suggests is largely signal is a bad trade.
+- **Early exit — abandon the spec**: the outcome Decision 11 explicitly permits - Rejected: the exit condition was "neither statistic carries plate-specific signal", and both do. 29 distinct rank-1 classes and 15.7% agreement with the prior is plate-specific by any reading.
+- **Defer the choice to the live corpus under Req 8**: ship both and compare - Rejected for the reason Decision 11 gave: a corpus verdict costs months and returns a single neutral number without saying which statistic was at fault.
+
+### Consequences
+
+**Positive:**
+- The gate is closed on measurement rather than argument, and tasks 3 onward are unblocked.
+- The statistic ships with a documented offline hit rate (78.2% top-5), so Req 8's eventual verdict has a prior expectation to be read against rather than being the first evidence anyone sees.
+- `tools/candidate_probe.py` is committed and re-runnable: a later model, palette or statistic can be measured the same way in one command.
+
+**Negative:**
+- Boundary bleed is real, unmitigated, and shipping. If Req 8 returns neutral, this is the first place to look, and Decision 5's removal obligation (task 19) applies.
+- The deciding evidence comes from the validation leg, not the device: dataset plates under a softmax over logits and **without** the speckle regularisation the device path applies, because `regulariseLabelMap` is Swift and reimplementing it in the probe would risk divergence from what ships. The 64-sample floor absorbs most of what that filter would remove, but the two paths are not identical and the figures should not be quoted as device figures.
+- The hit rate measures the **segmenter's** errors on dataset plates, not a user's corrections on their own meals. It is an upper-bound-shaped indicator, not a substitute for Req 8.
+- The device corpus remains unable to test either Decision 11 question; closing that gap needs multi-food captures, which no session can manufacture.
+
+### Impact
+
+`design.md`'s behavioural-contract row loses its provisional marking and its Testing Strategy gate is marked discharged. `tools/candidate_probe.py` joins the repository as the probe of record. Tasks 1 and 2 close; task 3 (`CandidateEvidence.compute`) is unblocked and must implement the eligible-channels-first ordering this decision fixes, not a rank-then-filter equivalent — they differ whenever a sentinel would have occupied a slot.
+
+---
