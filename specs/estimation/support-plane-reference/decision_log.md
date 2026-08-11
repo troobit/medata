@@ -3599,3 +3599,98 @@ exact, at the cost of one indirection for a reader who wants the full text.
 changes. Task 26 remains open; its next session should read this entry first.
 
 ---
+
+## Decision 61: The sitting's reading frame is frozen at the shipped constants, and the flat-bread criterion moves off nominal thickness
+
+**Date**: 2026-08-11
+**Status**: accepted
+
+### Context
+
+Decisions 44–51 established that every sector bracket in this feature is a
+reading at five structural constants — `ringOuterMm`, `ringSectorCount`,
+`sectorSupportMin`, `annulusOuterMm`, `inlierRemovalMultiple` — and that taking
+the capture-session readings before fixing them denominates the session in
+moving units (Decision 45's grid: eight distinct `maxCrossedSectors` brackets
+across count × bar). The prerequisites therefore require the five to be chosen
+and recorded, with reasons, before the sitting.
+
+Separately, the 2026-08-11 weighed-bread pair (58 g slice, both slices
+committed) produced the promoted path's first field firings — and localised the
+residual error. An independent probe off the slices (surround-plane fit,
+residual σ 1.09 mm; per-footprint integration) reproduces the pipeline's volume
+within 13 % on both captures, the mask footprint is a real slice's 109.7 cm²,
+and 100 % of food samples carry HIGH confidence. The 1.9× mass under-read that
+remains lives in the depth relief itself (p50 8.8 mm over a footprint that
+would need ~20 mm at nominal bread density) and/or in the β=1 density path —
+not in plane selection, masking, or integration.
+
+### Decision
+
+Freeze the sitting's reading frame at the shipped values — `ringOuterMm` 25 mm,
+`ringSectorCount` 8, `sectorSupportMin` 0.5, `annulusOuterMm` 50 mm,
+`inlierRemovalMultiple` 2× — changing no code, and dump per-sector fractions,
+crossed/escaped counts, and per-candidate plane-at-food for every capture so
+each bar can be re-read at other values afterwards. Grade the sitting's
+flat-food capture (Req 7.8) against measured depth relief beside a ruler
+measurement of the food's true thickness, not against nominal thickness alone.
+
+### Rationale
+
+Every bracket this log records — `maxCrossedSectors` 2…2 (Decision 48),
+`minSupportingSectors`'s collision (Decisions 30/33), the count's 4…8, the
+bar's 0…0.5 — was read at exactly this frame. Reading the sitting at the same
+frame keeps every recorded number valid as a prior; the mandated dumps make
+any other frame reachable by re-reading rather than re-shooting. The shipped
+values are each inside their measured brackets, so freezing them asserts
+nothing Req 3.7 forbids — the values the sitting *sets* still come from the
+captures. And the bread pair shows a plane-correct capture still failing its
+mass check for non-plane reasons, so a Req 7.8 criterion stated as "volume
+within X of weighed truth" would grade the depth sensor and the β path, not
+this feature; the ruler-vs-relief comparison separates them.
+
+### Alternatives Considered
+
+- **Move `sectorSupportMin` to 0.3 before the sitting**: cleanest pass side
+  across all five permitted counts (Decision 45) and off the 10× cliff at
+  0.5→0.6 — Rejected for the sitting: it re-denominates every recorded sector
+  bracket before any capture exists, and the per-sector dump reaches 0.3 by
+  re-reading at zero capture cost.
+- **Choose 4 sectors**: determines `maxCrossedSectors` at 0 from what is
+  already in hand — Rejected: this is the trap Decision 44's prerequisites
+  name; it asserts `ringSectorCount` in order to avoid asserting
+  `maxCrossedSectors`, and whether a 90° arc resolves Req 3.6's straddle is a
+  property only capture 6 can measure.
+- **Tighten `ransacSuccessProbability` to 0.99999 now**: removes the ~2 mm
+  draw dependence every quoted figure carries, with 8× iteration headroom
+  (Decision 51) — Deferred, not rejected: it moves selected planes up to
+  3.7 mm, so it would shift the regression-slice parity bands and re-denominate
+  the brackets the sitting is about to be read against. First change to apply
+  once the sitting's captures are in hand, with the other brackets re-read at
+  it.
+
+### Consequences
+
+**Positive:**
+- The sitting's readings land in the same units as every bracket recorded in
+  Decisions 40–57; nothing has to be re-measured to be comparable.
+- No code change, so the committed suites and the Req 5.1 parity bands stay
+  exactly as measured.
+- Req 7.8's grading can no longer mistake a depth-relief or density shortfall
+  for a plane defect — the bread pair would have failed a naive volume bar
+  with a correct plane.
+
+**Negative:**
+- The bar stays on its measured cliff (0.5) for the sitting itself; a
+  cliff-adjacent noisy sector could flip a verdict that 0.3 would have held —
+  mitigated but not removed by the re-read dumps.
+- The draw dependence stays in the sitting's raw figures until the deferred
+  tightening lands; ~2 mm of any quoted plane figure remains seed-attributable.
+
+### Impact
+
+`specs/estimation/support-plane-reference/prerequisites.md` (2026-08-11 note
+carries the probe evidence), `tasks.md` task 26 (pre-sitting half recorded
+here; the capture-dependent half remains open). No code changes.
+
+---

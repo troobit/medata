@@ -213,6 +213,7 @@ references:
 ## Calibrate and verify
 
 - [ ] 26. Determine the constants the design deliberately left unstated <!-- id:284ca5r -->
+  - PRE-SITTING HALF RECORDED (Decision 61, 2026-08-11): reading frame frozen at the shipped five (ring 25 mm, 8 sectors, bar 0.5, bound 50 mm, removal 2x), no code change; ransacSuccessProbability tightening deferred to first post-sitting change. Same-day probe over the committed bread pair EXONERATES the plane for the residual 1.9x under-read (depth relief p50 8.8 mm vs ~20 mm nominal; independent integration reproduces pipeline volume within 13%) — the capture-dependent half of this task remains, denominated in that frame.
   - Each is a measurement against the fixture corpus, not a value to invent: the fallback-rate defect threshold (4.5), the device/replay plane tolerance and its named fixture (5.1), and fallbackPenalty (4.6)
   - Req 3.7 adds the sector constants — ringSectorCount, sectorSupportMin, minSupportingSectors — which MUST be measured, not asserted. The values in the design are placeholders, as is every constant marked [owed] in SupportRegion
   - SETTLED (Decision 29): ringMinSamples = 200 per band is confirmed with 5.6-7.0x margin — measured band counts [1120, 1132, 1213] and [1294, 1347, 1392], and inner-band sectors carry 102-184 samples apiece against the 25 Decision 20 targets
