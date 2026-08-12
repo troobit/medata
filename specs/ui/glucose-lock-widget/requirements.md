@@ -87,7 +87,9 @@ A WidgetKit accessory widget that surfaces the current (or most-recent) blood-gl
 **Acceptance Criteria:**
 
 1. <a name="6.1"></a>WHEN the app or its background glucose refresh writes a newer reading (Req 1.2, 1.3), the widget SHALL reflect it at its next system-permitted reload.  
-2. <a name="6.2"></a>The widget SHALL NOT depend on its own polling or background execution for data — freshness is bounded by the app/background-refresh write cadence, and the staleness treatment (Req 5) covers the gap between writes.  
+2. <a name="6.2"></a>WHEN the widget's timeline reloads AND the stored snapshot's reading is at least one vendor poll interval old AND a LibreLinkUp connection is configured, the widget SHALL fetch the latest readings itself and re-derive the snapshot, so freshness does not depend on the app process being alive.  
+3. <a name="6.3"></a>The app and the widget SHALL share one vendor request budget with a 5-minute poll interval: each successful fetch on either side SHALL be recorded in the shared container, and neither side SHALL fetch while the recorded last fetch is younger than the interval. The gate is advisory (no cross-process atomicity) — the combined steady-state rate SHALL target one fetch per interval, with rare overlapping fetches accepted.  
+4. <a name="6.4"></a>The app's database remains the source of record: a widget-side fetch updates the shared display snapshot only, and the app SHALL ingest the same readings through its own poll/catch-up. A failed or rate-gated widget fetch SHALL fall back to the stored snapshot with the staleness treatment (Req 5).  
 
 ### 7. Tap target
 

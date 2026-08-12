@@ -102,9 +102,9 @@ references:
   - Requirements: [3.2a](requirements.md#3.2a)
   - References: decision_log.md
 
-- [ ] 16. STOP — on-device verification of the adaptive poll interval
-  - Confirm on device that a reading below 5.0 mmol/L is followed by a fetch within ~5 min rather than ~15 (Estimation-log-style check: compare consecutive bsl row native instants around a low in Documents/meals.sqlite)
-  - Confirm the interval returns to 15 min once glucose recovers above the threshold and is not falling
-  - Watch for a LibreLinkUp auth failure or rate-limit response during a sustained low — the ban risk this decision accepts; if one appears, raise the urgent interval before anything else
-  - Requirements: [3.2a](requirements.md#3.2a)
+- [ ] 16. STOP — on-device verification of the uniform 5-minute poll (Decision 13)
+  - Redefined 2026-08-13 by Decision 13: the adaptive 5/15 transition is dormant (uniform 5-minute baseline), so the original checks — tighten below 5.0 mmol/L, relax on recovery — no longer exist to observe
+  - Confirm on device that consecutive bsl fetches arrive at ~5-minute cadence regardless of glucose level (compare consecutive native instants in Documents/meals.sqlite)
+  - Watch for a LibreLinkUp auth failure or rate-limit response over a sustained session — the ban risk Decision 13 accepts; if one appears, execute the rollback: restore the 15-minute baseline, Decision 12 machinery resumes
+  - Overlaps glucose-lock-widget task 16.7 (locked-phone widget sync + vendor-signal watch) — run both on the same build/session
   - References: decision_log.md

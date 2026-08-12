@@ -448,7 +448,7 @@ event log would also require a metadata-querying store API that exists for no ot
 ## Decision 12: Adaptive poll interval — tighten to 5 minutes while low or falling fast
 
 **Date**: 2026-08-05
-**Status**: accepted
+**Status**: superseded by Decision 13
 
 ### Context
 
@@ -503,5 +503,46 @@ Reusing `TrendsMath.glucoseRate` rather than writing a second rate calculation m
 ### Impact
 
 `LibreLinkUpGlucoseSource` (`pollInterval`, new `urgentPollInterval` / `urgentThresholdMmolL` / `urgentFallRateMmolLPerMin` / `nextPollInterval` / `currentPollInterval`, poll loop), Req 3.2a, and a new `GlucoseIngestion` → `Persistence` use of `TrendsMath`. The background-fetch `earliestBeginDate` is unchanged at 15 minutes — iOS governs that delivery and does not honour a request as a schedule, so tightening it would add vendor exposure without adding freshness.
+
+---
+
+## Decision 13: Uniform 5-minute poll baseline; Decision 12's adaptive machinery is the rollback position
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+The glucose-lock-widget task 14 device pass surfaced the widget going stale whenever the app is suspended, and the fix (glucose-lock-widget Decision 16) introduces a shared app+widget vendor request budget. Deciding that budget's interval reopened the poll-cadence question Decision 12 had settled adaptively. The developer's judgement: up-to-date data is what makes the surfaces useful, and a uniform 5-minute cadence — matching the 5-minute grid LLU actually serves — is worth the vendor exposure, with an explicit rollback if the account is rate-limited.
+
+### Decision
+
+The LibreLinkUp poll baseline is 5 minutes, uniformly — one shared constant in `LibreLinkUpKit`, honoured by the app's poll loop and the widget's shared rate gate alike. Decision 12's adaptive machinery (urgent threshold, fall-rate trigger, `nextPollInterval`) is retained in code but dormant: with a 5-minute baseline and a 5-minute urgent floor, every branch yields the same interval. Rollback condition: if vendor rate-limiting or ban signals are observed, restore the 15-minute baseline — Decision 12's adaptive tightening then resumes governing behaviour without further code change.
+
+### Rationale
+
+Decision 12 rejected uniform 5-minute polling to keep sustained traffic low, accepting staleness while glucose is unremarkable. The field verdict since is that the staleness is not acceptable on the always-visible surfaces (Lock Screen widget, StandBy, home header), and the 2026-08-05 field event showed its cost precisely when it matters. 5 minutes matches the cadence LLU serves (measured 5-minute gaps), stays clear of the ~3-minute rate with known ban evidence, and the tripled steady-state rate is a deliberate, reversible bet: the machinery to retreat to is already written and tested, so rollback is a one-constant change.
+
+### Alternatives Considered
+
+- **Keep Decision 12's adaptive scheme and gate the widget at 15 minutes**: lowest vendor exposure - Rejected: leaves the widget stale for the large majority of glances, defeating the point of Decision 16.
+- **Uniform 10 minutes**: splits the difference - Rejected: still misses most of LLU's 5-minute serving cadence while carrying untested exposure anyway; no evidence 10 is materially safer than 5.
+- **Adaptive baseline with widget-side triggers**: adaptive logic in both processes - Rejected: two schedulers reading one budget adds coordination complexity for little gain over a uniform interval.
+
+### Consequences
+
+**Positive:**
+- Freshness ceiling on every surface matches what the vendor actually serves; the widget's shared budget has one simple interval.
+- Rollback is one constant: the tested adaptive scheme resumes without new code.
+- Scheduler simplicity — no data-dependent traffic patterns to reason about.
+
+**Negative:**
+- Sustained request rate roughly triples against a service that bans at ~3 minutes; tolerance at 5 minutes is untested. A ban costs the entire data stream — this is the recorded, accepted risk.
+- Battery and data use rise slightly at all times, not just during lows; not measured.
+- Decision 12's nine tests now pin dormant behaviour; they stay as the rollback contract.
+
+### Impact
+
+`LibreLinkUpGlucoseSource.pollInterval` (baseline constant moves to the shared `LibreLinkUpKit`), Req 3.2/3.2a (redefined in place), glucose-lock-widget Decision 16 and Req 6.3 (the shared gate adopts this interval), and `docs/agent-notes/glucose-ingestion.md` (cadence section). The background-fetch `earliestBeginDate` stays 15 minutes — iOS governs that delivery; tightening it adds exposure without freshness (Decision 12's finding, still valid).
 
 ---

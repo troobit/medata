@@ -139,3 +139,14 @@ on the co-hosted launchers.
   still ahead, and `.never` once the state is terminal (last-reading /
   never-recorded) — a terminal state cannot advance on its own and waits for
   the app's explicit reload.
+
+## Field-observed limitation (2026-08-13, task 14 device pass)
+
+Task 14's device pass closed: App Group round-trips, portrait and Lock Screen
+renders are fine. But the widget **often falls out of sync until the phone is
+unlocked or the app is opened and refreshed**. This is the architecture above
+behaving as built, not a bug in the render path: the publisher only runs while
+the app process is alive, so nothing republishes the snapshot or reloads the
+timeline while the app is suspended. Tracked as
+`specs/ui/glucose-lock-widget/tasks.md` task 16 (candidates: HealthKit
+background delivery, BGAppRefresh, or extension-side reads in `getTimeline`).

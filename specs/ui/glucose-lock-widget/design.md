@@ -2,7 +2,7 @@
 
 ## Overview
 
-A data-driven glucose readout added as a new widget kind in the existing `MeDataWidgets` extension. The app publishes a small versioned snapshot of the latest `bsl` reading to a shared App Group whenever glucose events change; the widget renders solely from that snapshot across the Lock Screen accessory families and StandBy. Trend and staleness are pure functions with unit tests; the widget process holds no database, network, or heavy dependency.
+A data-driven glucose readout added as a new widget kind in the existing `MeDataWidgets` extension. The app publishes a small versioned snapshot of the latest `bsl` reading to a shared App Group whenever glucose events change; the widget renders solely from that snapshot across the Lock Screen accessory families and StandBy. Trend and staleness are pure functions with unit tests; the widget process holds no database and no heavy dependency, but does carry the narrow LibreLinkUp client so it can refresh itself while the app is suspended (Decision 16).
 
 ## Architecture
 
@@ -32,6 +32,11 @@ bsl write (screenshot import / CGM ingest) ─▶ store.eventsDidChange tick
 
 Lock Screen render:
    GlucoseWidget provider ─▶ GlucoseSnapshotStore.read ─▶ timeline entries anchored to readingDate ─▶ view
+
+Extension-side refresh (app suspended; Decision 16):
+   getTimeline wake ─▶ snapshot ≥ pollInterval old AND shared rate gate open?
+      └▶ LibreLinkUpKit fetch (shared keychain session) ─▶ pure snapshot derivation ─▶ GlucoseSnapshotStore.write ─▶ render fresh entries
+      └▶ gate closed or fetch failed ─▶ render stored snapshot (staleness ladder)
 ```
 
 **Publisher lifecycle and isolation.** `GlucoseWidgetPublisher` is an `actor` (not `@MainActor` — the 24h store read must not hop to the main thread) that owns a long-lived `Task` consuming `store.eventsDidChange`. It is constructed once at app launch in `App.swift` and retained for the process lifetime. The ordering is **subscribe, then prime, then consume**, and it matters in that order:
@@ -45,6 +50,24 @@ It reacts to the post-commit `eventsDidChange` notification and never blocks a w
 ### Display-horizon read (no new store API)
 
 The publisher reads `store.events(in: (now − 24h)...now, type: EventType.bsl)`. The most-recent row is the snapshot reading (any age up to 24h drives the dimmed / last-reading states); the trailing-15-minute subset feeds the trend. Empty window → never-recorded snapshot (Req 1.4). Bounded at ≤288 rows/day, so no full-history scan and no `mostRecentEvent` accessor is added. A reading older than 24h is treated as never-recorded — beyond any glance-useful horizon.
+
+### Extension-side refresh (Req 6.2–6.4, Decision 16)
+
+The field defect this solves: the publisher above only runs while the app process is alive, so a locked phone shows a stale widget until the next unlock or app open — which also made the StandBy-day render impossible to verify. The fix lets `getTimeline` refresh the snapshot itself when the app has gone quiet. It raises the freshness ceiling from "next unlock" to "next WidgetKit wake" — it does **not** make the widget real-time: WidgetKit wakes are budgeted and best-effort, and the staleness ladder remains the degradation path. The shared vendor poll interval is **5 minutes** (one constant in `LibreLinkUpKit`, adopted by the app's `pollInterval` and the gate alike) — cgm-connect Decision 13's call: it matches the cadence LLU actually serves (the measured 5-minute gaps in the field data) and stays above the ~3-minute rate with known ban evidence, but is untested against the vendor's tolerance. The recorded rollback is a 15-minute baseline with the adaptive tightening re-armed; a ban costs the data stream entirely.
+
+**Trigger and gate.** In `getTimeline`: if the stored snapshot's reading is younger than the poll interval, render as today — no fetch. Otherwise consult the shared rate gate, one timestamp under a key in the App Group suite written after every successful vendor fetch by either process. Gate younger than the poll interval → render stored (another fetch happened recently); otherwise fetch with a short timeout (~8 s, `getTimeline` must return promptly), derive, write the snapshot, render. Failure of any step falls back to the stored snapshot — never a blank or an error state (Req 6.4). The gate is also adopted by `LibreLinkUpGlucoseSource` on the app side. **The gate is advisory, not atomic**: check-then-fetch on a UserDefaults timestamp has no cross-process compare-and-set, and `cfprefsd` visibility lags — an app poll and a widget wake landing together can both pass. The accepted outcome is a rare double fetch; the steady-state combined rate targets one fetch per interval (Req 6.3), and the ban evidence concerns sustained fast polling, not occasional overlap.
+
+**Auth is app-owned.** The widget never re-logins. It reads the shared session token; on a 401 (expired or invalidated session) it falls back to the stored snapshot and leaves auth repair to the app's next poll or foreground catch-up. This removes the two-process re-login race on the shared session item outright — the extension is a read-only consumer of credentials and session alike.
+
+**Fetch and derivation.** The LLU graph endpoint already returns `graphData` plus the latest measurement — enough history for the 30-minute trend window (Decision 15). The extension converts via the existing `mgPerDl` init and derives the snapshot with the same pure helpers the app uses. That requires the pure snapshot-from-readings derivation (and `TrendsMath.trend`) to move from `Persistence` into `GlucoseWidgetShared` — Foundation-only, already the home of the render maths; `Persistence` keeps thin wrappers so app-side callers do not change. `snapToGrid` (the 5-minute-mark snapping currently internal to `GlucoseIngestion`) moves with them and the extension applies it before deriving, so both surfaces preprocess identically and the arrow cannot differ across app and widget for the same data. Insufficient series → arrow withheld, exactly the existing Req 3 behaviour.
+
+**Packaging.** `LibreLinkUpClient` + `LibreLinkUpKeychain` extract from `GlucoseIngestion` into a new Foundation-only target/product `LibreLinkUpKit`, linked by `GlucoseIngestion` and the widget extension. This keeps GRDB/Persistence out of the appex (the Decision 12 constraint stands) and leaves the estimation-firewall untouched — no estimation target gains any new dependency.
+
+**Shared state migration.** Three things the extension needs currently live app-private and move to shared storage: the LLU connected flag + resolved host + patientId (from `UserDefaults.standard` to the App Group suite), and the keychain `credentials`/`session` items (into a shared keychain access group — a new entitlement on both targets; profiles re-mint on the next device build). The items are already `kSecAttrAccessibleAfterFirstUnlock`, so a locked-phone fetch works any time after the first unlock since boot — before that first unlock the widget renders the stored snapshot, an accepted edge. Existing installs get a one-time launch migration: any of these keys still in `UserDefaults.standard` (or the app-private keychain) are copied to the shared locations and the old copies removed — idempotent, a no-op once migrated.
+
+**Timeline policy change.** While the shared connected flag is set, the provider never returns `.never`: the policy is `.after(min(next staleness boundary, last fetch + poll interval))`, so WidgetKit keeps scheduling wakes and terminal states can self-heal without the app. With no connection configured, today's `.never` behaviour stands — a screenshot-import-only user gets no network activity from the widget, ever.
+
+**Divergence note (Req 6.4).** A widget-side fetch can make the shared snapshot briefly newer than the app's database; the DB catches up on the app's next poll/foreground catch-up, which fetches the same readings from the same endpoint. The snapshot is a display contract, not a store — nothing reads it back into persistence.
 
 ## Components and Interfaces
 

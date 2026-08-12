@@ -276,6 +276,18 @@ That is a property of the data path, not a bug to fix.
 **The one lever that would have helped here** is adaptive polling: keep the 15-minute interval
 while glucose is unremarkable, and tighten it when the last reading is low or falling fast —
 concentrating the vendor rate-limit budget on exactly the window where staleness does damage,
-while leaving the long-run average request rate near today's. Not implemented: it changes
-vendor-facing request behaviour and carries the account-ban risk that set the 15 minutes in the
-first place, so it needs an explicit decision rather than a quiet change.
+while leaving the long-run average request rate near today's. This WAS then implemented as cgm-connect
+Decision 12 (2026-08-05: 5-minute urgent interval while below 5.0 mmol/L or falling ≥ 0.111
+mmol/L/min, nine tests) — and subsequently superseded by Decision 13 (see the update below).
+
+## Update 2026-08-13 — uniform 5-minute baseline (cgm-connect Decision 13)
+
+The explicit decision the paragraphs above demanded now exists, twice over. cgm-connect
+Decision 12 implemented adaptive polling; cgm-connect **Decision 13 supersedes it with a uniform
+5-minute baseline** — one shared constant in `LibreLinkUpKit`, honoured by both the app's poll
+loop and the widget's shared rate gate (glucose-lock-widget Decision 16, extension-side refresh).
+Decision 12's adaptive machinery stays in code but dormant (every branch yields 5 minutes); it is
+the designated **rollback position** — if the account is rate-limited or banned, restore the
+15-minute baseline and the adaptive tightening resumes governing without new code. The statements
+above that "the modal 15-minute gap is the app's own poll interval" and "pollInterval = 15 * 60"
+describe the pre-Decision-13 state.

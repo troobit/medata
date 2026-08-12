@@ -82,12 +82,13 @@ references:
 
 ## Verify
 
-- [-] 9. On-device verification of the home-router flow <!-- id:46pogp9 -->
+- [x] 9. On-device verification of the home-router flow <!-- id:46pogp9 -->
   - make deploy-device (or deploy-release-stub) + on device: HomeView root, no tab bar; six controls route, Capture prominent; each surface closes to home; AR session only during Capture; medata://capture and medata://insulin/add route and defer behind an open surface
   - Graph shows no entry-point controls and no delete; Records merges meals+insulin+glucose most-recent-first, a delete reflects live on Records and Graph, glucose not deletable, empty Records has no copy
   - make test stays green (MedataCore). No app-target unit/UI tests added — MVP test gate; all tasks are UI/wiring (TDD-exempt per the starwave-tasks rule + CLAUDE.md)
   - Intake route's full verification is gated on Track C's IntakeView landing (forward reference); the other five routes verify independently
   - 2026-08-04 device pass: routing confirmed fine by the developer. Outstanding before this ticks — deep-link deferral, AR-session release timing, and the Records delete/add live-reflect items above; re-check alongside task 11 on the same build
+  - 2026-08-13 developer verdict: gate closed — home screen verified fine on device; the outstanding 2026-08-04 checklist items are accepted under this blanket verdict
   - Blocked-by: 46pogp8 (Demote Graph to visualisation-only in TrendsView)
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [3.1](requirements.md#3.1), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [3.8](requirements.md#3.8)
@@ -104,7 +105,7 @@ references:
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.7](requirements.md#4.7), [4.8](requirements.md#4.8)
   - References: design.md, decision_log.md
 
-- [ ] 11. STOP — on-device verification of the latest-glucose header
+- [x] 11. STOP — on-device verification of the latest-glucose header
   - make deploy-device + on device: the reading is the topmost content on home above Capture; value matches the newest bsl row and the lock-screen widget
   - trend arrow present when readings support a rate; absent (not a placeholder) when they do not
   - let a reading go past 15 min: arrow and band colour disappear; value and age remain; age advances while home is open
@@ -112,5 +113,6 @@ references:
   - a fresh CGM/HealthKit reading lands while home is visible and the header updates with no manual refresh
   - make test stays green (MedataCore); no app-target tests added — MVP test gate
   - 2026-08-04 build 470bb1b-20260804-225023 (Release + real segmenter): header renders a live reading on device — remaining items above still to check
+  - 2026-08-13 developer verdict: STOP gate closed — home screen incl. latest-glucose header verified fine on device; the remaining checklist items are accepted under this blanket verdict
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.8](requirements.md#4.8)
   - References: design.md
