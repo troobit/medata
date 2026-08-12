@@ -131,9 +131,11 @@ references:
   - Requirements: [3.5](requirements.md#3.5), [5.4](requirements.md#5.4)
   - References: specs/ui/glucose-lock-widget/prerequisites.md
 
-- [ ] 14. Human-gated on-device verification (STOP) <!-- id:7k39hjo -->
+- [x] 14. Human-gated on-device verification (STOP) <!-- id:7k39hjo -->
   - NOT agent-executable. Per prerequisites.md: App Group provisions and the snapshot round-trips app->extension (watch for the non-nil private-store misprovisioning trap; the cfprefsd console warning is benign).
   - Widget appears as a distinct gallery kind; monochrome Lock Screen render shows the status token without colour; StandBy-day colour enhancement; staleness ladder as a reading ages; tap opens the Graph from both locked and unlocked.
+  - 2026-08-13 developer verdict: gate closed — renders fine on portrait and Lock Screen, App Group round-trip works (widget shows live data). One defect observed: the widget often falls out of sync until the phone is unlocked or the app is opened/refreshed — recorded as the follow-up task below, not a blocker for this gate
+  - 2026-08-13 correction: StandBy-day colour could NOT be checked — StandBy runs while the phone is docked/locked, which is exactly the window the sync defect keeps stale; that check moves to the follow-up task's verification
   - Blocked-by: 7k39hjn (Verify: make test + spell green, build embeds the extension)
   - Stream: 1
   - Requirements: [1.7](requirements.md#1.7), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2)
@@ -149,3 +151,32 @@ references:
   - Evidence to re-run: pull Documents/meals.sqlite per docs/agent-notes/device-build-and-test.md and redo the gap-distribution + availability simulation recorded in Decision 15
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
   - References: decision_log.md
+
+- [ ] 16. Widget falls out of sync while the app is suspended
+  - Observed 2026-08-13 during the task 14 device pass: the widget often shows a stale reading until the phone is unlocked or the app is opened and refreshed
+  - Expected from the current architecture, not a regression: GlucoseWidgetPublisher is app-process-bound — it writes the snapshot and calls reloadTimelines only on CGM ticks while the app process is alive, so a suspended/killed app means no new snapshots; terminal timeline states use .never policy and wait for the app's explicit reload (docs/agent-notes/widget-extension.md)
+  - Candidate directions: HealthKit background delivery waking the app to republish; a BGAppRefresh fallback; or having getTimeline read fresh data itself so the widget refreshes on its own budget — each needs a Decision entry weighing background-execution limits
+  - Requires design + decision-log work before implementation; keep the estimation path untouched (offline invariant is unaffected — this is all local)
+  - Verification must include the StandBy-day colour check deferred from task 14 — it needs the widget updating while docked/locked, which only this fix makes possible
+  - [ ] 16.1. Extract LibreLinkUpKit — client, keychain, shared poll-interval constant
+    - New Foundation-only SwiftPM target + library product LibreLinkUpKit holding LibreLinkUpClient, LibreLinkUpKeychain, and the shared 5-minute poll-interval constant (cgm-connect Decision 13); GlucoseIngestion links it; no Persistence/GRDB dependency
+    - EstimationFirewallTests stays green — no estimation target gains LibreLinkUpKit in its closure; make test green
+  - [ ] 16.2. Move pure derivation to GlucoseWidgetShared — snapshot-from-readings, trend, snapToGrid
+    - Snapshot-from-readings derivation and TrendsMath.trend move from Persistence, snapToGrid from GlucoseIngestion, into GlucoseWidgetShared (Foundation-only); Persistence/GlucoseIngestion keep thin wrappers so app-side callers do not change
+    - Existing tests move with the code; both make test totals stay green
+  - [ ] 16.3. Uniform 5-minute baseline in the app poll loop (Decision 13)
+    - LibreLinkUpGlucoseSource adopts the LibreLinkUpKit constant as its baseline; Decision 12 adaptive machinery stays in code, now dormant (every branch yields 5 min) — it is the recorded rollback position
+    - Update the Decision 12 tests to pin the dormancy and keep the 5-minute floor assertion (vendor ban evidence at ~3 min)
+  - [ ] 16.4. Shared vendor rate gate in the App Group
+    - One last-fetch timestamp key in the App Group suite; LibreLinkUpGlucoseSource records every successful fetch and skips while the gate is younger than the interval; gate is advisory — no cross-process atomicity, rare double fetch accepted (Req 6.3)
+  - [ ] 16.5. Shared-state migration — flag/host/patientId to App Group, keychain to shared access group
+    - glucose.source.librelinkup.connected + resolved host + patientId move from UserDefaults.standard to the App Group suite; credentials/session keychain items move to a shared keychain access group (new entitlement on BOTH targets — profiles re-mint on next device build)
+    - One-time idempotent launch migration copies existing values and removes the old copies; no-op once migrated
+  - [ ] 16.6. Extension-side fetch in getTimeline + timeline policy change
+    - getTimeline: snapshot younger than interval -> render stored; else gate check -> fetch (~8 s timeout) -> snapToGrid + derive -> GlucoseSnapshotStore.write -> render; ANY failure falls back to stored snapshot (Req 6.4)
+    - Widget never re-logins: 401 -> fallback, auth repair is the app's (design: auth is app-owned); extension reads credentials/session only
+    - Policy while connected flag set: .after(min(next staleness boundary, last fetch + interval)) — never .never; without a connected flag today's behaviour stands (screenshot-only users: zero widget network)
+  - [ ] 16.7. STOP — device pass: locked-phone sync + StandBy colour + vendor-signal watch
+    - On device: leave the phone locked across several poll intervals — the widget advances without unlocking or opening the app; StandBy-day colour check (deferred from task 14)
+    - Watch logs/Settings for any LLU rate-limit or ban signal (429, status 920, forced re-login churn) — any such signal triggers the Decision 13 rollback: restore the 15-minute baseline, adaptive machinery resumes
+    - make test green (both totals), make spell clean

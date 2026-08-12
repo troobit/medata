@@ -5,6 +5,16 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## 2026-08-13 — speckle/stability gate closed (no weighed truth)
+
+Developer verdict on device: speckle is gone and readings are stable.
+`tasks-segmenter-training-pipeline` task 7 (the on-device STOP acceptance
+gate) is now **closed** on this evidence — accepted on the promoted
+`coreml_ab812dc3aa9d` model plus the shipped `PostProcessing.swift`
+connected-component cleanup, explicitly overriding the 2026-08-04 hold that
+reserved the gate for the retrained model. Task 6 (the new-recipe training
+run) remains open but is no longer what acceptance waits on.
+
 ## 2026-08-11 — weighed bread slice, model `coreml_ab812dc3aa9d`, build `9509b27-20260811-185011` (Release)
 
 Scene: **1 slice of bread, 58 g total** (scale truth), white plate. Yellow bank
@@ -142,7 +152,8 @@ nothing here is a calibration datum.
   (`tasks-segmenter-training-pipeline` task 6 is still open). So
   `tasks-segmenter-training-pipeline` task 7 stays open: it is the acceptance
   gate for the *retrained* model, and ticking it on this evidence would credit a
-  run that never happened.
+  run that never happened. *(Superseded: the developer closed task 7 on
+  2026-08-13 — see that session's entry.)*
 - **Estimation quality improved substantially but is not yet at target.**
   Developer verdict: "improved HUGELY since this bugfix, albeit is not yet as
   accurate as hoped". No numbers — this session took no weighed truth, so the

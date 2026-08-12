@@ -637,3 +637,47 @@ Leaving `staleAge` at 15 minutes is deliberate and independently evidenced: the 
 `TrendsMath.glucoseRate` default `window`, its tests, `glucose-lock-widget` Reqs 3.1/3.3/3.4, and both consumers of `GlucoseSnapshotSource` (the widget publisher and the home-page header). **Follow-up, deliberately deferred:** re-derive the rate thresholds for the 30-minute baseline, and make the window adapt to the observed cadence rather than being pinned — recorded as `glucose-lock-widget` task 15.
 
 ---
+
+## Decision 16: The widget fetches its own reading when the app is suspended
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+The task 14 device pass closed with one defect: the widget often falls out of sync until the phone is unlocked or the app is opened. This is the Decision 11 architecture behaving as built — the snapshot publisher only runs while the app process is alive, background reloads ride a best-effort `BGAppRefreshTask`, and terminal timeline states wait on the app's explicit reload. The staleness window also made the StandBy-day render unverifiable, since StandBy runs precisely while the phone is docked and locked. The developer's verdict: up-to-date data is what makes the widget useful.
+
+While the phone is locked with the app suspended, only the widget's own process can act. There is no push server, `BGAppRefreshTask` carries no frequency guarantee, and HealthKit is not a wake source for this sensor — Abbott's writes arrive late and batched (glucose-ingestion note, corrected 2026-08-05).
+
+### Decision
+
+`getTimeline` fetches the latest LibreLinkUp readings itself when the stored snapshot is at least one poll interval old, gated by a single shared vendor-request timestamp in the App Group. The shared poll interval is **5 minutes** — one constant in `LibreLinkUpKit` adopted by the app's `pollInterval` and the gate alike, so the steady-state vendor request rate is one fetch per 5 minutes regardless of which process asks. The interval itself is cgm-connect Decision 13's call (uniform 5-minute baseline, superseding the adaptive scheme, with a recorded rollback to 15 minutes on vendor rate-limit signals); this decision only binds the gate to that shared constant. The gate is advisory (no cross-process atomicity); rare overlapping fetches are accepted. The fetch is display-only: it rewrites the shared snapshot; the app's database remains the source of record and ingests the same readings on its own poll. The widget never re-logins — on a 401 it falls back to the stored snapshot and leaves auth repair to the app. Requirement 6.2 is redefined in place (it previously forbade widget-side fetching) and Reqs 6.3/6.4 state the shared budget and fallback.
+
+### Rationale
+
+Every alternative leaves the locked-phone window unfixed. The widget process is the only process iOS reliably wakes while the phone is locked (on the WidgetKit timeline budget), lock-screen and StandBy widgets receive those wakes, and the LLU keychain items are already `AfterFirstUnlock` so a locked fetch can authenticate. The shared rate gate holds the combined app+widget rate to one fetch per interval, so Decision 16 adds surfaces without adding traffic beyond what cgm-connect Decision 13 already accepts. Packaging as a Foundation-only `LibreLinkUpKit` keeps GRDB out of the appex, preserving Decision 12's constraint.
+
+### Alternatives Considered
+
+- **Status quo (BGAppRefresh + unlock-driven refresh)**: Already built - Rejected: measured insufficient; Apple's own guidance is that BackgroundTasks offers no frequency guarantee, and the field evidence is the widget staying stale until unlock.
+- **HealthKit background delivery as the wake source**: OS-immediate wakes on sample writes - Rejected: recorded 2026-08-05 as wrong for this sensor; Abbott's HealthKit writes are late and batched (zero healthkit rows on the primary device), so the wake fires on already-stale data.
+- **Live Activity with frequent updates**: Higher update budget - Rejected: updates still originate from the app process or a push server the project does not have; it is a different surface, not a fix for the Lock Screen widget.
+- **Push notifications / server-driven reload**: Real push freshness - Rejected: requires a server and an account infrastructure; contradicts the project's local-only posture and is far out of MVP scope.
+
+### Consequences
+
+**Positive:**
+- The widget self-heals while the phone stays locked — the actual usefulness window; StandBy-day colour becomes verifiable at all.
+- The shared gate holds the combined app+widget rate to the one-per-interval budget Decision 13 (cgm-connect) sets — the widget adds surfaces, not traffic.
+- Screenshot-import-only users see zero widget network activity (policy stays `.never` without a connected flag).
+
+**Negative:**
+- Network code enters the widget extension, reversing the original "renders solely from the snapshot" simplicity; the appex gains a keychain-sharing entitlement and re-provisioning churn.
+- The shared snapshot can briefly lead the database until the app's next catch-up.
+- Still not real-time: WidgetKit wakes are budgeted and best-effort, and the 5-minute vendor cadence (cgm-connect Decision 13) is the floor — the staleness ladder remains load-bearing.
+
+### Impact
+
+Req 6 (redefined in place), the extension-side refresh section of design.md, `LibreLinkUpKit` extraction from `GlucoseIngestion`, the pure snapshot derivation moving from `Persistence` to `GlucoseWidgetShared`, `LibreLinkUpGlucoseSource` adopting the shared rate gate, shared-storage migration of the LLU flag/host/patientId and keychain items, and both targets' entitlements.
+
+---
