@@ -5459,3 +5459,174 @@ now a one-line delegate to `searchedOrderTraced`; the arithmetic is unchanged an
 Decisions 70 and 71's readings are reproduced. No shipped code changes.
 
 ---
+
+## Decision 73: A search on the product is a signed search, and husbanding is possible but small
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 72 closed with five negatives. One is that no `[owed]` value moves, which
+is not a negative to discharge. One is Decision 69's standing qualifier on the
+shipped scan order, which needs the sitting. One is that the decomposition is of
+the z sum while δ is the projected error. The two that remain are one question
+read twice, which is Decision 71's shape:
+
+> Front-loading is an account supported by the profile, not a proof. Nothing here
+> bounds how much of the stock an optimal order could husband.
+
+> The fill axis has no search. The construction the finding nominates — a search
+> on the product rather than on the signed error — is named and unbuilt.
+
+Both are answered by giving Decision 70's loop an objective that can see the fill
+axis. The increment a candidate commits is already computed there — that loop
+compares the accumulated error and never subtracts — so reading it costs one
+subtraction per evaluation, and every rule below is that loop with one line
+changed.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record that **the nominated product search is not a distinct instrument**: on
+**8 of 8** committed sets the loud product order is bit-identical to one of the
+two signed directions — five to `spend up`, three to `spend down` — and it beats
+the signed search on **0 of 8**, reading **0.446…1.000×**. Record that
+**husbanding is possible and small**: a step-local rule that keeps the smallest
+agreeing increment beats the spending rule on **4 of 8** sets, by
+**0.738…1.156×**, so Decision 72's "no step-local objective can husband, at any
+width and at any lookahead depth" is **refuted as stated** and replaced by a
+magnitude. Record that **a fill-only search is quieter on 8 of 8**
+(**0.140…0.879×** the signed search), which is Decision 72's own prediction, and
+that it is **not even the fullest order on 3 of 8** — all three fallback legs —
+so the fill axis is no more step-locally maximisable than the coherence axis was
+on the exception. Decision 71's window does **not** close: the floor is still
+`|z| ascending`'s **0.4440** of Decision 67's asserted ceiling and the roof still
+**0.7182**, a **1.62×** window, now standing against four objectives rather than
+one. `stabilityRatioMin` stays `[owed]` and unsettleable on Decision 64's third
+finding. Not repaired, on Decisions 52–72's precedent.
+
+### Rationale
+
+One reading, in `theFillAxisGetsASearchOfItsOwn`, over the same eight committed
+sets — four captures × two legs — that Decisions 69–72 read, at Decision 70's
+narrowest width so the fallback legs are afforded. Four objectives, each run in
+both directions except the fill-only one, whose quiet direction is a
+quietest-order construction rather than a second bracket.
+
+**THE CONTROL IS AN IDENTITY, for the third time in this chain.** `spend` is
+Decision 70's rule with the increment subtracted out and put back, so it must
+reproduce `searchedOrder` to the bit or the objective machinery is what is being
+measured. It does, on **8 of 8** readings. Every difference below is the
+objective and nothing else.
+
+**THE PRODUCT SEARCH COLLAPSES, and the cause is that it has no direction.**
+`|Σ eᵢ| × Σ|eᵢ|` is written on magnitudes, so the sign is settled by the first
+step that commits anything and every step after walks the sign it already has.
+Measured, the loud product order's δ, fill and coherence all equal one signed
+direction's **to the bit on 8 of 8 sets**. So the construction Decision 72
+nominated is not weaker than the signed search — it **is** the signed search,
+with the direction chosen by the arithmetic instead of by the caller, and the
+0.446× and 0.523× readings are the two sets where it chose the quieter one.
+
+**HUSBANDING IS REAL AND IT IS A TRADE.** `husband` ranks in two tiers — every
+agreeing candidate above every disagreeing one, and only within the agreeing tier
+does it prefer the smallest — so a candidate committing exactly zero outranks
+every disagreeing one and costs the stock nothing. It wins on 4 of 8 sets and the
+mechanism is visible on both axes at once: on `1785901032716`'s 1.3 M-point
+fallback set it raises fill **0.4867 → 0.5052** *and* coherence
+**0.7609 → 0.8473** for **1.152×**, while on `1785135663727`'s fallback set it
+raises fill **0.4465 → 0.6032** and drops coherence **0.6384 → 0.3467** for
+**0.738×**. There is no monotone frontier: on `1786450130307`'s annulus both axes
+fall together (0.5453 → 0.5241, 0.4630 → 0.4209, **0.874×**).
+
+**AND IT DOES NOT CLOSE THE GAP.** On the set Decisions 70–72 name, husbanding
+is the closest any constructed order has come — **4.181673 mm**, **0.681×** the
+sort, from the greedy's 0.591× and the supply repair's 0.653× — and it is still
+short, because the sort's fill of **0.7350** is unreached by every objective
+tried, the fill search's 0.5890 included.
+
+**THE FILL AXIS IS NOT STEP-LOCALLY MAXIMISABLE EITHER**, which is the finding
+that generalises Decision 72's exception. The fill search is the fullest order on
+only **5 of 8** sets, and all three it loses are fallback legs: `spend down`
+out-fills it **0.6033 against 0.5582** on `1785135663727`, `|z| ascending`
+**0.7350 against 0.5890** on `1785901032716` and **0.5663 against 0.5378** on
+`1786439141215`. Decision 72 measured fill as spanning 3.1× against coherence's
+902× and called it nearly a property of the set; the narrow range is real and a
+greedy still cannot reach the top of it on the three largest sets.
+
+**THE WINDOW IS WHERE ALL OF THIS IS DENOMINATED.** Four objectives move the
+per-set floor — husbanding carries the fullest fill on three sets (0.2076,
+0.2502, 0.1949) — and none of them touches the set that carries the corpus floor,
+where `|z| ascending`'s 0.4440 stands unbeaten for the fourth decision running.
+The Double reference re-summed in every constructed order moves **0.000e+00 mm**
+against a smallest Float δ of 2.739e-05 mm.
+
+### Alternatives Considered
+
+- **Take Decision 72's husbanding sentence at its word and build only the product
+  search**: the decision states it from the decile profile and the profile is
+  real — Rejected on Decision 68's precedent. An account left unmeasured in this
+  chain has been refuted every time it was finally measured, and this one was
+  refuted as stated: a step-local rule husbands the stock on half the corpus.
+- **Beam the product objective rather than run it greedily**: the literal reading
+  of "the construction worth building", with Decision 71's machinery already in
+  place — Rejected on the measurement that came first. The product objective is
+  bit-identical to a signed one on 8 of 8 sets, so beaming it beams the search
+  Decision 71 already beamed, for a gain of 1.080× at most.
+- **A constrained search — maximise fill subject to a coherence floor — rather
+  than a product**: the remaining shape neither objective here covers, and the
+  one to name next — Rejected as premature rather than uninteresting. A sampled
+  order out-fills the fill search on all three fallback legs it loses, so a
+  constrained search inherits the same blind spot on the sets that decide the
+  window.
+- **Repair the sum — pairwise or Kahan accumulation**: still the strongest fix
+  available and it needs no capture — Rejected on Decisions 52–72's precedent. It
+  changes the centroid, hence which candidates survive `try? refine`, hence the
+  shipped fallback plane Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- Decision 72's fourth negative is discharged by building the construction it
+  nominated, and the answer is that the construction does not exist as a distinct
+  instrument. That is settled by a bit-identity rather than by a margin.
+- Decision 72's second negative is discharged with a number: husbanding buys
+  **1.156×** at most and costs **0.738×** at worst, where that decision bounded
+  it with an assertion.
+- The floor under the permutation group's extreme rises on three sets, so
+  `objectiveOrder(.husband)` is worth running beside `replenishedOrder` when a
+  floor is needed.
+- Both axes are now known to be un-maximisable by a step-local rule, on the same
+  three fallback legs. Decision 72's exception was one set and one axis; it is
+  three sets and both.
+- The control is an identity for the third time — `spend` reproduces Decision
+  70's search to the bit on 8 of 8 readings.
+
+**Negative:**
+- No `[owed]` value moves. `stabilityRatioMin` is no closer to being settleable
+  and this is the sixth decision in a row that settles no constant.
+- Decision 71's window does not close. Four objectives leave 0.4440…0.7182
+  exactly where it was, and the set that carries the floor is still won by a
+  plain sort.
+- The husbanding rule is one point on a frontier, not its extreme. Nothing here
+  bounds what a rule that trades the two axes deliberately could reach, and the
+  trade is measurably non-monotone.
+- The three sets where a greedy cannot reach the fullest fill are the three
+  largest, so the failure is confounded with count and this reading does not
+  separate them.
+- Every δ in Decisions 64–73 is still a reading at the shipped scan order.
+  Decision 69's qualifier stands.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theFillAxisGetsASearchOfItsOwn`, `SearchObjective`, `objectiveOrder`,
+`objectiveDirections`), `docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. Additive: no
+existing helper or reading is modified and Decisions 70–72's numbers are
+reproduced. No shipped code changes.
+
+---

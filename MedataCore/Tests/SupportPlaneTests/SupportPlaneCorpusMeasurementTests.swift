@@ -12985,6 +12985,427 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
+    // MARK: - The fill axis, given a search of its own (Decision 73)
+
+    // ONE LOOP, FOUR OBJECTIVES, ONE LINE APART. Decision 72 measured δ as fill × coherence and
+    // measured Decision 70's search as a coherence-maximiser BY CONSTRUCTION: its objective is
+    // the accumulated SIGNED error, so it has no term whatever for how much rounding an order
+    // leaves available to commit. That decision closed by naming the construction it did not
+    // build — "a search on the product rather than on the signed error" — and by asserting,
+    // from the decile profile alone, that the stock of loud addends is something "no step-local
+    // objective can husband, at any width and at any lookahead depth". Decision 68 is the
+    // precedent for an account left unmeasured, and both halves are this loop with one line
+    // changed.
+    //
+    // `spend` IS `searchedOrder` — same candidate set, same increment, same
+    // strict-improvement tie-break — so it is the identity control rather than a re-run.
+    enum SearchObjective: String, CaseIterable {
+        case spend      // Decision 70's rule: the largest signed increment on offer
+        case husband    // the SMALLEST increment that still agrees, saving the loud ones
+        case fill       // the largest increment by MAGNITUDE, its sign ignored
+        case product    // both axes at once: |Σ eᵢ| × Σ|eᵢ| as the step would leave them
+    }
+
+    // The increment a candidate commits is `after − here`, and both are already computed by
+    // Decision 70's loop — it compares `after` and never subtracts. Reading the increment costs
+    // one subtraction per evaluation and is what lets an objective see the fill axis at all.
+    //
+    // `husband` ranks in two tiers because it is not a magnitude rule: every candidate whose
+    // increment AGREES beats every candidate that does not, and only within the agreeing tier
+    // does it prefer the smallest. A candidate committing exactly zero — the commonest case,
+    // since most additions are exact — therefore outranks every disagreeing one and costs the
+    // stock nothing, which is the husbanding this is built to measure.
+    static func objectiveOrder(sortedByDepth sorted: [Vec3], normal: Vec3, width: Int,
+                               objective: SearchObjective, loud: Bool) -> [Vec3] {
+        let n = sorted.count
+        guard n > 0 else { return sorted }
+        let bins = Swift.min(width, n)
+        let per = (n + bins - 1) / bins
+        var cursor = (0..<bins).map { $0 * per }
+        let end = (0..<bins).map { Swift.min(($0 + 1) * per, n) }
+        let nx = Double(normal.x), ny = Double(normal.y), nz = Double(normal.z)
+        var sx: Float = 0, sy: Float = 0, sz: Float = 0
+        var qx = 0.0, qy = 0.0, qz = 0.0
+        var mass = 0.0                       // Σ|eᵢ| so far — the fill axis, accumulated
+        var out: [Vec3] = []
+        out.reserveCapacity(n)
+        for _ in 0..<n {
+            let here = nx * (Double(sx) - qx) + ny * (Double(sy) - qy) + nz * (Double(sz) - qz)
+            var best = -1
+            var bestRank = Int.min
+            var bestKey = -Double.infinity
+            for b in 0..<bins where cursor[b] < end[b] {
+                let p = sorted[cursor[b]]
+                let after = nx * (Double(sx + p.x) - (qx + Double(p.x)))
+                    + ny * (Double(sy + p.y) - (qy + Double(p.y)))
+                    + nz * (Double(sz + p.z) - (qz + Double(p.z)))
+                let e = after - here
+                let agreeing = loud ? e : -e
+                var rank = 0
+                let key: Double
+                switch objective {
+                case .spend:
+                    key = agreeing
+                case .husband:
+                    if agreeing > 0 { rank = 1; key = -agreeing } else { key = agreeing }
+                case .fill:
+                    key = loud ? abs(e) : -abs(e)
+                case .product:
+                    let both = abs(after) * (mass + abs(e))
+                    key = loud ? both : -both
+                }
+                if rank > bestRank || (rank == bestRank && key > bestKey) {
+                    bestRank = rank
+                    bestKey = key
+                    best = b
+                }
+            }
+            let p = sorted[cursor[best]]
+            cursor[best] += 1
+            let after = nx * (Double(sx + p.x) - (qx + Double(p.x)))
+                + ny * (Double(sy + p.y) - (qy + Double(p.y)))
+                + nz * (Double(sz + p.z) - (qz + Double(p.z)))
+            mass += abs(after - here)
+            sx += p.x; sy += p.y; sz += p.z
+            qx += Double(p.x); qy += Double(p.y); qz += Double(p.z)
+            out.append(p)
+        }
+        return out
+    }
+
+    // The directions each objective is run in. `fill` reads a magnitude and its quiet direction
+    // is a QUIETEST-order construction rather than a second bracket on the loud one, so it is
+    // not run: the reading is what the loudest order reaches, and every other objective brackets
+    // it from both sides exactly as Decision 70's does.
+    static func objectiveDirections(_ objective: SearchObjective) -> [Bool] {
+        objective == .fill ? [true] : [true, false]
+    }
+
+    // Decision 73. Decision 72 closed with five negatives. One is that no `[owed]` value moves,
+    // which is not a negative to discharge. One is Decision 69's standing qualifier on the
+    // shipped scan order, which needs the sitting. One is that the decomposition is of the z sum
+    // while δ is the projected error. The two that remain are one question read twice, which is
+    // Decision 71's shape:
+    //
+    //   Front-loading is an account supported by the profile, not a proof. Nothing here bounds
+    //   how much of the stock an optimal order could husband.
+    //
+    //   The fill axis has no search. The construction the finding nominates — a search on the
+    //   product rather than on the signed error — is named and unbuilt.
+    //
+    // Both are answered by giving the loop an objective that can see the fill axis, and the
+    // answer is the same reading: if the stock CAN be husbanded, a rule that saves it is louder
+    // than one that spends it, and the floor under the permutation group's extreme rises.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("a search on the product is a signed search, and husbanding is possible but small")
+    func theFillAxisGetsASearchOfItsOwn() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        struct Row {
+            let key: String, order: String
+            let reading: OrderReading
+            let parts: SumDecomposition
+        }
+        var rows: [Row] = []
+        var attainable: [String: Double] = [:]
+        var counts: [String: Int] = [:]
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                guard let baseline = Self.orderBaseline(set, seedNormal: seed) else { continue }
+                let key = "\(name)/\(leg)"
+                let sorted = Self.depthSorted(set)
+                // The sampled comparison is the one Decisions 70-72 quote: the sort that beats
+                // the search on the named exception, and the two orders that bracket it.
+                var candidates: [(String, [Vec3])] = [
+                    ("shipped", set),
+                    ("|z| ascending", set.sorted { abs($0.z) < abs($1.z) }),
+                    ("|z| descending", set.sorted { abs($0.z) > abs($1.z) }),
+                ]
+                for objective in SearchObjective.allCases {
+                    for loud in Self.objectiveDirections(objective) {
+                        candidates.append(("\(objective.rawValue) \(loud ? "up" : "down")",
+                                           Self.objectiveOrder(
+                                            sortedByDepth: sorted, normal: baseline.normal,
+                                            width: width, objective: objective, loud: loud)))
+                    }
+                }
+                for (order, permutation) in candidates {
+                    rows.append(Row(
+                        key: key, order: order,
+                        reading: Self.orderReading(name, leg: leg, order: order,
+                                                   points: permutation, baseline: baseline),
+                        parts: Self.decomposeZSum(permutation)))
+                }
+                attainable[key] = Self.attainableZCeilingMm(set)
+                counts[key] = set.count
+            }
+        }
+        let short = "the objective sweep no longer yields a reading on both legs of every"
+            + " committed capture, so it is read on a corpus that has changed"
+        #expect(counts.count == 2 * names.count, "\(short)")
+
+        let keys = counts.keys.sorted()
+        func rowsFor(_ key: String) -> [Row] { rows.filter { $0.key == key } }
+        func loudest(_ here: [Row], _ match: (String) -> Bool) -> Row? {
+            here.filter { match($0.order) }
+                .max { $0.reading.centroidErrorMm < $1.reading.centroidErrorMm }
+        }
+        func best(_ key: String, _ objective: SearchObjective) -> Row? {
+            loudest(rowsFor(key)) { $0.hasPrefix("\(objective.rawValue) ") }
+        }
+        // The set Decisions 70-72 name: the one where a sort beats every search, and the one
+        // Decision 72 measured as bound by FILL rather than by coherence.
+        let exception = "1785901032716/fallback"
+
+        // MARK: THE CONTROL FIRST. `spend` is not merely Decision 70's rule restated — it is
+        // that loop with the increment subtracted out and put back, so it must reproduce
+        // `searchedOrder` to the bit on every set and in both directions. If it does not, the
+        // objective machinery is what the findings below are measuring.
+
+        print("=== the control: `spend` against Decision 70's search ===")
+        var reproduced = 0, checked = 0
+        for name in names {
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            guard let baseline = Self.orderBaseline(annulus, seedNormal: Vec3(0, 0, 1))
+            else { continue }
+            let sorted = Self.depthSorted(annulus)
+            for loud in [true, false] {
+                let a = Self.searchedOrder(sortedByDepth: sorted, normal: baseline.normal,
+                                           width: width, loud: loud)
+                let b = Self.objectiveOrder(sortedByDepth: sorted, normal: baseline.normal,
+                                            width: width, objective: .spend, loud: loud)
+                checked += 1
+                if Self.orderReading(name, leg: "annulus", order: "control", points: a,
+                                     baseline: baseline).centroidErrorMm
+                    == Self.orderReading(name, leg: "annulus", order: "control", points: b,
+                                         baseline: baseline).centroidErrorMm {
+                    reproduced += 1
+                }
+            }
+        }
+        print("  `spend` reproduces Decision 70's search on \(reproduced) of \(checked)"
+              + " readings, to the bit")
+        let notTheSameSearch = "`spend` no longer reproduces `searchedOrder` exactly, so the"
+            + " four objectives are four searches rather than one search with its objective"
+            + " changed, and no difference below is attributable to the objective"
+        #expect(reproduced == checked, "\(notTheSameSearch)")
+
+        // MARK: THE FIRST FINDING — what each objective reaches, on both axes. Decision 72
+        // measured the search as carrying 0.883…6.690× the sort's coherence against
+        // 0.662…1.289× its fill. These four rules move the two axes deliberately, so this is
+        // the reading that says whether either can be bought.
+
+        print("=== what each objective reaches, and on which axis ===")
+        for key in keys {
+            print("  \(key): n = \(counts[key] ?? 0)")
+            for r in rowsFor(key) {
+                print("    \(r.order): δ \(String(format: "%.6f", r.reading.centroidErrorMm))"
+                      + " mm — fill \(String(format: "%.4f", r.parts.fill)),"
+                      + " coherence \(String(format: "%.4f", r.parts.coherence))")
+            }
+        }
+
+        // MARK: THE SECOND FINDING — husbanding, measured rather than asserted. Decision 72
+        // stated from the profile that no step-local objective can husband the stock of loud
+        // addends. `husband` is exactly such an objective: same loop, same width, same cost.
+
+        print("=== husbanding the stock against spending it ===")
+        var husbandGains: [Double] = []
+        var husbandWins = 0
+        for key in keys {
+            guard let spend = best(key, .spend), let saved = best(key, .husband),
+                  spend.reading.centroidErrorMm > 0 else { continue }
+            let gain = saved.reading.centroidErrorMm / spend.reading.centroidErrorMm
+            husbandGains.append(gain)
+            if gain > 1 { husbandWins += 1 }
+            print("  \(key): spend \(String(format: "%.6f", spend.reading.centroidErrorMm)) mm"
+                  + " (fill \(String(format: "%.4f", spend.parts.fill)), coherence"
+                  + " \(String(format: "%.4f", spend.parts.coherence))), husband"
+                  + " \(String(format: "%.6f", saved.reading.centroidErrorMm)) mm"
+                  + " (fill \(String(format: "%.4f", saved.parts.fill)), coherence"
+                  + " \(String(format: "%.4f", saved.parts.coherence))) —"
+                  + " \(String(format: "%.3f", gain))×")
+        }
+        print("  saving the stock beats spending it on \(husbandWins) of"
+              + " \(husbandGains.count) sets, by"
+              + " \(String(format: "%.3f", try #require(husbandGains.min())))…"
+              + "\(String(format: "%.3f", try #require(husbandGains.max())))×")
+
+        // MARK: THE THIRD FINDING — the product search, which is the construction Decision 72
+        // nominated, against the fill-only search it said was not it.
+
+        print("=== the product search, and the fill-only one it is not ===")
+        var productGains: [Double] = []
+        var fillGains: [Double] = []
+        var productWins = 0
+        for key in keys {
+            guard let spend = best(key, .spend), let both = best(key, .product),
+                  let only = best(key, .fill), spend.reading.centroidErrorMm > 0 else { continue }
+            let gain = both.reading.centroidErrorMm / spend.reading.centroidErrorMm
+            let alone = only.reading.centroidErrorMm / spend.reading.centroidErrorMm
+            productGains.append(gain)
+            fillGains.append(alone)
+            if gain > 1 { productWins += 1 }
+            print("  \(key): product \(String(format: "%.6f", both.reading.centroidErrorMm)) mm"
+                  + " (fill \(String(format: "%.4f", both.parts.fill)), coherence"
+                  + " \(String(format: "%.4f", both.parts.coherence)),"
+                  + " \(String(format: "%.3f", gain))× the search), fill-only"
+                  + " \(String(format: "%.6f", only.reading.centroidErrorMm)) mm"
+                  + " (fill \(String(format: "%.4f", only.parts.fill)), coherence"
+                  + " \(String(format: "%.4f", only.parts.coherence)),"
+                  + " \(String(format: "%.3f", alone))×)")
+        }
+        print("  the fill-only search reads"
+              + " \(String(format: "%.3f", try #require(fillGains.min())))…"
+              + "\(String(format: "%.3f", try #require(fillGains.max())))× the signed search")
+        print("  the product search beats the signed one on \(productWins) of"
+              + " \(productGains.count) sets, by"
+              + " \(String(format: "%.3f", try #require(productGains.min())))…"
+              + "\(String(format: "%.3f", try #require(productGains.max())))×")
+
+        // AND WHY, which is a mechanism rather than a margin. `|Σ eᵢ| × Σ|eᵢ|` carries no
+        // direction: the magnitude is chosen at the first step that commits anything and every
+        // step after that walks the sign it already has. If that is the whole of it, the loud
+        // product order is not merely weaker than a signed one — it IS one, and which one is
+        // decided by the arithmetic rather than by the caller.
+        print("=== whether the product search is a signed search that chose its own direction ===")
+        var collapsed = 0
+        for key in keys {
+            guard let both = rowsFor(key).first(where: { $0.order == "product up" })
+            else { continue }
+            let matched = rowsFor(key).filter { $0.order.hasPrefix("spend ") }.first {
+                $0.reading.centroidErrorMm == both.reading.centroidErrorMm
+                    && $0.parts.fill == both.parts.fill
+                    && $0.parts.coherence == both.parts.coherence
+            }
+            if matched != nil { collapsed += 1 }
+            let verdict = matched.map { "identical to \($0.order) on all three quantities" }
+                ?? "matched by neither signed direction"
+            print("  \(key): product up reads"
+                  + " \(String(format: "%.6f", both.reading.centroidErrorMm)) mm — \(verdict)")
+        }
+        print("  the loud product search is one of the two signed searches on \(collapsed) of"
+              + " \(keys.count) sets, to the bit")
+
+        // MARK: — AND THE OTHER AXIS, read the same way. Decision 72 measured fill as nearly a
+        // property of the SET, spanning 3.1× against coherence's 902×. If that is right, a
+        // search built on fill alone should reach the top of a narrow range — and where it does
+        // not, the axis is no more step-locally maximisable than the one the exception broke.
+        print("=== whether the fill search actually maximises fill ===")
+        var fillWins = 0
+        for key in keys {
+            let here = rowsFor(key)
+            guard let only = here.first(where: { $0.order == "fill up" }),
+                  let fullest = here.max(by: { $0.parts.fill < $1.parts.fill }) else { continue }
+            if fullest.order == only.order { fillWins += 1 }
+            print("  \(key): the fill search reads fill"
+                  + " \(String(format: "%.4f", only.parts.fill)) against the fullest order's"
+                  + " \(String(format: "%.4f", fullest.parts.fill)) (\(fullest.order))")
+        }
+        print("  the fill search is the fullest order on \(fillWins) of \(keys.count) sets")
+
+        // MARK: THE FOURTH FINDING — the named exception, where Decision 72 measured FILL as
+        // the binding axis and the search as having no purchase on it. If an objective that
+        // reads that axis is worth building, this is the set it has to show on.
+
+        print("=== \(exception): the set the search could not win ===")
+        if let sort = rowsFor(exception).first(where: { $0.order == "|z| ascending" }),
+           sort.reading.centroidErrorMm > 0 {
+            for objective in SearchObjective.allCases {
+                guard let r = best(exception, objective) else { continue }
+                let against = r.reading.centroidErrorMm / sort.reading.centroidErrorMm
+                print("  \(r.order): \(String(format: "%.6f", r.reading.centroidErrorMm)) mm,"
+                      + " \(String(format: "%.3f", against))× the sort — fill"
+                      + " \(String(format: "%.4f", r.parts.fill)) against its"
+                      + " \(String(format: "%.4f", sort.parts.fill)), coherence"
+                      + " \(String(format: "%.4f", r.parts.coherence)) against"
+                      + " \(String(format: "%.4f", sort.parts.coherence))")
+            }
+        }
+
+        // MARK: THE FIFTH FINDING — the window. Decision 71 closed it to 0.4440…0.7182 of
+        // Decision 67's asserted ceiling: the floor is what some order reached and the roof is
+        // what the arithmetic allows. A louder objective raises the floor and nothing here can
+        // move the roof, so this is where any gain above is denominated.
+
+        print("=== how full the loudest order of each objective drives the ceiling ===")
+        var fills: [Double] = []
+        var attainableFills: [Double] = []
+        var carriesTheFloor = ("", 0.0, 0.0)
+        for key in keys {
+            let here = rowsFor(key)
+            guard let fullest = here.max(by: { $0.reading.share < $1.reading.share }),
+                  let a = attainable[key], fullest.reading.zCeilingMm > 0 else { continue }
+            let roof = a / fullest.reading.zCeilingMm
+            fills.append(fullest.reading.share)
+            attainableFills.append(fullest.reading.share / roof)
+            if fullest.reading.share > carriesTheFloor.1 {
+                carriesTheFloor = (key, fullest.reading.share, roof)
+            }
+            print("  \(key): fullest \(String(format: "%.4f", fullest.reading.share)) of the"
+                  + " asserted ceiling (\(fullest.order)),"
+                  + " \(String(format: "%.4f", fullest.reading.share / roof)) of the attainable"
+                  + " one")
+        }
+        print("  the window on the set that carries the floor, \(carriesTheFloor.0):"
+              + " \(String(format: "%.4f", carriesTheFloor.1))…"
+              + "\(String(format: "%.4f", carriesTheFloor.2)) of the asserted ceiling,"
+              + " a \(String(format: "%.2f", carriesTheFloor.2 / carriesTheFloor.1))× window")
+        let windowInverted = "some objective now drives the mean past what ulp(s)/2 per addition"
+            + " allows, so the attainable ceiling is not a bound and the window does not close"
+        #expect(try #require(attainableFills.max()) < 1, "\(windowInverted)")
+
+        // MARK: THE CONTROL — the multiset again, held across every order constructed here.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in keys {
+            let here = rowsFor(key)
+            guard let lo = here.map(\.reading.doubleMeanZMm).min(),
+                  let hi = here.map(\.reading.doubleMeanZMm).max(),
+                  let delta = here.map(\.reading.centroidErrorMm).min() else { continue }
+            worstNoise = Swift.max(worstNoise, hi - lo)
+            tightestDelta = Swift.min(tightestDelta, delta)
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the constructed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across these orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading needs"
+            + " and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.
