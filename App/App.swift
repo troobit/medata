@@ -1,5 +1,6 @@
 import ARKit
 import CaptureKit
+import LibreLinkUpKit
 import OSLog
 import Pipeline
 import Segmentation
@@ -30,6 +31,13 @@ struct MedataApp: App {
         let store = Self.makeStore()
         _engine = State(initialValue: engine)
         self.store = store
+
+        // One-time move of the LibreLinkUp connection state out of app-private
+        // storage and into the App Group + shared keychain, so the widget can
+        // fetch for itself (glucose-lock-widget Decision 16). Idempotent, and a
+        // no-op on a fresh install — but it MUST precede the model below, which
+        // seeds its connected flags from the shared suite on the next line.
+        LibreLinkUpSharedState.migrateFromAppPrivateStorage()
 
         // Live glucose ingestion (cgm-connect Phase 4): one coordinator plus
         // both sources for the whole app. Constructed here (a stored property

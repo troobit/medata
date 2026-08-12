@@ -1,4 +1,5 @@
 import Foundation
+import LibreLinkUpKit
 import XCTest
 
 @testable import GlucoseIngestion
@@ -8,6 +9,11 @@ import XCTest
 // [GlucoseSample]. Deliberately no URLSession stubbing — the client is a
 // thin adapter and its network paths are verified on device (project
 // minimal-test gate).
+//
+// The payload types and the graph→reading mapping live in LibreLinkUpKit since
+// glucose-lock-widget Decision 16; `samples(from:)` — the reading→GlucoseSample
+// step these tests assert — is still GlucoseIngestion's, so the fixtures stay
+// here and cover both halves in one pass.
 final class LibreLinkUpMappingTests: XCTestCase {
 
     // MARK: - Login decoding

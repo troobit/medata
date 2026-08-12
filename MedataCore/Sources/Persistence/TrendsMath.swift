@@ -1,7 +1,9 @@
 import Foundation
-// Leaf enums only (GlucoseTrend / GlucoseBandStatus). GlucoseWidgetShared is
-// Foundation-only with an empty dependency list, so this edge adds nothing to
-// the estimation link closure (glucose-lock-widget Decision 10).
+// The glucose leaf types AND, since glucose-lock-widget Decision 16, the trend
+// and band maths themselves — the widget extension derives its own snapshot now
+// and cannot import Persistence. GlucoseWidgetShared is Foundation-only with an
+// empty dependency list, so this edge adds nothing to the estimation link
+// closure (Decision 10).
 import GlucoseWidgetShared
 
 // Pure maths for the Trends surface (UI Design Handoff 00, Reqs 10.2/10.3/10.5).
@@ -10,16 +12,10 @@ import GlucoseWidgetShared
 // existing MedataCore test suite covers it and the App imports it alongside the
 // store.
 
-// A single glucose reading in mmol/L (the value carried by `bsl` events).
-public struct GlucoseReading: Sendable, Equatable {
-    public let timestamp: Date
-    public let mmolL: Double
-
-    public init(timestamp: Date, mmolL: Double) {
-        self.timestamp = timestamp
-        self.mmolL = mmolL
-    }
-}
+// Re-exported so app-side callers keep saying `GlucoseReading` with only
+// `import Persistence`; the type itself moved to GlucoseWidgetShared with the
+// maths that consumes it.
+public typealias GlucoseReading = GlucoseWidgetShared.GlucoseReading
 
 // A dated scalar for bucketing (e.g. a meal's carbs at its capture time).
 public struct DatedValue: Sendable, Equatable {
@@ -55,9 +51,10 @@ public struct TrendsBucket: Sendable, Equatable {
 
 public enum TrendsMath {
 
-    // The target band (Req 10.2/10.5).
-    public static let targetLowMmolL = 3.9
-    public static let targetHighMmolL = 10.0
+    // The target band (Req 10.2/10.5). Forwarded, not re-declared — the widget
+    // classifies against the same two numbers (glucose-lock-widget Req 4.1).
+    public static let targetLowMmolL = GlucoseTrendMath.targetLowMmolL
+    public static let targetHighMmolL = GlucoseTrendMath.targetHighMmolL
 
     // Gaps longer than this are excluded from time-in-range (Req 10.5).
     public static let maxGapSeconds: TimeInterval = 60 * 60
@@ -160,93 +157,36 @@ public enum TrendsMath {
 
     // MARK: - Glucose trend (glucose-lock-widget Reqs 3.1-3.4, Decision 4)
 
+    // Thin forwards onto `GlucoseTrendMath` (GlucoseWidgetShared), which is
+    // where the implementation now lives so the widget extension can run the
+    // same classification without importing Persistence (glucose-lock-widget
+    // Decision 16). These exist so app-side callers — TrendsModel, TrendsView,
+    // LibreLinkUpGlucoseSource — did not have to change; new callers may use
+    // either name.
+
     // Band edges on |rate|, in mmol/L per minute. Half-open: a boundary value
     // belongs to the faster band.
-    public static let slowRateThreshold = 0.056
-    public static let mediumRateThreshold = 0.111
-    public static let fastRateThreshold = 0.166
+    public static let slowRateThreshold = GlucoseTrendMath.slowRateThreshold
+    public static let mediumRateThreshold = GlucoseTrendMath.mediumRateThreshold
+    public static let fastRateThreshold = GlucoseTrendMath.fastRateThreshold
 
-    // Slope of a least-squares fit over the readings in the closed window
-    // [now − window, now], in mmol/L per minute. Anchoring to `now` rather than
-    // to the latest reading keeps trend and staleness on the same clock, so a
-    // lagging reading cannot report a trend the staleness ladder already calls
-    // stale.
-    //
-    // nil unless at least two readings fall in the window AND the earliest and
-    // latest span `minSpan` — two near-simultaneous readings would otherwise
-    // amplify a millimole of noise into a spurious fast arrow. The ≥2-readings
-    // guard also covers Req 3.4: a latest reading older than the window leaves
-    // fewer than 2 readings in it.
-    //
-    // The window is 30 minutes, not the 15 the spec first assumed, because the
-    // LibreLinkUp feed does not deliver a reading every 5 minutes. Measured
-    // over 282 live rows on the primary device (2026-08-05), the gap between
-    // consecutive readings was 15 minutes in 152 cases, 5 in 96 and 10 in 31 —
-    // so a 15-minute window usually holds ONE reading and the arrow almost
-    // never appeared: derivable in 33.5 % of the minutes when the reading was
-    // fresh enough to display, against 99.1 % at 30 minutes. 30 is twice the
-    // modal cadence, which is what makes two consecutive readings always fit;
-    // 45 minutes adds 0.1 % and only lengthens the baseline. The cost is a
-    // slower arrow — see glucose-lock-widget Decision 15.
     public static func glucoseRate(
         _ readings: [GlucoseReading], now: Date,
         window: TimeInterval = 30 * 60, minSpan: TimeInterval = 10 * 60
     ) -> Double? {
-        let windowStart = now.addingTimeInterval(-window)
-        let inWindow = readings
-            .filter { $0.timestamp >= windowStart && $0.timestamp <= now }
-            .sorted { $0.timestamp < $1.timestamp }
-
-        guard let earliest = inWindow.first, let latest = inWindow.last,
-              inWindow.count >= 2,
-              latest.timestamp.timeIntervalSince(earliest.timestamp) >= minSpan
-        else { return nil }
-
-        // x in minutes from the earliest in-window reading, so the slope is
-        // already per-minute.
-        let xs = inWindow.map { $0.timestamp.timeIntervalSince(earliest.timestamp) / 60 }
-        let ys = inWindow.map(\.mmolL)
-        let xMean = xs.reduce(0, +) / Double(xs.count)
-        let yMean = ys.reduce(0, +) / Double(ys.count)
-
-        var covariance = 0.0
-        var variance = 0.0
-        for (x, y) in zip(xs, ys) {
-            covariance += (x - xMean) * (y - yMean)
-            variance += (x - xMean) * (x - xMean)
-        }
-        guard variance > 0 else { return nil }
-        return covariance / variance
+        GlucoseTrendMath.glucoseRate(readings, now: now, window: window, minSpan: minSpan)
     }
 
-    // The rate → arrow-state map. Split out from `trend(_:now:)` so the band
-    // edges are testable as exact values, with no floating-point reconstruction
-    // from timestamps in between.
     public static func trend(forRate rate: Double) -> GlucoseTrend {
-        let rising = rate > 0
-        switch abs(rate) {
-        case ..<slowRateThreshold: return .steady
-        case ..<mediumRateThreshold: return rising ? .risingSlow : .fallingSlow
-        case ..<fastRateThreshold: return rising ? .rising : .falling
-        default: return rising ? .risingFast : .fallingFast
-        }
+        GlucoseTrendMath.trend(forRate: rate)
     }
 
-    // nil when no rate qualifies (Reqs 3.3, 3.4) — the widget then shows the
-    // value with no arrow.
     public static func trend(_ readings: [GlucoseReading], now: Date) -> GlucoseTrend? {
-        guard let rate = glucoseRate(readings, now: now) else { return nil }
-        return trend(forRate: rate)
+        GlucoseTrendMath.trend(readings, now: now)
     }
 
-    // The reading's position against the target band (Req 4.1). Runs on the raw
-    // value while the widget shows one decimal place, so a raw 3.87 displays
-    // "3.9" yet carries the low token — the raw-value band is the authority at
-    // the boundary.
     public static func bandStatus(_ mmolL: Double) -> GlucoseBandStatus {
-        if mmolL < targetLowMmolL { return .low }
-        if mmolL > targetHighMmolL { return .high }
-        return .inRange
+        GlucoseTrendMath.bandStatus(mmolL)
     }
 
     // MARK: - Carb axis mapping (Req 10.2)

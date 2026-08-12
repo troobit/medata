@@ -2,11 +2,17 @@ import Foundation
 import XCTest
 
 // Estimation-path firewall (specs/data/cgm-connect Req 7.1): the TRANSITIVE
-// dependency closure of every estimation target must exclude
-// GlucoseIngestion. Transitive, not direct-edge — Pipeline → Persistence and
-// GlucoseIngestion → Persistence both exist, so a direct-edge check would
+// dependency closure of every estimation target must exclude the two targets
+// that can make a network call — GlucoseIngestion and, since
+// glucose-lock-widget Decision 16 pulled the vendor client out into its own
+// module, LibreLinkUpKit. Transitive, not direct-edge — Pipeline → Persistence
+// and GlucoseIngestion → Persistence both exist, so a direct-edge check would
 // miss a Pipeline → … → GlucoseIngestion path. The generated dump-package
 // graph is the single source of truth; no hand-maintained fixture.
+//
+// LibreLinkUpKit is the load-bearing addition: it holds the only URLSession use
+// left in the package, so it is the module whose arrival in an estimation
+// closure would breach the project's no-network-in-estimation invariant.
 final class EstimationFirewallTests: XCTestCase {
 
     private static let estimationTargets = [
@@ -14,15 +20,19 @@ final class EstimationFirewallTests: XCTestCase {
         "MetricScale", "SupportPlane", "CardDetection", "Confidence", "Foods",
     ]
 
+    private static let forbiddenTargets = ["GlucoseIngestion", "LibreLinkUpKit"]
+
     func testEstimationTargetsTransitivelyExcludeGlucoseIngestion() throws {
         #if os(macOS)
         let packageRoot = try Self.findPackageRoot()
         let graph = try Self.parseTargetGraph(Self.dumpPackage(at: packageRoot))
 
         // Guard against the check going vacuous through a rename.
-        XCTAssertNotNil(
-            graph["GlucoseIngestion"],
-            "GlucoseIngestion target missing from the package graph — firewall test is vacuous")
+        for forbidden in Self.forbiddenTargets {
+            XCTAssertNotNil(
+                graph[forbidden],
+                "\(forbidden) missing from the package graph — firewall test is vacuous")
+        }
 
         // Positive control: edge parsing must actually see dependencies.
         // Pipeline → Persistence is a real, load-bearing edge; if parsing
@@ -35,9 +45,11 @@ final class EstimationFirewallTests: XCTestCase {
         for target in Self.estimationTargets {
             XCTAssertNotNil(graph[target], "estimation target \(target) missing from dump-package")
             let closure = Self.transitiveClosure(of: target, in: graph)
-            XCTAssertFalse(
-                closure.contains("GlucoseIngestion"),
-                "\(target) transitively depends on GlucoseIngestion — Req 7.1 firewall breached")
+            for forbidden in Self.forbiddenTargets {
+                XCTAssertFalse(
+                    closure.contains(forbidden),
+                    "\(target) transitively depends on \(forbidden) — Req 7.1 firewall breached")
+            }
         }
         #else
         throw XCTSkip("requires the swift toolchain on PATH (macOS test host)")

@@ -1,4 +1,9 @@
 import Foundation
+// `GlucoseReading` is re-exported by Persistence as a typealias, but a
+// typealias only carries the NAME — its members need the defining module
+// imported (it moved to GlucoseWidgetShared with the trend maths,
+// glucose-lock-widget Decision 16).
+import GlucoseWidgetShared
 import Observation
 import Persistence
 import PortableContracts

@@ -3,6 +3,7 @@ import BackgroundTasks
 #endif
 import Foundation
 import GlucoseIngestion
+import LibreLinkUpKit
 import Observation
 import Persistence
 
@@ -44,8 +45,7 @@ final class GlucoseConnectionsModel {
 
     init(store: any PersistenceStore) {
         coordinator = IngestionCoordinator(store: store)
-        for id in [healthKit.id, libreLinkUp.id]
-        where UserDefaults.standard.bool(forKey: Self.connectedKey(id)) {
+        for id in [healthKit.id, libreLinkUp.id] where Self.connectedFlag(for: id) {
             connectedSourceIDs.insert(id)
         }
     }
@@ -176,13 +176,28 @@ final class GlucoseConnectionsModel {
     // init to know which sources to reconnect at launch. With no flag set,
     // nothing runs at launch (Req 1.4). UserDefaults is persistence only —
     // all live reads go through the observable mirror.
+    //
+    // LibreLinkUp's flag lives in the App Group suite rather than
+    // `UserDefaults.standard`, because the widget gates its own fetch on it
+    // (glucose-lock-widget Decision 16) and cannot see the app's private store.
+    // HealthKit's stays private — nothing outside this process reads it.
     private func setConnectedFlag(_ connected: Bool, for sourceID: String) {
         if connected {
             connectedSourceIDs.insert(sourceID)
         } else {
             connectedSourceIDs.remove(sourceID)
         }
-        UserDefaults.standard.set(connected, forKey: Self.connectedKey(sourceID))
+        if sourceID == LibreLinkUpSharedState.sourceID {
+            LibreLinkUpSharedState.setConnected(connected)
+        } else {
+            UserDefaults.standard.set(connected, forKey: Self.connectedKey(sourceID))
+        }
+    }
+
+    private static func connectedFlag(for sourceID: String) -> Bool {
+        sourceID == LibreLinkUpSharedState.sourceID
+            ? LibreLinkUpSharedState.isConnected()
+            : UserDefaults.standard.bool(forKey: connectedKey(sourceID))
     }
 
     private static func connectedKey(_ sourceID: String) -> String {

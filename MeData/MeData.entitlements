@@ -19,5 +19,16 @@
 	<array>
 		<string>group.rtob.MeData</string>
 	</array>
+	<!-- glucose-lock-widget Decision 16: the widget fetches from LibreLinkUp
+	     itself while the app is suspended, so the credentials and session
+	     keychain items must be readable from BOTH processes. The same group
+	     must appear in MeDataWidgets.entitlements, and the value here has to
+	     match LibreLinkUpKeychain.accessGroup once $(AppIdentifierPrefix)
+	     expands. Adding this re-mints the provisioning profiles — the first
+	     device build after it may need -allowProvisioningUpdates. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)rtob.MeData.shared</string>
+	</array>
 </dict>
 </plist>

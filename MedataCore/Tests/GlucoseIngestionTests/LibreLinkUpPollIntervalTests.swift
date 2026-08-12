@@ -1,14 +1,21 @@
 import Foundation
+import LibreLinkUpKit
 import XCTest
 
 @testable import GlucoseIngestion
 
-// Adaptive poll interval (cgm-connect Decision 12).
+// Adaptive poll interval (cgm-connect Decision 12), DORMANT since Decision 13.
 //
 // This governs how often the app hits a vendor that has banned accounts for
 // polling too fast, so every branch is pinned: the baseline must be the
 // baseline whenever glucose is unremarkable, and the tightened rate must never
 // go below the 5-minute floor.
+//
+// Decision 13 made the baseline 5 minutes — the one shared app+widget interval
+// — so every branch below now returns the same number. The branch tests are
+// kept as the rollback contract: they are what proves the adaptive scheme still
+// works if `LibreLinkUpPolling.interval` goes back to 15 minutes. See
+// `testAdaptiveMachineryIsDormantAtTheSharedInterval` at the foot of the file.
 //
 // The motivating case is `lowReadingTightensTheInterval` — on 2026-08-05 the
 // Abbott app alarmed on a low while MeData displayed a value measured eight
@@ -106,12 +113,28 @@ final class LibreLinkUpPollIntervalTests: XCTestCase {
             LibreLinkUpGlucoseSource.nextPollInterval(after: readings, now: now))
     }
 
-    // The ban guard. 3-minute polling is the rate that has cost accounts; the
-    // urgent rate must stay clear of it, and the baseline must not regress.
+    // The ban guard. 3-minute polling is the rate that has cost accounts, so
+    // NEITHER interval may drop below 5 minutes, whichever governs.
     func testIntervalsStayWithinTheVendorRateLimit() {
         XCTAssertGreaterThanOrEqual(LibreLinkUpGlucoseSource.urgentPollInterval, 5 * 60)
-        XCTAssertEqual(LibreLinkUpGlucoseSource.pollInterval, 15 * 60)
-        XCTAssertLessThan(
+        XCTAssertGreaterThanOrEqual(LibreLinkUpGlucoseSource.pollInterval, 5 * 60)
+        XCTAssertLessThanOrEqual(
             LibreLinkUpGlucoseSource.urgentPollInterval, LibreLinkUpGlucoseSource.pollInterval)
+    }
+
+    // cgm-connect Decision 13: the baseline is the ONE shared vendor interval,
+    // and it now equals the urgent floor — so every branch exercised above
+    // returns the same number and the adaptive scheme is dormant rather than
+    // deleted. That is deliberate: it is the recorded rollback position, and
+    // raising `LibreLinkUpPolling.interval` back to 15 minutes re-arms
+    // Decision 12's tightening with no other code change. These two assertions
+    // are what would fail first if someone "tidied up" the dormant machinery or
+    // let the two intervals drift apart again.
+    func testAdaptiveMachineryIsDormantAtTheSharedInterval() {
+        XCTAssertEqual(LibreLinkUpGlucoseSource.pollInterval, LibreLinkUpPolling.interval)
+        XCTAssertEqual(
+            LibreLinkUpGlucoseSource.pollInterval, LibreLinkUpGlucoseSource.urgentPollInterval,
+            "baseline and urgent interval have diverged — Decision 12 is live again, "
+                + "which is the rollback state and needs a decision-log entry")
     }
 }

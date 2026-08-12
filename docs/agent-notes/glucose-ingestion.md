@@ -291,3 +291,25 @@ the designated **rollback position** — if the account is rate-limited or banne
 15-minute baseline and the adaptive tightening resumes governing without new code. The statements
 above that "the modal 15-minute gap is the app's own poll interval" and "pollInterval = 15 * 60"
 describe the pre-Decision-13 state.
+
+As landed (task 16), the symbols are:
+
+- `LibreLinkUpPolling.interval` (`MedataCore/Sources/LibreLinkUpKit/LibreLinkUpSharedState.swift`) —
+  the one interval. `LibreLinkUpGlucoseSource.pollInterval` forwards to it; rollback is editing
+  this single constant back to `15 * 60`.
+- `LibreLinkUpRateGate` — one timestamp in the App Group suite, written by whichever process
+  fetched. `fetchAndIngest` skips while it is closed; `connect()` alone passes
+  `ignoringRateGate: true`, because a user who just typed a password must get a connection state
+  rather than silence.
+- `LibreLinkUpSharedState` — connected flag, resolved host and patient id, moved out of
+  `UserDefaults.standard` into the App Group suite so the widget can read them; the keychain items
+  moved to the shared access group for the same reason.
+  `migrateFromAppPrivateStorage()` runs once at launch and is a no-op thereafter.
+- `LibreLinkUpPollIntervalTests.testAdaptiveMachineryIsDormantAtTheSharedInterval` pins the
+  dormancy; the branch tests around it are the rollback contract, not dead weight.
+
+The client itself (`LibreLinkUpClient`, `LibreLinkUpKeychain`) moved out of `GlucoseIngestion`
+into the Foundation-only `LibreLinkUpKit` so the widget extension can link it without GRDB.
+`LibreLinkUpClient.readings(from:)` stops at the vendor's own reading type; the
+`GlucoseSample` step stayed in `GlucoseIngestion`
+(`MedataCore/Sources/GlucoseIngestion/LibreLinkUpSamples.swift`).

@@ -8,7 +8,7 @@ THREE kinds in one `WidgetBundle`:
 |---|---|---|---|
 | `ie.medata.widget.insulin` | `MeDataWidgets.swift` | none | `medata://insulin/add` |
 | `ie.medata.widget.capture` | `MeDataWidgets.swift` | none | `medata://capture` |
-| `ie.medata.widget.glucose` | `GlucoseWidget.swift` | App Group snapshot | `medata://graph` |
+| `ie.medata.widget.glucose` | `GlucoseWidget.swift` | App Group snapshot, plus its own LibreLinkUp fetch when the app is suspended (Decision 16) | `medata://graph` |
 
 Lock-screen accessory widgets carry a SINGLE tap target — that is why dose and
 capture are separate kinds, not two buttons in one widget, and why the glucose
@@ -16,9 +16,10 @@ kind's whole view is one `widgetURL`. Deep links are handled by
 `App/AppRoot.swift handleDeepLink` (see `insulin-dose-ui.md`).
 
 The two LAUNCHER kinds display no data: no persistence imports, `Timeline`
-policy `.never`. Keep them that way — the App Group and the snapshot read
-belong to the glucose kind alone. The 30 MB memory cap and the no-GRDB /
-no-network rule bind every kind in the bundle, glucose included.
+policy `.never`, no network. Keep them that way — the App Group, the snapshot
+read and the vendor fetch belong to the glucose kind alone. The 30 MB memory cap
+and the no-GRDB rule bind every kind in the bundle; the no-network rule binds
+the launchers only, since Decision 16 (see the last section).
 
 Families differ by kind: the launchers support `accessoryCircular`,
 `accessoryRectangular` and `systemSmall`; glucose supports those three plus
@@ -76,8 +77,9 @@ after task-14 device verification found the widget absent from StandBy. Do not
   and Release. The entitlements file sits inside the synchronized folder, so it
   is listed in `membershipExceptions` beside `Info.plist` to keep it out of the
   build phases — `CODE_SIGN_ENTITLEMENTS` is a path setting, not a membership.
-- The only linked package product is `GlucoseWidgetShared` (Foundation-only,
-  zero deps). Wiring it into an objectVersion-77 pbxproj needs THREE objects,
+- The linked package products are `GlucoseWidgetShared` (Foundation-only, zero
+  deps) and, since Decision 16, `LibreLinkUpKit` (Foundation-only, depends on
+  GlucoseWidgetShared alone). Wiring one into an objectVersion-77 pbxproj needs THREE objects,
   not a build setting: an `XCSwiftPackageProductDependency`, a `PBXBuildFile`
   with `productRef` pointing at it, and that build file listed in the widget's
   `PBXFrameworksBuildPhase` — plus the dependency in the target's
@@ -140,13 +142,47 @@ on the co-hosted launchers.
   never-recorded) — a terminal state cannot advance on its own and waits for
   the app's explicit reload.
 
-## Field-observed limitation (2026-08-13, task 14 device pass)
+## Field-observed limitation (2026-08-13, task 14 device pass) — and the fix
 
 Task 14's device pass closed: App Group round-trips, portrait and Lock Screen
-renders are fine. But the widget **often falls out of sync until the phone is
-unlocked or the app is opened and refreshed**. This is the architecture above
+renders are fine. But the widget **often fell out of sync until the phone was
+unlocked or the app was opened and refreshed**. This was the architecture above
 behaving as built, not a bug in the render path: the publisher only runs while
-the app process is alive, so nothing republishes the snapshot or reloads the
-timeline while the app is suspended. Tracked as
-`specs/ui/glucose-lock-widget/tasks.md` task 16 (candidates: HealthKit
-background delivery, BGAppRefresh, or extension-side reads in `getTimeline`).
+the app process is alive, so nothing republished the snapshot or reloaded the
+timeline while the app was suspended.
+
+Task 16 / Decision 16 fixes it by letting `getTimeline` fetch for itself. The
+widget is therefore **no longer network-free** — the "no network" rule in the
+table above now binds the two LAUNCHER kinds only. What still binds every kind:
+the 30 MB memory cap and no GRDB.
+
+- `GlucoseProvider.refreshedSnapshot` is the whole path, and every branch of it
+  falls back to the stored snapshot — a failed, gated or unconfigured fetch
+  renders exactly what it would have rendered before. There is no error state.
+- Four conditions must all hold before a request goes out: the shared connected
+  flag is set, the stored reading is at least `LibreLinkUpPolling.interval` old,
+  the shared `LibreLinkUpRateGate` is open, and a usable session + patient id are
+  readable. A screenshot-import-only user fails the first and never transmits.
+- **The widget never logs in.** It reads the session from the shared keychain
+  group; a 401 falls back and leaves auth repair to the app. Do not "improve"
+  this into a re-login — two processes repairing one session item is the race
+  Decision 16 avoided by construction.
+- Readings are snapped and rounded through `GlucoseGrid` before
+  `GlucoseDerivation.snapshot` — the same helpers the ingest path uses. Deriving
+  from raw vendor instants here would make the arrow differ between the widget
+  and the app for identical data.
+- Timeline policy changed with it: with a connection configured the provider
+  never returns `.never` (a widget that can refresh itself must keep being
+  woken, and the last-reading state is where a wake helps most). It books
+  whichever comes first — the next staleness boundary or the moment the rate
+  gate reopens. Without a connection, the old `.never`-when-terminal rule stands.
+- The shared snapshot can now briefly lead the database. That is intended: the
+  snapshot is a display contract, nothing reads it back into persistence, and
+  the app ingests the same readings on its next poll.
+
+The extension links **two** package products now — `GlucoseWidgetShared` and
+`LibreLinkUpKit` — each needing the same three pbxproj objects described above.
+Both targets also carry a `keychain-access-groups` entitlement
+(`$(AppIdentifierPrefix)rtob.MeData.shared`), which must stay in step with
+`LibreLinkUpKeychain.accessGroup`; that constant spells the team prefix out, so
+`codesign -d --entitlements -` on the appex is the check that they match.

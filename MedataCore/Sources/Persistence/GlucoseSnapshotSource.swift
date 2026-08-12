@@ -48,16 +48,13 @@ public enum GlucoseSnapshotSource {
         return snapshot(from: readings, now: now)
     }
 
-    // The pure half: newest row is the reading, the trailing window drives the
-    // trend. `readings` is expected in the store's `(timestamp ASC, id ASC)`
-    // order, so the last row is the most recent one.
+    // The pure half moved to `GlucoseDerivation` (GlucoseWidgetShared) when the
+    // widget started deriving its own snapshot from a vendor fetch
+    // (glucose-lock-widget Decision 16) — same argument as the extraction from
+    // the publisher, one rung further out: two surfaces deriving "the latest
+    // reading and its trend" independently is how they drift. This forward
+    // keeps `import Persistence` enough for app-side callers.
     public static func snapshot(from readings: [GlucoseReading], now: Date) -> GlucoseSnapshot {
-        guard let latest = readings.last else { return .neverRecorded }
-        return GlucoseSnapshot.make(
-            mmolL: latest.mmolL,
-            readingDate: latest.timestamp,
-            trend: TrendsMath.trend(readings, now: now),
-            status: TrendsMath.bandStatus(latest.mmolL)
-        )
+        GlucoseDerivation.snapshot(from: readings, now: now)
     }
 }
