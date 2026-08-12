@@ -11790,8 +11790,17 @@ struct SupportPlaneCorpusMeasurementTests {
     // the two directions bracket the extreme rather than duplicate it.
     static func searchedOrder(sortedByDepth sorted: [Vec3], normal: Vec3,
                               width: Int, loud: Bool) -> [Vec3] {
+        searchedOrderTraced(sortedByDepth: sorted, normal: normal, width: width, loud: loud).0
+    }
+
+    // The same search with its LIVE CANDIDATE COUNT recorded, by tenth of the run. Decision 72
+    // asks whether the search is capped by its own supply, and the supply is a property of the
+    // loop rather than of the order it returns, so it has to come out of the loop. Recording
+    // only: `searchedOrder` delegates here and Decisions 70 and 71's readings are unchanged.
+    static func searchedOrderTraced(sortedByDepth sorted: [Vec3], normal: Vec3,
+                                    width: Int, loud: Bool) -> ([Vec3], [Double]) {
         let n = sorted.count
-        guard n > 0 else { return sorted }
+        guard n > 0 else { return (sorted, []) }
         let bins = Swift.min(width, n)
         let per = (n + bins - 1) / bins
         var cursor = (0..<bins).map { $0 * per }
@@ -11801,10 +11810,14 @@ struct SupportPlaneCorpusMeasurementTests {
         var qx = 0.0, qy = 0.0, qz = 0.0
         var out: [Vec3] = []
         out.reserveCapacity(n)
-        for _ in 0..<n {
+        var liveTotal = [Double](repeating: 0, count: decileCount)
+        var liveSteps = [Double](repeating: 0, count: decileCount)
+        for step in 0..<n {
             var best = -1
+            var live = 0
             var bestScore = loud ? -Double.infinity : Double.infinity
             for b in 0..<bins where cursor[b] < end[b] {
+                live += 1
                 let p = sorted[cursor[b]]
                 let score = nx * (Double(sx + p.x) - (qx + Double(p.x)))
                     + ny * (Double(sy + p.y) - (qy + Double(p.y)))
@@ -11814,13 +11827,25 @@ struct SupportPlaneCorpusMeasurementTests {
                     best = b
                 }
             }
+            let d = decile(step, of: n)
+            liveTotal[d] += Double(live)
+            liveSteps[d] += 1
             let p = sorted[cursor[best]]
             cursor[best] += 1
             sx += p.x; sy += p.y; sz += p.z
             qx += Double(p.x); qy += Double(p.y); qz += Double(p.z)
             out.append(p)
         }
-        return out
+        return (out, (0..<decileCount).map {
+            liveSteps[$0] > 0 ? liveTotal[$0] / liveSteps[$0] : 0
+        })
+    }
+
+    // Tenths of a run, so a profile is the same length whatever the set's count is.
+    static let decileCount = 10
+
+    static func decile(_ step: Int, of n: Int) -> Int {
+        n <= 0 ? 0 : Swift.min(decileCount - 1, step * decileCount / n)
     }
 
     // The order Decision 69's ACCOUNT nominates but never tried. That decision explained
@@ -12525,6 +12550,438 @@ struct SupportPlaneCorpusMeasurementTests {
         let referenceMoves = "the Double reference now moves as much across the beamed orders as"
             + " the Float sum does, so the multiset is not held to the precision this reading"
             + " needs and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
+    // MARK: - The sum opened up, and the search's candidate supply (Decision 72)
+
+    // ONE ORDER'S SUM, WALKED WITH EVERY ROUNDING RECORDED. Decisions 67-71 read δ as a single
+    // number — bounded it, sampled it, searched it — and never opened it. The question Decision
+    // 71 leaves open is about the SEQUENCE rather than the total: a sort over 1.3 M near-equal
+    // same-sign addends beats a search that maximises the accumulated error at every step, and
+    // no account of that survives. δ is Σ eᵢ, so there are exactly two ways an order can be
+    // loud — commit LARGER roundings, or commit roundings that AGREE — and one reading
+    // separates them.
+    //
+    // Each eᵢ is exact in Double. `s` before and after are Floats, so their difference is
+    // exact, and subtracting zᵢ spans ulp(z) ≈ 2⁻¹⁵ mm to |s| ≈ 2²⁹ mm — 44 bits against
+    // Double's 53.
+    struct SumDecomposition {
+        let signed: Double            // Σ eᵢ — the Float z sum's error, exactly
+        let magnitude: Double         // Σ |eᵢ| — everything the arithmetic committed
+        let attainable: Double        // Σ ulp(sᵢ)/2 along THIS order's own trajectory
+        let decileFill: [Double]      // Σ|eᵢ| / Σ ulp(sᵢ)/2, by tenth of the run
+        let decileCoherence: [Double] // Σ eᵢ / Σ |eᵢ|, by tenth of the run
+
+        // The two axes. `coherence` is 1 when every rounding pushes the same way and 0 when
+        // they cancel exactly; `fill` is how much of what the arithmetic allows the order
+        // takes. Their product is the share of the attainable ceiling the order reaches.
+        var coherence: Double { magnitude > 0 ? abs(signed) / magnitude : 0 }
+        var fill: Double { attainable > 0 ? magnitude / attainable : 0 }
+    }
+
+    static func decomposeZSum(_ points: [Vec3]) -> SumDecomposition {
+        let n = points.count
+        var s: Float = 0
+        var signed = 0.0, magnitude = 0.0, attainable = 0.0
+        var bySigned = [Double](repeating: 0, count: decileCount)
+        var byMagnitude = [Double](repeating: 0, count: decileCount)
+        var byAttainable = [Double](repeating: 0, count: decileCount)
+        for (step, p) in points.enumerated() {
+            let before = s
+            s += p.z
+            // `reduce(0, +)`'s first addition is onto an exact zero and commits nothing, which
+            // this reads as e = 0 rather than special-casing it.
+            let e = (Double(s) - Double(before)) - Double(p.z)
+            let room = Double(s.ulp) / 2
+            let d = decile(step, of: n)
+            signed += e; magnitude += abs(e); attainable += room
+            bySigned[d] += e; byMagnitude[d] += abs(e); byAttainable[d] += room
+        }
+        return SumDecomposition(
+            signed: signed, magnitude: magnitude, attainable: attainable,
+            decileFill: (0..<decileCount).map {
+                byAttainable[$0] > 0 ? byMagnitude[$0] / byAttainable[$0] : 0
+            },
+            decileCoherence: (0..<decileCount).map {
+                byMagnitude[$0] > 0 ? bySigned[$0] / byMagnitude[$0] : 0
+            })
+    }
+
+    // THE SAME GREEDY WITH ITS CANDIDATE SUPPLY REPLENISHED. `searchedOrder` cuts `width`
+    // contiguous depth bins ONCE and reads their heads; a bin it drains is gone, so the search
+    // that starts with `width` candidates can finish with one, and every step after that is
+    // forced. Here a slot that runs out is refilled by splitting the largest live one at its
+    // midpoint, so `width` candidates stay live for the whole run.
+    //
+    // Nothing else moves — same axis, same objective, same strict-improvement tie-break, same
+    // n × width cost — so the difference between the two is the supply and nothing else. At
+    // `width >= n` every bin holds one point, no slot can be split, and the two are the same
+    // exhaustive greedy: that identity is the control.
+    static func replenishedOrder(sortedByDepth sorted: [Vec3], normal: Vec3,
+                                 width: Int, loud: Bool) -> [Vec3] {
+        replenishedOrderTraced(sortedByDepth: sorted, normal: normal,
+                               width: width, loud: loud).0
+    }
+
+    // The same, with its live-candidate count recorded by tenth of the run — the reading that
+    // says the refill actually held the supply up, rather than that being the intention.
+    static func replenishedOrderTraced(sortedByDepth sorted: [Vec3], normal: Vec3,
+                                       width: Int, loud: Bool) -> ([Vec3], [Double]) {
+        let n = sorted.count
+        guard n > 0 else { return (sorted, []) }
+        let bins = Swift.min(width, n)
+        let per = (n + bins - 1) / bins
+        var cursor = (0..<bins).map { $0 * per }
+        var end = (0..<bins).map { Swift.min(($0 + 1) * per, n) }
+        let nx = Double(normal.x), ny = Double(normal.y), nz = Double(normal.z)
+        var sx: Float = 0, sy: Float = 0, sz: Float = 0
+        var qx = 0.0, qy = 0.0, qz = 0.0
+        var out: [Vec3] = []
+        out.reserveCapacity(n)
+        var liveTotal = [Double](repeating: 0, count: decileCount)
+        var liveSteps = [Double](repeating: 0, count: decileCount)
+        for step in 0..<n {
+            var best = -1
+            var live = 0
+            var bestScore = loud ? -Double.infinity : Double.infinity
+            for b in 0..<bins where cursor[b] < end[b] {
+                live += 1
+                let p = sorted[cursor[b]]
+                let score = nx * (Double(sx + p.x) - (qx + Double(p.x)))
+                    + ny * (Double(sy + p.y) - (qy + Double(p.y)))
+                    + nz * (Double(sz + p.z) - (qz + Double(p.z)))
+                if loud ? (score > bestScore) : (score < bestScore) {
+                    bestScore = score
+                    best = b
+                }
+            }
+            let d = decile(step, of: n)
+            liveTotal[d] += Double(live)
+            liveSteps[d] += 1
+            let p = sorted[cursor[best]]
+            cursor[best] += 1
+            sx += p.x; sy += p.y; sz += p.z
+            qx += Double(p.x); qy += Double(p.y); qz += Double(p.z)
+            out.append(p)
+            // THE ONLY DIFFERENCE, and it is O(width) per drained slot rather than per step:
+            // the slot takes the top half of the largest live range, which leaves the array
+            // partitioned exactly as before and copies nothing.
+            if cursor[best] == end[best] {
+                var largest = -1, size = 1
+                for b in 0..<bins where end[b] - cursor[b] > size {
+                    size = end[b] - cursor[b]
+                    largest = b
+                }
+                if largest >= 0 {
+                    let mid = cursor[largest] + size / 2
+                    cursor[best] = mid
+                    end[best] = end[largest]
+                    end[largest] = mid
+                }
+            }
+        }
+        return (out, (0..<decileCount).map {
+            liveSteps[$0] > 0 ? liveTotal[$0] / liveSteps[$0] : 0
+        })
+    }
+
+    // Decision 72. Decision 71 closed with five negatives. One is that this is a fourth
+    // negative result in a row, which is not a negative to discharge. One is Decision 69's
+    // standing qualifier on the shipped scan order, which needs the sitting. One is the beam's
+    // budget cap, a statement about what was run rather than about the arithmetic. The two
+    // that remain are the window's two ends, and only one of them is answerable with what is
+    // in hand:
+    //
+    //   `|z| ascending` on the 1.3 M-point set is now unexplained rather than merely unbeaten.
+    //   Decision 70 attributed it to greedy myopia; that account is refuted and no replacement
+    //   is offered.
+    //
+    // Every instrument in this chain has treated δ as one number. It is a SUM of n − 1
+    // roundings, so an order can only be loud two ways: its roundings are larger, or they
+    // agree. `decomposeZSum` separates them, and the separation is what an account has to be
+    // made of. The supply hypothesis — the search's own candidate set drains, so its late
+    // steps are forced — is the one construction left that a step-local objective genuinely
+    // cannot see, and `replenishedOrder` is it with one variable changed.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("δ is a sum of roundings, and what the sort has more of is agreement")
+    func theSortsGainIsAgreementRatherThanSize() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        struct Row {
+            let key: String, order: String
+            let deltaMm: Double, zErrorMm: Double, doubleMeanZMm: Double
+            // What the FINAL division commits. `floatCentroid` sums in Float and then divides
+            // by n in Float, and the decomposition below accounts for the additions only, so
+            // this is the exact size of the term it is allowed to be short by.
+            let divisionRoomMm: Double
+            let parts: SumDecomposition
+        }
+        var rows: [Row] = []
+        var live: [String: [Double]] = [:]
+        var refilled: [String: [Double]] = [:]
+        var counts: [String: Int] = [:]
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                guard let baseline = Self.orderBaseline(set, seedNormal: seed) else { continue }
+                let key = "\(name)/\(leg)"
+                let sorted = Self.depthSorted(set)
+                let traced = Self.searchedOrderTraced(
+                    sortedByDepth: sorted, normal: baseline.normal, width: width, loud: true)
+                var candidates: [(String, [Vec3])] = [
+                    ("shipped", set),
+                    ("|z| ascending", set.sorted { abs($0.z) < abs($1.z) }),
+                    ("|z| descending", set.sorted { abs($0.z) > abs($1.z) }),
+                    ("greedy up", traced.0),
+                ]
+                candidates.append(("greedy down", Self.searchedOrder(
+                    sortedByDepth: sorted, normal: baseline.normal, width: width, loud: false)))
+                let refill = Self.replenishedOrderTraced(
+                    sortedByDepth: sorted, normal: baseline.normal, width: width, loud: true)
+                candidates.append(("replenished up", refill.0))
+                candidates.append(("replenished down", Self.replenishedOrder(
+                    sortedByDepth: sorted, normal: baseline.normal, width: width, loud: false)))
+                let room = Double(Float(baseline.cz).ulp) / 2
+                for (order, permutation) in candidates {
+                    let reading = Self.orderReading(name, leg: leg, order: order,
+                                                    points: permutation, baseline: baseline)
+                    rows.append(Row(key: key, order: order, deltaMm: reading.centroidErrorMm,
+                                    zErrorMm: reading.zErrorMm,
+                                    doubleMeanZMm: reading.doubleMeanZMm,
+                                    divisionRoomMm: room,
+                                    parts: Self.decomposeZSum(permutation)))
+                }
+                live[key] = traced.1
+                refilled[key] = refill.1
+                counts[key] = set.count
+            }
+        }
+        let short = "the decomposition no longer yields a reading on both legs of every"
+            + " committed capture, so it is read on a corpus that has changed"
+        #expect(counts.count == 2 * names.count, "\(short)")
+
+        let keys = counts.keys.sorted()
+        func rowsFor(_ key: String) -> [Row] { rows.filter { $0.key == key } }
+        func row(_ key: String, _ order: String) -> Row? {
+            rows.first { $0.key == key && $0.order == order }
+        }
+        // The set Decisions 70 and 71 name: the one where a sort beats every search.
+        let exception = "1785901032716/fallback"
+
+        // MARK: THE CONTROL FIRST. The decomposition has to reproduce the quantity it
+        // decomposes, or it is measuring something else: Σ eᵢ divided by n is the z mean's own
+        // error, which `orderReading` reads independently off the Float centroid.
+
+        // The gap is not a tolerance. `floatCentroid` sums in Float and DIVIDES in Float, and
+        // the decomposition accounts for the n − 1 additions only, so what it is short by is
+        // exactly the division's own rounding — ulp(μ)/2, which the corpus's ~350 mm standoff
+        // fixes at 1.5e-05 mm. Bounding the gap by that is an accounting identity where a
+        // fraction-of-the-smallest-reading tolerance would be a fitted number.
+        print("=== the control: Σ eᵢ against the reading it decomposes ===")
+        var worstGap = 0.0, room = 0.0, smallestError = Double.infinity
+        for r in rows where r.parts.signed != 0 {
+            let reconstructed = r.parts.signed / Double(counts[r.key] ?? 1)
+            worstGap = Swift.max(worstGap, abs(reconstructed - r.zErrorMm))
+            room = Swift.max(room, r.divisionRoomMm)
+            smallestError = Swift.min(smallestError, abs(r.zErrorMm))
+        }
+        print("  the roundings sum to the z mean's error to within"
+              + " \(String(format: "%.3e", worstGap)) mm across \(rows.count) readings,"
+              + " against the division's own \(String(format: "%.3e", room)) mm"
+              + " (\(String(format: "%.3f", worstGap / room)) of it) and a smallest error of"
+              + " \(String(format: "%.3e", smallestError)) mm")
+        let decompositionDrifts = "Σ eᵢ / n no longer reproduces the z mean's error to within"
+            + " the one rounding it does not account for, so the decomposition is not of the"
+            + " sum `floatCentroid` computes and nothing below is a statement about δ"
+        #expect(worstGap <= room, "\(decompositionDrifts)")
+
+        // MARK: THE FIRST FINDING — the two axes. An order is loud by committing larger
+        // roundings or by committing roundings that agree, and δ is their product against the
+        // attainable ceiling. This is the reading that says which one the sort has.
+
+        print("=== what each order's δ is made of ===")
+        for key in keys {
+            print("  \(key): n = \(counts[key] ?? 0)")
+            for r in rowsFor(key) {
+                print("    \(r.order): δ \(String(format: "%.6f", r.deltaMm)) mm —"
+                      + " fill \(String(format: "%.4f", r.parts.fill)),"
+                      + " coherence \(String(format: "%.4f", r.parts.coherence))")
+            }
+        }
+        // The spans, side by side, because the finding is which axis MOVES. A permutation
+        // cannot change what the set makes available, so a narrow fill span across orders is
+        // the statement that fill belongs to the set and coherence to the order.
+        let fills = rows.map(\.parts.fill), coherences = rows.map(\.parts.coherence)
+        let fillLo = try #require(fills.min()), fillHi = try #require(fills.max())
+        let cohLo = try #require(coherences.min()), cohHi = try #require(coherences.max())
+        print("  over \(rows.count) readings fill spans \(String(format: "%.4f", fillLo))…"
+              + "\(String(format: "%.4f", fillHi)) (\(String(format: "%.1f", fillHi / fillLo))×)"
+              + " and coherence \(String(format: "%.4f", cohLo))…"
+              + "\(String(format: "%.4f", cohHi)) (\(String(format: "%.0f", cohHi / cohLo))×)")
+
+        print("=== the search against the sort, on the two axes ===")
+        var fillRatios: [Double] = [], coherenceRatios: [Double] = []
+        var closure: [Double] = []
+        for key in keys {
+            guard let sort = row(key, "|z| ascending"),
+                  let search = rowsFor(key).filter({ $0.order.hasPrefix("greedy") })
+                    .max(by: { $0.deltaMm < $1.deltaMm }) else { continue }
+            guard sort.parts.fill > 0, sort.parts.coherence > 0 else { continue }
+            fillRatios.append(search.parts.fill / sort.parts.fill)
+            coherenceRatios.append(search.parts.coherence / sort.parts.coherence)
+            let observed = search.deltaMm / sort.deltaMm
+            let product = (fillRatios.last ?? 0) * (coherenceRatios.last ?? 0)
+            closure.append(observed > 0 ? abs(product - observed) / observed : 0)
+            print("  \(key): the search has \(String(format: "%.3f", fillRatios.last ?? 0))× the"
+                  + " sort's fill and \(String(format: "%.3f", coherenceRatios.last ?? 0))× its"
+                  + " coherence, for \(String(format: "%.3f", observed))× δ"
+                  + " (their product: \(String(format: "%.3f", product))×)")
+        }
+        print("  across the corpus the search's fill is"
+              + " \(String(format: "%.3f", try #require(fillRatios.min())))…"
+              + "\(String(format: "%.3f", try #require(fillRatios.max())))× the sort's and its"
+              + " coherence \(String(format: "%.3f", try #require(coherenceRatios.min())))…"
+              + "\(String(format: "%.3f", try #require(coherenceRatios.max())))×")
+        // δ is the PROJECTED error and the decomposition is of the z sum alone, so the product
+        // is not an identity — it closes to whatever |n̂_z| and the x and y sums leave. That it
+        // closes at all is what says the two axes are the whole of δ rather than two of several.
+        print("  fill × coherence reproduces the δ ratio to within"
+              + " \(String(format: "%.1f", 100 * (try #require(closure.max())))) % on"
+              + " \(closure.count) of \(keys.count) sets")
+
+        // MARK: THE SECOND FINDING — the profile through the run, on the named exception. A
+        // supply that drains shows here and nowhere else: the live-candidate count falls and
+        // the fill falls with it.
+
+        print("=== \(exception): through the run, by tenth ===")
+        if let profile = live[exception] {
+            print("  greedy live candidates (of \(width)):      "
+                  + profile.map { String(format: "%.1f", $0) }.joined(separator: " "))
+        }
+        if let profile = refilled[exception] {
+            print("  replenished live candidates (of \(width)): "
+                  + profile.map { String(format: "%.1f", $0) }.joined(separator: " "))
+        }
+        for order in ["|z| ascending", "greedy up", "replenished up"] {
+            guard let r = row(exception, order) else { continue }
+            print("  \(order) fill:      "
+                  + r.parts.decileFill.map { String(format: "%.3f", $0) }.joined(separator: " "))
+            print("  \(order) coherence: "
+                  + r.parts.decileCoherence.map { String(format: "%+.2f", $0) }
+                    .joined(separator: " "))
+        }
+
+        // MARK: THE THIRD FINDING — the supply hypothesis, with one variable changed. If the
+        // search is capped by its own draining candidate set, refilling it is what lifts δ.
+
+        print("=== the replenished search against the one it repairs ===")
+        var supplyGains: [Double] = []
+        var supplyWins = 0
+        for key in keys {
+            guard let greedy = rowsFor(key).filter({ $0.order.hasPrefix("greedy") })
+                    .max(by: { $0.deltaMm < $1.deltaMm }),
+                  let filled = rowsFor(key).filter({ $0.order.hasPrefix("replenished") })
+                    .max(by: { $0.deltaMm < $1.deltaMm }), greedy.deltaMm > 0 else { continue }
+            let gain = filled.deltaMm / greedy.deltaMm
+            supplyGains.append(gain)
+            if gain > 1 { supplyWins += 1 }
+            print("  \(key): greedy \(String(format: "%.6f", greedy.deltaMm)) mm, replenished"
+                  + " \(String(format: "%.6f", filled.deltaMm)) mm —"
+                  + " \(String(format: "%.3f", gain))×")
+        }
+        print("  refilling the candidate set beats the search it repairs on \(supplyWins) of"
+              + " \(supplyGains.count) sets, by"
+              + " \(String(format: "%.3f", try #require(supplyGains.min())))…"
+              + "\(String(format: "%.3f", try #require(supplyGains.max())))×")
+        if let sort = row(exception, "|z| ascending"),
+           let filled = rowsFor(exception).filter({ $0.order.hasPrefix("replenished") })
+            .max(by: { $0.deltaMm < $1.deltaMm }), sort.deltaMm > 0 {
+            print("  on the named exception it reads"
+                  + " \(String(format: "%.3f", filled.deltaMm / sort.deltaMm))× the sort")
+        }
+
+        // MARK: THE CONTROL — the two searches are one search when the supply cannot drain.
+        // At `width >= n` every bin holds one point and no slot is ever refilled, so the
+        // replenished search IS `searchedOrder`. Read on a subsample, the identity being a
+        // property of the two loops rather than of any set.
+
+        print("=== the control: the two searches at width >= n ===")
+        let controlGeometry = try #require(Self.geometry(names[0]))
+        let controlAnnulus = SupportRegion.ringSamples(geometry: controlGeometry).annulus
+            .map { controlGeometry.points[$0] }
+        let sample = Array(controlAnnulus.prefix(2_000))
+        let sampleBaseline = try #require(Self.orderBaseline(sample, seedNormal: Vec3(0, 0, 1)))
+        let sampleSorted = Self.depthSorted(sample)
+        var identical = 0, tried = 0
+        for loud in [true, false] {
+            let a = Self.searchedOrder(sortedByDepth: sampleSorted,
+                                       normal: sampleBaseline.normal,
+                                       width: sample.count, loud: loud)
+            let b = Self.replenishedOrder(sortedByDepth: sampleSorted,
+                                          normal: sampleBaseline.normal,
+                                          width: sample.count, loud: loud)
+            tried += 1
+            if Self.orderReading("control", leg: "annulus", order: "exhaustive", points: a,
+                                 baseline: sampleBaseline).centroidErrorMm
+                == Self.orderReading("control", leg: "annulus", order: "exhaustive", points: b,
+                                     baseline: sampleBaseline).centroidErrorMm {
+                identical += 1
+            }
+        }
+        print("  at width = \(sample.count) over \(sample.count) points the two searches agree"
+              + " on \(identical) of \(tried) readings, to the bit")
+        let notTheSameSearch = "the replenished search no longer reduces to `searchedOrder`"
+            + " when its supply cannot drain, so it is a different search rather than that one"
+            + " with its candidate set refilled and no gain is attributable to the supply"
+        #expect(identical == tried, "\(notTheSameSearch)")
+
+        // MARK: THE CONTROL — the multiset again, held across every order constructed here.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in keys {
+            let here = rowsFor(key)
+            guard let lo = here.map(\.doubleMeanZMm).min(),
+                  let hi = here.map(\.doubleMeanZMm).max(),
+                  let delta = here.map(\.deltaMm).min() else { continue }
+            worstNoise = Swift.max(worstNoise, hi - lo)
+            tightestDelta = Swift.min(tightestDelta, delta)
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the constructed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across these orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading needs"
+            + " and the movement cannot be attributed to the Float centroid"
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
