@@ -1,11 +1,15 @@
 // LibreLinkUp follower glucose source (specs/data/cgm-connect Req 3).
 //
-// Owns scheduling (15-minute foreground poll + catch-up + background-fetch
-// entry point) and the durable-ack fetch cycle; the HTTP contract lives in
-// LibreLinkUpClient. Credentials are captured by the Phase 4 UI via
-// setCredentials(email:password:) BEFORE connect and live only in the
-// Keychain (Req 3.1); disconnect wipes them (Req 6.2).
+// Owns scheduling (foreground poll + catch-up + background-fetch entry point)
+// and the durable-ack fetch cycle; the HTTP contract, the shared poll interval,
+// the shared connection state and the shared vendor rate gate live in
+// LibreLinkUpKit — the widget extension uses the same three (glucose-lock-widget
+// Decision 16), which is what makes the combined request rate one budget.
+// Credentials are captured by the Phase 4 UI via setCredentials(email:password:)
+// BEFORE connect and live only in the Keychain (Req 3.1); disconnect wipes them
+// (Req 6.2).
 import Foundation
+import LibreLinkUpKit
 // For TrendsMath / GlucoseReading — the adaptive poll interval reuses the
 // display's own rate maths so "falling fast" means the same thing to the
 // scheduler as to the arrow the user is looking at. GlucoseIngestion already
@@ -22,15 +26,25 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // live in this module — it is app-lifecycle wiring.
     public static let backgroundTaskIdentifier = "com.medata.librelinkup.refresh"
 
-    // Req 3.2: fetch at an interval no longer than 15 minutes while
-    // foregrounded. The spike confirmed ≤15 min is comfortably inside the
-    // API's rate limits (3-minute polling has caused account bans).
-    static let pollInterval: TimeInterval = 15 * 60
+    // Req 3.2: the baseline poll interval, now the ONE shared vendor interval
+    // (cgm-connect Decision 13) — the same constant the widget's rate gate
+    // reads, so app and widget spend one budget rather than two.
+    //
+    // It was 15 minutes, chosen because ~3-minute polling has caused
+    // LibreLinkUp account bans. Decision 13 lowered it to 5 to match the
+    // cadence LLU actually serves, accepting untested vendor tolerance at that
+    // rate; the rollback is to put 15 minutes back in `LibreLinkUpPolling`,
+    // which re-arms the adaptive tightening below without further code change.
+    static let pollInterval: TimeInterval = LibreLinkUpPolling.interval
 
     // The tightened interval used while glucose is low or falling fast
     // (see `nextPollInterval`). Deliberately 5 minutes, not 3: 3-minute
     // polling is the rate that has caused bans, so this stays clear of it
     // even during a sustained hypo.
+    //
+    // DORMANT under Decision 13: with a 5-minute baseline every branch of
+    // `nextPollInterval` yields the same value. It is retained, and its tests
+    // with it, because it is the recorded rollback position.
     static let urgentPollInterval: TimeInterval = 5 * 60
 
     // Below this the next poll tightens. Set at the top of the target band
@@ -47,10 +61,11 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // comfortable number while the real one crossed the band.
     static let urgentFallRateMmolLPerMin = -TrendsMath.mediumRateThreshold
 
-    // Non-secret persisted state; the token lives in the Keychain with the
-    // credentials.
-    private static let hostDefaultsKey = "glucose.source.librelinkup.host"
-    private static let patientIDDefaultsKey = "glucose.source.librelinkup.patientId"
+    // Non-secret persisted state. The resolved host and the followed patient id
+    // moved to the App Group suite (LibreLinkUpSharedState) because the widget
+    // needs both to fetch; the last-success time is a Settings display value
+    // only, so it stays app-private. The token lives in the Keychain with the
+    // credentials, in the shared access group for the same reason.
     private static let lastSuccessDefaultsKey = "glucose.source.librelinkup.lastSuccessAt"
 
     private let client: LibreLinkUpClient
@@ -105,7 +120,12 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             await sink.reportState(connectionState, for: id)
             return
         }
-        await fetchAndIngest()
+        // The one fetch that ignores the shared rate gate. connect() is the
+        // credential-validation path — a user who just typed a password, or a
+        // launch reconnect, must get a state within seconds rather than sit on
+        // `.notConnected` for up to an interval because the widget happened to
+        // fetch a minute ago. It is one request on a user action, not a rate.
+        await fetchAndIngest(ignoringRateGate: true)
         // A disconnect that interleaved the fetch must not resurrect polling.
         guard generation == connectionGeneration else { return }
         startPolling()
@@ -119,9 +139,8 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
         pollTask = nil
         session = nil
         keychain.deleteAll()
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Self.hostDefaultsKey)
-        defaults.removeObject(forKey: Self.patientIDDefaultsKey)
+        LibreLinkUpSharedState.setHost(nil)
+        LibreLinkUpSharedState.setPatientID(nil)
         lastSuccessAt = nil
         connectionState = .notConnected
         lastDeliveredAt = nil
@@ -138,17 +157,30 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // (registered under backgroundTaskIdentifier). Returns whether the
     // fetch-and-ingest cycle succeeded, for setTaskCompleted(success:).
     public func performBackgroundFetch() async -> Bool {
-        await fetchAndIngest()
+        // A wake that finds the shared gate closed did its job by NOT spending a
+        // request; reporting that as a failure would teach iOS to schedule
+        // fewer of these wakes for a condition that is working as designed.
+        guard LibreLinkUpRateGate.isOpen() else { return true }
+        return await fetchAndIngest()
     }
 
     // MARK: - Fetch cycle (Req 3.3, 3.4, Decision 7)
 
     @discardableResult
-    private func fetchAndIngest() async -> Bool {
+    private func fetchAndIngest(ignoringRateGate: Bool = false) async -> Bool {
         guard let sink else { return false }
+        // Req 6.3: one shared budget with the widget. A closed gate is not a
+        // failure — the connection state is left alone, and the readings this
+        // poll would have collected arrive on the next one, because the graph
+        // endpoint returns history rather than only what is new.
+        guard ignoringRateGate || LibreLinkUpRateGate.isOpen() else { return false }
         let generation = connectionGeneration
         do {
             let samples = try await fetchSamples()
+            // Recorded on the vendor request, before the ingest: the request is
+            // what the budget counts, and a store failure below must not let
+            // the next poll spend a second one immediately.
+            LibreLinkUpRateGate.recordFetch()
             // A disconnect that interleaved the fetch must not ingest or
             // report `.connected` for a source that no longer is.
             guard generation == connectionGeneration else { return false }
@@ -197,7 +229,7 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             // The cached patient id may be stale (patient unfollowed, account
             // changed) — drop it so the next cycle re-runs the connections
             // lookup instead of failing forever.
-            UserDefaults.standard.removeObject(forKey: Self.patientIDDefaultsKey)
+            LibreLinkUpSharedState.setPatientID(nil)
             throw error
         }
     }
@@ -206,42 +238,36 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // at the persisted regional host (default api-eu; the login redirect
     // resolves and persists the right one).
     private func ensureSession() async throws -> LibreLinkUpSession {
-        if let session, Self.isUsable(session) { return session }
-        if let cached = keychain.session(), Self.isUsable(cached) {
+        if let session, session.isUsable() { return session }
+        if let cached = keychain.session(), cached.isUsable() {
             session = cached
             return cached
         }
         guard let credentials = keychain.credentials() else {
             throw LibreLinkUpError.noCredentials
         }
-        let host =
-            UserDefaults.standard.string(forKey: Self.hostDefaultsKey)
-            ?? LibreLinkUpClient.defaultHost
+        let host = LibreLinkUpSharedState.host() ?? LibreLinkUpClient.defaultHost
         let fresh = try await client.login(credentials, host: host)
         session = fresh
         keychain.saveSession(fresh)
-        UserDefaults.standard.set(fresh.host, forKey: Self.hostDefaultsKey)
+        LibreLinkUpSharedState.setHost(fresh.host)
         return fresh
-    }
-
-    private static func isUsable(_ session: LibreLinkUpSession) -> Bool {
-        guard let expires = session.expires else { return true }
-        return expires > Date()
     }
 
     // First followed patient wins — documented minimal behaviour for the
     // single-user developer phase; an account following several patients
     // would need a picker (out of scope). Cached so later fetches skip the
-    // connections call.
+    // connections call — and so the widget, which never calls /llu/connections,
+    // has a patient id to fetch with at all.
     private func ensurePatientID(session: LibreLinkUpSession) async throws -> String {
-        if let cached = UserDefaults.standard.string(forKey: Self.patientIDDefaultsKey) {
+        if let cached = LibreLinkUpSharedState.patientID() {
             return cached
         }
         let patients = try await client.connections(session: session)
         guard let first = patients.first else {
             throw LibreLinkUpError.noPatients
         }
-        UserDefaults.standard.set(first.patientId, forKey: Self.patientIDDefaultsKey)
+        LibreLinkUpSharedState.setPatientID(first.patientId)
         return first.patientId
     }
 

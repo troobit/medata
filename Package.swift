@@ -40,7 +40,13 @@ let package = Package(
         // (specs/ui/glucose-lock-widget Decision 10): the MeDataWidgets
         // extension links exactly this and therefore cannot acquire GRDB
         // transitively. Foundation-only, zero dependencies.
-        .library(name: "GlucoseWidgetShared", targets: ["GlucoseWidgetShared"])
+        .library(name: "GlucoseWidgetShared", targets: ["GlucoseWidgetShared"]),
+        // Discrete product for the same reason as GlucoseWidgetShared
+        // (specs/ui/glucose-lock-widget Decision 16): the MeDataWidgets
+        // extension fetches from LibreLinkUp itself while the app is suspended,
+        // so it links this and GlucoseWidgetShared and still cannot acquire
+        // GRDB. Foundation-only, no Persistence dependency.
+        .library(name: "LibreLinkUpKit", targets: ["LibreLinkUpKit"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
@@ -122,6 +128,18 @@ let package = Package(
             name: "GlucoseWidgetShared",
             path: "MedataCore/Sources/GlucoseWidgetShared"
         ),
+        // LibreLinkUp vendor client (specs/data/cgm-connect Req 3), extracted
+        // from GlucoseIngestion so the widget extension can fetch for itself
+        // (specs/ui/glucose-lock-widget Decision 16). GlucoseWidgetShared is
+        // the only dependency and only for the App Group suite the shared
+        // connection state and vendor rate gate live in — so this target's
+        // closure stays Foundation + system frameworks, and the appex link
+        // closure still cannot reach GRDB (Decision 12).
+        .target(
+            name: "LibreLinkUpKit",
+            dependencies: ["GlucoseWidgetShared"],
+            path: "MedataCore/Sources/LibreLinkUpKit"
+        ),
         .target(
             name: "Persistence",
             dependencies: [
@@ -148,7 +166,12 @@ let package = Package(
         // (Req 7.1) — enforced by the firewall test in GlucoseIngestionTests.
         .target(
             name: "GlucoseIngestion",
-            dependencies: ["Persistence", "PortableContracts"],
+            dependencies: [
+                "Persistence", "PortableContracts", "LibreLinkUpKit",
+                // Grid snapping and the trend maths moved here so the widget
+                // shares them (glucose-lock-widget Decision 16).
+                "GlucoseWidgetShared"
+            ],
             path: "MedataCore/Sources/GlucoseIngestion"
         ),
         // Benchmark report maths (specs/estimation/snaq-parity lane B):
@@ -316,7 +339,10 @@ let package = Package(
             dependencies: [
                 "GlucoseIngestion",
                 "Persistence",
-                "PortableContracts"
+                "PortableContracts",
+                // The LLU payload decoding fixtures live here; the types they
+                // decode moved to LibreLinkUpKit (glucose-lock-widget Decision 16).
+                "LibreLinkUpKit"
             ],
             path: "MedataCore/Tests/GlucoseIngestionTests"
         ),

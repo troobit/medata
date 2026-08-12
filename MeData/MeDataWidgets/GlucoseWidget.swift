@@ -1,12 +1,17 @@
 import GlucoseWidgetShared
+import LibreLinkUpKit
 import SwiftUI
 import WidgetKit
 
 // The data-driven glucose kind (specs/ui/glucose-lock-widget). Unlike the two
-// launcher kinds it reads state — but only the App Group snapshot: no event log,
-// no persistence store, no network (Req 2.6). All the staleness logic lives in
-// GlucoseWidgetShared as pure functions; this file is the WidgetKit adapter over
-// it (Decision 12) plus the per-family views.
+// launcher kinds it reads state: the App Group snapshot, and — since Decision 16
+// — the LibreLinkUp feed itself when the app has gone quiet (Req 6.2). Still no
+// event log and no persistence store: the fetch goes through LibreLinkUpKit and
+// the derivation through GlucoseWidgetShared, both Foundation-only, so the appex
+// link closure is unchanged in the way that matters (no GRDB, Decision 12).
+//
+// All the staleness logic lives in GlucoseWidgetShared as pure functions; this
+// file is the WidgetKit adapter over it plus the per-family views.
 
 // MARK: - Timeline
 
@@ -39,18 +44,107 @@ struct GlucoseProvider: TimelineProvider {
                 readingDate: snapshot.readingDate))
     }
 
+    // The self-refresh path (Req 6.2-6.4, Decision 16). Before Decision 16 this
+    // rendered whatever the app had last published, which meant a locked phone
+    // showed a stale reading until the next unlock — the app process is the only
+    // thing that republished, and it is suspended. Now the wake itself can go
+    // and get the reading, so freshness tracks WidgetKit's wake budget rather
+    // than the user's unlocks.
     nonisolated func getTimeline(in context: Context, completion: @escaping (Timeline<GlucoseEntry>) -> Void) {
-        let now = Date.now
-        let snapshot = GlucoseSnapshotStore.read()
+        Task {
+            let now = Date.now
+            let stored = GlucoseSnapshotStore.read()
+            let snapshot = await Self.refreshedSnapshot(stored, now: now) ?? stored
+            completion(Self.timeline(for: snapshot, now: now))
+        }
+    }
+
+    // nil means "render what is stored": either no fetch was warranted, or one
+    // was attempted and something about it failed. Every failure lands here —
+    // no blank state, no error state (Req 6.4).
+    private static func refreshedSnapshot(
+        _ stored: GlucoseSnapshot, now: Date
+    ) async -> GlucoseSnapshot? {
+        // A screenshot-import-only user has no connection configured and gets
+        // zero network activity from the widget, ever.
+        guard LibreLinkUpSharedState.isConnected() else { return nil }
+        // Younger than one interval: the app (or an earlier wake) already has
+        // the newest reading the vendor will serve.
+        if let readingDate = stored.readingDate,
+            now.timeIntervalSince(readingDate) < LibreLinkUpPolling.interval {
+            return nil
+        }
+        // The shared app+widget budget (Req 6.3). Advisory — see
+        // LibreLinkUpRateGate.
+        guard LibreLinkUpRateGate.isOpen(now: now) else { return nil }
+
+        // Auth is app-owned: the widget reads the session and never logs in, so
+        // an expired or rejected session simply falls back and leaves the repair
+        // to the app's next poll. That removes the two-process re-login race on
+        // the shared keychain item outright.
+        guard let session = LibreLinkUpKeychain().session(), session.isUsable(at: now),
+            let patientID = LibreLinkUpSharedState.patientID()
+        else { return nil }
+
+        guard let graph = try? await client().graph(session: session, patientID: patientID) else {
+            return nil
+        }
+        LibreLinkUpRateGate.recordFetch(at: now)
+
+        // Snap and round exactly as the ingest path does, so the same vendor
+        // data cannot produce a different arrow here than in the app.
+        let readings = LibreLinkUpClient.readings(from: graph)
+            .map {
+                GlucoseReading(
+                    timestamp: GlucoseGrid.snap($0.instant),
+                    mmolL: GlucoseGrid.roundedMmolL(GlucoseGrid.mmolL(fromMgPerDl: $0.mgPerDl)))
+            }
+            .sorted { $0.timestamp < $1.timestamp }
+        let derived = GlucoseDerivation.snapshot(from: readings, now: now)
+        guard derived != .neverRecorded else { return nil }
+        GlucoseSnapshotStore.write(derived)
+        return derived
+    }
+
+    // getTimeline must return promptly, so the vendor call gets a short leash;
+    // a timeout is just another fallback to the stored snapshot.
+    private static func client() -> LibreLinkUpClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 8
+        configuration.timeoutIntervalForResource = 8
+        configuration.waitsForConnectivity = false
+        return LibreLinkUpClient(urlSession: URLSession(configuration: configuration))
+    }
+
+    private static func timeline(for snapshot: GlucoseSnapshot, now: Date) -> Timeline<GlucoseEntry> {
         let entries = GlucoseTimeline.renderPoints(snapshot, from: now).map {
             GlucoseEntry(date: $0.date, render: $0.render, readingDate: snapshot.readingDate)
         }
-        // A terminal state (last-reading / never-recorded) cannot advance on its
-        // own, so it waits for the app's explicit reload rather than booking a
-        // pointless refresh.
-        let policy: TimelineReloadPolicy =
-            GlucoseTimeline.nextBoundary(snapshot, after: now).map { .after($0) } ?? .never
-        completion(Timeline(entries: entries, policy: policy))
+        return Timeline(entries: entries, policy: policy(for: snapshot, now: now))
+    }
+
+    // With no connection configured this is the original rule: advance at the
+    // next staleness boundary, and `.never` once the state is terminal — a
+    // terminal state cannot advance on its own and waits for the app's explicit
+    // reload.
+    //
+    // With a connection, `.never` would be self-defeating: a widget that can
+    // refresh itself must keep being woken, and the last-reading state is
+    // exactly where a wake is most useful. So the policy becomes whichever
+    // comes first — the next ladder step, or the moment the shared rate gate
+    // reopens (Decision 16).
+    private static func policy(for snapshot: GlucoseSnapshot, now: Date) -> TimelineReloadPolicy {
+        let boundary = GlucoseTimeline.nextBoundary(snapshot, after: now)
+        guard LibreLinkUpSharedState.isConnected() else {
+            return boundary.map { .after($0) } ?? .never
+        }
+        let gateReopens = (LibreLinkUpRateGate.lastFetchAt() ?? now)
+            .addingTimeInterval(LibreLinkUpPolling.interval)
+        let next = min(boundary ?? gateReopens, gateReopens)
+        // A wake instant already in the past reads as "reload as soon as
+        // possible", which is a request the budget will simply throttle; nudge
+        // it forward so the timeline always names a future time.
+        return .after(max(next, now.addingTimeInterval(1)))
     }
 }
 

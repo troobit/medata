@@ -3,16 +3,20 @@
 // Implements the contract confirmed by the task 7 spike
 // (docs/agent-notes/librelinkup-api.md): login with region redirect,
 // bearer + SHA-256 `account-id` header on authenticated calls, connections
-// and graph endpoints, mg/dL-only value consumption. All URLSession use in
-// the module is confined to this file and its owning source (Req 3.5, 7.1);
-// nothing here is reachable from the estimation targets.
+// and graph endpoints, mg/dL-only value consumption.
+//
+// Extracted from `GlucoseIngestion` into this Foundation-only target so the
+// MeDataWidgets extension can fetch for itself while the app is suspended
+// (glucose-lock-widget Decision 16) without linking GRDB/Persistence — the
+// Decision 12 constraint on the appex link closure still stands. Nothing here
+// is reachable from the estimation targets.
 import CryptoKit
 import Foundation
 import Security
 
 // MARK: - Errors
 
-enum LibreLinkUpError: Error, Equatable {
+public enum LibreLinkUpError: Error, Equatable {
     case noCredentials
     case pendingAccountStep  // login status == 4 (tou / pp / verifyEmail)
     case clientVersionTooOld  // status 920 / HTTP 403 minimumVersion
@@ -26,72 +30,92 @@ enum LibreLinkUpError: Error, Equatable {
 
 // MARK: - Credentials and session
 
-struct LibreLinkUpCredentials: Codable, Sendable, Equatable {
-    let email: String
-    let password: String
+public struct LibreLinkUpCredentials: Codable, Sendable, Equatable {
+    public let email: String
+    public let password: String
+
+    public init(email: String, password: String) {
+        self.email = email
+        self.password = password
+    }
 }
 
 // Resolved auth state persisted between fetches: the regional host, the
 // bearer token (~6-month validity) and the SHA-256 hex of the user id sent
 // as the `account-id` header. Lives in the Keychain beside the credentials.
-struct LibreLinkUpSession: Codable, Sendable, Equatable {
-    let host: String
-    let token: String
-    let expires: Date?
-    let accountIDHash: String
+public struct LibreLinkUpSession: Codable, Sendable, Equatable {
+    public let host: String
+    public let token: String
+    public let expires: Date?
+    public let accountIDHash: String
+
+    public init(host: String, token: String, expires: Date?, accountIDHash: String) {
+        self.host = host
+        self.token = token
+        self.expires = expires
+        self.accountIDHash = accountIDHash
+    }
+
+    // A session with no expiry never goes stale on its own; otherwise the
+    // stored expiry decides. Both the app's poll loop and the widget's
+    // extension-side fetch gate on this before spending a request.
+    public func isUsable(at now: Date = Date()) -> Bool {
+        guard let expires else { return true }
+        return expires > now
+    }
 }
 
 // MARK: - Response payloads (decode-only)
 
-struct LLULoginResponse: Decodable {
-    let status: Int
-    let data: Payload?
+public struct LLULoginResponse: Decodable {
+    public let status: Int
+    public let data: Payload?
 
-    struct Payload: Decodable {
-        let redirect: Bool?
-        let region: String?
-        let authTicket: AuthTicket?
-        let user: User?
+    public struct Payload: Decodable {
+        public let redirect: Bool?
+        public let region: String?
+        public let authTicket: AuthTicket?
+        public let user: User?
 
-        struct AuthTicket: Decodable {
-            let token: String
-            let expires: Double?  // Unix seconds
+        public struct AuthTicket: Decodable {
+            public let token: String
+            public let expires: Double?  // Unix seconds
         }
-        struct User: Decodable {
-            let id: String
-        }
-    }
-}
-
-struct LLUConnectionsResponse: Decodable {
-    let status: Int
-    let data: [Patient]?
-
-    struct Patient: Decodable {
-        let patientId: String
-    }
-}
-
-struct LLUGraphResponse: Decodable {
-    let status: Int
-    let data: Payload?
-
-    struct Payload: Decodable {
-        let connection: Connection?
-        let graphData: [LLUMeasurement]?
-
-        struct Connection: Decodable {
-            let glucoseMeasurement: LLUMeasurement?
+        public struct User: Decodable {
+            public let id: String
         }
     }
 }
 
-// One reading. Only `ValueInMgPerDl` is consumed (converted in-app,
+public struct LLUConnectionsResponse: Decodable {
+    public let status: Int
+    public let data: [Patient]?
+
+    public struct Patient: Decodable {
+        public let patientId: String
+    }
+}
+
+public struct LLUGraphResponse: Decodable {
+    public let status: Int
+    public let data: Payload?
+
+    public struct Payload: Decodable {
+        public let connection: Connection?
+        public let graphData: [LLUMeasurement]?
+
+        public struct Connection: Decodable {
+            public let glucoseMeasurement: LLUMeasurement?
+        }
+    }
+}
+
+// One reading. Only `ValueInMgPerDl` is consumed (converted by the caller,
 // Req 5.5) — the `Value`/`GlucoseUnits` display pair is deliberately
 // ignored, sidestepping the undocumented unit-flag mapping.
-struct LLUMeasurement: Decodable {
-    let factoryTimestamp: String
-    let valueInMgPerDl: Double
+public struct LLUMeasurement: Decodable {
+    public let factoryTimestamp: String
+    public let valueInMgPerDl: Double
 
     enum CodingKeys: String, CodingKey {
         case factoryTimestamp = "FactoryTimestamp"
@@ -99,22 +123,42 @@ struct LLUMeasurement: Decodable {
     }
 }
 
+// MARK: - Mapped reading
+
+// One vendor reading, still in the vendor's unit and still un-snapped. The
+// deliberately narrow hand-off type between this module and its two consumers:
+// `GlucoseIngestion` turns it into a `GlucoseSample` for the ingest path, the
+// widget turns it into a `GlucoseReading` for the snapshot derivation. Neither
+// unit conversion nor grid snapping happens here — both callers must apply the
+// same shared helpers so the two surfaces cannot disagree.
+public struct LibreLinkUpReading: Sendable, Equatable {
+    public let instant: Date
+    public let mgPerDl: Double
+    public let nativeID: String
+
+    public init(instant: Date, mgPerDl: Double, nativeID: String) {
+        self.instant = instant
+        self.mgPerDl = mgPerDl
+        self.nativeID = nativeID
+    }
+}
+
 // MARK: - Client
 
-final class LibreLinkUpClient: Sendable {
+public final class LibreLinkUpClient: Sendable {
 
     // Abbott bumps the version floor roughly yearly; the failure is
     // self-describing (status 920 with the advertised minimum). Keep these
     // easy to change.
-    static let productHeader = "llu.ios"
-    static let versionHeader = "4.16.0"
-    static let defaultHost = "https://api-eu.libreview.io"
+    public static let productHeader = "llu.ios"
+    public static let versionHeader = "4.16.0"
+    public static let defaultHost = "https://api-eu.libreview.io"
     private static let userAgent =
         "Mozilla/5.0 (iPhone; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
 
     private let urlSession: URLSession
 
-    init(urlSession: URLSession = .shared) {
+    public init(urlSession: URLSession = .shared) {
         self.urlSession = urlSession
     }
 
@@ -124,7 +168,11 @@ final class LibreLinkUpClient: Sendable {
     // data.redirect → retry at api-{region}.libreview.io). The returned
     // session carries the RESOLVED host — persist it so later fetches skip
     // the redirect hop.
-    func login(
+    //
+    // App-side only: the widget never logs in (Decision 16). On a 401 it falls
+    // back to the stored snapshot and leaves auth repair to the app's next
+    // poll, which removes the two-process re-login race on the shared session.
+    public func login(
         _ credentials: LibreLinkUpCredentials, host: String
     ) async throws -> LibreLinkUpSession {
         var resolvedHost = host
@@ -165,7 +213,9 @@ final class LibreLinkUpClient: Sendable {
 
     // MARK: Fetch (agent-note "Fetching readings")
 
-    func connections(session: LibreLinkUpSession) async throws -> [LLUConnectionsResponse.Patient] {
+    public func connections(
+        session: LibreLinkUpSession
+    ) async throws -> [LLUConnectionsResponse.Patient] {
         let request = try Self.authenticatedRequest(session: session, path: "/llu/connections")
         let response: LLUConnectionsResponse = try await send(request)
         if response.status == 920 { throw LibreLinkUpError.clientVersionTooOld }
@@ -175,7 +225,9 @@ final class LibreLinkUpClient: Sendable {
         return patients
     }
 
-    func graph(session: LibreLinkUpSession, patientID: String) async throws -> LLUGraphResponse {
+    public func graph(
+        session: LibreLinkUpSession, patientID: String
+    ) async throws -> LLUGraphResponse {
         let request = try Self.authenticatedRequest(
             session: session, path: "/llu/connections/\(patientID)/graph")
         let response: LLUGraphResponse = try await send(request)
@@ -191,31 +243,31 @@ final class LibreLinkUpClient: Sendable {
     // — the API has no stable per-reading id, so the sensor-derived
     // FactoryTimestamp string is the nativeID (agent-note "Fetching
     // readings"). Unparseable timestamps are skipped rather than guessed.
-    static func samples(from graph: LLUGraphResponse) -> [GlucoseSample] {
+    public static func readings(from graph: LLUGraphResponse) -> [LibreLinkUpReading] {
         var measurements = graph.data?.graphData ?? []
         if let latest = graph.data?.connection?.glucoseMeasurement {
             measurements.append(latest)
         }
         let formatter = makeFactoryTimestampFormatter()
         var seen: Set<String> = []
-        var samples: [GlucoseSample] = []
+        var readings: [LibreLinkUpReading] = []
         for measurement in measurements {
             guard seen.insert(measurement.factoryTimestamp).inserted,
                 let instant = formatter.date(from: measurement.factoryTimestamp)
             else { continue }
-            samples.append(
-                GlucoseSample(
-                    nativeInstant: instant,
+            readings.append(
+                LibreLinkUpReading(
+                    instant: instant,
                     mgPerDl: measurement.valueInMgPerDl,
                     nativeID: measurement.factoryTimestamp))
         }
-        return samples
+        return readings
     }
 
     // FactoryTimestamp is UTC, "M/d/yyyy h:mm:ss a" — parse with
     // en_US_POSIX and the TZ pinned to UTC. Built per call: DateFormatter is
-    // not Sendable, and one allocation per 15-minute fetch is negligible.
-    static func makeFactoryTimestampFormatter() -> DateFormatter {
+    // not Sendable, and one allocation per fetch is negligible.
+    public static func makeFactoryTimestampFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.dateFormat = "M/d/yyyy h:mm:ss a"
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -225,7 +277,7 @@ final class LibreLinkUpClient: Sendable {
 
     // `account-id` header value: SHA-256 hex of data.user.id (enforced by
     // the API since LLU 4.11).
-    static func sha256Hex(_ value: String) -> String {
+    public static func sha256Hex(_ value: String) -> String {
         SHA256.hash(data: Data(value.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
@@ -251,8 +303,11 @@ final class LibreLinkUpClient: Sendable {
             }
             throw LibreLinkUpError.httpFailure(http.statusCode)
         default:
-            // 429 Retry-After is deliberately ignored: the 15-minute poll sits
-            // far above the API's rate limits (docs/agent-notes/librelinkup-api.md).
+            // 429 Retry-After is deliberately ignored: the shared poll gate
+            // (LibreLinkUpPolling) holds the combined app+widget rate to one
+            // fetch per interval. A 429 or a status-920 churn IS the rollback
+            // signal for cgm-connect Decision 13 — it is read from the logs,
+            // not handled here.
             throw LibreLinkUpError.httpFailure(http.statusCode)
         }
         do {
@@ -286,81 +341,5 @@ final class LibreLinkUpClient: Sendable {
         request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
         request.setValue(session.accountIDHash, forHTTPHeaderField: "account-id")
         return request
-    }
-}
-
-// MARK: - Keychain storage (Req 3.1)
-
-// Generic-password storage for the credentials and the auth session, with
-// kSecAttrAccessibleAfterFirstUnlock so a background refresh on a locked
-// device can read them (prerequisites.md). Credentials never appear in
-// event metadata; disconnect() wipes both items (Req 6.2).
-struct LibreLinkUpKeychain: Sendable {
-
-    private static let service = "com.medata.librelinkup"
-    private static let credentialsAccount = "credentials"
-    private static let sessionAccount = "session"
-
-    func saveCredentials(_ credentials: LibreLinkUpCredentials) throws {
-        try save(try JSONEncoder().encode(credentials), account: Self.credentialsAccount)
-    }
-
-    func credentials() -> LibreLinkUpCredentials? {
-        read(account: Self.credentialsAccount)
-            .flatMap { try? JSONDecoder().decode(LibreLinkUpCredentials.self, from: $0) }
-    }
-
-    func saveSession(_ session: LibreLinkUpSession) {
-        if let data = try? JSONEncoder().encode(session) {
-            try? save(data, account: Self.sessionAccount)
-        }
-    }
-
-    func session() -> LibreLinkUpSession? {
-        read(account: Self.sessionAccount)
-            .flatMap { try? JSONDecoder().decode(LibreLinkUpSession.self, from: $0) }
-    }
-
-    func deleteSession() {
-        delete(account: Self.sessionAccount)
-    }
-
-    func deleteAll() {
-        delete(account: Self.credentialsAccount)
-        delete(account: Self.sessionAccount)
-    }
-
-    private func query(account: String) -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: account,
-        ]
-    }
-
-    private func save(_ data: Data, account: String) throws {
-        SecItemDelete(query(account: account) as CFDictionary)
-        var attributes = query(account: account)
-        attributes[kSecValueData as String] = data
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        let status = SecItemAdd(attributes as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw LibreLinkUpError.keychainFailure(status)
-        }
-    }
-
-    private func read(account: String) -> Data? {
-        var query = query(account: account)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else {
-            return nil
-        }
-        return result as? Data
-    }
-
-    private func delete(account: String) {
-        SecItemDelete(query(account: account) as CFDictionary)
     }
 }

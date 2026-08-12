@@ -1,4 +1,5 @@
 import Foundation
+import GlucoseWidgetShared
 import Persistence
 
 // Routes every source's readings through one ingestion path (Req 1.2):
@@ -8,8 +9,6 @@ import Persistence
 // a source needs before advancing its cursor (Decision 7). Store errors
 // rethrow untouched so a failed write never advances anything.
 public actor IngestionCoordinator: GlucoseIngestSink {
-
-    private static let gridMs: Int64 = 5 * 60 * 1000
 
     private let store: any PersistenceStore
 
@@ -72,7 +71,7 @@ public actor IngestionCoordinator: GlucoseIngestSink {
                     timestampMs: mark,
                     // The single rounding point (Req 5.5): one decimal,
                     // before the store's duplicate/discrepancy comparison.
-                    mmolL: (sample.mmolL * 10).rounded() / 10,
+                    mmolL: GlucoseGrid.roundedMmolL(sample.mmolL),
                     sourceID: sourceID,
                     nativeInstantMs: Self.instantMs(sample.nativeInstant),
                     nativeID: sample.nativeID
@@ -148,19 +147,18 @@ public actor IngestionCoordinator: GlucoseIngestSink {
 
     // MARK: - Grid snapping (Req 5.1, Decision 4)
 
-    // Nearest 5-minute grid mark; an instant exactly halfway between two
-    // marks rounds to the LATER mark (deterministic half-to-later).
+    // Both moved to `GlucoseGrid` (GlucoseWidgetShared) so the widget's
+    // extension-side fetch preprocesses vendor readings exactly as this path
+    // does before deriving its snapshot (glucose-lock-widget Decision 16) —
+    // otherwise the same data could yield a different arrow on the two
+    // surfaces. Kept as forwards because the intra-batch bucketing below and
+    // its tests speak in these names.
     static func snapToGrid(_ instantMs: Int64) -> Int64 {
-        let shifted = instantMs + Self.gridMs / 2
-        let floored =
-            shifted >= 0
-            ? shifted / Self.gridMs
-            : (shifted - Self.gridMs + 1) / Self.gridMs
-        return floored * Self.gridMs
+        GlucoseGrid.snapToGrid(instantMs)
     }
 
     private static func instantMs(_ instant: Date) -> Int64 {
-        Int64((instant.timeIntervalSince1970 * 1000).rounded())
+        GlucoseGrid.instantMs(instant)
     }
 
     // Intra-batch tiebreak: nearest to the mark wins; equal distance →

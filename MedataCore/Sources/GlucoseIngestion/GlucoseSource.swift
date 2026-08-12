@@ -1,4 +1,5 @@
 import Foundation
+import GlucoseWidgetShared
 import Persistence
 
 // Source abstraction for live glucose (specs/data/cgm-connect Req 1).
@@ -30,13 +31,14 @@ public struct GlucoseSample: Sendable, Equatable {
         self.nativeID = nativeID
     }
 
-    // mg/dL convenience for sources that report it (Req 5.5): divides by
-    // 18.0182. No rounding here — the coordinator's single rounding point
-    // rounds to one decimal before the duplicate check and storage.
+    // mg/dL convenience for sources that report it (Req 5.5). The divisor is
+    // `GlucoseGrid.mgPerDlPerMmolL`, shared with the widget's own vendor fetch.
+    // No rounding here — the coordinator's single rounding point rounds to one
+    // decimal before the duplicate check and storage.
     public init(nativeInstant: Date, mgPerDl: Double, nativeID: String? = nil) {
         self.init(
             nativeInstant: nativeInstant,
-            mmolL: mgPerDl / 18.0182,
+            mmolL: GlucoseGrid.mmolL(fromMgPerDl: mgPerDl),
             nativeID: nativeID
         )
     }

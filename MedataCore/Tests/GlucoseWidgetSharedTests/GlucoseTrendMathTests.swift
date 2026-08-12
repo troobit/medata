@@ -1,12 +1,11 @@
 import Foundation
 import Testing
 import GlucoseWidgetShared
-@testable import Persistence
 
 // Trend derivation and band classification for the Lock Screen widget
 // (specs/ui/glucose-lock-widget Reqs 3.1–3.5, 4.1; Decision 4).
-@Suite("TrendsMath glucose trend")
-struct TrendsMathGlucoseTests {
+@Suite("GlucoseTrendMath glucose trend")
+struct GlucoseTrendMathTests {
 
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -26,14 +25,14 @@ struct TrendsMathGlucoseTests {
 
     @Test("Two readings ten minutes apart give the secant slope")
     func rateFromTwoReadings() {
-        let rate = TrendsMath.glucoseRate(readings(rate: 0.08, endingAt: now), now: now)
+        let rate = GlucoseTrendMath.glucoseRate(readings(rate: 0.08, endingAt: now), now: now)
         #expect(rate != nil)
         #expect(abs(rate! - 0.08) < 1e-9)
     }
 
     @Test("A falling series gives a negative rate")
     func rateIsSignedByDirection() {
-        let rate = TrendsMath.glucoseRate(readings(rate: -0.12, endingAt: now), now: now)
+        let rate = GlucoseTrendMath.glucoseRate(readings(rate: -0.12, endingAt: now), now: now)
         #expect(rate != nil)
         #expect(abs(rate! + 0.12) < 1e-9)
     }
@@ -47,7 +46,7 @@ struct TrendsMathGlucoseTests {
                 timestamp: now.addingTimeInterval(-900 + Double(step) * 225),
                 mmolL: 5.0 + Double(step) * 0.5625)   // 0.15 mmol/L per minute
         }
-        let rate = TrendsMath.glucoseRate(series, now: now)
+        let rate = GlucoseTrendMath.glucoseRate(series, now: now)
         #expect(rate != nil)
         #expect(abs(rate! - 0.15) < 1e-9)
     }
@@ -55,8 +54,8 @@ struct TrendsMathGlucoseTests {
     @Test("Unordered input gives the same rate as sorted input")
     func rateIgnoresInputOrder() {
         let series = readings(rate: 0.09, endingAt: now)
-        let forward = TrendsMath.glucoseRate(series, now: now)
-        let reversed = TrendsMath.glucoseRate(series.reversed(), now: now)
+        let forward = GlucoseTrendMath.glucoseRate(series, now: now)
+        let reversed = GlucoseTrendMath.glucoseRate(series.reversed(), now: now)
         #expect(forward == reversed)
     }
 
@@ -64,8 +63,8 @@ struct TrendsMathGlucoseTests {
 
     @Test("Fewer than two in-window readings gives no rate")
     func rateNeedsTwoReadings() {
-        #expect(TrendsMath.glucoseRate([], now: now) == nil)
-        #expect(TrendsMath.glucoseRate(
+        #expect(GlucoseTrendMath.glucoseRate([], now: now) == nil)
+        #expect(GlucoseTrendMath.glucoseRate(
             [GlucoseReading(timestamp: now, mmolL: 6.0)], now: now) == nil)
     }
 
@@ -73,13 +72,13 @@ struct TrendsMathGlucoseTests {
     func rateNeedsTenMinuteSpan() {
         // Nine minutes apart: two near-simultaneous readings must not amplify
         // into a spurious fast arrow.
-        #expect(TrendsMath.glucoseRate(
+        #expect(GlucoseTrendMath.glucoseRate(
             readings(rate: 0.2, span: 540, endingAt: now), now: now) == nil)
     }
 
     @Test("A ten-minute span is exactly enough")
     func tenMinuteSpanQualifies() {
-        #expect(TrendsMath.glucoseRate(readings(rate: 0.2, span: 600, endingAt: now), now: now) != nil)
+        #expect(GlucoseTrendMath.glucoseRate(readings(rate: 0.2, span: 600, endingAt: now), now: now) != nil)
     }
 
     @Test("A latest reading older than the window gives no rate")
@@ -87,7 +86,7 @@ struct TrendsMathGlucoseTests {
         // The whole series sits before the 30-minute window, so nothing is in
         // scope (glucose-lock-widget Decision 15 widened it from 15 min).
         let stale = readings(rate: 0.1, endingAt: now.addingTimeInterval(-31 * 60))
-        #expect(TrendsMath.glucoseRate(stale, now: now) == nil)
+        #expect(GlucoseTrendMath.glucoseRate(stale, now: now) == nil)
     }
 
     // The case that drove glucose-lock-widget Decision 15: a 15-minute LibreLinkUp cadence with a
@@ -99,7 +98,7 @@ struct TrendsMathGlucoseTests {
             GlucoseReading(timestamp: now.addingTimeInterval(-17 * 60), mmolL: 5.0),
             GlucoseReading(timestamp: now.addingTimeInterval(-2 * 60), mmolL: 6.5)
         ]
-        #expect(TrendsMath.glucoseRate(series, now: now) != nil)
+        #expect(GlucoseTrendMath.glucoseRate(series, now: now) != nil)
     }
 
     @Test("Readings outside the window are excluded from the fit")
@@ -108,7 +107,7 @@ struct TrendsMathGlucoseTests {
         let series = readings(rate: 0.08, endingAt: now) + [
             GlucoseReading(timestamp: now.addingTimeInterval(-3600), mmolL: 25.0)
         ]
-        let rate = TrendsMath.glucoseRate(series, now: now)
+        let rate = GlucoseTrendMath.glucoseRate(series, now: now)
         #expect(rate != nil)
         #expect(abs(rate! - 0.08) < 1e-9)
     }
@@ -120,13 +119,13 @@ struct TrendsMathGlucoseTests {
             GlucoseReading(timestamp: now.addingTimeInterval(-1800), mmolL: 5.0),
             GlucoseReading(timestamp: now, mmolL: 6.0)
         ]
-        #expect(TrendsMath.glucoseRate(series, now: now) != nil)
+        #expect(GlucoseTrendMath.glucoseRate(series, now: now) != nil)
         // One second earlier and the older reading falls out, leaving one.
         let series2 = [
             GlucoseReading(timestamp: now.addingTimeInterval(-1801), mmolL: 5.0),
             GlucoseReading(timestamp: now, mmolL: 6.0)
         ]
-        #expect(TrendsMath.glucoseRate(series2, now: now) == nil)
+        #expect(GlucoseTrendMath.glucoseRate(series2, now: now) == nil)
     }
 
     @Test("A future reading is outside the window")
@@ -136,7 +135,7 @@ struct TrendsMathGlucoseTests {
             GlucoseReading(timestamp: now.addingTimeInterval(60), mmolL: 6.0)
         ]
         // Only the older reading is in the closed window, so no rate.
-        #expect(TrendsMath.glucoseRate(series, now: now) == nil)
+        #expect(GlucoseTrendMath.glucoseRate(series, now: now) == nil)
     }
 
     // MARK: - Threshold map (Req 3.2, Decision 4)
@@ -157,7 +156,7 @@ struct TrendsMathGlucoseTests {
             (2.0, .risingFast)
         ] as [(Double, GlucoseTrend)])
     func risingBands(_ rate: Double, _ expected: GlucoseTrend) {
-        #expect(TrendsMath.trend(forRate: rate) == expected)
+        #expect(GlucoseTrendMath.trend(forRate: rate) == expected)
     }
 
     @Test(
@@ -169,24 +168,24 @@ struct TrendsMathGlucoseTests {
             (-0.166, .fallingFast)
         ] as [(Double, GlucoseTrend)])
     func fallingBands(_ rate: Double, _ expected: GlucoseTrend) {
-        #expect(TrendsMath.trend(forRate: rate) == expected)
+        #expect(GlucoseTrendMath.trend(forRate: rate) == expected)
     }
 
     // MARK: - Trend from readings (Reqs 3.3, 3.4)
 
     @Test("A qualifying series yields the mapped trend")
     func trendFromReadings() {
-        #expect(TrendsMath.trend(readings(rate: 0.2, endingAt: now), now: now) == .risingFast)
-        #expect(TrendsMath.trend(readings(rate: -0.07, endingAt: now), now: now) == .fallingSlow)
-        #expect(TrendsMath.trend(readings(rate: 0.0, endingAt: now), now: now) == .steady)
+        #expect(GlucoseTrendMath.trend(readings(rate: 0.2, endingAt: now), now: now) == .risingFast)
+        #expect(GlucoseTrendMath.trend(readings(rate: -0.07, endingAt: now), now: now) == .fallingSlow)
+        #expect(GlucoseTrendMath.trend(readings(rate: 0.0, endingAt: now), now: now) == .steady)
     }
 
     @Test("No rate means no trend")
     func trendIsNilWithoutARate() {
-        #expect(TrendsMath.trend([], now: now) == nil)
-        #expect(TrendsMath.trend(readings(rate: 0.2, span: 540, endingAt: now), now: now) == nil)
+        #expect(GlucoseTrendMath.trend([], now: now) == nil)
+        #expect(GlucoseTrendMath.trend(readings(rate: 0.2, span: 540, endingAt: now), now: now) == nil)
         // Wholly before the 30-minute window (glucose-lock-widget Decision 15).
-        #expect(TrendsMath.trend(
+        #expect(GlucoseTrendMath.trend(
             readings(rate: 0.2, endingAt: now.addingTimeInterval(-31 * 60)), now: now) == nil)
     }
 
@@ -202,12 +201,12 @@ struct TrendsMathGlucoseTests {
             (10.01, .high)
         ] as [(Double, GlucoseBandStatus)])
     func bandStatusBoundaries(_ mmolL: Double, _ expected: GlucoseBandStatus) {
-        #expect(TrendsMath.bandStatus(mmolL) == expected)
+        #expect(GlucoseTrendMath.bandStatus(mmolL) == expected)
     }
 
     @Test("Band status reads the existing target constants")
     func bandStatusReusesTargets() {
-        #expect(TrendsMath.bandStatus(TrendsMath.targetLowMmolL) == .inRange)
-        #expect(TrendsMath.bandStatus(TrendsMath.targetHighMmolL) == .inRange)
+        #expect(GlucoseTrendMath.bandStatus(GlucoseTrendMath.targetLowMmolL) == .inRange)
+        #expect(GlucoseTrendMath.bandStatus(GlucoseTrendMath.targetHighMmolL) == .inRange)
     }
 }

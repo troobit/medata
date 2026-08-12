@@ -159,21 +159,21 @@ references:
   - Candidate directions: HealthKit background delivery waking the app to republish; a BGAppRefresh fallback; or having getTimeline read fresh data itself so the widget refreshes on its own budget — each needs a Decision entry weighing background-execution limits
   - Requires design + decision-log work before implementation; keep the estimation path untouched (offline invariant is unaffected — this is all local)
   - Verification must include the StandBy-day colour check deferred from task 14 — it needs the widget updating while docked/locked, which only this fix makes possible
-  - [ ] 16.1. Extract LibreLinkUpKit — client, keychain, shared poll-interval constant
+  - [x] 16.1. Extract LibreLinkUpKit — client, keychain, shared poll-interval constant
     - New Foundation-only SwiftPM target + library product LibreLinkUpKit holding LibreLinkUpClient, LibreLinkUpKeychain, and the shared 5-minute poll-interval constant (cgm-connect Decision 13); GlucoseIngestion links it; no Persistence/GRDB dependency
     - EstimationFirewallTests stays green — no estimation target gains LibreLinkUpKit in its closure; make test green
-  - [ ] 16.2. Move pure derivation to GlucoseWidgetShared — snapshot-from-readings, trend, snapToGrid
+  - [x] 16.2. Move pure derivation to GlucoseWidgetShared — snapshot-from-readings, trend, snapToGrid
     - Snapshot-from-readings derivation and TrendsMath.trend move from Persistence, snapToGrid from GlucoseIngestion, into GlucoseWidgetShared (Foundation-only); Persistence/GlucoseIngestion keep thin wrappers so app-side callers do not change
     - Existing tests move with the code; both make test totals stay green
-  - [ ] 16.3. Uniform 5-minute baseline in the app poll loop (Decision 13)
+  - [x] 16.3. Uniform 5-minute baseline in the app poll loop (Decision 13)
     - LibreLinkUpGlucoseSource adopts the LibreLinkUpKit constant as its baseline; Decision 12 adaptive machinery stays in code, now dormant (every branch yields 5 min) — it is the recorded rollback position
     - Update the Decision 12 tests to pin the dormancy and keep the 5-minute floor assertion (vendor ban evidence at ~3 min)
-  - [ ] 16.4. Shared vendor rate gate in the App Group
+  - [x] 16.4. Shared vendor rate gate in the App Group
     - One last-fetch timestamp key in the App Group suite; LibreLinkUpGlucoseSource records every successful fetch and skips while the gate is younger than the interval; gate is advisory — no cross-process atomicity, rare double fetch accepted (Req 6.3)
-  - [ ] 16.5. Shared-state migration — flag/host/patientId to App Group, keychain to shared access group
+  - [x] 16.5. Shared-state migration — flag/host/patientId to App Group, keychain to shared access group
     - glucose.source.librelinkup.connected + resolved host + patientId move from UserDefaults.standard to the App Group suite; credentials/session keychain items move to a shared keychain access group (new entitlement on BOTH targets — profiles re-mint on next device build)
     - One-time idempotent launch migration copies existing values and removes the old copies; no-op once migrated
-  - [ ] 16.6. Extension-side fetch in getTimeline + timeline policy change
+  - [x] 16.6. Extension-side fetch in getTimeline + timeline policy change
     - getTimeline: snapshot younger than interval -> render stored; else gate check -> fetch (~8 s timeout) -> snapToGrid + derive -> GlucoseSnapshotStore.write -> render; ANY failure falls back to stored snapshot (Req 6.4)
     - Widget never re-logins: 401 -> fallback, auth repair is the app's (design: auth is app-owned); extension reads credentials/session only
     - Policy while connected flag set: .after(min(next staleness boundary, last fetch + interval)) — never .never; without a connected flag today's behaviour stands (screenshot-only users: zero widget network)

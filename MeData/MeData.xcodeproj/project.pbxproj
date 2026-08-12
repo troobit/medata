@@ -11,6 +11,8 @@
 		118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */ = {isa = PBXBuildFile; productRef = 118B44A52FF0000000272C1E /* GlucoseGraph */; };
 		11CC66A03000000000272C1E /* GlucoseIngestion in Frameworks */ = {isa = PBXBuildFile; productRef = 11CC66A13000000000272C1E /* GlucoseIngestion */; };
 		11DD77A02FF3000000272C1E /* GlucoseWidgetShared in Frameworks */ = {isa = PBXBuildFile; productRef = 11DD77A12FF3000000272C1E /* GlucoseWidgetShared */; };
+		11FE88A02FF4000000272C1E /* LibreLinkUpKit in Frameworks */ = {isa = PBXBuildFile; productRef = 11FE88A12FF4000000272C1E /* LibreLinkUpKit */; };
+		11FE88A22FF4000000272C1E /* LibreLinkUpKit in Frameworks */ = {isa = PBXBuildFile; productRef = 11FE88A32FF4000000272C1E /* LibreLinkUpKit */; };
 		111EC9232FBD47A100272C1E /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC91F2FBD47A100272C1E /* App.swift */; };
 		111EC9242FBD47A100272C1E /* ResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9212FBD47A100272C1E /* ResultView.swift */; };
 		111EC9252FBD47A100272C1E /* CaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111EC9202FBD47A100272C1E /* CaptureFlowView.swift */; };
@@ -178,6 +180,7 @@
 				111EC91E2FBD45B500272C1E /* MedataCore in Frameworks */,
 				118B44A42FF0000000272C1E /* GlucoseGraph in Frameworks */,
 				11CC66A03000000000272C1E /* GlucoseIngestion in Frameworks */,
+				11FE88A22FF4000000272C1E /* LibreLinkUpKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -186,6 +189,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				11DD77A02FF3000000272C1E /* GlucoseWidgetShared in Frameworks */,
+				11FE88A02FF4000000272C1E /* LibreLinkUpKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -290,6 +294,7 @@
 				111EC91D2FBD45B500272C1E /* MedataCore */,
 				118B44A52FF0000000272C1E /* GlucoseGraph */,
 				11CC66A13000000000272C1E /* GlucoseIngestion */,
+				11FE88A32FF4000000272C1E /* LibreLinkUpKit */,
 			);
 			productName = MeData;
 			productReference = 111EC90C2FBD327D00272C1E /* MeData.app */;
@@ -313,6 +318,7 @@
 			name = MeDataWidgets;
 			packageProductDependencies = (
 				11DD77A12FF3000000272C1E /* GlucoseWidgetShared */,
+				11FE88A12FF4000000272C1E /* LibreLinkUpKit */,
 			);
 			productName = MeDataWidgets;
 			productReference = 11ED00012FF2000000272C1E /* MeDataWidgets.appex */;
@@ -779,6 +785,14 @@
 		11DD77A12FF3000000272C1E /* GlucoseWidgetShared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = GlucoseWidgetShared;
+		};
+		11FE88A12FF4000000272C1E /* LibreLinkUpKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LibreLinkUpKit;
+		};
+		11FE88A32FF4000000272C1E /* LibreLinkUpKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LibreLinkUpKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
