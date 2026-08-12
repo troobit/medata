@@ -119,13 +119,15 @@ metadata:
 
 ## Phase 4: Backbone Swap Spike (gated half + comparison)
 
-- [ ] 20. STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 16 Pro <!-- id:2mfkxyy -->
+- [x] 20. STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 16 Pro <!-- id:2mfkxyy -->
   - Human-gated: Xcode Core ML performance report on the iPhone 16 Pro (v1 hardware floor — Decision 16 as amended by Decision 22). Confirm ANE residency (no GPU/CPU fallback) and <= 250 ms per 513x513 inference. Only runs if task 14's conversion succeeds.
+  - 2026-08-13 measured (artifact regenerated same day, matching the 2026-08-09 pass): prediction median 12.68 ms (n=120), compile 67.05 ms, load 21.34 ms; FULL ANE residency — all 315 dispatchable ops prefer the Neural Engine, zero CPU/GPU dispatch. Report committed at artifacts/spike_segformer-you.mlperf/report.json (Decision 28)
   - Blocked-by: 2mfkxyx (Code + run: spike_segformer.py autonomous half criteria 1, 2, 4)
   - Requirements: [3.1](requirements.md#3.1)
 
-- [ ] 21. Record the spike verdict in the decision log (pass/fail per criterion) <!-- id:2mfkxyz -->
+- [x] 21. Record the spike verdict in the decision log (pass/fail per criterion) <!-- id:2mfkxyz -->
   - Transcribe build/spike_segformer.json plus the task 20 latency verdict into decision_log.md whether the outcome is pass or fail (Req 3.1). A fail on any criterion closes Requirement 3 without a training run (Req 3.2).
+  - 2026-08-13: Decision 28 records the FULL PASS on all four criteria — converts, 7.3 MiB vs 24 MiB, 12.68 ms fully ANE-resident, oracle argmax 99.87%. Task 22's retrain condition is live
   - Blocked-by: 2mfkxyx (Code + run: spike_segformer.py autonomous half criteria 1, 2, 4), 2mfkxyy (STOP — measure SegFormer-B0 ANE latency and residency on the iPhone 16 Pro)
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2)
 
