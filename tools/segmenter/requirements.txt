@@ -6,9 +6,10 @@ tensorflow>=2.16
 pillow>=10.0
 numpy>=1.26
 
-# spike-only dependency — spike_segformer.py (segmenter-foundation design §5.2)
-# loads a public SegFormer-B0 checkpoint for the Core ML conversion spike.
-# Not needed for train/export/validation.
+# SegFormer-only dependency — the conversion spike (spike_segformer.py,
+# segmenter-foundation design §5.2) and the registered segformer_b0
+# architecture (archs.py, task 23). Not needed for deeplab_mnv3
+# train/export/validation; imported lazily.
 transformers>=4.44
 
 # dev/test only — the export-gate and lineage unit tests (tools/segmenter/tests/)

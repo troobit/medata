@@ -136,7 +136,8 @@ metadata:
   - Blocked-by: 2mfkxyz (Record the spike verdict in the decision log pass/fail per criterion), 2mfkxz7 (STOP — execute the stratified re-cut and re-measure the pinned baseline), 2mfkxzd (Code: register segformer_b0 in archs.py agent-executable prep for the task 22 retrain)
   - Requirements: [3.3](requirements.md#3.3)
 
-- [ ] 23. Code: register segformer_b0 in archs.py (agent-executable prep for the task 22 retrain) <!-- id:2mfkxzd -->
+- [x] 23. Code: register segformer_b0 in archs.py (agent-executable prep for the task 22 retrain) <!-- id:2mfkxzd -->
   - ArchSpec per the archs.py contract: model factory building SegFormer-B0 (transformers, spike-only dep) with the 36-channel head grafted per spike_segformer.py's graft, published-init policy, plain-tensor forward adapter (SegFormer emits logits at H/4 — upsample per the spike), and the export adapter export.py dispatches through
   - Registry-fixture tests pass without torch (lazy imports per the module convention); tools pytest suite stays green; spike_segformer.py may share the graft helper rather than duplicating it
   - Decision 28 settled viability (12.68 ms, fully ANE-resident); this task only makes --arch segformer_b0 selectable so the task 22 STOP can run as a training command
+  - 2026-08-13: landed — segformer_b0 registered in archs.py (published init nvidia/segformer-b0-finetuned-ade-512-512, weights-free rebuild for checkpoint loads, plain_tensor_logits normaliser); spike_segformer.py now delegates its graft to the shared archs.segformer_b0_grafted helper; --arch segformer_b0 selectable in train.py. Tools suite green: 266 passed (torch venv), 238 passed + 20 skipped (torch-free)

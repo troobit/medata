@@ -21,8 +21,9 @@ Contract per architecture (``ArchSpec``):
     index ``"out"``; plain-tensor architectures (SegFormer-class, which emit
     stride-4 logits) are bilinearly upsampled via ``plain_tensor_logits``.
 
-Only ``deeplab_mnv3`` is registered; the bake-off winner is added when its
-spike passes (spike_convert.py measures candidates — it does not train them).
+Registered: ``deeplab_mnv3`` (shipping) and ``segformer_b0`` (backbone-swap
+candidate — its conversion spike passed in full, segmenter-foundation
+Decision 28, so the task-22 comparison retrain can select it via ``--arch``).
 The ``arch`` recorded in checkpoint/lineage ``train_config`` resolves back
 through ``arch_from_lineage`` / ``arch_from_checkpoint``; absence means the
 historical ``deeplab_mnv3``, so pre-registry artefacts stay resolvable.
@@ -203,4 +204,82 @@ register(ArchSpec(
     build=_deeplab_build,
     load_checkpoint=_deeplab_load_checkpoint,
     forward_logits=dict_out_logits,
+))
+
+
+# ── segformer_b0 (backbone-swap candidate — segmenter-foundation Decision 28) ───
+
+# Published initialisation for segformer_b0 ``pretrained`` builds: the same
+# public checkpoint the conversion spike measured (spike_segformer.py). Like
+# deeplab_mnv3's COCO-seg DEFAULT weights, it embodies dense-prediction
+# transfer rather than a classification-only init (design §4.2's stated
+# preference).
+SEGFORMER_B0_CHECKPOINT = "nvidia/segformer-b0-finetuned-ade-512-512"
+
+
+def segformer_b0_grafted(num_classes: int, checkpoint: str | None):
+    """SegFormer-B0 (HF ``transformers`` — spike-only dependency until an
+    adoption decision) with the classifier grafted to ``num_classes`` and
+    wrapped to emit the raw logits tensor at SegFormer's native H/4 output
+    stride. Shared with spike_segformer.py so the graph the spike converted is
+    the graph this registration trains and exports.
+
+    ``checkpoint`` is an HF id or local path; ``None`` builds weights-free
+    from the default ``SegformerConfig`` (the published B0 variant — no
+    download; smoke runs and checkpoint rebuilds). Both paths produce the same
+    state-dict key set."""
+    import torch
+    from transformers import SegformerConfig, SegformerForSemanticSegmentation
+
+    if checkpoint is None:
+        model = SegformerForSemanticSegmentation(
+            SegformerConfig(num_labels=num_classes))
+    else:
+        model = SegformerForSemanticSegmentation.from_pretrained(checkpoint)
+        head = model.decode_head.classifier
+        model.decode_head.classifier = torch.nn.Conv2d(
+            head.in_channels, num_classes, kernel_size=1)
+
+    class PlainLogits(torch.nn.Module):
+        """Adapter to the plain-tensor convention: forward(x) -> [B, C, H/4,
+        W/4] logits; ``plain_tensor_logits`` upsamples to input resolution."""
+
+        def __init__(self, m):
+            super().__init__()
+            self.m = m
+
+        def forward(self, x):
+            return self.m(pixel_values=x).logits
+
+    return PlainLogits(model).eval()
+
+
+def _segformer_build(num_classes: int, pretrained: bool):
+    checkpoint = SEGFORMER_B0_CHECKPOINT if pretrained else None
+    return segformer_b0_grafted(num_classes, checkpoint)
+
+
+def _segformer_load_checkpoint(num_classes: int, checkpoint_path):
+    """Weights-free build + trained state dict (``{"model": ...}`` wrapper
+    accepted), eval mode. Unlike deeplab_mnv3's loader — whose pretrained
+    build is preserved historical behaviour — this never downloads: a trained
+    segformer_b0 checkpoint covers every parameter."""
+    import torch
+
+    model = segformer_b0_grafted(num_classes, checkpoint=None)
+    if checkpoint_path is not None and Path(checkpoint_path).is_file():
+        state = torch.load(str(checkpoint_path), map_location="cpu")
+        if isinstance(state, dict) and "model" in state:
+            state = state["model"]
+        model.load_state_dict(state, strict=False)
+    model.eval()
+    return model
+
+
+register(ArchSpec(
+    name="segformer_b0",
+    output="plain_tensor",
+    build=_segformer_build,
+    load_checkpoint=_segformer_load_checkpoint,
+    forward_logits=plain_tensor_logits,
 ))
