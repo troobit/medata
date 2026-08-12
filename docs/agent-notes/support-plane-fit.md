@@ -2251,3 +2251,82 @@ cell-to-cell variation is not one thing.
 
 **Not repaired**, on Decisions 52–75's precedent. `stabilityRatioMin` stays
 `[owed]`.
+
+## The floor is an order statistic, and it crosses (Decision 77)
+
+`theFloorIsAnOrderStatistic` discharges Decision 76's three non-capture
+negatives, which are two questions: a minimum over a growing sample is not a
+bound, and the sharp test's bar is added in quadrature over cells whose
+independence is not established. 17 cells at **128 draws**, **draws only** — the
+stride is excluded, Decision 76 having shown it is not a draw in the tail.
+
+### READ THIS FIRST: "the annulus arm is never beaten" is withdrawn
+
+| k draws | annulus floor |
+|---|---|
+| 4 | 1.312× |
+| 8 | 1.312× |
+| 16 | 1.094× |
+| 32 | **1.094×** — Decision 76's figure, reproduced exactly by the 32-prefix |
+| 64 | 1.075× |
+| 128 | **0.992×** |
+
+The crossing is `1786450130307`/annulus at n = 4,096, **draw 127**, **0.9921×** —
+1 of 1,024 annulus readings. Sixty-four draws would have missed it. Decision 76's
+**0 of 264** was right at its own depth and wrong as a rule.
+
+### Why it was always going to cross
+
+The observed prefix minimum sits in the body of its own resampled distribution at
+every k — quantiles **0.796, 0.962, 0.426, 0.686, 0.878** at k = 4, 8, 16, 32, 64,
+against resampled centres 1.217×, 1.152×, 1.103×, 1.067×, 1.033×. So the fall is
+the sample growing and nothing else. An order statistic of a population with
+support below 1× crosses 1× once k is large enough; the only question was how
+large, and the answer is between 64 and 128 draws on this corpus.
+
+### Quote the crossing RATE, not the floor
+
+Clopper-Pearson, one-sided, 95% — a bound that **tightens** with more draws where
+a floor sinks.
+
+| arm | crossings | bound |
+|---|---|---|
+| annulus, per cell | 0 of 128 | ≤ **0.0231** |
+| annulus, crossing cell | 1 of 128 | ≤ 0.0365 |
+| **annulus pooled** | **1 of 1,024** | ≤ **0.0046** |
+| **fallback pooled** | **272 of 1,152** | ≤ 0.2576 |
+
+**The arms differ by 242× in rate.** That is the separation in the form it
+survives in. Do not write "never" again.
+
+### The quadrature bar was 6% too narrow
+
+4,096 resampled 4-blocks, each applied to all 17 cells the way Decision 75's
+block was: **10.70 ± 1.78** against the quadrature **10.62 ± 1.68**. Cell
+dependence is real, measured, and small. Decision 75's own block splits 14 of 17
+— **+2.01 SD → +1.85 SD**, at the **0.050** tail of 4,096 blocks. Not refuted,
+not comfortable; the same verdict Decision 76 reached, now against a bar that
+assumes nothing about the cells.
+
+### The one unanimous cell was a small-sample artefact
+
+**0 of 17** cells unanimous at 128 draws (Decision 76 had 1 of 17):
+`1785901032716`/annulus@4096 moves 0.000 → **0.008**. 10 of 17 sit in 0.25…0.75.
+The coin covers every cell measured. Largest p̂ drift from 32 to 128 draws is
+`1786450130307`/annulus@1024, 0.531 → 0.734.
+
+### Controls
+
+Identity at all 128 seeds on 4 of 4 annulus legs (the seventh in this chain).
+Decision 67's ceiling reads **0.3907** of the attainable one across **2,176**
+rungs — the same figure as over 561, so quadrupling the draws finds no fuller
+order. The Double reference moves **0.000e+00 mm** against a smallest Float δ of
+1.550e-09 mm. Decision 71's window is read at full size and is untouched for a
+fourth time.
+
+Row lookup is now indexed rather than scanned (`byCut`); the rows, lookups and
+readings are identical and only the time to find a row changes. The reading takes
+~5 minutes.
+
+**Not repaired**, on Decisions 52–76's precedent. `stabilityRatioMin` stays
+`[owed]`.

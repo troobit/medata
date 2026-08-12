@@ -14549,6 +14549,528 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
+    // MARK: - The floor and the block (Decision 77)
+
+    // THE SAME CELLS, AND NO NEW GEOMETRY FOR HALF OF IT. Decision 76 closed with seven
+    // negatives. Four need no discharge or cannot have one here: no `[owed]` value moves,
+    // `decimated` is marked rather than repaired on Decisions 52-76's precedent, the coverage
+    // account above n = 4,096 belongs with that repair rather than before it, and four captures
+    // is four captures until the sitting. The three that remain are TWO questions:
+    //
+    //   The annulus floor at 1.094x is a minimum over a growing sample and will keep falling;
+    //   the separation is qualitative and this decision does not bound it.
+    //
+    //   The exchangeability model passes at +2.01 SD, which is close enough to its own boundary
+    //   that a different seed block could put it the other side.
+    //
+    //   The Bernoulli reading treats the 32 draws at a cell as independent, which they are by
+    //   construction, but treats the 17 cells as independent in the Poisson-binomial spread,
+    //   which is not established.
+    //
+    // The last two are one question read twice — is the sharp test's BAR the right width? — and
+    // one construction answers both: RESAMPLE THE BLOCK. Decision 75 read one block of four
+    // seeds, and Decision 76 scored it against a null assembled cell by cell and added in
+    // quadrature, which is exactly where cell independence enters. Drawing many blocks of four
+    // from the draws already in hand, and reading the split COUNT of the whole 17-cell panel per
+    // block, gives that bar directly with whatever dependence the cells have left in it — and it
+    // puts Decision 75's own block inside a distribution rather than beside a formula.
+    //
+    // The first is a different shape. A minimum has no bar and cannot be given one; the way to
+    // find out whether it is converging is to grow it and watch. 128 draws against 32, read at
+    // NESTED PREFIXES, against the same minimum resampled from the draws themselves. If the
+    // observed prefix minimum tracks what the cells' own population does at that k, the floor is
+    // an order statistic — it falls because the sample grows, not because the separation is
+    // weakening — and the quantity to quote is the CROSSING RATE, which does have a bar and does
+    // not move with k.
+    //
+    // The floor is read over DRAWS ALONE. Decision 76's 3.061x / 1.661x / 1.094x sequence pooled
+    // the stride with the draws, and that same decision then established the stride is not a
+    // draw in the tail. A minimum is where a contaminating cut matters most.
+    //
+    // `broadSeeds` CONTAINS `deepSeeds` as its first 32 IN ORDER, so the 32-prefix of every
+    // reading below is Decision 76's own rather than a re-run of it, and `subsampleSeeds` sits
+    // inside that in turn.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    static let broadSeeds: [UInt64] = (1...128).map(UInt64.init)
+    static let floorPrefixes = [4, 8, 16, 32, 64, 128]
+    static let blockResamples = 4_096
+    static let resampleSeed: UInt64 = 0x5EED_B10C_C0DE_F00D
+
+    @Test("the floor is an order statistic, and the block has a bar of its own")
+    func theFloorIsAnOrderStatistic() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        struct Row {
+            let set: String, leg: String, n: Int, cut: String, order: String
+            let reading: OrderReading
+            let parts: SumDecomposition
+        }
+        var rows: [Row] = []
+        var fullSize: [String: Int] = [:]
+        var attainable: [String: Double] = [:]
+        var identityHeld = 0, identityChecked = 0
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                let key = "\(name)/\(leg)"
+                fullSize[key] = set.count
+
+                // The identity rung, at all 128 seeds where it is affordable. Decision 76 read it
+                // at 32; the premise it protects is the same one and it gets stricter as the
+                // draws deepen, because a prefix minimum is only a nested sample of ONE
+                // population if every seed starts from the same row.
+                if leg == "annulus" {
+                    identityChecked += 1
+                    var identical = true
+                    for s in Self.broadSeeds where identical {
+                        identical = Self.subsampled(set, to: set.count, seed: s) == set
+                    }
+                    if identical { identityHeld += 1 }
+                }
+
+                var plan = Self.deepRungs
+                if name == Self.deepExceptionSet && leg == "fallback" {
+                    plan.append(Self.deepExceptionRung)
+                }
+                for rung in plan where rung < set.count {
+                    // DRAWS ONLY. The stride is Decision 76's subject and it is not a draw in the
+                    // tail, so it has no place in a minimum or in a resampled block.
+                    for s in Self.broadSeeds {
+                        guard let sub = Self.subsampled(set, to: rung, seed: s),
+                              let baseline = Self.orderBaseline(sub, seedNormal: seed)
+                        else { continue }
+                        let cut = "draw \(s)"
+                        let sorted = Self.depthSorted(sub)
+                        // The candidate set of Decisions 73-76, unchanged: the fill verdict is a
+                        // statement about THIS list and changes meaning if the list does.
+                        var candidates: [(String, [Vec3])] = [
+                            ("shipped", sub),
+                            ("|z| ascending", sub.sorted { abs($0.z) < abs($1.z) }),
+                            ("|z| descending", sub.sorted { abs($0.z) > abs($1.z) }),
+                        ]
+                        for objective in SearchObjective.allCases {
+                            for loud in Self.objectiveDirections(objective) {
+                                candidates.append((
+                                    "\(objective.rawValue) \(loud ? "up" : "down")",
+                                    Self.objectiveOrder(
+                                        sortedByDepth: sorted, normal: baseline.normal,
+                                        width: width, objective: objective, loud: loud)))
+                            }
+                        }
+                        for (order, permutation) in candidates {
+                            rows.append(Row(
+                                set: key, leg: leg, n: rung, cut: cut, order: order,
+                                reading: Self.orderReading(name, leg: leg, order: order,
+                                                           points: permutation,
+                                                           baseline: baseline),
+                                parts: Self.decomposeZSum(permutation)))
+                        }
+                        attainable["\(key)@\(rung)#\(cut)"] = Self.attainableZCeilingMm(sub)
+                    }
+                }
+            }
+        }
+        let short = "the ladder no longer yields a reading on both legs of every committed"
+            + " capture, so it is read on a corpus that has changed"
+        #expect(fullSize.count == 2 * names.count, "\(short)")
+
+        let drawNames = Self.broadSeeds.map { "draw \($0)" }
+        // Indexed rather than filtered. Decisions 74-76 scanned the row list per lookup, which is
+        // affordable at 33 cuts and is not at 128: the lookups are the same, the reading is the
+        // same, and only the time spent finding a row changes.
+        var byCut: [String: [Row]] = [:]
+        for row in rows { byCut["\(row.set)@\(row.n)#\(row.cut)", default: []].append(row) }
+        func rowsFor(_ set: String, _ n: Int, _ cut: String) -> [Row] {
+            byCut["\(set)@\(n)#\(cut)"] ?? []
+        }
+        let cells = Array(Set(rows.map { "\($0.set)@\($0.n)" })).sorted()
+        func split(_ cell: String) -> (set: String, n: Int) {
+            let parts = cell.split(separator: "@")
+            return (String(parts[0]), Int(parts[1]) ?? 0)
+        }
+        func isFullest(_ here: [Row]) -> Bool? {
+            guard let only = here.first(where: { $0.order == "fill up" }),
+                  let fullest = here.max(by: { $0.parts.fill < $1.parts.fill }) else { return nil }
+            return only.parts.fill == fullest.parts.fill
+        }
+        func searchVsSort(_ here: [Row]) -> Double? {
+            guard let sort = here.first(where: { $0.order == "|z| ascending" }),
+                  sort.reading.centroidErrorMm > 0,
+                  let search = here.filter({ $0.order.hasPrefix("spend ") })
+                    .max(by: { $0.reading.centroidErrorMm < $1.reading.centroidErrorMm })
+            else { return nil }
+            return search.reading.centroidErrorMm / sort.reading.centroidErrorMm
+        }
+        // Decision 76's estimator, unchanged and restated rather than shared, so that decision's
+        // readings are not re-denominated by anything done here.
+        func logStats(_ xs: [Double]) -> (g: Double, s: Double, se: Double, k: Int)? {
+            let ls = xs.filter { $0 > 0 && $0.isFinite }.map { Foundation.log($0) }
+            guard ls.count > 1 else { return nil }
+            let m = ls.reduce(0, +) / Double(ls.count)
+            let v = ls.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(ls.count - 1)
+            let sd = v.squareRoot()
+            return (Foundation.exp(m), Foundation.exp(sd),
+                    sd / Double(ls.count).squareRoot(), ls.count)
+        }
+        // Clopper-Pearson, upper limit only: the smallest rate at which observing this FEW
+        // crossings in k readings still has probability 0.05. At zero events it reduces to
+        // 1 - 0.05^(1/k), the rule of three's exact form; above zero the rule of three does not
+        // apply at all, which is the whole reason this is a search rather than a formula. The
+        // binomial coefficient is carried in logs step by step so nothing overflows at k > 1,000.
+        func crossingBound(events: Int, of k: Int) -> Double {
+            guard k > 0, events < k else { return 1 }
+            func atMost(_ p: Double) -> Double {
+                if p <= 0 { return 1 }
+                if p >= 1 { return 0 }
+                let lp = Foundation.log(p), lq = Foundation.log1p(-p)
+                var logC = 0.0, total = 0.0
+                for i in 0...events {
+                    if i > 0 {
+                        logC += Foundation.log(Double(k - i + 1)) - Foundation.log(Double(i))
+                    }
+                    total += Foundation.exp(logC + Double(i) * lp + Double(k - i) * lq)
+                }
+                return total
+            }
+            var lo = 0.0, hi = 1.0
+            for _ in 0..<200 {
+                let mid = (lo + hi) / 2
+                if atMost(mid) > 0.05 { lo = mid } else { hi = mid }
+            }
+            return (lo + hi) / 2
+        }
+
+        // MARK: THE CONTROL FIRST, and it is the same control for the seventh time. Every seed
+        // returns the set at full count, so the 128 ladders start from one row and a prefix of
+        // them is a nested sample of one population rather than a walk across several.
+
+        print("=== the control: every seed returns the set at full count ===")
+        print("  all \(Self.broadSeeds.count) draws reproduce the set element for element on"
+              + " \(identityHeld) of \(identityChecked) annulus legs")
+        let resampled = "a seed no longer returns the set at full count, so the draws are not"
+            + " cuts of one population and no prefix minimum below is an order statistic of one"
+        #expect(identityHeld == identityChecked, "\(resampled)")
+        let notNested = "Decision 76's seeds are no longer this decision's first 32 in order, so"
+            + " its readings are a separate measurement rather than the 32-prefix of these"
+        #expect(Array(Self.broadSeeds.prefix(Self.deepSeeds.count)) == Self.deepSeeds,
+                "\(notNested)")
+
+        // Every draw of every cell, in seed order, so a PREFIX is a nested sample by
+        // construction and the k-prefix at k = 32 is Decision 76's own reading.
+        var ladder: [String: [Double]] = [:]
+        for cell in cells {
+            let (key, n) = split(cell)
+            let xs = drawNames.map { searchVsSort(rowsFor(key, n, $0)) }
+            guard xs.allSatisfy({ $0 != nil }) else { continue }
+            ladder[cell] = xs.compactMap { $0 }
+        }
+        let annulusCells = ladder.keys.filter { split($0).set.hasSuffix("/annulus") }.sorted()
+        let fallbackCells = ladder.keys.filter { split($0).set.hasSuffix("/fallback") }.sorted()
+        let noLadder = "no cell yields a search-against-sort reading on all"
+            + " \(Self.broadSeeds.count) draws, so there is no nested prefix to read a minimum"
+            + " down and the floor cannot be grown at all"
+        #expect(!annulusCells.isEmpty, "\(noLadder)")
+
+        // MARK: THE FIRST FINDING — the floor, grown. Decision 76 reported 1.094x over 33 cuts
+        // and said in terms it was a floor and not a bound. Four times the draws says which of
+        // the two things a falling minimum can be doing: sampling further into a fixed tail, or
+        // tracking a separation that is not there.
+
+        print("=== the annulus floor against the number of draws ===")
+        var previousFloor: Double?
+        for prefix in Self.floorPrefixes {
+            let mins = annulusCells.compactMap { ladder[$0]?.prefix(prefix).min() }
+            guard let floor = mins.min() else { continue }
+            let drop = previousFloor.map { Foundation.log($0) - Foundation.log(floor) }
+            print("  \(prefix) draws over \(annulusCells.count) annulus cells:"
+                  + " floor \(String(format: "%.3f", floor))×"
+                  + (drop.map { " — \(String(format: "%.4f", $0)) in log from the half of it" }
+                     ?? ""))
+            previousFloor = floor
+        }
+        for leg in ["annulus", "fallback"] {
+            let here = leg == "annulus" ? annulusCells : fallbackCells
+            let all = here.compactMap { ladder[$0] }.flatMap { $0 }
+            guard let floor = all.min(), let roof = all.max() else { continue }
+            print("  \(leg), all \(all.count) draw readings: floor"
+                  + " \(String(format: "%.3f", floor))×, ceiling"
+                  + " \(String(format: "%.3f", roof))×, below 1× on"
+                  + " \(all.filter { $0 < 1 }.count)")
+        }
+
+        // MARK: AND WHAT THE FLOOR WOULD DO IF IT WERE ONLY AN ORDER STATISTIC. Resample k of the
+        // 128 draws — the same index set across every cell, which is exactly what a prefix is —
+        // and take the pooled minimum. That is the distribution the observed prefix floor is one
+        // realisation of, with no fitted family anywhere in it. If the observed floor sits in the
+        // body of that distribution at every k, the fall is the sample growing and nothing else.
+        print("=== the floor against its own resampled distribution, \(Self.blockResamples)"
+              + " blocks per k ===")
+        var rng = SplitMix64(seed: Self.resampleSeed)
+        for prefix in Self.floorPrefixes where prefix < Self.broadSeeds.count {
+            let observed = annulusCells.compactMap { ladder[$0]?.prefix(prefix).min() }.min()
+            var mins: [Double] = []
+            mins.reserveCapacity(Self.blockResamples)
+            for _ in 0..<Self.blockResamples {
+                let idx = Self.indexSubset(of: Self.broadSeeds.count, take: prefix, rng: &rng)
+                var pooled = Double.infinity
+                for cell in annulusCells {
+                    guard let xs = ladder[cell] else { continue }
+                    for i in idx { pooled = Swift.min(pooled, xs[i]) }
+                }
+                mins.append(pooled)
+            }
+            guard let stat = logStats(mins), let observed else { continue }
+            let below = Double(mins.filter { $0 <= observed }.count) / Double(mins.count)
+            print("  k = \(prefix): resampled floor \(String(format: "%.3f", stat.g))×"
+                  + " ×/÷ \(String(format: "%.3f", stat.s)), range"
+                  + " \(String(format: "%.3f", mins.min() ?? .nan))…"
+                  + " \(String(format: "%.3f", mins.max() ?? .nan))× — the observed prefix reads"
+                  + " \(String(format: "%.3f", observed))×, at the"
+                  + " \(String(format: "%.3f", below)) quantile of its own blocks")
+        }
+
+        // MARK: THE SECOND FINDING — the BOUND, which is what a floor was standing in for. The
+        // separation's claim is "the sort does not beat the loudest signed search on an annulus
+        // leg". As a minimum that claim gets weaker with every cut added, by construction. As a
+        // CROSSING RATE it does not: zero of k readings below 1x bounds the rate at
+        // 1 - 0.05^(1/k) with 95% confidence, and that bound TIGHTENS as k grows.
+        print("=== the crossing rate, bounded per cell ===")
+        for cell in (annulusCells + fallbackCells) {
+            guard let xs = ladder[cell], let stat = logStats(xs) else { continue }
+            let below = xs.filter { $0 < 1 }.count
+            // Where 1x sits relative to the cell's own centre, in the unit the spread is in —
+            // NEGATIVE is 1x below the centre, which is the arm winning. Reported as a companion
+            // to the count, on Decision 76's precedent: the log-ratios are visibly heavy-tailed
+            // and the count is the reading to lean on.
+            let logSpread = Foundation.log(stat.s)
+            let z1 = logSpread > 0 ? -Foundation.log(stat.g) / logSpread : Double.nan
+            print("  \(cell): \(below) of \(xs.count) draws below 1× — rate bounded at"
+                  + " \(String(format: "%.4f", crossingBound(events: below, of: xs.count)))"
+                  + " (95%, one-sided); the centre is"
+                  + " \(String(format: "%.3f", stat.g))× and 1× sits at"
+                  + " \(String(format: "%+.2f", z1)) geometric SD of it")
+        }
+        var pooledRate: [String: (below: Int, of: Int, bound: Double)] = [:]
+        for leg in ["annulus", "fallback"] {
+            let here = leg == "annulus" ? annulusCells : fallbackCells
+            let all = here.compactMap { ladder[$0] }.flatMap { $0 }
+            guard !all.isEmpty else { continue }
+            let below = all.filter { $0 < 1 }.count
+            let bound = crossingBound(events: below, of: all.count)
+            pooledRate[leg] = (below, all.count, bound)
+            print("  \(leg) pooled: \(below) of \(all.count) — rate bounded at"
+                  + " \(String(format: "%.4f", bound))"
+                  + " (95%, one-sided), which pools cells and so assumes they are exchangeable")
+        }
+        if let a = pooledRate["annulus"], let f = pooledRate["fallback"], a.below > 0 {
+            let aRate = Double(a.below) / Double(a.of), fRate = Double(f.below) / Double(f.of)
+            print("  the arms differ by \(String(format: "%.0f", fRate / aRate))× in rate, which"
+                  + " is the separation in the form it survives in")
+        }
+        // AND THE READINGS THAT CROSS, NAMED. A claim of the form "never" is refuted by
+        // exhibiting the counterexamples, not by a rate, so they are printed one by one.
+        print("=== every annulus reading below 1×, by cell and seed ===")
+        var crossings = 0
+        for cell in annulusCells {
+            guard let xs = ladder[cell] else { continue }
+            for (i, x) in xs.enumerated() where x < 1 {
+                crossings += 1
+                print("  \(cell), draw \(Self.broadSeeds[i]): \(String(format: "%.4f", x))×")
+            }
+        }
+        if crossings == 0 { print("  none — the annulus arm is unbeaten at this depth") }
+
+        // MARK: THE THIRD FINDING — the block, given a bar of its own. Decision 76 scored
+        // Decision 75's four seeds against a Poisson-binomial null: each cell splits
+        // independently with probability 1 - p̂⁴ - (1-p̂)⁴, and the spread is Σ p(1-p) added in
+        // quadrature. The addition is where cell independence enters, and it is not established.
+        // Resampling the block needs no such assumption: draw a 4-subset of the draws, apply the
+        // SAME subset to every cell — which is how Decision 75's block was applied — and count
+        // the panel's splits. The spread of that count carries the cells' dependence in it.
+
+        var verdicts: [String: [Bool]] = [:]
+        for cell in cells {
+            let (key, n) = split(cell)
+            let vs = drawNames.map { isFullest(rowsFor(key, n, $0)) }
+            guard vs.allSatisfy({ $0 != nil }) else { continue }
+            verdicts[cell] = vs.compactMap { $0 }
+        }
+        let panel = verdicts.keys.sorted()
+        let noPanel = "no cell carries a fill verdict on all \(Self.broadSeeds.count) draws, so"
+            + " the block cannot be resampled and Decision 76's bar cannot be checked"
+        #expect(!panel.isEmpty, "\(noPanel)")
+
+        print("=== the fill rate at \(Self.broadSeeds.count) draws, against its 32-prefix ===")
+        var rates: [String: Double] = [:]
+        for cell in panel {
+            guard let vs = verdicts[cell] else { continue }
+            let p = Double(vs.filter { $0 }.count) / Double(vs.count)
+            let prefix = vs.prefix(Self.deepSeeds.count)
+            let p32 = Double(prefix.filter { $0 }.count) / Double(prefix.count)
+            rates[cell] = p
+            print("  \(cell): p̂ = \(String(format: "%.3f", p)) over \(vs.count) draws,"
+                  + " against \(String(format: "%.3f", p32)) at Decision 76's 32")
+        }
+        let undecided = rates.values.filter { $0 >= 0.25 && $0 <= 0.75 }.count
+        let unanimous = rates.values.filter { $0 == 0 || $0 == 1 }.count
+        print("  \(unanimous) of \(rates.count) cells unanimous across all"
+              + " \(Self.broadSeeds.count) draws; \(undecided) sit in 0.25…0.75")
+
+        print("=== the split count of a 4-block: the quadrature bar against the resampled one ===")
+        // The bar Decision 76 used, recomputed at the better p̂ so that only the ADDITION is on
+        // trial and not the rate underneath it.
+        var predicted = 0.0, quadratureVariance = 0.0
+        let blockWidth = Self.subsampleSeeds.count
+        for cell in panel {
+            guard let p = rates[cell] else { continue }
+            let k = Double(blockWidth)
+            let ps = 1 - Foundation.pow(p, k) - Foundation.pow(1 - p, k)
+            predicted += ps
+            quadratureVariance += ps * (1 - ps)
+        }
+        var counts: [Int] = []
+        counts.reserveCapacity(Self.blockResamples)
+        for _ in 0..<Self.blockResamples {
+            let idx = Self.indexSubset(of: Self.broadSeeds.count, take: blockWidth, rng: &rng)
+            var splitCells = 0
+            for cell in panel {
+                guard let vs = verdicts[cell] else { continue }
+                let here = idx.map { vs[$0] }
+                if here.contains(true) && here.contains(false) { splitCells += 1 }
+            }
+            counts.append(splitCells)
+        }
+        let mean = Double(counts.reduce(0, +)) / Double(counts.count)
+        let variance = counts.map { (Double($0) - mean) * (Double($0) - mean) }.reduce(0, +)
+            / Double(counts.count - 1)
+        let empiricalSD = variance.squareRoot()
+        let quadratureSD = quadratureVariance.squareRoot()
+        print("  quadrature: \(String(format: "%.2f", predicted)) ±"
+              + " \(String(format: "%.2f", quadratureSD)) of \(panel.count) cells")
+        print("  resampled:  \(String(format: "%.2f", mean)) ±"
+              + " \(String(format: "%.2f", empiricalSD)) over \(counts.count) blocks,"
+              + " range \(counts.min() ?? -1)…\(counts.max() ?? -1)")
+        print("  the bar is \(String(format: "%.2f", empiricalSD / quadratureSD))× the"
+              + " quadrature one, which is the cells' dependence measured rather than assumed")
+
+        // AND DECISION 75'S OWN BLOCK, PLACED. Its seeds are inside `broadSeeds` in order, so it
+        // is one of the blocks this distribution is over and its position needs no model at all.
+        let shallowIndex = Self.subsampleSeeds.compactMap { Self.broadSeeds.firstIndex(of: $0) }
+        if shallowIndex.count == blockWidth {
+            var observedSplit = 0
+            for cell in panel {
+                guard let vs = verdicts[cell] else { continue }
+                let here = shallowIndex.map { vs[$0] }
+                if here.contains(true) && here.contains(false) { observedSplit += 1 }
+            }
+            let quadratureZ = quadratureSD > 0
+                ? (Double(observedSplit) - predicted) / quadratureSD : Double.nan
+            let empiricalZ = empiricalSD > 0
+                ? (Double(observedSplit) - mean) / empiricalSD : Double.nan
+            let atOrAbove = Double(counts.filter { $0 >= observedSplit }.count)
+                / Double(counts.count)
+            print("  Decision 75's own block splits \(observedSplit) of \(panel.count) —"
+                  + " \(String(format: "%+.2f", quadratureZ)) SD against the quadrature bar,"
+                  + " \(String(format: "%+.2f", empiricalZ)) SD against the resampled one,"
+                  + " and \(String(format: "%.3f", atOrAbove)) of blocks split at least as many")
+        }
+
+        // MARK: THE CONTROL — the ceiling, recomputed at every rung of every draw. Decision 67's
+        // bound is written on n and μ; a draw holds n exactly and moves μ, so the roof moves with
+        // the cut and is re-read 128 times per cell rather than 33.
+
+        print("=== the ceiling, recomputed at every rung of every draw ===")
+        var overRoof = 0, roofChecked = 0, worstShare = 0.0
+        for cell in cells {
+            let (key, n) = split(cell)
+            for cut in drawNames {
+                let here = rowsFor(key, n, cut)
+                guard let fullest = here.max(by: { $0.reading.share < $1.reading.share }),
+                      let a = attainable["\(key)@\(n)#\(cut)"], fullest.reading.zCeilingMm > 0
+                else { continue }
+                let roof = a / fullest.reading.zCeilingMm
+                roofChecked += 1
+                worstShare = Swift.max(worstShare, fullest.reading.share / roof)
+                if fullest.reading.share / roof >= 1 { overRoof += 1 }
+            }
+        }
+        print("  the fullest order reaches at most \(String(format: "%.4f", worstShare)) of the"
+              + " attainable ceiling across \(roofChecked) rungs")
+        let roofBroken = "some rung now drives the mean past what ulp(s)/2 per addition allows,"
+            + " so the attainable ceiling is not a bound under a drawn cut"
+        #expect(overRoof == 0, "\(roofBroken)")
+
+        // MARK: THE CONTROL — the multiset, held across every order of every draw.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for cell in cells {
+            let (key, n) = split(cell)
+            for cut in drawNames {
+                let here = rowsFor(key, n, cut)
+                guard let lo = here.map(\.reading.doubleMeanZMm).min(),
+                      let hi = here.map(\.reading.doubleMeanZMm).max(),
+                      let delta = here.map(\.reading.centroidErrorMm).min() else { continue }
+                worstNoise = Swift.max(worstNoise, hi - lo)
+                tightestDelta = Swift.min(tightestDelta, delta)
+            }
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the constructed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across these orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading needs"
+            + " and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
+    // Knuth's Algorithm S over indices rather than points, so a resampled block is drawn the same
+    // way `subsampled` draws a cut: one pass, exactly `take` of them, ascending. Ascending order
+    // matters — a block is applied identically to every cell, and Decision 75's own block is a
+    // set of seeds rather than a sequence of them.
+    static func indexSubset(of n: Int, take k: Int, rng: inout SplitMix64) -> [Int] {
+        guard k > 0, n >= k else { return [] }
+        var out: [Int] = []
+        out.reserveCapacity(k)
+        var remaining = k
+        for i in 0..<n {
+            if remaining == 0 { break }
+            if rng.uniformInt(n - i) < remaining {
+                out.append(i)
+                remaining -= 1
+            }
+        }
+        return out
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.

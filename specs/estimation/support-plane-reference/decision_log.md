@@ -6279,3 +6279,242 @@ existing helper or reading is modified, `decimated`, `subsampled` and
 reproduced inside the new reading as a sub-cut of it. No shipped code changes.
 
 ---
+
+## Decision 77: The floor is an order statistic, and the arm it protected is beaten at draw 127
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 76 closed with seven negatives. Four need no discharge or cannot have
+one here: no `[owed]` value moves, `decimated` is marked rather than repaired on
+Decisions 52-76's precedent, the coverage account above n = 4,096 belongs with
+that repair rather than before it, and four captures is four captures until the
+sitting. The three that remain are TWO questions.
+
+The first is that decision's own closing caveat:
+
+> The annulus floor at 1.094x is a minimum over a growing sample and will keep
+> falling; the separation is qualitative and this decision does not bound it.
+
+The second is one question read twice:
+
+> The exchangeability model passes at +2.01 SD, which is close enough to its own
+> boundary that a different seed block could put it the other side.
+
+> The Bernoulli reading treats the 32 draws at a cell as independent, which they
+> are by construction, but treats the 17 cells as independent in the
+> Poisson-binomial spread, which is not established.
+
+Both halves of the second are about the width of one bar, and one construction
+settles them with no new geometry at all: RESAMPLE THE BLOCK. Decision 75 read
+one block of four seeds; Decision 76 scored it against a null assembled cell by
+cell and added in quadrature, and the addition is where cell independence enters.
+Drawing many blocks of four from the draws already in hand, applying each block
+to every cell as Decision 75's block was applied, and reading the panel's split
+COUNT gives that bar directly with whatever dependence the cells have left in it.
+
+The first is a different shape. A minimum has no bar and cannot be given one; the
+way to find out whether one is converging is to grow it and watch. 128 draws
+against 32, read at nested prefixes, against the same minimum resampled from the
+draws themselves. `broadSeeds` contains `deepSeeds` as its first 32 IN ORDER, so
+the 32-prefix of every reading is Decision 76's own rather than a re-run of it,
+and `subsampleSeeds` sits inside that in turn.
+
+The floor is read over DRAWS ALONE. Decision 76's 3.061x / 1.661x / 1.094x
+sequence pooled the stride with the draws and that same decision then established
+the stride is not a draw in the tail; a minimum is where a contaminating cut
+matters most.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+
+### Decision
+
+Record that **the falling floor is an ORDER STATISTIC and nothing else**: at every
+k the observed prefix minimum sits in the body of its own resampled distribution
+— quantiles **0.796, 0.962, 0.426, 0.686, 0.878** at k = 4, 8, 16, 32, 64 — so
+the fall is the sample growing, not the separation weakening. The resampled
+centre falls **1.217x, 1.152x, 1.103x, 1.067x, 1.033x** across those same k,
+which is what a minimum over a fixed population does.
+
+Record accordingly that **Decision 76's "the sort never beats the loudest signed
+search on an annulus leg" is WITHDRAWN**. Grown to 128 draws the floor crosses:
+**1 of 1,024** annulus readings sits below 1x — `1786450130307`/annulus at
+n = 4,096, **draw 127**, reading **0.9921x**. Sixty-four draws would have missed
+it (floor 1.075x) and the 32-prefix reproduces Decision 76's **1.094x** exactly,
+so the earlier reading was right at its own depth and wrong as a rule.
+
+Record that **the quantity that replaces the floor is the CROSSING RATE, and it
+is a bound rather than a minimum**: Clopper-Pearson, one-sided, 95%. Per annulus
+cell it is **<= 0.0231** at 0 of 128 and **<= 0.0365** at the crossing cell;
+pooled it is **1 of 1,024, bounded <= 0.0046**, against fallback's **272 of
+1,152, bounded <= 0.2576**. The arms differ by **242x in rate**. Unlike a floor,
+this bound TIGHTENS as draws are added, which is the property the separation
+needed and did not have.
+
+Record that **the quadrature bar was 6% too narrow and the verdict does not
+turn on it**: over 4,096 resampled blocks the split count is **10.70 +/- 1.78**
+(range 4...17) against the quadrature **10.62 +/- 1.68**, so the cells' dependence
+is real, measured, and small. Decision 75's own block splits **14 of 17** — from
+**+2.01 SD** to **+1.85 SD**, and **0.050** of blocks split at least as many. The
+exchangeable-Bernoulli model is not refuted and it is not comfortable, exactly as
+Decision 76 said, now against a bar that assumes nothing about the cells.
+
+Record that **Decision 76's one unanimous cell was a small-sample artefact**:
+**0 of 17** cells are unanimous across 128 draws, `1785901032716`/annulus at
+n = 4,096 having moved from 0.000 to **0.008**. Ten of 17 sit in 0.25...0.75. The
+fill verdict is a coin on every cell measured, which strengthens that decision's
+finding rather than qualifying it.
+
+Decision 71's window is not read here and does not move. `stabilityRatioMin`
+stays `[owed]` and unsettleable on Decision 64's third finding. Not repaired, on
+Decisions 52-76's precedent.
+
+### Rationale
+
+One reading, in `theFloorIsAnOrderStatistic`, over the same committed sets, the
+same 17 cells, the same seven orders, the same width and the same estimator
+Decisions 73-76 used. 128 draws per cell, 2,176 rungs, no stride.
+
+**THE CONTROL IS AN IDENTITY, for the seventh time in this chain.** All 128 draws
+reproduce the set element for element at full count on **4 of 4** annulus legs.
+If any seed moved the set at full count, a prefix of the draws would not be a
+nested sample of one population and no minimum below would be an order statistic
+of anything.
+
+**WHY A RESAMPLED MINIMUM IS THE RIGHT NULL.** A prefix of k draws is one index
+set applied to every cell. Resampling k of the 128 the same way, and pooling the
+minimum over cells exactly as the prefix does, gives the distribution the
+observed prefix floor is one realisation of — with no fitted family anywhere in
+it, which matters because Decision 76 established these log-ratios are heavy-
+tailed. The observed floor sits at the 0.426 to 0.962 quantile across five values
+of k. There is nothing to explain.
+
+**AND WHY THAT MAKES THE CROSSING INEVITABLE RATHER THAN SURPRISING.** If the
+floor is an order statistic of a population whose support reaches below 1x, then
+growing k far enough crosses 1x with certainty; the only question was how far.
+The answer is between 64 and 128 draws on this corpus. Decision 76 wrote "it is
+reported as a floor, not as a bound" and "will keep falling"; both were correct,
+and this decision is what "keep falling" cashes out to.
+
+**THE CROSSING IS SMALL, AND THAT IS NOT A REASON TO DISCARD IT.** 0.9921x is
+0.79% below parity, and it is one reading of 1,024. It is also a reading of the
+same instrument that produced every other number in this chain, at a seed drawn
+the same way as the other 127. Keeping "never" by calling the nearest reading
+noise is precisely what a floor invites; a rate does not have the option.
+
+**WHAT THE SEPARATION IS NOW.** Not "the annulus arm is unbeatable" but "the
+annulus arm is beaten at a rate bounded below 0.5% where the fallback arm is
+beaten 23.6% of the time" — a **242x** ratio, quoted against bounds that tighten
+rather than a minimum that sinks. It is a weaker sentence and a stronger claim,
+because it survives the next thousand draws by construction.
+
+**THE BLOCK, AND WHY 4,096 OF THEM IS ENOUGH.** The question is whether adding
+cell variances in quadrature understates the panel's spread. The answer is a
+ratio, 1.06x, and it is stable long before the third decimal: enumerating all
+10.7 M four-subsets of 128 would refine a number whose only use is deciding
+whether +2.01 SD was inflated. It was, by 8%. Decision 75's block remains the
+95th percentile of blocks, which is the honest form of "consistent at its edge".
+
+**THE CONTROLS HOLD.** Decision 67's ceiling is recomputed per draw as well as
+per rung, because a draw holds n exactly and moves the standoff; the fullest
+order reaches at most **0.3907** of the attainable ceiling across **2,176** rungs
+and never breaches it — the same 0.3907 Decision 76 read over 561, so quadrupling
+the draws finds no fuller order. The Double reference re-summed in every
+constructed order moves **0.000e+00 mm** against a smallest Float delta of
+**1.550e-09 mm**.
+
+**AND ONE HOUSEKEEPING CHANGE, RECORDED BECAUSE IT TOUCHES A READING.** Row
+lookup is indexed rather than scanned. Decisions 74-76 filtered the row list per
+lookup, which is affordable at 33 cuts and quadratic in the wrong thing at 128.
+The rows, the lookups and the readings are identical; only the time to find a row
+changes.
+
+### Alternatives Considered
+
+- **Keep 32 draws and quote the floor with its caveat**: what Decision 76 did,
+  and the caveat was written honestly — Rejected because the caveat WAS the
+  finding. A claim whose stated weakness is "this number will keep falling" is a
+  claim waiting to be withdrawn, and withdrawing it at a time of our own choosing
+  is cheaper than having a later capture do it.
+- **Fit an extreme-value tail to the minima and extrapolate**: the standard
+  instrument for "where does a minimum converge" — Rejected because it needs a
+  family, and Decision 76 established these log-ratios are visibly heavy-tailed
+  with a 37x range in log spread across cells. The resampled null needs no family
+  and answers the question that was actually asked.
+- **Report the 0.9921x crossing as noise and keep "never"**: it is 0.79% below
+  parity on one reading of 1,024 — Rejected. There is no principled bar that
+  excludes it and admits the rest, and Decision 68's precedent in this chain is
+  that every account left unmeasured has been corrected when it was finally
+  measured.
+- **Enumerate all C(128,4) blocks rather than resample 4,096**: exact rather than
+  estimated — Rejected at 10.7 M blocks for a third decimal place on a ratio
+  (1.06x) whose only job is to say whether the quadrature bar was materially
+  wrong. It was not.
+- **Deepen the fallback arm instead**: the arm with the interesting behaviour,
+  since it crosses freely — Rejected because nothing is learned by watching an
+  arm that already crosses 23.6% of the time cross more. The bound that was owed
+  was on the arm that had not been seen to cross.
+- **Repair `decimated` first and re-read the chain**: it would make the stride
+  comparable and let the excluded cut back in — Rejected on Decisions 52-76's
+  precedent, and unnecessary here: this reading excludes the stride outright
+  rather than depending on it.
+
+### Consequences
+
+**Positive:**
+- The falling floor is explained rather than merely reported: it is an order
+  statistic, its own resampled distribution contains it at every k, and its fall
+  needed no account beyond the sample growing.
+- The separation is stated as a bound for the first time, and the bound tightens
+  with more draws where the floor sank — the arms differ by 242x in crossing
+  rate, `<= 0.0046` against `0.2576`.
+- A claim this chain has leaned on since Decision 74 is withdrawn on our own
+  measurement, at a cost of five minutes, rather than by a later capture.
+- Decision 76's quadrature bar is validated to 6%, so the two negatives about it
+  are discharged with a number rather than an argument, and the cells' dependence
+  is measured rather than assumed.
+- Decision 76's fill finding is strengthened: 0 of 17 cells unanimous at 128
+  draws, so the one exception was a small-sample artefact and the coin reading
+  covers every cell.
+- The ceiling reads 0.3907 over 2,176 rungs, the same figure as over 561, so
+  quadrupling the draws finds no fuller order.
+
+**Negative:**
+- No `[owed]` value moves. This is the tenth decision in a row that settles no
+  constant, and `stabilityRatioMin` is no closer to being settleable.
+- The crossing is one reading at 0.9921x. What dies is the word "never"; the
+  magnitude of the separation is unchanged and is now carried entirely by the
+  rate ratio, which is a coarser statement than the chain had hoped for.
+- The pooled bound pools cells and so assumes they are exchangeable — the very
+  assumption Finding 3 measured for a different statistic. Measured there,
+  assumed here.
+- The crossing rate is BOUNDED, not estimated: one event gives a point estimate
+  of 0.1% and an interval running to 0.46%, and no amount of drawing on four
+  captures narrows what four captures can say.
+- 128 draws is still a growing sample. The floor will keep falling and the bound
+  will keep tightening; they now move in opposite directions, which is the point,
+  but neither has converged.
+- The block resampling conditions on the observed 128 draws rather than the
+  population of all cuts, so it answers "would another block of these four have
+  read differently" and not "would another 128 draws".
+- `decimated` is still unrepaired, the coverage account above n = 4,096 is still
+  illustrated rather than established, and the cells remain n = 1,024 and 4,096
+  plus one at 65,536.
+- Four captures, four legs per arm. Every leg-level statement here is bounded by
+  that and this decision can only say so.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theFloorIsAnOrderStatistic`, `broadSeeds`, `floorPrefixes`, `blockResamples`,
+`resampleSeed`, `indexSubset`), `docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. Additive: no
+existing helper or reading is modified, `subsampled`, `orderReading`,
+`decomposeZSum` and `attainableZCeilingMm` are reused unchanged, and Decision
+76's 32 seeds are reproduced inside the new reading as its own 32-prefix. No
+shipped code changes.
+
+---
