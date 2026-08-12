@@ -1002,3 +1002,41 @@ artefact).
 `tasks-training-and-export.md` tasks 5–6.
 
 ---
+
+## Decision 28: SegFormer-B0 spike verdict — full pass; the conditional retrain gate is live
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+The spike's autonomous half (task 14) passed on 2026-08-09; the device half (task 20) waited on a human with the phone. The developer's initial instinct was to accept the incumbent's field latency as sufficient evidence — rejected in session because the latency experienced on recent builds belongs to the shipped DeepLabV3+MobileNetV3, not the SegFormer-B0 spike artifact, which had never run on device. The developer also relaxed the stance on the 250 ms bar ("this spec is all about accuracy — even a few seconds per scan is fine"), which turned out not to matter. The artifact was regenerated deterministically (`tools/segmenter/spike_segformer.py`, defaults): converts, 7,622,432 B FP16 vs the 24 MiB budget, oracle max abs err 0.00301, argmax agreement 99.87% (the 2026-08-09 run logged 99.98% — same pass, minor numeric drift).
+
+### Decision
+
+The spike verdict is a **full pass on all four criteria**, closing tasks 20 and 21. Criterion 3 measured on the iPhone 16 Pro (v1 hardware floor, Decision 22) via Xcode's Core ML performance report, 2026-08-13: **prediction median 12.68 ms** per 513×513 inference (n=120), compile 67.05 ms, load 21.34 ms, and **full ANE residency — all 315 dispatchable operations prefer the Neural Engine, zero CPU or GPU dispatch** (the remaining 547 program ops are consts/metadata). Task 22's conditional retrain is therefore live: retrain SegFormer-B0 on the same re-cut split with the same recipe, adopt only on ≥ 0.02 uplift on BOTH mean food-class IoU and the eight-staple mean (Req 3.3).
+
+### Rationale
+
+12.68 ms sits ~20× under the 250 ms bar with no fallback segments at all — including the spatial-reduction attention blocks, the ops with the least Core ML precedent and the stated conversion risk (design §5.1). Viability is settled; the only remaining question is the accuracy comparison, which is exactly what task 22 exists to answer.
+
+### Alternatives Considered
+
+- **Accept the incumbent's field latency without measuring the spike**: no device session needed - Rejected: measures a different architecture; ANE residency of SegFormer's attention ops was the actual unknown.
+- **Close Requirement 3 without the device half (no adoption pressure from latency)**: ends the spec sooner - Rejected: the measurement was one regeneration command plus a two-minute Xcode report, and a pass keeps the strongest accuracy lever available rather than discarding it undecided.
+
+### Consequences
+
+**Positive:**
+- The backbone-swap decision now rests purely on accuracy — latency and residency impose no constraint, with ~20× headroom for a larger variant if ever wanted.
+- Evidence is committed, not anecdotal: the full Xcode report JSON sits in `artifacts/spike_segformer-you.mlperf/`.
+
+**Negative:**
+- Task 22 is a live multi-hour MPS training gate (human/compute-gated STOP) — the spec cannot close without either running it or a recorded decision not to.
+- The regenerated artifact's oracle numbers differ in the third decimal from the 2026-08-09 run; harmless here, but conversion is not bit-reproducible across environments.
+
+### Impact
+
+Tasks 20–21 closed; task 22 (STOP — conditional SegFormer-B0 retrain vs the Req 3.3 adoption margin) is the sole remaining open task in this spec. Evidence: `artifacts/spike_segformer-you.mlperf/report.json`; the regenerated verdict JSON remains gitignored build output, transcribed here per task 21.
+
+---
