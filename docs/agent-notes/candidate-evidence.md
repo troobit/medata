@@ -135,10 +135,19 @@ That separation is the required boundary-bleed partition of the Req 8 analysis
 (the "Build the shortlist hit-rate analysis over the corrections corpus" task):
 split the combined-arm hit rate by whether the corrected class was adjacent to
 the predicted region. Adjacent hits with non-adjacent misses means bleed is
-crowding genuine confusions out of the five slots, and the conditional mitigation
-task fires. Adjacency is recomputable offline from a surviving capture bundle's
+crowding genuine confusions out of the five slots, and mitigation fires.
+Adjacency is recomputable offline from a surviving capture bundle's
 persisted argmax; rows whose bundle is gone are reported unknown, never assumed
 non-adjacent.
+
+The mitigation conditional is **not a pending task** (Decision 14, 2026-08-12):
+it is evaluated when the human-gated acceptance verdict runs this analysis on a
+corpus that finally carries relabels. `bleed_verdict=hurting` there reopens
+ranking repair (the closed task's candidate mitigations, measured with
+`tools/candidate_probe.py --erode`) before the removal gate is considered. It
+was closed rather than left pending because a pending non-STOP task gated on
+real-use data loops autonomous runners — the 2026-08-12 orbit run re-entered
+that phase 45 times before being killed.
 
 ## The Req 8 analysis: `tools/shortlist_hit_rate.py`
 
