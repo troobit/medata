@@ -6018,3 +6018,264 @@ reused unchanged, and Decision 74's stride readings are reproduced cell for cell
 inside the new one. No shipped code changes.
 
 ---
+
+## Decision 76: The cell is a coin, the aggregate is geometric, and the stride was truncating
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 75 closed with six negatives. Two are the shape of a negative result and
+need no discharge — no `[owed]` value moves, and the fill verdict is left
+unexplained on an axis that decision names none of. Two are standing qualifiers
+this chain carries by construction: decimation changes the multiset, so Decision
+71's window is read at full size and is untouched again here, and every δ since
+Decision 64 is a reading at the shipped scan order, which needs the sitting. The
+two that remain are one question read twice, which is Decision 71's shape:
+
+> Four seeds. The spread is bracketed by four draws per cell, which bounds the
+> distribution loosely and gives no estimate of its shape — the outside-count
+> null is exchangeability, not a fitted distribution.
+
+> The correction is one-sided in what it can repair. It says the 54.7× is a cell
+> reading; it does not say what the aggregate over draws means, because a ratio
+> averaged over cuts is not a quantity this chain has defined.
+
+Both are answered by drawing the same cells deep enough that a cell *has* a
+distribution, and then naming the estimator that summarises it. Decision 75
+bought breadth — 24 cells at 4 draws. This buys depth at the same cost — 17 cells
+at 32 draws — and the trade is forced, because a spread is not estimable from
+four readings and it is the spread, not the bracket, that says what a rung is
+worth.
+
+The cells are chosen rather than sampled. `deepRungs` is every count BOTH legs
+reach — the annulus legs hold 5,276 to 12,551 samples, so 1,024 and 4,096 are the
+whole of the overlap — plus the one cell Decision 74's most quoted figure came
+from. `deepSeeds` is 1…32 and so CONTAINS Decision 75's four, in its own order,
+which makes that decision's cut of every shared cell a sub-reading of this one
+rather than a separate measurement.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record that **the fill verdict at a cell is a coin, not a property sampled
+noisily**: 1 of 17 cells is unanimous across 32 draws and 11 of 17 sit in
+0.25…0.75, so the verdict carries under one bit and Decision 75's "the cell is a
+sample" is sharpened to a magnitude. Record that **the aggregate over cuts is the
+GEOMETRIC MEAN**, carrying the geometric SD as its spread and `s^(1/√k)` as the
+precision of the centre — the quantity Decision 75 said this chain had not
+defined, now defined and quoted at ×/÷ 1.0094…1.2958 over 32 draws.
+
+Record that **Decision 75's exoneration of the stride is WITHDRAWN IN THE TAIL**.
+That decision asked whether the stride falls inside the range of four draws — a
+range so wide a cut could be an order of magnitude out and still land in it. Read
+in units against 32, the stride is a draw in the median (above the centre on 8 of
+17, sign balanced) and is **not a draw in the tail**: beyond ±2 geometric SD on
+**4 of 17, all four ABOVE**, and outside the draws' whole range on **4 of 17**
+against the **1.03** exchangeability gives. The decisive cell needs no
+distributional assumption at all — `1786439141215`/annulus at n = 4,096 reads
+**7.494×** strided against a 32-draw range of **2.058…2.621×**, which is 2.86×
+above the maximum of thirty-two.
+
+Record that **the mechanism is truncation and not the periodicity Decision 74
+worried about**. `decimated` takes `step = n / target` in integer division and
+walks `target` steps, stopping at element `target × ⌊n/target⌋`: it is a stride
+over a **prefix**. Coverage is measured per cell at 66.7…99.9%, and it separates
+the readings — every one of the 12 cells covering ≥ 97.0% sits inside the draws'
+range, and 4 of the 5 covering ≤ 95.9% escape it. The worst is `step == 1`, where
+5,276 annulus samples "decimated" to 4,096 is a plain crop of the first 77.6% of
+the scan order and nothing is strided at all; that is the +21.37 SD cell.
+
+Record accordingly that **Decision 74's 54.729× is the stride's own artefact**,
+not merely a cell reading: the aggregate is **9.217× ×/÷ 1.336** (range
+5.419…17.830×), the stride sits at **+6.16 SD** outside that range, and the
+overstatement is **5.94×** — inside the 6.26…10.10× Decision 75 bracketed from
+four draws, and now a point estimate.
+
+Record that **Decision 74's withdrawn headline stays withdrawn, and for a priced
+reason**. At n = 1,024 the fallback legs lead by **+0.156** and at n = 4,096 they
+trail by **−0.094**, so the direction reverses with count. Against the draw bar
+both look real (2.61 and 2.03 SE); against the **leg** bar neither is (**1.67**
+and **0.38** SE). The claim is about legs, so the leg bar governs. The blocker is
+**four legs per arm**, not the cut — which prices what prerequisites captures 1–6
+buy for this reading specifically.
+
+Record that **the δ half survives 33 cuts but its margin does not**: the sort
+never beats the loudest signed search on an annulus leg — **0 of 264** — against
+**74 of 297** fallback readings below 1×, but the annulus floor falls to
+**1.094×** from Decision 75's 1.661× at five cuts. The separation holds with 9.4%
+of headroom, and every cut added has taken some.
+
+Decision 71's window is not read here and does not move. `stabilityRatioMin`
+stays `[owed]` and unsettleable on Decision 64's third finding. Not repaired, on
+Decisions 52–75's precedent.
+
+### Rationale
+
+One reading, in `theSpreadHasAShape`, over the same committed sets, the same
+seven orders, the same width and the same estimator inputs Decisions 73–75 used.
+Thirty-three cuts per cell: Decision 74's stride and 32 seeded draws.
+
+**THE CONTROL IS AN IDENTITY, for the sixth time in this chain.** All 32 draws
+reproduce the set element for element at full count on **4 of 4** annulus legs —
+re-read at every seed where it is affordable, Decision 75 having read it at four
+seeds on all eight sets. If any seed moved the set at full count the cells below
+would be drawn from different populations and no spread here would be a sampling
+spread.
+
+**THE SHAPE, AND WHY IT MATTERS THAT IT IS A COIN.** Decision 75 could say four
+draws disagree; it could not say whether a cell is near-determinate and sampled
+noisily or genuinely undetermined. The rates settle it: 0.000, 0.062, 0.062,
+0.094, 0.188, 0.250, 0.312, 0.500, 0.531, 0.531, 0.562, 0.562, 0.625, 0.656,
+0.688, 0.688, 0.875. One cell is unanimous and eleven sit inside 0.25…0.75. A
+finer instrument on the fill axis therefore buys nothing at these counts: there
+is no quantity at a cell to resolve more precisely.
+
+**THE SHARP TEST PASSES AT ITS EDGE.** If a cell is Bernoulli(p̂) and cuts are
+exchangeable, the rate at which FOUR draws split is predictable from the
+thirty-two as `1 − p̂⁴ − (1−p̂)⁴`, and the count is Poisson-binomial. It predicts
+**10.71 ± 1.64** of 17 cells; Decision 75's own four seeds — which are inside
+these thirty-two — split **14**, at **+2.01 SD**. Consistent, and only just: the
+model is not refuted, and it is not comfortable either.
+
+**THE ESTIMATOR, AND WHY IT IS GEOMETRIC.** A ratio's average cannot be
+arithmetic: 0.5× and 2× are the same disagreement in opposite directions and have
+to average to 1×, which the arithmetic mean (1.25×) does not. The geometric mean
+over draws is the aggregate, the geometric SD is the spread, and `s^(1/√k)` is
+the precision of the centre. Over 32 draws that precision runs ×/÷ 1.0094 to
+×/÷ 1.2958 — tight enough to quote, which is exactly what four draws could not
+support.
+
+**AND THE EXONERATION, RE-READ WITH POWER.** Decision 75's instrument was
+inside-or-outside a four-draw range, and its null was that a fifth exchangeable
+cut is extreme 2/5 of the time. That test cannot see a cut that is wrong by a
+factor: the range of four draws on `1786439141215`/annulus at n = 4,096 is wide
+enough to swallow almost anything, while the range of thirty-two is 2.058…2.621×
+and the stride reads 7.494×. The nonparametric count is the cleanest form — a
+33rd exchangeable cut escapes the other 32 with probability 2/33, so 1.03 of 17
+cells should escape and **4** do — and the sign makes it sharper still, because
+all four cells beyond ±2 SD are ABOVE, which no exchangeable cut produces.
+
+**THE MECHANISM WAS AVAILABLE TO BE READ FROM THE HELPER AND NOBODY READ IT.**
+`decimated` was introduced in Decision 74 and its `to: set.count` identity was
+checked five times across two decisions; what was never checked is what it does
+at any *other* target. Integer division makes `step × target ≤ n` with the
+remainder simply dropped, so the cut is a stride over a prefix and the prefix
+shortens as `target` approaches `n/2` or `n/3` from below. The measured coverages
+are 66.7%, 77.6%, 78.3%, 91.8%, 95.9% and then twelve at 97.0% or better, and
+they sort the escapes almost perfectly. At `step == 1` the construction is not a
+stride in any sense — it is the first `target` elements of the depth raster's
+scan order, which is a band of the scene.
+
+**WHY THE LEG BAR GOVERNS.** The per-cell rates carry a draw bar of ±0.028…0.043
+because 32 draws pin a Bernoulli rate well. The legs themselves scatter far more —
+±0.035 to ±0.216 — because four captures is four captures. A contrast between
+legs quoted against the draw bar would read 2.61 SE at n = 1,024 and look
+settled; against the leg bar it is 1.67 SE and is not. Reporting only the smaller
+bar is how a four-capture reading gets mistaken for a corpus result, which is the
+error this chain has now made twice.
+
+**THE δ HALF, AND AN HONEST NOTE ON ITS MARGIN.** 0 of 264 annulus readings
+against 74 of 297 fallback is the strongest form the separation has taken. But
+the annulus floor has fallen at every increase in cut count — 3.061× at one
+stride, 1.661× at five cuts, 1.094× at thirty-three — which is what a minimum
+over a growing sample does, and it means "never beaten" is now a 9.4% margin
+rather than a comfortable one. It is reported as a floor, not as a bound.
+
+**THE SPREAD IS NOT THE DRAW'S ALONE.** Quadrupling n from 1,024 to 4,096 should
+halve the log spread if the variation were sampling noise. It narrows on 7 of 8
+sets, but by factors 0.044, 0.240, 0.268, 0.746, 0.784, 0.868, 0.897 and 1.610 —
+a 37× range around a prediction of 0.500. Whatever the cell-to-cell variation is,
+it is not one thing.
+
+**THE CONTROLS HOLD.** Decision 67's ceiling is recomputed per cut as well as per
+rung, because a draw holds n exactly and moves μ; the fullest order reaches at
+most **0.3907** of the attainable ceiling across **561** rungs and never breaches
+it. The Double reference re-summed in every constructed order moves **0.000e+00
+mm** against a smallest Float δ of **3.586e-07 mm**.
+
+### Alternatives Considered
+
+- **Keep four draws and add cells instead**: the cheaper continuation of Decision
+  75, and it would cover the two decimation targets this decision drops —
+  Rejected because it compounds the error Decision 75 identified. More four-draw
+  cells is more readings that cannot be quoted; the missing thing was depth, and
+  no amount of breadth supplies a spread.
+- **Fix `decimated` to cover the whole set and re-run the chain**: the obvious
+  repair once truncation is found, and it would make the stride comparable at
+  every rung — Rejected on Decisions 52–75's precedent, and for a stronger reason
+  here: Decisions 73 and 74 are *recorded* at this helper's readings, so changing
+  it silently re-denominates two decisions. The defect is recorded and the
+  readings that rest on it are marked; the repair belongs with the sitting, where
+  it can be re-read once rather than twice.
+- **Bootstrap the cells rather than draw without replacement**: the standard
+  instrument for a sampling distribution — Rejected for Decision 75's reason,
+  unchanged: it alters the multiset's multiplicities, so it answers a question
+  about a different set and breaks the premise the decimators share.
+- **Report the arithmetic mean of the ratios**: simpler, and it is what "average"
+  usually means — Rejected because it is the wrong group. The quantity is a
+  ratio, its identity is 1×, and an arithmetic mean of ratios is not invariant to
+  which side of the comparison is the numerator; the geometric mean is.
+- **Drop the ±2 SD reading and quote only the nonparametric escape count**: the
+  escape count needs no normality, and the log-ratio distributions here are
+  visibly heavy-tailed — Rejected as a substitution but adopted as a companion.
+  Both are reported, they agree (4 of 17 either way), and the escape count is the
+  one the decision leans on.
+- **Take Decision 75's exoneration at its word and move on**: it was measured,
+  not argued, and it discharged the control it was built for — Rejected on
+  Decision 68's precedent, which this decision has now honoured for the second
+  time running: every account in this chain left unmeasured has been corrected
+  when it was finally measured, and an underpowered test is an unmeasured
+  account.
+
+### Consequences
+
+**Positive:**
+- The aggregate over cuts is defined, so a decimated rung is quotable for the
+  first time since Decision 74 introduced one.
+- A real defect in a helper two decisions rest on is found and measured rather
+  than suspected, and its footprint is bounded — coverage ≥ 97.0% is clean on
+  12 of 12 cells.
+- Decision 74's 54.729× gets a point estimate for its overstatement (5.94×)
+  rather than a bracket, and the reason moves from "a cell is noisy" to "the
+  instrument was cropping".
+- The fill axis is retired as a target for finer instruments at these counts: a
+  coin has nothing to resolve.
+- The δ half is read at 33 cuts, the strongest form the annulus/fallback
+  separation has taken, and its shrinking margin is on the record rather than
+  implied.
+- What the capture session buys is priced for one reading: the leg contrast needs
+  more legs, not more draws or more counts.
+
+**Negative:**
+- No `[owed]` value moves. This is the ninth decision in a row that settles no
+  constant, and `stabilityRatioMin` is no closer to being settleable.
+- `decimated` is left unrepaired, so Decisions 73 and 74 keep readings taken
+  through a cropping cut, and this decision marks them rather than redoing them.
+- The two upper decimation targets are not read at depth. n = 16,384 is dropped
+  entirely and n = 65,536 survives on one cell, so the coverage account is
+  established at 1,024 and 4,096 and merely illustrated above them.
+- Four captures. Every leg-level reading here is bounded by that and this
+  decision can only say so, not fix it.
+- The exchangeability model passes at +2.01 SD, which is close enough to its own
+  boundary that a different seed block could put it the other side.
+- The annulus floor at 1.094× is a minimum over a growing sample and will keep
+  falling; the separation is qualitative and this decision does not bound it.
+- The Bernoulli reading treats the 32 draws at a cell as independent, which they
+  are by construction, but treats the 17 cells as independent in the Poisson-
+  binomial spread, which is not established.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theSpreadHasAShape`, `deepSeeds`, `deepRungs`, `deepExceptionSet`,
+`deepExceptionRung`), `docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. Additive: no
+existing helper or reading is modified, `decimated`, `subsampled` and
+`attainableZCeilingMm` are reused unchanged, and Decision 75's four seeds are
+reproduced inside the new reading as a sub-cut of it. No shipped code changes.
+
+---
