@@ -4964,3 +4964,174 @@ the `stabilityRatioMin` marker), `docs/agent-notes/support-plane-fit.md`,
 changes.
 
 ---
+
+## Decision 70: The loudest order is searched rather than sampled, and the axis is what the search needed
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 69 closed with five negatives. One is the shape of a negative result and
+cannot be discharged. One is a stated qualifier on figures already recorded. Two
+need the sitting. The fifth needs nothing: "Ten orders is not the permutation
+group. Six shuffles agreeing closely is evidence that the shuffle regime is
+narrow, not that the structural extremes found here are the extremes."
+
+No further sample can answer that. A sample says what some order does; it never
+says what the loudest one does, and enumerating a thousand shuffles only draws
+more deeply from the regime Decision 69 already measured at 1.01…3.37×. What
+answers it is a SEARCH: walk the accumulated error up one step at a time, with
+no account of why any order is loud. At each step the Float sums already carry
+whatever error the prefix accrued, so adding point p lands the accumulated
+projected error at exactly `n̂·(fl(s + p) − (S + p))` — one evaluation, no
+lookahead needed, and the choice is made on the quantity itself rather than on a
+proxy for it.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record the permutation group's extreme as **searched and not sampled**, and
+record that what a search of this kind needs is the right AXIS rather than a
+large budget. On extraction's own leg the search beats the loudest of Decision
+69's ten orders by **2.1…4.3×**, and it is the loudest order tried on **7 of 8**
+committed sets. Decision 66's MEASURED margin falls again, **72.7× → 27.9×**;
+Decision 67's ASSERTED **7.6×** does not move, and its ceiling is not breached by
+any order in either decision. `stabilityRatioMin` stays `[owed]` and unsettleable
+on Decision 64's third finding. Not repaired, on Decisions 52–69's precedent.
+
+### Rationale
+
+One reading, in `theExtremeOfThePermutationGroupIsNotSampled`, over the same
+eight committed sets — four captures × two legs — that Decision 69 read. Four
+structural orders are re-read as the sampled comparison, that decision having
+measured a structural order as the noisiest on 8 of 8 sets, so the loudest of its
+ten is the loudest of these four.
+
+**THE AXIS IS THE WHOLE OF IT, and the first choice is the wrong one.** A search
+capped at `width` candidates per step draws them as cursors into the set held in
+some order, and the order that suggests itself is the PROJECTED coordinate — the
+quantity the objective is written on. It is the wrong axis and it is wrong for a
+reason the feature already knows: an inlier set lies within one `inlierBandMm` of
+its own plane, so `n̂·p` is very nearly constant across the whole set and twelve
+bins cut on it are twelve names for the same number. Searched that way the search
+LOSES to a plain sort, reaching **0.18…1.09×** of the loudest sampled order.
+Re-cut on DEPTH — the sum whose error the projection reads, the standoff being
+~350 mm where x and y average near zero — the same search at the same widths
+reads **0.59…4.27×**. Nothing else changed.
+
+**THE WIDTH BUYS ALMOST NOTHING, which is what makes the readings quotable.**
+Swept 12…256 on the four annulus sets and 12…64 on the two fallback sets that
+afford more than one entry, the widest search is **0.91…1.50×** the narrowest and
+δ climbs with the width on only **2 of 6**. A greedy that improved with its
+budget would be reporting compute; this one saturates at the narrowest width
+offered, so the two 0.6–1.3 M-point fallback sets capped at width 12 are narrow
+rather than under-searched.
+
+**What the search finds.** It is the loudest order on 7 of 8 sets. On the annulus
+leg: 0.025403 mm against 0.011917 (2.13×), 0.031885 against 0.007471 (4.27×),
+0.016093 against 0.005090 (3.16×), 0.028366 against 0.010877 (2.61×). On the
+fallback leg it wins on three, at 1.96×, 1.64× and 1.57×. **The exception is the
+largest set in the corpus** — `1785901032716`'s 1,298,233-point fallback set,
+where `|z| ascending` reads 6.143952 mm against the search's 3.628388 mm
+(0.59×). A greedy is myopic and can be beaten; this is where it is.
+
+**The ceiling is not breached, and the fullest fill is still a sampled order.**
+Searched orders fill Decision 67's `u·μ·(n−1)/2` to **0.1988…0.4237** against the
+sampled 0.0568…0.4440, so the search lifts the typical fill by 2–4× and leaves
+the single fullest reading where Decision 69 left it: 0.4440, on that same
+1.3 M-point set at `|z| ascending`. The bound holds against orders chosen to
+break it.
+
+**What it costs the two ways of placing extraction's leg.** δ/σ under the search
+reads 0.002548, 0.004136, 0.005086 and 0.004241 against the sampled 0.001195,
+0.000969, 0.001950 and 0.001341. Decision 66's MEASURED margin against the 0.1418
+bar therefore falls **72.7× → 27.9×** — 1,430× off its original 39,903× headline
+and now within **3.7×** of Decision 67's asserted figure. The asserted one does
+not move by a millimetre: per-capture ceilings 0.011272, 0.017063, 0.018543 and
+0.016858, identical in every order, for **7.6×**. Extraction's guard is safe by
+both readings under every order anyone has constructed; the two readings have
+nearly converged, and the one that converged is the measurement.
+
+**DECISION 69'S ACCOUNT IS HALF TRUE AND IS NOT THE MECHANISM.** That decision
+explained `|z| ascending` by saying a sort orders the RESIDUALS about the mean
+and blocks every below-mean sample before every above-mean one. Read as a
+prediction it has two halves. The blocking half survives: a blocked order is
+louder than an interleaved one on **6 of 8** sets. The converse half is REFUTED —
+interleaving the residuals from both ends so the partial sum stays near zero is
+the quietest order tried on **0 of 8**. And the account's own order reaches only
+**0.19…1.69×** of what the search finds, so it names a real effect without being
+what produces the extreme. Decision 68's precedent, on Decision 69's sentence.
+
+**The control is exact rather than merely small.** The Double reference re-summed
+in each searched order moves **0.000e+00 mm** — bit-identical across every
+constructed order on all eight sets — against a smallest Float δ of 2.739e-05 mm.
+A searched order is the harder case for this control than a shuffle, being chosen
+to make one accumulation drift.
+
+### Alternatives Considered
+
+- **Enumerate far more shuffles — a thousand rather than six**: the literal
+  reading of "ten orders is not the permutation group" — Rejected because
+  Decision 69 measured the shuffle regime at 1.01…3.37× wide. More draws from a
+  narrow regime give a better estimate of the middle and say nothing about the
+  ends, which is the question.
+- **Bound δ over all permutations analytically instead of constructing one**:
+  a bound would settle the question outright — Rejected because Decision 67's
+  ceiling IS that bound. What is not known is how tight it is, and only a
+  construction that fills it answers that.
+- **Take the search's number as the permutation group's extreme**: it is the
+  loudest order anyone has produced — Rejected on the measurement. A greedy is
+  myopic and `|z| ascending` beats it on the corpus's largest set, so the search
+  is a floor under the extreme and the ceiling is still the only upper statement.
+- **Repair the sum — pairwise or Kahan accumulation, which makes δ
+  order-independent and small at once**: still the strongest fix available and it
+  needs no capture — Rejected on Decisions 52–69's precedent. It changes the
+  centroid, hence which candidates survive `try? refine`, hence the shipped
+  fallback plane Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- Decision 69's fourth negative is discharged. Ten orders was not the extreme,
+  and the amount it was short by is measured rather than guessed at.
+- Decision 67's ceiling survives a second and more hostile test: it is not
+  breached by orders constructed to breach it, and the fullest any order fills it
+  is still 0.4440.
+- The two ways of placing extraction's leg have nearly converged — 27.9×
+  measured against 7.6× asserted, from 39,903× against 7.6× two decisions ago —
+  so quoting the asserted figure costs almost nothing now and needs no order.
+- The search's insensitivity to its own width, 0.91…1.50× over a 21× budget
+  range, means the capped fallback readings are narrow rather than unreliable.
+- Decision 69's account gets the treatment Decision 68 set the precedent for, and
+  comes back half true, which is more than the power-law account managed.
+
+**Negative:**
+- This is a third negative result in a row for the constant. No `[owed]` value
+  moves and `stabilityRatioMin` is no closer to being settleable.
+- The search is a FLOOR and is known to be beatable: `|z| ascending` is louder on
+  the corpus's largest set. Whether a non-greedy construction — a beam search, or
+  one that reasons about which ulp regime the running sum sits in — reaches the
+  ceiling is unmeasured.
+- The width saturates on 4 of 6 sets and CLIMBS on 2, and both climbers are
+  fallback sets. So saturation is an annulus reading, and the fallback leg may
+  still be width-limited at the widths its size affords.
+- The ceiling's tightness is now bracketed 0.4440 below and 1 above. A 2.3×
+  window is what the whole of Decisions 67–70 has narrowed it to, and nothing in
+  hand closes it.
+- Every δ in Decisions 64–70 is still a reading at the shipped scan order.
+  Decision 69's qualifier stands and this decision widens the spread it applies
+  to rather than removing it.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theExtremeOfThePermutationGroupIsNotSampled`, `searchedOrder`, `depthSorted`,
+`alternatingOrder`, `searchWidths`, `searchEvaluationBudget`, `affordableWidths`),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. No shipped code
+changes.
+
+---

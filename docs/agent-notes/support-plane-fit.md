@@ -1756,3 +1756,82 @@ capture not yet taken.**
 survive `try? refine`, hence the shipped fallback plane Decision 36 prices against.
 `stabilityRatioMin` stays `[owed]` and unsettleable; every remaining question about it is a
 capture question.
+
+## The loudest order is searched, and the axis is what the search needs (Decision 70)
+
+`theExtremeOfThePermutationGroupIsNotSampled` closes Decision 69's one non-capture negative
+that is not the shape of a negative result: *ten orders is not the permutation group*. No
+further sample answers it — a sample says what some order does, never what the loudest one
+does, and Decision 69 measured the shuffle regime at 1.01…3.37× wide, so more draws only
+describe the middle better.
+
+A **search** answers it. At each step the Float sums already carry the prefix's error, so
+adding point p lands the accumulated projected error at exactly `n̂·(fl(s + p) − (S + p))` —
+one evaluation, no lookahead, and no account of why any order is loud. Run up and run down;
+δ is the magnitude, so the two directions bracket the extreme.
+
+### Read this before writing another search over these sets: the AXIS, not the width
+
+The search is capped at `width` candidates per step, drawn as cursors into the set held in
+some order. **The obvious axis is wrong.** Cutting the bins on the projected coordinate —
+the quantity the objective is written on — leaves the search reaching **0.18…1.09×** of the
+loudest sampled order, i.e. *losing to a plain sort*. The reason is a fact the feature
+already knows: an inlier set lies within one `inlierBandMm` of its own plane, so `n̂·p` is
+near-constant over the whole set and twelve bins on it are twelve names for one number.
+
+Re-cut on **depth** — the sum whose error the projection reads, the standoff being ~350 mm
+where x and y average near zero — the same search at the same widths reads **0.59…4.27×**.
+Nothing else changed. See `depthSorted`, whose comment carries this.
+
+The width itself buys almost nothing: swept 12…256, the widest search is **0.91…1.50×** the
+narrowest and δ climbs with it on only 2 of 6 sets. So the two 0.6–1.3 M-point fallback sets
+that only afford width 12 (`searchEvaluationBudget`) are *narrow, not under-searched*.
+
+### What the search finds, against Decision 69's sampled extremes
+
+Loudest order on **7 of 8** committed sets. Extraction's leg, δ in mm:
+
+| set | loudest sampled | searched | gain |
+|---|---|---|---|
+| `1785135663727` annulus | 0.011917 (shipped) | **0.025403** | 2.13× |
+| `1785901032716` annulus | 0.007471 (`\|z\|` asc) | **0.031885** | 4.27× |
+| `1786439141215` annulus | 0.005090 (`\|z\|` asc) | **0.016093** | 3.16× |
+| `1786450130307` annulus | 0.010877 (`\|z\|` desc) | **0.028366** | 2.61× |
+
+**The search is a FLOOR and is beatable.** A greedy is myopic: on the corpus's largest set,
+`1785901032716`'s 1,298,233-point fallback set, `|z| ascending` reads 6.143952 mm against the
+search's 3.628388 mm (0.59×). Do not quote the search's number as the extreme.
+
+### The ceiling still bounds it, and the fullest fill is still a sampled order
+
+Searched orders fill Decision 67's `u·μ·(n−1)/2` to **0.1988…0.4237** against the sampled
+0.0568…0.4440 — so the search lifts the *typical* fill 2–4× and leaves Decision 69's 0.4440
+headline exactly where it stood. The ceiling's tightness is bracketed **0.4440…1**, and
+nothing in Decisions 67–70 closes that 2.3× window.
+
+| statement | shipped order | worst sampled | worst searched |
+|---|---|---|---|
+| Decision 66's **measured** annulus margin | 97–39,903× | 72.7× | **27.9×** |
+| Decision 67's **asserted** annulus margin | 7.6× | 7.6× | **7.6×** — cannot move |
+
+The measured figure has now fallen to within **3.7×** of the asserted one. **Quote the
+asserted one.** Extraction's guard is safe by both readings under every order constructed.
+
+### Decision 69's account is half true, and is not the mechanism
+
+That decision explained `|z| ascending` by residual blocking. As a prediction it has two
+halves, and they do not both hold:
+
+- **Blocking is loud** — a blocked order beats an interleaved one on **6 of 8** sets. Holds.
+- **Interleaving is quiet** — interleaving the residuals from both ends so the partial sum
+  stays near zero is the quietest order tried on **0 of 8** sets. **Refuted.**
+
+And the account's own order reaches only **0.19…1.69×** of what the search finds. It names a
+real effect without being what produces the extreme — Decision 68's precedent, applied to
+Decision 69's own sentence.
+
+Control unchanged and exact: the Double reference re-summed in every constructed order moves
+**0.000e+00 mm** on all eight sets, against a smallest Float δ of 2.739e-05 mm.
+
+**Not repaired**, on Decisions 52–69's precedent. `stabilityRatioMin` stays `[owed]` and
+unsettleable; Decision 64's third finding is untouched.

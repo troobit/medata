@@ -11749,6 +11749,388 @@ struct SupportPlaneCorpusMeasurementTests {
         }
     }
 
+    // The search's WIDTH: how many of the remaining points it may look at per step. A full
+    // greedy is O(n²) and the fallback leg carries 1.3 M points, so each step chooses among
+    // cursors into the set sorted by its own projected coordinate rather than among every
+    // point left. Every reading is therefore a LOWER bound on the permutation group's extreme,
+    // which is the direction that matters: an order the search finds is an order that exists,
+    // and Decision 67's ceiling bounds the other side.
+    //
+    // The width is swept rather than chosen, because it turns out to be the thing that decides
+    // what the search reaches — which is the finding, not a tuning detail.
+    static let searchWidths = [12, 32, 64, 128, 256]
+
+    // Evaluations per direction, per width. A width costs n × width objective evaluations, so
+    // the annulus leg affords the whole sweep and the fallback leg affords the first two or
+    // three entries — the 1.3 M-point set only the narrowest. The test PRINTS which widths each
+    // set was given rather than quietly running a shorter sweep on the big ones.
+    static let searchEvaluationBudget = 20_000_000
+
+    static func affordableWidths(_ n: Int) -> [Int] {
+        let affordable = Self.searchWidths.filter { n * $0 <= Self.searchEvaluationBudget }
+        return affordable.isEmpty ? [Self.searchWidths[0]] : affordable
+    }
+
+    // The set ordered by DEPTH, sorted once and handed to every constructed order — a
+    // comparator sort over 1.3 M points costs more than the searches that consume it.
+    //
+    // Not by the projected coordinate, which is the first thing to try and is the wrong axis:
+    // an inlier set lies within one `inlierBandMm` of its own plane, so `n̂·p` is very nearly
+    // constant over the whole set and bins cut on it are twelve names for the same number. The
+    // projected error is dominated by the z sum — the standoff is ~350 mm where x and y average
+    // near zero — so the freedom a search has is the spread in z, and that is what it is given.
+    static func depthSorted(_ points: [Vec3]) -> [Vec3] {
+        points.sorted { $0.z < $1.z }
+    }
+
+    // The search. At each step the Float sums already carry whatever error the prefix has
+    // accrued, so adding point p lands the accumulated projected error at exactly
+    // n̂·(fl(s + p) − (S + p)): one evaluation, no lookahead, and no account of WHY any order
+    // is loud. `loud` walks that error up and `!loud` walks it down; δ is its magnitude, so
+    // the two directions bracket the extreme rather than duplicate it.
+    static func searchedOrder(sortedByDepth sorted: [Vec3], normal: Vec3,
+                              width: Int, loud: Bool) -> [Vec3] {
+        let n = sorted.count
+        guard n > 0 else { return sorted }
+        let bins = Swift.min(width, n)
+        let per = (n + bins - 1) / bins
+        var cursor = (0..<bins).map { $0 * per }
+        let end = (0..<bins).map { Swift.min(($0 + 1) * per, n) }
+        let nx = Double(normal.x), ny = Double(normal.y), nz = Double(normal.z)
+        var sx: Float = 0, sy: Float = 0, sz: Float = 0
+        var qx = 0.0, qy = 0.0, qz = 0.0
+        var out: [Vec3] = []
+        out.reserveCapacity(n)
+        for _ in 0..<n {
+            var best = -1
+            var bestScore = loud ? -Double.infinity : Double.infinity
+            for b in 0..<bins where cursor[b] < end[b] {
+                let p = sorted[cursor[b]]
+                let score = nx * (Double(sx + p.x) - (qx + Double(p.x)))
+                    + ny * (Double(sy + p.y) - (qy + Double(p.y)))
+                    + nz * (Double(sz + p.z) - (qz + Double(p.z)))
+                if loud ? (score > bestScore) : (score < bestScore) {
+                    bestScore = score
+                    best = b
+                }
+            }
+            let p = sorted[cursor[best]]
+            cursor[best] += 1
+            sx += p.x; sy += p.y; sz += p.z
+            qx += Double(p.x); qy += Double(p.y); qz += Double(p.z)
+            out.append(p)
+        }
+        return out
+    }
+
+    // The order Decision 69's ACCOUNT nominates but never tried. That decision explained
+    // `|z| ascending` by saying a sort over near-equal same-sign addends orders the RESIDUALS
+    // about the mean and puts every below-mean sample before every above-mean one, so the
+    // partial sum drifts one way instead of cancelling. The two blocked halves of that
+    // prediction are already in hand — they ARE `|z| ascending` and `|z| descending` — and the
+    // half that is not is its converse: interleave the residuals from both ends so the partial
+    // sum stays near zero, and the account says the result must be quiet. Decision 68 is the
+    // precedent for what happens to an account left unmeasured.
+    static func alternatingOrder(sortedByDepth sorted: [Vec3]) -> [Vec3] {
+        var out: [Vec3] = []
+        out.reserveCapacity(sorted.count)
+        var lo = 0, hi = sorted.count - 1
+        while lo <= hi {
+            out.append(sorted[hi])
+            hi -= 1
+            if lo <= hi {
+                out.append(sorted[lo])
+                lo += 1
+            }
+        }
+        return out
+    }
+
+    // Decision 70. Decision 69 closed with five negatives; this discharges the one that needs
+    // no capture and is not the shape of a negative result: "Ten orders is not the permutation
+    // group. Six shuffles agreeing closely is evidence that the shuffle regime is narrow, not
+    // that the structural extremes found here are the extremes."
+    //
+    // Another sample cannot answer that — a sample says what some order does, never what the
+    // loudest one does. A SEARCH can, and it needs no account of why an order is loud: it
+    // walks the accumulated error up one step at a time. What it costs is the reading, because
+    // the search has a WIDTH — how many of the remaining points it may weigh per step — and
+    // the width is swept here rather than chosen.
+    //
+    // Only the four STRUCTURAL orders are re-read as the sampled comparison. Decision 69
+    // measured a structural order as the noisiest on 8 of 8 sets, so the loudest of its ten is
+    // the loudest of these four, and the six shuffles would cost the runtime without moving
+    // the number they are being compared against.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("the loudest order is searched rather than sampled, and only the ceiling bounds it")
+    func theExtremeOfThePermutationGroupIsNotSampled() throws {
+        let names = Self.captures + Self.rangeCaptures
+        var rows: [OrderReading] = []
+        var widthsGiven: [String: [Int]] = [:]
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                guard let baseline = Self.orderBaseline(set, seedNormal: seed) else { continue }
+                let sorted = Self.depthSorted(set)
+                var candidates: [(String, [Vec3])] = Self.orders(of: set)
+                    .filter { !$0.0.hasPrefix("shuffle") }
+                candidates.append(("residual alternating",
+                                   Self.alternatingOrder(sortedByDepth: sorted)))
+                let widths = Self.affordableWidths(set.count)
+                for width in widths {
+                    for (way, loud) in [("up", true), ("down", false)] {
+                        candidates.append(("search \(width) \(way)", Self.searchedOrder(
+                            sortedByDepth: sorted, normal: baseline.normal,
+                            width: width, loud: loud)))
+                    }
+                }
+                for (order, permutation) in candidates {
+                    rows.append(Self.orderReading(name, leg: leg, order: order,
+                                                  points: permutation, baseline: baseline))
+                }
+                widthsGiven["\(name)/\(leg)"] = widths
+            }
+        }
+        let short = "the searched-order sweep no longer yields a reading on both legs of every"
+            + " committed capture, so it is read on a corpus that has changed"
+        #expect(widthsGiven.count == 2 * names.count, "\(short)")
+
+        func rowsFor(_ key: String) -> [OrderReading] {
+            rows.filter { "\($0.name)/\($0.leg)" == key }
+        }
+        func loudest(_ here: [OrderReading], _ match: (String) -> Bool) -> OrderReading? {
+            here.filter { match($0.order) }.max { $0.centroidErrorMm < $1.centroidErrorMm }
+        }
+        let structural = ["shipped", "reversed", "|z| ascending", "|z| descending"]
+        let isStructural: (String) -> Bool = { structural.contains($0) }
+        let isSearched: (String) -> Bool = { $0.hasPrefix("search ") }
+        let keys = widthsGiven.keys.sorted()
+
+        // MARK: THE FIRST FINDING — the search's own width buys almost nothing, which is what
+        // makes every reading below worth quoting. A greedy that got better the more of the
+        // set it could see would be reporting its compute budget; this one saturates at the
+        // narrowest width the sweep offers, so the capped sets are not under-searched and the
+        // numbers are the search's rather than the runtime's. What the search needed was not
+        // width but the right AXIS — see `depthSorted`.
+
+        print("=== the search's own width, swept ===")
+        var widthGains: [Double] = []
+        var monotone = 0, swept = 0
+        for key in keys {
+            let here = rowsFor(key)
+            let widths = widthsGiven[key] ?? []
+            guard widths.count > 1 else {
+                print("  \(key): n = \(here.first?.n ?? 0), width \(widths) only —"
+                      + " \(Self.searchWidths.count - widths.count) of"
+                      + " \(Self.searchWidths.count) widths are past the"
+                      + " \(Self.searchEvaluationBudget) evaluation budget and were NOT run")
+                continue
+            }
+            swept += 1
+            var perWidth: [Double] = []
+            for width in widths {
+                let best = loudest(here, { $0.hasPrefix("search \(width) ") })
+                perWidth.append(best?.centroidErrorMm ?? 0)
+            }
+            let climbs = zip(perWidth, perWidth.dropFirst()).allSatisfy { $0 <= $1 }
+            if climbs { monotone += 1 }
+            if let first = perWidth.first, let last = perWidth.last, first > 0 {
+                widthGains.append(last / first)
+            }
+            let described = zip(widths, perWidth)
+                .map { "\($0.0): \(String(format: "%.6f", $0.1))" }
+                .joined(separator: ", ")
+            print("  \(key): n = \(here.first?.n ?? 0), δ by width — \(described) mm"
+                  + " (\(climbs ? "climbing" : "NOT monotone"))")
+        }
+        let widestGain = try #require(widthGains.max())
+        print("  over \(swept) sets that afford more than one width, the widest search is"
+              + " \(String(format: "%.2f", try #require(widthGains.min())))…"
+              + "\(String(format: "%.2f", widestGain))× the narrowest,"
+              + " and δ climbs with the width on \(monotone) of \(swept)")
+        let widthIsTheKnob = "δ now climbs with the search's own width by more than 2×, so the"
+            + " search has not saturated, every reading below is a budget artefact, and the"
+            + " capped fallback sets are under-searched rather than merely narrow"
+        #expect(widestGain < 2, "\(widthIsTheKnob)")
+
+        // MARK: THE SECOND FINDING — what the sampled extremes were worth. A structural order
+        // is the loudest of Decision 69's ten, so this is that decision's own headline against
+        // a search that did not have to guess where to look.
+
+        print("=== the sampled extreme against the searched one ===")
+        var searchGains: [Double] = []
+        for key in keys {
+            let here = rowsFor(key)
+            guard let sampled = loudest(here, isStructural), let found = loudest(here, isSearched),
+                  sampled.centroidErrorMm > 0 else { continue }
+            let widest = widthsGiven[key]?.last ?? 0
+            searchGains.append(found.centroidErrorMm / sampled.centroidErrorMm)
+            print("  \(key): loudest structural"
+                  + " \(String(format: "%.6f", sampled.centroidErrorMm)) mm (\(sampled.order)),"
+                  + " searched \(String(format: "%.6f", found.centroidErrorMm)) mm"
+                  + " (\(found.order)),"
+                  + " \(String(format: "%.2f", found.centroidErrorMm / sampled.centroidErrorMm))×"
+                  + " at width \(widest)")
+        }
+        let annulusGains = keys.filter { $0.hasSuffix("/annulus") }.compactMap { key -> Double? in
+            let here = rowsFor(key)
+            guard let sampled = loudest(here, isStructural), let found = loudest(here, isSearched),
+                  sampled.centroidErrorMm > 0 else { return nil }
+            return found.centroidErrorMm / sampled.centroidErrorMm
+        }
+        let worstAnnulusGain = try #require(annulusGains.min())
+        let beaten = searchGains.filter { $0 > 1 }.count
+        print("  the search is the loudest order on \(beaten) of \(searchGains.count) sets, and"
+              + " on extraction's own leg it beats every sampled order by"
+              + " \(String(format: "%.1f", worstAnnulusGain))…"
+              + "\(String(format: "%.1f", try #require(annulusGains.max())))×")
+        let samplingWasEnough = "a structural order now beats a fully afforded search on some"
+            + " set, so sampling did reach the extreme there and Decision 69's fourth negative"
+            + " closes the other way"
+        #expect(worstAnnulusGain > 1, "\(samplingWasEnough)")
+
+        // MARK: THE THIRD FINDING — the ceiling. Decision 67's bound is what a permutation
+        // cannot touch and Decision 69 filled it to 0.4440 by sampling. Read against orders
+        // chosen to fill it, it is still a bound — which is the whole of what survives.
+
+        let worst = try #require(rows.max { $0.share < $1.share })
+        print("=== how full a searched order drives Decision 67's ceiling ===")
+        for key in keys {
+            let here = rowsFor(key)
+            guard let sampled = loudest(here, isStructural),
+                  let found = loudest(here, isSearched) else { continue }
+            print("  \(key): share \(String(format: "%.4f", sampled.share)) sampled →"
+                  + " \(String(format: "%.4f", found.share)) searched")
+        }
+        print("  the fullest any order fills its own ceiling:"
+              + " \(String(format: "%.4f", worst.share)) on \(worst.name)/\(worst.leg)"
+              + " at \(worst.order)")
+        let ceilingBreaks = "a searched order now drives the Float mean past u·μ·(n−1)/2, so"
+            + " Decision 67's ceiling is a reading at the orders that had been tried rather"
+            + " than a bound, and its certificate does not transfer"
+        #expect(worst.share < 1, "\(ceilingBreaks)")
+
+        // MARK: THE FOURTH FINDING — what it costs extraction's two placements. Decision 66's
+        // margin is MEASURED, so a louder order eats it; Decision 67's is ASSERTED from
+        // (n, μ, σ, n̂_z), which a permutation holds, so it cannot move at all. This is the
+        // number that decides which of the two is worth quoting to a capture not yet taken.
+
+        print("=== extraction's leg under the search ===")
+        var searchedMargins: [Double] = []
+        var sampledMargins: [Double] = []
+        for name in names {
+            let here = rowsFor("\(name)/annulus")
+            guard let sampled = loudest(here, isStructural), let found = loudest(here, isSearched),
+                  let base = here.first(where: { $0.order == "shipped" }) else { continue }
+            searchedMargins.append(Self.inflationRatioBar / found.ratio)
+            sampledMargins.append(Self.inflationRatioBar / sampled.ratio)
+            print("  \(name): δ/σ \(String(format: "%.6f", found.ratio)) searched against"
+                  + " \(String(format: "%.6f", sampled.ratio)) sampled,"
+                  + " ceiling \(String(format: "%.6f", base.ratioCeiling)) at every order")
+        }
+        let worstSearched = try #require(searchedMargins.min())
+        let worstSampled = try #require(sampledMargins.min())
+        let asserted = try #require(rows.filter { $0.leg == "annulus" }.map(\.ratioCeiling).max())
+        let assertedMargin = Self.inflationRatioBar / asserted
+        print("  against the \(String(format: "%.4f", Self.inflationRatioBar)) bar:"
+              + " measured margin \(String(format: "%.1f", worstSampled))× sampled →"
+              + " \(String(format: "%.1f", worstSearched))× searched,"
+              + " asserted \(String(format: "%.1f", assertedMargin))× at every order")
+        let marginGone = "a searched order now carries extraction's own set past Decision 65's"
+            + " inflation bar, which Decision 67's ceiling says is impossible, so the ceiling"
+            + " and the measurement disagree and one of them is wrong"
+        #expect(worstSearched > 1, "\(marginGone)")
+        let measuredHolds = "the search no longer eats any of Decision 66's measured margin, so"
+            + " that figure is a property of the capture after all and does not need the"
+            + " asserted ceiling standing behind it"
+        #expect(worstSearched < worstSampled, "\(measuredHolds)")
+
+        // MARK: THE FIFTH FINDING — Decision 69's account, measured against its own prediction.
+        // Blocking the residuals by sign should be loud and interleaving them should be quiet.
+        // The search is the yardstick: an account that names the mechanism should land near it,
+        // and one that names a real effect without being the mechanism will not.
+
+        print("=== the account: residual blocking against residual interleaving ===")
+        var blockedLouder = 0, alternatingQuietest = 0
+        var accountReach: [Double] = []
+        var quietestOrders = Set<String>()
+        for key in keys {
+            let here = rowsFor(key)
+            guard let blocked = loudest(here, { $0 == "|z| ascending" || $0 == "|z| descending" }),
+                  let alternating = here.first(where: { $0.order == "residual alternating" }),
+                  let found = loudest(here, isSearched), found.centroidErrorMm > 0
+            else { continue }
+            let quietest = here.min { $0.centroidErrorMm < $1.centroidErrorMm }
+            if blocked.centroidErrorMm > alternating.centroidErrorMm { blockedLouder += 1 }
+            if let quietest { quietestOrders.insert(quietest.order) }
+            if quietest?.order == "residual alternating" { alternatingQuietest += 1 }
+            accountReach.append(blocked.centroidErrorMm / found.centroidErrorMm)
+            print("  \(key): blocked \(String(format: "%.6f", blocked.centroidErrorMm)) mm"
+                  + " (\(blocked.order)), alternating"
+                  + " \(String(format: "%.6f", alternating.centroidErrorMm)) mm, search"
+                  + " \(String(format: "%.6f", found.centroidErrorMm)) mm — the account reaches"
+                  + " \(String(format: "%.2f", blocked.centroidErrorMm / found.centroidErrorMm))"
+                  + " of it")
+        }
+        print("  blocking is louder than interleaving on \(blockedLouder) of \(keys.count) sets;"
+              + " interleaving is the quietest order tried on \(alternatingQuietest), against"
+              + " \(quietestOrders.sorted().joined(separator: ", ")) which are")
+        print("  the account's own order reaches"
+              + " \(String(format: "%.2f", try #require(accountReach.min())))…"
+              + "\(String(format: "%.2f", try #require(accountReach.max())))× of the search")
+
+        // MARK: THE CONTROL — the multiset has to be held to a precision the reading needs, and
+        // a searched order is a harder case for that than a shuffle: it is chosen to make one
+        // accumulation drift, so if the Double reference drifted with it the reading would be
+        // circular.
+
+        print("=== the control: the Double reference re-summed in each searched order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in keys {
+            let here = rowsFor(key)
+            guard let lo = here.map(\.doubleMeanZMm).min(),
+                  let hi = here.map(\.doubleMeanZMm).max(),
+                  let delta = here.map(\.centroidErrorMm).min() else { continue }
+            worstNoise = Swift.max(worstNoise, hi - lo)
+            tightestDelta = Swift.min(tightestDelta, delta)
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the searched orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across the searched orders"
+            + " as the Float sum does, so the multiset is not held to the precision this reading"
+            + " needs and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.
