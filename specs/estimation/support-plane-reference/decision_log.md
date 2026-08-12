@@ -5809,3 +5809,212 @@ existing helper or reading is modified and Decision 73's numbers are reproduced
 at the top rung. No shipped code changes.
 
 ---
+
+## Decision 75: The stride does not alias — but the cell it was read at is a sample, not a quantity
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 74 closed with six negatives. Two are the shape of a negative result and
+need no discharge — no `[owed]` value moves, and neither n nor the leg explains
+the fill verdict. One is Decision 69's standing qualifier on the shipped scan
+order, which needs the sitting. One is that the leg separation is read at 1,024
+and 4,096 only, which is the corpus's own ceiling on the annulus legs. One is
+that every reading is within-rung, which is a property of decimation rather than
+a defect in it. The last is a **control**, and that decision named it in its own
+closing sentence:
+
+> One decimator. A stride over the shipped scan order can alias the depth raster,
+> and a random subsample is not run — so "the count" is measured along one path
+> through it.
+
+The worry is specific rather than general suspicion of strides. `decimated` walks
+the **shipped** order at a fixed period, the shipped order is the depth raster's
+scan order, and a raster is the one population where a period is a physical
+direction: a stride of 1,268 over a 1,298,233-point fallback set can land on one
+image column, one scan direction or one depth row. Every quantity the ladder
+reads — the fill, the coherence, the sort's advantage — is a statement about how
+z correlates with position in that order, so a stride and the mechanism under
+test can fail together and read as agreement.
+
+Decision 74 listed this decimator among its own alternatives and deferred it as
+the *second* control, on the ground that a stride at `to: n` is the identity and
+a random one has no such rung. That ground is wrong, and cheaply: a draw of
+exactly n from n also returns the input, element for element, whatever the seed.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record that **the aliasing worry is refuted and the reading it was aimed at is
+worse than aliased**. The stride does not behave unlike a draw: over 24 fill
+cells it stands alone against every draw on **0**, it joins the draws on all
+**7** cells where they agree, and on the sort-against-search ratio it lands
+outside the four-draw spread on **12 of 24** against **9.6** expected if it were
+one of five exchangeable cuts. Record that **the cell is not a quantity**: the
+four draws disagree among *themselves* on **17 of 24** fill cells, so the fill
+verdict at a (set, leg, n) is a sample of a wide distribution and not a property
+of that cell. Record accordingly that **Decision 74's "at n = 1,024 the fallback
+legs are ahead — 4 of 4 against 3 of 4" is WITHDRAWN**: across four draws at that
+same count on those same sets the fallback reading spans the whole range, 4 of 4,
+3 of 4, 2 of 4, 2 of 4 and 0 of 4, and the annulus reading spans 1 to 3 of 4.
+That decision's *conclusion* is unchanged and strengthened — neither variable
+explains the verdict, because the verdict is not a function of either. Record
+that **the δ half survives every cut and is the only reading in Decision 74 that
+transfers**: the sort never beats the loudest signed search on an annulus leg at
+any count under any decimator — **0 of 40** readings, floor **1.661×** — against
+**20 of 80** fallback readings below 1×, the per-cut counts being 5, 6, 3, 4 and
+2 of 16. Record that **the named exception's numbers are the stride's**:
+`1785901032716`'s fallback leg at n = 65,536 reads **54.729×** under the stride
+against **5.419…8.741×** under four draws, so Decision 74's headline is
+**6.26…10.10×** above anything a draw produces, and at n = 16,384 that decision's
+0.811× sort-win is outside the draw spread of 0.998…1.486× in the other
+direction. The (set, count) demotion stands in kind; its figures do not.
+Decision 71's window is not read here and does not move. `stabilityRatioMin`
+stays `[owed]` and unsettleable on Decision 64's third finding. Not repaired, on
+Decisions 52–74's precedent.
+
+### Rationale
+
+One reading, in `theLadderIsNotAnArtefactOfTheStride`, over the same eight
+committed sets — four captures × two legs — with the same seven orders, the same
+width and the same four decimation targets Decision 74 used. Five cuts per rung:
+that decision's stride and four seeded draws.
+
+**THE CONTROL IS AN IDENTITY, for the fifth time in this chain, and it is what
+makes the two decimators comparable at all.** `subsampled` is Knuth's algorithm
+S, so at `target == n` every draw is `uniformInt(n − i) < n − i`, true
+unconditionally: it returns the input element for element and consumes the RNG
+identically whatever the seed. Both decimators reproduce the set at full count on
+**8 of 8** sets, so the top of the ladder is one row rather than one row per
+decimator, and Decision 74's ground for deferring this control is disposed of by
+the control itself.
+
+**THE STRIDE IS A DRAW.** The aliasing hypothesis makes a sharp prediction — a
+stride locked onto the raster reads differently from decimators that are not —
+and every reading refuses it. On the fill verdict the stride is never the odd one
+out (0 of 24) and it agrees with the draws on every cell where the draws agree
+(7 of 7). On the sort-against-search ratio it is outside the draw spread on 12 of
+24, where a fifth exchangeable cut would be outside on 9.6 of 24 by construction,
+since one of five exchangeable readings is the minimum or the maximum 2/5 of the
+time. Decision 74's fourth negative is discharged and its worry was misplaced.
+
+**AND THE CELL IS A SAMPLE.** The reading that matters is the one with no
+decimator in it: four draws, same population, same n, same leg, same standoff,
+disagreeing among themselves on **17 of 24** cells. Nothing about the stride is
+needed to see it. So the ladder Decision 74 printed cell by cell — FULLEST,
+out-filled, FULLEST down `1785135663727`'s annulus — was reading the sampling
+distribution of a verdict, and "every ladder flips more than once" is what a
+noisy binary verdict does whatever is on the x axis.
+
+**WHICH TAKES ONE OF DECISION 74'S TWO HEADLINES AND LEAVES THE OTHER.** At
+n = 1,024 the fallback legs read 4 of 4 under the stride and 0 of 4 under draw 5,
+so "the fallback legs are ahead" is one draw's reading of a cell that spans the
+whole range. At n = 4,096 the same comparison is 1 of 4 against 1 of 4 under the
+stride and 1, 1, 2 and 2 of 4 fallback against 1, 2, 3 and 1 of 4 annulus under
+the draws — no separation under any cut, which is what that decision reported
+there and is the half of its matched-count table that holds.
+
+**THE δ HALF IS UNTOUCHED AND IS PROMOTED AGAIN.** The sort-beats-search reading
+is aggregated over rungs rather than read at one, and aggregation is exactly what
+survives here: **0 of 40** annulus readings across five cuts, floors 3.061,
+1.681, 1.748, 1.661 and 1.943×, against 5, 6, 3, 4 and 2 of 16 fallback readings
+below 1×. The count moves with the cut — *which* fallback rung is beaten is a
+cell reading and behaves like one — while *whether the annulus is ever beaten* is
+the same answer under every decimator and every seed. That is the shape of the
+distinction this decision draws, measured on the quantity Decision 71's window is
+denominated in.
+
+**AND THE 54.7× IS NOT A NUMBER ABOUT THE CORPUS.** Decision 74's most quoted
+figure — "the search beats the sort by 54.7× on the population four decisions
+have called the one it cannot win" — is a single stride cell. Four draws at the
+same n on the same set read 5.419, and up to 8.741. The win is real at every cut;
+its size is not, and quoting it as a magnitude overstates by 6.26 to 10.10×.
+
+**THE CEILING HOLDS AT EVERY RUNG OF EVERY CUT.** Decision 67's bound is written
+on n and μ; a draw holds n exactly and moves μ, so the roof is recomputed per cut
+as well as per rung. The fullest order reaches at most **0.3566** of the
+attainable ceiling across **120 rungs**, well inside Decision 71's 0.4440…0.7182
+window, which is read at full size and is not touched by any rung here. The
+Double reference re-summed in every constructed order moves **0.000e+00 mm**
+against a smallest Float δ of **1.923e-06 mm**.
+
+### Alternatives Considered
+
+- **Build the frontier sweep Decision 73's third negative names — a rule that
+  trades fill against coherence deliberately**: still the outstanding
+  construction, and now two decisions deep — Rejected because it would be built
+  on cell readings, and this measurement is what says a cell reading is a sample.
+  A frontier fitted to noise is a frontier-shaped reading of noise.
+- **One seed rather than four**: the cheapest form of the control, and enough to
+  answer "does the stride agree with a draw?" — Rejected because it answers only
+  that. One draw replaces one cell reading with another and cannot show the
+  spread, which is the finding: the instability is visible only with draws to
+  compare against each other, with no decimator in the comparison at all.
+- **Resample with replacement — a bootstrap — rather than without**: the standard
+  instrument for a sampling distribution, and it gives every rung the same n from
+  the same population — Rejected because it changes the multiset's
+  multiplicities. Decision 74's ladder holds the population exactly and a
+  bootstrap does not, so it would answer a question about a different set and
+  break the one premise the two decimators share.
+- **A stratified draw — one element per depth bin**: holds the depth
+  distribution at every rung, so it removes the sampling noise in μ and σ —
+  Rejected because the depth distribution is part of what the fill and coherence
+  readings are about. It would suppress the very variation under test and read as
+  stability.
+- **Take Decision 74's cell readings at their word and move on**: the ladder is
+  printed, the numbers are committed, and the leg finding is the load-bearing
+  one — Rejected on Decision 68's precedent. Every account in this chain left
+  unmeasured has been corrected when it was finally measured, and this one was
+  corrected at the first re-draw.
+
+### Consequences
+
+**Positive:**
+- Decision 74's last non-capture negative is discharged, and the decimator it
+  worried about is exonerated by a sharp test rather than by argument.
+- The chain gains a rule it did not have: **a decimated rung is a draw**, so a
+  reading at one is quotable only as an aggregate over rungs and cuts. The δ half
+  of Decision 74 satisfies it; its fill half does not.
+- The δ half is promoted a second time — 0 of 40 against 20 of 80, five
+  decimators — which is the strongest form the annulus/fallback separation has
+  taken.
+- One committed figure is corrected downward by an order of magnitude before
+  anything was built on it, which is the cheapest point at which that can happen.
+- Decision 67's ceiling is read at 120 further rungs and is never breached, on
+  sets drawn rather than strided.
+- The control is an identity for the fifth time, and `subsampled` gives every
+  later reading a decimator whose seed is a knob.
+
+**Negative:**
+- No `[owed]` value moves. This is the eighth decision in a row that settles no
+  constant, and `stabilityRatioMin` is no closer to being settleable.
+- The fill verdict is now known to be a sample and is still unexplained. Decision
+  74 separated a confound onto neither variable; this one says the quantity does
+  not sit on either axis, and names no axis it does sit on.
+- Four seeds. The spread is bracketed by four draws per cell, which bounds the
+  distribution loosely and gives no estimate of its shape — the outside-count
+  null is exchangeability, not a fitted distribution.
+- The correction is one-sided in what it can repair. It says the 54.7× is a cell
+  reading; it does not say what the aggregate over draws means, because a ratio
+  averaged over cuts is not a quantity this chain has defined.
+- Decimation still changes the multiset, so no δ measured at any rung of any cut
+  transfers to the full set, and Decision 71's window is untouched rather than
+  confirmed for a second time.
+- Every δ in Decisions 64–75 is still a reading at the shipped scan order.
+  Decision 69's qualifier stands.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theLadderIsNotAnArtefactOfTheStride`, `subsampled`, `subsampleSeeds`),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. Additive: no
+existing helper or reading is modified, `decimated` and `decimationTargets` are
+reused unchanged, and Decision 74's stride readings are reproduced cell for cell
+inside the new one. No shipped code changes.
+
+---
