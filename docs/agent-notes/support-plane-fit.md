@@ -1980,4 +1980,60 @@ objective can husband at any width or lookahead depth. Use `replenishedOrder`, n
 a fill-maximiser alone is not it — `|z| descending` on `1785135663727`'s fallback set reads
 fill 0.5563 at coherence 0.0196 for a δ of 0.055403 mm.
 
+> **Built, in Decision 73, and it is not a distinct search.** The product objective is
+> bit-identical to a signed one on 8 of 8 sets. Do not propose it again.
+
 **Not repaired**, on Decisions 52–71's precedent. `stabilityRatioMin` stays `[owed]`.
+
+## The product search is the signed search, and husbanding is small (Decision 73)
+
+`theFillAxisGetsASearchOfItsOwn` closes Decision 72's two remaining non-capture negatives,
+which are one question read twice: front-loading is an account rather than a proof, and the
+fill axis has no search. Four objectives, one loop, one line apart — `objectiveOrder` reads
+the increment Decision 70's loop already computes and never subtracts.
+
+| objective | rule | reading |
+|---|---|---|
+| `spend` | largest signed increment — Decision 70's rule | the control: reproduces `searchedOrder` **to the bit on 8 of 8** |
+| `husband` | smallest **agreeing** increment; agreeing beats disagreeing outright | beats `spend` on **4 of 8**, **0.738…1.156×** |
+| `fill` | largest increment by magnitude, sign ignored | **0.140…0.879×** `spend` on 8 of 8 |
+| `product` | `\|Σ eᵢ\| × Σ\|eᵢ\|` after the step | **0 of 8**, 0.446…1.000× |
+
+### Read this before writing another objective over these sets
+
+**The product objective carries no direction**, so the sign is settled at the first step that
+commits anything and every step after walks the one it has. Its δ, fill and coherence equal
+one signed direction's **to the bit on 8 of 8** sets — five `spend up`, three `spend down`.
+It is not a weaker search; it is the same search with the direction chosen by the arithmetic.
+
+**Husbanding works and it is a trade with no monotone frontier.** A zero-rounding candidate
+outranks every disagreeing one, so it costs the stock nothing:
+
+| set | fill | coherence | δ |
+|---|---|---|---|
+| `1785901032716`/fallback | 0.4867 → 0.5052 | 0.7609 → 0.8473 | **1.152×** |
+| `1785135663727`/fallback | 0.4465 → 0.6032 | 0.6384 → 0.3467 | 0.738× |
+| `1786450130307`/annulus | 0.5453 → 0.5241 | 0.4630 → 0.4209 | 0.874× |
+
+So Decision 72's "no step-local objective can husband, at any width and at any lookahead
+depth" is **refuted as stated** and replaced by a magnitude — **1.156× at most**.
+
+**Neither axis is step-locally maximisable.** The fill search is not even the fullest order on
+**3 of 8** sets, and all three are fallback legs: out-filled by `spend down` **0.6033 against
+0.5582**, by `|z| ascending` **0.7350 against 0.5890** and **0.5663 against 0.5378**. Decision
+72's exception was one set and one axis; it is three sets and both. The three are also the
+three largest sets, so the failure is confounded with count.
+
+### The window is where this is denominated, and it does not move
+
+Husbanding is the closest any constructed order has come to the sort on the named exception —
+**4.181673 mm, 0.681×**, from the greedy's 0.591× and the supply repair's 0.653× — and it is
+still short: the sort's fill of **0.7350** is unreached by every objective tried. The floor
+under the permutation group's extreme is still `|z| ascending`'s **0.4440** of Decision 67's
+asserted ceiling against a **0.7182** roof, **a 1.62× window**, unchanged from Decision 71 and
+now standing against four objectives rather than one.
+
+Husbanding does carry the fullest fill on three sets (0.2076, 0.2502, 0.1949), so run
+`objectiveOrder(.husband)` beside `replenishedOrder` if you need a floor.
+
+**Not repaired**, on Decisions 52–72's precedent. `stabilityRatioMin` stays `[owed]`.
