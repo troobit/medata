@@ -1040,3 +1040,43 @@ The spike verdict is a **full pass on all four criteria**, closing tasks 20 and 
 Tasks 20–21 closed; task 22 (STOP — conditional SegFormer-B0 retrain vs the Req 3.3 adoption margin) is the sole remaining open task in this spec. Evidence: `artifacts/spike_segformer-you.mlperf/report.json`; the regenerated verdict JSON remains gitignored build output, transcribed here per task 21.
 
 ---
+
+## Decision 29: Task-22 retrain re-anchored to the live lane — Decision 27 recipe on the merged corpus vs `ab812dc3aa9d`
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Task 22 and Req 3.3 as written pin the retrain to a configuration that no longer exists. The "same recipe" was the Requirement 2 candidate's: co-occurrence loss plus inverse-frequency weighting. That candidate was rejected (Decision 24), the weighting was attributed as the staple-killer (Decision 25) and removed from `train.py` entirely (snaq-parity Decision 13 — restoring it is deliberate friction). The "same re-cut split" was `data/foodseg103_remapped`, the 35-class v1 label space: its mapping file (`class_mapping_foodseg103_v1.json`) has left the tree, and `load_co_stats` fail-fasts on the mapping SHA — both the v1 re-cut's `co_stats.json` (`af6e1cd7…`) and the v2 remap's (`90ff4b4c…`) stamp SHAs that no longer match the current `class_mapping_foodseg103.json` (`62ce25cf…`). The comparison target, the task-19 recipe checkpoint, was never exported and lost to the incumbent on the same-set diagnostic. Meanwhile Decision 27 promoted `ab812dc3aa9d`, trained on the merged FoodSeg103 + Food Recognition 2022 corpus with plain CE, class weighting `none`, and geometric-only augmentation. Executing task 22's letter would train a candidate in a dead label space, with a banned lever, to beat a checkpoint that already lost — a win could not drive adoption.
+
+### Decision
+
+The Req 3.3 comparison runs in the live label space instead: `--arch segformer_b0` (published ADE20K init per the task-23 ArchSpec) is trained with **exactly the Decision 27 incumbent recipe** — `data/merged_foodseg_foodrec2022`, 36 classes, 513×513, 12 epochs, batch 16, lr 1e-3, plain CE, class weighting `none`, geometric augmentation only — and compared against the promoted incumbent `ab812dc3aa9d` on the 182-image leak-free anchor (primary, the Decision 21/27 measurement), with merged val/heldout as context. Adoption still requires the unchanged Req 3.3 margin: ≥ 0.02 on BOTH mean food-class IoU and the carb-staple mean (Req 2.3's staple set as measurable on the comparison set, identical treatment for both checkpoints). Adoption hands export-gate integration to `model-production`, as task 22 already states.
+
+### Rationale
+
+Design §5.3 states the point of the comparison: "does the better backbone plus the same recipe beat the same recipe on the current backbone." Re-anchoring preserves that sentence exactly — same data, same recipe, same step budget (12 epochs at batch 16 on either side), backbone as the only variable — against the checkpoint the swap would actually replace. The margin, the two-mean conjunction, and the adoption consequence are untouched. Both candidates share one label space, so the comparison needs no family-collapse adjustment and reuses the same `run_validation.py` path that judged Decision 27.
+
+### Alternatives Considered
+
+- **Literal replication (v1 split, co-occurrence + inverse-frequency)**: faithful to the letter of Req 3.3 - Rejected: requires restoring a deleted mapping file and a lever banned in code as the attributed failure cause (Decisions 25, snaq-parity 13); the target checkpoint already lost to the incumbent, so beating it proves nothing adoptable.
+- **FoodSeg103-only retrain in the current palette (v2 re-cut, co-occurrence loss, weighting `none`)**: closest permitted reading of "same recipe + same split" - Rejected: its `co_stats.json` fail-fasts on the stale mapping SHA by design, and no incumbent checkpoint with that recipe exists — a fair backbone comparison would need a second gated incumbent retrain, doubling compute in the FoodSeg103-only lane Decisions 24/25 closed.
+- **Close Requirement 3 without the retrain** (the "recorded decision not to" branch of Decision 28): cheapest exit - Rejected: the spike passed with ~20× latency headroom, leaving accuracy the only open question; discarding the strongest remaining accuracy lever undecided contradicts the reason the device half was measured at all.
+
+### Consequences
+
+**Positive:**
+- One gated run answers the adoption question that is actually live, against the checkpoint the swap would replace, measured by the same validation path and sets as Decision 27.
+- Exact recipe parity (identical flags, epochs, and step budget) makes the result attributable to the backbone alone.
+- The pre-launch smoke run surfaced that `segformer_b0` could not train on the rig at all — an MPS-only BatchNorm-backward failure in the decode head, now fixed in `archs.py` (contiguous-input pre-hook; no-op for CPU, inference, and the export trace).
+
+**Negative:**
+- Req 3.3's letter (co-occurrence countermeasure, task-19 target) is not exercised; the co-occurrence mechanism stays parked where Decisions 24/25 left it, and this run says nothing further about it.
+- A negative verdict costs roughly half a day of MPS time with no shipped uplift — the accepted price of the gate Decision 28 left live.
+
+### Impact
+
+Req 3.3 carries an amended-by note pointing here. Task 22 executes via this instantiation: run artifacts land in the working branch's `tools/segmenter/build/` (`checkpoint_segformer_merged.pt`, `train_segformer_merged_20260813.log`, lineage); the verdict entry follows as its own decision. `tools/segmenter/archs.py` gains the MPS backward fix.
+
+---

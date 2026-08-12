@@ -133,6 +133,7 @@ metadata:
 
 - [ ] 22. STOP — IF the spike passes, retrain SegFormer-B0 and compare with the adoption margin <!-- id:2mfkxz0 -->
   - Conditional on task 21 being a full pass. Retrain SegFormer-B0 on the same re-cut split with the same recipe (init policy + co-occurrence loss), not an unweighted baseline. Adopt only if it beats the recipe-upgraded checkpoint (task 19) by >= 0.02 on BOTH mean food-class IoU and the eight-staple mean (Req 3.3); otherwise record the comparison and keep the existing architecture. Adoption hands export-gate integration to model-production.
+  - 2026-08-13: Decision 29 re-anchors the comparison — the as-written recipe, split, and target were superseded by Decisions 24/25/27 and snaq-parity Decision 13 (weighting banned, v1 label space gone, task-19 checkpoint rejected). Executed instead as: segformer_b0 (published ADE init) with the exact Decision 27 incumbent recipe on the merged corpus, judged against ab812dc3aa9d on the leak-free anchor with the unchanged >= 0.02 two-mean margin. Pre-launch smoke exposed an MPS-only BatchNorm-backward failure in the SegFormer decode head — fixed in archs.py (contiguous-input pre-hook). Run launched: tools/segmenter/build/train_segformer_merged_20260813.log
   - Blocked-by: 2mfkxyz (Record the spike verdict in the decision log pass/fail per criterion), 2mfkxz7 (STOP — execute the stratified re-cut and re-measure the pinned baseline), 2mfkxzd (Code: register segformer_b0 in archs.py agent-executable prep for the task 22 retrain)
   - Requirements: [3.3](requirements.md#3.3)
 
