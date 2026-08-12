@@ -1906,3 +1906,78 @@ Control unchanged and exact: the Double reference re-summed in every beamed orde
 **0.000e+00 mm** on all eight sets, against a smallest Float δ of 2.739e-05 mm.
 
 **Not repaired**, on Decisions 52–70's precedent. `stabilityRatioMin` stays `[owed]`.
+
+## δ is fill × coherence, and the search only buys one (Decision 72)
+
+`theSortsGainIsAgreementRatherThanSize` closes Decision 71's third negative — `|z| ascending`
+on the 1.3 M-point set was unexplained rather than merely unbeaten. **This is the first
+positive account in Decisions 67–72**; the four before it refuted proposals.
+
+### The decomposition, and read this before writing another search over these sets
+
+δ is a sum of `n − 1` roundings, so an order is loud exactly two ways:
+
+| axis | definition | what it belongs to |
+|---|---|---|
+| **fill** | `Σ|eᵢ| / Σ ulp(sᵢ)/2` | the SET — spans 0.2337…0.7350 over 56 readings, a **3.1×** range |
+| **coherence** | `|Σeᵢ| / Σ|eᵢ|` | the ORDER — spans 0.0010…0.8836, a **902×** range |
+
+Their product reproduces the observed δ ratio to within **3.2 % on 8 of 8** sets, so the two
+are the whole of δ and not two of several. (Not exactly: δ is the projected error and
+`decomposeZSum` is of the z sum alone. The residue is `|n̂_z|` and the x and y sums.)
+
+**Decision 70's search maximises the accumulated SIGNED error, so it is a coherence-maximiser
+by construction and has no term at all for fill.** Across the corpus it carries
+**0.883…6.690×** the sort's coherence against **0.662…1.289×** its fill. That is why it wins
+on 7 of 8 sets by 1.24…8.91× — and why it cannot win on the eighth, where the binding axis is
+fill: `|z| ascending` reads fill **0.7350** against 0.4867 and leads on coherence by only
+1.13×. **The sort is not cleverer than the search. It wins on the axis the search cannot
+read.** Anything built on top of this search inherits that blind spot.
+
+### Front-loading, which is what a step-local objective cannot husband
+
+By tenth of the run on `1785901032716`'s fallback set:
+
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| greedy fill | 0.697 | 0.727 | 0.668 | 0.550 | 0.058 | 0.374 | 0.874 | 0.649 | 0.311 | **0.252** |
+| greedy coherence | +1.00 | +1.00 | +1.00 | +1.00 | +0.12 | +0.57 | +1.00 | +1.00 | +0.72 | **−1.00** |
+| `|z| ascending` fill | 0.487 | 0.495 | 0.201 | 0.206 | 0.650 | 0.840 | 0.697 | 0.839 | 0.900 | **0.952** |
+| `|z| ascending` coherence | −0.04 | −0.77 | −0.90 | +1.00 | +1.00 | +0.56 | +1.00 | +1.00 | +1.00 | +0.88 |
+
+The greedy takes the loud addends when it meets them and its last 130,000 steps run at
+coherence **−1.00**, unwinding what it built. The sort still has them at the end.
+
+### The supply IS a defect, and it is not the mechanism
+
+`searchedOrder` cuts `width` depth bins ONCE, so a drained bin is gone: the live candidate
+count on that set falls **12.0 → 2.0** across the ten tenths and the search finishes forced.
+`replenishedOrder` refills a drained slot from the largest live one — same axis, same
+objective, same tie-break, same `n × width` cost, **one variable** — and holds the count at
+**12.0 in all ten tenths**.
+
+It beats the search it repairs on **6 of 8** sets (0.912…1.262×) and lifts the exception
+3.628388 → 4.012661 mm. **It does not close the gap: 0.653× the sort, from 0.591×.** With the
+supply held at 12 for the whole run the last tenth still reads coherence −1.00 at fill 0.252,
+so what runs out is the stock of loud addends in the remaining multiset — which no step-local
+objective can husband at any width or lookahead depth. Use `replenishedOrder`, not
+`searchedOrder`, if you need a floor under the extreme.
+
+### The controls, both exact
+
+- **The decomposition against the reading.** `Σeᵢ / n` must be the z mean's error, short by
+  the one rounding it omits: `floatCentroid` sums in Float and DIVIDES in Float. Over 56
+  readings the gap is **1.511e-05 mm against the division's own 1.526e-05** — 0.990 of it.
+  An accounting identity, not a tolerance.
+- **The two searches at `width >= n`.** Every bin holds one point, no slot can be refilled,
+  so the replenished search IS `searchedOrder` — 2 of 2 readings to the bit on a 2,000-point
+  subsample. Every gain above is the supply and nothing else.
+- The Double reference re-summed in each constructed order moves **0.000e+00 mm**.
+
+### What is named and unbuilt
+
+**A search on the PRODUCT rather than on the signed error.** The fill axis has no search, and
+a fill-maximiser alone is not it — `|z| descending` on `1785135663727`'s fallback set reads
+fill 0.5563 at coherence 0.0196 for a δ of 0.055403 mm.
+
+**Not repaired**, on Decisions 52–71's precedent. `stabilityRatioMin` stays `[owed]`.

@@ -5290,3 +5290,172 @@ constructed order on all eight sets — against a smallest Float δ of 2.739e-05
 changes.
 
 ---
+
+## Decision 72: δ is fill times coherence, and the search can only buy one of them
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 71 closed with five negatives. One is that this is a fourth negative
+result in a row, which is not a negative to discharge. One is Decision 69's
+standing qualifier on the shipped scan order, which needs the sitting. One is the
+beam's budget cap, a statement about what was run rather than about the
+arithmetic. Of the two that remain, one is answerable with what is in hand:
+
+> `|z| ascending` on the 1.3 M-point set is now unexplained rather than merely
+> unbeaten. Decision 70 attributed it to greedy myopia; that account is refuted
+> and no replacement is offered.
+
+Every instrument in Decisions 67–71 has treated δ as one number — bounded it,
+sampled it, searched it, beamed it — and none has opened it. It is a sum of
+`n − 1` roundings, so an order can be loud exactly two ways: commit LARGER
+roundings, or commit roundings that AGREE. That is a decomposition, not a
+hypothesis, and it is what an account has to be made of.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record δ as the product of two independent axes — **fill**, `Σ|eᵢ|` over
+`Σ ulp(sᵢ)/2`, and **coherence**, `|Σeᵢ|` over `Σ|eᵢ|` — and record that
+Decision 70's search optimises **coherence alone**. Across the corpus the search
+carries **0.883…6.690×** the sort's coherence against **0.662…1.289×** its fill,
+and the product of the two reproduces the observed δ ratio to within **3.2 % on
+8 of 8** sets. On the named exception the binding axis is the one the search has
+no term for: `|z| ascending` reads fill **0.7350** against the search's 0.4867
+while its coherence leads by only 1.13×. The mechanism is **front-loading** —
+the greedy spends the set's loud addends early and its last tenth runs at
+coherence **−1.00**, unwinding what it built. The candidate SUPPLY is measured
+and is not the mechanism: refilling it lifts δ on 6 of 8 sets by 0.912…1.262× and
+on the exception from 3.628388 to 4.012661 mm, still **0.653×** the sort.
+`stabilityRatioMin` stays `[owed]` and unsettleable on Decision 64's third
+finding. Not repaired, on Decisions 52–71's precedent.
+
+### Rationale
+
+One reading, in `theSortsGainIsAgreementRatherThanSize`, over the same eight
+committed sets — four captures × two legs — that Decisions 69–71 read. Seven
+orders per set: the three structural ones, both directions of Decision 70's
+search, and both directions of the replenished search below.
+
+**THE CONTROL IS AN ACCOUNTING IDENTITY, not a tolerance.** `Σeᵢ / n` has to
+reproduce the z mean's error, and what it is short by is exactly the one rounding
+it does not account for: `floatCentroid` sums in Float and then DIVIDES in Float.
+Over 56 readings the gap is **1.511e-05 mm against the division's own 1.526e-05**
+— 0.990 of it, and never above. A fraction-of-the-smallest-reading bar would have
+been fitted; this one is arithmetic.
+
+**FILL IS NEARLY A PROPERTY OF THE SET; COHERENCE IS THE ORDER'S.** Over 56
+readings fill spans **0.2337…0.7350**, a **3.1×** range, while coherence spans
+**0.0010…0.8836**, a **902×** one. δ moves with the second — a permutation cannot
+change what the set makes available to commit, and barely does. This is why
+Decision 70's search works at all: its objective is
+the accumulated signed error, so it is a coherence-maximiser BY CONSTRUCTION, and
+it has no term whatever for how much rounding is available to commit.
+
+**AND IT IS WHY THE EXCEPTION IS AN EXCEPTION.** On seven sets coherence is the
+binding axis and the search wins by 1.24…8.91×. On `1785901032716`'s
+1,298,233-point fallback set the binding axis is FILL — 0.662× — and the search
+has no purchase on it. The sort is not doing something cleverer than the search;
+it is winning on the axis the search does not read.
+
+**THE PROFILE SAYS WHAT FRONT-LOADING COSTS.** Read by tenth of the run on that
+set, the greedy opens at fill 0.697, 0.727, 0.668 with coherence pinned at
+**+1.00**, and closes at 0.311 and 0.252 with the last tenth's coherence at
+**−1.00**: every rounding in the final 130,000 steps pushed the error back.
+`|z| ascending` runs the other way round — fill **0.487 → 0.952** rising through
+the run, coherence negative for the first three tenths and locked at +1.00 from
+the fourth on. The greedy takes the loud addends when it meets them; the sort
+still has them at the end.
+
+**THE SUPPLY HYPOTHESIS IS MEASURED AND IS A PARTIAL REPAIR.**
+`searchedOrder` cuts `width` depth bins ONCE, so a bin it drains is gone: the live
+candidate count on that set falls **12.0 → 2.0** across the ten tenths, and the
+search finishes on a forced order. `replenishedOrder` refills a drained slot from
+the largest live one — same axis, same objective, same tie-break, same n × width
+cost, one variable — and holds the count at **12.0 in all ten tenths**. It beats
+the search it repairs on **6 of 8** sets, by 0.912…1.262×. It does not close the
+gap: 0.653× the sort where the greedy read 0.591×. **With the supply held at 12
+for the whole run the last tenth still reads coherence −1.00 and fill 0.252**, so
+what is exhausted is not the candidate slots but the stock of loud addends in the
+remaining multiset — which no step-local objective can husband, at any width and
+at any lookahead depth. That is Decision 71's refuted myopia account replaced
+rather than merely withdrawn.
+
+**The control is an identity for the second time in this chain.** At
+`width >= n` every bin holds one point and no slot can ever be refilled, so the
+replenished search IS `searchedOrder`. Read over a 2,000-point subsample it
+reproduces it on 2 of 2 readings to the bit, so every gain above is the supply
+and nothing else. The Double reference re-summed in each constructed order moves
+**0.000e+00 mm** on all eight sets, against a smallest Float δ of 2.739e-05 mm.
+
+### Alternatives Considered
+
+- **A fill-maximising search — pick the largest available `|eᵢ|` at each step
+  rather than the largest signed one**: the direct reading of the finding, and it
+  needs no new machinery — Rejected as the wrong next reading rather than as
+  uninteresting. It would maximise `Σ|eᵢ|` and say nothing about the sign, and
+  the corpus already shows an order can have fill 0.5563 at coherence 0.0196
+  (`|z| descending`, `1785135663727` fallback) for a δ of 0.055403 mm. A search
+  on the product is the construction worth building, and it is a different
+  instrument from this decomposition.
+- **Deepen the beam until it finds the sort's order**: the literal reading of
+  "front-loading is depth-myopia" — Rejected on the arithmetic. Reaching
+  `|z| ascending` from the greedy's first step needs ~108,000 consecutive locally
+  suboptimal choices; Decision 71's budget affords a beam of 4 there. A beam that
+  could do it is not a beam.
+- **Take the supply repair as the account**: it is a real gain, on 6 of 8 sets,
+  and it is the hypothesis this reading set out to test — Rejected on the profile.
+  The last tenth reads the same collapse with the supply held at 12 as without
+  it, so the repair moves δ without being what caps it.
+- **Repair the sum — pairwise or Kahan accumulation**: still the strongest fix
+  available and it needs no capture — Rejected on Decisions 52–71's precedent. It
+  changes the centroid, hence which candidates survive `try? refine`, hence the
+  shipped fallback plane Decision 36 prices `fallbackPenalty` against.
+
+### Consequences
+
+**Positive:**
+- Decision 71's third negative is discharged, and this is the first POSITIVE
+  account in Decisions 67–72: the exception is explained rather than another
+  proposal refuted.
+- δ has a decomposition for the first time. Fill × coherence closes to 3.2 % on
+  8 of 8 sets, so the two axes are the whole of it and not two of several.
+- What Decision 70's search is FOR is now stated rather than assumed. It is a
+  coherence-maximiser, which is why it wins on 7 of 8 sets and why it cannot win
+  on the eighth.
+- The supply defect is real and is fixed in the instrument: `replenishedOrder`
+  raises the floor under the permutation group's extreme on 6 of 8 sets, so
+  Decision 70's floor was loose for a reason that is now measured.
+- The control is an accounting identity — the gap IS the division's rounding —
+  and the width-`n` control is exact by construction.
+
+**Negative:**
+- No `[owed]` value moves. `stabilityRatioMin` is no closer to being settleable
+  and this remains the fifth decision in a row that settles no constant.
+- Front-loading is an account supported by the profile, not a proof. Nothing here
+  bounds how much of the stock an optimal order could husband, so the window
+  Decision 71 closed to 1.62× does not close further.
+- The decomposition is of the z sum alone while δ is the projected error, so the
+  two axes close to 3.2 % rather than exactly. The residue is `|n̂_z|` and the x
+  and y sums, and it is not separated here.
+- The fill axis has no search. The construction the finding nominates — a search
+  on the product rather than on the signed error — is named and unbuilt, so the
+  floor under the extreme is still Decision 70's search plus a supply repair.
+- Every δ in Decisions 64–72 is still a reading at the shipped scan order.
+  Decision 69's qualifier stands.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theSortsGainIsAgreementRatherThanSize`, `SumDecomposition`, `decomposeZSum`,
+`replenishedOrder`, `replenishedOrderTraced`, `searchedOrderTraced`,
+`decileCount`, `decile`), `docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. `searchedOrder` is
+now a one-line delegate to `searchedOrderTraced`; the arithmetic is unchanged and
+Decisions 70 and 71's readings are reproduced. No shipped code changes.
+
+---
