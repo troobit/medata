@@ -13688,6 +13688,359 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
+    // MARK: - The decimator itself (Decision 75)
+
+    // THE SAME LADDER, CUT BY A DRAW. Decision 74 closed with four negatives. Two are the
+    // shape of a negative result — neither n nor the leg explains the fill verdict, and no
+    // `[owed]` value moves. One is Decision 69's standing qualifier on the shipped scan order,
+    // which needs the sitting. The last one is a CONTROL, and that decision named it in its
+    // own closing sentence:
+    //
+    //   One decimator only — a stride can alias the depth raster and a random subsample is
+    //   not run.
+    //
+    // The worry is specific and it is not general suspicion of strides. `decimated` walks the
+    // SHIPPED order at a fixed period, the shipped order is the depth raster's scan order, and
+    // a raster is the one population where a period is a physical direction: a stride of 1268
+    // over a 1.3 M-point fallback set can land on one image column, one scan direction, or one
+    // depth row, and every quantity this ladder reads — the fill, the coherence, the sort's
+    // advantage — is a statement about how z correlates with position IN THAT ORDER. So a
+    // stride and the mechanism under test can fail together and read as agreement.
+    //
+    // A DRAW cannot alias, and Decision 74's own construction is what makes the two
+    // comparable: both keep the shipped order of the elements they retain, so the only thing
+    // that changes between them is WHICH elements, and n, the population, the standoff and
+    // the leg are held exactly as that decision held them.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    static let subsampleSeeds: [UInt64] = [1, 2, 3, 5]
+
+    // Knuth's Algorithm S. One pass, EXACTLY `target` elements, and the shipped order of the
+    // ones it keeps — the same three properties `decimated` has, minus the period. At
+    // `target == n` every draw is `uniformInt(n - i) < n - i`, which is true unconditionally,
+    // so it returns the input element for element and consumes the RNG identically whatever
+    // the seed: the top of the ladder is one row rather than one row per decimator, which is
+    // the identity the comparison below rests on.
+    static func subsampled(_ points: [Vec3], to target: Int, seed: UInt64) -> [Vec3]? {
+        let n = points.count
+        guard target > 0, n >= target else { return nil }
+        var rng = SplitMix64(seed: seed)
+        var out: [Vec3] = []
+        out.reserveCapacity(target)
+        var remaining = target
+        for i in 0..<n {
+            if remaining == 0 { break }
+            if rng.uniformInt(n - i) < remaining {
+                out.append(points[i])
+                remaining -= 1
+            }
+        }
+        return out
+    }
+
+    @Test("the ladder reads the count rather than the decimator")
+    func theLadderIsNotAnArtefactOfTheStride() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        struct Row {
+            let set: String, leg: String, n: Int, draw: String, order: String
+            let reading: OrderReading
+            let parts: SumDecomposition
+        }
+        var rows: [Row] = []
+        var fullSize: [String: Int] = [:]
+        var attainable: [String: Double] = [:]
+        var identityHeld = 0, identityChecked = 0
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                let key = "\(name)/\(leg)"
+                fullSize[key] = set.count
+
+                // The top of the ladder, asserted rather than measured: BOTH decimators have
+                // to return the set at full count, or the two ladders start from different
+                // rows and no rung below is comparable across them.
+                identityChecked += 1
+                var identical = Self.decimated(set, to: set.count) == set
+                for s in Self.subsampleSeeds where identical {
+                    identical = Self.subsampled(set, to: set.count, seed: s) == set
+                }
+                if identical { identityHeld += 1 }
+
+                for rung in Self.decimationTargets where rung < set.count {
+                    var cuts: [(String, [Vec3])] = []
+                    if let strided = Self.decimated(set, to: rung) {
+                        cuts.append(("stride", strided))
+                    }
+                    for s in Self.subsampleSeeds {
+                        if let drawn = Self.subsampled(set, to: rung, seed: s) {
+                            cuts.append(("draw \(s)", drawn))
+                        }
+                    }
+                    for (cut, sub) in cuts {
+                        guard let baseline = Self.orderBaseline(sub, seedNormal: seed)
+                        else { continue }
+                        let sorted = Self.depthSorted(sub)
+                        // The same seven orders Decisions 73 and 74 read, and nothing else.
+                        var candidates: [(String, [Vec3])] = [
+                            ("shipped", sub),
+                            ("|z| ascending", sub.sorted { abs($0.z) < abs($1.z) }),
+                            ("|z| descending", sub.sorted { abs($0.z) > abs($1.z) }),
+                        ]
+                        for objective in SearchObjective.allCases {
+                            for loud in Self.objectiveDirections(objective) {
+                                candidates.append((
+                                    "\(objective.rawValue) \(loud ? "up" : "down")",
+                                    Self.objectiveOrder(
+                                        sortedByDepth: sorted, normal: baseline.normal,
+                                        width: width, objective: objective, loud: loud)))
+                            }
+                        }
+                        for (order, permutation) in candidates {
+                            rows.append(Row(
+                                set: key, leg: leg, n: rung, draw: cut, order: order,
+                                reading: Self.orderReading(name, leg: leg, order: order,
+                                                           points: permutation,
+                                                           baseline: baseline),
+                                parts: Self.decomposeZSum(permutation)))
+                        }
+                        attainable["\(key)@\(rung)#\(cut)"] = Self.attainableZCeilingMm(sub)
+                    }
+                }
+            }
+        }
+        let short = "the ladder no longer yields a reading on both legs of every committed"
+            + " capture, so it is read on a corpus that has changed"
+        #expect(fullSize.count == 2 * names.count, "\(short)")
+
+        let setKeys = fullSize.keys.sorted()
+        let cutNames = ["stride"] + Self.subsampleSeeds.map { "draw \($0)" }
+        func rowsFor(_ set: String, _ n: Int, _ cut: String) -> [Row] {
+            rows.filter { $0.set == set && $0.n == n && $0.draw == cut }
+        }
+        func rungs(_ set: String) -> [Int] {
+            Array(Set(rows.filter { $0.set == set }.map(\.n))).sorted()
+        }
+        // Decision 74's first quantity: is the fill search the fullest order here?
+        func isFullest(_ here: [Row]) -> Bool? {
+            guard let only = here.first(where: { $0.order == "fill up" }),
+                  let fullest = here.max(by: { $0.parts.fill < $1.parts.fill }) else { return nil }
+            return only.parts.fill == fullest.parts.fill
+        }
+        // Decision 74's second: the window's own quantity, the loudest signed search over the
+        // sort that beats it. Below 1x is the sort winning.
+        func searchVsSort(_ here: [Row]) -> Double? {
+            guard let sort = here.first(where: { $0.order == "|z| ascending" }),
+                  sort.reading.centroidErrorMm > 0,
+                  let search = here.filter({ $0.order.hasPrefix("spend ") })
+                    .max(by: { $0.reading.centroidErrorMm < $1.reading.centroidErrorMm })
+            else { return nil }
+            return search.reading.centroidErrorMm / sort.reading.centroidErrorMm
+        }
+
+        // MARK: THE CONTROL FIRST. Both decimators are the identity at full count, so the row
+        // Decisions 73 and 74 are read on is the same row under either — which is what makes
+        // every rung below a statement about the cut rather than about the top.
+
+        print("=== the control: both decimators return the set at full count ===")
+        print("  the stride and all \(Self.subsampleSeeds.count) draws reproduce the set element"
+              + " for element on \(identityHeld) of \(identityChecked) sets")
+        let resampled = "a decimator no longer returns the set at full count, so the two ladders"
+            + " start from different rows and no rung is comparable across them"
+        #expect(identityHeld == identityChecked, "\(resampled)")
+
+        // MARK: THE FIRST FINDING — the fill verdict, stride against draw, cell by cell. If
+        // the stride aliases, its verdict is the odd one out; if the verdict is the count's,
+        // every cut agrees.
+
+        print("=== the fill verdict, per cut ===")
+        var cellsRead = 0, cellsUnanimous = 0, strideAgainstDraws = 0, drawsSplit = 0
+        for key in setKeys {
+            for n in rungs(key) {
+                let verdicts = cutNames.compactMap { cut -> (String, Bool)? in
+                    guard let v = isFullest(rowsFor(key, n, cut)) else { return nil }
+                    return (cut, v)
+                }
+                guard let stride = verdicts.first(where: { $0.0 == "stride" })?.1 else { continue }
+                let drawn = verdicts.filter { $0.0 != "stride" }.map(\.1)
+                cellsRead += 1
+                let agreeing = drawn.filter { $0 == stride }.count
+                let fullest = drawn.filter { $0 }.count
+                if agreeing == drawn.count { cellsUnanimous += 1 }
+                if agreeing == 0 && !drawn.isEmpty { strideAgainstDraws += 1 }
+                // The draws AGAINST EACH OTHER, with no decimator in the comparison at all.
+                // This is the reading that says whether the cell is a quantity or a sample.
+                if fullest != 0 && fullest != drawn.count { drawsSplit += 1 }
+                print("  \(key) n = \(n): stride \(stride ? "FULLEST" : "out-filled"),"
+                      + " draws \(fullest) of \(drawn.count) FULLEST")
+            }
+        }
+        print("  every cut agrees on \(cellsUnanimous) of \(cellsRead) cells; the stride stands"
+              + " alone against every draw on \(strideAgainstDraws); the draws disagree among"
+              + " THEMSELVES on \(drawsSplit)")
+
+        // MARK: THE SECOND FINDING — Decision 74's own headline, re-read per cut. That decision
+        // reported the verdict at matched counts as a count of legs; if the draw moves it, the
+        // 3-of-4 against 4-of-4 reading is the stride's rather than the count's.
+
+        print("=== the separation at matched counts, per cut ===")
+        let common = Self.decimationTargets.filter { t in
+            setKeys.allSatisfy { (fullSize[$0] ?? 0) > t }
+        }
+        for n in common {
+            for cut in cutNames {
+                var annulusWins = 0, annulusSeen = 0, fallbackWins = 0, fallbackSeen = 0
+                for key in setKeys {
+                    guard let v = isFullest(rowsFor(key, n, cut)) else { continue }
+                    if key.hasSuffix("/annulus") {
+                        annulusSeen += 1
+                        if v { annulusWins += 1 }
+                    } else {
+                        fallbackSeen += 1
+                        if v { fallbackWins += 1 }
+                    }
+                }
+                print("  n = \(n), \(cut): fullest on \(annulusWins) of \(annulusSeen) annulus"
+                      + " and \(fallbackWins) of \(fallbackSeen) fallback legs")
+            }
+        }
+        let noMatchedCount = "no decimation target is reachable by every committed set, so the"
+            + " ladder never holds the count and the two decimators are compared on nothing"
+        #expect(!common.isEmpty, "\(noMatchedCount)")
+
+        // MARK: THE THIRD FINDING — the δ half. Decision 74 read the sort-beats-search quantity
+        // as a leg property that survives holding the count. It is the reading Decision 71's
+        // window is denominated in, so it is the one that matters most if the stride moves it.
+
+        print("=== the search against the sort, per cut ===")
+        var spreadsRead = 0, strideOutside = 0
+        for key in setKeys {
+            for n in rungs(key) {
+                let ratios = cutNames.compactMap { cut -> (String, Double)? in
+                    guard let r = searchVsSort(rowsFor(key, n, cut)) else { return nil }
+                    return (cut, r)
+                }
+                guard let stride = ratios.first(where: { $0.0 == "stride" })?.1 else { continue }
+                let drawn = ratios.filter { $0.0 != "stride" }.map(\.1)
+                guard let lo = drawn.min(), let hi = drawn.max() else { continue }
+                let inside = stride >= lo && stride <= hi
+                spreadsRead += 1
+                if !inside { strideOutside += 1 }
+                print("  \(key) n = \(n): stride \(String(format: "%.3f", stride))×, draws"
+                      + " \(String(format: "%.3f", lo))…\(String(format: "%.3f", hi))×"
+                      + " — the stride is \(inside ? "inside" : "OUTSIDE") the draw spread")
+            }
+        }
+        // If the stride were just another draw, it would be the extreme of five exchangeable
+        // readings 2/5 of the time. That is the null this count is read against: a stride that
+        // ALIASES lands outside far more often than 2/5, and one that does not lands at it.
+        let exchangeable = 2.0 * Double(spreadsRead) / Double(cutNames.count)
+        print("  the stride is outside the draw spread on \(strideOutside) of \(spreadsRead)"
+              + " cells, against \(String(format: "%.1f", exchangeable)) expected if it were"
+              + " one of \(cutNames.count) exchangeable cuts")
+
+        print("=== the sort beating the search, by leg and cut ===")
+        for cut in cutNames {
+            var annulusBeaten = 0, annulusSeen = 0, fallbackBeaten = 0, fallbackSeen = 0
+            var annulusFloor = Double.infinity
+            for key in setKeys {
+                for n in rungs(key) {
+                    guard let r = searchVsSort(rowsFor(key, n, cut)) else { continue }
+                    if key.hasSuffix("/annulus") {
+                        annulusSeen += 1
+                        annulusFloor = Swift.min(annulusFloor, r)
+                        if r < 1 { annulusBeaten += 1 }
+                    } else {
+                        fallbackSeen += 1
+                        if r < 1 { fallbackBeaten += 1 }
+                    }
+                }
+            }
+            print("  \(cut): the sort beats the search on \(annulusBeaten) of \(annulusSeen)"
+                  + " annulus rungs (floor \(String(format: "%.3f", annulusFloor))×) and"
+                  + " \(fallbackBeaten) of \(fallbackSeen) fallback rungs")
+        }
+
+        // MARK: THE CONTROL — the ceiling, at every rung of every cut. Decision 67's bound is
+        // written on n and μ; the draw holds n exactly and moves μ, so the roof is recomputed
+        // per cut as well as per rung.
+
+        print("=== the ceiling, recomputed at every rung of every cut ===")
+        var overRoof = 0, roofChecked = 0
+        var worstShare = 0.0
+        for key in setKeys {
+            for n in rungs(key) {
+                for cut in cutNames {
+                    let here = rowsFor(key, n, cut)
+                    guard let fullest = here.max(by: { $0.reading.share < $1.reading.share }),
+                          let a = attainable["\(key)@\(n)#\(cut)"], fullest.reading.zCeilingMm > 0
+                    else { continue }
+                    let roof = a / fullest.reading.zCeilingMm
+                    roofChecked += 1
+                    worstShare = Swift.max(worstShare, fullest.reading.share / roof)
+                    if fullest.reading.share / roof >= 1 { overRoof += 1 }
+                }
+            }
+        }
+        print("  the fullest order reaches at most"
+              + " \(String(format: "%.4f", worstShare)) of the attainable ceiling across"
+              + " \(roofChecked) rungs")
+        let roofBroken = "some rung now drives the mean past what ulp(s)/2 per addition allows,"
+            + " so the attainable ceiling is not a bound under a drawn cut"
+        #expect(overRoof == 0, "\(roofBroken)")
+
+        // MARK: THE CONTROL — the multiset, held across every order of every cut.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in setKeys {
+            for n in rungs(key) {
+                for cut in cutNames {
+                    let here = rowsFor(key, n, cut)
+                    guard let lo = here.map(\.reading.doubleMeanZMm).min(),
+                          let hi = here.map(\.reading.doubleMeanZMm).max(),
+                          let delta = here.map(\.reading.centroidErrorMm).min() else { continue }
+                    worstNoise = Swift.max(worstNoise, hi - lo)
+                    tightestDelta = Swift.min(tightestDelta, delta)
+                }
+            }
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the constructed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across these orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading needs"
+            + " and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.

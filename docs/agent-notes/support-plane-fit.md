@@ -2091,3 +2091,69 @@ reference moves **0.000e+00 mm** against a smallest Float δ of 1.923e-06 mm.
 One decimator only — a stride can alias the depth raster and a random subsample is not run.
 
 **Not repaired**, on Decisions 52–73's precedent. `stabilityRatioMin` stays `[owed]`.
+
+## The stride was fine; the cell was not (Decision 75)
+
+`theLadderIsNotAnArtefactOfTheStride` discharges Decision 74's last non-capture
+negative — a stride over the shipped scan order can alias the depth raster.
+`subsampled` is Knuth's algorithm S: one pass, exactly `target` elements, the
+shipped order of the ones it keeps, no period. Five cuts per rung — Decision 74's
+stride plus four seeded draws — on the same eight sets, seven orders and four
+targets.
+
+### The identity that made this cheap
+
+At `target == n` the draw is `uniformInt(n − i) < n − i`, true unconditionally,
+so it returns the input element for element **whatever the seed**. Decision 74
+deferred this control believing a draw has no identity rung. It has one. Both
+decimators reproduce all 8 sets, so the two ladders start from the same row.
+
+### The stride is a draw — the aliasing hypothesis fails a sharp test
+
+| reading | stride against the draws |
+|---|---|
+| fill verdict, stride alone against all four draws | **0 of 24** |
+| fill verdict, cells where the draws agree | stride joins them **7 of 7** |
+| search-vs-sort, stride outside the draw spread | **12 of 24**, against 9.6 expected |
+
+The 9.6 is exchangeability, not a fit: one of five exchangeable readings is the
+minimum or the maximum 2/5 of the time.
+
+### But the cell is a sample — read this before quoting any ladder rung
+
+**The four draws disagree among themselves on 17 of 24 fill cells**, with no
+decimator in the comparison at all. So a ladder rung is a draw, and Decision 74's
+cell-by-cell prints (FULLEST, out-filled, FULLEST) are the sampling distribution
+of a binary verdict rather than a reading against n.
+
+Two consequences for anything quoting Decision 74:
+
+- **Its n = 1,024 headline is withdrawn.** Fallback legs read 4, 3, 2, 2 and 0 of
+  4 across the five cuts; annulus 3, 1, 1, 2, 2. "The fallback legs are ahead" is
+  one cut's reading of a cell that spans the whole range. Its *conclusion* —
+  neither variable explains the verdict — is strengthened, not weakened.
+- **Its 54.7× is 6.26–10.10× over.** `1785901032716`/fallback at n = 65,536 reads
+  54.729× strided and 5.419…8.741× drawn. The win is real under every cut; the
+  magnitude is the stride's. At n = 16,384 that decision's 0.811× sort-win is
+  outside the draw spread (0.998…1.486×) the other way.
+
+### What does survive, and why
+
+The δ half, because it is aggregated over rungs rather than read at one: the sort
+never beats the loudest signed search on an annulus leg at any count under any
+decimator — **0 of 40**, floor **1.661×** — against **20 of 80** fallback
+readings below 1× (5, 6, 3, 4, 2 of 16 per cut). *Which* fallback rung is beaten
+moves with the cut; *whether* the annulus is ever beaten does not.
+
+**The rule: a decimated rung is a draw. Quote aggregates over rungs and cuts,
+never a cell.**
+
+Decision 67's ceiling holds at 120 further rungs (fullest 0.3566 of the
+attainable one). Decision 71's 0.4440…0.7182 window is read at full size, which
+no cut decimates, so it is untouched for a second time. The Double reference
+moves **0.000e+00 mm** against a smallest Float δ of 1.923e-06 mm.
+
+Four seeds only — the spread is bracketed loosely and its shape is unestimated.
+
+**Not repaired**, on Decisions 52–74's precedent. `stabilityRatioMin` stays
+`[owed]`.
