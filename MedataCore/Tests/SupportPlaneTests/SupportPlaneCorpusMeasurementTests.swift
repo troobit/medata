@@ -13406,6 +13406,288 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
+    // MARK: - The count confound, held exactly (Decision 74)
+
+    // THE SAME EIGHT SETS, READ AT MATCHED COUNTS. Decision 73 closed with five negatives. One
+    // is that no `[owed]` value moves, which is not a negative to discharge. One is Decision 71's
+    // window, which four objectives left where it was. One is Decision 69's standing qualifier on
+    // the shipped scan order, which needs the sitting. One is that husbanding is a point on a
+    // frontier rather than its extreme — a construction. The last one is a CONTROL, and it is
+    // aimed at that decision's own headline:
+    //
+    //   The three sets where a greedy cannot reach the fullest fill are the three largest, so
+    //   the failure is confounded with count and this reading does not separate them.
+    //
+    // "Neither axis is step-locally maximisable" rests on three sets that differ from the other
+    // five in TWO ways at once: they are fallback legs and they are 20-100× larger. Decision 68
+    // is the precedent for an account left unmeasured, and this one is cheaper to measure than
+    // any of them — it needs no new objective, only the same seven orders read at a count the
+    // legs share.
+    //
+    // DECIMATION is the knob, and it is Decision 66's shape run the other way: that decision held
+    // the count exactly and moved the shape, this one holds the shape and moves the count. A
+    // fixed stride over the shipped order keeps the population, the standoff and the leg, and
+    // lands EXACTLY on a target, so a 1.3 M-point fallback leg and a 20 k-point annulus leg can
+    // be read at the same n and compared as counts rather than as sets.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    static let decimationTargets = [1_024, 4_096, 16_384, 65_536]
+
+    // A stride, not a draw. `to: points.count` gives `step == 1` and returns the input element
+    // for element, so the top rung of every ladder IS Decision 73's reading rather than a
+    // resample of it — which is the identity the comparison below rests on.
+    static func decimated(_ points: [Vec3], to target: Int) -> [Vec3]? {
+        let n = points.count
+        guard target > 0, n >= target else { return nil }
+        let step = n / target
+        var out: [Vec3] = []
+        out.reserveCapacity(target)
+        for i in 0..<target { out.append(points[i * step]) }
+        return out
+    }
+
+    @Test("the greedy's blind spot follows the leg rather than the count")
+    func theBlindSpotIsSeparatedFromTheCount() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        struct Row {
+            let set: String, leg: String, n: Int, order: String
+            let reading: OrderReading
+            let parts: SumDecomposition
+        }
+        var rows: [Row] = []
+        var fullSize: [String: Int] = [:]
+        var attainable: [String: Double] = [:]
+        var identityHeld = 0, identityChecked = 0
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                let key = "\(name)/\(leg)"
+                fullSize[key] = set.count
+                let rungs = Self.decimationTargets.filter { $0 < set.count } + [set.count]
+                for rung in rungs {
+                    guard let sub = Self.decimated(set, to: rung),
+                          let baseline = Self.orderBaseline(sub, seedNormal: seed)
+                    else { continue }
+                    if rung == set.count {
+                        identityChecked += 1
+                        if sub == set { identityHeld += 1 }
+                    }
+                    let sorted = Self.depthSorted(sub)
+                    // The same seven orders Decision 73 read, and nothing else: three sampled
+                    // ones and the four objectives. Changing the order set would change what
+                    // "the fullest order" means, and that phrase is the finding under test.
+                    var candidates: [(String, [Vec3])] = [
+                        ("shipped", sub),
+                        ("|z| ascending", sub.sorted { abs($0.z) < abs($1.z) }),
+                        ("|z| descending", sub.sorted { abs($0.z) > abs($1.z) }),
+                    ]
+                    for objective in SearchObjective.allCases {
+                        for loud in Self.objectiveDirections(objective) {
+                            candidates.append(("\(objective.rawValue) \(loud ? "up" : "down")",
+                                               Self.objectiveOrder(
+                                                sortedByDepth: sorted, normal: baseline.normal,
+                                                width: width, objective: objective, loud: loud)))
+                        }
+                    }
+                    for (order, permutation) in candidates {
+                        rows.append(Row(
+                            set: key, leg: leg, n: rung, order: order,
+                            reading: Self.orderReading(name, leg: leg, order: order,
+                                                       points: permutation, baseline: baseline),
+                            parts: Self.decomposeZSum(permutation)))
+                    }
+                    attainable["\(key)@\(rung)"] = Self.attainableZCeilingMm(sub)
+                }
+            }
+        }
+        let short = "the ladder no longer yields a reading on both legs of every committed"
+            + " capture, so it is read on a corpus that has changed"
+        #expect(fullSize.count == 2 * names.count, "\(short)")
+
+        let setKeys = fullSize.keys.sorted()
+        func rowsFor(_ set: String, _ n: Int) -> [Row] {
+            rows.filter { $0.set == set && $0.n == n }
+        }
+        func rungs(_ set: String) -> [Int] {
+            Array(Set(rows.filter { $0.set == set }.map(\.n))).sorted()
+        }
+        // Is the fill search the fullest order here, and if not, by how much is it out-filled?
+        func fillVerdict(_ here: [Row]) -> (mine: Double, best: Double, by: String)? {
+            guard let only = here.first(where: { $0.order == "fill up" }),
+                  let fullest = here.max(by: { $0.parts.fill < $1.parts.fill }) else { return nil }
+            return (only.parts.fill, fullest.parts.fill, fullest.order)
+        }
+        // The window's own quantity: the loudest signed search against the sort that beats it.
+        func searchVsSort(_ here: [Row]) -> Double? {
+            guard let sort = here.first(where: { $0.order == "|z| ascending" }),
+                  sort.reading.centroidErrorMm > 0,
+                  let search = here.filter({ $0.order.hasPrefix("spend ") })
+                    .max(by: { $0.reading.centroidErrorMm < $1.reading.centroidErrorMm })
+            else { return nil }
+            return search.reading.centroidErrorMm / sort.reading.centroidErrorMm
+        }
+
+        // MARK: THE CONTROL FIRST. A stride of 1 has to return the input, or the top rung is a
+        // resample and Decision 73's reading is not the row this ladder starts from. Everything
+        // below is a comparison DOWN the ladder from that row, so if this fails the ladder
+        // measures the decimator rather than the count.
+
+        print("=== the control: the top rung is the set itself ===")
+        print("  the stride-1 rung reproduces the set element for element on"
+              + " \(identityHeld) of \(identityChecked)")
+        let resampled = "`decimated(set, to: set.count)` no longer returns the set, so the top"
+            + " rung is a resample and no rung below it is comparable to Decision 73"
+        #expect(identityHeld == identityChecked, "\(resampled)")
+
+        // MARK: THE FIRST FINDING — the verdict at full size, read back. Decision 73 measured the
+        // fill search as the fullest order on 5 of 8 sets and named the three it loses as the
+        // three fallback legs. That is the top row of every ladder here.
+
+        print("=== the verdict at full size, which is Decision 73's ===")
+        var fullWins = 0
+        var fullLosses: [String] = []
+        for key in setKeys {
+            guard let n = fullSize[key], let v = fillVerdict(rowsFor(key, n)) else { continue }
+            if v.mine == v.best { fullWins += 1 } else { fullLosses.append(key) }
+            print("  \(key) (n = \(n)): fill search \(String(format: "%.4f", v.mine)) against the"
+                  + " fullest order's \(String(format: "%.4f", v.best)) (\(v.by))")
+        }
+        print("  the fill search is the fullest order on \(fullWins) of \(setKeys.count) sets;"
+              + " it loses on \(fullLosses.joined(separator: ", "))")
+
+        // MARK: THE SECOND FINDING — the same verdict down the ladder, per set. If the blind spot
+        // is the COUNT, a fallback leg cut to a small n starts winning and an annulus leg is
+        // already there. If it is the LEG, the verdict holds down the whole ladder and the two
+        // legs stay apart at counts they share.
+
+        print("=== the fill verdict against count, per set ===")
+        for key in setKeys {
+            print("  \(key):")
+            for n in rungs(key) {
+                guard let v = fillVerdict(rowsFor(key, n)) else { continue }
+                print("    n = \(n): fill \(String(format: "%.4f", v.mine)) against"
+                      + " \(String(format: "%.4f", v.best)) (\(v.by)) —"
+                      + " \(v.mine == v.best ? "FULLEST" : "out-filled")")
+            }
+        }
+
+        // MARK: THE THIRD FINDING — the separation, read at counts both legs reach. This is the
+        // whole point of the ladder: at a matched n the count is held exactly and the only thing
+        // left between the two groups is which leg they came from.
+
+        print("=== the separation, at counts every set reaches ===")
+        let common = Self.decimationTargets.filter { t in
+            setKeys.allSatisfy { (fullSize[$0] ?? 0) >= t }
+        }
+        for n in common {
+            var annulusWins = 0, annulusSeen = 0, fallbackWins = 0, fallbackSeen = 0
+            for key in setKeys {
+                guard let v = fillVerdict(rowsFor(key, n)) else { continue }
+                if key.hasSuffix("/annulus") {
+                    annulusSeen += 1
+                    if v.mine == v.best { annulusWins += 1 }
+                } else {
+                    fallbackSeen += 1
+                    if v.mine == v.best { fallbackWins += 1 }
+                }
+            }
+            print("  n = \(n): the fill search is fullest on \(annulusWins) of \(annulusSeen)"
+                  + " annulus legs and \(fallbackWins) of \(fallbackSeen) fallback legs")
+        }
+        let noMatchedCount = "no decimation target is reachable by every committed set, so the"
+            + " ladder never holds the count and the confound is not separated"
+        #expect(!common.isEmpty, "\(noMatchedCount)")
+
+        // MARK: THE FOURTH FINDING — the window's own quantity against count. Decision 71 read
+        // the search's shortfall against the sort on one set at one n. If that shortfall is a
+        // count effect it closes down the ladder; if it is the leg's, it does not.
+
+        print("=== the search against the sort, down the ladder ===")
+        for key in setKeys {
+            let ratios = rungs(key).compactMap { n -> String? in
+                guard let r = searchVsSort(rowsFor(key, n)) else { return nil }
+                return "n \(n): \(String(format: "%.3f", r))×"
+            }
+            print("  \(key): \(ratios.joined(separator: ", "))")
+        }
+
+        // MARK: THE CONTROL — the ceiling, at every rung. Decision 67's bound is written on n and
+        // μ, both of which decimation MOVES, so the roof has to be recomputed per rung rather
+        // than carried down from the top one.
+
+        print("=== the ceiling, recomputed at every rung ===")
+        var overRoof = 0, roofChecked = 0
+        var worstShare = 0.0
+        for key in setKeys {
+            for n in rungs(key) {
+                let here = rowsFor(key, n)
+                guard let fullest = here.max(by: { $0.reading.share < $1.reading.share }),
+                      let a = attainable["\(key)@\(n)"], fullest.reading.zCeilingMm > 0
+                else { continue }
+                let roof = a / fullest.reading.zCeilingMm
+                roofChecked += 1
+                worstShare = Swift.max(worstShare, fullest.reading.share / roof)
+                if fullest.reading.share / roof >= 1 { overRoof += 1 }
+            }
+        }
+        print("  the fullest order reaches at most"
+              + " \(String(format: "%.4f", worstShare)) of the attainable ceiling across"
+              + " \(roofChecked) rungs")
+        let roofBroken = "some rung now drives the mean past what ulp(s)/2 per addition allows,"
+            + " so the attainable ceiling is not a bound at every count"
+        #expect(overRoof == 0, "\(roofBroken)")
+
+        // MARK: THE CONTROL — the multiset again, held across every order at every rung.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in setKeys {
+            for n in rungs(key) {
+                let here = rowsFor(key, n)
+                guard let lo = here.map(\.reading.doubleMeanZMm).min(),
+                      let hi = here.map(\.reading.doubleMeanZMm).max(),
+                      let delta = here.map(\.reading.centroidErrorMm).min() else { continue }
+                worstNoise = Swift.max(worstNoise, hi - lo)
+                tightestDelta = Swift.min(tightestDelta, delta)
+            }
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the constructed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across these orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading needs"
+            + " and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.

@@ -2037,3 +2037,57 @@ Husbanding does carry the fullest fill on three sets (0.2076, 0.2502, 0.1949), s
 `objectiveOrder(.husband)` beside `replenishedOrder` if you need a floor.
 
 **Not repaired**, on Decisions 52–72's precedent. `stabilityRatioMin` stays `[owed]`.
+
+## The blind spot is two findings, and only one is the leg (Decision 74)
+
+`theBlindSpotIsSeparatedFromTheCount` discharges Decision 73's one negative that is a
+control rather than a construction: its three losing sets were fallback legs **and** the
+three largest, so "neither axis is step-locally maximisable" was confounded with n.
+`decimated(_:to:)` is a fixed stride — same population, same standoff, same leg, exact
+target count — and `to: set.count` gives stride 1, so the top rung of every ladder **is**
+Decision 73's reading rather than a resample of it (8 of 8, element for element).
+
+### The grouping does not survive, and the count does not inherit it
+
+| n | fill search is the fullest order |
+|---|---|
+| 1,024 | 3 of 4 annulus, **4 of 4 fallback** |
+| 4,096 | 1 of 4 annulus, 1 of 4 fallback |
+| 16,384 | 0 of 4 fallback (no annulus leg reaches it) |
+| 65,536 | 0 of 4 fallback |
+| full | 5 of 8 — the three losses all fallback (Decision 73) |
+
+At a matched count the legs are indistinguishable, and at 1,024 the fallback legs are
+*ahead*. But the verdict is not monotone in n either — `1785135663727`/annulus reads
+FULLEST, out-filled, FULLEST down its three rungs and `1786450130307`/fallback reads
+FULLEST, FULLEST, out-filled, out-filled, FULLEST down its five. **Neither variable
+explains it**; the confound is separated and what is behind it is unnamed.
+
+### The δ half IS the leg, and it survives the control
+
+The sort-beats-search reading — the quantity Decision 71's window is denominated in —
+never occurs on an annulus leg at any count the corpus supplies: **12 readings, floor
+2.321×**, against **6 of 20** fallback rungs below 1×. At n = 4,096, count held exactly:
+**0 of 4** annulus against **3 of 4** fallback (0.427×, 0.592×, 0.756×). It needs a count
+to show at — at 1,024 nothing is beaten — and no annulus leg can be read above 12,551, so
+the separation is read at 1,024 and 4,096 only.
+
+### Read this before explaining the named exception from its geometry
+
+`1785901032716`/fallback — the set Decisions 70–73 call the one a search cannot win —
+reads **18.704×, 0.427×, 0.811×, 54.729×, 0.591×** down its own ladder. The search beats
+the sort by 54.7× at n = 65,536 on that same population. Whatever the sort has there is a
+property of the **(set, count) pair**, not of the set; four decisions have tried to explain
+it from the set's shape.
+
+### What this does and does not touch
+
+Decision 67's ceiling is now read at **32 rungs** spanning 1,024 to 1,298,233 and is never
+breached — the fullest order reaches **0.6183** of the attainable ceiling, the same figure
+Decision 71 measured at full size. Decision 71's **0.4440…0.7182 window does not move**:
+every rung is a different multiset, so no rung's δ transfers to the full set. The Double
+reference moves **0.000e+00 mm** against a smallest Float δ of 1.923e-06 mm.
+
+One decimator only — a stride can alias the depth raster and a random subsample is not run.
+
+**Not repaired**, on Decisions 52–73's precedent. `stabilityRatioMin` stays `[owed]`.
