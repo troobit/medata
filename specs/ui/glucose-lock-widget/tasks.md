@@ -143,16 +143,17 @@ references:
 
 ## Follow-ups
 
-- [ ] 15. Tighten the trend derivation against the observed CGM cadence
+- [ ] 15. Tighten the trend derivation against the observed CGM cadence <!-- id:7k39hjr -->
   - Deferred from Decision 15. MVP accepted a laggier, less certain arrow in exchange for it existing at all (33.5 % -> 99.1 % availability); these are the two things knowingly left approximate
   - Re-derive the four rate thresholds (0.056 / 0.111 / 0.166 mmol/L per min) for a 30-minute regression baseline — they were chosen for a 15-minute one, so the band edges are currently approximate
   - Make the window adapt to the observed cadence instead of being pinned at 30 min: measure the recent median gap and size the window at about twice it, so a true 5-minute feed gets a short responsive baseline and a 15-minute feed still qualifies
   - Consider surfacing the arrow's confidence (e.g. withhold the fast bands when the baseline is long) rather than presenting a 30-minute average slope with the same authority as a 5-minute one
   - Evidence to re-run: pull Documents/meals.sqlite per docs/agent-notes/device-build-and-test.md and redo the gap-distribution + availability simulation recorded in Decision 15
+  - Blocked-by: 7k39hjq (Widget falls out of sync while the app is suspended)
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
   - References: decision_log.md
 
-- [ ] 16. Widget falls out of sync while the app is suspended
+- [ ] 16. Widget falls out of sync while the app is suspended <!-- id:7k39hjq -->
   - Observed 2026-08-13 during the task 14 device pass: the widget often shows a stale reading until the phone is unlocked or the app is opened and refreshed
   - Expected from the current architecture, not a regression: GlucoseWidgetPublisher is app-process-bound — it writes the snapshot and calls reloadTimelines only on CGM ticks while the app process is alive, so a suspended/killed app means no new snapshots; terminal timeline states use .never policy and wait for the app's explicit reload (docs/agent-notes/widget-extension.md)
   - Candidate directions: HealthKit background delivery waking the app to republish; a BGAppRefresh fallback; or having getTimeline read fresh data itself so the widget refreshes on its own budget — each needs a Decision entry weighing background-execution limits

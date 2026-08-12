@@ -133,5 +133,10 @@ metadata:
 
 - [ ] 22. STOP — IF the spike passes, retrain SegFormer-B0 and compare with the adoption margin <!-- id:2mfkxz0 -->
   - Conditional on task 21 being a full pass. Retrain SegFormer-B0 on the same re-cut split with the same recipe (init policy + co-occurrence loss), not an unweighted baseline. Adopt only if it beats the recipe-upgraded checkpoint (task 19) by >= 0.02 on BOTH mean food-class IoU and the eight-staple mean (Req 3.3); otherwise record the comparison and keep the existing architecture. Adoption hands export-gate integration to model-production.
-  - Blocked-by: 2mfkxyz (Record the spike verdict in the decision log pass/fail per criterion), 2mfkxyt (STOP — validate the recipe-upgraded checkpoint against Reqs 2.3/2.4/2.5 as written)
+  - Blocked-by: 2mfkxyz (Record the spike verdict in the decision log pass/fail per criterion), 2mfkxz7 (STOP — execute the stratified re-cut and re-measure the pinned baseline), 2mfkxzd (Code: register segformer_b0 in archs.py agent-executable prep for the task 22 retrain)
   - Requirements: [3.3](requirements.md#3.3)
+
+- [ ] 23. Code: register segformer_b0 in archs.py (agent-executable prep for the task 22 retrain) <!-- id:2mfkxzd -->
+  - ArchSpec per the archs.py contract: model factory building SegFormer-B0 (transformers, spike-only dep) with the 36-channel head grafted per spike_segformer.py's graft, published-init policy, plain-tensor forward adapter (SegFormer emits logits at H/4 — upsample per the spike), and the export adapter export.py dispatches through
+  - Registry-fixture tests pass without torch (lazy imports per the module convention); tools pytest suite stays green; spike_segformer.py may share the graft helper rather than duplicating it
+  - Decision 28 settled viability (12.68 ms, fully ANE-resident); this task only makes --arch segformer_b0 selectable so the task 22 STOP can run as a training command
