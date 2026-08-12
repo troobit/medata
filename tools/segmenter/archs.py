@@ -240,6 +240,15 @@ def segformer_b0_grafted(num_classes: int, checkpoint: str | None):
         model.decode_head.classifier = torch.nn.Conv2d(
             head.in_channels, num_classes, kernel_size=1)
 
+    # MPS workaround: the decode head's BatchNorm2d saves its (non-contiguous,
+    # via the fuse-conv over concatenated reshaped stages) input for backward,
+    # and the MPS batch-norm backward kernel rejects it ("view size is not
+    # compatible..."). Making the input contiguous fixes backward; on CPU and
+    # in the export trace it is a no-op (contiguous() returns the tensor
+    # unchanged when the layout is already dense).
+    model.decode_head.batch_norm.register_forward_pre_hook(
+        lambda module, args: (args[0].contiguous(),))
+
     class PlainLogits(torch.nn.Module):
         """Adapter to the plain-tensor convention: forward(x) -> [B, C, H/4,
         W/4] logits; ``plain_tensor_logits`` upsamples to input resolution."""
