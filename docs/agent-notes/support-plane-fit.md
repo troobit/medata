@@ -1798,9 +1798,13 @@ Loudest order on **7 of 8** committed sets. Extraction's leg, δ in mm:
 | `1786439141215` annulus | 0.005090 (`\|z\|` asc) | **0.016093** | 3.16× |
 | `1786450130307` annulus | 0.010877 (`\|z\|` desc) | **0.028366** | 2.61× |
 
-**The search is a FLOOR and is beatable.** A greedy is myopic: on the corpus's largest set,
-`1785901032716`'s 1,298,233-point fallback set, `|z| ascending` reads 6.143952 mm against the
-search's 3.628388 mm (0.59×). Do not quote the search's number as the extreme.
+**The search is a FLOOR and is beatable.** On the corpus's largest set, `1785901032716`'s
+1,298,233-point fallback set, `|z| ascending` reads 6.143952 mm against the search's
+3.628388 mm (0.59×). Do not quote the search's number as the extreme.
+
+> **The "a greedy is myopic" account is superseded by Decision 71.** Beams of 1, 2 and 4 on
+> that set all land within 0.0004 mm of the greedy, so lookahead is not what it lacked. The
+> 0.59× measurement stands and is now unexplained.
 
 ### The ceiling still bounds it, and the fullest fill is still a sampled order
 
@@ -1835,3 +1839,70 @@ Control unchanged and exact: the Double reference re-summed in every constructed
 
 **Not repaired**, on Decisions 52–69's precedent. `stabilityRatioMin` stays `[owed]` and
 unsettleable; Decision 64's third finding is untouched.
+
+## The ceiling is loose by the binade, and a beam does not help (Decision 71)
+
+`theCeilingIsLooseByTheUlpRegime` closes Decision 70's two non-capture negatives, which are
+one question read twice: the search is a beatable FLOOR, and the ceiling's tightness is
+bracketed 0.4440…1. That decision's own sentence named the two constructions — "a beam
+search, or one that reasons about which ulp regime the running sum sits in" — and they close
+the window from opposite sides. The width is held at 12 throughout; only the beam is swept.
+
+### The looseness is arithmetic, and ⅔ of it is a closed form
+
+Decision 67's ceiling charges every addition `u·|s|`. What a Float addition commits is
+`ulp(s)/2`, and the two differ by `2^⌊log₂ s⌋ / s`. **No permutation can recover that gap.**
+
+Over one full binade the running sum sweeps `x ∈ [2ᵏ, 2ᵏ⁺¹)` while the ceiling weights each
+addition by `x`, so the weighted mean of `2ᵏ/x` is `∫x·(2ᵏ/x)dx / ∫x dx` = **⅔ exactly**,
+independent of `k`. The last binade is partial and is read from the top down, so it can only
+pull the mixture up: **⅔ is a floor, 1 the trivial roof.**
+
+`attainableZCeilingMm` sums `ulp(sᵢ)/2` along the loudest prefix trajectory any order can
+produce — the i largest-magnitude points first, `ulp` being monotone — so it is a bound over
+the WHOLE permutation group, not a reading at the orders tried.
+
+| set | n | asserted | attainable | of it |
+|---|---|---|---|---|
+| `1786439141215` annulus | 5,276 | 6.402e-02 mm | 4.393e-02 mm | **0.6861** |
+| `1785901032716` annulus | 12,551 | 1.317e-01 mm | 9.319e-02 mm | 0.7076 |
+| `1785901032716` fallback | 1,298,233 | 1.385e+01 mm | 9.947e+00 mm | 0.7182 |
+| `1786450130307` fallback | 581,996 | 5.044e+00 mm | 3.845e+00 mm | **0.7624** |
+
+0.6861…0.7624 across a 246× count range, both legs and a 127 mm standoff range — 1.03…1.14×
+above the ⅔ floor. **The spread is a reading of where `n·μ` falls in its binade, not of the
+sets.** So the ceiling's ~1.4× slack needs no re-measurement on the sitting's captures.
+
+### The window, and read it PER SET
+
+The floor is what some order reached on a set; the roof is what the arithmetic allows on that
+same set. Quoting the corpus's loosest roof against another set's fullest fill is the weaker
+statement. On `1785901032716`'s fallback set, which carries Decision 69's 0.4440 headline:
+
+**0.4440…0.7182 — a 1.62× window, from Decision 70's 2.25×.** Against the attainable ceiling
+rather than the asserted one, the corpus's fills rise from 0.1686…0.4440 to 0.2352…0.6183.
+
+### The beam refutes the myopia account, and the control is an identity
+
+`beamSearchedOrder` keeps `beam` partial orders alive and lets them compete. **A beam of 1 is
+Decision 70's search exactly** — same candidate set, same strict-improvement tie-break, same
+arithmetic — and reproduces its δ on **16 of 16** readings **to the bit**. First control in
+this chain that is exact by construction rather than by measurement.
+
+Swept 1…8, the beam beats the greedy on **3 of 8** sets and by at most **1.080×** (0.022022 →
+0.023788 mm, `1785135663727` annulus). Everywhere else it ties to six figures or loses.
+
+**It does not recover Decision 70's named exception.** On `1785901032716`'s 1,298,233-point
+fallback set, `|z| ascending` reads 6.143952 mm; beams 1, 2 and 4 all land within 0.0004 mm
+of the greedy's 3.628388 mm, so the gap is **0.59× still**. Decision 70 attributed that gap
+to greedy myopia. **That account is refuted and nothing replaces it** — a sort over 1.3 M
+near-equal same-sign addends does something a step-local objective cannot see at any
+lookahead depth the budget affords.
+
+Do not read this as "beams do not work": the beam is capped at 4 on the largest set by
+`beamEvaluationBudget` (n × beam × width), which the test prints rather than hiding.
+
+Control unchanged and exact: the Double reference re-summed in every beamed order moves
+**0.000e+00 mm** on all eight sets, against a smallest Float δ of 2.739e-05 mm.
+
+**Not repaired**, on Decisions 52–70's precedent. `stabilityRatioMin` stays `[owed]`.

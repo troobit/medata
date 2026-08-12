@@ -12131,6 +12131,403 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
+    // The BEAM. Decision 70's search keeps one partial order alive and extends whichever
+    // candidate lands the accumulated error furthest out, which is myopic by construction —
+    // the loudest step now can leave the running sum at a residue where every later step is
+    // quiet. This keeps `beam` partial orders alive at each step and lets them compete, so
+    // `beam == 1` is Decision 70's search EXACTLY rather than approximately: same candidate
+    // set, same strict-improvement tie-break, same arithmetic. That identity is the control.
+    //
+    // The order is not carried on the states — a state's order is n points and copying `beam`
+    // of them per step is O(beam·n²). Each surviving state records only which parent it came
+    // from and which bin it drew, and the winner's order is replayed forward from that chain.
+    static func beamSearchedOrder(sortedByDepth sorted: [Vec3], normal: Vec3,
+                                  width: Int, beam: Int, loud: Bool) -> [Vec3] {
+        let n = sorted.count
+        guard n > 0, beam > 0 else { return sorted }
+        let bins = Swift.min(width, n)
+        let per = (n + bins - 1) / bins
+        let end = (0..<bins).map { Swift.min(($0 + 1) * per, n) }
+        let nx = Double(normal.x), ny = Double(normal.y), nz = Double(normal.z)
+
+        var live = 1
+        var cursor = [Int](repeating: 0, count: beam * bins)
+        for b in 0..<bins { cursor[b] = b * per }
+        var sx = [Float](repeating: 0, count: beam), sy = sx, sz = sx
+        var qx = [Double](repeating: 0, count: beam), qy = qx, qz = qx
+        var nextCursor = cursor
+        var nsx = sx, nsy = sy, nsz = sz
+        var nqx = qx, nqy = qy, nqz = qz
+
+        var parent = [Int32](repeating: 0, count: n * beam)
+        var chosen = [UInt8](repeating: 0, count: n * beam)
+
+        // Top-`beam` of the at most beam × bins extensions, kept by insertion. `key` is the
+        // signed score for the loud direction and its negation for the quiet one, so one
+        // comparison serves both and the strict `<` reproduces the greedy's tie-break.
+        var kKey = [Double](repeating: 0, count: beam)
+        var kState = [Int](repeating: 0, count: beam)
+        var kBin = [Int](repeating: 0, count: beam)
+
+        for step in 0..<n {
+            var kept = 0
+            for s in 0..<live {
+                let base = s * bins
+                for b in 0..<bins where cursor[base + b] < end[b] {
+                    let p = sorted[cursor[base + b]]
+                    let score = nx * (Double(sx[s] + p.x) - (qx[s] + Double(p.x)))
+                        + ny * (Double(sy[s] + p.y) - (qy[s] + Double(p.y)))
+                        + nz * (Double(sz[s] + p.z) - (qz[s] + Double(p.z)))
+                    let key = loud ? score : -score
+                    guard kept < beam || key > kKey[beam - 1] else { continue }
+                    var i = Swift.min(kept, beam - 1)
+                    while i > 0, kKey[i - 1] < key {
+                        kKey[i] = kKey[i - 1]; kState[i] = kState[i - 1]; kBin[i] = kBin[i - 1]
+                        i -= 1
+                    }
+                    kKey[i] = key; kState[i] = s; kBin[i] = b
+                    if kept < beam { kept += 1 }
+                }
+            }
+            for r in 0..<kept {
+                let s = kState[r], b = kBin[r]
+                let src = s * bins, dst = r * bins
+                for j in 0..<bins { nextCursor[dst + j] = cursor[src + j] }
+                let p = sorted[cursor[src + b]]
+                nextCursor[dst + b] += 1
+                nsx[r] = sx[s] + p.x; nsy[r] = sy[s] + p.y; nsz[r] = sz[s] + p.z
+                nqx[r] = qx[s] + Double(p.x)
+                nqy[r] = qy[s] + Double(p.y)
+                nqz[r] = qz[s] + Double(p.z)
+                parent[step * beam + r] = Int32(s)
+                chosen[step * beam + r] = UInt8(b)
+            }
+            swap(&cursor, &nextCursor)
+            swap(&sx, &nsx); swap(&sy, &nsy); swap(&sz, &nsz)
+            swap(&qx, &nqx); swap(&qy, &nqy); swap(&qz, &nqz)
+            live = kept
+        }
+
+        var binAt = [UInt8](repeating: 0, count: n)
+        var row = 0
+        for step in stride(from: n - 1, through: 0, by: -1) {
+            binAt[step] = chosen[step * beam + row]
+            row = Int(parent[step * beam + row])
+        }
+        var replay = (0..<bins).map { $0 * per }
+        var out: [Vec3] = []
+        out.reserveCapacity(n)
+        for step in 0..<n {
+            let b = Int(binAt[step])
+            out.append(sorted[replay[b]])
+            replay[b] += 1
+        }
+        return out
+    }
+
+    // THE ATTAINABLE CEILING, and it is the first bound in this chain computed from the SET
+    // rather than read off a run. Decision 67's ceiling charges every addition `u·|s|`. What a
+    // Float addition can actually commit is `ulp(s)/2`, and the two differ by `2^⌊log₂ s⌋ / s`
+    // — a factor in (½, 1] fixed by WHERE in its binade the running sum happens to sit. The
+    // gap is not slack in the reading: it is arithmetic no permutation can reach.
+    //
+    // Maximised over the WHOLE permutation group rather than over the orders tried. `ulp` is
+    // non-decreasing in magnitude, so bounding the i-th partial sum by the largest magnitude
+    // any i of the points can reach — the i most positive or the i most negative — bounds
+    // every order's i-th rounding at once. `reduce(0, +)` commits n − 1 roundings (the first
+    // addition is onto an exact zero), and the division by n commits one more.
+    //
+    // Returned in the mean's units so it is directly comparable with `OrderReading.zCeilingMm`.
+    static func attainableZCeilingMm(_ points: [Vec3]) -> Double {
+        let n = points.count
+        guard n > 1 else { return 0 }
+        let z = points.map { Double($0.z) }
+        let descending = z.sorted(by: >)
+        var high = descending[0], low = descending[n - 1]
+        var total = 0.0
+        for i in 1..<n {
+            high += descending[i]
+            low += descending[n - 1 - i]
+            let reach = Swift.max(abs(high), abs(low))
+            total += Double(Float(reach).ulp) / 2
+        }
+        let mean = high / Double(n)
+        return total / Double(n) + Double(Float(mean).ulp) / 2
+    }
+
+    // Beam widths. 1 is Decision 70's search and is the control; the rest are the question.
+    static let searchBeams = [1, 2, 4, 8]
+
+    // A beam costs n × beam × width evaluations, so the two largest fallback sets stop short
+    // of the widest beam. The test PRINTS what each set was given rather than quietly running
+    // a shorter sweep on the big ones — same rule as `searchEvaluationBudget`.
+    static let beamEvaluationBudget = 64_000_000
+
+    static func affordableBeams(_ n: Int, width: Int) -> [Int] {
+        let affordable = Self.searchBeams.filter { n * $0 * width <= Self.beamEvaluationBudget }
+        return affordable.isEmpty ? [Self.searchBeams[0]] : affordable
+    }
+
+    // Decision 71. Decision 70 closed with five negatives; this discharges the two that need
+    // no capture and are one question read twice: "The search is a FLOOR and is known to be
+    // beatable — whether a non-greedy construction, a beam search or one that reasons about
+    // which ulp regime the running sum sits in, reaches the ceiling is unmeasured", and "the
+    // ceiling's tightness is now bracketed 0.4440 below and 1 above".
+    //
+    // Both names in that sentence are taken, and they close the window from opposite sides.
+    // The BEAM raises the floor if a non-greedy construction is louder than Decision 70's
+    // greedy. The ULP REGIME lowers the ceiling: `u·|s|` is not what an addition commits,
+    // `ulp(s)/2` is, and the ratio between them is a property of the binade the running sum
+    // passes through — computable from the set, over every order at once.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    @Test("the ceiling is loose by the binade, and a beam does not take up the slack")
+    func theCeilingIsLooseByTheUlpRegime() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        var rows: [OrderReading] = []
+        var beamsGiven: [String: [Int]] = [:]
+        var attainable: [String: Double] = [:]
+        var asserted: [String: Double] = [:]
+        var counts: [String: Int] = [:]
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                guard let baseline = Self.orderBaseline(set, seedNormal: seed) else { continue }
+                let key = "\(name)/\(leg)"
+                let sorted = Self.depthSorted(set)
+                // The sampled comparison is Decision 70's: four structural orders, of which
+                // one is the loudest of Decision 69's ten on every set.
+                var candidates: [(String, [Vec3])] = Self.orders(of: set)
+                    .filter { !$0.0.hasPrefix("shuffle") }
+                let beams = Self.affordableBeams(set.count, width: width)
+                for (way, loud) in [("up", true), ("down", false)] {
+                    candidates.append(("greedy \(way)", Self.searchedOrder(
+                        sortedByDepth: sorted, normal: baseline.normal,
+                        width: width, loud: loud)))
+                    for beam in beams {
+                        candidates.append(("beam \(beam) \(way)", Self.beamSearchedOrder(
+                            sortedByDepth: sorted, normal: baseline.normal,
+                            width: width, beam: beam, loud: loud)))
+                    }
+                }
+                for (order, permutation) in candidates {
+                    rows.append(Self.orderReading(name, leg: leg, order: order,
+                                                  points: permutation, baseline: baseline))
+                }
+                beamsGiven[key] = beams
+                attainable[key] = Self.attainableZCeilingMm(set)
+                asserted[key] = Self.unitRoundoff * abs(baseline.cz) * Double(set.count - 1) / 2
+                counts[key] = set.count
+            }
+        }
+        let short = "the beam sweep no longer yields a reading on both legs of every committed"
+            + " capture, so it is read on a corpus that has changed"
+        #expect(beamsGiven.count == 2 * names.count, "\(short)")
+
+        func rowsFor(_ key: String) -> [OrderReading] {
+            rows.filter { "\($0.name)/\($0.leg)" == key }
+        }
+        func loudest(_ here: [OrderReading], _ match: (String) -> Bool) -> OrderReading? {
+            here.filter { match($0.order) }.max { $0.centroidErrorMm < $1.centroidErrorMm }
+        }
+        let structural = ["shipped", "reversed", "|z| ascending", "|z| descending"]
+        let isStructural: (String) -> Bool = { structural.contains($0) }
+        let keys = beamsGiven.keys.sorted()
+
+        // MARK: THE CONTROL FIRST, because every reading below is a comparison against it. A
+        // beam of 1 is not merely similar to Decision 70's search — it is the same candidate
+        // set walked with the same tie-break, so it must reproduce that decision's δ to the
+        // bit. If it does not, the beam machinery is what is being measured.
+
+        print("=== the control: a beam of 1 against Decision 70's greedy ===")
+        var reproduced = 0, checked = 0
+        for key in keys {
+            let here = rowsFor(key)
+            for way in ["up", "down"] {
+                guard let beamed = here.first(where: { $0.order == "beam 1 \(way)" }),
+                      let greedy = here.first(where: { $0.order == "greedy \(way)" })
+                else { continue }
+                checked += 1
+                if beamed.centroidErrorMm == greedy.centroidErrorMm { reproduced += 1 }
+            }
+        }
+        print("  a beam of 1 reproduces Decision 70's search on \(reproduced) of \(checked)"
+              + " readings, to the bit")
+        let beamIsNotTheGreedy = "a beam of 1 no longer reproduces Decision 70's search"
+            + " exactly, so the beam is a different search rather than that one generalised"
+            + " and no gain below can be attributed to the lookahead"
+        #expect(reproduced == checked, "\(beamIsNotTheGreedy)")
+
+        // MARK: THE FIRST FINDING — the ceiling's looseness, decomposed. Decision 67's bound
+        // charges u·|s| per addition where the arithmetic commits ulp(s)/2. The ratio is not a
+        // measurement artefact and no order can recover it: it is where in its binade the
+        // running sum sits, and the running sum's trajectory is n̂-independent because every z
+        // in these sets shares a sign.
+
+        print("=== the ceiling, and what the arithmetic can actually reach ===")
+        var reach: [Double] = []
+        for key in keys {
+            guard let a = attainable[key], let c = asserted[key], c > 0 else { continue }
+            reach.append(a / c)
+            print("  \(key): n = \(counts[key] ?? 0), asserted ceiling"
+                  + " \(String(format: "%.3e", c)) mm, attainable"
+                  + " \(String(format: "%.3e", a)) mm — \(String(format: "%.4f", a / c)) of it")
+        }
+        let worstReach = try #require(reach.max())
+        let tightestReach = try #require(reach.min())
+        print("  the attainable ceiling is \(String(format: "%.4f", tightestReach))…"
+              + "\(String(format: "%.4f", worstReach)) of the asserted one across the corpus")
+        // AND IT HAS A CLOSED FORM. Over one full binade the running sum sweeps x ∈ [2^k,
+        // 2^{k+1}) while the asserted ceiling weights each addition by x itself, so the
+        // weighted mean of 2^k/x is ∫x·(2^k/x)dx / ∫x dx = ⅔ exactly, independent of k. Every
+        // completed binade contributes exactly that; the last one is partial and its ratio is
+        // read from the top of the range downwards, so it can only pull the mixture UP. ⅔ is
+        // therefore a floor on the binade factor and 1 its trivial roof — which is what makes
+        // the corpus's 0.69…0.76 a reading of where n·μ falls rather than of the sets.
+        let binadeFloor = 2.0 / 3
+        print("  the closed form: a full binade contributes exactly"
+              + " \(String(format: "%.4f", binadeFloor)) and a partial last one raises it, so"
+              + " the corpus sits \(String(format: "%.3f", tightestReach / binadeFloor))…"
+              + "\(String(format: "%.3f", worstReach / binadeFloor))× above the floor")
+        let binadeIsNothing = "the attainable ceiling now equals the asserted one on some set,"
+            + " so the binade factor is not what Decisions 67-70's unfilled ceiling was made of"
+            + " and the window does not close from above"
+        #expect(worstReach < 1, "\(binadeIsNothing)")
+        let floorBreached = "a set now reads below ⅔ of the asserted ceiling, which the binade"
+            + " mixture cannot do, so `attainableZCeilingMm` is summing something other than"
+            + " the roundings `reduce(0, +)` commits"
+        #expect(tightestReach > binadeFloor, "\(floorBreached)")
+
+        // MARK: THE SECOND FINDING — the beam against the greedy. A beam of 1 IS the greedy,
+        // so this is read as a gain over the beam's own first entry rather than against a
+        // number quoted from Decision 70, and any movement is the lookahead alone.
+
+        print("=== the beam against the greedy it generalises ===")
+        var beamGains: [Double] = []
+        var beamWins = 0
+        for key in keys {
+            let here = rowsFor(key)
+            guard let greedy = loudest(here, { $0.hasPrefix("beam 1 ") }),
+                  let best = loudest(here, { $0.hasPrefix("beam ") }), greedy.centroidErrorMm > 0
+            else { continue }
+            let gain = best.centroidErrorMm / greedy.centroidErrorMm
+            beamGains.append(gain)
+            if gain > 1 { beamWins += 1 }
+            let described = (beamsGiven[key] ?? []).map { beam -> String in
+                let b = loudest(here, { $0.hasPrefix("beam \(beam) ") })
+                return "\(beam): \(String(format: "%.6f", b?.centroidErrorMm ?? 0))"
+            }.joined(separator: ", ")
+            print("  \(key): δ by beam — \(described) mm"
+                  + " (\(String(format: "%.3f", gain))× over the greedy, best \(best.order))")
+        }
+        let capped = keys.filter { (beamsGiven[$0] ?? []).count < Self.searchBeams.count }
+        for key in capped {
+            print("  \(key): \(Self.searchBeams.count - (beamsGiven[key] ?? []).count) of"
+                  + " \(Self.searchBeams.count) beams are past the"
+                  + " \(Self.beamEvaluationBudget) evaluation budget and were NOT run")
+        }
+        print("  the beam beats the greedy on \(beamWins) of \(beamGains.count) sets, by"
+              + " \(String(format: "%.3f", try #require(beamGains.min())))…"
+              + "\(String(format: "%.3f", try #require(beamGains.max())))×")
+
+        // MARK: THE THIRD FINDING — the named exception. Decision 70 recorded ONE set where a
+        // sampled order beats the search: `1785901032716`'s 1.3 M-point fallback set, where
+        // `|z| ascending` reads 0.59× of it. If lookahead is what the greedy lacked, that is
+        // where it should show.
+
+        print("=== the set where a sort beat the search ===")
+        for key in keys {
+            let here = rowsFor(key)
+            guard let sampled = loudest(here, isStructural),
+                  let best = loudest(here, { $0.hasPrefix("beam ") }), sampled.centroidErrorMm > 0
+            else { continue }
+            print("  \(key): loudest sampled \(String(format: "%.6f", sampled.centroidErrorMm))"
+                  + " mm (\(sampled.order)), best beam"
+                  + " \(String(format: "%.6f", best.centroidErrorMm)) mm (\(best.order)) —"
+                  + " \(String(format: "%.2f", best.centroidErrorMm / sampled.centroidErrorMm))×")
+        }
+
+        // MARK: THE FOURTH FINDING — the window. Decision 70 bracketed the ceiling's tightness
+        // at 0.4440…1. The fills below are the floor, the attainable share is the roof, and
+        // what is quoted is the pair rather than either alone.
+
+        print("=== how full the loudest order drives each ceiling ===")
+        var fills: [Double] = []
+        var attainableFills: [Double] = []
+        var carriesTheFloor = ("", 0.0, 0.0)
+        for key in keys {
+            let here = rowsFor(key)
+            guard let best = here.max(by: { $0.share < $1.share }),
+                  let a = attainable[key], let c = asserted[key], c > 0 else { continue }
+            fills.append(best.share)
+            attainableFills.append(best.share * c / a)
+            if best.share > carriesTheFloor.1 { carriesTheFloor = (key, best.share, a / c) }
+            print("  \(key): fullest \(String(format: "%.4f", best.share)) of the asserted"
+                  + " ceiling (\(best.order)),"
+                  + " \(String(format: "%.4f", best.share * c / a)) of the attainable one")
+        }
+        // The window is a per-SET quantity: the floor is what some order reached on that set
+        // and the roof is what the arithmetic allows on that same set. Quoting the corpus's
+        // loosest roof against another set's fullest fill would be the weaker statement.
+        let fullest = try #require(fills.max())
+        print("  the window on the set that carries the floor, \(carriesTheFloor.0):"
+              + " \(String(format: "%.4f", carriesTheFloor.1))…"
+              + "\(String(format: "%.4f", carriesTheFloor.2)) of the asserted ceiling,"
+              + " a \(String(format: "%.2f", carriesTheFloor.2 / carriesTheFloor.1))× window"
+              + " against Decision 70's \(String(format: "%.2f", 1 / fullest))×")
+        let windowInverted = "some order now drives the mean past what ulp(s)/2 per addition"
+            + " allows, so the attainable ceiling is not a bound and the window does not close"
+        #expect(try #require(attainableFills.max()) < 1, "\(windowInverted)")
+
+        // MARK: THE CONTROL — the multiset again, held across orders chosen with lookahead.
+
+        print("=== the control: the Double reference re-summed in each beamed order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for key in keys {
+            let here = rowsFor(key)
+            guard let lo = here.map(\.doubleMeanZMm).min(),
+                  let hi = here.map(\.doubleMeanZMm).max(),
+                  let delta = here.map(\.centroidErrorMm).min() else { continue }
+            worstNoise = Swift.max(worstNoise, hi - lo)
+            tightestDelta = Swift.min(tightestDelta, delta)
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the beamed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across the beamed orders as"
+            + " the Float sum does, so the multiset is not held to the precision this reading"
+            + " needs and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.
