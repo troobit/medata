@@ -399,9 +399,24 @@ For long runs on the local Mac:
 
 ### Detached runs — launch, find, watch, resume
 
-`caffeinate` survives a closed terminal via `nohup`, but not a lid close or a
-reboot (2026-07-15: a reboot killed a run at epoch 30; the sidecar resumed it
-losing nothing). Keep the lid open and the Mac on power.
+`caffeinate` survives a closed terminal via `nohup`, but never a reboot
+(2026-07-15: a reboot killed a run at epoch 30; the sidecar resumed it losing
+nothing). Lid-closed running IS supported, but only in **clamshell mode**: AC
+power plus an external display and keyboard/mouse (a powered hub carrying all
+three works — the 2026-08 runs use exactly that). `caffeinate` alone does NOT
+survive a lid close without the external display: clamshell exit forces sleep
+regardless of any assertion. The working setup is therefore either lid open on
+power, or lid closed on the hub, with `caffeinate -is` wrapped around the run
+in both cases.
+
+Belt-and-braces (optional): `sudo pmset -b disablesleep 1` forces sleep off at
+the firmware-settings level, guarding the run if the hub or display drops
+mid-epoch and clamshell mode exits. Restore afterwards with
+`sudo pmset -b sleep 1; sudo pmset -b disablesleep 0` — note that pair is the
+RESTORE half (it re-enables sleep); don't confuse the two. With a reliable hub
+this is unnecessary, and `-b` targets the battery profile anyway (the run
+should always be on AC) — use it only when the hub's power delivery is in
+doubt.
 
 ```sh
 # Launch detached (log name: train_<variant>_<date>.log)
