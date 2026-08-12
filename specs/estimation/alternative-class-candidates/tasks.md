@@ -173,7 +173,7 @@ references:
   - Stream: 1
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
 
-- [ ] 17. Mitigate boundary bleed in the candidate ranking (conditional) <!-- id:67qnbfm -->
+- [x] 17. Mitigate boundary bleed in the candidate ranking (conditional) <!-- id:67qnbfm -->
   - Fires only if the boundary-bleed partition in "Build the shortlist hit-rate analysis over the corrections corpus" shows bleed is HURTING — adjacent corrections hitting the shortlist while non-adjacent ones miss, meaning what touches the food is crowding genuine confusions out of the five slots. A partition showing the opposite closes this task as no-change-needed
   - Evidence that put it here (Decision 13, probe 2026-08-11): rank-1 candidates physically touch the food 69.7% of the time against a 9.1% chance baseline. Intrinsic, not an edge artefact — eroding each region before accumulating reaches only 57.7% at 16 px and costs 27% of scored foods, so interior-only sampling is already measured and rejected as the remedy
   - Why it ships unmitigated: the same probe found the true class in the top five on 78.2% of the segmenter wrong regions, consistent with bleed BECAUSE the adjacent class is frequently the correct one — a mislabelled region has usually had a neighbour label smeared across it. Bleed and signal are the same measurement until corrections separate them
@@ -181,7 +181,7 @@ references:
   - Measure any mitigation against the committed baseline with tools/candidate_probe.py — it takes --erode and prints adjacency beside the chance floor, so a change is one command
   - Not the same lever as "Remove the pass and the retained field if the verdict is negative": that removes the feature on a negative Req 8 verdict, this repairs the ranking while keeping it. Removal is the fallback if this fails or is not worth its cost
   - See docs/agent-notes/candidate-evidence.md for the probe mechanics and the full figures
-  - STILL PENDING 2026-08-12: the analysis exists and runs, but the partition it fires on returns bleed_verdict=insufficient — the corpus carries no relabels at all yet, so neither the adjacent nor the non-adjacent cell has a row. This task cannot be closed either way until corrections accumulate
+  - CLOSED 2026-08-12 (Decision 14): not fired, and not fireable by any agent session — the partition returns bleed_verdict=insufficient because the corpus holds zero relabels, and only real device use adds them. The condition is folded into "Record the acceptance verdict against the recency baseline", which runs the same analysis: bleed_verdict=hurting there reopens this work as the repair-before-removal step, exactly as a negative verdict fires the removal gate. Everything needed to execute later is retained in the bullets above and in docs/agent-notes/candidate-evidence.md. Left pending, this task loops an autonomous runner — the 2026-08-12 orbit run re-entered this phase 45 times over 13 hours because a pending non-STOP task reads as actionable now
   - Blocked-by: 67qnbfi (Build the shortlist hit-rate analysis over the corrections corpus)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [8.1](requirements.md#8.1)
@@ -201,6 +201,7 @@ references:
   - NOT agent-executable. Waits on real use of the surface — Decision 5 gates spec closure, not implementation, and no session can manufacture the corrections the verdict reads from
   - Run the "Build the shortlist hit-rate analysis over the corrections corpus" analysis once both shortlist_source arms carry enough rows, and record the outcome as a decision in decision_log.md
   - The first-correction split is the measurement that matters most; aggregate hit rate is dominated by repeat foods where recency already wins
+  - Decision 14: the boundary-bleed partition of this same run decides the mitigation question folded in from "Mitigate boundary bleed in the candidate ranking" — bleed_verdict=hurting fires ranking repair (that task's candidate mitigations, measured with tools/candidate_probe.py) before any removal; helping or neutral confirms it closed as no-change-needed
   - A neutral or negative result is a valid outcome and is recorded as such rather than tuned around — the repository precedent is segmenter-foundation Decision 24, which recorded a negative verdict and kept the incumbent
   - Blocked-by: 67qnbfi (Build the shortlist hit-rate analysis over the corrections corpus)
   - Stream: 1

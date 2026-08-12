@@ -521,3 +521,45 @@ The eligible-channel restriction is not a tuning choice. Without it the second-a
 `design.md`'s behavioural-contract row loses its provisional marking and its Testing Strategy gate is marked discharged. `tools/candidate_probe.py` joins the repository as the probe of record. Tasks 1 and 2 close; task 3 (`CandidateEvidence.compute`) is unblocked and must implement the eligible-channels-first ordering this decision fixes, not a rank-then-filter equivalent — they differ whenever a sentinel would have occupied a slot.
 
 ---
+
+## Decision 14: The bleed-mitigation conditional is evaluated at the acceptance verdict, not held as a pending task
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+"Mitigate boundary bleed in the candidate ranking" was written as a conditional task in the agent-executable stream: it fires only if the boundary-bleed partition of the Req 8 analysis shows adjacent corrections hitting the shortlist while non-adjacent ones miss. That partition reads from the corrections corpus, which as of 2026-08-12 holds zero relabel records, so `tools/shortlist_hit_rate.py` returns `bleed_verdict=insufficient` — and no agent session can change that, because only real device use adds corrections.
+
+The 2026-08-11/12 orbit run exposed the structural cost of holding that state as a pending task. Orbit selects the next phase by "does it contain an unchecked task", and its phase prompt (`/next-task --phase`, then `/commit`) does not pin the agent to one spec's task file. After the phase's first task closed at 02:18, orbit re-entered the phase 45 more times over 13 hours (~$191 of the run's ~$221): each fresh agent found the mitigation task unfireable, was routed by `/next-task` to agent-actionable work in a different spec (`support-plane-reference`), committed there, and exited cleanly — leaving the task pending and the loop live until the run was killed.
+
+### Decision
+
+Close the mitigation task. Its firing condition is evaluated at "Record the acceptance verdict against the recency baseline" (the human-gated STOP task), which runs the same analysis: `bleed_verdict=hurting` in that run reopens ranking repair as the step tried before the removal gate; helping or neutral confirms no-change-needed.
+
+### Rationale
+
+The partition is one cut of the same analysis run the acceptance verdict already reads — two tasks reading one run's output at the same future moment is one task too many. The autonomous-run contract the tasks file already encodes (STOP tasks are the ones no agent can execute) was being violated by a non-STOP task whose gate is real-use data; folding the condition into the STOP task that owns that data restores it. Nothing is lost: the candidate mitigations, the rejection of interior-only sampling, and the one-command measurement (`tools/candidate_probe.py --erode`) stay recorded on the closed task and in `docs/agent-notes/candidate-evidence.md`.
+
+### Alternatives Considered
+
+- **Leave it pending in the corpus-measurement phase**: the status quo - Rejected: it loops any autonomous runner (measured: 45 re-entries, 13 hours, ~$191) and misrepresents waiting-on-data as actionable work.
+- **Move it under the acceptance-gates STOP phase**: keeps it visible as a task - Rejected: it would duplicate the acceptance verdict's read of the same analysis output as a fourth STOP task whose entire content is "if that run says hurting"; a bullet on the verdict task records the same obligation without a second gate.
+- **Implement a mitigation now**: make the task completable by doing the work - Rejected: unevidenced. Decision 13 ships bleed unmitigated precisely because bleed and signal are the same measurement until corrections separate them, and the one direct remedy already measured (interior-only sampling) is rejected on evidence.
+
+### Consequences
+
+**Positive:**
+- Autonomous runs over this tasks file terminate: every remaining pending task is a STOP task.
+- The repair-before-removal ordering survives, now recorded where the verdict actually lands rather than as a parallel gate.
+- The corrective evidence trail (probe figures, rejected remedies, measurement command) stays attached to the closed task text.
+
+**Negative:**
+- Mitigation no longer appears as pending work in `rune list`; if the verdict fires it, a new task entry must be written then, rediscovered via this decision and the verdict task's bullet.
+- A reader of the tasks file alone sees a checked "Mitigate boundary bleed" task and must read its CLOSED bullet to learn no mitigation was applied.
+
+### Impact
+
+Tasks file only, plus one sentence in `design.md`'s boundary-bleed partition paragraph pointing the "fires the mitigation task" language at this decision. No code changes; the ranking ships exactly as Decision 13 fixed it.
+
+---
