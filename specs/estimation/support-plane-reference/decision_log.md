@@ -5630,3 +5630,182 @@ existing helper or reading is modified and Decisions 70–72's numbers are
 reproduced. No shipped code changes.
 
 ---
+
+## Decision 74: The blind spot is two findings — the fill half is the count, the δ half is the leg
+
+**Date**: 2026-08-12
+**Status**: accepted
+
+### Context
+
+Decision 73 closed with five negatives. One is that no `[owed]` value moves,
+which is not a negative to discharge. One is Decision 71's window, which four
+objectives left where it was. One is Decision 69's standing qualifier on the
+shipped scan order, which needs the sitting. One is a construction — husbanding
+is a point on a frontier rather than its extreme. The fifth is the only one that
+is a **control** rather than a construction, and it is aimed at that decision's
+own headline:
+
+> The three sets where a greedy cannot reach the fullest fill are the three
+> largest, so the failure is confounded with count and this reading does not
+> separate them.
+
+"Neither axis is step-locally maximisable" rests on three sets that differ from
+the other five in two ways at once: they are fallback legs and they are 20–100×
+larger. Decision 68 is the precedent for an account left unmeasured, and this
+one is cheaper to measure than any of them — it needs no new objective, only the
+same seven orders read at a count the two legs share.
+
+**Decimation** is that knob, and it is Decision 66's shape run the other way:
+that decision held the count exactly and moved the shape, this one holds the
+shape and moves the count. A fixed stride over the shipped order keeps the
+population, the standoff and the leg, and lands exactly on a target — so a
+1,298,233-point fallback leg and a 12,551-point annulus leg can be read at the
+same n and compared as counts rather than as sets.
+
+It reads no owed constant as a bar, so it sits inside the admission Decision 63
+widened `rangeCaptures` to and re-denominates nothing Decisions 40–57 bracket.
+
+### Decision
+
+Record that **Decision 73's grouping does not survive the count control, and
+that separating the confound hands the cause to neither variable cleanly**. The
+fill verdict is **not** a leg property: at n = 4,096 the fill search is the
+fullest order on **1 of 4** annulus legs and **1 of 4** fallback legs, and at
+n = 1,024 the fallback legs are *ahead* — **4 of 4** against **3 of 4**. Nor is
+it monotone in the count: across the ladder it reads **7 of 8** at 1,024,
+**2 of 8** at 4,096, **0 of 4** at 16,384, **0 of 4** at 65,536 and **5 of 8** at
+full size, so the full-size rung is louder than every intermediate one and no
+monotone account in n survives either. Record separately that **the other half
+of Decision 73's grouping is real and is a leg property**: a plain sort beats
+the loudest signed search on **6 of 20** fallback rungs and **0 of 12** annulus
+rungs, the annulus floor being **2.321×** across a 12× count range, and at
+n = 4,096 with the count held exactly it is **3 of 4** fallback legs against
+**0 of 4** annulus legs. Record that **the named exception is a property of the
+(set, count) pair rather than of the set**: `1785901032716`'s fallback leg reads
+**18.704×, 0.427×, 0.811×, 54.729×, 0.591×** down its own ladder, so the search
+beats the sort by 54.7× on the very set Decisions 70–73 name as the one it
+cannot win. Decision 71's window is **not read here** and does not move — every
+rung is a different multiset. `stabilityRatioMin` stays `[owed]` and
+unsettleable on Decision 64's third finding. Not repaired, on Decisions 52–73's
+precedent.
+
+### Rationale
+
+One reading, in `theBlindSpotIsSeparatedFromTheCount`, over the same eight
+committed sets — four captures × two legs — that Decisions 69–73 read, with the
+same seven orders and the same width. Changing the order set would change what
+"the fullest order" means, and that phrase is the finding under test.
+
+**THE CONTROL IS AN IDENTITY, for the fourth time in this chain.** `decimated`
+is a stride, so `to: set.count` gives a stride of 1 and returns the input
+element for element. It does, on **8 of 8** sets, so the top rung of every ladder
+*is* Decision 73's reading rather than a resample of it, and the three pairs that
+decision quotes come back unchanged — **0.5582 against 0.6033**, **0.5890
+against 0.7350**, **0.5378 against 0.5663**, the fill search fullest on 5 of 8
+and losing on exactly the three fallback legs.
+
+**AND THE GROUPING IT CARRIES IS A COINCIDENCE OF THOSE COUNTS.** Hold n and the
+two legs are indistinguishable: at 4,096, 1 of 4 against 1 of 4; at 1,024, the
+fallback legs are ahead. "All three it loses are fallback legs" is therefore true
+of the corpus at full size and false of the mechanism.
+
+**THE COUNT DOES NOT INHERIT THE EXPLANATION.** Every ladder flips more than
+once — `1785135663727`'s annulus reads FULLEST, out-filled, FULLEST at 1,024,
+4,096 and 10,469, and `1786450130307`'s fallback reads FULLEST, FULLEST,
+out-filled, out-filled, FULLEST across its five rungs. A verdict that is not
+monotone in the only variable left is not explained by that variable either, so
+what Decision 73 measured is a real reading with no account, which is Decision
+71's shape at the other axis.
+
+**THE δ HALF SEPARATES CLEANLY, AND IT IS THE LEG.** The sort-beats-search
+reading — the one Decision 71's window is denominated in — never occurs on an
+annulus leg at any count the corpus supplies: 12 readings, floor **2.321×**,
+against 20 fallback readings of which 6 fall below 1×. At n = 4,096 the count is
+held exactly and the split is **0 of 4 against 3 of 4** (`0.427×`, `0.592×`,
+`0.756×`). It is conditioned on count as well — at n = 1,024 no leg is beaten at
+all — so the honest statement is that the annulus leg has never been beaten and
+the fallback leg is beaten from 4,096 upward.
+
+**AND THE EXCEPTION IS NOT A SET.** Decisions 70–73 name `1785901032716`'s
+fallback leg as the one set where a sort beats every search. Decimated, that same
+population hands the search a **54.729×** win at 65,536 and an **18.704×** win at
+1,024. Whatever the sort has there, it is not something the set carries.
+
+**THE CEILING HOLDS AT EVERY COUNT.** Decision 67's bound is written on n and μ,
+both of which decimation moves, so the roof is recomputed per rung: the fullest
+order reaches at most **0.6183** of the attainable ceiling across **32 rungs** —
+the same figure Decision 71 measured at full size, so no rung on the ladder fills
+it further than the committed sets already do. The Double reference re-summed in
+every constructed order moves **0.000e+00 mm** against a smallest Float δ of
+**1.923e-06 mm**.
+
+### Alternatives Considered
+
+- **Build the frontier sweep Decision 73's third negative names — a rule that
+  trades the two axes deliberately**: the literal next construction, and the one
+  that decision's own "one point on a frontier, not its extreme" asks for —
+  Rejected because it extends a headline whose grouping was untested. A
+  construction built on a confounded reading inherits the confound, and the
+  control costs one stride where the sweep costs an objective family.
+- **Random subsampling rather than a fixed stride**: the decimator with no
+  correlation to the scan order, and the obvious guard against a stride aliasing
+  the raster — Rejected as the *second* control rather than the first. A stride
+  at `to: n` is the identity, so the ladder's top rung is Decision 73's reading
+  exactly; a random decimator has no such rung and would compare two readings
+  instead of walking down from one.
+- **Match the counts by growing the annulus legs — a wider annulus — rather than
+  shrinking the fallback legs**: reaches the fallback counts instead of
+  abandoning them — Rejected because widening the annulus changes the region,
+  hence the population, the standoff and the thickness. It moves the leg while
+  appearing to move the count, which is the confound this is built to remove.
+- **Take Decision 73's grouping at its word and move on**: three of three is a
+  clean split and the decision states it plainly — Rejected on Decision 68's
+  precedent. Every account in this chain left unmeasured has been refuted when it
+  was finally measured, and this one was refuted at the first matched count.
+
+### Consequences
+
+**Positive:**
+- Decision 73's fifth negative is discharged, and its headline is corrected in
+  the half that does not survive: "neither axis is step-locally maximisable, on
+  the same three fallback legs" keeps the finding and loses the grouping.
+- The δ half of that grouping is *promoted* rather than dropped — it is a leg
+  property that survives the count control at 3 of 4 against 0 of 4, which is a
+  stronger statement than the confounded one it replaces.
+- The named exception is demoted from a property of a set to a property of a
+  (set, count) pair, which removes the temptation to explain it from that set's
+  geometry — four decisions have tried.
+- The control is an identity for the fourth time, and `decimated` gives every
+  later reading in this chain a count knob that costs one stride.
+- Decision 67's ceiling is now read at 32 rungs spanning 1,024 to 1,298,233 and
+  is never breached, so the bound is confirmed across three orders of count.
+
+**Negative:**
+- No `[owed]` value moves. This is the seventh decision in a row that settles no
+  constant, and `stabilityRatioMin` is no closer to being settleable.
+- Neither variable explains the fill verdict. The confound is separated and what
+  is behind it is unnamed, so this decision closes a control and opens an
+  account.
+- One decimator. A stride over the shipped scan order can alias the depth raster,
+  and a random subsample is not run — so "the count" is measured along one path
+  through it.
+- Every reading is within-rung. Decimation changes the multiset, so no δ measured
+  on a rung transfers to the full set and Decision 71's 0.4440…0.7182 window is
+  untouched rather than confirmed.
+- The leg separation is read at 1,024 and 4,096 only. The annulus legs top out at
+  12,551, so no annulus leg can be read at 65,536 and the corpus cannot say
+  whether one would be beaten there.
+- Every δ in Decisions 64–74 is still a reading at the shipped scan order.
+  Decision 69's qualifier stands.
+
+### Impact
+
+`MedataCore/Tests/SupportPlaneTests/SupportPlaneCorpusMeasurementTests.swift`
+(`theBlindSpotIsSeparatedFromTheCount`, `decimated`, `decimationTargets`),
+`docs/agent-notes/support-plane-fit.md`,
+`specs/estimation/support-plane-reference/tasks.md` task 26. Additive: no
+existing helper or reading is modified and Decision 73's numbers are reproduced
+at the top rung. No shipped code changes.
+
+---
