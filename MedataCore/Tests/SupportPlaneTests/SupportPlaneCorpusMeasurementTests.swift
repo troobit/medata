@@ -14041,6 +14041,514 @@ struct SupportPlaneCorpusMeasurementTests {
         #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
     }
 
+    // MARK: - The shape of the draw (Decision 76)
+
+    // THE SAME CELLS, DRAWN DEEP. Decision 75 closed with six negatives. Two are the shape of a
+    // negative result rather than something to discharge — no `[owed]` value moves, and the fill
+    // verdict is left unexplained on an axis it names none of. Two are standing qualifiers this
+    // chain carries by construction: decimation changes the multiset, so Decision 71's window is
+    // read at full size and is untouched here as well, and every δ is a reading at the shipped
+    // scan order (Decision 69), which needs the sitting. The two that remain are one question
+    // read twice, which is Decision 71's shape:
+    //
+    //   Four seeds. The spread is bracketed by four draws per cell, which bounds the
+    //   distribution loosely and gives no estimate of its shape — the outside-count null is
+    //   exchangeability, not a fitted distribution.
+    //
+    //   The correction is one-sided in what it can repair. It says the 54.7x is a cell reading;
+    //   it does not say what the AGGREGATE over draws means, because a ratio averaged over cuts
+    //   is not a quantity this chain has defined.
+    //
+    // Both are answered by drawing the same cells deep enough that a cell HAS a distribution,
+    // and then naming the estimator that summarises it. Decision 75 bought breadth — 24 cells at
+    // 4 draws. This buys depth at the same cost — 17 cells at 32 draws — and the trade is forced:
+    // a spread is not estimable from four readings, and it is the spread, not the bracket, that
+    // says what a rung is worth.
+    //
+    // The cells are chosen, not sampled. `deepRungs` is every count BOTH legs reach — the annulus
+    // legs top out between 5,276 and 12,551 samples, so 1,024 and 4,096 are the whole of the
+    // overlap, and they carry Decision 74's withdrawn headline. The one cell added on top is
+    // where that decision's most quoted figure was read.
+    //
+    // It reads no owed constant as a bar, so it sits inside the admission Decision 63 widened
+    // `rangeCaptures` to and re-denominates nothing Decisions 40-57 bracket.
+    //
+    // `deepSeeds` CONTAINS Decision 75's four, and in its own order, so that decision's cut of
+    // every shared cell is a sub-reading of this one rather than a separate measurement — which
+    // is what lets the 4-draw behaviour be PREDICTED from the 32-draw shape and checked.
+    static let deepSeeds: [UInt64] = (1...32).map(UInt64.init)
+    static let deepRungs = [1_024, 4_096]
+    static let deepExceptionSet = "1785901032716"
+    static let deepExceptionRung = 65_536
+
+    @Test("a decimated cell has a distribution, and the aggregate over cuts is geometric")
+    func theSpreadHasAShape() throws {
+        let names = Self.captures + Self.rangeCaptures
+        let width = Self.searchWidths[0]
+        struct Row {
+            let set: String, leg: String, n: Int, cut: String, order: String
+            let reading: OrderReading
+            let parts: SumDecomposition
+        }
+        var rows: [Row] = []
+        var fullSize: [String: Int] = [:]
+        var attainable: [String: Double] = [:]
+        var identityHeld = 0, identityChecked = 0
+
+        for name in names {
+            let slice = try DepthSlice.load(name)
+            let gravity = slice.gravity.normalised()
+            let inputs = LiDARPlaneFitter.Inputs(
+                depth: slice.depth, colourIntrinsics: slice.colourIntrinsics,
+                foodRegionMask: slice.colourFoodMask, gravityCamera: slice.gravity)
+            var stats = SupportPlaneFitStats()
+            let points = LiDARPlaneFitter.collectCandidatePoints(inputs, stats: &stats)
+            var fallbackRng = SplitMix64(seed: Fnv1a64.hash(slice.depth.depthBytesMm))
+            let trace = Self.fallbackRansacTrace(
+                points: points, gravity: gravity, rng: &fallbackRng,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad,
+                band: LiDARPlaneFitter.inlierBandMm)
+            guard let residual = Self.fallbackResidualReading(
+                points: points, gravity: gravity, band: LiDARPlaneFitter.inlierBandMm,
+                budget: LiDARPlaneFitter.maxIterations,
+                coneRad: LiDARPlaneFitter.gravityAngleMaxRad, improvements: trace)
+            else { continue }
+            let inliers = Self.inlierSet(points: points, reading: residual)
+
+            let g = try #require(Self.geometry(name))
+            let annulus = SupportRegion.ringSamples(geometry: g).annulus.map { g.points[$0] }
+            let legs: [(String, [Vec3], Vec3)] = [
+                ("annulus", annulus, Vec3(0, 0, 1)),
+                ("fallback", inliers, residual.leastSquares.0),
+            ]
+            for (leg, set, seed) in legs {
+                let key = "\(name)/\(leg)"
+                fullSize[key] = set.count
+
+                // The identity rung, re-read where it is affordable. Decision 75 read it on all
+                // eight sets at four seeds; the annulus legs are 5k-13k samples, so all THIRTY-TWO
+                // are cheap there. If any seed moved the set at full count, every cell below would
+                // be drawn from a different population and no spread here would be one.
+                if leg == "annulus" {
+                    identityChecked += 1
+                    var identical = true
+                    for s in Self.deepSeeds where identical {
+                        identical = Self.subsampled(set, to: set.count, seed: s) == set
+                    }
+                    if identical { identityHeld += 1 }
+                }
+
+                var plan = Self.deepRungs
+                if name == Self.deepExceptionSet && leg == "fallback" {
+                    plan.append(Self.deepExceptionRung)
+                }
+                for rung in plan where rung < set.count {
+                    var cuts: [(String, [Vec3])] = []
+                    if let strided = Self.decimated(set, to: rung) {
+                        cuts.append(("stride", strided))
+                    }
+                    for s in Self.deepSeeds {
+                        if let drawn = Self.subsampled(set, to: rung, seed: s) {
+                            cuts.append(("draw \(s)", drawn))
+                        }
+                    }
+                    for (cut, sub) in cuts {
+                        guard let baseline = Self.orderBaseline(sub, seedNormal: seed)
+                        else { continue }
+                        let sorted = Self.depthSorted(sub)
+                        // The same candidate set Decisions 73-75 read. The fill verdict is
+                        // "is `fill up` the fullest ORDER HERE", so it is a statement about this
+                        // list and changes meaning if the list does.
+                        var candidates: [(String, [Vec3])] = [
+                            ("shipped", sub),
+                            ("|z| ascending", sub.sorted { abs($0.z) < abs($1.z) }),
+                            ("|z| descending", sub.sorted { abs($0.z) > abs($1.z) }),
+                        ]
+                        for objective in SearchObjective.allCases {
+                            for loud in Self.objectiveDirections(objective) {
+                                candidates.append((
+                                    "\(objective.rawValue) \(loud ? "up" : "down")",
+                                    Self.objectiveOrder(
+                                        sortedByDepth: sorted, normal: baseline.normal,
+                                        width: width, objective: objective, loud: loud)))
+                            }
+                        }
+                        for (order, permutation) in candidates {
+                            rows.append(Row(
+                                set: key, leg: leg, n: rung, cut: cut, order: order,
+                                reading: Self.orderReading(name, leg: leg, order: order,
+                                                           points: permutation,
+                                                           baseline: baseline),
+                                parts: Self.decomposeZSum(permutation)))
+                        }
+                        attainable["\(key)@\(rung)#\(cut)"] = Self.attainableZCeilingMm(sub)
+                    }
+                }
+            }
+        }
+        let short = "the ladder no longer yields a reading on both legs of every committed"
+            + " capture, so it is read on a corpus that has changed"
+        #expect(fullSize.count == 2 * names.count, "\(short)")
+
+        let cutNames = ["stride"] + Self.deepSeeds.map { "draw \($0)" }
+        let drawNames = Self.deepSeeds.map { "draw \($0)" }
+        // Decision 75's own four, in its own order, as a sub-reading of this one.
+        let shallowCut = Self.subsampleSeeds.map { "draw \($0)" }
+        func rowsFor(_ set: String, _ n: Int, _ cut: String) -> [Row] {
+            rows.filter { $0.set == set && $0.n == n && $0.cut == cut }
+        }
+        let cells = Array(Set(rows.map { "\($0.set)@\($0.n)" })).sorted()
+        func split(_ cell: String) -> (set: String, n: Int) {
+            let parts = cell.split(separator: "@")
+            return (String(parts[0]), Int(parts[1]) ?? 0)
+        }
+        // Decision 74's first quantity: is the fill search the fullest order here?
+        func isFullest(_ here: [Row]) -> Bool? {
+            guard let only = here.first(where: { $0.order == "fill up" }),
+                  let fullest = here.max(by: { $0.parts.fill < $1.parts.fill }) else { return nil }
+            return only.parts.fill == fullest.parts.fill
+        }
+        // Decision 74's second, and the quantity Decision 71's window is denominated in. Below
+        // 1x is the sort winning.
+        func searchVsSort(_ here: [Row]) -> Double? {
+            guard let sort = here.first(where: { $0.order == "|z| ascending" }),
+                  sort.reading.centroidErrorMm > 0,
+                  let search = here.filter({ $0.order.hasPrefix("spend ") })
+                    .max(by: { $0.reading.centroidErrorMm < $1.reading.centroidErrorMm })
+            else { return nil }
+            return search.reading.centroidErrorMm / sort.reading.centroidErrorMm
+        }
+        // THE ESTIMATOR THIS DECISION NAMES. A ratio's average is geometric, not arithmetic:
+        // 0.5x and 2x are the same disagreement in opposite directions and have to average to 1x,
+        // which the arithmetic mean (1.25x) does not. The spread is the geometric SD, and the
+        // precision of the centre is that spread raised to 1/sqrt(k) — which is the thing four
+        // draws cannot give and is what makes a cell quotable at all.
+        func logStats(_ xs: [Double]) -> (g: Double, s: Double, se: Double, k: Int)? {
+            let ls = xs.filter { $0 > 0 && $0.isFinite }.map { Foundation.log($0) }
+            guard ls.count > 1 else { return nil }
+            let m = ls.reduce(0, +) / Double(ls.count)
+            let v = ls.map { ($0 - m) * ($0 - m) }.reduce(0, +) / Double(ls.count - 1)
+            let sd = v.squareRoot()
+            return (Foundation.exp(m), Foundation.exp(sd),
+                    sd / Double(ls.count).squareRoot(), ls.count)
+        }
+
+        // MARK: THE CONTROL FIRST. Every seed is the identity at full count, so the 32 ladders
+        // and Decision 75's five all start from the same row.
+
+        print("=== the control: every seed returns the set at full count ===")
+        print("  all \(Self.deepSeeds.count) draws reproduce the set element for element on"
+              + " \(identityHeld) of \(identityChecked) annulus legs")
+        let resampled = "a seed no longer returns the set at full count, so the draws are not"
+            + " cuts of one population and no spread measured below is a sampling spread"
+        #expect(identityHeld == identityChecked, "\(resampled)")
+        let notNested = "Decision 75's seeds are no longer a subset of this decision's, so its"
+            + " four-draw readings are a separate measurement rather than a sub-reading of these"
+        #expect(Set(Self.subsampleSeeds).isSubset(of: Set(Self.deepSeeds)), "\(notNested)")
+
+        // MARK: THE FIRST FINDING — the fill verdict has a SHAPE. Decision 75 established that
+        // four draws disagree; it could not say whether a cell is a coin (p near 0.5, nothing
+        // to read) or a near-determinate property sampled noisily (p near 0 or 1). Thirty-two
+        // draws separate those, and the answer is what says whether the fill axis is worth a
+        // finer instrument or is not a quantity at this count at all.
+
+        print("=== the fill verdict, as a rate over \(Self.deepSeeds.count) draws ===")
+        var rates: [String: Double] = [:]
+        for cell in cells {
+            let (key, n) = split(cell)
+            let verdicts = drawNames.compactMap { isFullest(rowsFor(key, n, $0)) }
+            guard !verdicts.isEmpty else { continue }
+            let p = Double(verdicts.filter { $0 }.count) / Double(verdicts.count)
+            rates[cell] = p
+            let stride = isFullest(rowsFor(key, n, "stride"))
+            print("  \(key) n = \(n): fullest on \(verdicts.filter { $0 }.count) of"
+                  + " \(verdicts.count) draws, p̂ = \(String(format: "%.3f", p))"
+                  + " — the stride reads \(stride == true ? "FULLEST" : "out-filled")")
+        }
+        let determinate = rates.values.filter { $0 == 0 || $0 == 1 }.count
+        let undecided = rates.values.filter { $0 >= 0.25 && $0 <= 0.75 }.count
+        print("  \(determinate) of \(rates.count) cells are unanimous across all"
+              + " \(Self.deepSeeds.count) draws; \(undecided) sit in 0.25…0.75, where the"
+              + " verdict carries under one bit")
+
+        // MARK: THE SHARP TEST. If a cell is Bernoulli(p̂) and the draws are exchangeable, then
+        // the rate at which FOUR draws split is predictable from the thirty-two: 1 - p̂⁴ - (1-p̂)⁴,
+        // averaged over cells. Decision 75's four seeds are inside these thirty-two, so the
+        // prediction is checked against that decision's own reading rather than against a
+        // re-run of it. A cell that is really a coin predicts 0.875; one that is really
+        // determinate predicts 0.
+
+        print("=== the sharp test: predicting Decision 75's four-draw split from these"
+              + " \(Self.deepSeeds.count) ===")
+        var predictedSplit = 0.0, splitVariance = 0.0, observedSplit = 0, cellsPredicted = 0
+        for cell in cells {
+            let (key, n) = split(cell)
+            guard let p = rates[cell] else { continue }
+            let four = shallowCut.compactMap { isFullest(rowsFor(key, n, $0)) }
+            guard four.count == shallowCut.count else { continue }
+            cellsPredicted += 1
+            let k = Double(four.count)
+            // Under exchangeability each cell splits independently with this probability, so
+            // the COUNT is Poisson-binomial: the spread on the prediction is Σ p(1-p) and is
+            // what says whether a gap between predicted and observed is a gap at all.
+            let ps = 1 - Foundation.pow(p, k) - Foundation.pow(1 - p, k)
+            predictedSplit += ps
+            splitVariance += ps * (1 - ps)
+            let fullest = four.filter { $0 }.count
+            if fullest != 0 && fullest != four.count { observedSplit += 1 }
+        }
+        if cellsPredicted > 0 {
+            let sd = splitVariance.squareRoot()
+            let z = sd > 0 ? (Double(observedSplit) - predictedSplit) / sd : Double.nan
+            print("  exchangeability predicts \(String(format: "%.2f", predictedSplit)) ±"
+                  + " \(String(format: "%.2f", sd)) of \(cellsPredicted) cells split at"
+                  + " \(shallowCut.count) draws; Decision 75's own four seeds split"
+                  + " \(observedSplit) of \(cellsPredicted) — \(String(format: "%+.2f", z)) SD")
+        }
+        let noPrediction = "no cell carries both a \(Self.deepSeeds.count)-draw rate and"
+            + " Decision 75's four seeds, so its reading cannot be predicted from this one"
+        #expect(cellsPredicted > 0, "\(noPrediction)")
+
+        // MARK: THE SECOND FINDING — the aggregate, DEFINED. Decision 75 said a ratio averaged
+        // over cuts is not a quantity this chain has defined. It is defined here: the geometric
+        // mean over draws, carrying the geometric SD as its spread and s^(1/sqrt k) as the
+        // precision of the centre. Everything below is quoted in it.
+
+        print("=== the search against the sort, as a distribution over"
+              + " \(Self.deepSeeds.count) draws ===")
+        var spreads: [String: (g: Double, s: Double, se: Double, k: Int)] = [:]
+        var strideSigmas: [(cell: String, sigma: Double)] = []
+        var strideEscapes = 0
+        for cell in cells {
+            let (key, n) = split(cell)
+            let ratios = drawNames.compactMap { searchVsSort(rowsFor(key, n, $0)) }
+            guard let stat = logStats(ratios), let lo = ratios.min(), let hi = ratios.max()
+            else { continue }
+            spreads[cell] = stat
+            let stride = searchVsSort(rowsFor(key, n, "stride"))
+            // In geometric SD, because that is the unit the spread is in. Undefined when every
+            // draw reads the same ratio, which would make the cell determinate and the question
+            // moot.
+            let logSpread = Foundation.log(stat.s)
+            let sigmas = logSpread > 0
+                ? stride.map { (Foundation.log($0) - Foundation.log(stat.g)) / logSpread } : nil
+            print("  \(key) n = \(n): geometric mean \(String(format: "%.3f", stat.g))×"
+                  + " ×/÷ \(String(format: "%.3f", stat.s)) over \(stat.k) draws"
+                  + " (range \(String(format: "%.3f", lo))…\(String(format: "%.3f", hi))×,"
+                  + " the centre known to ×/÷"
+                  + " \(String(format: "%.4f", Foundation.exp(stat.se))))"
+                  + " — the stride reads"
+                  + " \(stride.map { String(format: "%.3f", $0) } ?? "n/a")×, at"
+                  + " \(sigmas.map { String(format: "%+.2f", $0) } ?? "n/a") geometric SD"
+                  + " and \(stride.map { $0 > hi || $0 < lo ? "OUTSIDE" : "inside" } ?? "n/a")"
+                  + " the draws' whole range")
+            if let s = sigmas { strideSigmas.append((cell, s)) }
+            if let s = stride, s > hi || s < lo { strideEscapes += 1 }
+        }
+
+        // MARK: AND THE EXONERATION, RE-READ WITH POWER. Decision 75 asked whether the stride
+        // falls inside the range of FOUR draws — a range so wide that a cut could be an order of
+        // magnitude out and still land in it. Thirty-two draws give a spread, so the same
+        // question can be asked in units: where does the stride sit in geometric SD? A cut that
+        // is genuinely one of the population is symmetric about 0 and beyond ±2 about 1 cell in
+        // 20; a cut locked onto the raster is not.
+        let outliers = strideSigmas.filter { abs($0.sigma) > 2 }
+        let above = strideSigmas.filter { $0.sigma > 0 }.count
+        // The nonparametric form of the same question, which needs no normality: a 33rd
+        // exchangeable cut is the extreme of 33 with probability 2/33, so escaping the whole
+        // range of 32 draws should happen on about 1 cell in 17.
+        print("  the stride sits above the draws' centre on \(above) of \(strideSigmas.count)"
+              + " cells and beyond ±2 geometric SD on \(outliers.count), of which"
+              + " \(outliers.filter { $0.sigma > 0 }.count) are ABOVE;"
+              + " \(strideEscapes) of \(strideSigmas.count) escape the draws' whole range,"
+              + " against the \(String(format: "%.2f", 2 * Double(strideSigmas.count) / 33))"
+              + " a 33rd exchangeable cut would give")
+        for o in outliers.sorted(by: { abs($0.sigma) > abs($1.sigma) }) {
+            print("    \(o.cell): \(String(format: "%+.2f", o.sigma)) geometric SD")
+        }
+
+        // AND THE MECHANISM, WHICH IS NOT THE ONE DECISION 74 NAMED. `decimated` takes
+        // `step = n / target` in INTEGER division and then walks `target` steps, so it stops at
+        // element `target * step` and never reaches the tail: it is a stride over a PREFIX
+        // covering `target * floor(n / target) / n` of the set, and at target just under n/2 or
+        // n/3 that prefix is two thirds of it. A draw covers the whole set at every rung by
+        // construction. So the worry was "a period lands on one image column"; the defect is
+        // that the cut is also a CROP, and a crop of a raster is a band of the scene.
+        print("=== what the stride actually covers, against where it escapes ===")
+        for cell in cells.sorted() {
+            let (key, n) = split(cell)
+            guard let total = fullSize[key], total > n else { continue }
+            let covered = n * (total / n)
+            let sigma = strideSigmas.first { $0.cell == cell }?.sigma
+            print("  \(cell): step \(total / n) over \(total), reaching element \(covered) —"
+                  + " \(String(format: "%.1f%%", 100 * Double(covered) / Double(total)))"
+                  + " of the set, at"
+                  + " \(sigma.map { String(format: "%+.2f", $0) } ?? "n/a") geometric SD")
+        }
+
+        // MARK: THE THIRD FINDING — Decision 74's most quoted figure, re-read as an aggregate.
+        // That decision reported 54.729x on `deepExceptionSet`'s fallback leg; Decision 75 said
+        // that was a cell reading and bracketed four draws at 5.419…8.741x without being able to
+        // say what the centre was. Now it can.
+
+        let exceptionCell = "\(Self.deepExceptionSet)/fallback@\(Self.deepExceptionRung)"
+        print("=== the named exception, re-read in the estimator ===")
+        if let stat = spreads[exceptionCell] {
+            let stride = searchVsSort(rowsFor("\(Self.deepExceptionSet)/fallback",
+                                              Self.deepExceptionRung, "stride"))
+            print("  \(exceptionCell): the aggregate is"
+                  + " \(String(format: "%.3f", stat.g))× ×/÷ \(String(format: "%.3f", stat.s));"
+                  + " Decision 74 quoted"
+                  + " \(stride.map { String(format: "%.3f", $0) } ?? "n/a")× from one stride,"
+                  + " an overstatement of"
+                  + " \(stride.map { String(format: "%.2f", $0 / stat.g) } ?? "n/a")×")
+        }
+
+        // MARK: THE FOURTH FINDING — Decision 74's withdrawn headline, re-read as a rate. That
+        // decision read "at n = 1,024 the fallback legs are AHEAD, 4 of 4 against 3 of 4" off one
+        // stride; Decision 75 withdrew it by showing the cell spans the whole range. A rate over
+        // thirty-two draws per leg is the form in which the claim can be settled rather than
+        // merely withdrawn.
+
+        print("=== the withdrawn headline, re-read as a rate per leg ===")
+        var legMeans: [String: (mean: Double, drawSE: Double, legSE: Double)] = [:]
+        for n in Self.deepRungs {
+            for leg in ["annulus", "fallback"] {
+                let here = cells.filter { c in
+                    let (key, cn) = split(c)
+                    return cn == n && key.hasSuffix("/\(leg)") && rates[c] != nil
+                }.compactMap { rates[$0] }
+                guard here.count > 1 else { continue }
+                let mean = here.reduce(0, +) / Double(here.count)
+                // TWO error bars, and the wider one is the one that counts. The DRAW bar pools
+                // each cell's own Bernoulli variance and answers "would more seeds move this?".
+                // The LEG bar is the scatter of the cells' own rates and answers "would another
+                // capture move this?" — which is the question, because the claim is about legs.
+                // Quoting the draw bar alone would make a four-capture reading look settled.
+                let drawSE = (here.map { $0 * (1 - $0) / Double(Self.deepSeeds.count) }
+                    .reduce(0, +) / Double(here.count * here.count)).squareRoot()
+                let v = here.map { ($0 - mean) * ($0 - mean) }.reduce(0, +)
+                    / Double(here.count - 1)
+                let legSE = (v / Double(here.count)).squareRoot()
+                legMeans["\(n)/\(leg)"] = (mean, drawSE, legSE)
+                print("  n = \(n), \(leg): the fill search is fullest on"
+                      + " \(String(format: "%.3f", mean)) of draws over \(here.count) legs"
+                      + " — ± \(String(format: "%.3f", drawSE)) across draws,"
+                      + " ± \(String(format: "%.3f", legSE)) across legs")
+            }
+        }
+        // The contrast Decision 74 asserted and Decision 75 withdrew, read against BOTH bars.
+        // Which bar governs is not a choice: the claim is about legs, so the leg bar does, and
+        // the draw bar is reported only to show how much smaller it is — that gap is exactly
+        // how a four-capture reading gets mistaken for a settled one.
+        for n in Self.deepRungs {
+            guard let a = legMeans["\(n)/annulus"], let f = legMeans["\(n)/fallback"]
+            else { continue }
+            let gap = f.mean - a.mean
+            let drawBar = (a.drawSE * a.drawSE + f.drawSE * f.drawSE).squareRoot()
+            let legBar = (a.legSE * a.legSE + f.legSE * f.legSE).squareRoot()
+            print("  n = \(n): fallback leads annulus by \(String(format: "%+.3f", gap))"
+                  + " — \(String(format: "%.2f", abs(gap) / drawBar)) SE against the draw bar,"
+                  + " \(String(format: "%.2f", abs(gap) / legBar)) SE against the leg bar")
+        }
+
+        // MARK: THE FIFTH FINDING — the δ half at depth. This is the reading Decision 75 promoted
+        // for surviving five cuts; thirty-three is the strongest form the annulus/fallback
+        // separation can take on the committed corpus.
+
+        print("=== the sort beating the search, by leg, over all \(cutNames.count) cuts ===")
+        var annulusBeaten = 0, annulusSeen = 0, fallbackBeaten = 0, fallbackSeen = 0
+        var annulusFloor = Double.infinity, fallbackFloor = Double.infinity
+        for cell in cells {
+            let (key, n) = split(cell)
+            for cut in cutNames {
+                guard let r = searchVsSort(rowsFor(key, n, cut)) else { continue }
+                if key.hasSuffix("/annulus") {
+                    annulusSeen += 1
+                    annulusFloor = Swift.min(annulusFloor, r)
+                    if r < 1 { annulusBeaten += 1 }
+                } else {
+                    fallbackSeen += 1
+                    fallbackFloor = Swift.min(fallbackFloor, r)
+                    if r < 1 { fallbackBeaten += 1 }
+                }
+            }
+        }
+        print("  annulus: the sort wins \(annulusBeaten) of \(annulusSeen) readings, floor"
+              + " \(String(format: "%.3f", annulusFloor))×")
+        print("  fallback: the sort wins \(fallbackBeaten) of \(fallbackSeen) readings, floor"
+              + " \(String(format: "%.3f", fallbackFloor))×")
+
+        // MARK: THE CONTROL — does the spread behave like a sampling spread? A cell's noise comes
+        // from drawing n of N, so quadrupling n should narrow the log spread. If it does not, the
+        // variation is not sampling noise and the estimator above is summarising something else.
+
+        print("=== the spread against the count: does drawing more narrow it? ===")
+        var narrowed = 0, comparedCounts = 0
+        for key in fullSize.keys.sorted() {
+            guard let lo = spreads["\(key)@\(Self.deepRungs[0])"],
+                  let hi = spreads["\(key)@\(Self.deepRungs[1])"] else { continue }
+            comparedCounts += 1
+            let from = Foundation.log(lo.s), to = Foundation.log(hi.s)
+            if to < from { narrowed += 1 }
+            let factor = from > 0 ? String(format: "%.3f", to / from) : "n/a"
+            print("  \(key): geometric SD \(String(format: "%.3f", lo.s)) at n ="
+                  + " \(Self.deepRungs[0]) against \(String(format: "%.3f", hi.s)) at n ="
+                  + " \(Self.deepRungs[1]) — a factor of \(factor) in log spread, against the"
+                  + " 0.500 a 4× count would give if the noise were the draw's alone")
+        }
+        print("  the spread narrows on \(narrowed) of \(comparedCounts) sets")
+
+        // MARK: THE CONTROL — the ceiling, at every rung of every cut. Decision 67's bound is
+        // written on n and μ; a draw holds n exactly and moves μ, so the roof is recomputed per
+        // cut as well as per rung, for thirty-three cuts rather than five.
+
+        print("=== the ceiling, recomputed at every rung of every cut ===")
+        var overRoof = 0, roofChecked = 0, worstShare = 0.0
+        for cell in cells {
+            let (key, n) = split(cell)
+            for cut in cutNames {
+                let here = rowsFor(key, n, cut)
+                guard let fullest = here.max(by: { $0.reading.share < $1.reading.share }),
+                      let a = attainable["\(key)@\(n)#\(cut)"], fullest.reading.zCeilingMm > 0
+                else { continue }
+                let roof = a / fullest.reading.zCeilingMm
+                roofChecked += 1
+                worstShare = Swift.max(worstShare, fullest.reading.share / roof)
+                if fullest.reading.share / roof >= 1 { overRoof += 1 }
+            }
+        }
+        print("  the fullest order reaches at most \(String(format: "%.4f", worstShare)) of the"
+              + " attainable ceiling across \(roofChecked) rungs")
+        let roofBroken = "some rung now drives the mean past what ulp(s)/2 per addition allows,"
+            + " so the attainable ceiling is not a bound under a drawn cut"
+        #expect(overRoof == 0, "\(roofBroken)")
+
+        // MARK: THE CONTROL — the multiset, held across every order of every cut.
+
+        print("=== the control: the Double reference re-summed in each order ===")
+        var worstNoise = 0.0, tightestDelta = Double.infinity
+        for cell in cells {
+            let (key, n) = split(cell)
+            for cut in cutNames {
+                let here = rowsFor(key, n, cut)
+                guard let lo = here.map(\.reading.doubleMeanZMm).min(),
+                      let hi = here.map(\.reading.doubleMeanZMm).max(),
+                      let delta = here.map(\.reading.centroidErrorMm).min() else { continue }
+                worstNoise = Swift.max(worstNoise, hi - lo)
+                tightestDelta = Swift.min(tightestDelta, delta)
+            }
+        }
+        print("  the Double mean moves at most \(String(format: "%.3e", worstNoise)) mm across"
+              + " the constructed orders, against a smallest Float δ of"
+              + " \(String(format: "%.3e", tightestDelta)) mm")
+        let referenceMoves = "the Double reference now moves as much across these orders as the"
+            + " Float sum does, so the multiset is not held to the precision this reading needs"
+            + " and the movement cannot be attributed to the Float centroid"
+        #expect(tightestDelta > 100 * worstNoise, "\(referenceMoves)")
+    }
+
     // MARK: - Helpers
 
     // Everything `admissibility` reads, per candidate, computed once.
