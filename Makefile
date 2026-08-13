@@ -73,14 +73,19 @@ build:
 # concluded the suite was 16 tests when it was 313 + 16.
 # pipefail: without it the target's exit status was tee's (always 0), so a
 # failing suite still "passed" by exit code — discovered 2026-08-09 when a red
-# test survived the gate. Concurrent runs still share the log path (totals can
-# cross-contaminate); see docs/agent-notes/device-build-and-test.md.
+# test survived the gate.
+# The log lives under this checkout's own .build/, not a fixed /tmp path: orbit
+# variant runs execute `make test` in several worktrees at once, and a shared
+# path let one run's totals be grepped from another's log (observed 2026-08-08).
+TEST_LOG := $(CURDIR)/.build/medata-swift-test.log
+
 test:
-	set -o pipefail; swift test 2>&1 | tee /tmp/medata-swift-test.log
+	@mkdir -p $(dir $(TEST_LOG))
+	set -o pipefail; swift test 2>&1 | tee $(TEST_LOG)
 	@echo ""
 	@echo "---- Test totals (two frameworks — report BOTH) ----"
-	@echo "XCTest:        $$(grep -E 'Executed [0-9]+ tests' /tmp/medata-swift-test.log | tail -1 | sed 's/^[[:space:]]*//')"
-	@echo "swift-testing: $$(grep -E 'Test run with [0-9]+ test' /tmp/medata-swift-test.log | tail -1 | sed 's/^[^A-Za-z]*//')"
+	@echo "XCTest:        $$(grep -E 'Executed [0-9]+ tests' $(TEST_LOG) | tail -1 | sed 's/^[[:space:]]*//')"
+	@echo "swift-testing: $$(grep -E 'Test run with [0-9]+ test' $(TEST_LOG) | tail -1 | sed 's/^[^A-Za-z]*//')"
 
 spell:
 	bash tools/check_spelling.sh
