@@ -60,7 +60,10 @@ actor GlucoseWidgetPublisher {
     }
 
     private func run() async {
-        log.info("event=publisher.start")
+        // `.notice` throughout for anything a device pull needs to see: `.info`
+        // stays in memory and `log collect` never gets it
+        // (docs/agent-notes/device-build-and-test.md).
+        log.notice("event=publisher.start")
         await publishIfChanged(trigger: "prime")
         for await _ in changes {
             await publishIfChanged(trigger: "tick")
@@ -91,7 +94,7 @@ actor GlucoseWidgetPublisher {
         // from a daily budget and may defer it by many minutes. So this line
         // means "asked", never "shown" — a widget lagging behind these
         // timestamps is the system throttling, not a missed write.
-        log.info("""
+        log.notice("""
             event=publish.reloadRequested trigger=\(trigger, privacy: .public) \
             was=\(Self.stamp(stored.readingDate), privacy: .public) \
             now=\(Self.stamp(snapshot.readingDate), privacy: .public) \
@@ -110,7 +113,7 @@ actor GlucoseWidgetPublisher {
         // Confirms or refutes the skew diagnosis from the field: if this fires,
         // the old `...now` window bound was hiding this row from the widget.
         if let readingDate = snapshot.readingDate, readingDate > now {
-            log.info("""
+            log.notice("""
                 event=publish.futureReading \
                 skewSeconds=\(Int(readingDate.timeIntervalSince(now)), privacy: .public)
                 """)
