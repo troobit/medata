@@ -219,6 +219,55 @@ def test_plain_tensor_logits_passes_full_resolution_through():
     assert torch.equal(logits, images * 2.0)
 
 
+# ── segformer_b0 registration (segmenter-foundation task 23, Decision 28) ───────
+
+def test_segformer_b0_is_registered_with_the_plain_tensor_contract():
+    # Torch-free: registration and the spec surface never import transformers.
+    spec = archs.get("segformer_b0")
+    assert "segformer_b0" in archs.ARCH_CHOICES
+    assert spec.output == "plain_tensor"
+    assert spec.forward_logits is archs.plain_tensor_logits
+    assert callable(spec.build)
+    assert callable(spec.load_checkpoint)
+
+
+def test_segformer_b0_weights_free_build_emits_quarter_stride_logits():
+    pytest.importorskip("torch")
+    pytest.importorskip("transformers")
+    import torch
+
+    # pretrained=False must not download: default SegformerConfig is the B0
+    # variant. Forward is SegFormer's native H/4 plain tensor; the registry
+    # normaliser upsamples it to the input resolution.
+    model = archs.get("segformer_b0").build(36, pretrained=False)
+    images = torch.zeros(1, 3, 64, 64)
+    with torch.no_grad():
+        raw = model(images)
+        logits = archs.plain_tensor_logits(model, images)
+    assert raw.shape == (1, 36, 16, 16)
+    assert logits.shape == (1, 36, 64, 64)
+
+
+def test_segformer_b0_checkpoint_round_trips_through_the_loader(tmp_path):
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("transformers")
+
+    # The strict=False hazard the arch stamp guards against: the loader's
+    # weights-free rebuild must share the trained build's state-dict keys, or
+    # a checkpoint would silently load nothing.
+    trained = archs.get("segformer_b0").build(36, pretrained=False)
+    path = tmp_path / "checkpoint.pt"
+    torch.save({"model": trained.state_dict(), "arch": "segformer_b0"}, path)
+
+    loaded = archs.get("segformer_b0").load_checkpoint(36, path)
+    assert not loaded.training  # eval mode per the contract
+    reloaded_state = loaded.state_dict()
+    trained_state = trained.state_dict()
+    assert set(reloaded_state) == set(trained_state)
+    key = "m.decode_head.classifier.weight"
+    assert torch.equal(reloaded_state[key], trained_state[key])
+
+
 # ── Resume drift-check and lineage gain the arch field (torch-gated) ────────────
 
 TARGET_SIZE = 64

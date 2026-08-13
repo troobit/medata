@@ -124,11 +124,14 @@ This codebase was made possible by, and builds on the work of others, detailed b
   <https://lorenz.ecn.purdue.edu/~food3d/>. Single-food 3D meshes + nutrition
   values for cross-dataset β calibration. Access is request-gated (form +
   password); access obtained 2026-08-10. Of the distributed components, only
-  the 3D meshes and nutrition values (plus the dataset README) are collected —
-  depth is rendered deterministically from the meshes by
-  `tools/metafood3d/render.py`, so the Blender renders, RGBD videos, and point
-  clouds are not used. Commercial use is governed by cross-dataset-calibration
-  Decision 18. Cited in `specs/OVERVIEW.md`.
+  the 3D meshes and nutrition values (plus the dataset README) were collected
+  for that purpose — depth is rendered deterministically from the meshes by
+  `tools/metafood3d/render.py`, so the Blender renders were not needed for
+  calibration. The Blender renders were obtained on 2026-08-14 for a different
+  purpose: they are queued as a candidate segmenter training corpus behind a
+  mask-derivation spike (segmenter-foundation Decision 31, estimation-quality
+  task 8). RGBD videos and point clouds remain uncollected. Commercial use is
+  governed by cross-dataset-calibration Decision 18. Cited in `specs/OVERVIEW.md`.
 
 ### Supporting reference data
 

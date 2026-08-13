@@ -19,9 +19,40 @@ references:
 ## Gated run
 
 - [ ] 6. STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage (multi-hour local MPS/GPU; changes the shipped artefact) — human/compute-gated, do not run autonomously <!-- id:pgctxeb -->
+  - Queue position R1 — head of the serial run queue below, and the only run with a settled recipe. Run it before anything in the MetaFood3D phase: it is the baseline the corpus experiments are measured against
+  - Recipe (post-Decision-25 lever space): --loss combined --class-weighting sqrt_inverse --photometric-augment on the merged corpus at step parity with the incumbent; inverse-frequency weighting stays deleted as the attributed staple-killer
+  - Judge on heldout_leakfree against the shipped ab812dc3aa9d at 0.3927 mean food-class IoU with the 0.45 staple floors. Either outcome needs a decision entry in segmenter-foundation/decision_log.md
   - Blocked-by: pgctxe6 (Add a class-imbalance-aware loss option to tools/segmenter/train.py via a CLI flag --loss {ce,weighted_ce,focal,dice,combined}; omitting it reproduces todays unweighted nn.CrossEntropyLoss byte-for-byte in the recorded train_config), pgctxe7 (Express loss selection and class-weight computation as pure, torch-free-testable helpers; record the selected loss + weighting scheme in the checkpoint and build/lineage.json train_config), pgctxe8 (Add torch-free unit tests under tools/segmenter/tests/ covering weight-derivation and loss-selection; they pass without torch and the tools pytest suite stays green), pgctxe9 (Add opt-in photometric colour/brightness/contrast augmentation applied to the image only never the mask, off by default, recorded in train_config), pgctxea (Document the recommended next run as a single copy-pasteable command in docs/ml-training.md section 4, consistent with the resume/caffeinate run-hygiene guidance; run make spell clean)
 
 - [x] 7. STOP — on-device deploy + capture verification that overlay speckle is gone and readings are stable (physical iPhone + human) — the real acceptance gate, cannot be automated <!-- id:pgctxec -->
   - 2026-08-04 device session: overlay speckle confirmed GONE by the developer — but from the shipped PostProcessing connected-component cleanup on the promoted coreml_ab812dc3aa9d model; task 6's retrain has not run; this gate stays open until the new recipe's model is on device (docs/agent-notes/field-truth-sessions.md)
   - 2026-08-13 developer verdict: gate closed — on-device speckle/stability verified, speckle is visibly gone. Accepted on the promoted coreml_ab812dc3aa9d model + PostProcessing cleanup; the developer accepts the outcome without waiting on task 6's retrain, overriding the 2026-08-04 hold
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously)
+
+## MetaFood3D synthetic corpus and the serial run queue
+
+- [ ] 8. Build a training corpus from the MetaFood3D Blender renders (agent-executable, no GPU) <!-- id:pgctxed -->
+  - data/Blender_render_images.tar.gz is 137 GiB gzipped, laid out as Blender_render_images/<Category>/<instance>/<Instance>/{Original,Depth,Normal}/ with about 60 viewpoints per instance across 108 categories. Extraction runs to a few hundred GB against 1.1 TiB free — check df before starting, and note the archive is not seekable, so any listing pass decompresses sequentially
+  - This component ships NO segmentation masks — the dataset's masks are in RGBD_videos, which the project did not collect (docs/references.md). Single-object renders plus the Depth channel make masks derivable, but that is an inference: prove it on one category before building anything. The (bowl) categories are the risk, since a bowl or plate in frame is not food
+  - tools/metafood3d/mapping_metafood3d_to_palette.json maps 13 of 108 categories onto 11 of 33 palette classes, and it was built for calibration rather than training. Decide deliberately whether to widen it: Rice and Yeast_bread are currently unmapped, and of the three zero-image staples only potato_mashed is covered — brown_rice and bread_wholemeal are not, so these renders do not close the absent-staple gap that Decision 21 recorded
+  - Emit a dataset directory in the shape train.py already consumes (splits.json beside images and masks, as in data/merged_foodseg_foodrec2022), so every run below is a recipe or corpus change and never a loader change
+  - Renders are synthetic single objects on a rendered background: they carry no plate clutter, no occlusion and no handheld blur, so they are a class-coverage lever, not a realism lever. Say so in whatever verdict they produce
+
+- [ ] 9. STOP — R2: incumbent recipe plus synthetic renders, corpus as the only change <!-- id:pgctxee -->
+  - ONE MACHINE, STRICTLY SERIAL — do not start this or any run below while another is in flight. About 25 min/epoch, so roughly 5 h for a 12-epoch run on MPS. Clamshell rig with caffeinate -is per docs/agent-notes; the resume sidecar caps a reboot at one lost epoch
+  - The question is whether synthetic render data helps at all. Hold the Decision 27 recipe fixed and change only the corpus, so the delta is attributable to the data and nothing else
+  - The mixing ratio is both the lever and the risk: these renders reach 11 palette classes, so an unweighted mix shifts class balance toward exactly those and can buy tail coverage with a staple regression — the failure mode Decision 25 already recorded once
+  - Judge on heldout_leakfree against the shipped ab812dc3aa9d at 0.3927 mean food-class IoU with the 0.45 staple floors (segmenter-foundation Decisions 5 and 14). Pass an absolute --lineage path or metrics land in a stray nested tree, and seed train_config.arch or run_validation.py fails fast
+  - Needs a decision entry either way, in segmenter-foundation/decision_log.md where the corpus and recipe verdicts live
+  - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously), pgctxed (Build a training corpus from the MetaFood3D Blender renders agent-executable, no GPU)
+
+- [ ] 10. STOP — R3: mixing-ratio or staple-targeted follow-up, shape set by R2's verdict <!-- id:pgctxef -->
+  - Deliberately unspecified until R2 returns: its shape is set by that verdict — a different mixing ratio if R2 was ambiguous, or a potato_mashed-targeted subset if the gain was concentrated in the classes the renders actually cover
+  - Same serial constraint and same judging surface as R2. If R2 is a clean rejection, this run does not happen at all
+  - Blocked-by: pgctxee (STOP — R2: incumbent recipe plus synthetic renders, corpus as the only change)
+
+- [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question
+  - Decision 30 rejected SegFormer-B0 at an equal 12-epoch budget, but the candidate was still climbing at epoch 12 (+0.0116, monotonic throughout) while the incumbent had plateaued at epoch 11. Whether it wins on a longer schedule is genuinely unanswered
+  - This is TWO runs, not one: a longer-schedule incumbent has to run alongside the longer-schedule candidate or the comparison stops being attributable, which is Decision 29's step-parity rule. SegFormer took about 6 h at 12 epochs, so an 18-epoch pair is roughly 9 h plus 7.5 h of machine time on top of everything above
+  - Lowest priority in the queue. Decision 30's own consequence is that the architectural lever is spent at this budget, so the data and recipe runs earn their machine time first
+  - --arch segformer_b0 is already selectable (segmenter-foundation task 23); this task is machine time and a verdict, not code

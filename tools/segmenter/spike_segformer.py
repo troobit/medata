@@ -90,6 +90,17 @@ def _load_export_module():
     return export
 
 
+def _load_archs_module():
+    """Same sys.path-by-name pattern for the sibling archs.py: the graft the
+    spike converts is archs.py's ``segformer_b0_grafted`` — the SAME graph the
+    registered ``segformer_b0`` architecture trains and exports (task 23)."""
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import archs
+    return archs
+
+
 def _import_heavy():
     """torch + transformers + coremltools, or a clear install message."""
     try:
@@ -175,25 +186,11 @@ def _load_spike_model(checkpoint: str):
     checkpoint's task/accuracy is irrelevant; the conversion mechanics of the
     MiT-B0 graph are what the spike measures). Returns a module whose forward
     yields the raw logits tensor (H/4 x W/4 — SegFormer's native output
-    stride; the oracle compares like with like on both sides)."""
-    torch, _, SegformerForSemanticSegmentation = _import_heavy()
-
-    model = SegformerForSemanticSegmentation.from_pretrained(checkpoint)
-    head = model.decode_head.classifier
-    model.decode_head.classifier = torch.nn.Conv2d(
-        head.in_channels, NUM_CLASSES, kernel_size=1
-    )
-    model.eval()
-
-    class LogitsOnly(torch.nn.Module):
-        def __init__(self, m):
-            super().__init__()
-            self.m = m
-
-        def forward(self, x):
-            return self.m(pixel_values=x).logits
-
-    return LogitsOnly(model).eval()
+    stride; the oracle compares like with like on both sides). The graft
+    itself is archs.py's shared helper, so the spike measures the same graph
+    the registered ``segformer_b0`` architecture builds."""
+    _import_heavy()  # fail with the install hint, not a bare ImportError
+    return _load_archs_module().segformer_b0_grafted(NUM_CLASSES, checkpoint)
 
 
 def run_spike(checkpoint: str, out_mlpackage: str, verdict_path: str,

@@ -261,8 +261,20 @@ reporting, uncalibrated honesty, and the β_c bake lock. Stages 0/3/7/9 and the
   lineage `train_config` ONLY when non-default — absence means deeplab),
   `export.load_checkpoint(…, arch=None)` (resolves from the checkpoint's own
   `arch` key), `run_validation.py` (resolves via `archs.arch_from_lineage`).
-  Torch-free at import; `register()`/`unregister()` exist for fixtures and the
-  future bake-off winner. `--init-checkpoint` is deeplab-only (backbone surgery).
+  Torch-free at import; `register()`/`unregister()` exist for fixtures and
+  bake-off candidates. `--init-checkpoint` is deeplab-only (backbone surgery).
+- **`segformer_b0` is registered** (segmenter-foundation task 23, after the
+  Decision 28 spike full pass). `archs.segformer_b0_grafted(num_classes,
+  checkpoint)` is the shared graft helper — `spike_segformer._load_spike_model`
+  delegates to it, so the spike measured the same graph the registry builds.
+  `pretrained=True` loads `nvidia/segformer-b0-finetuned-ade-512-512` (HF
+  `transformers`, lazy import) and grafts the classifier; `pretrained=False` /
+  the checkpoint loader build weights-free from the default `SegformerConfig`
+  (defaults ARE the B0 variant — no download; unlike deeplab's loader, which
+  keeps its historical pretrained-build semantics). The built module is a
+  wrapper emitting plain H/4 logits (state-dict keys carry an `m.` prefix);
+  `plain_tensor_logits` upsamples to input resolution and is the normaliser
+  export traces through.
 - **Inverse-frequency weighting is deleted, not deprecated** (Req 6.3 /
   Decision 13, enforcing segmenter-foundation Decision 25).
   `loss_config.class_weights(scheme, …)` builds `none` (returns None) or
