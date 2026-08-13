@@ -1040,3 +1040,155 @@ The spike verdict is a **full pass on all four criteria**, closing tasks 20 and 
 Tasks 20–21 closed; task 22 (STOP — conditional SegFormer-B0 retrain vs the Req 3.3 adoption margin) is the sole remaining open task in this spec. Evidence: `artifacts/spike_segformer-you.mlperf/report.json`; the regenerated verdict JSON remains gitignored build output, transcribed here per task 21.
 
 ---
+
+## Decision 29: Task-22 retrain re-anchored to the live lane — Decision 27 recipe on the merged corpus vs `ab812dc3aa9d`
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Task 22 and Req 3.3 as written pin the retrain to a configuration that no longer exists. The "same recipe" was the Requirement 2 candidate's: co-occurrence loss plus inverse-frequency weighting. That candidate was rejected (Decision 24), the weighting was attributed as the staple-killer (Decision 25) and removed from `train.py` entirely (snaq-parity Decision 13 — restoring it is deliberate friction). The "same re-cut split" was `data/foodseg103_remapped`, the 35-class v1 label space: its mapping file (`class_mapping_foodseg103_v1.json`) has left the tree, and `load_co_stats` fail-fasts on the mapping SHA — both the v1 re-cut's `co_stats.json` (`af6e1cd7…`) and the v2 remap's (`90ff4b4c…`) stamp SHAs that no longer match the current `class_mapping_foodseg103.json` (`62ce25cf…`). The comparison target, the task-19 recipe checkpoint, was never exported and lost to the incumbent on the same-set diagnostic. Meanwhile Decision 27 promoted `ab812dc3aa9d`, trained on the merged FoodSeg103 + Food Recognition 2022 corpus with plain CE, class weighting `none`, and geometric-only augmentation. Executing task 22's letter would train a candidate in a dead label space, with a banned lever, to beat a checkpoint that already lost — a win could not drive adoption.
+
+### Decision
+
+The Req 3.3 comparison runs in the live label space instead: `--arch segformer_b0` (published ADE20K init per the task-23 ArchSpec) is trained with **exactly the Decision 27 incumbent recipe** — `data/merged_foodseg_foodrec2022`, 36 classes, 513×513, 12 epochs, batch 16, lr 1e-3, plain CE, class weighting `none`, geometric augmentation only — and compared against the promoted incumbent `ab812dc3aa9d` on the 182-image leak-free anchor (primary, the Decision 21/27 measurement), with merged val/heldout as context. Adoption still requires the unchanged Req 3.3 margin: ≥ 0.02 on BOTH mean food-class IoU and the carb-staple mean (Req 2.3's staple set as measurable on the comparison set, identical treatment for both checkpoints). Adoption hands export-gate integration to `model-production`, as task 22 already states.
+
+### Rationale
+
+Design §5.3 states the point of the comparison: "does the better backbone plus the same recipe beat the same recipe on the current backbone." Re-anchoring preserves that sentence exactly — same data, same recipe, same step budget (12 epochs at batch 16 on either side), backbone as the only variable — against the checkpoint the swap would actually replace. The margin, the two-mean conjunction, and the adoption consequence are untouched. Both candidates share one label space, so the comparison needs no family-collapse adjustment and reuses the same `run_validation.py` path that judged Decision 27.
+
+### Alternatives Considered
+
+- **Literal replication (v1 split, co-occurrence + inverse-frequency)**: faithful to the letter of Req 3.3 - Rejected: requires restoring a deleted mapping file and a lever banned in code as the attributed failure cause (Decisions 25, snaq-parity 13); the target checkpoint already lost to the incumbent, so beating it proves nothing adoptable.
+- **FoodSeg103-only retrain in the current palette (v2 re-cut, co-occurrence loss, weighting `none`)**: closest permitted reading of "same recipe + same split" - Rejected: its `co_stats.json` fail-fasts on the stale mapping SHA by design, and no incumbent checkpoint with that recipe exists — a fair backbone comparison would need a second gated incumbent retrain, doubling compute in the FoodSeg103-only lane Decisions 24/25 closed.
+- **Close Requirement 3 without the retrain** (the "recorded decision not to" branch of Decision 28): cheapest exit - Rejected: the spike passed with ~20× latency headroom, leaving accuracy the only open question; discarding the strongest remaining accuracy lever undecided contradicts the reason the device half was measured at all.
+
+### Consequences
+
+**Positive:**
+- One gated run answers the adoption question that is actually live, against the checkpoint the swap would replace, measured by the same validation path and sets as Decision 27.
+- Exact recipe parity (identical flags, epochs, and step budget) makes the result attributable to the backbone alone.
+- The pre-launch smoke run surfaced that `segformer_b0` could not train on the rig at all — an MPS-only BatchNorm-backward failure in the decode head, now fixed in `archs.py` (contiguous-input pre-hook; no-op for CPU, inference, and the export trace).
+
+**Negative:**
+- Req 3.3's letter (co-occurrence countermeasure, task-19 target) is not exercised; the co-occurrence mechanism stays parked where Decisions 24/25 left it, and this run says nothing further about it.
+- A negative verdict costs roughly half a day of MPS time with no shipped uplift — the accepted price of the gate Decision 28 left live.
+
+### Impact
+
+Req 3.3 carries an amended-by note pointing here. Task 22 executes via this instantiation: run artifacts land in the working branch's `tools/segmenter/build/` (`checkpoint_segformer_merged.pt`, `train_segformer_merged_20260813.log`, lineage); the verdict entry follows as its own decision. `tools/segmenter/archs.py` gains the MPS backward fix.
+
+---
+
+## Decision 30: Task-22 verdict — SegFormer-B0 rejected at equal budget; `deeplab_mnv3` stays
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Decision 28 closed the spike as a full pass with roughly 20x latency headroom (12.68 ms median per 513x513 inference on the iPhone 16 Pro, full ANE residency), leaving accuracy as the only open question on the backbone swap. Decision 29 re-anchored the Req 3.3 comparison to the live lane: `segformer_b0` with published ADE20K init, trained with the exact Decision 27 incumbent recipe on the merged corpus, judged against the promoted incumbent `ab812dc3aa9d` on the 182-image leak-free anchor, with the unchanged >= 0.02 two-mean adoption margin.
+
+That run executed on 2026-08-13 (six hours nineteen minutes of MPS time, 12 epochs, `train_segformer_merged_20260813.log`), producing checkpoint `89f305fa30dc`.
+
+### Decision
+
+**SegFormer-B0 is not adopted.** The existing `deeplab_mnv3` architecture stays. Requirement 3 closes: the backbone-swap track is answered and needs no further gated compute at this budget.
+
+### Rationale
+
+The candidate loses on both metrics on both measured sets, by margins between four and five times the size of the uplift adoption required:
+
+| Set | Metric | Incumbent `ab812dc3aa9d` | Candidate `89f305fa30dc` | Delta | Required |
+|---|---|---|---|---|---|
+| Leak-free anchor (182) | mean food-class IoU | 0.3927 | 0.2912 | **-0.1015** | >= +0.02 |
+| Leak-free anchor (182) | staple mean (n=7) | 0.3870 | 0.2987 | **-0.0884** | >= +0.02 |
+| Merged val (1711) | mean food-class IoU | 0.4420 | 0.3716 | **-0.0704** | context |
+| Merged val (1711) | staple mean (n=8) | 0.4503 | 0.3632 | **-0.0871** | context |
+
+The anchor is the binding measurement per Decision 29; merged val is context and agrees in sign and rough magnitude, so the verdict does not rest on a single set. The training loops' own val metric independently corroborates it (incumbent 0.4418, candidate 0.3719 at epoch 12), and re-measuring the incumbent through `run_validation.py` reproduced its training figure to within 0.0002 (0.4420 vs 0.4418), which establishes that the measurement path itself is sound.
+
+Recipe parity was verified from the two lineage files rather than assumed: identical train/val counts (45,515 / 1,711), plain CE loss, 12 epochs, lr 0.001, poly-0.9-per-epoch schedule, 36 classes, 513x513, augmentation and pretrained init on. `arch` is the only recorded difference, so the delta is attributable to the backbone as Design 5.3 requires.
+
+The loss is concentrated in class collapse rather than uniform degradation: apple 0.4303 -> 0.0000, banana 0.7130 -> 0.2255, soup 0.4373 -> 0.0426, fish_white 0.2279 -> 0.0007, pasta 0.6497 -> 0.3406, against gains on fruit_juice (0.3765 -> 0.6041) and egg (0.3419 -> 0.4801). That is the signature of a model that has learned the high-frequency classes and not yet the tail.
+
+### Scope of the verdict
+
+**This rejects SegFormer-B0 at an equal step budget, not SegFormer-B0 in general.** The candidate had not converged when the budget ran out — it gained 0.0116 mean IoU in its final epoch and rose monotonically across all twelve — while the incumbent had plateaued, peaking at 0.4469 on epoch 11 and slipping to 0.4418 on epoch 12. Equal epochs were Decision 29's deliberate choice, because an unequal budget would make the delta unattributable. The consequence is that this run bounds what the backbone achieves in twelve epochs and says nothing about what it achieves in thirty.
+
+Reopening on a longer schedule is therefore a coherent future move, but it is not free and it is not this requirement: it would need its own gated run and, for attributability, a matching longer-schedule incumbent, which is two gated runs rather than one.
+
+### Alternatives Considered
+
+- **Adopt on the latency win alone**: The spike passed with ~20x headroom and the candidate is 7.3 MiB against 24 MiB - Rejected: Req 3.3's margin is an accuracy margin, and shipping a model 0.10 mean IoU worse to save latency the incumbent already meets inverts the requirement. Latency was never the binding constraint.
+- **Extend the candidate's schedule now and re-judge**: It was still improving, so more epochs plausibly close some of the gap - Rejected as part of this task: it breaks Decision 29's equal-budget parity, so any resulting win would be unattributable between backbone and schedule. Recorded above as a possible separate track needing two gated runs.
+- **Judge on merged val instead of the anchor**: The candidate's deficit is smaller there (-0.0704 against -0.1015) - Rejected: Decision 29 pins the anchor as primary because it is the Decision 21/27 measurement the incumbent was promoted on, and the margin fails on both sets regardless, so the choice does not change the outcome.
+
+### Consequences
+
+**Positive:**
+- Requirement 3 closes with a measured answer rather than an open gate; no further gated compute is owed at this budget.
+- The incumbent stays, so no export-gate integration work passes to `model-production` and no shipped behaviour changes.
+- The measurement path is now corroborated end to end (training metric reproduced to 0.0002 through the validation path), which strengthens every future comparison on these sets.
+
+**Negative:**
+- Roughly half a day of MPS time produced no shipped uplift — the price Decision 28 accepted when it left the gate live.
+- The accuracy problem the swap was meant to address remains open, and the strongest remaining architectural lever is now spent at this budget; further accuracy work falls to data and recipe rather than backbone.
+- The verdict is budget-bounded, so "SegFormer-B0 on a longer schedule" stays genuinely unanswered rather than closed.
+
+### Impact
+
+Task 22 completes, which is segmenter-foundation's last open task. `tools/segmenter/build/` gains the run artifacts: `checkpoint_segformer_merged.pt` (`89f305fa30dc`), `train_segformer_merged_20260813.log`, the four `lineage_*_task22_*.json` measurement files, and `task22_context.log`. No shipped code changes; `archs.py` retains the `segformer_b0` registration from task 23 and the MPS contiguity fix from Decision 29, both of which stay useful if the longer-schedule question is ever reopened.
+
+---
+
+## Decision 31: The MetaFood3D renders enter the corpus behind a mask spike, and the runs go one at a time in a fixed order
+
+**Date**: 2026-08-14
+**Status**: proposed
+
+### Context
+
+`data/Blender_render_images.tar.gz` (137 GiB) landed on 2026-08-14, which reopens the data lever at exactly the moment Decision 30 closed the architectural one. Three facts bound what it can do. The component ships no segmentation masks — the dataset's masks live in `RGBD_videos`, which was not collected — so a segmentation corpus has to be derived from the single-object renders plus their `Depth` channel rather than read off. `tools/metafood3d/mapping_metafood3d_to_palette.json`, built for calibration, maps 13 of 108 categories onto 11 of 33 palette classes; of the three staples with zero FoodSeg103 images (Decision 21) it covers `potato_mashed` alone, leaving `brown_rice` and `bread_wholemeal` untouched. And the renders are synthetic single objects with no plate clutter, occlusion or handheld blur.
+
+Meanwhile the queue of things wanting the training machine has grown to at least five runs, and there is one machine. At roughly 25 minutes an epoch, a 12-epoch run is about 5 hours, so ordering is not a formality — it is a multi-day commitment made once.
+
+### Decision
+
+The renders may enter the segmenter corpus only after a mask-derivation spike on one category demonstrates that `Depth` yields usable food masks. Runs execute strictly serially on the one machine, in this order: **R1** the settled `combined` + `sqrt_inverse` recipe (estimation-quality task 6), **R2** the incumbent recipe with the synthetic corpus as the only change, **R3** a mixing-ratio or staple-targeted follow-up whose shape R2's verdict sets, and **R4/R5** the SegFormer-B0 longer-schedule pair last. Every run is judged on `heldout_leakfree` against `ab812dc3aa9d` at 0.3927 with the 0.45 staple floors, and every run earns its own verdict entry here.
+
+### Rationale
+
+Each run changes one variable, which is the only way a verdict attributes to anything: R1 moves the recipe on the known corpus, R2 moves the corpus on the known recipe. Putting R1 first also means the corpus experiments are measured against a current baseline rather than a stale one.
+
+The spike gate exists because the corpus is not known to be buildable. "Single object, so the mask is whatever the depth buffer says is near" is an inference, and the `(bowl)` categories are the obvious way it fails — a bowl is in frame and is not food. Discovering that after extracting a few hundred GB and burning a 5-hour run is the expensive order to discover it in.
+
+The architecture pair goes last because Decision 30's own consequence is that the architectural lever is spent at this budget, and because it costs two runs rather than one: step parity (Decision 29) means a longer-schedule incumbent has to run beside the longer-schedule candidate.
+
+### Alternatives Considered
+
+- **Mix the renders in immediately and judge by the result**: skips the spike and saves a day - Rejected: with no shipped masks the corpus may not be derivable at all, and a bad mask derivation produces a quiet accuracy loss that looks like a data verdict rather than a pipeline bug.
+- **Acquire `RGBD_videos` instead, which does ship masks**: real masks, no derivation - Rejected for now, not on the merits: it is another large acquisition, and its frames come from one fixed rig rather than the render set's viewpoint sweep. It is the obvious fallback if the depth-derived masks fail the spike.
+- **Run the SegFormer pair first, while the question is fresh**: answers the loudest open question - Rejected: it is the lowest-expected-value use of a serial machine on Decision 30's own reasoning, and it would delay the data lever by two runs.
+- **Run two jobs concurrently to use the machine harder**: halves wall-clock on paper - Rejected: MPS contention makes both runs slower and their timings mutually incomparable, and the epoch timings are load-bearing evidence in these verdicts.
+- **Widen the palette mapping first, to cover more of the 108 categories**: more classes, more data - Rejected as a precondition: it is a separate judgement about class identity (is MetaFood3D `Rice` white or brown?) that should not be settled under time pressure inside a training push. Task 8 records it as a deliberate decision point.
+
+### Consequences
+
+**Positive:**
+- One variable per run, so each verdict attributes to the change under test.
+- `potato_mashed` gets its first training images, against a staple that has had zero.
+- The queue is explicit and ordered, so an interrupted session resumes without re-litigating what to run next.
+
+**Negative:**
+- Multi-day serial machine time before the last item is answered, during which the machine is unavailable for anything else.
+- A win on synthetic single-object renders may not transfer to real plates with clutter and occlusion; the leak-free anchor is the only thing that will say so, and it is real-image only.
+- `brown_rice` and `bread_wholemeal` remain uncovered, so the absent-staple gap Decision 21 recorded is narrowed by one class, not closed.
+- Extraction consumes a few hundred GB of the 1.1 TiB free.
+
+### Impact
+
+`specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` gains tasks 8-11 (corpus build plus R2, R3 and the R4/R5 pair) and task 6 gains its queue position; `docs/references.md` records the renders as collected and queued rather than unused. No code changes — `--arch segformer_b0` is already selectable from task 23, and `train.py` consumes the corpus shape task 8 emits.
+
+---
