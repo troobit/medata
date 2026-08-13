@@ -14,14 +14,16 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
 - `make build` / `make test` — SwiftPM core. `make test` prints **both** test
   totals (XCTest ~323 + swift-testing 16). Never report only one framework's
   slice as "the" test count.
-  - **Gotcha: the totals are grepped from a fixed shared log path**
-    (`tee /tmp/medata-swift-test.log`, Makefile ~line 75). Two `make test` runs
-    overlapping in time — e.g. in two worktrees — clobber each other's log, so
-    the printed totals can belong to the *other* run (observed 2026-08-08: both
-    orbit variant runs reported an identical XCTest line down to the timing
-    stamp). Pass/fail from the live stream is per-run truth; only the grepped
-    summary lines are unreliable under concurrency. Never run two `make test`
-    invocations concurrently if the totals matter.
+  - **Concurrency of the totals: fixed 2026-08-13.** The totals are grepped from
+    `$(CURDIR)/.build/medata-swift-test.log` (`TEST_LOG` in the Makefile), which
+    is per-checkout, so parallel worktree runs no longer share it. Before the
+    fix the path was a fixed `/tmp/medata-swift-test.log`: two overlapping
+    `make test` runs clobbered each other's log and the printed totals could
+    belong to the *other* run (observed 2026-08-08 — both orbit variant runs
+    reported an identical XCTest line down to the timing stamp). This mattered
+    because `orbit run --variants N --parallel` runs `make test` in several
+    worktrees simultaneously by design. Pass/fail from the live stream was
+    always per-run truth; only the grepped summary lines were affected.
   - **Exit code**: fixed 2026-08-09 — the target sets `pipefail`, so
     `make test` now exits non-zero on a failing suite. Before the fix the exit
     status was tee's (always 0), so any gate that trusted the exit code alone
