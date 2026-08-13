@@ -1080,3 +1080,65 @@ Design §5.3 states the point of the comparison: "does the better backbone plus 
 Req 3.3 carries an amended-by note pointing here. Task 22 executes via this instantiation: run artifacts land in the working branch's `tools/segmenter/build/` (`checkpoint_segformer_merged.pt`, `train_segformer_merged_20260813.log`, lineage); the verdict entry follows as its own decision. `tools/segmenter/archs.py` gains the MPS backward fix.
 
 ---
+
+## Decision 30: Task-22 verdict — SegFormer-B0 rejected at equal budget; `deeplab_mnv3` stays
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Decision 28 closed the spike as a full pass with roughly 20x latency headroom (12.68 ms median per 513x513 inference on the iPhone 16 Pro, full ANE residency), leaving accuracy as the only open question on the backbone swap. Decision 29 re-anchored the Req 3.3 comparison to the live lane: `segformer_b0` with published ADE20K init, trained with the exact Decision 27 incumbent recipe on the merged corpus, judged against the promoted incumbent `ab812dc3aa9d` on the 182-image leak-free anchor, with the unchanged >= 0.02 two-mean adoption margin.
+
+That run executed on 2026-08-13 (six hours nineteen minutes of MPS time, 12 epochs, `train_segformer_merged_20260813.log`), producing checkpoint `89f305fa30dc`.
+
+### Decision
+
+**SegFormer-B0 is not adopted.** The existing `deeplab_mnv3` architecture stays. Requirement 3 closes: the backbone-swap track is answered and needs no further gated compute at this budget.
+
+### Rationale
+
+The candidate loses on both metrics on both measured sets, by margins between four and five times the size of the uplift adoption required:
+
+| Set | Metric | Incumbent `ab812dc3aa9d` | Candidate `89f305fa30dc` | Delta | Required |
+|---|---|---|---|---|---|
+| Leak-free anchor (182) | mean food-class IoU | 0.3927 | 0.2912 | **-0.1015** | >= +0.02 |
+| Leak-free anchor (182) | staple mean (n=7) | 0.3870 | 0.2987 | **-0.0884** | >= +0.02 |
+| Merged val (1711) | mean food-class IoU | 0.4420 | 0.3716 | **-0.0704** | context |
+| Merged val (1711) | staple mean (n=8) | 0.4503 | 0.3632 | **-0.0871** | context |
+
+The anchor is the binding measurement per Decision 29; merged val is context and agrees in sign and rough magnitude, so the verdict does not rest on a single set. The training loops' own val metric independently corroborates it (incumbent 0.4418, candidate 0.3719 at epoch 12), and re-measuring the incumbent through `run_validation.py` reproduced its training figure to within 0.0002 (0.4420 vs 0.4418), which establishes that the measurement path itself is sound.
+
+Recipe parity was verified from the two lineage files rather than assumed: identical train/val counts (45,515 / 1,711), plain CE loss, 12 epochs, lr 0.001, poly-0.9-per-epoch schedule, 36 classes, 513x513, augmentation and pretrained init on. `arch` is the only recorded difference, so the delta is attributable to the backbone as Design 5.3 requires.
+
+The loss is concentrated in class collapse rather than uniform degradation: apple 0.4303 -> 0.0000, banana 0.7130 -> 0.2255, soup 0.4373 -> 0.0426, fish_white 0.2279 -> 0.0007, pasta 0.6497 -> 0.3406, against gains on fruit_juice (0.3765 -> 0.6041) and egg (0.3419 -> 0.4801). That is the signature of a model that has learned the high-frequency classes and not yet the tail.
+
+### Scope of the verdict
+
+**This rejects SegFormer-B0 at an equal step budget, not SegFormer-B0 in general.** The candidate had not converged when the budget ran out — it gained 0.0116 mean IoU in its final epoch and rose monotonically across all twelve — while the incumbent had plateaued, peaking at 0.4469 on epoch 11 and slipping to 0.4418 on epoch 12. Equal epochs were Decision 29's deliberate choice, because an unequal budget would make the delta unattributable. The consequence is that this run bounds what the backbone achieves in twelve epochs and says nothing about what it achieves in thirty.
+
+Reopening on a longer schedule is therefore a coherent future move, but it is not free and it is not this requirement: it would need its own gated run and, for attributability, a matching longer-schedule incumbent, which is two gated runs rather than one.
+
+### Alternatives Considered
+
+- **Adopt on the latency win alone**: The spike passed with ~20x headroom and the candidate is 7.3 MiB against 24 MiB - Rejected: Req 3.3's margin is an accuracy margin, and shipping a model 0.10 mean IoU worse to save latency the incumbent already meets inverts the requirement. Latency was never the binding constraint.
+- **Extend the candidate's schedule now and re-judge**: It was still improving, so more epochs plausibly close some of the gap - Rejected as part of this task: it breaks Decision 29's equal-budget parity, so any resulting win would be unattributable between backbone and schedule. Recorded above as a possible separate track needing two gated runs.
+- **Judge on merged val instead of the anchor**: The candidate's deficit is smaller there (-0.0704 against -0.1015) - Rejected: Decision 29 pins the anchor as primary because it is the Decision 21/27 measurement the incumbent was promoted on, and the margin fails on both sets regardless, so the choice does not change the outcome.
+
+### Consequences
+
+**Positive:**
+- Requirement 3 closes with a measured answer rather than an open gate; no further gated compute is owed at this budget.
+- The incumbent stays, so no export-gate integration work passes to `model-production` and no shipped behaviour changes.
+- The measurement path is now corroborated end to end (training metric reproduced to 0.0002 through the validation path), which strengthens every future comparison on these sets.
+
+**Negative:**
+- Roughly half a day of MPS time produced no shipped uplift — the price Decision 28 accepted when it left the gate live.
+- The accuracy problem the swap was meant to address remains open, and the strongest remaining architectural lever is now spent at this budget; further accuracy work falls to data and recipe rather than backbone.
+- The verdict is budget-bounded, so "SegFormer-B0 on a longer schedule" stays genuinely unanswered rather than closed.
+
+### Impact
+
+Task 22 completes, which is segmenter-foundation's last open task. `tools/segmenter/build/` gains the run artifacts: `checkpoint_segformer_merged.pt` (`89f305fa30dc`), `train_segformer_merged_20260813.log`, the four `lineage_*_task22_*.json` measurement files, and `task22_context.log`. No shipped code changes; `archs.py` retains the `segformer_b0` registration from task 23 and the MPS contiguity fix from Decision 29, both of which stay useful if the longer-schedule question is ever reopened.
+
+---
