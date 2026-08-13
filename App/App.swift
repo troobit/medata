@@ -184,7 +184,10 @@ struct MedataApp: App {
         let stamp = (plistStamp?.isEmpty ?? true) ? "unstamped" : plistStamp!
         let source = Pipeline.preShutterSourceTag == "pre_shutter_stub" ? "stub" : "coreml"
         Logger(subsystem: "ie.medata.app", category: "Shutter")
-            .info("event=launch buildStamp=\(stamp, privacy: .public) segmenterSource=\(source, privacy: .public)")
+            // `.notice` so `make logs-device` can actually find it: `.info` is
+            // memory-only and never reaches the persisted store `log collect`
+            // reads (docs/agent-notes/device-build-and-test.md).
+            .notice("event=launch buildStamp=\(stamp, privacy: .public) segmenterSource=\(source, privacy: .public)")
     }
 
     private static func makeStore() -> any PersistenceStore {

@@ -36,6 +36,21 @@ xcodebuild/devicectl commands were previously retyped ~50 times):
   `/tmp/medata-device.log`. **Post-hoc only** — macOS has no scriptable live
   stream for an iOS device (`log stream` is host-only, devicectl has no log
   subcommand); live viewing stays in Console.app (recipe below).
+- **Log at `.notice`, never `.info`, for anything a device pull must show.**
+  `log collect` reads the device's *persisted* store, and on iOS only notice
+  and above is persisted — `.info` lives in a memory buffer that the tethered
+  collect does not return, and `.debug` is off entirely. The `--info --debug`
+  flags on `log show` widen what is *displayed* from the archive; they cannot
+  recover what was never written. Verified 2026-08-13: an archive collected
+  eight minutes after a launch contained thousands of `com.apple.*` lines from
+  inside the MeData process and not one `ie.medata.app` line, because every one
+  of ours was `.info`. Apple's own subsystems appear at Info/Debug level in the
+  same archive — they carry log configurations we do not, so their presence is
+  not evidence that ours would survive.
+- Reading the archive needs no root, only the collect does: after one
+  `sudo make logs-device`, query `/tmp/medata-device.logarchive` freely with
+  `/usr/bin/log show … --predicate …`. Spell out `/usr/bin/log` — `log` is a
+  zsh built-in in this shell and swallows the flags with "too many arguments".
 - `make spell` — spelling lint.
 
 Default device (Makefile): `you`, iPhone 16 Pro, devicectl `6AD781BA-89FF-5A82-A2A1-B5EC9469F465`, bundle `rtob.MeData`. Note the

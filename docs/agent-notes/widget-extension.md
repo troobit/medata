@@ -175,7 +175,23 @@ the 30 MB memory cap and no GRDB.
   never returns `.never` (a widget that can refresh itself must keep being
   woken, and the last-reading state is where a wake helps most). It books
   whichever comes first — the next staleness boundary or the moment the rate
-  gate reopens. Without a connection, the old `.never`-when-terminal rule stands.
+  gate reopens — **floored at one poll interval from now** (Decision 17).
+  Never lower that floor: the ladder transitions ship as timeline entries, so a
+  wake exists only to fetch, and a fetch inside the interval is refused by the
+  gate. A sooner wake spends the daily reload budget on nothing, and that budget
+  is what the locked-phone window runs on. Without a connection, the old
+  `.never`-when-terminal rule stands.
+- `LibreLinkUpRateGate.recordFetch` is called **before** the request goes out,
+  on both the widget and app sides (Decision 17). It records requests, not
+  successes — that is what gives a failing fetch its one-interval backoff. Move
+  it back after the response and a 401 loop books "reload as soon as possible"
+  on every wake until the budget is gone.
+- `getTimeline` logs one `event=widget.timeline` line per wake with
+  `outcome=` (the branch of `refreshedSnapshot`), the stored and rendered
+  reading ages, and the booked wake delay — subsystem `ie.medata.app`, category
+  `GlucoseWidget`, so `make logs-device` interleaves it with the app's
+  publishes. No such line during a locked stretch means WidgetKit never woke the
+  extension, which is a budget observation and not a code defect.
 - The shared snapshot can now briefly lead the database. That is intended: the
   snapshot is a display contract, nothing reads it back into persistence, and
   the app ingests the same readings on its next poll.
@@ -186,3 +202,75 @@ Both targets also carry a `keychain-access-groups` entitlement
 (`$(AppIdentifierPrefix)rtob.MeData.shared`), which must stay in step with
 `LibreLinkUpKeychain.accessGroup`; that constant spells the team prefix out, so
 `codesign -d --entitlements -` on the appex is the check that they match.
+
+## What actually schedules a reload (2026-08-13, task 16.7, 3 h tethered)
+
+**The `.after(date)` policy is advisory. It is not what wakes this widget.**
+Measured over three hours with the app suspended for most of it: nine extension
+wakes, every one booking `nextWakeSeconds=300`, none arriving at 300 s. Gaps were
+20.1, 20.7, 20.1, 20.1, 22.2, 20.1, 20.1 minutes (the one 15.0 gap was the app's
+own `publish.reloadRequested`, not a WidgetKit wake).
+
+`com.apple.chrono` records the trigger for each reload. Over the window:
+**14 × `Reload widget for reason: stale`, 4 × `environmentMismatch`, 0 from the
+booked date**, each staleness reload preceded by `Widget is visible and
+effectively stale, reloading content.` So the cadence is WidgetKit's own
+staleness evaluation, gated on visibility — keyed on `GlucoseTimeline.staleAge`,
+not on anything the provider books.
+
+Consequences, all recorded as Decision 18:
+
+- **`staleAge` (15 min) < cadence (~20 min), so the widget routinely renders
+  stale for several minutes of each cycle.** Working as designed, not a bug.
+- **Do not raise `staleAge` to close that gap.** It is the reload trigger, so
+  raising it postpones the refresh by the same amount it buys, and the widget
+  spends that time rendering stale data relabelled as fresh.
+- **Do not lower the Decision 17 wake floor.** If the booked date is not honoured
+  at all, an earlier one cannot produce an earlier wake — only budget spend.
+- The ~20 min figure is one device, one window, with the widget periodically
+  visible; "visible" is part of the trigger, so a locked-and-untouched stretch is
+  what would separate system cadence from how often the phone was woken. The
+  *trigger* observation does not depend on the number.
+
+Read the wake lines as: `storedAgeSeconds` is how stale the App Group snapshot
+was when the extension ran, `renderedAgeSeconds` is what shipped after
+`refreshedSnapshot`. Eight of nine wakes rendered 0–2.2 min old against stored
+ages of 19–24 min — **Decision 16's self-fetch is carrying the entire locked
+window**. The one stale render (29.8 min, `outcome=refreshed`) was a real
+45-minute vendor gap, nothing fresher to fetch.
+
+### Negative ages are normal
+
+`renderedAgeSeconds` goes negative (observed -1.1, -0.9, -0.2, -0.1 min, with
+`event=publish.futureReading skewSeconds=` 13 and 1). The vendor stamps readings
+on the next 5-minute boundary, so a reading can arrive dated slightly ahead. The
+ladder handles it — `age <= staleAge` is true for negatives, so it renders fresh.
+But the fresh branch renders age with `Text(_, style: .relative)` (Decision 14),
+which on a future date reads as a countdown. Not yet checked on-screen.
+
+### Prime can publish backwards (fixed by Decision 19, task 16.9)
+
+Seen at launch: `trigger=prime was=…10:55:00Z now=…09:55:00Z lagSeconds=4670` —
+the app republished an hour-old reading over the newer one the widget had
+fetched while the app was suspended, because prime reads the database and the
+widget's fetches never write back to it. The next tick corrected it 274 ms later.
+The publisher gates on *value differs*, which is a change test; with two writers
+it needs an ordering test on `readingDate`. If you add a third writer of the
+snapshot, it must honour the same guard.
+
+## StandBy colour (2026-08-13, task 16.7 device pass)
+
+Portrait StandBy, **high** band: orange renders. That is the result that matters,
+because the open question was whether `renderingMode` reports `.fullColor` in
+StandBy at all — the `guard renderingMode == .fullColor else { return .primary }`
+in `tint(_:)` is the only thing that can suppress the whole colour channel, and
+`high` proved it resolves.
+
+- **In-range renders white by design.** `tint(.inRange)` is `.primary` and
+  `token(.inRange)` is `nil` — an absent token *is* the in-range state (Req 4.3,
+  Decision 7). White is the correct render, not an unstyled one.
+- **Low was not observed on-device and is accepted on construction.** `.low`
+  is a case in the same `switch` in the same function, behind the same
+  `renderingMode` guard the high pass already exercised; the only difference from
+  the verified branch is the `Color` literal (`.red` vs `.orange`). There is no
+  separate code path left to fail.

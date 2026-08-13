@@ -2,6 +2,7 @@ import GlucoseWidgetShared
 import LibreLinkUpKit
 import SwiftUI
 import WidgetKit
+import os
 
 // The data-driven glucose kind (specs/ui/glucose-lock-widget). Unlike the two
 // launcher kinds it reads state: the App Group snapshot, and — since Decision 16
@@ -29,6 +30,21 @@ struct GlucoseEntry: TimelineEntry {
 // SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, so the conformance does not compile
 // otherwise (see LauncherProvider, docs/agent-notes/widget-extension.md).
 struct GlucoseProvider: TimelineProvider {
+
+    // Same subsystem/category as GlucoseWidgetPublisher, so `make logs-device`
+    // interleaves the app's publishes with the extension's wakes in one stream.
+    // Every interpolation is `.public` — os_log redacts non-literals otherwise,
+    // and these numbers are the whole point of the lines.
+    private static let log = Logger(subsystem: "ie.medata.app", category: "GlucoseWidget")
+
+    // Which branch of `refreshedSnapshot` a wake took. Only `refreshed` sent a
+    // request that came back; the rest render the stored snapshot, and telling
+    // them apart is the difference between "WidgetKit never woke us", "we woke
+    // and chose not to fetch", and "we fetched and it failed".
+    private enum FetchOutcome: String {
+        case notConnected, readingYoung, gated, noSession, requestFailed, derivedEmpty, refreshed
+    }
+
     nonisolated func placeholder(in context: Context) -> GlucoseEntry {
         // The gallery preview shows the empty state rather than a specimen
         // reading — no fabricated decimal (Req 2.7), functional copy (Req 8.2).
@@ -54,29 +70,49 @@ struct GlucoseProvider: TimelineProvider {
         Task {
             let now = Date.now
             let stored = GlucoseSnapshotStore.read()
-            let snapshot = await Self.refreshedSnapshot(stored, now: now) ?? stored
-            completion(Self.timeline(for: snapshot, now: now))
+            let (refreshed, outcome) = await Self.refreshedSnapshot(stored, now: now)
+            let snapshot = refreshed ?? stored
+            let wake = Self.nextWake(for: snapshot, now: now)
+            // The one line that says whether a locked-phone wake happened at
+            // all, what it decided, and when it asked to be woken next — the
+            // three unknowns behind the "widget falls out of sync" report
+            // (tasks.md 16.7).
+            // `.notice`, not `.info`: only notice and above are persisted to
+            // the device's log store, and `log collect` (make logs-device)
+            // reads that store. An `.info` line here is invisible to every
+            // post-hoc device pull — see docs/agent-notes/device-build-and-test.md.
+            Self.log.notice("""
+                event=widget.timeline outcome=\(outcome.rawValue, privacy: .public) \
+                storedAgeSeconds=\(Self.age(of: stored, at: now), privacy: .public) \
+                renderedAgeSeconds=\(Self.age(of: snapshot, at: now), privacy: .public) \
+                nextWakeSeconds=\(Self.wakeDelay(wake, from: now), privacy: .public)
+                """)
+            completion(
+                Timeline(
+                    entries: Self.entries(for: snapshot, now: now),
+                    policy: wake.map { .after($0) } ?? .never))
         }
     }
 
-    // nil means "render what is stored": either no fetch was warranted, or one
-    // was attempted and something about it failed. Every failure lands here —
-    // no blank state, no error state (Req 6.4).
+    // A nil snapshot means "render what is stored": either no fetch was
+    // warranted, or one was attempted and something about it failed. Every
+    // failure lands here — no blank state, no error state (Req 6.4). The
+    // outcome rides along for the log line only; it changes no behaviour.
     private static func refreshedSnapshot(
         _ stored: GlucoseSnapshot, now: Date
-    ) async -> GlucoseSnapshot? {
+    ) async -> (GlucoseSnapshot?, FetchOutcome) {
         // A screenshot-import-only user has no connection configured and gets
         // zero network activity from the widget, ever.
-        guard LibreLinkUpSharedState.isConnected() else { return nil }
+        guard LibreLinkUpSharedState.isConnected() else { return (nil, .notConnected) }
         // Younger than one interval: the app (or an earlier wake) already has
         // the newest reading the vendor will serve.
         if let readingDate = stored.readingDate,
             now.timeIntervalSince(readingDate) < LibreLinkUpPolling.interval {
-            return nil
+            return (nil, .readingYoung)
         }
         // The shared app+widget budget (Req 6.3). Advisory — see
         // LibreLinkUpRateGate.
-        guard LibreLinkUpRateGate.isOpen(now: now) else { return nil }
+        guard LibreLinkUpRateGate.isOpen(now: now) else { return (nil, .gated) }
 
         // Auth is app-owned: the widget reads the session and never logs in, so
         // an expired or rejected session simply falls back and leaves the repair
@@ -84,12 +120,18 @@ struct GlucoseProvider: TimelineProvider {
         // the shared keychain item outright.
         guard let session = LibreLinkUpKeychain().session(), session.isUsable(at: now),
             let patientID = LibreLinkUpSharedState.patientID()
-        else { return nil }
+        else { return (nil, .noSession) }
 
-        guard let graph = try? await client().graph(session: session, patientID: patientID) else {
-            return nil
-        }
+        // Recorded BEFORE the request, not after a good response (Decision 17).
+        // The budget counts requests, and a failure that left the gate open sent
+        // the next wake straight back out: with no record, `nextWake` computes a
+        // gate-reopen instant already in the past, books the earliest wake it
+        // can, and the extension retries as fast as WidgetKit will run it —
+        // spending the daily reload budget on a request that is failing anyway.
         LibreLinkUpRateGate.recordFetch(at: now)
+        guard let graph = try? await client().graph(session: session, patientID: patientID) else {
+            return (nil, .requestFailed)
+        }
 
         // Snap and round exactly as the ingest path does, so the same vendor
         // data cannot produce a different arrow here than in the app.
@@ -101,9 +143,9 @@ struct GlucoseProvider: TimelineProvider {
             }
             .sorted { $0.timestamp < $1.timestamp }
         let derived = GlucoseDerivation.snapshot(from: readings, now: now)
-        guard derived != .neverRecorded else { return nil }
+        guard derived != .neverRecorded else { return (nil, .derivedEmpty) }
         GlucoseSnapshotStore.write(derived)
-        return derived
+        return (derived, .refreshed)
     }
 
     // getTimeline must return promptly, so the vendor call gets a short leash;
@@ -116,11 +158,23 @@ struct GlucoseProvider: TimelineProvider {
         return LibreLinkUpClient(urlSession: URLSession(configuration: configuration))
     }
 
-    private static func timeline(for snapshot: GlucoseSnapshot, now: Date) -> Timeline<GlucoseEntry> {
-        let entries = GlucoseTimeline.renderPoints(snapshot, from: now).map {
+    private static func entries(for snapshot: GlucoseSnapshot, now: Date) -> [GlucoseEntry] {
+        GlucoseTimeline.renderPoints(snapshot, from: now).map {
             GlucoseEntry(date: $0.date, render: $0.render, readingDate: snapshot.readingDate)
         }
-        return Timeline(entries: entries, policy: policy(for: snapshot, now: now))
+    }
+
+    // MARK: - Log helpers
+
+    // -1 stands for "no reading" / "never", so every field stays an integer and
+    // the lines parse with one grep.
+    private static func age(of snapshot: GlucoseSnapshot, at now: Date) -> Int {
+        guard let readingDate = snapshot.readingDate else { return -1 }
+        return Int(now.timeIntervalSince(readingDate))
+    }
+
+    private static func wakeDelay(_ wake: Date?, from now: Date) -> Int {
+        wake.map { Int($0.timeIntervalSince(now)) } ?? -1
     }
 
     // With no connection configured this is the original rule: advance at the
@@ -133,18 +187,23 @@ struct GlucoseProvider: TimelineProvider {
     // exactly where a wake is most useful. So the policy becomes whichever
     // comes first — the next ladder step, or the moment the shared rate gate
     // reopens (Decision 16).
-    private static func policy(for snapshot: GlucoseSnapshot, now: Date) -> TimelineReloadPolicy {
+    // nil is `.never`. Split out from the policy so the wake instant can be
+    // logged as a number of seconds.
+    private static func nextWake(for snapshot: GlucoseSnapshot, now: Date) -> Date? {
         let boundary = GlucoseTimeline.nextBoundary(snapshot, after: now)
-        guard LibreLinkUpSharedState.isConnected() else {
-            return boundary.map { .after($0) } ?? .never
-        }
+        guard LibreLinkUpSharedState.isConnected() else { return boundary }
         let gateReopens = (LibreLinkUpRateGate.lastFetchAt() ?? now)
             .addingTimeInterval(LibreLinkUpPolling.interval)
         let next = min(boundary ?? gateReopens, gateReopens)
-        // A wake instant already in the past reads as "reload as soon as
-        // possible", which is a request the budget will simply throttle; nudge
-        // it forward so the timeline always names a future time.
-        return .after(max(next, now.addingTimeInterval(1)))
+        // Floor at one interval, not at one second (Decision 17). A wake sooner
+        // than that can achieve nothing the timeline has not already pre-baked:
+        // the ladder transitions ship as entries, so the only reason to be woken
+        // is to fetch, and a fetch inside the interval is refused by the gate.
+        // The old one-second nudge turned every no-fetch outcome into "reload as
+        // soon as possible" whenever the gate stamp was stale — a request
+        // WidgetKit answers out of the same daily budget the later, useful wakes
+        // need.
+        return max(next, now.addingTimeInterval(LibreLinkUpPolling.interval))
     }
 }
 

@@ -681,3 +681,160 @@ Every alternative leaves the locked-phone window unfixed. The widget process is 
 Req 6 (redefined in place), the extension-side refresh section of design.md, `LibreLinkUpKit` extraction from `GlucoseIngestion`, the pure snapshot derivation moving from `Persistence` to `GlucoseWidgetShared`, `LibreLinkUpGlucoseSource` adopting the shared rate gate, shared-storage migration of the LLU flag/host/patientId and keychain items, and both targets' entitlements.
 
 ---
+
+## Decision 17: The shared gate counts requests sent, and no wake is booked inside one interval
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Task 16.7's device pass found the widget showing a reading nearly ten minutes old while the app was suspended, recovering only when the app was opened — the same symptom Decision 16 set out to fix. Reading the shipped path turned up a scheduling defect that would produce exactly that shape without any of Decision 16's machinery being wrong.
+
+`LibreLinkUpRateGate.recordFetch` ran only after a good response, and `nextWake` booked the next reload at `lastFetch + interval`, floored at one second from now. So a failed vendor request left no record: the computed gate-reopen instant was already in the past, the floor collapsed the wake to "as soon as possible", and the extension asked to be re-run immediately — repeatedly, for as long as the failure lasted. WidgetKit answers those requests out of a small daily budget (tens of wakes, shared with every other widget on the device). A burst spends it, after which the widget receives no wakes for a long stretch and sits stale until the app republishes.
+
+The app-side poll had the same recording gap, without the same consequence: its retry cadence is its own timer, not the gate.
+
+### Decision
+
+Record the vendor request in the shared gate immediately **before** it is sent, on both sides, so a failed request closes the gate exactly as a successful one does. Floor the widget's next wake at one poll interval from now instead of one second. Requirement 6.3 is redefined in place: the gate records each request *sent*, not each *successful* fetch.
+
+### Rationale
+
+The gate exists to bound vendor traffic, and a request that fails has already been spent — the vendor saw it. Recording on send makes the gate's meaning match its purpose, and gives failure a backoff for free: the failed request's own record is what pushes the next wake out by an interval.
+
+The one-second floor was never useful. Every staleness transition is pre-baked as a timeline entry (Req 5.4), so the ladder advances with no reload at all; the only thing a wake can accomplish is a fetch, and a fetch inside the interval is refused by the gate. A wake sooner than one interval is therefore budget spent on nothing, and the budget is the scarce resource that keeps the locked-phone window working.
+
+### Alternatives Considered
+
+- **Record failures in a separate "last attempt" key**: Keeps "last successful fetch" available for diagnostics - Rejected: two timestamps for one budget, and every caller would have to consult both correctly to stay safe; the one thing either key is used for is deciding whether to spend a request.
+- **Exponential backoff on consecutive failures**: Standard remedy for a retry storm - Rejected: needs failure-count state shared across two processes, and one interval is already the cadence beyond which fetching is pointless — there is nothing for a longer backoff to protect.
+- **Leave the app side recording on success**: Smaller change - Rejected: it would make Req 6.3 true of one process and false of the other; the app's own comment already stated the intended rule ("the request is what the budget counts").
+- **Drop the floor entirely and return the raw gate-reopen instant**: Simplest code - Rejected: a past instant is a valid `.after` date that WidgetKit reads as "as soon as possible", which is the defect itself.
+
+### Consequences
+
+**Positive:**
+- A failing vendor call costs one request per interval instead of as many as WidgetKit will run, which is the churn task 16.7's ban-watch is looking for.
+- The reload budget is spent only on wakes that can fetch, so the locked-phone window gets the wakes it needs.
+- One rule for both processes: the gate counts requests.
+
+**Negative:**
+- A transient failure (a dropped connection at the wrong moment) now costs a full interval before the next attempt, where previously the retry was immediate.
+- A wake whose gate reopens in less than an interval is deferred to the full interval, so the widget's fetch cadence can drift up to one interval behind the app's.
+- Nothing records *successful* fetches distinctly any more; a future "last known good vendor contact" display would need its own timestamp.
+
+### Impact
+
+`GlucoseWidget.swift` (`refreshedSnapshot`, `nextWake`), `LibreLinkUpGlucoseSource.fetchAndIngest`, Req 6.3, and the refresh section of `docs/agent-notes/widget-extension.md`.
+
+---
+
+## Decision 18: The booked wake is advisory; staleness is the real reload clock, and `staleAge` stays 15 minutes
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+Task 16.7's device pass collected three hours of tethered logs (`make logs-device LOG_LAST=3h`) with the app suspended for most of the window. Nine extension wakes were recorded. Every one booked `nextWakeSeconds=300`. None arrived at 300 seconds. The gaps were 20.1, 20.7, 20.1, 20.1, 22.2, 20.1 and 20.1 minutes — the one 15.0-minute gap was the app's own `publish.reloadRequested`, not a WidgetKit wake.
+
+The `com.apple.chrono` subsystem records why each reload happened. Across the window: **14 × `Reload widget for reason: stale`, 4 × `environmentMismatch`, 0 attributable to the booked timeline date.** Each staleness reload is preceded by `Widget is visible and effectively stale, reloading content.`
+
+Decision 17 reasoned about the booked wake as though it were the mechanism that schedules the extension, and floored it at one poll interval to avoid spending budget on wakes that could not fetch. The floor is right. The causal model behind it was not: the booked date is not what wakes this widget.
+
+### Decision
+
+Treat the `.after(date)` timeline policy as advisory rather than as a schedule. The reload cadence is a platform property — WidgetKit's staleness evaluation, gated on the widget being visible — and lands at roughly 20 minutes on this device.
+
+Keep `GlucoseTimeline.staleAge` at 15 minutes. Do **not** raise it to close the gap against the observed cadence, and do not lower the Decision 17 wake floor to chase a shorter one.
+
+### Rationale
+
+The floor from Decision 17 survives unchanged, and the evidence strengthens it: if the booked date is not honoured at all, booking one sooner cannot produce an earlier wake and can only spend budget.
+
+`staleAge` is a *truth threshold*, not a display-tuning knob. It answers "is this reading still meaningful?" — a question about the reading, not about the refresh schedule. Because it is also what WidgetKit's staleness timer keys on, raising it to 20 minutes would postpone the reload by the same 5 minutes it bought, and the widget would spend that time rendering a reading it had relabelled as fresh. In a health display, widening the fresh band to hide a stale state trades a visible, correct "stale" for an invisible, wrong "fresh". The stale render is the system working.
+
+The consequence must therefore be stated plainly rather than engineered away: with a 15-minute threshold and a ~20-minute cadence, the widget will routinely show stale for several minutes of each cycle, even with a perfect vendor feed and every part of Decision 16 working. That is the platform's floor on this display, not a defect in it.
+
+The field data supports the threshold on its own terms. Of nine wakes, eight rendered a reading 0–2.2 minutes old after `refreshedSnapshot` ran. The single stale render (29.8 minutes, `outcome=refreshed`) came from a genuine 45-minute vendor gap between the 19:10 and 19:55 readings — there was nothing fresher to fetch, which is exactly the case the threshold exists to expose.
+
+### Alternatives Considered
+
+- **Raise `staleAge` to 20–25 minutes to match the observed cadence**: Removes the routine stale render - Rejected: it relabels stale data as fresh rather than making it fresher, and because staleness is the reload trigger it would push the cadence out by roughly the same amount, reproducing the gap one rung higher.
+- **Lower the booked wake below one interval to request more reloads**: More chances to refresh - Rejected: reverts Decision 17 for a mechanism the logs show is not in play; the reloads are staleness-driven, so the extra requests buy nothing and spend the budget that the locked-phone window depends on.
+- **Request reloads from the app on a background timer to drive the widget**: Sidesteps WidgetKit scheduling - Rejected: the app is suspended for exactly the window this is meant to cover, which is the premise of Decision 16.
+- **Treat the ~20-minute cadence as a device-specific artifact and re-measure before concluding**: Cautious - Partially adopted: the cadence figure is device-specific and recorded as such, but the *trigger* (`reason: stale`, zero booked-date reloads) is a mechanism observation that does not depend on the number.
+
+### Consequences
+
+**Positive:**
+- The refresh model in the notes now matches what the platform does, so future scheduling work starts from the measured mechanism rather than the assumed one.
+- Decision 17's floor is retained on stronger evidence.
+- A stale reading stays labelled stale, which is the honest rendering for a health value.
+
+**Negative:**
+- The widget will show stale for part of most cycles, and that is now an accepted property rather than an open bug — it needs saying in the requirements so it is not re-raised as a defect.
+- The cadence was measured on one device over one three-hour window with the widget periodically visible; "visible" is part of the trigger, so some of the regularity may reflect how often the phone was woken. A locked-and-untouched stretch would separate the two.
+- Nothing here improves the locked-phone window; it establishes what its ceiling is.
+
+### Impact
+
+`GlucoseTimeline.staleAge` (unchanged, now load-bearing by decision), the refresh section of `docs/agent-notes/widget-extension.md`, and Decision 17's rationale, which is amended rather than superseded.
+
+---
+
+## Decision 19: The published snapshot must be monotonic in `readingDate`
+
+**Date**: 2026-08-13
+**Status**: accepted
+
+### Context
+
+The same device pass caught the app publishing an older reading over a newer one at launch:
+
+```
+21:12:50.144  trigger=prime  was=…10:55:00Z  now=…09:55:00Z  lagSeconds=4670
+21:12:50.418  trigger=tick   was=…09:55:00Z  now=…11:10:00Z  lagSeconds=170
+```
+
+While the app was suspended, the widget's own fetches (Decision 16) advanced the App Group snapshot to the 10:55Z reading. On launch, `GlucoseWidgetPublisher`'s prime write read the trailing rows from the database — whose newest row was the 09:55Z reading from before the app was suspended — and published it, moving the shared snapshot back by an hour. The tick 274 ms later fetched fresh data and published 11:10Z, correcting it.
+
+`widget-extension.md` already records that "the shared snapshot can now briefly lead the database" and that this is intended. The publisher was never taught it: it writes when the value **differs** from what is stored, which is a change test, not an ordering test.
+
+### Decision
+
+Gate the publish on the candidate reading being strictly newer than the stored snapshot's `readingDate`, in addition to the existing difference check. A publish carrying an older reading is dropped, not written. Prime and tick both go through the guard.
+
+### Rationale
+
+Once two processes write the same snapshot from different sources — one from persistence, one from the vendor — "has it changed?" stops being sufficient, because change is symmetric and time is not. Decision 16 created that second writer deliberately and accepted that the snapshot may lead the database; the ordering guard is the invariant that makes leading safe rather than merely tolerated.
+
+The observed exposure was 274 ms and self-correcting, which is why this is a guard and not an architecture change. But its size is incidental: the correcting tick is a vendor fetch that can fail or be refused by the shared gate, and the prime path runs at exactly the moment a user has opened the app to look at a number. A stale-by-an-hour reading rendered as fresh is the failure this display exists to avoid.
+
+Deriving the guard from `readingDate` rather than from wall-clock write order is what makes it correct across two processes with no shared clock discipline — the reading's own timestamp is the only ordering both writers already agree on, and both already carry it in the snapshot.
+
+### Alternatives Considered
+
+- **Have the widget write its fetched readings back into the database**: Removes the divergence at the source - Rejected: puts GRDB, or a second write path into persistence, inside a 30 MB extension — the constraint Decision 16 was built to respect. The notes state plainly that nothing reads the snapshot back into persistence.
+- **Skip the prime write when the stored snapshot is recent**: Smaller change, no ordering logic - Rejected: "recent" is a second threshold to pick and defend, and it fails the case this actually guards — a stored reading that is recent *and* newer than what prime holds.
+- **Let the tick correct it, as it already does**: No code change - Rejected: relies on a network call that Decision 17 can legitimately refuse, at the one moment the user is looking at the display.
+- **Compare on value equality alone (status quo)**: Already implemented - Rejected: it is the defect; an hour-old reading with a different value is "changed" and gets written.
+
+### Consequences
+
+**Positive:**
+- The shared snapshot becomes monotonic, so the widget can never render backwards regardless of which process wrote last.
+- Makes the "snapshot may lead the database" property from Decision 16 an enforced invariant rather than a comment.
+- The guard is a pure comparison on data both writers already carry — testable on the package side, no new state.
+
+**Negative:**
+- A genuine correction that lowers `readingDate` — a vendor retraction, or a clock adjustment on the device — would now be refused. No such case has been observed, but the guard would hide it if it occurred.
+- Adds an ordering rule that any future writer of the snapshot must also honour; a third writer that skips it reintroduces the defect silently.
+- Prime becomes a conditional write, so "the app was launched" no longer implies "the snapshot was rewritten" when reading logs.
+
+### Impact
+
+`App/GlucoseWidgetPublisher.swift` (the publish gate, both prime and tick paths), `GlucoseSnapshotStore`, and the data-flow section of `docs/agent-notes/widget-extension.md`. Tracked as task 16.9.
+
+---

@@ -175,12 +175,14 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
         // endpoint returns history rather than only what is new.
         guard ignoringRateGate || LibreLinkUpRateGate.isOpen() else { return false }
         let generation = connectionGeneration
+        // Recorded before the request goes out, not after a good response
+        // (Decision 17): the budget counts requests, so a failed one — and the
+        // 401 re-login retry inside `fetchSamples` — must close the gate just
+        // as a successful one does. A store failure below must likewise not let
+        // the next poll spend a second request immediately.
+        LibreLinkUpRateGate.recordFetch()
         do {
             let samples = try await fetchSamples()
-            // Recorded on the vendor request, before the ingest: the request is
-            // what the budget counts, and a store failure below must not let
-            // the next poll spend a second one immediately.
-            LibreLinkUpRateGate.recordFetch()
             // A disconnect that interleaved the fetch must not ingest or
             // report `.connected` for a source that no longer is.
             guard generation == connectionGeneration else { return false }
