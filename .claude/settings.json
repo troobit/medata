@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -V)",
+      "Bash(log show *)",
+      "Read(//private/tmp/medata-device.logarchive/**)",
+      "Bash(/usr/bin/log show *)",
+      "Bash(plutil -p /tmp/medata-debug/Build/Products/Debug-iphoneos/MeData.app/Info.plist)",
+      "Bash(timeout 120 tar tzf data/Blender_render_images.tar.gz)",
+      "Bash(xxd -l 16 data/Blender_render_images.tar.gz)",
+      "Bash(timeout 90 tar tzf data/Blender_render_images.tar.gz)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(tar tzf *)",
+      "Bash(git check-ignore *)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(/opt/homebrew/bin/python3 --version)",
+      "Bash(git commit *)"
+    ]
+  }
+}
