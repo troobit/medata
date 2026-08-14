@@ -68,7 +68,7 @@ rounds. Every Make-built binary logs one line at launch on the
 `ie.medata.app` / `Shutter` channel:
 
 ```
-event=launch buildStamp=<git-sha>-<timestamp> segmenterSource=stub|coreml
+event=launch buildStamp=<git-sha>[-dirty]-<timestamp> segmenterSource=stub|coreml
 ```
 
 The Make target prints the same stamp (`DEPLOYED BUILD STAMP: …`) at deploy
@@ -78,6 +78,35 @@ testing — days were lost debugging against the stub without realising. A plain
 Xcode Run logs `buildStamp=unstamped` (the stamp comes from the
 `MEDATA_BUILD_STAMP` build setting via `MeData/Info.plist`, which only the
 Make targets set).
+
+`-dirty` sits with the sha it qualifies and means tracked files were modified
+when the build was made: the sha names the commit the build was *based on*, not
+the tree that was compiled, so that binary cannot be rebuilt from the commit
+alone. It is measured with `git diff --quiet HEAD` — tracked files only, so
+gitignored build products like `segmenter.mlpackage` never trigger it. During
+active UI work nearly every hand-driven deploy reads `-dirty`, so its presence
+is unremarkable; the information is in its absence. A stamp *without* `-dirty`
+is a checkable claim that the binary matches the named commit, which is what an
+archived capture round or a tagged attempt needs to be reproducible. A dirty
+build is fine for looking at a screen; it is not the build to cite as the
+reference for a comparison you intend to repeat.
+
+### Tagging a UI attempt
+
+When a UI design is worth comparing against later, commit it on a clean tree and
+tag that commit `<design>-attempt-N` — `tilt-guide-attempt-1` and
+`tilt-guide-attempt-2` are the existing pair (`docs/agent-notes/tilt-aim-guide.md`).
+The tag points at exactly one commit, `N` is only the order the attempts were
+tried in, and the tag claims nothing beyond "this is what that attempt was". It
+is not a version label, nothing reads it, and no numbering is reserved —
+everything stays v0 until main (pipeline Decision 50). Build the tagged commit
+and the stamp comes out clean, so a capture round and the attempt it shows are
+joined by the sha.
+
+To spin a variant out of an attempt later, branch from the tag:
+`git switch -c <design>-<variant> <design>-attempt-N`. Nothing else needs
+updating, and deleting a tag once its attempt stops being interesting is fine —
+`git log` still holds the commit.
 
 ## Debug vs Release stub matrix
 

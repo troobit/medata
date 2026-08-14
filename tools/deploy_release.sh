@@ -13,7 +13,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEVICE_UDID="${DEVICE_UDID:?set DEVICE_UDID (xcrun devicectl list devices)}"
 BUNDLE_ID="${BUNDLE_ID:-rtob.MeData}"
 DERIVED_RELEASE="${DERIVED_RELEASE:-/tmp/medata-release}"
-BUILD_STAMP="${BUILD_STAMP:-$(git -C "$REPO_ROOT" rev-parse --short HEAD)-$(date +%Y%m%d-%H%M%S)}"
+# Same expression as Makefile's BUILD_STAMP: <sha>[-dirty]-<timestamp>, with
+# dirtiness over TRACKED files only. Both git calls carry -C "$REPO_ROOT" — a
+# deploy invoked from another directory would otherwise measure that tree.
+BUILD_STAMP="${BUILD_STAMP:-$(git -C "$REPO_ROOT" rev-parse --short HEAD)$(git -C "$REPO_ROOT" diff --quiet HEAD || echo '-dirty')-$(date +%Y%m%d-%H%M%S)}"
 
 MODEL_PATH="$REPO_ROOT/MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage"
 APP_PATH="$DERIVED_RELEASE/Build/Products/Release-iphoneos/MeData.app"
