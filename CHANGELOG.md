@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Anchor label-space mismatch in segmenter validation** (`specs/bugfixes/anchor-label-space-mismatch/report.md`, `tools/segmenter/run_validation.py`, `tools/segmenter/validation.py`): Two remapped FoodSeg103 dataset roots with identical image stems but different label spaces (35 vs 36 classes) were causing silent misattribution of classes above index 23, understating mean food-class IoU by ~0.07. The validation script now enforces label-space consistency between model and dataset, preventing silently incorrect benchmark metrics from propagating to promotion decisions. The shipped `ab812dc3aa9d` checkpoint's recorded 0.3927 figure remains correct; re-measurements through `run_validation.py` now reproduce it accurately with the fixed anchor.
+
+### Changed
+
+- **Segmenter-foundation decision log updated with validation findings and recipe decisions** (`specs/estimation/segmenter-foundation/decision_log.md`): New decisions documenting the anchor label-space mismatch investigation, validation methodology, and recipe confirmation ahead of the SegFormer-B0 retrain.
+- **ML training and reference documentation updated** (`docs/ml-training.md`, `docs/references.md`): Expanded ML training methodology documentation and reference materials for segmenter development.
+- **Segmenter tools updated for validation consistency** (`tools/segmenter/export.py`, `tools/segmenter/merge_corpus_foodrec2022.py`, `tools/segmenter/train.py`): Minor updates to ensure consistency with fixed validation pipeline.
+- **Deployment scripts updated** (`tools/deploy_release.sh`): Enhanced release deployment tooling.
+
+### Added
+
+- **Anchor label-space validation test** (`tools/segmenter/tests/test_anchor_label_space.py`): New test suite ensuring model output channel count matches dataset label space before validation scoring.
+- **MetaFood3D dataset fetching script** (`tools/metafood3d/fetch_dataset.sh`): Script for queued fetching of MetaFood3D Blender-rendered dataset as a candidate training corpus.
+
 ### Changed
 
 - **Specs overview corrections and status updates** (`specs/OVERVIEW.md`): corrected creation dates for Research, Minimum Viable Volume Estimator, Rawframe Rgb Conversion, Event Log Schema, and Manual Carb Intake; marked Alternative Class Candidates and Mass Readout as In Progress; updated Glucose Lock Screen Widget task count (22/26) and extended description capturing Decisions 17–19 and the second device pass findings.

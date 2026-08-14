@@ -123,15 +123,21 @@ This codebase was made possible by, and builds on the work of others, detailed b
 - **MetaFood3D.** Chen et al. (ref. 8). CC BY-NC 4.0 (non-commercial).
   <https://lorenz.ecn.purdue.edu/~food3d/>. Single-food 3D meshes + nutrition
   values for cross-dataset β calibration. Access is request-gated (form +
-  password); access obtained 2026-08-10. Of the distributed components, only
-  the 3D meshes and nutrition values (plus the dataset README) were collected
-  for that purpose — depth is rendered deterministically from the meshes by
+  password); access obtained 2026-08-10. Collected on that date for that
+  purpose: the 3D meshes, the nutrition values, the point clouds and the
+  dataset README — depth is rendered deterministically from the meshes by
   `tools/metafood3d/render.py`, so the Blender renders were not needed for
-  calibration. The Blender renders were obtained on 2026-08-14 for a different
-  purpose: they are queued as a candidate segmenter training corpus behind a
-  mask-derivation spike (segmenter-foundation Decision 31, estimation-quality
-  task 8). RGBD videos and point clouds remain uncollected. Commercial use is
-  governed by cross-dataset-calibration Decision 18. Cited in `specs/OVERVIEW.md`.
+  calibration. The point clouds (1,024 sampled points per object) were taken
+  with the meshes but are **not used by anything**; the volume path reads the
+  meshes directly. The Blender renders were obtained on 2026-08-13 for a
+  different purpose: they are queued as a candidate segmenter training corpus
+  behind a mask-derivation spike (segmenter-foundation Decision 31,
+  estimation-quality task 8). **RGBD videos remain uncollected** — per the
+  dataset README that is the only component shipping per-frame segmentation
+  masks, and the only one carrying real captured frames rather than renders,
+  so it is the component to revisit if the renders do not earn their place.
+  Commercial use is governed by cross-dataset-calibration Decision 18. Cited in
+  `specs/OVERVIEW.md`.
 
 ### Supporting reference data
 

@@ -468,6 +468,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-coreml",
                         default="MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage")
     parser.add_argument("--out-tflite", default="tools/segmenter/build/segmenter.tflite")
+    parser.add_argument("--lineage", default=None, metavar="PATH",
+                        help="Where to write the lineage manifest (default "
+                             "tools/segmenter/build/lineage.json). Pass a "
+                             "per-model path when exporting a candidate "
+                             "alongside the bundled model, or the export "
+                             "overwrites the incumbent's recorded metrics — "
+                             "preserve_metrics only protects a re-export of "
+                             "the SAME checkpoint.")
     parser.add_argument("--skip-tflite", action="store_true",
                         help="Skip the TFLite export (validation only in v1).")
     parser.add_argument("--skip-validation", action="store_true",
@@ -488,7 +496,7 @@ def main(argv: list[str] | None = None) -> int:
     # checkpoint — without one there is no SHA-256 to anchor reproducibility.
     model_version: str | None = None
     if args.checkpoint and Path(args.checkpoint).is_file():
-        model_version = emit_lineage(args.checkpoint)
+        model_version = emit_lineage(args.checkpoint, args.lineage)
     else:
         print("[export] no --checkpoint file; skipping lineage manifest + version stamp")
 

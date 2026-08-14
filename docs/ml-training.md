@@ -327,7 +327,11 @@ Output: a PyTorch checkpoint at `tools/segmenter/build/checkpoint.pt`. This `.pt
 is the **single source of truth** (Decision 28) that both export paths (§6)
 consume — there is no separate iOS vs Android training run.
 
-### Current run (myfoodrepo-bridge, 2026-07-26): merged corpus at 36 classes
+### The incumbent recipe (myfoodrepo-bridge, 2026-07-26): merged corpus at 36 classes
+
+This is the recipe that produced the **shipped** model `ab812dc3aa9d` (Decision 27),
+and it is the baseline every later run is judged against. R2 re-runs it verbatim
+with the corpus as the only change, so keep it launchable as written.
 
 Palette v2 (MD-29) and the Food Recognition 2022 bridge (MD-30) move training
 to the merged corpus — `data/merged_foodseg_foodrec2022` (train 45,515 /
@@ -347,6 +351,78 @@ nohup caffeinate -is tools/segmenter/.venv/bin/python tools/segmenter/train.py \
     --out tools/segmenter/build/checkpoint_merged_v2.pt \
     >> tools/segmenter/build/train_merged_v2.log 2>&1 &
 ```
+
+### Current run (estimation-quality R1, 2026-08-14): `combined` + `sqrt_inverse`
+
+R1 is the settled class-imbalance recipe from estimation-quality task 6: the
+incumbent corpus and step budget with three levers changed —
+`--loss combined` (Dice + CE at `--dice-weight` 0.5), `--class-weighting
+sqrt_inverse`, and `--photometric-augment`. This is the exact command that
+produced `e4e92a9df9d3`, recovered from the shell that launched it:
+
+```sh
+tools/segmenter/.venv/bin/python tools/segmenter/train.py \
+    --data /Users/r/repos/medata/data/merged_foodseg_foodrec2022 \
+    --num-classes 36 --target-size 513 \
+    --epochs 12 --batch-size 16 --lr 1e-3 \
+    --loss combined --class-weighting sqrt_inverse --photometric-augment \
+    --out tools/segmenter/build/checkpoint_combined_sqrtinv.pt \
+    >> tools/segmenter/build/train_combined_sqrtinv_20260814.log 2>&1 &
+```
+
+Launched 01:52, finished 08:17 — 12/12 epochs in about 6h25m on MPS, roughly
+32 min/epoch. Two hygiene notes, because R2 will be launched from this block:
+
+- The command above carries **no `nohup caffeinate -is` prefix**; `caffeinate -is`
+  was started by hand in a second shell 42 seconds later. That worked, but it is
+  not what "Detached runs" below prescribes — prefix the launch as documented and
+  the run survives both a closed shell and a sleeping Mac.
+- The 13 Aug attempt (`train_combined_sqrtinv_20260813.log`, 35 bytes) is a
+  mistyped `asdcanohup` prefix that never started a run. Check the log has epoch
+  lines in it before walking away.
+
+Validated on the binding surface with:
+
+```sh
+tools/segmenter/.venv/bin/python tools/segmenter/run_validation.py \
+    --checkpoint tools/segmenter/build/checkpoint_combined_sqrtinv.pt \
+    --data /Users/r/repos/medata/data/foodseg103_remapped_v2 \
+    --split heldout_leakfree \
+    --lineage /Users/r/repos/medata/tools/segmenter/build/lineage-e4e92a9df9d3.json \
+    > tools/segmenter/build/validate_combined_sqrtinv_leakfree_v2anchor.log 2>&1
+```
+
+> **`--data` must be `foodseg103_remapped_v2`, not `foodseg103_remapped.**
+> Both directories hold the same 182 leak-free stems, but their masks are in
+> different label spaces — v1 tops out at class 34 (35 classes), v2 at class 35
+> (36 classes), and the indices diverge above 23. Validating a 36-class model
+> against the v1 masks silently mis-scores every class above the divergence and
+> understates the mean by roughly 0.07 without failing. R1 was first measured
+> that way and read 0.2472; the same command against v2 reads 0.3215. The
+> incumbent reproduces its recorded 0.3927 **only** against v2, which is what
+> identifies v2 as the surface Decisions 27 and 30 were measured on.
+>
+> `splits.json` `anchor.path` points at the v1 directory and is wrong — the
+> default at `merge_corpus_foodrec2022.py:121-122` was never moved to `_v2` when
+> the corpus was. The leak-free guarantee itself is unaffected: the stems are
+> identical in both directories, so the no-overlap check still holds.
+
+Measured on the v2 anchor, against the incumbent re-measured the same day with
+the same script: mean food-class IoU **0.3215 vs 0.3927** (−0.071), and a staple
+mean of 0.3549 vs 0.3870 over the incumbent's seven measurable staples (−0.032).
+`export_eligible: false`. On merged val R1 peaked at 0.4046 (epoch 12, still
+climbing) against the incumbent's 0.4418.
+
+The per-staple split is the informative part, and it is the classic
+class-weighting trade: R1 **lifts `bread_white` from 0.3927 to 0.4605**, taking
+the incumbent's weakest staple over the 0.45 floor, while regressing the strong
+ones — `pasta` 0.6497 → 0.5158, `chips_fries` 0.5599 → 0.4703, `white_rice`
+0.6320 → 0.5873. `bread_wholemeal` and `potato_mashed` read 0.0000 for both
+models (Decision 21: zero FoodSeg103 images), and `brown_rice` is `absent` for
+the incumbent but 0.0000 for R1 — meaning only R1 predicts it anywhere.
+
+The promote-or-reject verdict is
+`specs/estimation/segmenter-foundation/decision_log.md`, not this runbook.
 
 ### Superseded: recommended next run (estimation-quality PRD)
 
@@ -572,6 +648,66 @@ here — and ANE residency in particular is a manual check that is easy to miss.
      that converts fine but falls back to CPU/GPU silently blows the latency bar.
 3. Tap the shutter on device → a real `MealRecord` with a non-placeholder carb
    total reaches the result view.
+
+### Swapping which model is bundled
+
+Judging a candidate in the real world means putting it on the phone, and the app
+has **no model picker** — the bundled artefact is the model, chosen at build
+time. That is deliberate: nothing on the device selects a model, so there is no
+way for a build to disagree with itself about what it is running.
+
+The rule that makes swapping cheap is: **never export over the bundled path.**
+Export each candidate to its own name under `build/`, with its own lineage
+manifest, and treat `Resources/segmenter.mlpackage` purely as a copy target.
+
+```sh
+# Export a candidate ASIDE — never straight into Resources/.
+tools/segmenter/.venv/bin/python tools/segmenter/export.py \
+    --checkpoint tools/segmenter/build/checkpoint_combined_sqrtinv.pt \
+    --out-coreml tools/segmenter/build/segmenter-e4e92a9df9d3.mlpackage \
+    --lineage    tools/segmenter/build/lineage-e4e92a9df9d3.json \
+    --skip-tflite
+
+# Put it on the phone: one copy, one build.
+rm -rf MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage
+cp -R tools/segmenter/build/segmenter-e4e92a9df9d3.mlpackage \
+      MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage
+make deploy-release
+```
+
+Swapping back to the incumbent is the same two commands with
+`segmenter-ab812dc3aa9d.mlpackage` — no re-export and no retrain, because the
+candidate's artefact and manifest are still sitting in `build/`. `build/` is
+gitignored in full, so the accumulated candidates cost nothing but disk.
+
+`--lineage` is the load-bearing flag. `emit_lineage` writes to
+`build/lineage.json` by default and `preserve_metrics` only protects a re-export
+of the **same** checkpoint, so an export without it silently overwrites whatever
+model the manifest last described. That is not hypothetical: the R1 run
+(§4) overwrote the incumbent's recorded metrics and its developer-phase release
+override, and only the checkpoint surviving on disk made them recoverable.
+
+### Knowing which model is on the phone
+
+Three surfaces name the model, and they agree by construction because all three
+read the same 12-hex id that `export.py` stamps into the Core ML metadata as
+`medata.modelVersion`:
+
+- **The build** — `make deploy-release` prints `BUNDLED SEGMENTER:` before
+  building and `DEPLOYED SEGMENTER:` after installing. Read it out of the
+  artefact itself, not out of a variable, so a stale copy cannot lie.
+- **Every capture** — the app stamps `segmenterSource = coreml_<modelVersion>`
+  on each `MealRecord` and `EstimationOutcome`; Settings › Estimation log shows
+  it per capture, and the Benchmark report is scoped by it, so captures taken
+  under different models never pool into one accuracy number.
+- **The launch line** — `event=launch buildStamp=… segmenterSource=…` via
+  `make logs-device`. Note this one reports only `stub` or `coreml`: it tells you
+  whether a real model is bound, **not which**. Use the build output or a capture
+  for that.
+
+The build stamp identifies the *build*, not the model inside it — a `cp -R` swap
+followed by a rebuild changes both, but a rebuild without a swap changes only the
+stamp. Match the model id, not just the stamp, before trusting a captured trail.
 
 ## 8. Capturing gravimetric meal fixtures
 

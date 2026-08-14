@@ -74,6 +74,49 @@ def food_class_names() -> tuple[str, ...]:
     return tuple(c["name"] for c in channels if c["name"] not in specials)
 
 
+def dataset_channel_count(data_root: str | Path) -> int | None:
+    """The label-space width a prepared dataset directory records for itself.
+
+    Every directory `prepare_dataset.py` / `merge_corpus_foodrec2022.py` emits
+    carries a `splits.json` stating its `channel_count`. Returns ``None`` when the
+    directory makes no such claim — an unmanifested root is unknown, not wrong.
+    """
+    manifest = Path(data_root) / "splits.json"
+    if not manifest.is_file():
+        return None
+    try:
+        return json.loads(manifest.read_text()).get("channel_count")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def assert_label_space(data_root: str | Path, expected_channels: int) -> None:
+    """Fail fast when a dataset's label space differs from the model's.
+
+    Two remapped FoodSeg103 roots exist with the SAME image stems but different
+    class indices — `foodseg103_remapped` at 35 channels and
+    `foodseg103_remapped_v2` at 36, diverging above index 23. Scoring across that
+    boundary reads only legal indices, so it never raises on its own: it silently
+    mis-attributes every class above the divergence and returns a plausible,
+    roughly 0.07-low mean. That is not hypothetical — it put a wrong figure into
+    two recorded verdicts before anyone noticed
+    (specs/bugfixes/anchor-label-space-mismatch/report.md).
+
+    Silent on an unmanifested root, by the same reasoning as
+    ``dataset_channel_count``: this guard exists to catch a contradiction, not to
+    require a manifest.
+    """
+    recorded = dataset_channel_count(data_root)
+    if recorded is not None and recorded != expected_channels:
+        raise SystemExit(
+            f"[validate] label-space mismatch: the model has {expected_channels} "
+            f"channels but {data_root} records {recorded} — its masks are in a "
+            "different class-index space, and scoring against them would return a "
+            "plausible WRONG number rather than fail. Point --data at the matching "
+            "corpus (36 channels: data/foodseg103_remapped_v2)."
+        )
+
+
 def empty_metrics() -> dict[str, Any]:
     """Unpopulated metrics block (matches lineage.empty_metrics plus decision fields)."""
     return {

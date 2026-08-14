@@ -22,7 +22,7 @@ Long local runs (e.g. Apple-silicon MPS) are interruptible: a resume sidecar
 Usage (docs/ml-training.md §4)::
 
     python tools/segmenter/train.py \\
-        --data data/foodseg103_remapped \\
+        --data data/foodseg103_remapped_v2 \\
         --num-classes 36 --target-size 513 \\
         --epochs 60 --batch-size 16 --lr 1e-3 \\
         --out tools/segmenter/build/checkpoint.pt
@@ -72,6 +72,7 @@ if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 import archs  # noqa: E402  (torch-free at import, same family as loss_config)
 import loss_config  # noqa: E402
+import validation  # noqa: E402  (pure stdlib — label-space guard only)
 
 # ImageNet normalization -- MUST match export.reference_input (train/serve match).
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -978,7 +979,7 @@ def _save_checkpoint(model, args, last_miou: float, pretrained: bool,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data", default="data/foodseg103_remapped",
+    parser.add_argument("--data", default="data/foodseg103_remapped_v2",
                         help="Remapped dataset root with train/val[/heldout] splits.")
     parser.add_argument("--num-classes", type=int, default=36)
     parser.add_argument("--target-size", type=int, default=513)
@@ -1087,6 +1088,11 @@ def main(argv: list[str] | None = None) -> int:
             f"({PALETTE_BACKGROUND}), so at least {PALETTE_BACKGROUND + 1} "
             f"classes are required."
         )
+
+    # A corpus in a different label space trains happily and scores plausibly —
+    # every index it reads is legal (bugfix anchor-label-space-mismatch). Cheaper
+    # to refuse here than to discover it after a multi-hour run.
+    validation.assert_label_space(args.data, args.num_classes)
 
     return train(args)
 
