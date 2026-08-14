@@ -31,7 +31,9 @@ references:
 
 ## MetaFood3D synthetic corpus and the serial run queue
 
-- [-] 8. Build a training corpus from the MetaFood3D Blender renders (agent-executable, no GPU) <!-- id:pgctxed -->
+- [x] 8. Spike — settle the MetaFood3D mask route, then judge whether the corpus is worth building (agent-executable, no GPU) <!-- id:pgctxed -->
+  - RETITLED 2026-08-14 on acceptance of segmenter-foundation Decision 33. The original title was `Build a training corpus from the MetaFood3D Blender renders`, which this task can no longer honestly satisfy: the spike ran, and its verdict is that the corpus should NOT be built. Ticking a build criterion would have claimed work that was deliberately not done; leaving it open would have implied outstanding work when the question is settled. The task is what it turned out to be — a spike with a negative verdict — and closes as one
+  - Original detail lines are retained verbatim below as the brief the spike was run against, including the two premises it falsified
   - data/Blender_render_images.tar.gz is 137 GiB gzipped, laid out as Blender_render_images/<Category>/<instance>/<Instance>/{Original,Depth,Normal}/ with about 60 viewpoints per instance across 108 categories. Extraction runs to a few hundred GB against 1.1 TiB free — check df before starting, and note the archive is not seekable, so any listing pass decompresses sequentially
   - This component ships NO segmentation masks — the dataset's masks are in RGBD_videos, which the project did not collect (docs/references.md). Single-object renders plus the Depth channel make masks derivable, but that is an inference: prove it on one category before building anything. The (bowl) categories are the risk, since a bowl or plate in frame is not food
   - tools/metafood3d/mapping_metafood3d_to_palette.json maps 13 of 108 categories onto 11 of 33 palette classes, and it was built for calibration rather than training. Decide deliberately whether to widen it: Rice and Yeast_bread are currently unmapped, and of the three zero-image staples only potato_mashed is covered — brown_rice and bread_wholemeal are not, so these renders do not close the absent-staple gap that Decision 21 recorded
@@ -43,7 +45,9 @@ references:
   - Mapping deliberately NOT widened: Rice and Yeast_bread carry no grain type in the dataset, so mapping them would guess wrong-class pixels into white_rice/bread_white/bread_wholemeal, which already hold real images
   - Confirmed as stated: these are a class-coverage lever, not a realism lever — and the coverage they offer is 11 of 33 classes from one studio tablecloth, against classes that are no longer the bottleneck
 
-- [ ] 9. WITHDRAWN by Decision 33 — R2 does not run; there is no corpus to test and the serial machine time returns to the queue <!-- id:pgctxee -->
+- [x] 9. WITHDRAWN by Decision 33 — R2 does not run; there is no corpus to test and the serial machine time returns to the queue <!-- id:pgctxee -->
+  - Closed 2026-08-14 on acceptance of Decision 33, which was `proposed` when this title was written. Ticked to close the ledger entry, NOT to claim the run happened — the title carries the withdrawal. Left `Pending` it would have counted as outstanding work in every task sweep for a run that will never be scheduled
+  - Consequence for task 10 (R3), which is blocked-by this one and whose shape was to be `set by R2's verdict`: there is now no R2 verdict to set it. Decision 33 states the serial ordering stands with R2 removed, but R3's premise came from R2. Re-scope or withdraw task 10 before it is picked up
   - ONE MACHINE, STRICTLY SERIAL — do not start this or any run below while another is in flight. About 25 min/epoch, so roughly 5 h for a 12-epoch run on MPS. Clamshell rig with caffeinate -is per docs/agent-notes; the resume sidecar caps a reboot at one lost epoch
   - The question is whether synthetic render data helps at all. Hold the Decision 27 recipe fixed and change only the corpus, so the delta is attributable to the data and nothing else
   - The mixing ratio is both the lever and the risk: these renders reach 11 palette classes, so an unweighted mix shifts class balance toward exactly those and can buy tail coverage with a staple regression — the failure mode Decision 25 already recorded once

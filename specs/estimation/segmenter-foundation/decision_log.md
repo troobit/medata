@@ -1254,7 +1254,13 @@ Note that acquiring `RGBD_videos` changes nothing here: it is the same dataset u
 ## Decision 33: The MetaFood3D corpus is rejected — the staple gap it was built to close is already closed, and its labels contradict the plate/food boundary
 
 **Date**: 2026-08-14
-**Status**: proposed
+**Status**: accepted
+
+> Accepted by the developer 2026-08-14, after the load-bearing measurement was
+> independently re-checked against `data/merged_foodseg_foodrec2022/co_stats.json`:
+> `potato_mashed` 150 images / 10,769,149 train pixels, `brown_rice` 131 /
+> 11,372,646, `bread_wholemeal` 2,546 / 229,242,179, and `beans_baked` the sole
+> class at zero. The staple gap this corpus was queued to close is closed.
 
 ### Context
 
