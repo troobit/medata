@@ -116,9 +116,66 @@ which the Swift decoder never read; that stale shape is superseded.)*
   distinct `Object_name` values, via `derive_metadata.py` →
   `categories.txt`.
 - Downloads live in gitignored `data/` (never committed, Req 1.2):
-  mesh + point-cloud tarballs, the v2 workbook, `_MetaFood3D_Readme.txt`.
-  Only meshes + workbook + readme have consumers; renders/videos/point
-  clouds are unused.
+  mesh + point-cloud tarballs, the v2 workbook, `_MetaFood3D_Readme.txt`,
+  and since 2026-08-13/14 the Blender renders and both RGBD video
+  components. Only meshes + workbook + readme have consumers; point clouds,
+  renders and videos are unused — see the component audit below.
+
+## Component audit for segmenter training (2026-08-14, Decision 33)
+
+The renders and RGBD videos were collected as candidate segmenter training
+corpora and **rejected**. The facts below are measured, not inferred, so a
+future revisit does not have to re-run the spike.
+
+- **Layouts.** Renders:
+  `Blender_render_images/<Category>/<instance>/<Instance>/{Original,Depth,Normal}/`,
+  **200 viewpoints** per instance (not the ~60 the task text assumed).
+  Videos: `RGBD_videos/<Category>/<object>/{original,masks,depth,segmented}/`,
+  200 frames each, 1:1 across modalities, plus a stray `.mp4` per object.
+- **Masks exist on both routes.** Render `Original` is **RGBA with a real
+  alpha matte** — no need to infer from `Depth` at all. Alpha `>127` and
+  "depth != background" agree at **IoU 0.9985-0.9989**, so Decision 31's
+  depth inference is confirmed. Video `masks/*.jpg` are lossy-stored but
+  effectively binary: 16 grey levels, all `<=10` or `>=245`, **zero**
+  mid-tone pixels, so `>128` thresholds exactly.
+- **The container problem is real, per-object, and systematic across frames.**
+  Video masks include the plate/boat/carton for many container-served
+  objects: `Mashed_Potato/mash1` covers the whole dark plate at 15.0-21.3 %
+  of frame across every sampled frame, against 2.2-4.2 % for the other three
+  `Mashed_Potato` objects — a 4-8x coverage signature, not a one-frame
+  glitch. `French_Fry/fries_1` (7.0-9.4 %) labels the paper plate,
+  `new_fries_3` the boat, `new_waffle_fry_2` the entire carton. Bare foods
+  are tight — all six `Apple` objects sit at 3.4-12.9 % with no container.
+  **The `new_` prefix is not a discriminator**: `new_fries_4` and
+  `new_waffle_fry_1` are clean while `new_fries_3` and `new_waffle_fry_2`
+  are not. For `(bowl)` categories the scanned mesh *is* the bowl, so the
+  renders inherit it there too.
+- **Some frames contain no food at all.** `French_Fry/fries_2` holds
+  0.09-0.30 % mask coverage across sampled frames — the camera is pointed at
+  bare tablecloth — yet the frames are still shipped under the category. A
+  frame-coverage floor would be mandatory in any build.
+- **Scale is 80 objects, not 16,000 images.** The 13 mapped categories cover
+  80 physical objects over 11 palette classes — `potato_mashed` 4, `beef` 4,
+  `egg` 5, `pork` 5, `chips_fries` 6, `carrot` 12. The 200 views per object
+  are near-duplicates of one specimen on one black studio tablecloth, so any
+  honest split must be **object-disjoint**, which leaves n=1 heldout objects
+  for the thin classes.
+- **Render photometry is viewpoint-dependent and wrong.** `Mashed_Potato`
+  food-pixel mean luminance runs L=44-158 across viewpoints against L=137-181
+  for the same objects in the real captures. Renders also have no background
+  (transparent), 3-6 % frame coverage, and sub-horizon viewpoints the capture
+  path never sees.
+- **The staple premise that motivated it was stale.** "Three zero-image
+  staples" is a **FoodSeg103-only** fact from Decision 21. In the live merged
+  corpus `potato_mashed` has 150 images / 10.77 M train pixels, `brown_rice`
+  131 / 11.37 M, `bread_wholemeal` 2,546 / 229.24 M. The only zero-train-pixel
+  class is `beans_baked`, which MetaFood3D does not cover. The real gap is
+  that those staples are absent from **heldout**, which MetaFood3D cannot fix
+  because `heldout_leakfree` is deliberately real-image FoodSeg103 only.
+- **Cost of a pass.** The archives are gzip, not seekable. Streaming to the
+  `M` categories took ~3.5 min for the 137 GiB render archive with a
+  `tarfile` `r|gz` filter that extracts only matching members, so a full pass
+  is roughly 6 min. Filter and stop early rather than extracting wholesale.
 - Meshes assumed millimetres; a metre/centimetre snapshot trips
   unit-sanity and the conversion belongs in `derive_metadata.py`.
 
