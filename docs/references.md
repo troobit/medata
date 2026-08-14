@@ -129,13 +129,19 @@ This codebase was made possible by, and builds on the work of others, detailed b
   `tools/metafood3d/render.py`, so the Blender renders were not needed for
   calibration. The point clouds (1,024 sampled points per object) were taken
   with the meshes but are **not used by anything**; the volume path reads the
-  meshes directly. The Blender renders were obtained on 2026-08-13 for a
-  different purpose: they are queued as a candidate segmenter training corpus
-  behind a mask-derivation spike (segmenter-foundation Decision 31,
-  estimation-quality task 8). **RGBD videos remain uncollected** — per the
-  dataset README that is the only component shipping per-frame segmentation
-  masks, and the only one carrying real captured frames rather than renders,
-  so it is the component to revisit if the renders do not earn their place.
+  meshes directly. The Blender renders were obtained on 2026-08-13, and the
+  RGBD videos (both the base component and `flipped_food`) on 2026-08-14, as
+  candidate segmenter training corpora. **Both were evaluated and rejected on
+  2026-08-14** (segmenter-foundation Decision 33, estimation-quality task 8):
+  the mask derivation works on both routes — the renders carry an alpha matte
+  agreeing with the depth-derived mask at IoU 0.9985+, and the videos ship
+  effectively binary masks — but the corpus is not worth building. The staple
+  gap it targeted was already closed by the foodrec2022 merge, the video masks
+  include the plate or carton for container-served foods (which is precisely
+  the boundary the estimation path depends on), and 80 physical objects across
+  11 palette classes cannot support an honest heldout split. No MetaFood3D
+  component now feeds the segmenter lane; the meshes and nutrition values
+  continue to feed the calibration lane.
   Commercial use is governed by cross-dataset-calibration Decision 18. Cited in
   `specs/OVERVIEW.md`.
 
