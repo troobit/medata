@@ -71,7 +71,11 @@ public struct GlucoseSnapshot: Codable, Sendable, Equatable {
     }
 }
 
-// The shared container the app writes and the widget reads.
+// The shared container BOTH the app and the widget write, and the widget reads.
+//
+// Because there are two writers, the store is monotonic in `readingDate`: a
+// write carrying an older reading than the stored one is dropped (Req 1.8,
+// Decision 19 — see `supersedesStored`).
 //
 // One Codable value under one key, so a concurrent reader sees the old blob or
 // the new one and never a spliced mixture (Req 1.5) — plist-level atomicity,
@@ -100,12 +104,52 @@ public enum GlucoseSnapshotStore {
     public static var sharedDefaults: UserDefaults? { UserDefaults(suiteName: appGroupID) }
 
     // No-ops when the suite is nil or encoding fails, leaving any previously
-    // written snapshot untouched (Req 1.6).
+    // written snapshot untouched (Req 1.6) — and, since Decision 19, when the
+    // candidate carries an OLDER reading than the one already stored (Req 1.8).
+    //
+    // Returns whether the snapshot was stored, so a caller can skip the
+    // timeline reload (app) or the render (widget) it would otherwise base on a
+    // write that did not happen.
+    @discardableResult
     public static func write(
         _ snapshot: GlucoseSnapshot, to defaults: UserDefaults? = GlucoseSnapshotStore.sharedDefaults
-    ) {
-        guard let defaults, let blob = try? JSONEncoder().encode(snapshot) else { return }
+    ) -> Bool {
+        guard let defaults, supersedesStored(snapshot, in: defaults),
+            let blob = try? JSONEncoder().encode(snapshot)
+        else { return false }
         defaults.set(blob, forKey: snapshotKey)
+        return true
+    }
+
+    // The ordering guard (Req 1.8, Decision 19). It lives in the store rather
+    // than in either writer because there are TWO of them: the app publishes
+    // what the database holds, and the widget publishes what it fetched for
+    // itself while the app was suspended (Decision 16). The snapshot may
+    // therefore legitimately lead the database, and an app catch-up that
+    // recomputed from rows it has not yet ingested must not roll it back —
+    // observed in the field as an hour-old reading republished over a newer
+    // one. Any future writer inherits the rule by construction.
+    //
+    // `readingDate` is the ordering key, not wall-clock write order: it is the
+    // only clock the two processes already agree on, and both carry it.
+    // Strictly newer, so an equal-dated recompute is a no-op rather than two
+    // writers alternating derivations of the same reading.
+    //
+    // Advisory in the same way the vendor rate gate is — read-then-write across
+    // two processes has no compare-and-set, so a simultaneous pair can still
+    // interleave. This closes the observed regression, not a race that would
+    // need a lock the App Group does not offer.
+    //
+    // A candidate carrying NO reading is not an older reading: it is the
+    // never-recorded state, which the app must still be able to write when the
+    // `bsl` history empties (Req 1.4).
+    static func supersedesStored(
+        _ candidate: GlucoseSnapshot, in defaults: UserDefaults
+    ) -> Bool {
+        guard let candidateDate = candidate.readingDate,
+            let storedDate = read(from: defaults).readingDate
+        else { return true }
+        return candidateDate > storedDate
     }
 
     // Never-recorded when the suite is nil, the key is absent, the blob does not

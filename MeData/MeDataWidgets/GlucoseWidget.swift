@@ -42,7 +42,8 @@ struct GlucoseProvider: TimelineProvider {
     // them apart is the difference between "WidgetKit never woke us", "we woke
     // and chose not to fetch", and "we fetched and it failed".
     private enum FetchOutcome: String {
-        case notConnected, readingYoung, gated, noSession, requestFailed, derivedEmpty, refreshed
+        case notConnected, readingYoung, gated, noSession, requestFailed, derivedEmpty, notNewer,
+            refreshed
     }
 
     nonisolated func placeholder(in context: Context) -> GlucoseEntry {
@@ -144,7 +145,12 @@ struct GlucoseProvider: TimelineProvider {
             .sorted { $0.timestamp < $1.timestamp }
         let derived = GlucoseDerivation.snapshot(from: readings, now: now)
         guard derived != .neverRecorded else { return (nil, .derivedEmpty) }
-        GlucoseSnapshotStore.write(derived)
+        // The store is monotonic in `readingDate` (Req 1.8, Decision 19), so a
+        // derivation that is not newer than what is stored is dropped — and
+        // then the stored snapshot is also what should render, which is exactly
+        // what nil means here. The same branch covers a nil suite or an encode
+        // failure: nothing was written, so render what is there.
+        guard GlucoseSnapshotStore.write(derived) else { return (nil, .notNewer) }
         return (derived, .refreshed)
     }
 
