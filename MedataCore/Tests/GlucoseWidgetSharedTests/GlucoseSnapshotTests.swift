@@ -52,6 +52,51 @@ struct GlucoseSnapshotTests {
         }
     }
 
+    // MARK: - Monotonic writes (Req 1.8, Decision 19)
+
+    // The field defect: the app recomputed from a database that had not yet
+    // ingested the reading the widget fetched for itself, and overwrote it.
+    @Test("A write carrying an older reading is dropped", arguments: [-3600.0, -300.0, 0.0])
+    func olderWriteIsDropped(_ offset: TimeInterval) {
+        withSuite { defaults in
+            let stored = GlucoseSnapshot.make(
+                mmolL: 6.4, readingDate: reading, trend: .steady, status: .inRange)
+            #expect(GlucoseSnapshotStore.write(stored, to: defaults))
+            let older = GlucoseSnapshot.make(
+                mmolL: 9.1, readingDate: reading.addingTimeInterval(offset), trend: .rising,
+                status: .inRange)
+            #expect(GlucoseSnapshotStore.write(older, to: defaults) == false)
+            #expect(GlucoseSnapshotStore.read(from: defaults) == stored)
+        }
+    }
+
+    @Test("A write carrying a newer reading replaces the stored one")
+    func newerWriteIsStored() {
+        withSuite { defaults in
+            GlucoseSnapshotStore.write(
+                .make(mmolL: 6.4, readingDate: reading, trend: .steady, status: .inRange),
+                to: defaults)
+            let newer = GlucoseSnapshot.make(
+                mmolL: 9.1, readingDate: reading.addingTimeInterval(300), trend: .rising,
+                status: .inRange)
+            #expect(GlucoseSnapshotStore.write(newer, to: defaults))
+            #expect(GlucoseSnapshotStore.read(from: defaults) == newer)
+        }
+    }
+
+    // Never-recorded carries no reading, so it is not an older one: the app
+    // must still be able to clear the tile when the bsl history empties.
+    @Test("Never-recorded still clears a stored reading")
+    func neverRecordedClears() {
+        withSuite { defaults in
+            GlucoseSnapshotStore.write(
+                .make(mmolL: 6.4, readingDate: reading, trend: .steady, status: .inRange),
+                to: defaults)
+            #expect(GlucoseSnapshotStore.write(.neverRecorded, to: defaults))
+            #expect(GlucoseSnapshotStore.read(from: defaults) == .neverRecorded)
+        }
+    }
+
     // MARK: - Unreadable snapshots (Req 1.7)
 
     @Test("No stored snapshot reads as never-recorded")

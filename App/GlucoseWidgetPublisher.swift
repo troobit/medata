@@ -75,8 +75,10 @@ actor GlucoseWidgetPublisher {
     }
 
     // Writes and reloads ONLY when the recomputed snapshot differs from the
-    // stored one (Req 1.3). An unchanged recompute — the common case for a
-    // tick from an insulin or intake write — costs one read and nothing else.
+    // stored one (Req 1.3) AND carries a strictly newer reading (Req 1.8,
+    // enforced in the store so the widget's own writes obey it too). An
+    // unchanged recompute — the common case for a tick from an insulin or
+    // intake write — costs one read and nothing else.
     private func publishIfChanged(trigger: String) async {
         let now = Date()
         let snapshot = await currentSnapshot(now: now)
@@ -88,7 +90,20 @@ actor GlucoseWidgetPublisher {
                 """)
             return
         }
-        GlucoseSnapshotStore.write(snapshot)
+        // Differing is not the same as newer. The widget publishes its own
+        // fetches while this process is suspended (Decision 16), so a recompute
+        // from a database that has not ingested them yet is a REGRESSION, not
+        // an update — the store drops it (Req 1.8, Decision 19) and there is
+        // nothing to reload. Seen in the field at both prime and tick.
+        guard GlucoseSnapshotStore.write(snapshot) else {
+            log.notice("""
+                event=publish.dropped trigger=\(trigger, privacy: .public) \
+                reason=notNewer \
+                was=\(Self.stamp(stored.readingDate), privacy: .public) \
+                now=\(Self.stamp(snapshot.readingDate), privacy: .public)
+                """)
+            return
+        }
         WidgetCenter.shared.reloadTimelines(ofKind: GlucoseSnapshotStore.widgetKind)
         // `reloadTimelines` is a REQUEST, not a refresh: WidgetKit spends it
         // from a daily budget and may defer it by many minutes. So this line
