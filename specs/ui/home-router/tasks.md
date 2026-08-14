@@ -96,7 +96,7 @@ references:
 
 ## Latest-glucose header
 
-- [x] 10. Latest-glucose header on the home page
+- [x] 10. Latest-glucose header on the home page <!-- id:gnuq1hq -->
   - GlucoseSnapshotSource in Persistence — lift the display-horizon read; the future-skew window bound and the snapshot derivation out of GlucoseWidgetPublisher; the publisher calls it and keeps only its write/reload plus the futureReading log (Req 4.7)
   - App/HomeGlucoseModel.swift — @Observable @MainActor holding one GlucoseSnapshot; reloads on store.eventsDidChange (RecordsModel pattern). Reads the STORE not GlucoseSnapshotStore so the header does not depend on App Group provisioning
   - HomeView.glucoseHeader — value + mmol/L + age above the route controls; TimelineView(.periodic by 60) so the age advances; arrow and band colour withheld past GlucoseTimeline.staleAge; em-dash placeholder with no copy when nothing is inside the horizon
@@ -105,7 +105,7 @@ references:
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5), [4.6](requirements.md#4.6), [4.7](requirements.md#4.7), [4.8](requirements.md#4.8)
   - References: design.md, decision_log.md
 
-- [x] 11. STOP — on-device verification of the latest-glucose header
+- [x] 11. STOP — on-device verification of the latest-glucose header <!-- id:31pjp18 -->
   - make deploy-device + on device: the reading is the topmost content on home above Capture; value matches the newest bsl row and the lock-screen widget
   - trend arrow present when readings support a rate; absent (not a placeholder) when they do not
   - let a reading go past 15 min: arrow and band colour disappear; value and age remain; age advances while home is open

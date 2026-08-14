@@ -1,16 +1,16 @@
 ---
 references:
-    - smolspec.md
-    - decision_log.md
+    - specs/ui/mass-readout/smolspec.md
+    - specs/ui/mass-readout/decision_log.md
 ---
 # Mass Readout
 
 ## Shipped with meal-review (recorded, Decision 1)
 
-- [x] 1. ResultView hero mass line
+- [x] 1. ResultView hero mass line <!-- id:4ue5vkr -->
   - Shipped during meal-review: ≈ N g on plate in the carbTotal hero stack, live pendingTotalMassG sum, accessibility id result.massLine (App/ResultView.swift). Recorded here per Decision 1; implementation history lives in the meal-review commits.
 
-- [x] 2. Records meal rows show mass beside carbs
+- [x] 2. Records meal rows show mass beside carbs <!-- id:jsfpdj8 -->
   - Shipped during meal-review: MealRecordRow computes massG from record.macros.perClass and renders N g carbs · ≈ M g (App/RecordsView.swift). Recorded here per Decision 1.
 
 ## Remaining
