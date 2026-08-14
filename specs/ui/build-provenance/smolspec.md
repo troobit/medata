@@ -51,10 +51,20 @@ rejected below with reasons.
   (`git -C "$REPO_ROOT" diff --quiet HEAD`) — without it a deploy invoked from
   another directory measures whichever tree the shell happens to be sitting in.
 - Dirtiness MUST be measured against tracked files only
-  (`git diff --quiet HEAD`), not `git status --porcelain`. Untracked build
-  by-products are routine here — `segmenter.mlpackage` is generated and
-  gitignored — and a stamp that reads `dirty` on every single build carries no
-  information.
+  (`git diff --quiet HEAD`), not `git status --porcelain`.
+  - **Corrected 2026-08-14.** This clause previously justified itself by claiming
+    that `segmenter.mlpackage`, being generated and gitignored, would make a
+    `--porcelain` check report dirty on every build. That is false, and was
+    measured to be false: `--porcelain` hides ignored files unless `--ignored` is
+    passed, so a tree carrying only that artefact reports the empty string. The
+    reasoning was wrong even though the conclusion is right; it is corrected here
+    rather than quietly deleted, because the wrong version was transcribed into
+    `docs/agent-notes/device-build-and-test.md` and will be recognised there.
+  - The real divergence is **untracked but not ignored** files — a new agent note,
+    a scratch script, a half-written spec. Those are routine mid-session, they say
+    nothing about whether the built sources differ from the commit, and a stamp
+    that reads `dirty` because a markdown file is unstaged carries no information
+    about the binary it labels.
 - `make deploy-release-stub` MUST NOT self-report dirty for its own
   Package.swift edit. It already refuses to run against a modified
   Package.swift (`tools/deploy_release_stub.sh:34-38`) and the stamp is
