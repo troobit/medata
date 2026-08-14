@@ -17,7 +17,7 @@ Usage::
 
     python tools/segmenter/run_validation.py \\
         --checkpoint tools/segmenter/build/checkpoint.pt \\
-        --data data/foodseg103_remapped --split heldout
+        --data data/foodseg103_remapped_v2 --split heldout
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--checkpoint", default="tools/segmenter/build/checkpoint.pt")
-    parser.add_argument("--data", default="data/foodseg103_remapped")
+    parser.add_argument("--data", default="data/foodseg103_remapped_v2")
     parser.add_argument("--split", default="heldout",
                         help="Split directory under --data to evaluate (default heldout).")
     parser.add_argument("--lineage", default="tools/segmenter/build/lineage.json")
@@ -134,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[validate] arch = {arch}")
 
     names = _channel_names()
+    # The model is built at the palette's channel count regardless of --data, and
+    # every class index in a mismatched corpus is still a legal index — so without
+    # this the run scores happily and reports a wrong number (bugfix
+    # anchor-label-space-mismatch). Checked beside the arch fail-fast above for
+    # the same reason: silent wrongness beats loudly nothing.
+    validation.assert_label_space(args.data, len(names))
     model = export.load_checkpoint(len(names), args.checkpoint, arch=arch)
     device = train._resolve_device(args.device)
     model.to(device)

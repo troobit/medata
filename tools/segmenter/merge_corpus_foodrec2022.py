@@ -118,8 +118,13 @@ def main(argv=None) -> int:
                         default="/Users/r/repos/medata/data/foodseg103_remapped_v2")
     parser.add_argument("--foodrec",
                         default="/Users/r/repos/medata/data/foodrec2022")
+    # MUST be a split of the --foodseg root: the anchor's masks are the surface
+    # every promotion verdict is measured on, so an anchor from a different remap
+    # records a path in a label space the corpus was never built in. This default
+    # said `foodseg103_remapped` (35 channels) while --foodseg moved to `_v2`
+    # (36) — see specs/bugfixes/anchor-label-space-mismatch/report.md.
     parser.add_argument("--anchor",
-                        default="/Users/r/repos/medata/data/foodseg103_remapped/heldout_leakfree")
+                        default="/Users/r/repos/medata/data/foodseg103_remapped_v2/heldout_leakfree")
     parser.add_argument("--foodseg-mapping",
                         default="/Users/r/repos/medata/tools/segmenter/class_mapping_foodseg103.json")
     parser.add_argument("--foodrec-mapping",
@@ -153,6 +158,14 @@ def main(argv=None) -> int:
     # Leak-free anchor invariants: byte-digest recorded; no anchor stem in
     # merged train/val.
     anchor = Path(args.anchor)
+    # The stem checks below pass whichever remap the anchor came from — the stems
+    # are identical across them and only the mask indices differ — so the label
+    # space has to be checked on its own.
+    if anchor.parent.resolve() != foodseg.resolve():
+        raise SystemExit(
+            f"anchor {anchor} is not a split of the corpus root {foodseg} — "
+            "the anchor's masks must be in the same label space as the corpus"
+        )
     anchor_stems = sorted(p.stem for p in (anchor / "images").iterdir())
     digest = hashlib.sha256()
     for p in sorted(anchor.rglob("*")):

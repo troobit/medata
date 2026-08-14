@@ -25,6 +25,16 @@ if [ ! -d "$MODEL_PATH" ]; then
     exit 1
 fi
 
+# Which model is about to go on the phone. The 12-hex id is stamped into the
+# Core ML metadata by export.py as `medata.modelVersion`, and it is the SAME id
+# the app reports as `segmenterSource = coreml_<id>` on every capture. Printed
+# here because swapping the bundled model is a plain `cp -R` that leaves no
+# other trace — the build stamp identifies the BUILD, not the model in it.
+MODEL_VERSION="$(strings -a "$MODEL_PATH/Data/com.apple.CoreML/model.mlmodel" 2>/dev/null \
+    | grep -A1 -x 'medata\.modelVersion' | tail -1)"
+[ -n "$MODEL_VERSION" ] || MODEL_VERSION="unstamped (exported without --checkpoint)"
+echo "BUNDLED SEGMENTER: $MODEL_VERSION"
+
 xcodebuild build -project "$REPO_ROOT/MeData/MeData.xcodeproj" -scheme MeData \
     -configuration Release -destination "id=$DEVICE_UDID" \
     -derivedDataPath "$DERIVED_RELEASE" -allowProvisioningUpdates \
@@ -42,3 +52,5 @@ xcrun devicectl device process launch --device "$DEVICE_UDID" \
 
 echo ""
 echo "DEPLOYED BUILD STAMP: $BUILD_STAMP  (Release + segmenter)"
+echo "DEPLOYED SEGMENTER:   $MODEL_VERSION"
+echo "Every capture from this install stamps segmenterSource=coreml_$MODEL_VERSION"

@@ -1192,3 +1192,61 @@ The architecture pair goes last because Decision 30's own consequence is that th
 `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` gains tasks 8-11 (corpus build plus R2, R3 and the R4/R5 pair) and task 6 gains its queue position; `docs/references.md` records the renders as collected and queued rather than unused. No code changes — `--arch segformer_b0` is already selectable from task 23, and `train.py` consumes the corpus shape task 8 emits.
 
 ---
+
+## Decision 32: A non-commercial corpus may train research checkpoints, but no checkpoint may be promoted until lineage records the corpus licence
+
+**Date**: 2026-08-14
+**Status**: proposed
+
+### Context
+
+Decision 31 queued the MetaFood3D Blender renders as a candidate segmenter corpus (R2), and the `RGBD_videos` component — the only one shipping per-frame segmentation masks — is under consideration as the fallback if the mask-derivation spike fails. Both are MetaFood3D, licensed CC BY-NC 4.0.
+
+cross-dataset-calibration Decision 18 already settled the non-commercial question for that dataset, and permits it freely in research. But its safety argument rests on two premises stated in its own text: that "MetaFood3D touches nothing outside the calibration pool — segmenter training and estimation-quality make no reference to it", and that removal is provable from the shipped artefact, because the baked `calibration_licence` and `calibration_contributing_datasets_per_class` meta rows "prove the result is NC-free without trusting process discipline". Decision 31 falsified the first premise without addressing the second, and it did so silently: it discusses the corpus on coverage and realism grounds and never mentions the licence.
+
+The second premise is the load-bearing one, and it does not transfer. A calibration bake can be shown NC-free by reading meta rows out of the shipped database. A checkpoint cannot: `lineage.json` records `foodseg103_source`, `split_seed`, `class_mapping_version` and a `pretrained_checkpoint` `{source_url, licence, sha256}` object, but has **no field describing the training corpus or its licence** — and the exported `.mlpackage` carries only `medata.modelVersion`. The gap is already visible on the shipped model: `ab812dc3aa9d` trained on the merged FoodSeg103 + Food Recognition 2022 corpus, yet its manifest's `foodseg103_source` reads `"FoodSeg103"`. Lineage under-describes the corpus today, so an NC contribution would enter the weights with nothing in the artefact to reveal it.
+
+Both current corpora are commercially permissive — FoodSeg103 Apache 2.0, Food Recognition 2022 CC BY 4.0 (`data/foodrec2022/SOURCE.md`) — so this would be the first non-commercial contribution to the shipped weights.
+
+### Decision
+
+MetaFood3D — the renders, and `RGBD_videos` if acquired — may be used freely to train and evaluate **research** checkpoints. No checkpoint trained on a non-commercially-licensed corpus may be promoted to the bundled `segmenter.mlpackage` until the lineage manifest records the corpus composition and its strictest licence, and `export.py` stamps that strictest licence into the Core ML metadata beside `medata.modelVersion`. A commercial build's bundled model must then be checkable from the artefact alone, exactly as a commercial database bake is under Decision 18.
+
+### Rationale
+
+This is the same posture Decision 18 took, applied to the surface Decision 18 assumed it would never reach: research is unblocked, the commercial question is deferred, and the deferral is safe *because* it is auditable rather than because someone remembers. Restating the gate for weights costs nothing now and preserves the property that made deferral defensible in the first place.
+
+Recording it in lineage rather than in prose is the whole point. The alternative is process discipline over a gitignored build directory, and that store has already proven unreliable in practice: the R1 run overwrote `lineage.json` wholesale, taking the incumbent's recorded metrics and its developer-phase release override with it, and nothing noticed until the file was read for another purpose. A licence fact held only in a decision entry and a human's memory is weaker than one held in the manifest and stamped into the artefact.
+
+The mechanism is already half-built and idiomatic. `lineage.build_lineage` takes a `pretrained_checkpoint` `{source_url, licence, sha256}` object precisely so the published initialisation's licence travels with the checkpoint; a corpus object is the same shape for the same reason. Fixing it also repairs the existing under-description, which is worth doing regardless of whether any NC data is ever used.
+
+The gate binds promotion, not training, because that is where the exposure actually is. A research checkpoint that never reaches the bundle encumbers nothing, and blocking the experiment would forfeit the only data lever left after Decision 30 spent the architectural one.
+
+Note that acquiring `RGBD_videos` changes nothing here: it is the same dataset under the same licence, so it is permitted for research on identical terms, and the promotion gate applies to it identically.
+
+### Alternatives Considered
+
+- **Bar MetaFood3D from segmenter training entirely**: zero exposure, no new machinery - Rejected: it forfeits the data lever at the point Decision 30 established the architecture is not the lever, and it contradicts Decision 18's own finding that non-commercial data is acceptable in research when the commercial gate is auditable. It also would not prevent the next NC corpus from entering unrecorded, because the recording gap is the actual defect.
+- **Rely on the decision log and the operator's memory of which runs used which corpus**: no code changes - Rejected as exactly what Decision 18 refused for calibration, and on stronger evidence here: the manifest that would hold the fact is gitignored and has already been silently overwritten once.
+- **Treat model weights as insufficiently derivative for CC BY-NC to bind**: arguably a statistical summary rather than adapted material - Rejected as the load-bearing position, mirroring Decision 18's parallel rejection: the question is legally unsettled and the repo's posture is strictest-licence-wins. It remains a fallback argument, not the plan.
+- **Defer until the mask-derivation spike proves the renders are usable**: avoids work on a corpus that may not exist - Rejected: the acquisition question is live now — whether to download `RGBD_videos` turns on this answer — and the gate is a sentence whether or not the spike passes.
+- **Record the licence only in `lineage.json`, without stamping the export**: less work, and lineage is the training-side source of truth - Rejected: lineage is gitignored and does not travel with the `.mlpackage`, so a bundled model would still be unattributable. Decision 18's guarantee is specifically that the *shipped artefact* proves its own provenance.
+
+### Consequences
+
+**Positive:**
+- R2 and the `RGBD_videos` acquisition are unblocked immediately, with the commercial question deferred rather than forced.
+- The commercial gate becomes a property of the artefact rather than of anyone's recollection, matching how the database bake already works.
+- The existing corpus under-description in lineage is repaired as a side effect — `foodseg103_source` reading `"FoodSeg103"` for a merged-corpus model is wrong today, independent of any licence question.
+- A per-model manifest convention now exists to hold it (`build/lineage-<model_version>.json`), so recording corpus provenance no longer competes for a single shared file.
+
+**Negative:**
+- Lineage and export work must land before any NC-trained checkpoint can be promoted, which puts a code dependency in front of a promotion that would otherwise be a file copy. The elapsed cost is not the objection and is not a reason to weaken the gate; it is noted only so the ordering is deliberate.
+- A recorded strictest licence is only as honest as what the corpus builder writes into it — the field moves the failure from invisible to checkable, not from possible to impossible.
+- Models predating the field, including the bundled `ab812dc3aa9d`, will report an unknown corpus licence until their manifests are re-emitted; absence must not be read as "commercially clean".
+
+### Impact
+
+`tools/segmenter/lineage.py` (corpus object + strictest-licence derivation), `tools/segmenter/export.py` (metadata stamp beside `medata.modelVersion`), and whichever corpus builder emits the MetaFood3D dataset (estimation-quality task 8) plus `merge_corpus_foodrec2022.py`, which must record the per-source licences it already has on disk in `SOURCE.md`. Gates promotion of R2 and any later NC-trained run; does not gate R1, R3 or the R4/R5 pair, whose corpora are Apache 2.0 and CC BY 4.0. Supplements cross-dataset-calibration Decision 18 rather than superseding it — that decision continues to govern the calibration pool unchanged. `docs/references.md` should also gain the Food Recognition 2022 entry it currently lacks, since that corpus trains the shipped model and its licence is recorded only in `data/foodrec2022/SOURCE.md`.
+
+---
