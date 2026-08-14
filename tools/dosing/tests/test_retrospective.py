@@ -175,6 +175,39 @@ class FpuTests(TempCase):
         self.assertEqual(row["status"], "unavailable")
         self.assertEqual(row["reason"], "clinical_totals_empty_in_all_meals")
 
+    def test_an_empty_clinical_totals_row_is_excluded_not_read_as_zero(self):
+        # Per row, for the reason the whole-corpus case is unavailable: proto3
+        # omits a default, so an empty message cannot be told from two real
+        # zeros, and folding it in would drag the distribution towards "fat
+        # never matters".
+        builder = self.builder()
+        builder.meal(T0, 60.0, sigma=0.7, fat_g=20.0, protein_g=15.0)
+        builder.meal(T0 + HOUR, 40.0, sigma=0.6)
+        path = builder.write()
+        db = rt.connect(path)
+        try:
+            corpus = rt.load(db)
+        finally:
+            db.close()
+        empty = corpus.meals[1]
+        self.assertTrue(empty.clinical_present)
+        self.assertFalse(empty.clinical_has_any_key)
+        self.assertIsNone(empty.fpu)
+
+        row = parse(capture(path))["fpu"][0]
+        self.assertEqual(row["status"], "available")
+        self.assertEqual(row["n"], "1")
+        self.assertEqual(row["clinical_empty"], "1")
+        self.assertEqual(row["denominator"], "2")
+
+    def test_one_populated_key_makes_the_other_a_real_zero(self):
+        builder = self.builder()
+        builder.meal(T0, 60.0, sigma=0.7, fat_g=20.0)
+        corpus, _ = load_fixture(builder)
+        meal = corpus.meals[0]
+        self.assertIsNone(meal.protein_g)
+        self.assertAlmostEqual(meal.fpu, 1.8)
+
     def test_available_reports_stale_rows_separately(self):
         builder = self.builder()
         first = builder.meal(T0, 60.0, sigma=0.7, fat_g=20.0, protein_g=15.0)
@@ -268,6 +301,15 @@ class ConfoundTests(TempCase):
         _, windows = load_fixture(builder)
         self.assertTrue(windows[0].second_bolus)
 
+    def test_a_second_bolus_at_the_paired_dose_instant_is_stacking(self):
+        # Exclusion is by bolus identity, not by instant: two doses recorded at
+        # one timestamp are two doses, and only one of them was paired.
+        builder = self.base()
+        builder.bolus(T0 + 10 * MINUTE, 2.0)
+        corpus, windows = load_fixture(builder)
+        self.assertEqual(len(corpus.boluses), 2)
+        self.assertTrue(windows[0].second_bolus)
+
     def test_the_paired_meal_itself_is_not_an_intervening_carbohydrate(self):
         _, windows = load_fixture(self.base())
         self.assertFalse(windows[0].intervening_carb)
@@ -286,18 +328,61 @@ class ConfoundTests(TempCase):
         builder.bsl_series(T0 - HOUR, T0 + 12 * HOUR, 5)
         _, windows = load_fixture(builder)
         self.assertEqual(len(windows), 2)
-        # Both sit before the dose, so neither is inside the other's window.
-        self.assertFalse(any(w.intervening_carb for w in windows))
+        # One dose covers both plates, so neither window can attribute its own
+        # outcome — confounded twice over, by the span and by the shared dose.
         self.assertEqual(len({w.bolus_id for w in windows}), 1)
+        self.assertTrue(all(w.intervening_carb for w in windows))
+        self.assertTrue(all(w.shared_bolus for w in windows))
 
-    def test_a_carbohydrate_event_at_the_dose_instant_is_not_intervening(self):
+    def test_one_dose_covering_an_intake_and_a_later_meal_confounds_both(self):
+        # The pattern the span-only test missed: the intake sits before the
+        # dose, so it is outside the meal window's span however that span opens,
+        # yet the same dose covers both plates.
+        builder = self.builder()
+        builder.intake(T0, 15.0)
+        builder.bolus(T0 + 5 * MINUTE, 6.0)
+        builder.meal(T0 + 20 * MINUTE, 60.0, sigma=0.7)
+        builder.bsl_series(T0 - HOUR, T0 + 12 * HOUR, 5)
+        _, windows = load_fixture(builder)
+        self.assertEqual(len(windows), 2)
+        self.assertEqual(len({w.bolus_id for w in windows}), 1)
+        self.assertTrue(all(w.shared_bolus for w in windows))
+
+    def test_a_window_with_its_own_dose_does_not_share_it(self):
+        builder = self.base()
+        builder.intake(T0 + 20 * HOUR, 15.0)
+        builder.bolus(T0 + 20 * HOUR + 5 * MINUTE, 2.0)
+        _, windows = load_fixture(builder)
+        self.assertEqual(len(windows), 2)
+        self.assertFalse(any(w.shared_bolus for w in windows))
+
+    def test_an_unpaired_window_shares_nothing(self):
+        builder = self.builder()
+        builder.meal(T0, 60.0, sigma=0.7)
+        builder.intake(T0 + 5 * MINUTE, 15.0)
+        _, windows = load_fixture(builder)
+        self.assertFalse(any(w.paired for w in windows))
+        self.assertFalse(any(w.shared_bolus for w in windows))
+
+    def test_the_windows_own_event_at_the_dose_instant_is_not_intervening(self):
+        # Exclusion is by event identity, so a meal recorded at its dose's exact
+        # instant is still not its own confound.
         builder = self.builder()
         builder.meal(T0, 60.0, sigma=0.7)
         builder.bolus(T0, 6.0)
-        builder.intake(T0, 15.0)
         builder.bsl_series(T0 - HOUR, T0 + 12 * HOUR, 5)
         _, windows = load_fixture(builder)
-        self.assertFalse(any(w.intervening_carb for w in windows))
+        self.assertEqual(len(windows), 1)
+        self.assertFalse(windows[0].intervening_carb)
+
+    def test_a_carbohydrate_event_before_the_span_is_not_intervening(self):
+        # The span opens at the meal, not arbitrarily earlier: a plate two hours
+        # before an unrelated one does not confound it.
+        builder = self.base()
+        builder.intake(T0 - 2 * HOUR, 15.0)
+        _, windows = load_fixture(builder)
+        meal_window = next(w for w in windows if w.carb_kind == "meal")
+        self.assertFalse(meal_window.intervening_carb)
 
     def test_window_running_past_the_last_reading_is_truncated(self):
         builder = self.builder()
@@ -414,9 +499,26 @@ class EndToEndTests(TempCase):
         self.assertEqual(steps["paired_45min"]["n"], "3")
         self.assertEqual(steps["window_complete"]["n"], "3")
         self.assertEqual(steps["no_second_bolus"]["n"], "2")
+        # No dose in this scenario is paired to two carbohydrate events, so the
+        # shared-dose step passes all of them through.
+        self.assertEqual(steps["no_shared_bolus"]["n"], "2")
         self.assertEqual(steps["no_intervening_carb"]["n"], "1")
         self.assertEqual(steps["no_second_bolus"]["entered"], "3")
         self.assertEqual(steps["no_intervening_carb"]["of_candidates"], "0.2000")
+
+    def test_the_waterfall_order_is_fixed(self):
+        self.assertEqual([row["step"] for row in self.output["filter"]],
+                         ["candidates", "paired_45min", "window_complete",
+                          "no_second_bolus", "no_shared_bolus",
+                          "no_intervening_carb", "coverage_ge_0.70"])
+
+    def test_the_last_waterfall_step_is_the_survivor_count(self):
+        # Coverage is a rung of the waterfall, not a filter applied after it, so
+        # a reader cannot mistake the last printed step for the headline.
+        last = self.output["filter"][-1]
+        self.assertEqual(last["step"], "coverage_ge_0.70")
+        self.assertEqual(last["n"], self.output["surviving"][0]["n"])
+        self.assertEqual(last["of_candidates"], self.output["surviving"][0]["frac"])
 
     def test_headline_surviving_fraction(self):
         surviving = self.output["surviving"][0]

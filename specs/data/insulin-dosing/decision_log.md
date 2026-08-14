@@ -946,3 +946,80 @@ event's metadata contract, which medreg owns — the pairing is recorded on the
 suggestion row, not on the dose.
 
 ---
+
+## Decision 14: A shared dose is a fourth confounding filter, alongside the intervening meal
+
+**Date**: 2026-08-14
+**Status**: accepted
+
+### Context
+
+Decision 8 named three confounding filters for the D0 retrospective measurement: adequate glucose
+coverage, no second bolus inside the 6-hour window, and no intervening meal. The instrument built for
+that measurement — `tools/dosing/retrospective.py` — implemented the intervening-meal filter as a
+time span opening at the paired dose.
+
+Reviewing it found that a span anchored on the dose cannot express the confound it is meant to catch.
+A manual intake at 12:00, one dose at 12:05, and a plate at 12:20 is an ordinary pattern: one dose
+covers two carbohydrate events. Neither event sits inside a span that opens at the other's dose, so
+both windows read as clean, and each attributes the whole trajectory to its own carbohydrates. That
+inflates the surviving fraction — the single number Req 11.2 exists to produce and Req 11.4 exists to
+protect.
+
+### Decision
+
+Sharing a dose is a distinct confounding filter with its own name, `no_shared_bolus`, applied
+between the stacking filter and the intervening-carbohydrate filter. A window is confounded when
+another carbohydrate event is paired to the same bolus, whatever their spacing. The
+intervening-carbohydrate span is separately widened to open at the earlier of the carbohydrate event
+and its dose, so a pre-bolus no longer hides an event that precedes the meal.
+
+### Rationale
+
+Whether two carbohydrate events share a dose is a fact about pairing, not about elapsed time, and no
+interval anchored on one of them is guaranteed to contain the other. Expressing it as a span was the
+category error; expressing it as a pairing test makes it exact and makes the widened span an
+independent improvement rather than a patch over the same hole.
+
+Keeping the two filters separate, rather than folding sharing into `intervening_carb`, preserves what
+the attrition waterfall is for. Decision 8 requires each filter to print its own attrition so a
+reader can see which one consumed the windows; a merged flag would report a number without saying
+which confound produced it.
+
+This is a tightening. Req 11.4 forbids loosening a filter to raise the surviving fraction and says
+nothing against correcting one that was too loose to be true — the surviving fraction can only fall.
+
+### Alternatives Considered
+
+- **Widen the intervening-carbohydrate span alone**: One filter instead of two — Rejected: it does
+  not work. Where the dose precedes the meal, an event before that dose is outside any span anchored
+  on either the meal or the dose, and that is precisely the pattern found.
+- **Fold the shared-dose test into `intervening_carb`**: Fewer lines in the waterfall — Rejected:
+  the waterfall exists so each filter's attrition is separately visible, and two different confounds
+  under one name defeat that.
+- **Leave it and note the bias in the write-up**: No code change — Rejected: the surviving fraction
+  is the number that decides whether outcome scoring is built at all, and a known upward bias in it
+  is not something a footnote repairs.
+
+### Consequences
+
+**Positive:**
+
+- The headline surviving fraction is no longer inflated by dose-sharing, which is common with manual
+  intakes recorded near a meal.
+- The waterfall attributes each lost window to the specific confound that consumed it.
+
+**Negative:**
+
+- The surviving fraction will be lower than the pre-fix instrument would have reported, making the
+  Req 11.3 outcome — that scoring is not viable on this history — more likely.
+- Two filters where Decision 8 named one, so anyone reading that decision alone will see a filter
+  set that no longer matches the instrument.
+
+### Impact
+
+`tools/dosing/retrospective.py` and its tests. No change to any requirement: Req 11.2 names the
+filters only as "the confounding filters". Task 16's measurement is unaffected in kind — it remains
+blocked on a human-produced export.
+
+---

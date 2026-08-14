@@ -36,9 +36,11 @@ Three readings of the source data are load-bearing and easy to get wrong:
     was never populated. Those two are not the same fact, and the second is
     reported as absent rather than folded into the distribution as a zero.
   * Fat and protein grams reach the record through `macros.clinicalTotals`.
-    Where that message is missing entirely the FPU distribution is reported
-    UNAVAILABLE with its reason. Substituting zeros there would manufacture a
-    "fat never matters" answer out of an empty field.
+    A meal contributes an FPU only where that message holds at least one of the
+    two keys; where it is missing or empty the meal is counted and excluded, and
+    where no meal has it the distribution is UNAVAILABLE with its reason.
+    Substituting zeros for an empty message would manufacture a "fat never
+    matters" answer out of an empty field, one meal at a time.
 
 Read-only throughout: the database is opened `mode=ro` and a ZIP is expanded
 into a temporary directory that is removed on exit.
@@ -231,7 +233,15 @@ class Meal:
 
     @property
     def fpu(self):
-        if not self.clinical_present:
+        """The meal's fat-protein units, or None where the field says nothing.
+
+        An empty `clinicalTotals` message carries no more information than a
+        missing one — proto3 omits a field equal to its default, so neither key
+        being present is indistinguishable from both being genuinely zero. Only
+        a message with at least one key contributes; there the OTHER key's
+        absence is a real zero, because something populated the message.
+        """
+        if not self.clinical_has_any_key:
             return None
         fat = self.fat_g if self.fat_g is not None else 0.0
         protein = self.protein_g if self.protein_g is not None else 0.0
@@ -443,7 +453,7 @@ def load(db):
 class Window:
     __slots__ = ("carb_event_id", "carb_kind", "carb_ms", "bolus_id", "bolus_ms",
                  "gap_min", "complete", "second_bolus", "intervening_carb",
-                 "coverage", "samples", "max_gap_min")
+                 "shared_bolus", "coverage", "samples", "max_gap_min")
 
     def __init__(self, carb_event_id, carb_kind, carb_ms):
         self.carb_event_id = carb_event_id
@@ -455,6 +465,7 @@ class Window:
         self.complete = False
         self.second_bolus = False
         self.intervening_carb = False
+        self.shared_bolus = False
         self.coverage = None
         self.samples = 0
         self.max_gap_min = None
@@ -510,15 +521,21 @@ def build_windows(corpus):
         start, end = window.bolus_ms, window.bolus_ms + span_ms
         window.complete = last_bsl_ms is not None and last_bsl_ms >= end
 
-        # The outcome window is half-open at the dose and closed at its end:
-        # the paired dose itself is never its own second bolus.
+        # Both confound tests span a CLOSED interval and exclude the window's
+        # own event by identity rather than by instant. Excluding by instant
+        # would let a second dose recorded at the paired dose's exact timestamp
+        # pass as the paired dose itself.
         low, high = slice_between(bolus_ms_sorted, start, end)
-        window.second_bolus = any(ms > start for ms in bolus_ms_sorted[low:high])
+        window.second_bolus = any(bolus_id != window.bolus_id
+                                  for bolus_id, _ms, _units in corpus.boluses[low:high])
 
-        low, high = slice_between(carb_ms_sorted, start, end)
-        window.intervening_carb = any(
-            carb_id_by_index[i] != event_id and carb_ms_sorted[i] > start
-            for i in range(low, high))
+        # The span opens at the EARLIER of the meal and the dose it was paired
+        # to, not at the dose. Where the dose came first, a carbohydrate event
+        # between the two lands in the same trajectory, and a span opening at
+        # the dose would miss it.
+        low, high = slice_between(carb_ms_sorted, min(carb_ms, start), end)
+        window.intervening_carb = any(carb_id_by_index[i] != event_id
+                                      for i in range(low, high))
 
         low, high = slice_between(corpus.bsl_ms, start, end)
         inside = corpus.bsl_ms[low:high]
@@ -528,7 +545,23 @@ def build_windows(corpus):
         window.coverage = len(buckets) / COVERAGE_BUCKETS
         window.max_gap_min = largest_gap_min(inside, start, end)
         windows.append(window)
+
+    mark_shared_boluses(windows)
     return windows
+
+
+def mark_shared_boluses(windows):
+    """Flag every window whose dose was also paired to another carbohydrate event.
+
+    This is the second half of attribution, and it is a pairing fact rather than
+    a span fact: a meal and a manual intake either side of one dose feed that
+    dose whatever their spacing, and no interval anchored on one of them is
+    guaranteed to contain the other. A dose covering two plates cannot be
+    scored against either, so both windows are confounded.
+    """
+    per_bolus = Counter(w.bolus_id for w in windows if w.paired)
+    for window in windows:
+        window.shared_bolus = window.paired and per_bolus[window.bolus_id] > 1
 
 
 def largest_gap_min(sorted_ms, start, end):
@@ -655,17 +688,20 @@ def report_fpu(corpus):
               f"n=0 denominator={len(decoded)}")
         return
 
-    stale = sum(1 for m in with_clinical if m.corrected)
-    fat_absent = sum(1 for m in with_clinical if m.fat_g is None)
-    protein_absent = sum(1 for m in with_clinical if m.protein_g is None)
+    # Every count on this line shares the set that produced the distribution,
+    # so the ratios below are numerator and denominator over the same meals.
+    stale = sum(1 for m in populated if m.corrected)
+    fat_absent = sum(1 for m in populated if m.fat_g is None)
+    protein_absent = sum(1 for m in populated if m.protein_g is None)
     print(f"fpu status=available n={len(values)} denominator={len(decoded)} "
-          f"clinical_populated={len(populated)} stale={stale} "
+          f"clinical_populated={len(populated)} "
+          f"clinical_empty={len(with_clinical) - len(populated)} stale={stale} "
           f"stale_frac={frac(stale, len(values))} "
           f"fat_key_absent={fat_absent} protein_key_absent={protein_absent}")
     emit_distribution("fpu_dist", values, places=3)
-    emit_distribution("fpu_fat_g", [m.fat_g for m in with_clinical
+    emit_distribution("fpu_fat_g", [m.fat_g for m in populated
                                     if m.fat_g is not None], places=2)
-    emit_distribution("fpu_protein_g", [m.protein_g for m in with_clinical
+    emit_distribution("fpu_protein_g", [m.protein_g for m in populated
                                         if m.protein_g is not None], places=2)
     for band in (1.0, 2.0, 3.0):
         hits = sum(1 for v in values if v >= band)
@@ -717,6 +753,9 @@ def report_coverage(windows):
     intervening = sum(1 for w in paired if w.intervening_carb)
     print(f"intervening_carb n={intervening} denominator={len(paired)} "
           f"frac={frac(intervening, len(paired))}")
+    shared = sum(1 for w in paired if w.shared_bolus)
+    print(f"shared_bolus n={shared} denominator={len(paired)} "
+          f"frac={frac(shared, len(paired))}")
 
 
 def report_survival(windows):
@@ -725,7 +764,9 @@ def report_survival(windows):
     Filters are applied in a fixed order and each step prints what entered it,
     what left it, and what fraction of the ORIGINAL candidate set remains — so a
     reader can see which filter consumed the windows rather than only that they
-    are gone.
+    are gone. The coverage threshold is the last rung of that same waterfall
+    rather than a step applied after it, so the final `filter` line and the
+    `surviving` headline are the same number reached two ways.
     """
     candidates = len(windows)
     steps = [
@@ -737,8 +778,13 @@ def report_survival(windows):
     steps.append(("window_complete", stage))
     stage = [w for w in stage if not w.second_bolus]
     steps.append(("no_second_bolus", stage))
+    stage = [w for w in stage if not w.shared_bolus]
+    steps.append(("no_shared_bolus", stage))
     stage = [w for w in stage if not w.intervening_carb]
     steps.append(("no_intervening_carb", stage))
+    unconfounded = stage
+    stage = [w for w in stage if w.coverage >= COVERAGE_PRIMARY]
+    steps.append((f"coverage_ge_{COVERAGE_PRIMARY:.2f}", stage))
 
     previous = candidates
     for name, kept in steps:
@@ -747,13 +793,12 @@ def report_survival(windows):
               f"of_candidates={frac(len(kept), candidates)}")
         previous = len(kept)
 
-    unconfounded = stage
     for rung in COVERAGE_LADDER:
         survivors = [w for w in unconfounded if w.coverage >= rung]
         print(f"surviving_ladder coverage_min={rung:.2f} n={len(survivors)} "
               f"denominator={candidates} frac={frac(len(survivors), candidates)}")
 
-    survivors = [w for w in unconfounded if w.coverage >= COVERAGE_PRIMARY]
+    survivors = stage
     print(f"surviving n={len(survivors)} denominator={candidates} "
           f"frac={frac(len(survivors), candidates)} "
           f"coverage_min={COVERAGE_PRIMARY:.2f} "
