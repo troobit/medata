@@ -20,7 +20,7 @@ references:
   - `value` carries duration minutes and is absent when nil; metadata JSON is schema_version/kind/provenance/note with note omitted when nil
   - `character` is NOT written to metadata — derivable from kind, and two sources of truth for the regression key is the defect this avoids
   - Lookback returns `(instant - interval, instant]` newest first; undecodable rows are dropped, matching TrendsModel's existing handling
-  - Blocked-by: av1ktp0 (Add EventType.activity and the activity value types to Persistence)
+  - Blocked-by: av1ktp0 (Add `EventType.activity` and the activity value types to Persistence)
   - Requirements: [1.3](requirements.md#1.3), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
 
 - [ ] 3. MedataCore tests for encoding and lookback boundaries <!-- id:av3wsn8 -->
@@ -47,7 +47,7 @@ references:
 - [ ] 5. Deep link `medata://activity/add` <!-- id:av5rfk6 -->
   - Added to the existing `CFBundleURLTypes` array in the partial `MeData/Info.plist` — it cannot be an `INFOPLIST_KEY_` build setting
   - Handled in `AppRoot.handleDeepLink`, inheriting the existing `pendingDeepLink` resume so arrival during a dismissing presentation is not silently dropped
-  - Blocked-by: av4hjd2 (ActivityModel and ActivitySheet)
+  - Blocked-by: av4hjd2 (`ActivityModel` and `ActivitySheet`)
   - Requirements: [3.5](requirements.md#3.5)
 
 ## Display
@@ -72,9 +72,9 @@ references:
   - Human verification, cannot be automated. Log a real activity from the deep link and from the Graph; confirm the two-tap repeat path, that a blank duration saves, and that the day view renders the span without obscuring the trace
   - Match `event=launch buildStamp=…` before trusting any device output
   - `make test` green (BOTH totals — XCTest and swift-testing), `make spell` clean
-  - Blocked-by: av5rfk6 (Deep link medata://activity/add), av6zcx1 (Graph day/week/month rendering), av7bnv5 (Records row and swipe-to-delete)
+  - Blocked-by: av5rfk6 (Deep link `medata://activity/add`), av6zcx1 (Graph day/week/month rendering), av7bnv5 (Records row and swipe-to-delete)
   - Requirements: [3.1](requirements.md#3.1), [4.1](requirements.md#4.1)
 
-- [ ] 9. Regenerate the specs index <!-- id:av9tgh7 -->
+- [x] 9. Regenerate the specs index <!-- id:av9tgh7 -->
   - `/specs-overview` so `specs/OVERVIEW.md` carries this spec
   - Blocked-by: av8qlm3 (STOP — on-device entry pass on the iPhone 16 Pro)
