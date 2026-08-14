@@ -1324,3 +1324,57 @@ Rejecting the corpus is also the cheaper error. Building it costs only disk, but
 `specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` — task 8 closes with a negative verdict, task 9 (R2) is withdrawn, and tasks 10/11 lose their dependency on R2. Decision 31's corpus clause is withdrawn and its run ordering retained; Decision 32's promotion gate is not exercised but stands unchanged for any future non-commercial corpus. `docs/references.md` records the RGBD components as collected and the whole MetaFood3D segmenter lane as closed. `docs/agent-notes/metafood3d-ingestion.md` gains the verified component facts. No code changes: nothing was built, and `tools/metafood3d/mapping_metafood3d_to_palette.json` is unchanged.
 
 ---
+
+## Decision 34: R3 is re-scoped as R1's attribution follow-up, not withdrawn with R2
+
+**Date**: 2026-08-14
+**Status**: accepted
+
+### Context
+
+Decision 33 withdrew R2 (estimation-quality task 9), and stated that "R3/R4/R5 keep their relative order with R2 removed". That preserved R3's queue position but not its content: task 10's entire premise was "shape set by R2's verdict — a different mixing ratio if R2 was ambiguous, or a `potato_mashed`-targeted subset if the gain was concentrated in the classes the renders actually cover". Both halves were about the synthetic corpus. With no corpus there is no mixing ratio to vary, and Decision 33 established that the render-covered staples already hold real images, so a staple-targeted subset drawn from them has nothing to add. R3 was left in the queue as a scheduled run with no question to answer.
+
+The replacement premise is already sitting in R1. Task 6's recipe changes **three levers at once** — `--loss combined`, `--class-weighting sqrt_inverse`, and `--photometric-augment` — against the merged corpus at step parity. A clean win needs nothing further. Any other outcome is unattributable as it stands: a regression could belong to the loss, to the weighting, to the augmentation, or to an interaction, and the single verdict cannot separate them.
+
+This repository has already paid for that lesson once. Decision 24 had to repurpose an existing ledger run as a controlled attribution experiment after the co-occurrence recipe regressed, and Decision 25 records the result — `--loss combined` and the co-occurrence run "share only the inverse-frequency weighting and both regress the staples broadly", so "the weighting is the attributed culprit". That attribution only existed because a second run happened to be available to isolate the shared lever. Leaving R3 with no premise while R1 bundles three changes recreates exactly the condition that made Decision 24 unplanned work.
+
+### Decision
+
+Task 10 is re-scoped from "R3: mixing-ratio or staple-targeted follow-up, shape set by R2's verdict" to **"R3: attribution follow-up on R1, shape set by R1's verdict"**, and its `Blocked-by` moves from the withdrawn R2 (`pgctxee`) to R1 (`pgctxeb`).
+
+Its shape stays deliberately unspecified until R1 returns, on the same principle as before: if R1 is a clean win with no staple regression beyond tolerance, R3 does not run at all. If R1 regresses or is ambiguous, R3 removes one lever and holds the rest, following the controlled design of Decisions 24 and 25.
+
+The judging surface is unchanged — `heldout_leakfree` against the shipped `ab812dc3aa9d` at 0.3927 mean food-class IoU with the 0.45 staple floors — as is the strictly serial one-run-at-a-time constraint.
+
+### Rationale
+
+Re-pointing the dependency preserves what Decision 33 explicitly kept (the relative ordering and the serial constraint) while replacing what it silently destroyed (the question). The new premise is not invented for the occasion: it follows mechanically from R1's own recipe carrying three simultaneous changes, and from this project's recorded attribution discipline, where a lever's effect is only claimed when a run isolates it.
+
+Keeping R3 conditional rather than pre-specified is the same restraint the original entry showed. Pre-writing the recipe now would be designing an experiment before its question exists, and R1's verdict is what determines whether the question is "which lever hurt" or "there is nothing to ask".
+
+### Alternatives Considered
+
+- **Withdraw R3 along with R2**: the queue becomes R1 then R4/R5 — Rejected: a negative R1 would then leave three confounded levers with no scheduled run to separate them, which is precisely the gap Decision 24 had to fill unplanned. The machine time freed by R2's withdrawal is better spent making R1 interpretable than left unallocated.
+- **Keep the staple-targeted half of the original premise**: drop the mixing-ratio clause and retain a `potato_mashed`-targeted subset — Rejected: Decision 33 measured that `potato_mashed`, `brown_rice` and `bread_wholemeal` already carry real images in the merged corpus (150, 131 and 2,546 respectively). What is absent is those staples in the **heldout** split, and no training run can fix a measurement gap in the judging anchor.
+- **Pre-specify R3's recipe now**: fix the lever to be isolated in advance so the run can be queued without waiting — Rejected: which lever to isolate is exactly what R1's verdict determines, and committing now risks reserving hours of serial machine time for a question R1 may answer outright.
+- **Split R1 into three single-lever runs instead**: remove the attribution problem at source — Rejected on cost. At roughly five hours per run that is three runs before any candidate exists, against a shipped model that a single combined run may already beat; the combined-then-attribute order gets a candidate first and pays for isolation only if it is needed.
+
+### Consequences
+
+**Positive:**
+
+- R3 has a real question again, and one that is well-founded rather than manufactured to keep a slot.
+- A negative R1 becomes interpretable through a run that is already scheduled, instead of through unplanned work as in Decision 24.
+- If R1 wins cleanly, R3 does not run and its machine time returns to the queue — the conditionality is a genuine saving, not a formality.
+
+**Negative:**
+
+- R3 stays unspecified until R1 completes, so the serial queue cannot be planned beyond R1 with any precision.
+- Re-scoping rather than withdrawing keeps a slot in a queue that Decision 33 had just shortened, so the apparent saving from R2's withdrawal is smaller than it first read.
+- Isolating one lever from three still leaves interactions unresolved; a two-lever interaction would need a further run this decision does not schedule.
+
+### Impact
+
+`specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` task 10 (title, detail lines, and `Blocked-by`). No change to R1, R4 or R5, and no change to the judging procedure.
+
+---

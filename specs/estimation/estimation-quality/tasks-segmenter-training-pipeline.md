@@ -55,10 +55,15 @@ references:
   - Needs a decision entry either way, in segmenter-foundation/decision_log.md where the corpus and recipe verdicts live
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously), pgctxed (Build a training corpus from the MetaFood3D Blender renders agent-executable, no GPU)
 
-- [ ] 10. STOP — R3: mixing-ratio or staple-targeted follow-up, shape set by R2's verdict <!-- id:pgctxef -->
-  - Deliberately unspecified until R2 returns: its shape is set by that verdict — a different mixing ratio if R2 was ambiguous, or a potato_mashed-targeted subset if the gain was concentrated in the classes the renders actually cover
-  - Same serial constraint and same judging surface as R2. If R2 is a clean rejection, this run does not happen at all
-  - Blocked-by: pgctxee (STOP — R2: incumbent recipe plus synthetic renders, corpus as the only change)
+- [ ] 10. STOP — R3: attribution follow-up on R1, shape set by R1's verdict <!-- id:pgctxef -->
+  - RE-SCOPED 2026-08-14 by segmenter-foundation Decision 34. The original premise was "mixing-ratio or staple-targeted follow-up, shape set by R2's verdict"; both halves were about the synthetic corpus and died with R2's withdrawal under Decision 33. Decision 33 kept this task's queue position but left it with no question, which is what Decision 34 repairs
+  - The premise now comes from R1 itself. Task 6 changes THREE levers at once — --loss combined, --class-weighting sqrt_inverse, --photometric-augment — so any outcome other than a clean win is unattributable: a regression could belong to the loss, the weighting, the augmentation, or an interaction, and one verdict cannot separate them
+  - Deliberately unspecified until R1 returns. If R1 is a clean win with no staple regression beyond the 0.02 tolerance, THIS RUN DOES NOT HAPPEN and its machine time returns to the queue. If R1 regresses or is ambiguous, remove ONE lever and hold the rest — the controlled design Decisions 24 and 25 used to attribute the staple collapse to inverse-frequency weighting, where the co-occurrence run and the combined-loss run "share only the inverse-frequency weighting and both regress the staples broadly"
+  - Same judging surface as R1, unchanged: heldout_leakfree against the shipped ab812dc3aa9d at 0.3927 mean food-class IoU with the 0.45 staple floors (Decisions 5 and 14). Pass an absolute --lineage path or metrics land in a stray nested tree, and seed train_config.arch or run_validation.py fails fast
+  - ONE MACHINE, STRICTLY SERIAL — do not start this while another run is in flight. Clamshell rig with caffeinate -is per docs/agent-notes; the resume sidecar caps a reboot at one lost epoch
+  - Needs a decision entry either way in segmenter-foundation/decision_log.md, where the corpus and recipe verdicts live
+  - Interactions stay unresolved by design: isolating one lever from three does not settle a two-lever interaction, and Decision 34 does not schedule a further run for that
+  - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously)
 
 - [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question
   - Decision 30 rejected SegFormer-B0 at an equal 12-epoch budget, but the candidate was still climbing at epoch 12 (+0.0116, monotonic throughout) while the incumbent had plateaued at epoch 11. Whether it wins on a longer schedule is genuinely unanswered
