@@ -107,9 +107,21 @@ App side is `App/GlucoseWidgetPublisher.swift`, an `actor` (deliberately not
 `@MainActor` — it runs on every CGM tick) held for the process lifetime by
 `App.swift`. It reads the trailing 24 h of `bsl` rows, builds a
 `GlucoseSnapshot`, and writes + reloads ONLY when the value differs from what
-is already stored. Reloads are scoped: `reloadTimelines(ofKind:)` with the
-glucose kind, so glucose writes do not spend the shared WidgetKit reload budget
-on the co-hosted launchers.
+is already stored AND carries a newer reading. Reloads are scoped:
+`reloadTimelines(ofKind:)` with the glucose kind, so glucose writes do not spend
+the shared WidgetKit reload budget on the co-hosted launchers.
+
+- **The store is monotonic in `readingDate`** (Decision 19, Req 1.8). The
+  ordering test lives in `GlucoseSnapshotStore.write`, not in either writer,
+  because there are two of them — put it on the app side only and the widget's
+  own fetches escape it, and so would a third writer. `write` returns whether
+  the snapshot landed: the app skips its reload when it did not
+  (`event=publish.dropped reason=notNewer`), and the widget renders the stored
+  snapshot instead of its own derivation (`outcome=notNewer`). Strictly newer,
+  so an equal-dated recompute is a no-op rather than two writers alternating
+  derivations of one reading. A candidate with a nil `readingDate` is the
+  never-recorded state and is still written — block that and emptying the `bsl`
+  history could never clear the tile.
 
 - The contract is one `Codable` blob under one key in
   `UserDefaults(suiteName: "group.rtob.MeData")` — plist-level atomicity, so a
@@ -194,7 +206,10 @@ the 30 MB memory cap and no GRDB.
   extension, which is a budget observation and not a code defect.
 - The shared snapshot can now briefly lead the database. That is intended: the
   snapshot is a display contract, nothing reads it back into persistence, and
-  the app ingests the same readings on its next poll.
+  the app ingests the same readings on its next poll. What makes leading *safe*
+  rather than merely tolerated is the ordering guard in
+  `GlucoseSnapshotStore.write` (Decision 19, above): the app's catch-up cannot
+  publish the database's older reading over the widget's newer one.
 
 The extension links **two** package products now — `GlucoseWidgetShared` and
 `LibreLinkUpKit` — each needing the same three pbxproj objects described above.
@@ -248,15 +263,21 @@ ladder handles it — `age <= staleAge` is true for negatives, so it renders fre
 But the fresh branch renders age with `Text(_, style: .relative)` (Decision 14),
 which on a future date reads as a countdown. Not yet checked on-screen.
 
-### Prime can publish backwards (fixed by Decision 19, task 16.9)
+### Prime could publish backwards (fixed in task 16.9, Decision 19)
 
 Seen at launch: `trigger=prime was=…10:55:00Z now=…09:55:00Z lagSeconds=4670` —
 the app republished an hour-old reading over the newer one the widget had
 fetched while the app was suspended, because prime reads the database and the
 widget's fetches never write back to it. The next tick corrected it 274 ms later.
-The publisher gates on *value differs*, which is a change test; with two writers
-it needs an ordering test on `readingDate`. If you add a third writer of the
-snapshot, it must honour the same guard.
+The publisher gated on *value differs*, which is a change test; with two writers
+it needs an ordering test on `readingDate`.
+
+Fixed by making `GlucoseSnapshotStore.write` itself monotonic (see the data-flow
+section above), so both writers — and any third one added later — are covered
+without either of them opting in. **Not verified on device**: the fix landed
+without a device pass, so the field confirmation is a missing
+`event=publish.dropped reason=notNewer` line at a launch that would previously
+have logged a backwards `publish.reloadRequested`.
 
 ## StandBy colour (2026-08-13, task 16.7 device pass)
 
