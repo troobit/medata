@@ -154,6 +154,17 @@ private struct ThrowingStore: PersistenceStore {
     func deleteInsulinEvent(id: UUID) async throws {
         fatalError("unused")
     }
+    func saveActivity(_ activity: ActivityEvent) async throws {
+        fatalError("unused")
+    }
+    func deleteActivityEvent(id: UUID) async throws {
+        fatalError("unused")
+    }
+    func activities(
+        before instant: Date, within interval: TimeInterval
+    ) async throws -> [ActivityEvent] {
+        fatalError("unused")
+    }
     func saveIntakeEntry(_ entry: IntakeEntry) async throws {
         fatalError("unused")
     }

@@ -41,6 +41,11 @@ public enum EventType {
     // Manual carb intake (specs/data/manual-carb-intake); `value` carries
     // carbohydrate grams. Row shape mirrors the insulin convention above.
     public static let intake = "intake"
+    // Recorded activity (specs/data/activity-events Req 1.1); `value` carries
+    // duration in MINUTES and is absent when no duration was given (Req 1.5).
+    // `timestamp` is the activity start. Row shape mirrors the insulin
+    // convention above; see `ActivityEvent`.
+    public static let activity = "activity"
 }
 
 // Whether a dose is fast-acting meal/correction insulin or background
@@ -494,6 +499,36 @@ public protocol PersistenceStore: Sendable {
     // survives. Notifies `eventsDidChange` once (delete notifies
     // unconditionally, matching `deleteMeal`).
     func deleteIntakeEntry(id: UUID) async throws
+
+    // specs/data/activity-events Req 1.1, 1.3, 1.5, 1.6. Writes ONE `events`
+    // row per activity, following the insulin convention: `value` = duration
+    // in minutes and is NULL when `durationMinutes` is nil (unrecorded, never
+    // zero), `timestamp` = the activity start in UTC ms, `metadata` = JSON
+    // object with `schema_version` (integer 1), `kind` and `provenance`, plus
+    // `note` only when provided (key absent — not null — when nil).
+    // `character` is NOT written: it is derivable from `kind`, and two sources
+    // of truth for the field a later model keys on is the defect this avoids.
+    // Notifies `eventsDidChange` once.
+    func saveActivity(_ activity: ActivityEvent) async throws
+
+    // Req 3.6. Deletes a single activity event by id. The DELETE is gated on
+    // `event_type = activity`, so a meal/insulin/intake/bsl row sharing the id
+    // survives, and no side tables are touched. Notifies `eventsDidChange`
+    // once (delete notifies unconditionally, matching `deleteMeal`).
+    func deleteActivityEvent(id: UUID) async throws
+
+    // Req 5.1, 5.2. The lookback a dosing model asks rather than
+    // reimplementing an interval query and a metadata decode. Returns events
+    // whose timestamp falls in the HALF-OPEN interval
+    // `(instant - interval, instant]` — one exactly at `instant - interval` is
+    // excluded, one exactly at `instant` is included — newest first. Rows whose
+    // metadata does not decode are DROPPED rather than throwing, matching how
+    // TrendsModel already handles insulin rows with unreadable metadata; an
+    // empty result is an ordinary answer, not an error.
+    // `ActivityEvent.defaultLookback` is the 36-hour window of Decision 3.
+    func activities(
+        before instant: Date, within interval: TimeInterval
+    ) async throws -> [ActivityEvent]
 
     // specs/ui/records-deletion Req (glucose deletable, superseding
     // home-router Req 3.5). Deletes a single bsl event by id, gated on

@@ -880,6 +880,108 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    // MARK: - Activity (specs/data/activity-events)
+
+    public func saveActivity(_ activity: ActivityEvent) async throws {
+        let metadata = try Self.activityMetadataJSON(for: activity)
+        let timestampMs = Int64(activity.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            // `value` carries duration in minutes and stays NULL when the
+            // duration is unrecorded (Req 1.5) — nil, never 0.
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    activity.id.uuidString, timestampMs, EventType.activity,
+                    activity.durationMinutes, metadata
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func deleteActivityEvent(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a meal/insulin/intake/bsl row sharing the
+            // id survives. Activity events have no side tables — nothing else
+            // to cascade.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.activity]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func activities(
+        before instant: Date, within interval: TimeInterval
+    ) async throws -> [ActivityEvent] {
+        let endMs = Int64(instant.timeIntervalSince1970 * 1000)
+        let startMs = Int64(instant.addingTimeInterval(-interval).timeIntervalSince1970 * 1000)
+        let rows = try await queue.read { db in
+            // Half-open at the lower bound, closed at the upper: `> startMs`
+            // excludes an event exactly at `instant - interval`, `<= endMs`
+            // includes one exactly at `instant` (Req 5.1).
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT id, timestamp, value, metadata FROM events
+                    WHERE event_type = ? AND timestamp > ? AND timestamp <= ?
+                    ORDER BY timestamp DESC, id DESC
+                    """,
+                arguments: [EventType.activity, startMs, endMs]
+            )
+        }
+        // Undecodable rows are dropped, not thrown — TrendsModel's existing
+        // handling of insulin rows with unreadable metadata.
+        return rows.compactMap(Self.activityEvent(from:))
+    }
+
+    // Builds the `metadata` JSON object per design.md "Row shape":
+    // `schema_version`, `kind` and `provenance`, plus `note` only when provided
+    // — the key is absent, never null, when nil. `character` is deliberately
+    // NOT written; it is derived from `kind`.
+    private static func activityMetadataJSON(for activity: ActivityEvent) throws -> String {
+        var payload: [String: Any] = [
+            "schema_version": ActivityEvent.metadataSchemaVersion,
+            "kind": activity.kind.rawValue,
+            "provenance": activity.provenance.rawValue
+        ]
+        if let note = activity.note {
+            payload["note"] = note
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    // Returns nil for any row that cannot be read as an activity — an
+    // unparseable id, malformed metadata JSON, or a `kind`/`provenance` string
+    // outside the shipped vocabulary. The caller drops those rows.
+    private static func activityEvent(from row: Row) -> ActivityEvent? {
+        let idString: String = row["id"]
+        guard let id = UUID(uuidString: idString) else { return nil }
+        let metadata: String = row["metadata"]
+        guard
+            let parsed = try? JSONSerialization.jsonObject(with: Data(metadata.utf8)),
+            let payload = parsed as? [String: Any],
+            let kindString = payload["kind"] as? String,
+            let kind = ActivityKind(rawValue: kindString),
+            let provenanceString = payload["provenance"] as? String,
+            let provenance = ActivityProvenance(rawValue: provenanceString)
+        else { return nil }
+        let timestampMs: Int64 = row["timestamp"]
+        return ActivityEvent(
+            id: id,
+            timestamp: Date(timeIntervalSince1970: Double(timestampMs) / 1000),
+            kind: kind,
+            durationMinutes: row["value"],
+            provenance: provenance,
+            note: payload["note"] as? String
+        )
+    }
+
     public func deleteArtefacts(olderThan date: Date) async throws {
         let cutoffMs = Int64(date.timeIntervalSince1970 * 1000)
         // Meals holding an ACTUAL correction are exempt (meal-review Req 8.4):
