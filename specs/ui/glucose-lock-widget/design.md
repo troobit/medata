@@ -28,14 +28,16 @@ The snapshot is a single Codable value stored as one JSON `Data` blob under one 
 ```
 bsl write (screenshot import / CGM ingest) ─▶ store.eventsDidChange tick
    └▶ GlucoseWidgetPublisher: read last 24h bsl (store.events) ─▶ TrendsMath.trend + band status
-        └▶ build GlucoseSnapshot ─▶ if differs from stored: GlucoseSnapshotStore.write + WidgetCenter.shared.reloadTimelines(ofKind: glucoseKind)
+        └▶ build GlucoseSnapshot ─▶ if differs from stored: GlucoseSnapshotStore.write
+             ├▶ written (reading is newer) ─▶ WidgetCenter.shared.reloadTimelines(ofKind: glucoseKind)
+             └▶ dropped (reading is older — the widget already published a newer one) ─▶ no reload
 
 Lock Screen render:
    GlucoseWidget provider ─▶ GlucoseSnapshotStore.read ─▶ timeline entries anchored to readingDate ─▶ view
 
 Extension-side refresh (app suspended; Decision 16):
    getTimeline wake ─▶ snapshot ≥ pollInterval old AND shared rate gate open?
-      └▶ LibreLinkUpKit fetch (shared keychain session) ─▶ pure snapshot derivation ─▶ GlucoseSnapshotStore.write ─▶ render fresh entries
+      └▶ LibreLinkUpKit fetch (shared keychain session) ─▶ pure snapshot derivation ─▶ GlucoseSnapshotStore.write ─▶ render fresh entries (or, if the write is dropped as not newer, render the stored snapshot)
       └▶ gate closed or fetch failed ─▶ render stored snapshot (staleness ladder)
 ```
 
@@ -107,10 +109,13 @@ public enum GlucoseSnapshotStore {
     // the existing launcher convention (ie.medata.widget.insulin/.capture —
     // docs/agent-notes/widget-extension.md).
     public static let widgetKind = "ie.medata.widget.glucose"
-    public static func write(_ s: GlucoseSnapshot)      // no-op if suite nil or encode fails (Req 1.6)
+    @discardableResult
+    public static func write(_ s: GlucoseSnapshot) -> Bool  // stored? no-op if suite nil, encode fails (Req 1.6), or the reading is not newer than the stored one (Req 1.8)
     public static func read() -> GlucoseSnapshot        // .neverRecorded if suite nil / missing / undecodable / version ≠ schemaVersion (Req 1.7)
 }
 ```
+
+**Ordering guard (Req 1.8, Decision 19).** With Decision 16 there are two writers — the app, publishing what the database holds, and the widget, publishing what it fetched while the app was suspended — so "has the snapshot changed?" stopped being a sufficient test: change is symmetric and time is not. `write` therefore drops a candidate whose `readingDate` is not strictly newer than the stored one. The guard lives in the store, not in either writer, so both paths and any future third writer are covered by construction; `readingDate` is the ordering key because it is the only clock the two processes already agree on, and both already carry it. The write returns whether it landed: the app skips its `reloadTimelines` when it did not, and the widget renders the stored snapshot rather than the derivation it just tried to publish. A candidate carrying *no* reading is the never-recorded state (Req 1.4), not an older reading, and is still written — otherwise emptying the `bsl` history could never clear the tile. Like the vendor rate gate (Req 6.3) the guard is advisory: read-then-write across two processes has no compare-and-set, so it closes the observed regression rather than a genuine simultaneous race.
 
 `status` is derivable from `mmolL`, but it is baked into the snapshot so the widget never re-derives band logic — one source of truth in `TrendsMath`. `Persistence` depends on `GlucoseWidgetShared` only for the two leaf enums (`TrendsMath` returns `GlucoseTrend`); the `GlucoseSnapshotStore` UserDefaults layer is called only by the app and the widget, never on the estimation path. The dependency edge is one-way and `GlucoseWidgetShared` has no path to `GlucoseIngestion`, so the cgm-connect estimation firewall is unaffected.
 
@@ -197,6 +202,8 @@ entries. `GlucoseWidgetShared` is unchanged; see Decision 14.)
 
 Reload policy by terminal state: `fresh`/`stale` timelines use `.after(next boundary)` so the ladder advances even without a new write; `lastReading` and `neverRecorded` use `.never` (a now-in-the-past `.after` would trigger a pointless reload-asap, and the "Xh ago" label need not tick between data writes) — the next app/background write reloads them explicitly.
 
+**The booked date is a request, not a schedule (Req 6.5, Decision 18).** Three hours of tethered logs found none of the observed reloads attributable to the booked date: 14 of 18 fired as `com.apple.chrono` `reason: stale`, each preceded by "Widget is visible and effectively stale". The reload clock is WidgetKit's own visibility-gated staleness evaluation, keyed on `GlucoseTimeline.staleAge`, and it ran at roughly 20 minutes against a booked 5. So the policy above still says what the widget *wants*; the cadence it *gets* is the platform's, and the resulting routine stale render is the accepted window of Req 6.5, not a defect to design around. Two rules follow and are do-not-revert: `staleAge` stays at 15 minutes (it is the trigger as well as the threshold, so raising it postpones the reload by what it buys), and the Decision 17 one-interval wake floor stays (an earlier booking cannot produce an earlier wake when the booking is not honoured at all — only budget spend).
+
 **Provider isolation gotcha.** The widget target builds with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so every `TimelineProvider` witness (`placeholder`, `getSnapshot`, `getTimeline`) must be marked `nonisolated` explicitly or the conformance does not compile — see the existing `LauncherProvider` and `docs/agent-notes/widget-extension.md`.
 
 `age` string (Req 5.5): whole minutes `"\(m)m"` for the first hour, whole hours `"\(h)h"` beyond; `max(0, ...)` clamps a future `readingDate` (clock skew) to age 0 → treated as fresh.
@@ -252,6 +259,8 @@ Only `GlucoseSnapshot` (above). No event-log schema change — `bsl` events are 
 | Fewer than 2 in-window readings, or span < 10m, or latest older than the 30m window (Decision 15) | `trend == nil`, no arrow | 3.3, 3.4 |
 | `readingDate` in the future (clock skew) | age clamps to 0, rendered fresh | 5.5 |
 | No bsl in 24h | never-recorded snapshot | 1.4, 8.1 |
+| Candidate snapshot's reading not newer than the stored one (app catch-up behind the widget's own fetch) | `write` drops it and returns false; app skips the reload, widget renders the stored snapshot | 1.8 |
+| Reload cadence longer than the 15-minute freshness threshold | Stale treatment for part of most cycles; accepted, not corrected | 5.2, 6.5 |
 
 ## Testing Strategy
 
@@ -260,6 +269,7 @@ Per the project gate (MedataCore logic tests green; no app-UI test target; devic
 - **`GlucoseTrendMath.trend` / `glucoseRate`** (GlucoseWidgetSharedTests — moved there with the implementation in Decision 16; previously `TrendsMath` in PersistenceTests): each threshold boundary (0.056, 0.111, 0.166 and negatives — half-open inclusivity), the `<2 readings` and `<10m span` guards, `latest` older than the window ⇒ nil, and sign→direction. Boundary values are exact, so example-based tests suffice; no PBT needed.
 - **`bandStatus`**: 3.9 and 10.0 boundaries (low/in-range/high inclusive at the band edges).
 - **`GlucoseSnapshot` round-trip** (new `GlucoseWidgetSharedTests`): encode/decode identity; a blob with an unknown `version` decodes to `.neverRecorded`; a corrupt blob → `.neverRecorded`; non-finite / out-of-range `mmolL` builds to `.neverRecorded`.
+- **Ordering guard** (same suite, Req 1.8): a write carrying an older or equal-dated reading is dropped and the stored snapshot survives; a newer one replaces it; `.neverRecorded` still clears a stored reading. Pure comparison on data both writers already carry, so it is testable on the package side even though one of the two writers is the extension.
 - **Dependency-graph assertion** (in `GlucoseWidgetSharedTests`, mirroring the cgm-connect firewall approach): `swift package dump-package` shows `GlucoseWidgetShared` has an empty dependency list, so the extension link closure cannot acquire GRDB/Persistence. Note the limit of this check — it sees only *package* edges, so it cannot detect an accidental `import WidgetKit`; that boundary (Decision 12) is held by review and by the module compiling for the macOS test host.
 - **`GlucoseTimeline.render`/`renderPoints`/`nextBoundary`**: given a snapshot at `T`, `render` returns fresh / stale / lastReading / neverRecorded across the 15- and 30-minute boundaries; `renderPoints` emits the three boundary points in order; `nextBoundary` returns the 15m/30m instant when the ladder can still advance and nil in the terminal states; age-string formatting incl. the future-timestamp clamp. All Foundation-only — the WidgetKit adapter in the extension is too thin to test and is covered by the device pass.
 
@@ -269,11 +279,11 @@ Human-gated device verification (prerequisites.md): App Group provisions and the
 
 | Req | Design element |
 |---|---|
-| 1.1–1.7 | `GlucoseSnapshot` (versioned schema), `GlucoseSnapshotStore` (atomic single-key blob, nil-suite/decode fallbacks), `GlucoseWidgetPublisher` |
+| 1.1–1.8 | `GlucoseSnapshot` (versioned schema), `GlucoseSnapshotStore` (atomic single-key blob, nil-suite/decode fallbacks, 1.8 `readingDate` ordering guard shared by both writers), `GlucoseWidgetPublisher` |
 | 2.1–2.8 | `GlucoseWidget` kind (`GlucoseSnapshotStore.widgetKind`) + per-family views; functional copy; mmol/L 1-dp; 2.7 value sanity guard in `GlucoseSnapshot.make`; locked-render intent |
 | 3.1–3.5 | `TrendsMath.glucoseRate`/`trend` (now-anchored, regression, guards) |
 | 4.1–4.4 | `bandStatus`; non-colour status token; StandBy-day colour enhancement; suppressed when stale/absent |
 | 5.1–5.5 | `GlucoseTimeline.render`/`renderPoints`/`nextBoundary` + the widget's `GlucoseEntry` adapter; opacity de-emphasis; last-reading vs never-recorded; age format + skew clamp |
-| 6.1–6.2 | Publisher `reloadTimelines(ofKind:)` on change; subscribe-then-prime init ordering; no widget-side polling; per-state reload policy |
+| 6.1–6.5 | Publisher `reloadTimelines(ofKind:)` on change; subscribe-then-prime init ordering; extension-side fetch under the shared rate gate; per-state reload policy, bounded by the measured staleness-driven cadence (6.5) |
 | 7.1–7.2 | `medata://graph` route (`DeepLinkTarget.graphCover` + both `onDismiss` sites) + `widgetURL`; locked-open defers to unlock |
 | 8.1–8.2 | `.neverRecorded` render distinct from last-reading; functional placeholder copy |
