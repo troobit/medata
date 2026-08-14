@@ -50,7 +50,7 @@ final class BslIngestTests: XCTestCase {
             XCTAssertTrue(tables.contains("processed_images"))
             let version = try String.fetchOne(
                 db, sql: "SELECT v FROM meta WHERE k = 'schema_version'")
-            XCTAssertEqual(version, "7")
+            XCTAssertEqual(version, "8")
         }
     }
 

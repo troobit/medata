@@ -197,6 +197,17 @@ private struct NoOpPersistenceStore: PersistenceStore {
     ) async throws {
         fatalError("unused")
     }
+    func saveDoseSuggestion(_ row: DoseSuggestionRecord) async throws {
+        fatalError("unused")
+    }
+    func linkDose(
+        suggestionID: UUID, insulinEventID: UUID, givenUnits: Double
+    ) async throws {
+        fatalError("unused")
+    }
+    func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord] {
+        fatalError("unused")
+    }
     func benchmarkMeals() async throws -> [BenchmarkMeal] {
         fatalError("unused")
     }
