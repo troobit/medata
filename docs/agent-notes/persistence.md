@@ -119,6 +119,20 @@ Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT E
 
 Nothing in `MedataCore` or `App` consumes the lookback within the activity-events spec: the covariate is RECORDED and no insulin adjustment is applied (Decision 5). insulin-dosing Req 12.4 is the intended first consumer.
 
+## Dose suggestions (insulin-dosing)
+
+`dose_suggestions` (schema **v8**; `CREATE IF NOT EXISTS` retrofits it onto v7 DBs — no DDL on legacy tables) is a derived side table like `quick_presets` / `estimation_outcomes`: **none of `saveDoseSuggestion`, `linkDose`, `doseSuggestions` touches `eventsDidChange`** (Req 7.4), and none of them adds a key to the insulin event's metadata contract, which medreg owns and parses (Req 7.3, 9.7).
+
+The version literal `'8'` lives in **three** places in `GRDBPersistenceStore.swift` — the `INSERT OR IGNORE` in `createSchema`, the `INSERT OR REPLACE` in `migrate`, and the changelog comment between them. Bump all three together or `migrate` silently re-stamps a v8 database back down on every launch.
+
+The ratio is stored **only** as `cr_g_per_u` — grams of carbohydrate covered by one unit. "2 U per 10 g in the morning" IS 5.0 g/U, and a 60 g breakfast at 5.0 g/U is 12 U. The reciprocal is a display derivation and is never stored.
+
+`fpu` is derived by the store at save from `fat_g` and `protein_g` (`BenchmarkMeal.truthCarbsG` precedent — the caller-supplied value is ignored) and is **nil when either macro is absent**: an absent macro is unrecorded, not zero. `saveDoseSuggestion` is INSERT OR REPLACE by id so a review-screen correction rewrites the row rather than appending one per keystroke. There is **no eviction bound** — unlike `estimation_outcomes`, the longitudinal series is the product.
+
+`DoseSuggestionRecord` lives in Persistence, not in Dosing, so the Req 10.3 firewall holds. Values produced by Dosing — the suppression reason and the band — are carried as raw strings; the storage vocabularies that Persistence owns (`DoseSuggestionOutcome`, `CarbsSource`, `RatioSource`) are enums here, `EstimationOutcomeKind`-style, with the fields typed `String` so an unknown value round-trips rather than being dropped.
+
+Open, unspecified: `insulin_event_id` and `source_event_id` are not cleared by `deleteInsulinEvent`, `deleteRecords`, or the DEBUG `deleteAllData()` — the last wipes `events` wholesale while side tables survive (as they already do for `quick_presets` / `estimation_outcomes` / `benchmark_meals`). Neither spec says what should happen; after one Debug reset every ledger row points at a deleted event.
+
 ## Record deletion (records-deletion)
 
 `deleteBslEvent(id:)` mirrors the insulin/intake single-row gates

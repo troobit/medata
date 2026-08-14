@@ -1186,14 +1186,55 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 ON correction_records(meal_id);
             CREATE INDEX IF NOT EXISTS idx_correction_records_predicted
                 ON correction_records(predicted_class);
+            CREATE TABLE IF NOT EXISTS dose_suggestions (
+                id                TEXT    PRIMARY KEY,
+                timestamp         INTEGER NOT NULL,
+                meal_timestamp    INTEGER NOT NULL,
+                row_version       INTEGER NOT NULL,
+                rule_id           TEXT    NOT NULL,
+                rule_version      INTEGER NOT NULL,
+                fat_rule_id       TEXT,
+                fat_rule_version  INTEGER,
+                outcome           TEXT    NOT NULL,
+                suppression       TEXT,
+                carbs_g           REAL,
+                carbs_source      TEXT    NOT NULL,
+                source_event_id   TEXT,
+                exact_units       REAL,
+                rounded_units     REAL,
+                increment_u       REAL    NOT NULL,
+                seed_clamped      INTEGER NOT NULL,
+                cr_g_per_u        REAL    NOT NULL,
+                cr_source         TEXT    NOT NULL,
+                cr_fit_ref        TEXT,
+                band              TEXT    NOT NULL,
+                local_hour        INTEGER NOT NULL,
+                utc_hour          INTEGER NOT NULL,
+                utc_offset_s      INTEGER NOT NULL,
+                iob_u             REAL    NOT NULL,
+                sigma_meal        REAL,
+                start_bg_mmol     REAL,
+                start_bg_age_s    INTEGER,
+                fat_g             REAL,
+                protein_g         REAL,
+                fpu               REAL,
+                fat_stale         INTEGER NOT NULL,
+                given_units       REAL,
+                insulin_event_id  TEXT,
+                build_stamp       TEXT    NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS dose_suggestions_timestamp
+                ON dose_suggestions(timestamp);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '7')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '8')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '7' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 7 adds
+    // Idempotent: re-stamps schema_version to '8' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 8 adds
+    // dose_suggestions (specs/data/insulin-dosing, design "The ledger");
+    // version 7 added
     // correction_records (specs/ui/meal-review, design "Correction store");
     // version 6 added estimation_outcomes AND benchmark_meals
     // (specs/estimation/snaq-parity Decision 7, design "Data Models");
@@ -1203,7 +1244,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     // tables (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '7')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '8')"
         )
     }
 
@@ -1494,6 +1535,130 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             truthCarbsG: row["truth_carbs_g"],
             dbEdition: row["db_edition"],
             fidelity: fidelity
+        )
+    }
+
+    // MARK: - Dose suggestions (specs/data/insulin-dosing "The ledger")
+
+    public func saveDoseSuggestion(_ row: DoseSuggestionRecord) async throws {
+        // fpu is derived here and stored, never derived on read
+        // (BenchmarkMeal.truthCarbsG precedent): the caller-supplied value is
+        // ignored so a later change to the formula cannot reinterpret old rows.
+        let fpu = DoseSuggestionRecord.fatProteinUnits(
+            fatG: row.fatG, proteinG: row.proteinG
+        )
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT OR REPLACE INTO dose_suggestions
+                        (id, timestamp, meal_timestamp, row_version, rule_id,
+                         rule_version, fat_rule_id, fat_rule_version, outcome,
+                         suppression, carbs_g, carbs_source, source_event_id,
+                         exact_units, rounded_units, increment_u, seed_clamped,
+                         cr_g_per_u, cr_source, cr_fit_ref, band, local_hour,
+                         utc_hour, utc_offset_s, iob_u, sigma_meal,
+                         start_bg_mmol, start_bg_age_s, fat_g, protein_g, fpu,
+                         fat_stale, given_units, insulin_event_id, build_stamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    row.id.uuidString, row.timestampMs, row.mealTimestampMs,
+                    row.rowVersion, row.ruleID, row.ruleVersion,
+                    row.fatRuleID, row.fatRuleVersion, row.outcome,
+                    row.suppression, row.carbsG, row.carbsSource,
+                    row.sourceEventID?.uuidString, row.exactUnits,
+                    row.roundedUnits, row.incrementU, row.seedClamped,
+                    row.crGramsPerUnit, row.crSource, row.crFitRef, row.band,
+                    row.localHour, row.utcHour, row.utcOffsetS, row.iobU,
+                    row.sigmaMeal, row.startBgMmol, row.startBgAgeS,
+                    row.fatG, row.proteinG, fpu, row.fatStale,
+                    row.givenUnits, row.insulinEventID?.uuidString,
+                    row.buildStamp
+                ]
+            )
+        }
+        // No eventsDidChange: suggestion rows are not `events` rows (Req 7.4,
+        // quick_presets / estimation_outcomes convention).
+    }
+
+    public func linkDose(
+        suggestionID: UUID, insulinEventID: UUID, givenUnits: Double
+    ) async throws {
+        try await queue.write { db in
+            // Side table only — the insulin event's metadata contract is left
+            // exactly as medreg documents and parses it (Req 7.3, 9.7).
+            try db.execute(
+                sql: """
+                    UPDATE dose_suggestions
+                    SET given_units = ?, insulin_event_id = ?
+                    WHERE id = ?
+                    """,
+                arguments: [
+                    givenUnits, insulinEventID.uuidString, suggestionID.uuidString
+                ]
+            )
+        }
+        // No eventsDidChange (Req 7.4).
+    }
+
+    public func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM dose_suggestions
+                    ORDER BY timestamp DESC, id DESC
+                    LIMIT ?
+                    """,
+                arguments: [limit]
+            ).map(Self.doseSuggestion(from:))
+        }
+    }
+
+    private static func doseSuggestion(from row: Row) throws -> DoseSuggestionRecord {
+        let idString: String = row["id"]
+        guard let id = UUID(uuidString: idString) else {
+            throw PersistenceError.corruptRecord("invalid dose_suggestions UUID: \(idString)")
+        }
+        let sourceEventIDString: String? = row["source_event_id"]
+        let insulinEventIDString: String? = row["insulin_event_id"]
+        return DoseSuggestionRecord(
+            id: id,
+            timestampMs: row["timestamp"],
+            mealTimestampMs: row["meal_timestamp"],
+            rowVersion: row["row_version"],
+            ruleID: row["rule_id"],
+            ruleVersion: row["rule_version"],
+            fatRuleID: row["fat_rule_id"],
+            fatRuleVersion: row["fat_rule_version"],
+            outcome: row["outcome"],
+            suppression: row["suppression"],
+            carbsG: row["carbs_g"],
+            carbsSource: row["carbs_source"],
+            sourceEventID: sourceEventIDString.flatMap(UUID.init(uuidString:)),
+            exactUnits: row["exact_units"],
+            roundedUnits: row["rounded_units"],
+            incrementU: row["increment_u"],
+            seedClamped: row["seed_clamped"],
+            crGramsPerUnit: row["cr_g_per_u"],
+            crSource: row["cr_source"],
+            crFitRef: row["cr_fit_ref"],
+            band: row["band"],
+            localHour: row["local_hour"],
+            utcHour: row["utc_hour"],
+            utcOffsetS: row["utc_offset_s"],
+            iobU: row["iob_u"],
+            sigmaMeal: row["sigma_meal"],
+            startBgMmol: row["start_bg_mmol"],
+            startBgAgeS: row["start_bg_age_s"],
+            fatG: row["fat_g"],
+            proteinG: row["protein_g"],
+            fpu: row["fpu"],
+            fatStale: row["fat_stale"],
+            givenUnits: row["given_units"],
+            insulinEventID: insulinEventIDString.flatMap(UUID.init(uuidString:)),
+            buildStamp: row["build_stamp"]
         )
     }
 

@@ -599,4 +599,29 @@ public protocol PersistenceStore: Sendable {
     // Req 1.3 read path (benchmark report / export). Returns every meal
     // ordered newest first ((created_at, id) descending).
     func benchmarkMeals() async throws -> [BenchmarkMeal]
+
+    // specs/data/insulin-dosing Req 7.1, 7.2, 7.4. Persists one dose
+    // suggestion — made or suppressed — as INSERT OR REPLACE by id, so a
+    // review-screen correction rewrites the same row rather than appending one
+    // per keystroke. `fpu` is DERIVED HERE from `fatG` and `proteinG`
+    // (`DoseSuggestionRecord.fatProteinUnits`), ignoring the caller-supplied
+    // value, so a later change to the formula cannot silently reinterpret old
+    // rows. Suggestion rows are not `events` rows: no `eventsDidChange`
+    // interaction (quick_presets / estimation_outcomes convention above), and
+    // no key of the insulin event's metadata contract is added, altered or
+    // extended (Req 7.3, 9.7). There is no eviction bound — unlike
+    // `estimation_outcomes`, the longitudinal series is the product.
+    func saveDoseSuggestion(_ row: DoseSuggestionRecord) async throws
+
+    // Req 7.5. Associates a recorded dose with the suggestion it refers to:
+    // an UPDATE of `given_units` and `insulin_event_id` on the side table
+    // ONLY. The insulin event is not read, rewritten or touched. Does not
+    // notify `eventsDidChange`.
+    func linkDose(
+        suggestionID: UUID, insulinEventID: UUID, givenUnits: Double
+    ) async throws
+
+    // Req 7.2 read path (ledger review / export). Returns at most `limit` rows
+    // ordered newest first ((timestamp, id) descending).
+    func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord]
 }
