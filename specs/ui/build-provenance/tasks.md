@@ -1,7 +1,7 @@
 ---
 references:
-    - smolspec.md
-    - decision_log.md
+    - specs/ui/build-provenance/smolspec.md
+    - specs/ui/build-provenance/decision_log.md
 ---
 # Build Provenance
 
