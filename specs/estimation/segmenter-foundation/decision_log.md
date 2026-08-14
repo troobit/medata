@@ -1250,3 +1250,77 @@ Note that acquiring `RGBD_videos` changes nothing here: it is the same dataset u
 `tools/segmenter/lineage.py` (corpus object + strictest-licence derivation), `tools/segmenter/export.py` (metadata stamp beside `medata.modelVersion`), and whichever corpus builder emits the MetaFood3D dataset (estimation-quality task 8) plus `merge_corpus_foodrec2022.py`, which must record the per-source licences it already has on disk in `SOURCE.md`. Gates promotion of R2 and any later NC-trained run; does not gate R1, R3 or the R4/R5 pair, whose corpora are Apache 2.0 and CC BY 4.0. Supplements cross-dataset-calibration Decision 18 rather than superseding it — that decision continues to govern the calibration pool unchanged. `docs/references.md` should also gain the Food Recognition 2022 entry it currently lacks, since that corpus trains the shipped model and its licence is recorded only in `data/foodrec2022/SOURCE.md`.
 
 ---
+
+## Decision 33: The MetaFood3D corpus is rejected — the staple gap it was built to close is already closed, and its labels contradict the plate/food boundary
+
+**Date**: 2026-08-14
+**Status**: accepted
+
+> Accepted by the developer 2026-08-14, after the load-bearing measurement was
+> independently re-checked against `data/merged_foodseg_foodrec2022/co_stats.json`:
+> `potato_mashed` 150 images / 10,769,149 train pixels, `brown_rice` 131 /
+> 11,372,646, `bread_wholemeal` 2,546 / 229,242,179, and `beans_baked` the sole
+> class at zero. The staple gap this corpus was queued to close is closed.
+
+### Context
+
+Decision 31 queued the MetaFood3D Blender renders as a candidate segmenter corpus behind a mask-derivation spike, and estimation-quality task 8 was to run that spike and build the corpus. Since Decision 31 was written, `RGBD_videos` and `RGBD_videos_flipped_food` were also collected, so the mask question became a real choice between masks derived from the renders and the masks shipped with the videos, rather than a pass/fail on the renders alone.
+
+The spike was run on 2026-08-14 against both components. It settled the mask mechanism decisively — and then the surrounding measurements removed the reason to build the corpus at all.
+
+**The mask mechanism works, on both routes.** In the renders, `Original` is RGBA carrying a real alpha matte; the alpha mask and the depth-background mask agree at IoU 0.9985-0.9989 over sampled viewpoints, so Decision 31's inference that `Depth` yields usable masks is confirmed rather than merely plausible. In `RGBD_videos` the shipped `masks/` are JPEG but effectively binary — 16 grey levels, all within `<=10` or `>=245`, zero mid-tone pixels — so a threshold at 128 is exact. Neither route fails on mechanism.
+
+**The motivating premise is stale.** Decision 31's stated headline benefit was that "`potato_mashed` gets its first training images, against a staple that has had zero", and task 8 repeats the three-zero-image-staples framing. That fact came from Decision 21, which measured **FoodSeg103 alone**. The merged corpus that actually trains the model (Decision 27) already carries all three: `potato_mashed` 150 images / 10.77 M train pixels, `brown_rice` 131 / 11.37 M, `bread_wholemeal` 2,546 / 229.24 M. This is not a coincidence to be double-checked but the recorded intent of the merge — dataset-strategy MD-30 chose the Food Recognition 2022 release specifically because "its ontology covers cereal via porridge/muesli/crunch-muesli/birchermuesli/flakes-oat plus rice-whole-grain, bread-wholemeal, and mashed-potatoes-…-butter". The staples MetaFood3D was queued to supply are the exact three that substitution was selected to supply, and it already did. The only class with zero train pixels in the live corpus is `beans_baked`, which MetaFood3D does not cover. What is actually absent is those staples in the **heldout** split, so they cannot be *measured* — and MetaFood3D cannot fix that, because the judging anchor `heldout_leakfree` is deliberately real-image FoodSeg103 only.
+
+**The labels contradict the thing the product does.** Sampling every object of three mapped categories showed the annotation convention is inconsistent, and inconsistent worst where the value is highest. `Mashed_Potato/mash1` labels the entire dark plate as food at 15.0-21.3 % frame coverage across every sampled frame, against 2.2-4.2 % for the other three `Mashed_Potato` objects — a 4-8x signature, not a one-frame glitch; `French_Fry/fries_1` labels the paper plate, `new_fries_3` the cardboard boat, and `new_waffle_fry_2` the entire branded carton with the fries barely visible. All six `Apple` objects are tight to the fruit. Separately, `French_Fry/fries_2` sits at 0.09-0.30 % coverage — the camera is pointed at bare tablecloth — yet those frames still ship under the category. The `new_` prefix is not a discriminator — `new_fries_3` and `new_waffle_fry_2` are container-inclusive while `new_fries_4` and `new_waffle_fry_1` are not. The split runs along container-served versus bare food, and `potato_mashed` and `chips_fries` — the only two carb-priority staples in the mapping — are exactly the container-served ones.
+
+**Effective sample size is 80 objects, not 16,000 images.** The 13 mapped categories cover 80 physical objects across 11 palette classes, thinnest exactly where it matters: `potato_mashed` 4, `beef` 4, `egg` 5, `pork` 5, `chips_fries` 6. The 200 renders or 200 video frames per object are near-duplicate views of one specimen on one black studio tablecloth. An object-disjoint split leaves n=1 heldout object for the thinnest classes; a frame-level split reproduces the Decision 21 contamination that scored a stale checkpoint 0.7403 against an honest 0.3776.
+
+**The renders are photometrically wrong.** Food-pixel mean luminance swings with viewpoint from L=44 to L=158 across `Mashed_Potato` renders, against L=137-181 for the same four objects in the real captures — systematically 2-4x too dark at many viewpoints. The renders also carry no background at all (transparent alpha), place the object at 3-6 % frame coverage, and sweep viewpoints from below and side-on that the nadir-ish capture path never sees. For `(bowl)` categories the scanned mesh *is* the bowl, so the renders inherit the container problem there too.
+
+### Decision
+
+The MetaFood3D corpus is not built and does not enter segmenter training. Estimation-quality task 8 closes as a completed spike with a negative verdict rather than as a corpus build, and **R2 (task 9) does not run** — there is no corpus for it to test, so the serial machine time it reserved returns to the queue.
+
+`tools/metafood3d/mapping_metafood3d_to_palette.json` is **not** widened. `Rice` (8 objects) and `Yeast_bread` (9 objects) stay ambiguous.
+
+Decision 31's corpus clause is withdrawn by this entry. Its serial run ordering stands: R1 remains head of the queue, and R3/R4/R5 keep their relative order with R2 removed.
+
+### Rationale
+
+The corpus was justified by a staple gap that the foodrec2022 merge had already closed before Decision 31 was written. Once `potato_mashed` has 150 real plated images, adding 4 studio objects — one of whose masks labels a dinner plate as mashed potato — is not a coverage win; it is label noise aimed at a class that no longer needs the help.
+
+The container finding is disqualifying on its own, and specifically for this product. MeData's estimation path exists to isolate food from the plate so a volume can be carved from it. Training masks that call the plate "food" teach the exact confusion the geometry stage then has to undo, and they do it in the two staple classes the gate is scored on. A model that learns "the white ellipse under the fries is fries" inflates carved volume directly into the carbohydrate number.
+
+Widening the mapping would make this worse rather than better. `Rice` and `Yeast_bread` are ambiguous because the dataset records no grain type, and both would land on staples that already hold real images (`white_rice` 1,646, `bread_white` 4,196, `bread_wholemeal` 2,546). Guessing the grain would inject wrong-class pixels into classes that are already supervised — paying label noise for nothing.
+
+Rejecting the corpus is also the cheaper error. Building it costs only disk, but spending it costs R2: five hours of a strictly serial one-machine queue, producing a verdict confounded by container-inclusive masks and a 26 % near-duplicate injection into a 45,515-image train set concentrated in 11 of 33 classes — the class-balance shift that Decision 25 already recorded as a staple regression once. Worse, a `potato_mashed` IoU measured on one heldout object would read as the absent-staple gap closing when it had not.
+
+### Alternatives Considered
+
+- **Build from `RGBD_videos` instead of the renders**: real imagery, real shipped masks, and it avoids the renders' photometry problem entirely - Rejected: it is the route whose masks are container-inclusive, and it substitutes one fixed studio rig (one black tablecloth, a colour-checker card and marker boards in every frame) for the render set's viewpoint sweep. It concentrates the domain rather than widening it.
+- **Build from the renders as task 8 specified**: the mask derivation is now proven, so the original plan is executable - Rejected: executable is not the same as worth executing. The staple premise is stale, the photometry is viewpoint-dependent and 2-4x too dark, and there is no background to composite against that is not itself an invention.
+- **Build a narrowed corpus from the container-free categories only** (Apple, Banana, Tomato, Tomato_slice, Broccoli, Carrot, Egg, Steak, Pork_Chop, Chicken_breast, Chicken_thighs — 70 objects, 9 palette classes, masks verified tight) - Rejected, and this is the closest call: it is the one variant whose labels are trustworthy. But it excludes both staples by construction, so it delivers zero staple value, and all nine classes already hold 782-2,853 images each in the merged corpus. It would spend R2 to add one studio background to classes that are not the bottleneck. Recorded here as the only defensible build if a human later wants one.
+- **Widen the mapping to cover `Rice` and `Yeast_bread`, adding 17 objects**: more staple coverage on paper - Rejected: the dataset records no grain type, so the mapping would be a guess routed into staples that already have real images. Task 8 asked for a deliberate decision either way; this is the deliberate no.
+- **Build it anyway and let R2 answer empirically**: the measurement settles it rather than an argument - Rejected: R2 is five hours of a serial queue behind R1, and the confound is known in advance rather than discovered by the run. A verdict on a corpus whose staple masks include the plate cannot attribute to "synthetic data helps or does not".
+
+### Consequences
+
+**Positive:**
+- The serial queue shortens by one five-hour run, and R1 keeps the machine.
+- The plate/food boundary the estimation path depends on is not contradicted in training data.
+- The mask question is settled with measurements rather than inference: both routes work mechanically, and Decision 31's `Depth` hypothesis is confirmed at IoU 0.9985+, so a future revisit starts from fact.
+- The stale zero-image-staple premise is corrected in the record, where it had propagated from Decision 21 into Decision 31 and task 8.
+- The non-commercial exposure Decision 32 gated never materialises: no NC data enters the weights, so the promotion gate is not exercised.
+
+**Negative:**
+- The data lever is now spent alongside the architectural lever Decision 30 closed, leaving recipe changes (R1) and post-processing as the remaining levers. There is no queued corpus improvement behind this.
+- `brown_rice`, `bread_wholemeal` and `potato_mashed` remain unmeasurable on `heldout_leakfree`, and nothing in this decision addresses that; it needs real plated images in the heldout split, which is a separate acquisition.
+- About 190 GB of collected archives (renders plus both RGBD components) now have no consumer in the segmenter lane. They remain valid for the calibration lane under Decision 18.
+- The narrowed container-free corpus is left unbuilt, so if a human judges nine non-staple classes worth a run, that build has to be done then rather than now.
+
+### Impact
+
+`specs/estimation/estimation-quality/tasks-segmenter-training-pipeline.md` — task 8 closes with a negative verdict, task 9 (R2) is withdrawn, and tasks 10/11 lose their dependency on R2. Decision 31's corpus clause is withdrawn and its run ordering retained; Decision 32's promotion gate is not exercised but stands unchanged for any future non-commercial corpus. `docs/references.md` records the RGBD components as collected and the whole MetaFood3D segmenter lane as closed. `docs/agent-notes/metafood3d-ingestion.md` gains the verified component facts. No code changes: nothing was built, and `tools/metafood3d/mapping_metafood3d_to_palette.json` is unchanged.
+
+---
