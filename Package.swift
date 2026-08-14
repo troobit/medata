@@ -46,7 +46,15 @@ let package = Package(
         // extension fetches from LibreLinkUp itself while the app is suspended,
         // so it links this and GlucoseWidgetShared and still cannot acquire
         // GRDB. Foundation-only, no Persistence dependency.
-        .library(name: "LibreLinkUpKit", targets: ["LibreLinkUpKit"])
+        .library(name: "LibreLinkUpKit", targets: ["LibreLinkUpKit"]),
+        // Discrete product for the pure dose arithmetic
+        // (specs/data/insulin-dosing Decision 11). A product, not a bare
+        // target, because the iOS app links SwiftPM code by PRODUCT name only
+        // — `packageProductDependencies` in project.pbxproj names products —
+        // so `import Dosing` from App/ cannot resolve without this line.
+        // GlucoseWidgetShared is the precedent: a zero-dependency leaf that
+        // still needed its own library product to be linkable.
+        .library(name: "Dosing", targets: ["Dosing"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
@@ -150,6 +158,21 @@ let package = Package(
                 .product(name: "ZIPFoundation", package: "ZIPFoundation")
             ],
             path: "MedataCore/Sources/Persistence"
+        ),
+        // Pure dose arithmetic (specs/data/insulin-dosing Decision 11): the
+        // band classifier, the carbohydrate ratio type, the insulin-on-board
+        // curve and the suggester. Foundation only — the dependency list MUST
+        // stay empty. Persistence must not depend on it and it must not depend
+        // on Persistence: the App composes the persisted row from the pure
+        // result, so no estimation target can reach this code even
+        // transitively (Req 10.3). The firewall is structural rather than
+        // asserted by a dump-package test — GlucoseIngestion needed one
+        // because it depends on Persistence, which Pipeline also depends on,
+        // so a transitive path was possible; here there is no edge for a path
+        // to run along.
+        .target(
+            name: "Dosing",
+            path: "MedataCore/Sources/Dosing"
         ),
         // Libre ingestion (specs/data/libre-ingestion): LibreLink screenshot →
         // bsl readings. Zero internal dependencies by design (Decision 2) —
@@ -328,6 +351,11 @@ let package = Package(
             resources: [
                 .copy("Resources/corpus")
             ]
+        ),
+        .testTarget(
+            name: "DosingTests",
+            dependencies: ["Dosing"],
+            path: "MedataCore/Tests/DosingTests"
         ),
         .testTarget(
             name: "GlucoseWidgetSharedTests",
