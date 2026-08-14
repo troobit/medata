@@ -8,14 +8,14 @@ references:
 
 ## Core
 
-- [ ] 1. Add `EventType.activity` and the activity value types to Persistence <!-- id:av1ktp0 -->
+- [x] 1. Add `EventType.activity` and the activity value types to Persistence <!-- id:av1ktp0 -->
   - `EventType.activity = "activity"` alongside meal/bsl/insulin/intake, with the same comment convention naming this spec
   - `ActivityKind` (swim, waterpolo, cycle, run, walk, gym, other), `ActivityCharacter`, `ActivityProvenance`, `ActivityEvent` — shapes exactly as design.md section 1
   - `character` is a computed property over `kind`, never a stored field; the switch must be exhaustive over `allCases` so a new kind fails the build rather than defaulting
   - `durationMinutes` is `Double?` — nil is unrecorded, never 0
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3)
 
-- [ ] 2. Add the store surface — save, delete, and the lookback query <!-- id:av2mqr4 -->
+- [x] 2. Add the store surface — save, delete, and the lookback query <!-- id:av2mqr4 -->
   - `saveActivity`, `deleteActivityEvent`, `activities(before:within:)` on `PersistenceStore` and `GRDBPersistenceStore`, following `saveInsulinDose`/`deleteInsulinEvent` byte for byte in row handling
   - `value` carries duration minutes and is absent when nil; metadata JSON is schema_version/kind/provenance/note with note omitted when nil
   - `character` is NOT written to metadata — derivable from kind, and two sources of truth for the regression key is the defect this avoids
@@ -23,7 +23,7 @@ references:
   - Blocked-by: av1ktp0 (Add EventType.activity and the activity value types to Persistence)
   - Requirements: [1.3](requirements.md#1.3), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2)
 
-- [ ] 3. MedataCore tests for encoding and lookback boundaries <!-- id:av3wsn8 -->
+- [x] 3. MedataCore tests for encoding and lookback boundaries <!-- id:av3wsn8 -->
   - Round-trip save → `events(in:type:)` → decode; nil duration omits `value` and decodes back to nil not 0; nil note omitted from metadata
   - Lookback boundary: an event exactly at `instant - interval` is excluded, one exactly at `instant` is included
   - `character` mapping exhaustive over `ActivityKind.allCases`
