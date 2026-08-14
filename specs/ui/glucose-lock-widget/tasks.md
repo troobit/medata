@@ -153,7 +153,7 @@ references:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
   - References: decision_log.md
 
-- [x] 16. Widget falls out of sync while the app is suspended <!-- id:7k39hjq -->
+- [ ] 16. Widget falls out of sync while the app is suspended <!-- id:7k39hjq -->
   - Observed 2026-08-13 during the task 14 device pass: the widget often shows a stale reading until the phone is unlocked or the app is opened and refreshed
   - Expected from the current architecture, not a regression: GlucoseWidgetPublisher is app-process-bound — it writes the snapshot and calls reloadTimelines only on CGM ticks while the app process is alive, so a suspended/killed app means no new snapshots; terminal timeline states use .never policy and wait for the app's explicit reload (docs/agent-notes/widget-extension.md)
   - Candidate directions: HealthKit background delivery waking the app to republish; a BGAppRefresh fallback; or having getTimeline read fresh data itself so the widget refreshes on its own budget — each needs a Decision entry weighing background-execution limits
@@ -210,3 +210,10 @@ references:
     - Stated as accepted rather than as a defect and carrying Decision 18's do-not-raise rule — the 15-minute threshold is the reload trigger as well as the threshold so raising it postpones the refresh by what it buys. Req 5.1 is unchanged at 15 minutes
     - Req 5.2 and 6.1 cross-reference 6.5; design.md carries the same bound beside the reload-policy paragraph plus an error-handling row
     - Requirements edit only — no code change and nothing to verify on device
+  - [ ] 16.11. STOP — device confirmation of the monotonic guard, plus the StandBy colour check this task owes
+    - Reopened 2026-08-14 by developer decision. `rune` auto-propagated 16 to complete when 16.9 and 16.10 closed; that was tool propagation, not a verdict. 16.9's own detail line records `NOT device-verified — no device pass was run`, and task 16's fourth bullet requires `the StandBy-day colour check deferred from task 14 — it needs the widget updating while docked/locked, which only this fix makes possible`. This subtask exists so the parent's incompleteness is structural and survives the next `rune` operation, rather than being a flipped marker the tool re-ticks
+    - Criterion 1 — the guard fires in the field: one `event=publish.dropped reason=notNewer` line at a launch that would previously have logged a backwards `publish.reloadRequested`. The 00:04:55 pairing that motivated Decision 19 (`was=14:00:00Z now=13:50:00Z lagSeconds=895`, then `was=13:50:00Z now=14:05:00Z`) is the shape to watch for — a suspended-app catch-up recomputing from rows the database has not yet ingested
+    - Criterion 2 — StandBy-day colour, deferred from task 14 and carried forward by 16.7. Portrait StandBy at the high band renders orange (recorded in `docs/agent-notes/widget-extension.md`); this pass is the docked/locked observation that only the 16.6 self-fetch makes reachable
+    - Why a device pass and not a test: the guard in `GlucoseSnapshotStore.write` is advisory by construction — read-then-write across two processes has no compare-and-set, and its own comment says so. The unit tests pin the comparison; only the field pins the cross-process ordering under real WidgetKit wake timing (measured at ~20-minute gaps in 16.7)
+    - Match `event=launch buildStamp=…` before trusting any device output
+    - No code blocks this. Everything it verifies is already committed; it needs a phone and a locked-screen window
