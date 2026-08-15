@@ -21,14 +21,14 @@ metadata:
 
 ## Phase 1 — Pure calculator (macOS-testable, agent-executable)
 
-- [ ] 1. Add the Dosing SwiftPM target and DosingTests to Package.swift <!-- id:idz0001 -->
+- [x] 1. Add the Dosing SwiftPM target and DosingTests to Package.swift <!-- id:idz0001 -->
   - Zero dependencies, Foundation only; the dependency list MUST stay empty
   - Persistence does not import Dosing and Dosing does not import Persistence — the firewall is structural, so no dump-package graph test is written
   - Stream: 1
   - Requirements: [10.2](requirements.md#10.2), [10.3](requirements.md#10.3)
   - References: design.md#Module layout and the firewall (Req 10.3)
 
-- [ ] 2. CarbRatio and CarbRatioTable — one direction, named in the type <!-- id:idz0002 -->
+- [x] 2. CarbRatio and CarbRatioTable — one direction, named in the type <!-- id:idz0002 -->
   - CarbRatio holds gramsPerUnit only; the reciprocal exists solely as the display-derivation unitsPerTenGrams
   - Failable init rejecting anything outside 1.0...60.0 and any non-finite value
   - CarbRatioTable.seed = overnight 10.0, breakfast 5.0, lunch 10.0, dinner 10.0 g/U; ratio(for:) reports whether the seed or a configured value applied
@@ -36,11 +36,11 @@ metadata:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5), [1.6](requirements.md#1.6), [9.5](requirements.md#9.5)
   - References: design.md#The ratio: one direction, named in the type (Req 1)
-  - [ ] 2.1. Tests: init rejects 0.9, 60.1, NaN and infinity; accepts both interval endpoints; unitsPerTenGrams renders 2.0 for 5.0 g/U; an unconfigured band falls back to its seed and reports isSeed <!-- id:idz0003 -->
+  - [x] 2.1. Tests: init rejects 0.9, 60.1, NaN and infinity; accepts both interval endpoints; unitsPerTenGrams renders 2.0 for 5.0 g/U; an unconfigured band falls back to its seed and reports isSeed <!-- id:idz0003 -->
     - Stream: 1
     - Requirements: [1.5](requirements.md#1.5), [1.6](requirements.md#1.6)
 
-- [ ] 3. DoseBand classifier over medreg's boundary hours in local time <!-- id:idz0004 -->
+- [x] 3. DoseBand classifier over medreg's boundary hours in local time <!-- id:idz0004 -->
   - overnight 0..<6, breakfast 6..<11, lunch 11..<16, dinner 16..<24; the boundary hour opens the band it starts
   - band(at:calendar:) takes the Calendar (and therefore the time zone) as a parameter and never reaches for a global
   - Expose the local hour, the UTC hour and the UTC offset in seconds derived from the same instant, so the local-versus-UTC disagreement is a recordable quantity
@@ -48,11 +48,11 @@ metadata:
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.2](requirements.md#2.2), [2.3](requirements.md#2.3), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [10.2](requirements.md#10.2)
   - References: design.md#Bands: medreg's boundaries, the device's clock (Req 2)
-  - [ ] 3.1. Tests: boundaries at 00:00, 05:59, 06:00, 10:59, 11:00, 15:59, 16:00, 23:59; a daylight-saving transition day; a non-UTC zone asserting local hour and UTC hour differ and the offset matches <!-- id:idz0005 -->
+  - [x] 3.1. Tests: boundaries at 00:00, 05:59, 06:00, 10:59, 11:00, 15:59, 16:00, 23:59; a daylight-saving transition day; a non-UTC zone asserting local hour and UTC hour differ and the offset matches <!-- id:idz0005 -->
     - Stream: 1
     - Requirements: [2.1](requirements.md#2.1), [2.3](requirements.md#2.3), [2.5](requirements.md#2.5)
 
-- [ ] 4. InsulinActivityModel and insulinOnBoard — medreg's curve transcribed <!-- id:idz0006 -->
+- [x] 4. InsulinActivityModel and insulinOnBoard — medreg's curve transcribed <!-- id:idz0006 -->
   - Exponential oref0/LoopKit form with medreg's rapidActing preset: peak 75 min, duration 360 min; derived tau 101.785714, a 0.565476, S 2.082955
   - remainingFraction is 1.0 at or before delivery and 0.0 at or beyond the duration of action
   - insulinOnBoard sums units times remaining fraction over prior boluses only; basal excluded; empty history yields zero and is not an error
@@ -60,11 +60,11 @@ metadata:
   - Stream: 1
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.4](requirements.md#4.4), [9.8](requirements.md#9.8)
   - References: design.md#Insulin-on-board: medreg's curve, transcribed (Req 4)
-  - [ ] 4.1. Tests: the shared fixture table at 0/30/75/120/180/240/300/360 minutes to 1e-4, well inside the 0.01 U cross-repository tolerance; basal excluded from the sum; a dose at exactly 360 minutes contributes zero <!-- id:idz0007 -->
+  - [x] 4.1. Tests: the shared fixture table at 0/30/75/120/180/240/300/360 minutes to 1e-4, well inside the 0.01 U cross-repository tolerance; basal excluded from the sum; a dose at exactly 360 minutes contributes zero <!-- id:idz0007 -->
     - Stream: 1
     - Requirements: [4.2](requirements.md#4.2), [4.3](requirements.md#4.3), [4.6](requirements.md#4.6), [9.8](requirements.md#9.8)
 
-- [ ] 5. DoseSuggester: DoseInputs, DoseOutcome, SuggestedDose, SuppressionReason <!-- id:idz0008 -->
+- [x] 5. DoseSuggester: DoseInputs, DoseOutcome, SuggestedDose, SuppressionReason <!-- id:idz0008 -->
   - The seven ordered steps of design.md, in that order: absent carbs suppresses; band and ratio; exact = max(0, carbs / gramsPerUnit - iob); the 0.5 U test on the UNROUNDED value; rounding half away from zero applied ONCE to the final value; the control-minimum suppression; the seed with its clamp flag
   - SuggestionContext carries band, hours, offset, ratio and insulin-on-board even on a suppression, because a suppressed suggestion is recorded as fully as a made one
   - DosableIncrement accepts 0.5 and 1.0 only; ruleID "cr-v0", ruleVersion 1
@@ -73,7 +73,7 @@ metadata:
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4), [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.8](requirements.md#3.8), [5.1](requirements.md#5.1), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5), [5.6](requirements.md#5.6), [5.7](requirements.md#5.7), [10.2](requirements.md#10.2)
   - References: design.md#The suggester (Req 3, 5)
-  - [ ] 5.1. Tests: exact 0.49 suppressed and 0.50 suggested; a 3 g quick-add at 10 g/U suppressed rather than clamped up; rounding half away from zero at both increments; a case where rounding the carb term and the insulin-on-board term separately would differ, proving rounding is applied once; the 0.5 U increment case that rounds below the control floor; clamping above 60 U preserving exactUnits; determinism on repeated identical inputs <!-- id:idz0009 -->
+  - [x] 5.1. Tests: exact 0.49 suppressed and 0.50 suggested; a 3 g quick-add at 10 g/U suppressed rather than clamped up; rounding half away from zero at both increments; a case where rounding the carb term and the insulin-on-board term separately would differ, proving rounding is applied once; the 0.5 U increment case that rounds below the control floor; clamping above 60 U preserving exactUnits; determinism on repeated identical inputs <!-- id:idz0009 -->
     - Stream: 1
     - Requirements: [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [5.2](requirements.md#5.2), [5.3](requirements.md#5.3), [5.4](requirements.md#5.4), [5.5](requirements.md#5.5)
 
