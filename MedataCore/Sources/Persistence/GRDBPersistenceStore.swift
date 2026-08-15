@@ -724,6 +724,101 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         changeBroadcaster.notify()
     }
 
+    // MARK: - Activity (specs/data/activity-events Req 1, 3.6, 5.1)
+
+    public func saveActivity(_ activity: ActivityEvent) async throws {
+        let metadata = try Self.activityMetadataJSON(for: activity)
+        let timestampMs = Int64(activity.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            // `value` binds NULL when the duration is unrecorded (Req 1.5) —
+            // absent, never 0.
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    activity.id.uuidString, timestampMs, EventType.activity,
+                    activity.durationMinutes, metadata
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func deleteActivityEvent(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a row of another type sharing the id
+            // survives. Activity events have no side tables.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.activity]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func activities(before instant: Date, within interval: TimeInterval) async throws
+        -> [ActivityEvent] {
+        // Half-open at the far end and inclusive at `instant`: an event
+        // exactly at `instant - interval` is out, one exactly at `instant` is
+        // in (design §6).
+        let upperMs = Int64(instant.timeIntervalSince1970 * 1000)
+        let lowerMs = Int64(instant.addingTimeInterval(-interval).timeIntervalSince1970 * 1000)
+        let rows: [Row] = try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT id, timestamp, value, metadata FROM events
+                    WHERE event_type = ? AND timestamp > ? AND timestamp <= ?
+                    ORDER BY timestamp DESC, id DESC
+                    """,
+                arguments: [EventType.activity, lowerMs, upperMs]
+            )
+        }
+        return rows.compactMap(Self.activityEvent(from:))
+    }
+
+    // `note` omitted entirely when nil (InsulinDose convention); `character`
+    // deliberately absent — it is derivable from `kind`, and writing it would
+    // create two sources of truth for the field a later model keys on.
+    private static func activityMetadataJSON(for activity: ActivityEvent) throws -> String {
+        var payload: [String: Any] = [
+            "kind": activity.kind.rawValue,
+            "provenance": activity.provenance.rawValue,
+            "schema_version": ActivityEvent.metadataSchemaVersion
+        ]
+        if let note = activity.note {
+            payload["note"] = note
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    // Rows with unreadable metadata are dropped rather than throwing — the
+    // lookback is a covariate read, not a ledger read.
+    private static func activityEvent(from row: Row) -> ActivityEvent? {
+        guard
+            let idString: String = row["id"], let id = UUID(uuidString: idString),
+            let timestampMs: Int64 = row["timestamp"],
+            let metadata: String = row["metadata"],
+            let data = metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let kindRaw = object["kind"] as? String,
+            let kind = ActivityKind(rawValue: kindRaw)
+        else { return nil }
+        let provenance = (object["provenance"] as? String)
+            .flatMap(ActivityProvenance.init(rawValue:)) ?? .manual
+        return ActivityEvent(
+            id: id,
+            timestamp: Date(timeIntervalSince1970: Double(timestampMs) / 1000),
+            kind: kind,
+            durationMinutes: row["value"],
+            provenance: provenance,
+            note: object["note"] as? String
+        )
+    }
+
     public func deleteBslEvent(id: UUID) async throws {
         try await queue.write { db in
             // Gated on event_type so a meal/insulin/intake row sharing the

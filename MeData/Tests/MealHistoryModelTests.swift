@@ -122,6 +122,10 @@ private final class FakeStore: PersistenceStore, @unchecked Sendable {
     func saveInsulinDose(_ dose: InsulinDose) async throws {
         fatalError("unused")
     }
+    func saveActivity(_ activity: ActivityEvent) async throws {}
+    func deleteActivityEvent(id: UUID) async throws {}
+    func activities(before instant: Date, within interval: TimeInterval) async throws
+        -> [ActivityEvent] { [] }
     func deleteInsulinEvent(id: UUID) async throws {
         fatalError("unused")
     }

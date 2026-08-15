@@ -128,6 +128,14 @@ let package = Package(
             name: "GlucoseWidgetShared",
             path: "MedataCore/Sources/GlucoseWidgetShared"
         ),
+        // Pure dose arithmetic (specs/data/insulin-dosing). Foundation only —
+        // the dependency list MUST stay empty. Persistence must not depend on
+        // it and it must not depend on Persistence: the App composes the
+        // persisted row from the pure result, so no estimation target can
+        // reach this code even transitively (Req 10.3). The firewall is
+        // structural: with an empty dependency list there is no edge for a
+        // transitive path to run along, so no dump-package test is added.
+        .target(name: "Dosing", path: "MedataCore/Sources/Dosing"),
         // LibreLinkUp vendor client (specs/data/cgm-connect Req 3), extracted
         // from GlucoseIngestion so the widget extension can fetch for itself
         // (specs/ui/glucose-lock-widget Decision 16). GlucoseWidgetShared is
@@ -333,6 +341,11 @@ let package = Package(
             name: "GlucoseWidgetSharedTests",
             dependencies: ["GlucoseWidgetShared"],
             path: "MedataCore/Tests/GlucoseWidgetSharedTests"
+        ),
+        .testTarget(
+            name: "DosingTests",
+            dependencies: ["Dosing"],
+            path: "MedataCore/Tests/DosingTests"
         ),
         .testTarget(
             name: "GlucoseIngestionTests",

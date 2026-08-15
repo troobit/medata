@@ -41,6 +41,9 @@ public enum EventType {
     // Manual carb intake (specs/data/manual-carb-intake); `value` carries
     // carbohydrate grams. Row shape mirrors the insulin convention above.
     public static let intake = "intake"
+    // Physical activity (specs/data/activity-events Req 1.1); `value` carries
+    // duration in minutes and is ABSENT when no duration was given (Req 1.5).
+    public static let activity = "activity"
 }
 
 // Whether a dose is fast-acting meal/correction insulin or background
@@ -494,6 +497,31 @@ public protocol PersistenceStore: Sendable {
     // survives. Notifies `eventsDidChange` once (delete notifies
     // unconditionally, matching `deleteMeal`).
     func deleteIntakeEntry(id: UUID) async throws
+
+    // specs/data/activity-events Req 1.1–1.6. Writes ONE `events` row per
+    // activity: `value` = duration in minutes, ABSENT (SQL NULL) when the
+    // duration is unrecorded so it can never be read back as an instantaneous
+    // activity (Req 1.5); `timestamp` = the activity start in UTC ms;
+    // `metadata` = JSON object with `kind`, `provenance`, `schema_version`
+    // (integer 1), plus `note` only when provided (key absent — not null —
+    // when nil). `character` is NOT written: it is derived from `kind`
+    // (design §2). Notifies `eventsDidChange` once.
+    func saveActivity(_ activity: ActivityEvent) async throws
+
+    // Req 3.6. Deletes a single activity event by id, gated on
+    // `event_type = activity` (the insulin/intake convention) so a row of
+    // another type sharing the id survives. Notifies `eventsDidChange` once.
+    func deleteActivityEvent(id: UUID) async throws
+
+    // Req 5.1 — the dosing covariate lookback. Returns the activity events
+    // whose timestamp falls in `(instant - interval, instant]`, newest first.
+    // The window is a required parameter so the caller's lookback is visible
+    // in the code that uses it; `ActivityEvent.defaultLookback` (36 h,
+    // Req 5.2 / Decision 3) is what call sites pass. Rows whose metadata does
+    // not decode are dropped, matching how TrendsModel handles unreadable
+    // insulin rows. An empty result is an ordinary answer, not an error.
+    func activities(before instant: Date, within interval: TimeInterval) async throws
+        -> [ActivityEvent]
 
     // specs/ui/records-deletion Req (glucose deletable, superseding
     // home-router Req 3.5). Deletes a single bsl event by id, gated on
