@@ -10,6 +10,9 @@ import SwiftUI
 // via `editing:` (Req 7.2).
 struct CarbEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
+    // Carbohydrates that did not arrive through the camera get the same
+    // readout and the same seed (specs/data/insulin-dosing Req 3.3).
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
     @State private var model: CarbEntryModel
     // "Save as quick-add" (Req 4.4): the entry save is already committed when
     // this sub-sheet opens; cancelling it creates no preset and rolls back
@@ -75,14 +78,52 @@ struct CarbEntrySheet: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 56, weight: .bold).monospacedDigit())
                 .foregroundStyle(Color.textPrimary)
-                .onChange(of: model.carbsText) { model.clampCarbsText() }
+                .onChange(of: model.carbsText) {
+                    model.clampCarbsText()
+                    Task { await doseSuggestions?.refresh(for: doseSubject) }
+                }
                 .accessibilityLabel("Carbohydrates in grams")
                 .accessibilityIdentifier("carb.amount")
-            Text("grams")
-                .font(.subheadline)
-                .foregroundStyle(Color.textSecondary)
+            // The same middle-dot segment as the review screen, appended to
+            // the caption this sheet already carries. Same font, same
+            // secondary colour, same grammar: a quantity and a unit symbol.
+            if let readout = doseSuggestions?.readout {
+                MiddleDotLine(
+                    runs: [
+                        MiddleDotLine.Run(id: "carb.unitLabel", text: "grams"),
+                        MiddleDotLine.Run(
+                            id: "carb.doseSuggestion",
+                            text: readout.unitsLabel,
+                            emphasised: true,
+                            animates: Double(readout.units)
+                        )
+                    ],
+                    textColour: Color.textSecondary,
+                    separatorColour: Color.textSecondary.opacity(0.45)
+                )
+            } else {
+                Text("grams")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+                    .accessibilityIdentifier("carb.unitLabel")
+            }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // Fat and protein ride along as recorded covariates when the developer
+    // typed them; they change no number in iteration 1 (Req 8.1).
+    private var doseSubject: DoseSubject {
+        DoseSubject(
+            carbsG: model.carbs.map(Double.init),
+            instant: model.timestamp,
+            source: .intake,
+            sourceEventID: model.editing?.id,
+            fatG: model.macros.fatG,
+            proteinG: model.macros.proteinG,
+            sigmaMeal: nil,
+            fatStale: false
+        )
     }
 
     // MARK: - Time (Req 1.2) — InsulinDoseSheet.timeRow pattern verbatim
@@ -145,7 +186,10 @@ struct CarbEntrySheet: View {
     private var saveButton: some View {
         Button {
             Task {
-                if await model.save() { dismiss() }
+                if await model.save() {
+                    await doseSuggestions?.arm(from: doseSubject)
+                    dismiss()
+                }
             }
         } label: {
             if model.isSaving {

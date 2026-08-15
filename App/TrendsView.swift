@@ -17,13 +17,16 @@ struct TrendsView: View {
     let store: any PersistenceStore
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(ActivityStore.self) private var activityStore: ActivityStore?
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
     @State private var showOptions = false
+    @State private var showActivitySheet = false
 
     @AppStorage(SettingsKeys.trendsShowCarbs) private var showCarbs = true
     @AppStorage(SettingsKeys.trendsShowGlucose) private var showGlucose = true
     @AppStorage(SettingsKeys.trendsShowInsulin) private var showInsulin = true
+    @AppStorage(SettingsKeys.trendsShowActivity) private var showActivity = true
     @AppStorage(SettingsKeys.trendsShowTargetBand) private var showTargetBand = true
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
@@ -48,6 +51,7 @@ struct TrendsView: View {
                     if model.range == .day {
                         dayMeals
                         dayInsulin
+                        dayActivity
                     }
                 }
                 .padding(20)
