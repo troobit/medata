@@ -79,7 +79,7 @@ metadata:
 
 ## Phase 2 — Ledger persistence (macOS-testable, agent-executable)
 
-- [ ] 6. dose_suggestions table and DoseSuggestionRecord <!-- id:idz000a -->
+- [x] 6. dose_suggestions table and DoseSuggestionRecord <!-- id:idz000a -->
   - CREATE TABLE IF NOT EXISTS retrofitted into the existing createSchema DDL block, schema_version stamped 7 to 8, plus the timestamp index
   - All columns of design.md including exact_units, cr_g_per_u, cr_source, cr_fit_ref, band, local_hour, utc_hour, utc_offset_s, iob_u, sigma_meal, start_bg_mmol, start_bg_age_s, fat_g, protein_g, fpu, fat_stale, rule_id, rule_version, fat_rule_id, fat_rule_version, row_version, build_stamp
   - fpu = (fat_g x 9 + protein_g x 4) / 100 computed at write time and stored, never derived on read
@@ -90,7 +90,7 @@ metadata:
   - Requirements: [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [7.6](requirements.md#7.6), [7.8](requirements.md#7.8), [7.9](requirements.md#7.9), [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [10.5](requirements.md#10.5)
   - References: design.md#The ledger (Req 7)
 
-- [ ] 7. saveDoseSuggestion, linkDose and doseSuggestions on PersistenceStore <!-- id:idz000b -->
+- [x] 7. saveDoseSuggestion, linkDose and doseSuggestions on PersistenceStore <!-- id:idz000b -->
   - INSERT OR REPLACE by id so a review-screen correction rewrites the same row rather than appending one per keystroke
   - linkDose is an UPDATE on the side table only; the insulin event's metadata JSON is written exactly as today — kind, insulin_type, schema_version, note — and no key is added
   - None of the three notifies eventsDidChange
@@ -98,7 +98,7 @@ metadata:
   - Stream: 1
   - Requirements: [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [9.7](requirements.md#9.7), [10.5](requirements.md#10.5)
   - References: design.md#The ledger (Req 7)
-  - [ ] 7.1. Tests: round-trip save then read newest-first; a second save with the same id replaces rather than appends; linkDose fills given_units and insulin_event_id; neither write fires eventsDidChange; an upgrade from a schema-7 database keeps every existing event <!-- id:idz000c -->
+  - [x] 7.1. Tests: round-trip save then read newest-first; a second save with the same id replaces rather than appends; linkDose fills given_units and insulin_event_id; neither write fires eventsDidChange; an upgrade from a schema-7 database keeps every existing event <!-- id:idz000c -->
     - Stream: 1
     - Requirements: [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [10.5](requirements.md#10.5)
 
