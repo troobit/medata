@@ -93,7 +93,7 @@ references:
   - Blocked-by: oecpdn2 (make test green Persistence parity, ingestion logic, firewall. make build, make spell)
   - Stream: 1
 
-- [x] 15. Adaptive LibreLinkUp poll interval (Decision 12)
+- [x] 15. Adaptive LibreLinkUp poll interval (Decision 12) <!-- id:qvhp6nv -->
   - nextPollInterval(after:now:) — pure static on LibreLinkUpGlucoseSource: 5 min when the newest reading is below 5.0 mmol/L or the fetch is falling at/faster than TrendsMath.mediumRateThreshold, else the 15-min baseline
   - currentPollInterval is set after each successful fetch and read before the loop sleeps, so the fetch that just landed governs the wait that follows it
   - 9 XCTest cases pin every branch incl. the threshold boundary, rising-fast staying at baseline, order independence, and a floor assertion that the urgent interval never drops to the ~3-min ban rate (XCTest 515 -> 524)
@@ -102,7 +102,7 @@ references:
   - Requirements: [3.2a](requirements.md#3.2a)
   - References: decision_log.md
 
-- [ ] 16. STOP — on-device verification of the uniform 5-minute poll (Decision 13)
+- [ ] 16. STOP — on-device verification of the uniform 5-minute poll (Decision 13) <!-- id:rr6z4bf -->
   - Redefined 2026-08-13 by Decision 13: the adaptive 5/15 transition is dormant (uniform 5-minute baseline), so the original checks — tighten below 5.0 mmol/L, relax on recovery — no longer exist to observe
   - Confirm on device that consecutive bsl fetches arrive at ~5-minute cadence regardless of glucose level (compare consecutive native instants in Documents/meals.sqlite)
   - Watch for a LibreLinkUp auth failure or rate-limit response over a sustained session — the ban risk Decision 13 accepts; if one appears, execute the rollback: restore the 15-minute baseline, Decision 12 machinery resumes

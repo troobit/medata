@@ -27,11 +27,16 @@ LOG_FILE    ?= /tmp/medata-device.log
 LOG_ARCHIVE ?= /tmp/medata-device.logarchive
 LOG_LAST    ?= 30m
 
-# Build stamp: git short SHA + wall-clock time, injected into Info.plist and
-# logged by the app at launch (event=launch in App/App.swift). Match the stamp
-# printed here against the one in the device log before trusting any capture —
-# stale binaries have silently invalidated whole test rounds before.
-BUILD_STAMP := $(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d-%H%M%S)
+# Build stamp: git short SHA (plus -dirty when tracked files were modified) +
+# wall-clock time, injected into Info.plist and logged by the app at launch
+# (event=launch in App/App.swift). Match the stamp printed here against the one
+# in the device log before trusting any capture — stale binaries have silently
+# invalidated whole test rounds before. Dirtiness is measured against TRACKED
+# files only, not `git status --porcelain`: the routine mid-session divergence
+# is untracked-but-not-ignored files (a new agent note, a scratch script), which
+# say nothing about whether the built sources differ from the commit.
+GIT_SHA     := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD || echo '-dirty')
+BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
