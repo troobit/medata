@@ -41,6 +41,10 @@ public enum EventType {
     // Manual carb intake (specs/data/manual-carb-intake); `value` carries
     // carbohydrate grams. Row shape mirrors the insulin convention above.
     public static let intake = "intake"
+    // Physical activity (specs/data/activity-events Req 1.1); `value` carries
+    // duration in minutes, or is absent when no duration was given (Req 1.5).
+    // Row shape mirrors the insulin convention above.
+    public static let activity = "activity"
 }
 
 // Whether a dose is fast-acting meal/correction insulin or background
@@ -467,6 +471,33 @@ public protocol PersistenceStore: Sendable {
     // `insulinUnitsOutOfRange` for units < 0 or > 60; 0 and 60 are accepted
     // (the UI enforces its own floor). Notifies `eventsDidChange` once.
     func saveInsulinDose(_ dose: InsulinDose) async throws
+
+    // specs/data/activity-events Req 1.1–1.6. Writes ONE `events` row per
+    // activity: `value` = duration in minutes (REAL) or NULL when no duration
+    // was given (Req 1.5 — never 0), `timestamp` = the activity start,
+    // `metadata` = JSON object with `kind`, `provenance` and `schema_version`
+    // (integer 1), plus `note` only when provided (key absent — not null —
+    // when nil). `character` is NOT written: it is derivable from `kind`, and
+    // storing it would create a second source of truth for the field a later
+    // model keys on. Notifies `eventsDidChange` once.
+    func saveActivity(_ activity: ActivityEvent) async throws
+
+    // Req 3.6. Deletes a single activity event by id, gated on
+    // `event_type = activity` (the insulin/intake convention), so a row of
+    // another type sharing the id survives. Notifies `eventsDidChange` once.
+    func deleteActivityEvent(id: UUID) async throws
+
+    // Req 5.1 — the dosing lookback. Returns activity events whose timestamp
+    // falls in `(instant - interval, instant]`, newest first. Exists so a
+    // dosing model asks one question rather than reimplementing an interval
+    // query and a metadata decode; the interval is required at the call site
+    // so the caller's window is always visible in the code that uses it
+    // (Req 5.2 states the 36-hour default the CALLER passes). Rows whose
+    // metadata does not decode are dropped, matching how the Graph already
+    // handles unreadable insulin rows. An empty result is an ordinary
+    // outcome, not an error (Req 5.3).
+    func activities(before instant: Date, within interval: TimeInterval) async throws
+        -> [ActivityEvent]
 
     // PRD regression-suggestion-integration Core 3. Deletes a single insulin
     // event by id. The DELETE is gated on `event_type = insulin`, so a meal or

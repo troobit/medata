@@ -46,7 +46,13 @@ let package = Package(
         // extension fetches from LibreLinkUp itself while the app is suspended,
         // so it links this and GlucoseWidgetShared and still cannot acquire
         // GRDB. Foundation-only, no Persistence dependency.
-        .library(name: "LibreLinkUpKit", targets: ["LibreLinkUpKit"])
+        .library(name: "LibreLinkUpKit", targets: ["LibreLinkUpKit"]),
+        // Discrete product for the same reason as GlucoseWidgetShared
+        // (specs/data/insulin-dosing Req 10.3): the app links the pure dose
+        // arithmetic directly, and it is deliberately NOT reachable via the
+        // MedataCore umbrella, so no estimation target can acquire it even
+        // transitively. Foundation-only, zero dependencies.
+        .library(name: "Dosing", targets: ["Dosing"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.27.0"),
@@ -128,6 +134,15 @@ let package = Package(
             name: "GlucoseWidgetShared",
             path: "MedataCore/Sources/GlucoseWidgetShared"
         ),
+        // Pure dose arithmetic (specs/data/insulin-dosing). Foundation only —
+        // the dependency list MUST stay empty. Persistence must not depend on
+        // it and it must not depend on Persistence: the App composes the
+        // persisted row from the pure result, so no estimation target can
+        // reach this code even transitively (Req 10.3). The firewall here is
+        // structural rather than asserted by a graph test — with an empty
+        // dependency list and only the app target and its own tests depending
+        // on it, there is no edge for a path to run along.
+        .target(name: "Dosing", path: "MedataCore/Sources/Dosing"),
         // LibreLinkUp vendor client (specs/data/cgm-connect Req 3), extracted
         // from GlucoseIngestion so the widget extension can fetch for itself
         // (specs/ui/glucose-lock-widget Decision 16). GlucoseWidgetShared is
@@ -333,6 +348,11 @@ let package = Package(
             name: "GlucoseWidgetSharedTests",
             dependencies: ["GlucoseWidgetShared"],
             path: "MedataCore/Tests/GlucoseWidgetSharedTests"
+        ),
+        .testTarget(
+            name: "DosingTests",
+            dependencies: ["Dosing"],
+            path: "MedataCore/Tests/DosingTests"
         ),
         .testTarget(
             name: "GlucoseIngestionTests",

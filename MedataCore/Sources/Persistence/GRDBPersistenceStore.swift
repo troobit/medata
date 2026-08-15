@@ -792,6 +792,104 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    // MARK: - Activity (specs/data/activity-events)
+
+    // Same row shape as an insulin dose: one `events` row, `value` carrying
+    // the event's one continuous quantity — here duration in minutes, NULL
+    // when unrecorded (Req 1.5). No new table, no schema version bump.
+    public func saveActivity(_ activity: ActivityEvent) async throws {
+        let metadata = try Self.activityMetadataJSON(for: activity)
+        let timestampMs = Int64(activity.timestamp.timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO events (id, timestamp, event_type, value, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    activity.id.uuidString, timestampMs, EventType.activity,
+                    activity.durationMinutes, metadata
+                ]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    public func deleteActivityEvent(id: UUID) async throws {
+        try await queue.write { db in
+            // Gated on event_type so a row of another type sharing the id
+            // survives. Activity events have no side tables.
+            try db.execute(
+                sql: "DELETE FROM events WHERE id = ? AND event_type = ?",
+                arguments: [id.uuidString, EventType.activity]
+            )
+        }
+        changeBroadcaster.notify()
+    }
+
+    // Req 5.1. Half-open at the far end, closed at `instant`: an event
+    // exactly at `instant - interval` is excluded, one exactly at `instant`
+    // is included.
+    public func activities(
+        before instant: Date, within interval: TimeInterval
+    ) async throws -> [ActivityEvent] {
+        let lower = Int64(instant.addingTimeInterval(-interval).timeIntervalSince1970 * 1000)
+        let upper = Int64(instant.timeIntervalSince1970 * 1000)
+        let rows = try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT id, timestamp, value, metadata FROM events
+                    WHERE event_type = ? AND timestamp > ? AND timestamp <= ?
+                    ORDER BY timestamp DESC, id DESC
+                    """,
+                arguments: [EventType.activity, lower, upper]
+            )
+        }
+        return rows.compactMap(Self.activityEvent(from:))
+    }
+
+    // Rows that fail to decode are dropped rather than throwing: an
+    // unreadable covariate row must not take down a dosing read.
+    private static func activityEvent(from row: Row) -> ActivityEvent? {
+        guard
+            let idString: String = row["id"],
+            let id = UUID(uuidString: idString),
+            let timestampMs: Int64 = row["timestamp"],
+            let metadata: String = row["metadata"],
+            let data = metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let kindRaw = object["kind"] as? String,
+            let kind = ActivityKind(rawValue: kindRaw)
+        else { return nil }
+        let provenance = (object["provenance"] as? String)
+            .flatMap(ActivityProvenance.init(rawValue:)) ?? .manual
+        return ActivityEvent(
+            id: id,
+            timestamp: Date(timeIntervalSince1970: Double(timestampMs) / 1000),
+            kind: kind,
+            durationMinutes: row["value"],
+            provenance: provenance,
+            note: object["note"] as? String
+        )
+    }
+
+    // `kind`, `provenance`, `schema_version`, plus `note` only when provided
+    // — absent, never null, when nil (the insulin payload's convention).
+    // `character` is deliberately not written (design §2).
+    private static func activityMetadataJSON(for activity: ActivityEvent) throws -> String {
+        var payload: [String: Any] = [
+            "kind": activity.kind.rawValue,
+            "provenance": activity.provenance.rawValue,
+            "schema_version": ActivityEvent.metadataSchemaVersion
+        ]
+        if let note = activity.note {
+            payload["note"] = note
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
+        return String(decoding: data, as: UTF8.self)
+    }
+
     // MARK: - Manual carb intake (specs/data/manual-carb-intake Phase 1)
 
     // Bounds accepted at the store layer (Req 1.4).
