@@ -93,6 +93,22 @@ archived capture round or a tagged attempt needs to be reproducible. A dirty
 build is fine for looking at a screen; it is not the build to cite as the
 reference for a comparison you intend to repeat.
 
+### `segmenterSource` has two forms — only one names the model
+
+The launch line's `segmenterSource=stub|coreml` is a **compile-time** branch:
+`App/App.swift:185` reads `Pipeline.preShutterSourceTag`, which is a
+`#if DEV_STUB_SEGMENTER` switch and knows nothing about which `.mlpackage` was
+bundled. The 12-hex form `coreml_<modelVersion>` comes from
+`PipelineFactory.swift:124` and is stamped onto **captures**
+(`MealRecord.segmenterSource`, surfaced in Settings → Estimation log), where
+the id is read out of the loaded model's `medata.modelVersion` metadata.
+
+So a launch log proves the stamp and stub-vs-real; it cannot prove *which*
+model an install binds. That needs one capture on that install — or, for the
+weaker claim, `strings`/`coremltools` on the `.mlpackage` the build compiled.
+`myfoodrepo-bridge/tasks-training-and-export.md` task 6 asked for the 12-hex id
+in the launch log for months; no build has ever emitted it there.
+
 ### Tagging a UI attempt
 
 When a UI design is worth comparing against later, commit it on a clean tree and
@@ -115,7 +131,7 @@ updating, and deleting a tag once its attempt stops being interesting is fine �
 | Build | Segmenter | Capture-testable? |
 |---|---|---|
 | Debug (Xcode Run / `make deploy-device`) | stub at `-Onone`, ~20 s/mask | **No** — mask stale, `canShutter=false` ~19 s of every 20 |
-| Release, plain (`make deploy-release`) | real Core ML model (bundled since 2026-07-05) | **Yes** — the real path; confirm `segmenterSource=coreml_<sha12>` in the launch log |
+| Release, plain (`make deploy-release`) | real Core ML model (bundled since 2026-07-05) | **Yes** — the real path; the launch log reads a bare `segmenterSource=coreml` |
 | Release + forced stub (`make deploy-release-stub`) | stub at ~2 Hz | **Yes** — deterministic stub masks, when the real model's output would confound the test |
 
 The stub emits a mask roughly every ~20 s in Debug, so the sub-second arming
