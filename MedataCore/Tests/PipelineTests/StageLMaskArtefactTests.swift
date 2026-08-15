@@ -154,6 +154,17 @@ private struct ThrowingStore: PersistenceStore {
     func deleteInsulinEvent(id: UUID) async throws {
         fatalError("unused")
     }
+    func saveActivity(_ activity: ActivityEvent) async throws {
+        fatalError("unused")
+    }
+    func deleteActivityEvent(id: UUID) async throws {
+        fatalError("unused")
+    }
+    func activities(
+        before instant: Date, within interval: TimeInterval
+    ) async throws -> [ActivityEvent] {
+        fatalError("unused")
+    }
     func saveIntakeEntry(_ entry: IntakeEntry) async throws {
         fatalError("unused")
     }
@@ -187,6 +198,17 @@ private struct ThrowingStore: PersistenceStore {
     func saveBenchmarkMeal(
         _ meal: BenchmarkMeal, carbsPer100g: (String, String) -> Double?
     ) async throws {
+        fatalError("unused")
+    }
+    func saveDoseSuggestion(_ row: DoseSuggestionRecord) async throws {
+        fatalError("unused")
+    }
+    func linkDose(
+        suggestionID: UUID, insulinEventID: UUID, givenUnits: Double
+    ) async throws {
+        fatalError("unused")
+    }
+    func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord] {
         fatalError("unused")
     }
     func benchmarkMeals() async throws -> [BenchmarkMeal] {

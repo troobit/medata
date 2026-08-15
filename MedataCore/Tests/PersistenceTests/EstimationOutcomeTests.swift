@@ -131,12 +131,12 @@ final class EstimationOutcomeTests: XCTestCase {
         XCTAssertEqual(raw, 1_750_123_456_789)
     }
 
-    func testSchemaVersionIsStampedSeven() async throws {
+    func testSchemaVersionIsStampedEight() async throws {
         let q = try DatabaseQueue(path: dbURL.path)
         let version: String? = try await q.read { db in
             try String.fetchOne(db, sql: "SELECT v FROM meta WHERE k = 'schema_version'")
         }
-        XCTAssertEqual(version, "7", "correction_records lands with schema_version 7")
+        XCTAssertEqual(version, "8", "dose_suggestions lands with schema_version 8")
     }
 
     func testOutcomeIndexesExist() async throws {
