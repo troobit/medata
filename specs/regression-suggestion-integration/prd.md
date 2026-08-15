@@ -37,6 +37,12 @@ existing `exportArchive()` ZIP is the transport medreg already consumes.
 
 - No dose suggestion, insulin-on-board, or regression maths in the app — medreg
   owns all modelling, off-device, against exported data.
+  - Superseded in part, after this PRD shipped, by
+    [`specs/data/insulin-dosing/decision_log.md`](../data/insulin-dosing/decision_log.md)
+    Decision 1, "Reverse the 'no dose suggestion in the app' non-goal, narrowly":
+    suggestion arithmetic and insulin-on-board now run on-device; parameter
+    fitting does not, and `~/repos/medreg` remains the only place dosing
+    parameters are estimated from history.
 - No confidence scores, gating, warnings, reassurance, or disclaimer copy
   (developer-phase copy rule, CLAUDE.md).
 - No changes to the medreg repository.

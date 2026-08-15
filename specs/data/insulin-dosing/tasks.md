@@ -170,7 +170,7 @@ metadata:
 
 - [ ] 14. make test green, make build, make spell <!-- id:idz000j -->
   - Report BOTH totals from make test — XCTest and swift-testing
-  - Blocked-by: idz000g (Meal review readout on the existing mass line), idz000h (Manual intake path — same readout, same arming), idz000i (Seed the dose sheet through one optional initialiser parameter), idz000c (Tests: round-trip save then read newest-first)
+  - Blocked-by: idz000g (Meal review readout on the existing mass line), idz000h (Manual intake path — same readout, same arming), idz000i (Seed the dose sheet through one optional initialiser parameter), idz000c (Tests: round-trip save then read newest-first; a second save with the same id replaces rather than appends; linkDose fills given_units and insulin_event_id; neither write fires eventsDidChange; an upgrade from a schema-7 database keeps every existing event)
   - Stream: 1
   - Requirements: [10.1](requirements.md#10.1), [10.3](requirements.md#10.3)
 
@@ -264,7 +264,7 @@ metadata:
 
 ## Phase 8 — Spec reconciliation (unblocked; do first)
 
-- [ ] 24. Annotate the superseded non-goal in the shipped PRD — do not rewrite it <!-- id:idz000t -->
+- [x] 24. Annotate the superseded non-goal in the shipped PRD — do not rewrite it <!-- id:idz000t -->
   - Discharges the first clause of Decision 1's Impact section, which reads: "specs/regression-suggestion-integration/prd.md (one cross-reference line), specs/OVERVIEW.md, and everything in this spec." The third clause is this spec; the first two had no task until now, so the repo contradicts itself in a way no ledger surfaced. Neither this task nor task 25 depends on any code
   - `specs/regression-suggestion-integration/prd.md` currently states, under `## Non-goals`: "No dose suggestion, insulin-on-board, or regression maths in the app — medreg owns all modelling, off-device, against exported data." That is now false in part and nothing on the page says so
   - Add ONE cross-reference line beneath that bullet pointing at `specs/data/insulin-dosing/decision_log.md` Decision 1, "Reverse the 'no dose suggestion in the app' non-goal, narrowly". Do NOT delete or reword the original bullet: that PRD is marked Done and is a record of what shipped, so editing its text destroys the record, while annotating it preserves both the original intent and the reversal
@@ -273,7 +273,7 @@ metadata:
   - Run `make spell` after the edit
   - Requirements: [10.5](requirements.md#10.5)
 
-- [ ] 25. Regenerate the specs index so it carries this spec and activity-events <!-- id:idz000u -->
+- [x] 25. Regenerate the specs index so it carries this spec and activity-events <!-- id:idz000u -->
   - `/specs-overview` — `specs/OVERVIEW.md` is a generated index and currently lists neither `specs/data/insulin-dosing` nor `specs/data/activity-events`
   - Also confirm the regenerated Segmenter Foundation row no longer contradicts itself: it currently reads both "19 of 22 tasks done" and "ALL 23 tasks done" in the same cell
   - Blocked-by: idz000t (Annotate the superseded non-goal in the shipped PRD — do not rewrite it)

@@ -65,7 +65,7 @@ references:
   - Interactions stay unresolved by design: isolating one lever from three does not settle a two-lever interaction, and Decision 34 does not schedule a further run for that
   - Blocked-by: pgctxeb (STOP — run an actual segmenter training job with the new recipe, export to Core ML, and swap the bundled segmenter.mlpackage multi-hour local MPS/GPU; changes the shipped artefact — human/compute-gated, do not run autonomously)
 
-- [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question
+- [ ] 11. STOP — R4/R5: the SegFormer-B0 longer-schedule pair, Decision 30's open question <!-- id:8l5zdrf -->
   - Decision 30 rejected SegFormer-B0 at an equal 12-epoch budget, but the candidate was still climbing at epoch 12 (+0.0116, monotonic throughout) while the incumbent had plateaued at epoch 11. Whether it wins on a longer schedule is genuinely unanswered
   - This is TWO runs, not one: a longer-schedule incumbent has to run alongside the longer-schedule candidate or the comparison stops being attributable, which is Decision 29's step-parity rule. SegFormer took about 6 h at 12 epochs, so an 18-epoch pair is roughly 9 h plus 7.5 h of machine time on top of everything above
   - Lowest priority in the queue. Decision 30's own consequence is that the architectural lever is spent at this budget, so the data and recipe runs earn their machine time first
