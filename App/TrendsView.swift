@@ -49,6 +49,7 @@ struct TrendsView: View {
                     if model.range == .day {
                         dayMeals
                         dayInsulin
+                        dayActivity
                     }
                 }
                 .padding(20)
@@ -423,6 +424,59 @@ struct TrendsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Day activity list (specs/data/activity-events Req 4.3)
+
+    // The day's activities, in the same height-pinned scroll-disabled List the
+    // Insulin section uses — WITHOUT the pin the List collapses to zero height
+    // inside the ScrollView. Read-only here; deletion lives on Records
+    // (Req 3.6), as it does for doses.
+    private var dayActivity: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Activity")
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+            if model.dayActivities.isEmpty {
+                Text("no activity")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+            } else {
+                List {
+                    ForEach(model.dayActivities) { entry in
+                        activityRow(entry)
+                            .listRowBackground(Color.surfacePrimary)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .environment(\.defaultMinListRowHeight, doseRowHeight)
+                .frame(height: CGFloat(model.dayActivities.count) * doseRowHeight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func activityRow(_ entry: ActivityEntry) -> some View {
+        HStack {
+            Text(timeLabel(entry.timestamp))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.textPrimary)
+            Text(entry.kind.displayLabel)
+                .font(.subheadline)
+                .foregroundStyle(Color.seriesActivity)
+            Spacer()
+            // Nothing at all when the duration was not recorded — never
+            // "0 min" (Req 1.5).
+            if let minutes = entry.durationMinutes {
+                Text("\(Int(minutes.rounded())) min")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+        .accessibilityIdentifier("graph.activity.\(entry.id.uuidString)")
     }
 
     private func doseRow(_ dose: InsulinEntry) -> some View {

@@ -60,7 +60,7 @@ references:
   - Blocked-by: av2mqr4 (Add the store surface — save, delete, and the lookback query)
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2)
 
-- [ ] 7. Records row and swipe-to-delete <!-- id:av7bnv5 -->
+- [x] 7. Records row and swipe-to-delete <!-- id:av7bnv5 -->
   - Row carries kind label and duration; deletion by the same swipe the insulin rows use
   - Needs the `List`-inside-`ScrollView` treatment with a pinned height — without the height pin it collapses to zero
   - Blocked-by: av2mqr4 (Add the store surface — save, delete, and the lookback query)

@@ -47,11 +47,13 @@ final class RecordsModel {
         async let insulin = loadInsulin()
         async let glucose = loadGlucose()
         async let intake = loadIntake()
+        async let activity = loadActivity()
         var merged: [RecordRow] = []
         merged.append(contentsOf: await meals)
         merged.append(contentsOf: await insulin)
         merged.append(contentsOf: await glucose)
         merged.append(contentsOf: await intake)
+        merged.append(contentsOf: await activity)
         merged.sort { lhs, rhs in
             if lhs.timestamp != rhs.timestamp { return lhs.timestamp > rhs.timestamp }
             return lhs.id < rhs.id
@@ -72,6 +74,10 @@ final class RecordsModel {
             try? await store.deleteBslEvent(id: reading.id)
         case .intake(let record):
             try? await store.deleteIntakeEntry(id: record.id)
+        case .activity(let entry):
+            // The same swipe the insulin rows use
+            // (specs/data/activity-events Req 3.6).
+            try? await store.deleteActivityEvent(id: entry.id)
         }
     }
 
@@ -87,6 +93,7 @@ final class RecordsModel {
             case .insulin(let entry): eventIDs.append(entry.id)
             case .glucose(let reading): eventIDs.append(reading.id)
             case .intake(let record): eventIDs.append(record.id)
+            case .activity(let entry): eventIDs.append(entry.id)
             }
         }
         try? await store.deleteRecords(mealIDs: mealIDs, eventIDs: eventIDs)
@@ -182,6 +189,30 @@ final class RecordsModel {
             macros: macros,
             source: source,
             presetID: presetID
+        )
+    }
+
+    private func loadActivity() async -> [RecordRow] {
+        let events = (try? await store.events(in: Self.allTime, type: EventType.activity)) ?? []
+        return events.compactMap { Self.activityEntry(from: $0) }.map { .activity($0) }
+    }
+
+    // Decodes an `activity` event row: `value` = duration in minutes, ABSENT
+    // when unrecorded (activity-events Req 1.5 — nil, never 0), metadata JSON
+    // carries `kind`. Deliberately duplicated per model rather than shared
+    // (home-router Decision 13), same as `insulinEntry(from:)` above.
+    private static func activityEntry(from event: Event) -> ActivityEntry? {
+        guard
+            let data = event.metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let kindRaw = object["kind"] as? String,
+            let kind = ActivityKind(rawValue: kindRaw)
+        else { return nil }
+        return ActivityEntry(
+            id: event.id,
+            timestamp: event.timestamp,
+            kind: kind,
+            durationMinutes: event.value
         )
     }
 
