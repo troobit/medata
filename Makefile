@@ -105,7 +105,8 @@ spell:
 harness-accuracy:
 	@test -n "$(FIXTURES)" || { \
 	  echo "usage: make harness-accuracy FIXTURES=<dir> SHA=<checkpoint-sha256> [OUT=<file>]"; \
-	  echo "  SHA must match the fixtures' segmenter stamp, e.g. coreml_ab812dc3aa9d"; \
+	  echo "  SHA is the bundle's bare segmenter stamp, e.g. ab812dc3aa9d — NOT the"; \
+	  echo "  app-facing lineage form 'coreml_ab812dc3aa9d', which fails the load"; \
 	  exit 1; }
 	swift run HarnessCLI accuracy \
 	  --fixtures-dir "$(FIXTURES)" \
