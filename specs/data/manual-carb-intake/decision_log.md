@@ -354,7 +354,7 @@ The nullability carries the useful fact on its own: non-NULL means "this number 
 **Negative:**
 - Another written-but-never-read column — the same honest weakness `preset_id` carries.
 - A dangling `source_meal_id` cannot be resolved once the meal is deleted, so the "which meal" half of the stamp is best-effort; only the "born from a capture" half is durable.
-- Forces schema 8 → 9 and the first additive `ALTER TABLE` in the store. `ADD COLUMN` is not idempotent in SQLite, so `migrate` changes from an unconditional re-stamp into a read-the-stored-version-then-act pair. It stays non-destructive, so event-log-schema Decision 10 ("no destructive DDL ships") is unaffected.
+- Forces schema 9 → 10 and the first additive `ALTER TABLE` in the store. `ADD COLUMN` is not idempotent in SQLite, so `migrate` changes from an unconditional re-stamp into a read-the-stored-version-then-act pair. It stays non-destructive, so event-log-schema Decision 10 ("no destructive DDL ships") is unaffected.
 
 ---
 

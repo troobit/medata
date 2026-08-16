@@ -124,23 +124,23 @@ references:
 
 ## Preset origin stamp (Req 8.8, 8.9)
 
-- [ ] 12. Write tests for quick_presets.source_meal_id round-trip and the schema 8 to 9 migration <!-- id:yh454uo -->
+- [ ] 12. Write tests for quick_presets.source_meal_id round-trip and the schema 9 to 10 migration <!-- id:yh454uo -->
   - Extend MedataCore/Tests/PersistenceTests/QuickPresetTests.swift, XCTest style matching the existing cases
   - Cover: saveQuickPreset persists sourceMealID and quickPresets() reads it back; nil round-trips as NULL
   - Cover: an INSERT OR REPLACE update of an existing preset preserves source_meal_id when the caller passes it through, per Req 8.9
-  - Cover: a DB created at schema 8 (quick_presets without the column) gains source_meal_id on open, its existing presets survive with NULL, and a second open does not throw duplicate column name
+  - Cover: a DB created at schema 9 (quick_presets without the column) gains source_meal_id on open, its existing presets survive with NULL, and a second open does not throw duplicate column name
   - Cover: deleting the meal named by source_meal_id leaves the preset row and its value unchanged (Req 8.8) - the stamp is never dereferenced
   - Stream: 1
   - Requirements: [8.8](requirements.md#8.8), [8.9](requirements.md#8.9)
   - References: design.md#Schema: quick_presets.source_meal_id
 
-- [ ] 13. Implement schema v9, QuickPreset.sourceMealID, and QuickPreset.nextSortOrder(after:) <!-- id:yh454up -->
-  - GRDBPersistenceStore.createSchema: quick_presets CREATE TABLE gains source_meal_id TEXT (nullable); stamp schema_version 9
-  - migrate(): read the stored schema_version before re-stamping and run ALTER TABLE quick_presets ADD COLUMN source_meal_id TEXT only when it is below 9 - ADD COLUMN is not idempotent in SQLite. Non-destructive, so event-log-schema Decision 10 still holds
+- [ ] 13. Implement schema v10, QuickPreset.sourceMealID, and QuickPreset.nextSortOrder(after:) <!-- id:yh454up -->
+  - GRDBPersistenceStore.createSchema: quick_presets CREATE TABLE gains source_meal_id TEXT (nullable); stamp schema_version 10
+  - migrate(): read the stored schema_version before re-stamping and run ALTER TABLE quick_presets ADD COLUMN source_meal_id TEXT only when it is below 10 - ADD COLUMN is not idempotent in SQLite. Non-destructive, so event-log-schema Decision 10 still holds
   - Update the migrate() header comment with the version-9 line, matching the existing per-version notes
   - QuickPreset gains public var sourceMealID: UUID?; quickPreset(from:) decodes it, saveQuickPreset binds it
   - Add public static func nextSortOrder(after presets: [QuickPreset]) -> Int to QuickPreset and rewrite IntakeModel.nextSortOrder to call it - one expression, three call sites
-  - Blocked-by: yh454uo (Write tests for quick_presets.source_meal_id round-trip and the schema 8 to 9 migration)
+  - Blocked-by: yh454uo (Write tests for quick_presets.source_meal_id round-trip and the schema 9 to 10 migration)
   - Stream: 1
   - Requirements: [8.8](requirements.md#8.8), [8.9](requirements.md#8.9)
   - References: design.md#Schema: quick_presets.source_meal_id, decision_log.md
@@ -149,7 +149,7 @@ references:
   - App/QuickPresetEditSheet.swift destructures the preset it is given and reconstructs a QuickPreset on save, so an edit silently drops the new column
   - Capture private let sourceMealID: UUID? in init alongside presetID/sortOrder and pass it through untouched on save
   - No test task - App-layer UI; covered by the store-level Req 8.9 case and the on-device checklist
-  - Blocked-by: yh454up (Implement schema v9, QuickPreset.sourceMealID, and QuickPreset.nextSortOrderafter:)
+  - Blocked-by: yh454up (Implement schema v10, QuickPreset.sourceMealID, and QuickPreset.nextSortOrderafter:)
   - Stream: 1
   - Requirements: [8.9](requirements.md#8.9)
   - References: design.md#Schema: quick_presets.source_meal_id
@@ -163,7 +163,7 @@ references:
   - Carbs: Double(displayedCarbsG.rounded()) clamped into CarbEntryModel.minCarbs...maxCarbs (1...999); a meal rounding to 0 g yields an empty carb field and a disabled Save via the sheet existing canSave rule
   - Macros: left absent (Req 8.4) - clinicalTotals protein/fat/fibre are deliberately not carried
   - sortOrder from QuickPreset.nextSortOrder(after: existingPresets)
-  - Blocked-by: yh454up (Implement schema v9, QuickPreset.sourceMealID, and QuickPreset.nextSortOrderafter:)
+  - Blocked-by: yh454up (Implement schema v10, QuickPreset.sourceMealID, and QuickPreset.nextSortOrderafter:)
   - Stream: 1
   - Requirements: [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
   - References: design.md#The flattening, and what survives it, design.md#Which number is frozen
