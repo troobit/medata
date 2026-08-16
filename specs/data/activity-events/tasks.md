@@ -44,7 +44,7 @@ references:
   - Blocked-by: av2mqr4 (Add the store surface — save, delete, and the lookback query)
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [2.4](requirements.md#2.4), [4.4](requirements.md#4.4)
 
-- [ ] 5. Deep link `medata://activity/add` <!-- id:av5rfk6 -->
+- [x] 5. Deep link `medata://activity/add` <!-- id:av5rfk6 -->
   - Added to the existing `CFBundleURLTypes` array in the partial `MeData/Info.plist` — it cannot be an `INFOPLIST_KEY_` build setting
   - Handled in `AppRoot.handleDeepLink`, inheriting the existing `pendingDeepLink` resume so arrival during a dismissing presentation is not silently dropped
   - Blocked-by: av4hjd2 (`ActivityModel` and `ActivitySheet`)
