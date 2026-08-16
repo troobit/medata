@@ -13,9 +13,27 @@ import SwiftUI
 struct InsulinDoseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model: InsulinDoseModel
+    // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1): the
+    // sheet opens pre-seeded with the schedule's kind and nominal amount, so a
+    // changed dose is an adjustment rather than a fresh entry. The sheet is not
+    // rebuilt and gains no schedule-specific controls — the only difference is
+    // where `units` and `kind` start and who is told about the saved event.
+    private let onSaved: ((UUID) -> Void)?
 
-    init(store: any PersistenceStore) {
-        _model = State(initialValue: InsulinDoseModel(store: store))
+    init(
+        store: any PersistenceStore,
+        seedUnits: Int? = nil,
+        seedKind: InsulinKind? = nil,
+        onSaved: ((UUID) -> Void)? = nil
+    ) {
+        let model = InsulinDoseModel(store: store)
+        if let seedUnits {
+            model.seed(units: seedUnits, kind: seedKind ?? model.kind)
+        } else if let seedKind {
+            model.kind = seedKind
+        }
+        _model = State(initialValue: model)
+        self.onSaved = onSaved
     }
 
     var body: some View {
@@ -115,7 +133,10 @@ struct InsulinDoseSheet: View {
     private var saveButton: some View {
         Button {
             Task {
-                if await model.save() { dismiss() }
+                if await model.save() {
+                    if let eventID = model.savedEventID { onSaved?(eventID) }
+                    dismiss()
+                }
             }
         } label: {
             if model.isSaving {

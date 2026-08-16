@@ -33,13 +33,20 @@ flowchart LR
 iOS has no "repeat until acknowledged" trigger. The mechanism is to schedule the
 whole prompt sequence up front and cancel what is left when the dose closes:
 
-- One `UNCalendarNotificationTrigger` at the scheduled time, `repeats: true` so the
-  daily occurrence needs no re-arming.
-- **K follow-ups** at interval **I** after it, as `UNTimeIntervalNotificationTrigger`
-  requests with derived identifiers.
+- One request at the scheduled time and **K follow-ups** at interval **I** after
+  it, each with a derived identifier.
 - On discharge (logged or skipped), `removePendingNotificationRequests` for that
   occurrence's follow-up identifiers, and `removeDeliveredNotifications` for any
   already shown.
+
+> **Superseded in part by [Decision 4](decision_log.md).** This section originally
+> specified a `repeats: true` `UNCalendarNotificationTrigger` for the due
+> notification and `UNTimeIntervalNotificationTrigger` follow-ups. Building it
+> showed the two cannot both hold: an interval trigger fires relative to when it is
+> *scheduled*, and a repeating trigger cannot be cancelled for one day only, so
+> discharging one dose would end the whole schedule. Every request is now a **dated
+> one-shot** on a rolling horizon sized against the 64-request pending budget.
+> Everything else below stands.
 
 The cutoff of Req 3.3 is therefore `K × I` and needs no timer. Nothing runs in the
 background to keep the reminder alive, which matters because

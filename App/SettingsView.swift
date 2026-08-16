@@ -15,6 +15,10 @@ private struct ArchiveFile: Identifiable {
 // demo glucose so Trends is verifiable before an importer ships (Decision 13).
 struct SettingsView: View {
     let store: any PersistenceStore
+    // The recurring dose schedule (specs/data/dose-schedule Req 1.3, 1.4, 3.2,
+    // 3.3). Owned by AppRoot so the outstanding set survives this cover being
+    // presented and dismissed.
+    let doseSchedule: DoseScheduleModel
     // Fresh-install default forks on device capability (Req 16.2 / Decision 9):
     // 1-view on LiDAR devices, 2-view otherwise. Passed from AppRoot so the
     // Picker resolves an unset key the same way `CaptureFlowView.effectiveMode`
@@ -115,6 +119,8 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settings.insulinBasal")
                 }
             }
+
+            doseScheduleSection
 
             Section {
                 Button {
