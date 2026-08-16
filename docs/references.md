@@ -143,7 +143,8 @@ This codebase was made possible by, and builds on the work of others, detailed b
   component now feeds the segmenter lane; the meshes and nutrition values
   continue to feed the calibration lane.
   Commercial use is governed by cross-dataset-calibration Decision 18. Cited in
-  `specs/OVERVIEW.md`.
+  `specs/OVERVIEW.md`. Local copy gitignored under `data/` with SHA-256
+  provenance in `data/metafood3d/SOURCE.md`.
 
 ### Supporting reference data
 
