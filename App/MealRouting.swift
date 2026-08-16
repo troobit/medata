@@ -72,6 +72,7 @@ enum RecordRow: Identifiable {
     case insulin(InsulinEntry)  // .id is UUID
     case glucose(GlucoseRow)    // (id: Event.id, timestamp, mmolL) — GlucoseReading has no id
     case intake(IntakeRecord)   // manual carb entry (manual-carb-intake Req 6.1)
+    case activity(ActivityEntry)  // logged activity (activity-events Req 4.3)
 
     // Sort key for the Records timeline (Req 3.1, most-recent-first).
     var timestamp: Date {
@@ -80,6 +81,7 @@ enum RecordRow: Identifiable {
         case .insulin(let entry): entry.timestamp
         case .glucose(let row): row.timestamp
         case .intake(let record): record.timestamp
+        case .activity(let entry): entry.timestamp
         }
     }
 
@@ -91,6 +93,7 @@ enum RecordRow: Identifiable {
         case .insulin(let entry): entry.id.uuidString
         case .glucose(let row): row.id.uuidString
         case .intake(let record): record.id.uuidString
+        case .activity(let entry): entry.id.uuidString
         }
     }
 }
