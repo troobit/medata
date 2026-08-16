@@ -52,4 +52,11 @@ extension Color {
     // markers reuse the bolus teal.
     static let seriesInsulinBolus = Color(uiColor: .systemTeal)
     static let seriesInsulinBasal = Color(uiColor: .systemPurple)
+    // Activity ground track on the Graph (specs/data/activity-events design
+    // §4). Must be distinct from the carb accent (green), the glucose line
+    // (orange) AND both insulin series (teal, purple) — pink is the only
+    // system hue left that no other series claims, and the mark it fills is a
+    // thin ribbon below the insulin band, so its chroma carries the whole
+    // signal at that height.
+    static let seriesActivity = Color(uiColor: .systemPink)
 }
