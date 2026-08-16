@@ -57,4 +57,8 @@ extension Color {
     // series (teal / purple), so the activity band is never read as any of
     // them. Also the selected-chip fill on the activity entry sheet.
     static let seriesActivity = Color(uiColor: .systemPink)
+    // The shaded active-period backdrop. Low enough alpha that the glucose
+    // trace, carb bars and insulin band all read through it unchanged
+    // (Req 4.1) — it is a ground, not a mark.
+    static let bandActivity = seriesActivity.opacity(0.13)
 }
