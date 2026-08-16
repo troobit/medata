@@ -5,14 +5,19 @@ import SwiftUI
 // plain medium-detent sheet from AppRoot — the same weight as the insulin dose
 // sheet, deliberately lighter than the Capture/Records/Graph covers.
 //
-// ATTEMPT 1 — "chip row and stepper", the dose-sheet idiom applied verbatim:
-// the kinds are a horizontally scrolling row of labelled chips and the
-// duration is a ±5-minute stepper flanking a large numeral, exactly as
-// `InsulinDoseSheet` handles units. It opens on the most recently used kind,
-// so the repeat path is open → Save (Req 3.1/3.3). Duration starts blank and
-// blank saves `nil` (Req 3.4/1.5); the time control defaults to now and moves
-// backwards (Req 3.2). No intensity, effort or calorie control (Req 2.4), and
-// no reassurance or disclaimer copy anywhere (Req 4.4).
+// ATTEMPT 2 — "everything on one surface": all seven kinds are a 4×2 grid of
+// icon tiles, so no kind is ever off-screen and picking one is a single tap
+// wherever the eye lands, and the duration is a row of one-tap presets rather
+// than a stepper. What it gives up is arbitrary precision — 37 minutes cannot
+// be expressed, only the presets or nothing — on the reasoning that a
+// remembered duration is a rounded guess anyway, and that a stepper walking to
+// 45 in five-minute taps is the slowest control on the sheet.
+//
+// It opens on the most recently used kind, so the repeat path is open → Save
+// (Req 3.1/3.3). Duration starts blank and blank saves `nil` (Req 3.4/1.5);
+// the time control defaults to now and moves backwards (Req 3.2). No
+// intensity, effort or calorie control (Req 2.4), and no reassurance or
+// disclaimer copy anywhere (Req 4.4).
 //
 // NOTE: sizing/`contentShape` live INSIDE each Button label — a Button's tap
 // gesture covers only its label, so outside modifiers draw a dead surface
@@ -21,15 +26,17 @@ struct ActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model: ActivityModel
 
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
     init(store: any PersistenceStore) {
         _model = State(initialValue: ActivityModel(store: store))
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                kindChips
-                durationStepper
+            VStack(spacing: 16) {
+                kindGrid
+                durationPresets
                 timeRow
                 saveButton
                 if let saveError = model.saveError {
@@ -50,31 +57,38 @@ struct ActivitySheet: View {
 
     // MARK: - Kind (Req 2.1, 3.3)
 
-    private var kindChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(ActivityKind.allCases, id: \.self) { kind in
-                    kindChip(kind)
-                }
+    // Every kind visible at once: seven tiles over two rows of four, so the
+    // remembered kind and every alternative are one tap apart.
+    private var kindGrid: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(ActivityKind.allCases, id: \.self) { kind in
+                kindTile(kind)
             }
-            .padding(.horizontal, 2)
         }
         .accessibilityIdentifier("activity.kinds")
     }
 
-    private func kindChip(_ kind: ActivityKind) -> some View {
+    private func kindTile(_ kind: ActivityKind) -> some View {
         let isOn = model.kind == kind
         return Button {
             model.kind = kind
         } label: {
-            Label(kind.displayLabel, systemImage: kind.symbolName)
-                .labelStyle(.titleAndIcon)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(isOn ? Color.seriesActivity : Color.surfaceElevated, in: Capsule())
-                .foregroundStyle(isOn ? Color.captureBackground : Color.textSecondary)
-                .contentShape(Capsule())
+            VStack(spacing: 4) {
+                Image(systemName: kind.symbolName)
+                    .font(.system(size: 22, weight: .medium))
+                Text(kind.displayLabel)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                isOn ? Color.seriesActivity : Color.surfaceElevated,
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .foregroundStyle(isOn ? Color.captureBackground : Color.textSecondary)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("activity.kind.\(kind.rawValue)")
@@ -82,45 +96,34 @@ struct ActivitySheet: View {
 
     // MARK: - Duration (Req 3.4)
 
-    // Blank by default and blank is reachable again: stepping down off the
-    // 5-minute floor clears the value rather than bottoming out.
-    private var durationStepper: some View {
-        HStack(spacing: 20) {
-            stepControl("minus", identifier: "activity.duration.minus") {
-                model.stepDurationDown()
-            }
-            VStack(spacing: 0) {
-                Text(model.durationLabel)
-                    .font(.system(size: 34, weight: .bold).monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.1), value: model.durationMinutes)
-                    .accessibilityIdentifier("activity.duration")
-                Text("duration")
-                    .font(.caption)
-                    .foregroundStyle(Color.textSecondary)
-            }
-            .frame(minWidth: 120)
-            stepControl("plus", identifier: "activity.duration.plus") {
-                model.stepDurationUp()
+    // One tap sets a duration, tapping the same preset again clears it — so
+    // blank, which is what most entries will carry, is never more than one tap
+    // away and never blocks Save.
+    private var durationPresets: some View {
+        HStack(spacing: 8) {
+            ForEach(ActivityModel.durationPresets, id: \.self) { minutes in
+                durationChip(minutes)
             }
         }
         .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("activity.duration")
     }
 
-    private func stepControl(
-        _ symbol: String, identifier: String, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(Color.textPrimary)
-                .frame(width: 56, height: 56)
-                .background(Color.surfaceElevated, in: Circle())
-                .contentShape(Circle())
+    private func durationChip(_ minutes: Double) -> some View {
+        let isOn = model.durationMinutes == minutes
+        return Button {
+            model.toggleDuration(minutes)
+        } label: {
+            Text("\(Int(minutes))")
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(isOn ? Color.textPrimary : Color.surfaceElevated, in: Capsule())
+                .foregroundStyle(isOn ? Color.surfacePrimary : Color.textSecondary)
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(identifier)
+        .accessibilityIdentifier("activity.duration.\(Int(minutes))")
     }
 
     // MARK: - Time (Req 3.2)
@@ -137,6 +140,9 @@ struct ActivitySheet: View {
         .accessibilityIdentifier("activity.time")
     }
 
+    // The button states what will be written, duration included, so the one
+    // control that is easy to leave in the wrong state is legible before the
+    // tap rather than after it.
     private var saveButton: some View {
         Button {
             Task {
@@ -147,7 +153,7 @@ struct ActivitySheet: View {
                 MedataLoadingSymbol(mode: .loop, size: 22)
                     .frame(maxWidth: .infinity)
             } else {
-                Text("Save \(model.kind.displayLabel)")
+                Text(saveLabel)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
             }
@@ -158,5 +164,10 @@ struct ActivitySheet: View {
         .foregroundStyle(Color.captureBackground)
         .disabled(model.isSaving)
         .accessibilityIdentifier("activity.save")
+    }
+
+    private var saveLabel: String {
+        guard let minutes = model.durationMinutes else { return "Save \(model.kind.displayLabel)" }
+        return "Save \(model.kind.displayLabel) · \(Int(minutes)) min"
     }
 }
