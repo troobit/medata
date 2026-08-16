@@ -12,6 +12,7 @@ import SwiftUI
 // - the recent-entries list — swipe-delete, tap-to-edit inline (Req 7.1/7.5).
 struct IntakeView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
     @State private var model: IntakeModel
     @State private var activeSheet: IntakeSheet?
 
@@ -138,7 +139,24 @@ struct IntakeView: View {
     private func presetButton(_ preset: QuickPreset) -> some View {
         let isSaving = model.savingPresetID == preset.id
         return Button {
-            Task { await model.tapPreset(preset) }
+            Task {
+                await model.tapPreset(preset)
+                // A preset tile's entire label is a carbohydrate figure;
+                // adding a second number to it would rewrite the control and
+                // blunt its one job. So the tap shows NOTHING and arms the
+                // seed — the suggestion reaches the developer one tap later,
+                // as the dose sheet's opening value (insulin-dosing Req 6.6).
+                await doseSuggestions?.arm(
+                    from: DoseSubject(
+                        carbsG: preset.carbsG,
+                        instant: Date(),
+                        source: .quickPreset,
+                        sourceEventID: preset.id,
+                        fatG: preset.macros.fatG,
+                        proteinG: preset.macros.proteinG
+                    )
+                )
+            }
         } label: {
             VStack(spacing: 2) {
                 Text(preset.name)

@@ -1,3 +1,4 @@
+import Dosing
 import Pipeline
 import SwiftUI
 
@@ -5,6 +6,84 @@ import SwiftUI
 private struct ArchiveFile: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+// One carbohydrate-ratio row (insulin-dosing Req 1.2, 1.5, 6.8). The local
+// hour window in the leading column is a fact about which meals the row
+// governs — it makes "mornings" concrete without a sentence. Validation is
+// `CarbRatio.init?`: a rejected entry leaves the stored value in force and
+// the field reverts on commit, with no error copy.
+private struct CarbRatioRow: View {
+    let band: DoseBand
+
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var stored: CarbRatio {
+        CarbRatio(gramsPerUnit: UserDefaults.standard.double(forKey: key))
+            ?? CarbRatioTable.seed[band]!
+    }
+
+    private var key: String { DoseSuggestionModel.ratioKey(for: band) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .foregroundStyle(Color.textPrimary)
+                    Text(window)
+                        .font(.footnote)
+                        .foregroundStyle(Color.textSecondary)
+                }
+                Spacer()
+                TextField("", text: $text)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 64)
+                    .focused($focused)
+                    .accessibilityIdentifier("settings.ratio.\(band.rawValue)")
+                Text("g/U")
+                    .foregroundStyle(Color.textSecondary)
+            }
+            // Rendered, never stored (Req 1.2): the same number in the
+            // developer's own phrasing, so nobody has to hold the inversion
+            // in their head.
+            Text("= \(String(format: "%.1f", stored.unitsPerTenGrams)) U per 10 g")
+                .font(.footnote)
+                .foregroundStyle(Color.textSecondary)
+        }
+        .onAppear { text = format(stored.gramsPerUnit) }
+        .onChange(of: focused) { _, isFocused in
+            if !isFocused { commit() }
+        }
+        .onSubmit(commit)
+    }
+
+    private func commit() {
+        guard let ratio = Double(text).flatMap(CarbRatio.init(gramsPerUnit:)) else {
+            text = format(stored.gramsPerUnit)
+            return
+        }
+        UserDefaults.standard.set(ratio.gramsPerUnit, forKey: key)
+        text = format(ratio.gramsPerUnit)
+    }
+
+    private func format(_ value: Double) -> String { String(format: "%.1f", value) }
+
+    private var label: String {
+        switch band {
+        case .overnight: "Overnight"
+        case .breakfast: "Breakfast"
+        case .lunch: "Lunch"
+        case .dinner: "Dinner"
+        }
+    }
+
+    private var window: String {
+        let hours = band.localHours
+        return String(format: "%02d:00–%02d:00", hours.lowerBound, hours.upperBound)
+    }
 }
 
 // The Settings screen — design-handoff-00 §12, design-system/pages/settings.md.
@@ -46,6 +125,19 @@ struct SettingsView: View {
     private var bolusInsulinType = SettingsKeys.insulinTypeBolusDefault
     @AppStorage(SettingsKeys.insulinTypeBasal)
     private var basalInsulinType = SettingsKeys.insulinTypeBasalDefault
+    // Dose-suggestion parameters (insulin-dosing Req 1.2, 5.6, 9.4). Stored
+    // 0 means "unset" for the increment — the picker resolves it to the 1 U
+    // standard, matching how `captureModeRaw` resolves its own empty default.
+    @AppStorage(SettingsKeys.dosableIncrementU) private var dosableIncrement = 0.0
+    @AppStorage(SettingsKeys.ratioSource) private var ratioSource = "manual"
+    @AppStorage(SettingsKeys.ratioFitRef) private var ratioFitRef = ""
+
+    private var incrementBinding: Binding<Double> {
+        Binding(
+            get: { DosableIncrement(units: dosableIncrement)?.units ?? DosableIncrement.standard.units },
+            set: { dosableIncrement = $0 }
+        )
+    }
 
     private var captureModeBinding: Binding<CaptureMode> {
         Binding(
@@ -113,6 +205,32 @@ struct SettingsView: View {
                         .multilineTextAlignment(.trailing)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("settings.insulinBasal")
+                }
+                // Carbohydrate ratios in band order (insulin-dosing Req 1.2,
+                // 6.9). The STORED value is grams per unit and the field is
+                // suffixed `g/U` so the direction is on screen at all times;
+                // the reciprocal beneath spells out the developer's own
+                // phrasing — `= 2.0 U per 10 g` — so the two conventions are
+                // visibly the same number. A field labelled merely "Ratio" is
+                // the trap this layout exists to close.
+                ForEach(DoseBand.allCases, id: \.self) { band in
+                    CarbRatioRow(band: band)
+                }
+                Picker("Pen increment", selection: incrementBinding) {
+                    Text("0.5 U").tag(0.5)
+                    Text("1 U").tag(1.0)
+                }
+                .accessibilityIdentifier("settings.dosableIncrement")
+                Picker("Ratio source", selection: $ratioSource) {
+                    Text("Chosen").tag("manual")
+                    Text("medreg").tag("medreg")
+                }
+                .accessibilityIdentifier("settings.ratioSource")
+                LabeledContent("medreg fit") {
+                    TextField("", text: $ratioFitRef)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("settings.ratioFitRef")
                 }
             }
 

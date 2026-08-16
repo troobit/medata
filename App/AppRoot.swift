@@ -38,6 +38,12 @@ struct AppRoot: View {
     // re-subscribe every time.
     @State private var homeGlucose: HomeGlucoseModel
 
+    // Owned here, exactly as `DoseSuggestionModel`'s own header states, so a
+    // seed armed inside the Capture cover survives that cover's dismissal.
+    // Injected into the environment so the review screen and the carb sheet
+    // read the same instance without being threaded through four initialisers.
+    @State private var doseSuggestions: DoseSuggestionModel
+
     // The deep links under the `medata` scheme — each a single-tap lock-screen
     // widget target (PRD amendment to App 10; glucose-lock-widget Req 7.1).
     private enum DeepLinkTarget {
@@ -61,6 +67,7 @@ struct AppRoot: View {
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
         _homeGlucose = State(initialValue: HomeGlucoseModel(store: store))
+        _doseSuggestions = State(initialValue: DoseSuggestionModel(store: store))
     }
 
     // A single optional so the covers are mutually exclusive by construction —
@@ -94,6 +101,7 @@ struct AppRoot: View {
             onSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
+        .environment(doseSuggestions)
         .fullScreenCover(item: $activeSheet, onDismiss: {
             // A deep-linked present waits for the cover's dismissal to
             // finish; presenting mid-animation is silently dropped by SwiftUI.
