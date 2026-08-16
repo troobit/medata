@@ -52,7 +52,7 @@ references:
 
 ## Display
 
-- [ ] 6. Graph day/week/month rendering <!-- id:av6zcx1 -->
+- [x] 6. Graph day/week/month rendering <!-- id:av6zcx1 -->
   - Day: span mark from start to start+duration where a duration exists, point mark where it does not; own band below the insulin band, keyed off the same `glucoseAxisMax` fraction so it stays clear of the glucose plot under Auto and Fixed y-scales
   - Week/Month: per-day count x-aligned with the carbohydrate buckets via `TrendsMath.dailyBuckets`
   - New `Colors.swift` tokens distinct from both insulin series and the glucose trace

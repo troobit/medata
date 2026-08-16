@@ -24,6 +24,7 @@ struct TrendsView: View {
     @AppStorage(SettingsKeys.trendsShowCarbs) private var showCarbs = true
     @AppStorage(SettingsKeys.trendsShowGlucose) private var showGlucose = true
     @AppStorage(SettingsKeys.trendsShowInsulin) private var showInsulin = true
+    @AppStorage(SettingsKeys.trendsShowActivity) private var showActivity = true
     @AppStorage(SettingsKeys.trendsShowTargetBand) private var showTargetBand = true
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
@@ -151,6 +152,40 @@ struct TrendsView: View {
                     }
                 }
             }
+            // Activity band (specs/data/activity-events Req 4.1/4.2).
+            // ATTEMPT 1: a marker band in the chart's own vocabulary — a
+            // rounded rule from start to start+duration where a duration was
+            // recorded, a dot where it was not, in one horizontal lane.
+            if showActivity {
+                ForEach(model.activityMarkers) { marker in
+                    if let end = marker.end {
+                        RuleMark(
+                            xStart: .value("Start", marker.date),
+                            xEnd: .value("End", end),
+                            y: .value("Activity", activityBandY)
+                        )
+                        .foregroundStyle(Color.seriesActivity)
+                        .lineStyle(StrokeStyle(lineWidth: 7, lineCap: .round))
+                    } else {
+                        PointMark(
+                            x: .value("Time", marker.date),
+                            y: .value("Activity", activityBandY)
+                        )
+                        .symbol(.circle)
+                        .symbolSize(50)
+                        .foregroundStyle(Color.seriesActivity)
+                        .annotation(position: .top, spacing: 1) {
+                            // Week/Month markers are per-day counts; a single
+                            // activity needs no "1" over it.
+                            if marker.kind == nil, marker.count > 1 {
+                                Text("\(marker.count)")
+                                    .font(.caption2.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(Color.textSecondary)
+                            }
+                        }
+                    }
+                }
+            }
         }
         // Pin the x-domain to the whole selected range. Without this the
         // domain shrinks to the data extent — with a single meal the day chart
@@ -208,6 +243,17 @@ struct TrendsView: View {
     // the glucose trace's plot band whichever y-scale is active.
     private var insulinBandY: Double { glucoseAxisMax * 0.04 }
 
+    // The activity band's y-position, keyed off the same `glucoseAxisMax`
+    // fraction so it holds its place under both Auto and Fixed y-scales.
+    // The design asked for it BELOW the insulin band; there is no room there.
+    // The chart floor is 0, insulin sits at 4% — on a 260 pt chart that is
+    // ~10 pt off the axis — so a band beneath it would have ~5 pt of clear
+    // space and the glyphs would collide. It sits above insulin instead,
+    // clear of the insulin unit annotations and still far below the glucose
+    // plot band (3.9+ mmol/L ≈ 28% under a fixed 14 scale), which is the
+    // separation the design was actually protecting (Req 4.1).
+    private var activityBandY: Double { glucoseAxisMax * 0.16 }
+
     private func insulinSymbol(for kind: InsulinKind?) -> BasicChartSymbolShape {
         switch kind {
         case .bolus: return .circle
@@ -229,6 +275,7 @@ struct TrendsView: View {
             metricChip("Carbs", series: .medataAccent, isOn: showCarbs) { showCarbs.toggle() }
             metricChip("Glucose", series: .seriesGlucose, isOn: showGlucose) { showGlucose.toggle() }
             metricChip("Insulin", series: .seriesInsulinBolus, isOn: showInsulin) { showInsulin.toggle() }
+            metricChip("Activity", series: .seriesActivity, isOn: showActivity) { showActivity.toggle() }
             disabledChip("Protein · Fat")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
