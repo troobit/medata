@@ -43,9 +43,9 @@ references:
   - If promoting while below the 0.48/0.45 gates: developer-phase override with attributable reason; export_eligible stays truthful
   - Blocked-by: 8id22y5 (Run the full detached training job on the merged corpus at 36 classes)
 
-- [-] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
+- [x] 6. Export, swap the bundled model, and deploy for verification <!-- id:8id22y7 -->
   - DEPLOY LEG DONE 2026-08-15 — `make deploy-release` from a CLEAN tree at `a33cb5d`: build succeeded, `devicectl` installed, and the launch step succeeded this time (the 2026-07-26 failure was only the locked device). `DEPLOYED BUILD STAMP: a33cb5d-20260815-231735`, no `-dirty`, so the binary is rebuildable from the named commit. The bundled `segmenter.mlpackage` compiled into it reads `medata.modelVersion=ab812dc3aa9d`, read out of the same package by `tools/deploy_release.sh:37`
-  - What remains is ONE capture on this build, whose new estimation-log row carries the live `coreml_ab812dc3aa9d` lineage. Deferred to a device session; it is the first frame of task 7 either way
+  - CLOSED 2026-08-16 — nine capture attempts on that install (11:42–11:56 local) each wrote an `estimation_outcomes` row reading `modelVersion=coreml_ab812dc3aa9d`. That is the live lineage of the CURRENT build, which is what this task asked for and what the 2026-08-05 Settings reading could not give. Pulled without root by the `devicectl` recipe in `docs/agent-notes/device-build-and-test.md`; the session is written up in `docs/agent-notes/field-truth-sessions.md` under 2026-08-16
   - **Route (b) cannot close this task and the line above asking for `segmenterSource=coreml_<12-hex>` in the launch log is wrong.** `App/App.swift:185` computes the launch line's source as a compile-time branch — `Pipeline.preShutterSourceTag == "pre_shutter_stub" ? "stub" : "coreml"` — so the launch line reads `segmenterSource=coreml` and never carries a model id. The 12-hex id is `PipelineFactory.swift:124`'s `"coreml_\(modelVersion)"`, stamped onto captures (`MealRecord.segmenterSource`). `sudo make logs-device` therefore proves the build stamp and that the install is not the stub build — worth having, not sufficient here
   - STILL PARTIAL 2026-08-05 — an earlier note in this ledger closed this task and was WRONG; corrected here. The developer did read `coreml_ab812dc3aa9d` in Settings → Estimation log, but `EstimationLogView` renders each row's historical `EstimationOutcome.modelVersion`, and the newest attempt in the device DB is 2026-08-03. So the reading proves the 2-3 August builds bound the promoted model; it says nothing about the build now installed. There is no surface in the app that displays the CURRENT build's `captureLineage`
   - Circumstantial but not sufficient: today's Release was built from the same unchanged `MedataCore/Sources/Pipeline/Resources/segmenter.mlpackage`, so it almost certainly binds the same model — 'almost certainly' is not what this gate asks for
@@ -56,8 +56,11 @@ references:
 
 ## Human gates
 
-- [ ] 7. STOP — on-device capture verification by a human <!-- id:8id22y8 -->
+- [-] 7. STOP — on-device capture verification by a human <!-- id:8id22y8 -->
   - A human points the phone at real meals (including a cereal bowl) to confirm the overlay and carb readings; the agent verifies only launch log and build stamp
+  - PASS RUN 2026-08-16, NOT CONFIRMED — the sitting happened on build `a33cb5d-20260815-231735`: one slice of toast and one bowl (milk, yogurt, submerged Weetbix), nine attempts, full numbers in `docs/agent-notes/field-truth-sessions.md` under 2026-08-16. The task stays open because what it asks for is *confirmation* of the readings, and the readings were not confirmable: toast read ~2x over nominal (28.7 g carbs on a slice worth ~15), and the bowl read `cheese` at **0.07 g carbs** on the LiDAR path and `bread_wholemeal + tomato` at 14.5 g on the two-view path
+  - The cereal leg of this task cannot be judged from that sitting and should NOT be read as "the model fails on cereal". The bowl's visible surface was milk and yogurt with the Weetbix beneath it, so `cereal` (24) was never on screen to be predicted and yogurt has no palette class at all. The gap it exposes is occlusion — the pipeline estimates the visible surface and has no concept of food submerged under a liquid — which no amount of cereal training data addresses. A fair cereal test needs dry cereal, or milk poured after the capture
+  - What a re-run needs to be worth more than this one: scale-weighed truth (this sitting took none), and a dry-cereal scene for the cereal leg
   - Blocked-by: 8id22y7 (Export, swap the bundled model, and deploy for verification)
 
 - [ ] 8. STOP — ANE residency check in Xcode <!-- id:8id22y9 -->
