@@ -102,6 +102,7 @@ struct AppRoot: View {
                 showInsulinSheet = true
             },
             onSkipDose: { dose in Task { await doseSchedule.skip(dose) } },
+            surfaceStyle: doseSchedule.surfaceStyle,
             onCapture: {
                 // The benchmark tag must not survive into a non-benchmark
                 // capture — clear it here in case a deferred benchmark

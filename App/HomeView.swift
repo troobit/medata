@@ -21,6 +21,9 @@ struct HomeView: View {
     var onLogDose: (OutstandingDose) -> Void = { _ in }
     var onAdjustDose: (OutstandingDose) -> Void = { _ in }
     var onSkipDose: (OutstandingDose) -> Void = { _ in }
+    // Which of the two attempts is showing. A developer-phase comparison
+    // switch, not a preference.
+    var surfaceStyle: DoseScheduleSettings.SurfaceStyle = .banner
     let onCapture: () -> Void
     let onIntake: () -> Void
     let onDose: () -> Void
@@ -39,7 +42,7 @@ struct HomeView: View {
             Spacer()
             captureButton
             routeButton("Intake", systemImage: "fork.knife", identifier: "home.intake", action: onIntake)
-            routeButton("Dose", systemImage: "syringe", identifier: "home.dose", action: onDose)
+            doseRoute
             routeButton("Records", systemImage: "square.stack.3d.up", identifier: "home.records", action: onRecords)
             routeButton("Graph", systemImage: "chart.xyaxis.line", identifier: "home.graph", action: onGraph)
             routeButton("Settings", systemImage: "gearshape.fill", identifier: "home.settings", action: onSettings)
@@ -50,18 +53,48 @@ struct HomeView: View {
         .task { await glucose.start() }
     }
 
-    // UI attempt 1: a dedicated card per outstanding dose, above every route.
-    // The ledger is the source of truth here — the card appears because an
-    // occurrence is open, not because a notification was delivered or seen, so
-    // it carries the whole feature when authorisation is refused (Req 7.2).
+    // The two attempts at the outstanding-dose surface, switchable in Settings
+    // so both can be seen on one build (specs/data/dose-schedule; tags
+    // `dose-schedule-ui-attempt-1` and `-2`).
+    //
+    // Both read the LEDGER, not a notification: the surface appears because an
+    // occurrence is open, not because a notification was delivered or seen,
+    // which is what makes the refused-authorisation path (Req 7.2) the same
+    // feature rather than a degraded one.
+
+    // Attempt 1: a dedicated card per outstanding dose, above every route.
     @ViewBuilder
     private var outstandingDoseSection: some View {
-        ForEach(outstandingDoses) { dose in
-            OutstandingDoseBanner(
+        if surfaceStyle == .banner {
+            ForEach(outstandingDoses) { dose in
+                OutstandingDoseBanner(
+                    dose: dose,
+                    onLog: { onLogDose(dose) },
+                    onAdjust: { onAdjustDose(dose) },
+                    onSkip: { onSkipDose(dose) }
+                )
+            }
+        }
+    }
+
+    // Attempt 2: the Dose route itself becomes the discharge control while a
+    // dose is outstanding. Home keeps the same shape either way; the control
+    // changes what it does. With more than one dose outstanding the oldest
+    // takes the control and the rest wait, which is the honest limit of not
+    // adding a surface.
+    @ViewBuilder
+    private var doseRoute: some View {
+        if surfaceStyle == .doseRoute, let dose = outstandingDoses.first {
+            OutstandingDoseControl(
                 dose: dose,
                 onLog: { onLogDose(dose) },
                 onAdjust: { onAdjustDose(dose) },
                 onSkip: { onSkipDose(dose) }
+            )
+        } else {
+            routeButton(
+                "Dose", systemImage: "syringe", identifier: "home.dose",
+                action: onDose
             )
         }
     }

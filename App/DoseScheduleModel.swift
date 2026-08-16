@@ -151,6 +151,12 @@ final class DoseScheduleModel {
     // Live authorisation state, refreshed on every foreground rather than
     // cached, so a revocation made in system Settings is seen (Req 7.2).
     private(set) var notificationsAuthorised = false
+    // Which of the two in-app attempts Home renders. A developer-phase
+    // comparison switch so both can be judged on one build, not a preference
+    // the feature depends on.
+    var surfaceStyle: DoseScheduleSettings.SurfaceStyle = .banner {
+        didSet { DoseScheduleSettings.save(surfaceStyle) }
+    }
 
     private let store: any PersistenceStore
     private let scheduler: LocalReminderScheduler
@@ -181,6 +187,9 @@ final class DoseScheduleModel {
     func refresh(now: Date = Date()) async {
         schedules = DoseScheduleSettings.seedIfNeeded()
         plan = DoseScheduleSettings.reminderPlan()
+        if surfaceStyle != DoseScheduleSettings.surfaceStyle() {
+            surfaceStyle = DoseScheduleSettings.surfaceStyle()
+        }
         notificationsAuthorised = await scheduler.authorisationStatus() == .authorized
 
         await openDueOccurrences(now: now)
