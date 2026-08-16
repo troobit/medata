@@ -36,4 +36,10 @@ nonisolated enum SettingsKeys {
     static let insulinTypeBasal = "medata.insulin.basalType"
     static let insulinTypeBolusDefault = "NovoRapid"
     static let insulinTypeBasalDefault = "Lantus"
+
+    // Most recently saved activity kind (specs/data/activity-events Req 3.3),
+    // stored as the kind's stable machine key so the entry sheet opens on it
+    // and a repeat activity is a two-tap save. Written by ActivityModel on a
+    // successful save only.
+    static let activityLastKind = "medata.activity.lastKind"
 }

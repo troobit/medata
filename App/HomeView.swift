@@ -17,6 +17,7 @@ struct HomeView: View {
     let onCapture: () -> Void
     let onIntake: () -> Void
     let onDose: () -> Void
+    let onActivity: () -> Void
     let onRecords: () -> Void
     let onGraph: () -> Void
     let onSettings: () -> Void
@@ -32,6 +33,10 @@ struct HomeView: View {
             captureButton
             routeButton("Intake", systemImage: "fork.knife", identifier: "home.intake", action: onIntake)
             routeButton("Dose", systemImage: "syringe", identifier: "home.dose", action: onDose)
+            // Activity sits beside Dose because it is the same kind of control:
+            // a plain sheet raised over home, not a cover
+            // (specs/data/activity-events Req 3.1).
+            routeButton("Activity", systemImage: "figure.run", identifier: "home.activity", action: onActivity)
             routeButton("Records", systemImage: "square.stack.3d.up", identifier: "home.records", action: onRecords)
             routeButton("Graph", systemImage: "chart.xyaxis.line", identifier: "home.graph", action: onGraph)
             routeButton("Settings", systemImage: "gearshape.fill", identifier: "home.settings", action: onSettings)
@@ -155,7 +160,7 @@ struct HomeView: View {
         .accessibilityIdentifier("home.capture")
     }
 
-    // The five secondary routes: one consistent full-width treatment on the
+    // The six secondary routes: one consistent full-width treatment on the
     // elevated surface (statCard idiom).
     private func routeButton(
         _ title: String,

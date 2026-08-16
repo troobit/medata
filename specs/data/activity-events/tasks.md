@@ -33,7 +33,7 @@ references:
 
 ## Entry
 
-- [ ] 4. `ActivityModel` and `ActivitySheet` <!-- id:av4hjd2 -->
+- [x] 4. `ActivityModel` and `ActivitySheet` <!-- id:av4hjd2 -->
   - Medium-detent `.sheet` modelled on `InsulinDoseSheet`/`InsulinDoseModel`, not a full-screen cover
   - Kind chips preselected to the most recently used kind via a new `SettingsKeys` entry, so a repeat activity is open → Save
   - Optional duration stepper, blank by default, blank saves nil and never blocks Save
