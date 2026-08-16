@@ -133,6 +133,47 @@ The ratio is stored **only** as `cr_g_per_u` — grams of carbohydrate covered b
 
 Open, unspecified: `insulin_event_id` and `source_event_id` are not cleared by `deleteInsulinEvent`, `deleteRecords`, or the DEBUG `deleteAllData()` — the last wipes `events` wholesale while side tables survive (as they already do for `quick_presets` / `estimation_outcomes` / `benchmark_meals`). Neither spec says what should happen; after one Debug reset every ledger row points at a deleted event.
 
+## Dose occurrences (dose-schedule)
+
+`dose_occurrences` (schema **v9**; `CREATE IF NOT EXISTS` retrofits it onto v8
+DBs) is the occurrence ledger — one row per due instance of a `ScheduledDose`,
+carrying its outcome. Derived side table like `dose_suggestions`: **no method
+here touches `eventsDidChange`**, so history refreshes exactly once per logged
+dose (the insulin event fires it), not twice.
+
+The version literal now reads `'9'` in the same **three** places
+(`createSchema`'s `INSERT OR IGNORE`, `migrate`'s `INSERT OR REPLACE`, the
+changelog comment between them). Three test files assert it —
+`PersistenceTests`, `BslIngestTests`, `EstimationOutcomeTests` — plus
+`DoseSuggestionTests`'s v7-upgrade case. Bump all of them together.
+
+The index `dose_occurrences_schedule (schema_id, due_at)` is **UNIQUE**, not
+plain. That is load-bearing, not an optimisation: `openOccurrence` is
+`INSERT OR IGNORE` + `SELECT`, so opening the same due instant twice — two
+foreground passes, or a foreground racing the notification handler — yields ONE
+row. Req 2.3's "at most one outstanding occurrence per schedule" is enforced by
+the schema rather than by every caller remembering to check.
+
+`closeOccurrence` is a genuine **compare-and-set**: `UPDATE … WHERE id = ? AND
+outcome = 'outstanding'`, returning `db.changesCount > 0`. The caller writes the
+insulin event **only when it returns true**. That is the whole of Req 4.6 — a
+stale follow-up notification tapped after the dose was logged in-app matches
+zero rows and writes nothing. Single process, single writer, so unlike the
+widget snapshot guard it is exact rather than advisory. Passing `.outstanding`
+as the outcome is rejected with `false` rather than performing a no-op that
+reports success.
+
+`closedAt` is the moment the dose was LOGGED, never the scheduled time; `dueAt`
+minus `closedAt` is lateness, and there is deliberately no lateness column.
+`wasNominal` is nil for a skip or a miss, true for the one-tap path, false for
+the ADJUST sheet.
+
+`ScheduledDose` is NOT a table. It lives in settings
+(`App/DoseScheduleSettings.swift`, key `medata.doseSchedule.schedules`) because
+it is configuration and holds no history — which is what makes Req 1.5
+("editing a schedule alters no recorded dose") mechanical rather than a rule to
+remember. `InsulinKind` gained `Codable` for it.
+
 ## Record deletion (records-deletion)
 
 `deleteBslEvent(id:)` mirrors the insulin/intake single-row gates

@@ -5,6 +5,7 @@ import OSLog
 import Pipeline
 import Segmentation
 import SwiftUI
+import UserNotifications
 
 @main
 struct MedataApp: App {
@@ -19,6 +20,13 @@ struct MedataApp: App {
     // Decision 11). nil only under the UI-test harness, which returns below
     // before it is built.
     private let glucoseWidgetPublisher: GlucoseWidgetPublisher?
+    // The dose-schedule notification delegate (specs/data/dose-schedule
+    // Req 4.1, 7.3). Retained for the process lifetime because
+    // `UNUserNotificationCenter.delegate` is weak, and it must survive a
+    // background launch in which nothing else holds it. nil only under the
+    // UI-test harness, which returns before it is built.
+    private let doseNotificationDelegate: DoseNotificationDelegate?
+    private let doseAdjustRouter = DoseAdjustRouter()
     @Environment(\.scenePhase) private var scenePhase
 
     #if DEBUG
@@ -58,10 +66,26 @@ struct MedataApp: App {
             // read on a launch the comment above keeps hermetic, and there is
             // no Lock Screen to publish to.
             glucoseWidgetPublisher = nil
+            doseNotificationDelegate = nil
             return
         }
         _uiTestHarness = State(initialValue: nil)
         #endif
+
+        // The dose-schedule notification surface. Setting the delegate and
+        // registering the category are the ONLY notification work done at
+        // launch: authorisation is requested when the developer first enables a
+        // scheduled dose and at no other moment (Req 7.1), so nothing here
+        // prompts. Both calls must happen before the application finishes
+        // launching, or an action tapped on a notification that woke the app
+        // arrives with no delegate to receive it.
+        let doseDelegate = DoseNotificationDelegate(
+            store: store, router: doseAdjustRouter
+        )
+        doseNotificationDelegate = doseDelegate
+        let centre = UNUserNotificationCenter.current()
+        centre.delegate = doseDelegate
+        centre.setNotificationCategories([DoseNotificationCategory.make()])
 
         // Lock Screen glucose snapshot (glucose-lock-widget Reqs 1.2-1.4).
         // Constructed BEFORE the glucose sources start below: its init binds
@@ -150,7 +174,8 @@ struct MedataApp: App {
                     store: store,
                     glucoseConnections: glucoseConnections,
                     visionCardDetector: visionCardDetector,
-                    preShutterSegmenter: preShutterSegmenter
+                    preShutterSegmenter: preShutterSegmenter,
+                    adjustRouter: doseAdjustRouter
                 )
                 #if DEBUG
                 if let uiTestHarness {

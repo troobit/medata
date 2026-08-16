@@ -14,6 +14,16 @@ import SwiftUI
 // (ui-capture-flow.md gotcha).
 struct HomeView: View {
     let glucose: HomeGlucoseModel
+    // The outstanding-dose surface (specs/data/dose-schedule Req 2.4, 4.5).
+    // Empty when nothing is due, which is most of the day and is also the whole
+    // of the feature's inert state when no schedule is defined (Req 1.7).
+    var outstandingDoses: [OutstandingDose] = []
+    var onLogDose: (OutstandingDose) -> Void = { _ in }
+    var onAdjustDose: (OutstandingDose) -> Void = { _ in }
+    var onSkipDose: (OutstandingDose) -> Void = { _ in }
+    // Which of the two attempts is showing. A developer-phase comparison
+    // switch, not a preference.
+    var surfaceStyle: DoseScheduleSettings.SurfaceStyle = .banner
     let onCapture: () -> Void
     let onIntake: () -> Void
     let onDose: () -> Void
@@ -29,10 +39,14 @@ struct HomeView: View {
                 .foregroundStyle(Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             glucoseHeader
+            outstandingDoseSection
             Spacer()
             captureButton
             routeButton("Intake", systemImage: "fork.knife", identifier: "home.intake", action: onIntake)
-            routeButton("Dose", systemImage: "syringe", identifier: "home.dose", action: onDose)
+            // `doseRoute` rather than a plain Dose button: dose-schedule
+            // attempt 2 repurposes this control as the discharge action while a
+            // dose is outstanding (see below).
+            doseRoute
             // Activity sits beside Dose because it is the same kind of control:
             // a plain sheet raised over home, not a cover
             // (specs/data/activity-events Req 3.1).
@@ -45,6 +59,52 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)
         .task { await glucose.start() }
+    }
+
+    // The two attempts at the outstanding-dose surface, switchable in Settings
+    // so both can be seen on one build (specs/data/dose-schedule; tags
+    // `dose-schedule-ui-attempt-1` and `-2`).
+    //
+    // Both read the LEDGER, not a notification: the surface appears because an
+    // occurrence is open, not because a notification was delivered or seen,
+    // which is what makes the refused-authorisation path (Req 7.2) the same
+    // feature rather than a degraded one.
+
+    // Attempt 1: a dedicated card per outstanding dose, above every route.
+    @ViewBuilder
+    private var outstandingDoseSection: some View {
+        if surfaceStyle == .banner {
+            ForEach(outstandingDoses) { dose in
+                OutstandingDoseBanner(
+                    dose: dose,
+                    onLog: { onLogDose(dose) },
+                    onAdjust: { onAdjustDose(dose) },
+                    onSkip: { onSkipDose(dose) }
+                )
+            }
+        }
+    }
+
+    // Attempt 2: the Dose route itself becomes the discharge control while a
+    // dose is outstanding. Home keeps the same shape either way; the control
+    // changes what it does. With more than one dose outstanding the oldest
+    // takes the control and the rest wait, which is the honest limit of not
+    // adding a surface.
+    @ViewBuilder
+    private var doseRoute: some View {
+        if surfaceStyle == .doseRoute, let dose = outstandingDoses.first {
+            OutstandingDoseControl(
+                dose: dose,
+                onLog: { onLogDose(dose) },
+                onAdjust: { onAdjustDose(dose) },
+                onSkip: { onSkipDose(dose) }
+            )
+        } else {
+            routeButton(
+                "Dose", systemImage: "syringe", identifier: "home.dose",
+                action: onDose
+            )
+        }
     }
 
     // The most recent reading, the one thing on home that is not a route

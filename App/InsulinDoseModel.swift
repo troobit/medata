@@ -23,6 +23,11 @@ final class InsulinDoseModel {
     var timestamp = Date()
     private(set) var isSaving = false
     private(set) var saveError: String?
+    // The id of the event the last successful save wrote. The dose schedule
+    // needs it: an adjusted dose closes its occurrence with `wasNominal` false
+    // and links THIS event, rather than the sheet writing one event and the
+    // schedule writing another.
+    private(set) var savedEventID: UUID?
 
     private let store: any PersistenceStore
     private var holdTask: Task<Void, Never>?
@@ -101,10 +106,11 @@ final class InsulinDoseModel {
             timestamp: timestamp,
             units: Double(units),
             kind: kind,
-            insulinType: Self.insulinType(for: kind)
+            insulinType: InsulinProduct.name(for: kind)
         )
         do {
             try await store.saveInsulinDose(dose)
+            savedEventID = dose.id
             return true
         } catch {
             saveError = "Save failed: \(error.localizedDescription)"
@@ -112,21 +118,20 @@ final class InsulinDoseModel {
         }
     }
 
-    // Per-kind product string from Settings (App 5), falling back to the
-    // shipped defaults when the Settings field is unset or cleared.
-    private static func insulinType(for kind: InsulinKind) -> String {
-        let key: String
-        let fallback: String
-        switch kind {
-        case .bolus:
-            key = SettingsKeys.insulinTypeBolus
-            fallback = SettingsKeys.insulinTypeBolusDefault
-        case .basal:
-            key = SettingsKeys.insulinTypeBasal
-            fallback = SettingsKeys.insulinTypeBasalDefault
-        }
-        let stored = UserDefaults.standard.string(forKey: key)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return stored.isEmpty ? fallback : stored
+    // The per-kind product string (App 5) now lives in `InsulinProduct`
+    // (App/SettingsKeys.swift): the dose schedule's notification handler writes
+    // insulin events with the app not running, so the lookup had to be
+    // reachable without this view-model existing.
+
+    // MARK: - Pre-seeding from a scheduled dose (dose-schedule Req 5.1)
+
+    // The ADJUST action's entry point: the sheet opens with the schedule's kind
+    // and nominal amount already set, so a changed dose is an adjustment rather
+    // than a fresh entry. Nothing is computed or pre-adjusted from recorded
+    // activity — the magnitude of that relationship is unmeasured and this
+    // does not invent one (Req 5.3).
+    func seed(units: Int, kind: InsulinKind) {
+        self.units = min(max(units, Self.minUnits), Self.maxUnits)
+        self.kind = kind
     }
 }

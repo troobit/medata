@@ -105,8 +105,13 @@ the tree.
 ### Impact
 
 `specs/data/insulin-dosing/requirements.md` Req 12.7 and the notifications non-goal
-both need amending in place to point here. Neither edit is made yet, because that
-file is being modified concurrently by other work; both are owed.
+both need amending in place to point here.
+
+**Both amendments landed on 2026-08-16** ([task 27](tasks.md)). Req 12.7 now carries
+only the adherence-display clause, with the reversed prompting clause quoted in an
+amendment note beneath it; the non-goal now reads "No scheduled follow-up doses or
+extended/square-wave boluses" with the same treatment. Neither was deleted — the
+original wording is quoted in place so the reversal is legible rather than silent.
 
 ---
 
@@ -246,5 +251,107 @@ underneath it as a fallback.
   default interval and cutoff carry more weight than their apparent triviality.
 - If the mechanism does prove insufficient, the Live Activity work is additional
   rather than instead — this decision spends a little to defer a lot.
+
+---
+
+## Decision 4: Every notification is a dated one-shot on a rolling horizon
+
+**Date**: 2026-08-16
+**Status**: accepted
+
+### Context
+
+[design.md section 1](design.md#1-the-repeat-without-background-execution) sketches
+the prompt sequence as one `UNCalendarNotificationTrigger` with `repeats: true` at
+the scheduled time, plus K `UNTimeIntervalNotificationTrigger` follow-ups. Building
+it exposed a conflict between the two halves of that sketch.
+
+A `UNTimeIntervalNotificationTrigger` fires a fixed interval after it is *scheduled*,
+not after the due notification is *delivered*. So the follow-ups can only be armed
+relative to a known instant, which means arming them for one specific day — while
+the due notification, being `repeats: true`, is armed once for every day. The two
+halves then disagree about which occurrence they belong to.
+
+The deeper problem is cancellation. [Req 3.3](requirements.md#3.3) requires the
+repeat to stop when the dose is logged or skipped. A repeating trigger cannot be
+cancelled for one day only: `removePendingNotificationRequests` withdraws the whole
+recurrence. Discharging Monday's dose would silently end Tuesday's reminder.
+
+### Decision
+
+Every request in the plan is a **dated, non-repeating** `UNCalendarNotificationTrigger`
+— the due notification at index 0 and the K follow-ups alike, each at
+`dueAt + n x I`. The plan reaches a **rolling horizon** of
+
+    horizonDays = min(7, 64 / (enabledSchedules x (K + 1)))
+
+days ahead, sized against the system's 64-request pending budget, and is torn down
+and rebuilt on every foreground, every schedule edit, every enable or disable and
+every time an occurrence closes. With the developer's two schedules and the seeded
+K = 4, that is 10 requests a day and a six-day horizon.
+
+### Rationale
+
+Per-day identifiers already exist — `dose.<scheduleID>.<yyyy-MM-dd>.<n>`
+([task 5](tasks.md)) — and they are only *useful* if the request they name can be
+cancelled on its own. Making every request a dated one-shot is what turns that
+identifier from a label into a handle.
+
+[Req 7.3](requirements.md#7.3) forbids the reminder depending on the app being run,
+and the horizon is how that survives: the app can go unopened for six days and every
+prompt still fires from a request armed before it was closed. The failure mode is
+bounded and visible — past the horizon the prompts simply stop, rather than firing
+at the wrong amount or against a schedule that no longer exists.
+
+Rebuilding the whole plan rather than patching it is the same discipline
+[task 14](tasks.md) already asks for: the plan is derived, never authoritative. A
+teardown-and-rebuild cannot leave a stale identifier behind, and a stale identifier
+surviving a delete is exactly the defect that task exists to prevent.
+
+### Alternatives Considered
+
+- **The design's sketch as written** — repeating due notification plus interval
+  follow-ups: Rejected. The follow-ups cannot be armed for a day they do not know
+  about, and the repeating due notification cannot be cancelled for one day, so
+  discharging one dose would end the schedule.
+- **All K+1 requests repeating daily at fixed wall-clock times** — no horizon, no
+  rebuild, and Req 7.3 satisfied indefinitely: Rejected because it cannot satisfy
+  Req 3.3 at all. Nothing can stop today's tail without stopping every future day's.
+- **Re-arm the tail from the notification action handler** — the handler runs when
+  the app is woken, so it could extend the plan: Rejected. [Task 13](tasks.md)
+  forbids any work in that handler that can be deferred to the next foreground, and
+  the handler runs under a short system deadline against GRDB. Extending the plan
+  there trades the one path that must be correct for a convenience.
+- **A background task that re-arms the plan daily**: Rejected. The app's background
+  budget is already spent on the CGM `BGAppRefreshTask`
+  (`App/GlucoseConnectionsModel.swift`), and design.md section 1 is explicit that
+  nothing may compete with it.
+
+### Consequences
+
+**Positive:**
+
+- Cancelling one occurrence's tail is exact, which is what Req 4.6's idempotency
+  and Req 3.3's stop condition both rest on.
+- The plan cannot drift: it is rebuilt from the schedules and the ledger, so a
+  deleted, disabled or re-timed schedule leaves nothing behind.
+- The 64-request budget is respected by construction rather than by hoping.
+
+**Negative:**
+
+- The reminder has a horizon. An app left unopened past it stops prompting, and
+  nothing tells the developer that happened — the ledger still opens occurrences
+  and still closes them as missed, so the data is intact, but the prompt is gone.
+- The horizon shrinks as schedules or follow-ups are added: eight enabled schedules
+  at K = 4 gives a single day. The formula makes that visible but does not warn.
+- Rebuilding the plan on every foreground is more work than patching it, and it
+  briefly leaves no pending requests at all between the teardown and the rebuild.
+
+### Impact
+
+`App/LocalReminderScheduler.swift` (no repeating triggers anywhere),
+`App/DoseScheduleModel.swift` (`horizonDays`, `plannedRequests`,
+`reconcileNotificationPlan`). design.md section 1's description of the mechanism is
+superseded by this entry.
 
 ---
