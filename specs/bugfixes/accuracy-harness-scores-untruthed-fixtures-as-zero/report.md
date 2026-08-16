@@ -52,6 +52,17 @@ containing no evidence.
 - **Fix therefore applied one level up**, in `evaluate(meals:)`, leaving the pure
   helpers and `perClassStats` untouched. See Decision 1.
 
+## Discovered Root Cause
+
+`AccuracyHarness.evaluate(meals:)` passed every meal to `pointMAPE`/`pointMAE`
+without asking whether it carried ground truth, and those helpers answer `0`
+when the actual is not positive (`guard act > 0 else { return 0 }`). An
+untruthed fixture therefore scored as a *perfect* estimate instead of being
+excluded, pulling MAPE and MAE toward zero in proportion to how many untruthed
+fixtures a run contained. `passesBar` then read only those two aggregates and
+never the number of meals actually scored, so a run of entirely untruthed
+fixtures reported MAPE 0 and passed.
+
 **Defect type:** Scope error in an aggregate — unmeasured samples admitted to a
 metric, and a pass/fail predicate that did not consult its own sample count.
 
