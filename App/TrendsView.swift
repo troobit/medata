@@ -24,6 +24,7 @@ struct TrendsView: View {
     @AppStorage(SettingsKeys.trendsShowCarbs) private var showCarbs = true
     @AppStorage(SettingsKeys.trendsShowGlucose) private var showGlucose = true
     @AppStorage(SettingsKeys.trendsShowInsulin) private var showInsulin = true
+    @AppStorage(SettingsKeys.trendsShowActivity) private var showActivity = true
     @AppStorage(SettingsKeys.trendsShowTargetBand) private var showTargetBand = true
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
@@ -48,6 +49,7 @@ struct TrendsView: View {
                     if model.range == .day {
                         dayMeals
                         dayInsulin
+                        dayActivity
                     }
                 }
                 .padding(20)
@@ -100,6 +102,34 @@ struct TrendsView: View {
 
     private var chart: some View {
         Chart {
+            // Activity (specs/data/activity-events Req 4.1/4.2).
+            // ATTEMPT 2: the active period as a shaded column behind the whole
+            // plot rather than a lane of its own — the duration is read
+            // against the glucose trace that ran through it, which is the
+            // question the covariate exists to answer. Declared FIRST so it
+            // is the backmost layer: at this alpha the trace, the bars and the
+            // insulin band all read through it unchanged (Req 4.1).
+            // This is a data mark at an activity's own time; it is NOT a
+            // current-time rule, of which there is still none (PRD App 7).
+            if showActivity {
+                ForEach(model.activityMarkers) { marker in
+                    if let span = span(for: marker) {
+                        RectangleMark(
+                            xStart: .value("Start", span.lowerBound),
+                            xEnd: .value("End", span.upperBound),
+                            yStart: .value("Floor", 0),
+                            yEnd: .value("Ceiling", glucoseAxisMax)
+                        )
+                        .foregroundStyle(Color.bandActivity)
+                    } else {
+                        // No duration recorded: the instant only, dashed so it
+                        // never reads as a measured span.
+                        RuleMark(x: .value("Time", marker.date))
+                            .foregroundStyle(Color.seriesActivity.opacity(0.45))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                    }
+                }
+            }
             if showTargetBand {
                 RectangleMark(
                     yStart: .value("Low", TrendsMath.targetLowMmolL),
@@ -208,6 +238,21 @@ struct TrendsView: View {
     // the glucose trace's plot band whichever y-scale is active.
     private var insulinBandY: Double { glucoseAxisMax * 0.04 }
 
+    // The time a shaded activity column covers, or nil where there is nothing
+    // to shade. Day markers span start → start+duration and a marker with no
+    // duration returns nil (Req 1.5/4.2). Week and Month markers are per-day
+    // aggregates (nil `kind`), so their column is the whole calendar day —
+    // x-aligned with that day's carb bucket.
+    private func span(for marker: ActivityMarker) -> ClosedRange<Date>? {
+        if let end = marker.end { return marker.date...end }
+        guard marker.kind == nil else { return nil }
+        let calendar = Calendar.current
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: marker.date) else {
+            return nil
+        }
+        return marker.date...dayEnd
+    }
+
     private func insulinSymbol(for kind: InsulinKind?) -> BasicChartSymbolShape {
         switch kind {
         case .bolus: return .circle
@@ -229,6 +274,7 @@ struct TrendsView: View {
             metricChip("Carbs", series: .medataAccent, isOn: showCarbs) { showCarbs.toggle() }
             metricChip("Glucose", series: .seriesGlucose, isOn: showGlucose) { showGlucose.toggle() }
             metricChip("Insulin", series: .seriesInsulinBolus, isOn: showInsulin) { showInsulin.toggle() }
+            metricChip("Activity", series: .seriesActivity, isOn: showActivity) { showActivity.toggle() }
             disabledChip("Protein · Fat")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -376,6 +422,59 @@ struct TrendsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Day activity list (specs/data/activity-events Req 4.3)
+
+    // The day's activities, in the same height-pinned scroll-disabled List the
+    // Insulin section uses — WITHOUT the pin the List collapses to zero height
+    // inside the ScrollView. Read-only here; deletion lives on Records
+    // (Req 3.6), as it does for doses.
+    private var dayActivity: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Activity")
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+            if model.dayActivities.isEmpty {
+                Text("no activity")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+            } else {
+                List {
+                    ForEach(model.dayActivities) { entry in
+                        activityRow(entry)
+                            .listRowBackground(Color.surfacePrimary)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .environment(\.defaultMinListRowHeight, doseRowHeight)
+                .frame(height: CGFloat(model.dayActivities.count) * doseRowHeight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func activityRow(_ entry: ActivityEntry) -> some View {
+        HStack {
+            Text(timeLabel(entry.timestamp))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.textPrimary)
+            Text(entry.kind.displayLabel)
+                .font(.subheadline)
+                .foregroundStyle(Color.seriesActivity)
+            Spacer()
+            // Nothing at all when the duration was not recorded — never
+            // "0 min" (Req 1.5).
+            if let minutes = entry.durationMinutes {
+                Text("\(Int(minutes.rounded())) min")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+        .accessibilityIdentifier("graph.activity.\(entry.id.uuidString)")
     }
 
     private func doseRow(_ dose: InsulinEntry) -> some View {

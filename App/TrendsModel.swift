@@ -37,6 +37,35 @@ struct InsulinMarker: Identifiable {
     let kind: InsulinKind?
 }
 
+// One decoded activity event for the selected range
+// (specs/data/activity-events Req 4.1). `kind` comes from the event's metadata
+// JSON and `durationMinutes` from `value`, which is absent when the duration
+// was not recorded (Req 1.5) — nil here means unrecorded, never zero. Rows
+// whose metadata does not decode are dropped, as the insulin rows are.
+struct ActivityEntry: Identifiable, Equatable {
+    let id: UUID
+    let timestamp: Date
+    let kind: ActivityKind
+    let durationMinutes: Double?
+
+    // The activity's end, where a duration was recorded (Req 4.2).
+    var endDate: Date? {
+        durationMinutes.map { timestamp.addingTimeInterval($0 * 60) }
+    }
+}
+
+// One chart marker in the activity band. Day range: one per activity, with
+// `end` set where a duration exists so it draws as a span rather than a point
+// (Req 4.2). Week/Month: one per non-empty day carrying that day's activity
+// count, with a nil kind and a nil end (a day can mix kinds).
+struct ActivityMarker: Identifiable {
+    let id = UUID()
+    let date: Date
+    let end: Date?
+    let kind: ActivityKind?
+    let count: Int
+}
+
 // View-model for the Trends screen (§10). Loads meals, `bsl` glucose, and
 // `insulin` doses for the selected range, refreshes on `eventsDidChange`, and
 // exposes chart series and summary stats. All bucketing / axis maths comes from
@@ -49,6 +78,10 @@ final class TrendsModel {
     private(set) var meals: [MealRecord] = []
     private(set) var glucose: [GlucoseReading] = []
     private(set) var insulin: [InsulinEntry] = []
+    // Activity events for the selected range (specs/data/activity-events
+    // Req 4.1). Recorded only — nothing on this screen derives a dose from
+    // them (Req 5.3 / Decision 5).
+    private(set) var activities: [ActivityEntry] = []
     // Manual carb entries for the selected range (manual-carb-intake Req 6.2).
     // Kept as (date, value) pairs — a bare [Double] cannot feed either Day's
     // per-entry TrendsChartPoint or Week/Month's dailyBuckets, both of which
@@ -67,6 +100,7 @@ final class TrendsModel {
     private(set) var carbBars: [TrendsChartPoint] = []
     private(set) var glucoseLine: [TrendsChartPoint] = []
     private(set) var insulinMarkers: [InsulinMarker] = []
+    private(set) var activityMarkers: [ActivityMarker] = []
     private(set) var carbAxisMax: Double = 0
     private(set) var autoGlucoseMax: Double = 0
     // Corrections overlay (snaqui PRD Req 3): the latest correction's total per
@@ -124,6 +158,9 @@ final class TrendsModel {
         }
         let doses = (try? await store.events(in: iv.start...iv.end, type: EventType.insulin)) ?? []
         insulin = doses.compactMap(Self.insulinEntry(from:))
+        let activityEvents =
+            (try? await store.events(in: iv.start...iv.end, type: EventType.activity)) ?? []
+        activities = activityEvents.compactMap(Self.activityEntry(from:))
         // `value` is already the validated carb figure written at save time
         // (manual-carb-intake design: Carb totals and graph series) — no
         // metadata decode needed for plotting.
@@ -150,6 +187,12 @@ final class TrendsModel {
             insulinMarkers = insulin.map {
                 InsulinMarker(date: $0.timestamp, units: $0.units, kind: $0.kind)
             }
+            // One marker per activity, carrying its end where a duration was
+            // recorded so the chart can draw the span rather than a point
+            // (Req 4.2).
+            activityMarkers = activities.map {
+                ActivityMarker(date: $0.timestamp, end: $0.endDate, kind: $0.kind, count: 1)
+            }
         case .week, .month:
             // Meal and intake samples combine BEFORE bucketing, so a day's
             // bucket total is one number regardless of how many sources
@@ -167,6 +210,15 @@ final class TrendsModel {
             insulinMarkers = TrendsMath.dailyBuckets(insulinSamples, in: iv, calendar: calendar)
                 .filter { $0.count > 0 }
                 .map { InsulinMarker(date: $0.start, units: $0.total, kind: nil) }
+            // Per-day COUNT, not a duration total: an unrecorded duration is
+            // absent rather than zero (Req 1.5), so summing minutes across a
+            // week would silently under-report the days that carry no
+            // duration. The bucket's own `count` needs no sample value, so
+            // the samples carry a constant.
+            let activitySamples = activities.map { DatedValue(date: $0.timestamp, value: 1) }
+            activityMarkers = TrendsMath.dailyBuckets(activitySamples, in: iv, calendar: calendar)
+                .filter { $0.count > 0 }
+                .map { ActivityMarker(date: $0.start, end: nil, kind: nil, count: $0.count) }
         }
         carbAxisMax = TrendsMath.carbAxisMax(forMaxCarbs: carbBars.map(\.value).max() ?? 0)
         let dataMax = glucoseLine.map(\.value).max() ?? 0
@@ -184,6 +236,25 @@ final class TrendsModel {
             let kind = InsulinKind(rawValue: kindRaw)
         else { return nil }
         return InsulinEntry(id: event.id, timestamp: event.timestamp, units: units, kind: kind)
+    }
+
+    // Decodes an `activity` event row: `value` = duration in minutes and is
+    // ABSENT when unrecorded (Req 1.5 — nil, never 0), metadata JSON carries
+    // `kind` (specs/data/activity-events design §2). Same shape as
+    // `insulinEntry(from:)` above; rows that do not decode are dropped.
+    private static func activityEntry(from event: Event) -> ActivityEntry? {
+        guard
+            let data = event.metadata.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let kindRaw = object["kind"] as? String,
+            let kind = ActivityKind(rawValue: kindRaw)
+        else { return nil }
+        return ActivityEntry(
+            id: event.id,
+            timestamp: event.timestamp,
+            kind: kind,
+            durationMinutes: event.value
+        )
     }
 
     // Removes one dose; the chart marker and the day list refresh together
@@ -218,6 +289,12 @@ final class TrendsModel {
     // The day's doses, newest first, for the Day-view Insulin list (App 8).
     var dayDoses: [InsulinEntry] {
         insulin.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // The day's activities, newest first, for the Day-view Activity list
+    // (specs/data/activity-events Req 4.3).
+    var dayActivities: [ActivityEntry] {
+        activities.sorted { $0.timestamp > $1.timestamp }
     }
 
     private var dayCount: Int {

@@ -31,6 +31,11 @@ struct AppRoot: View {
     // defers a deep-linked present until the conflicting presentation's
     // dismissal completes.
     @State private var showInsulinSheet = false
+    // The activity-entry sheet (specs/data/activity-events Req 3), the same
+    // plain-sheet weight as the dose sheet and owned here for the same reason:
+    // the home Activity control and `medata://activity/add` raise one surface
+    // from any app state.
+    @State private var showActivitySheet = false
     @State private var pendingDeepLink: DeepLinkTarget?
     // The home page's latest-reading header (Req 4). Owned here rather than by
     // HomeView so the subscription survives every cover present/dismiss —
@@ -42,6 +47,7 @@ struct AppRoot: View {
     // widget target (PRD amendment to App 10; glucose-lock-widget Req 7.1).
     private enum DeepLinkTarget {
         case insulinSheet  // medata://insulin/add
+        case activitySheet  // medata://activity/add
         case captureCover  // medata://capture
         case graphCover  // medata://graph — the glucose widget's tap target
     }
@@ -89,6 +95,7 @@ struct AppRoot: View {
             },
             onIntake: { activeSheet = .intake },
             onDose: { showInsulinSheet = true },
+            onActivity: { showActivitySheet = true },
             onRecords: { activeSheet = .records },
             onGraph: { activeSheet = .graph },
             onSettings: { activeSheet = .settings }
@@ -100,6 +107,8 @@ struct AppRoot: View {
             switch pendingDeepLink {
             case .insulinSheet:
                 showInsulinSheet = true
+            case .activitySheet:
+                showActivitySheet = true
             case .captureCover:
                 activeSheet = .capture
             case .graphCover:
@@ -159,11 +168,35 @@ struct AppRoot: View {
             case .graphCover:
                 pendingDeepLink = nil
                 activeSheet = .graph
+            case .activitySheet:
+                pendingDeepLink = nil
+                showActivitySheet = true
             case .insulinSheet, nil:
                 break
             }
         }) {
             InsulinDoseSheet(store: store)
+        }
+        // The activity sheet resumes a pending target exactly as the dose
+        // sheet above does — the two are the same kind of surface, so a deep
+        // link arriving while either is up must survive the dismissal
+        // (specs/data/activity-events Req 3.5).
+        .sheet(isPresented: $showActivitySheet, onDismiss: {
+            switch pendingDeepLink {
+            case .captureCover:
+                pendingDeepLink = nil
+                activeSheet = .capture
+            case .graphCover:
+                pendingDeepLink = nil
+                activeSheet = .graph
+            case .insulinSheet:
+                pendingDeepLink = nil
+                showInsulinSheet = true
+            case .activitySheet, nil:
+                break
+            }
+        }) {
+            ActivitySheet(store: store)
         }
         .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.
@@ -187,26 +220,47 @@ struct AppRoot: View {
     // The `medata` scheme is registered in MeData/Info.plist (CFBundleURLTypes;
     // merged with the generated Info.plist). Both links land on their target
     // from any state, dismissing whatever is presented first (App 10):
-    //   medata://insulin/add — the dose-entry sheet
-    //   medata://capture     — the Capture cover
-    //   medata://graph       — the Graph cover (glucose widget tap, Req 7.1).
-    //                          From a locked device iOS defers the open until
-    //                          the user authenticates, then `onOpenURL` fires
-    //                          here as usual (Req 7.2) — nothing extra needed.
+    //   medata://insulin/add  — the dose-entry sheet
+    //   medata://activity/add — the activity-entry sheet
+    //                           (specs/data/activity-events Req 3.5)
+    //   medata://capture      — the Capture cover
+    //   medata://graph        — the Graph cover (glucose widget tap, Req 7.1).
+    //                           From a locked device iOS defers the open until
+    //                           the user authenticates, then `onOpenURL` fires
+    //                           here as usual (Req 7.2) — nothing extra needed.
+    // The two entry sheets are mutually exclusive in practice, so each link
+    // dismisses the other one first and resumes through `pendingDeepLink`;
+    // presenting a sheet over a sheet that is animating out is dropped.
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "medata" else { return }
         switch (url.host, url.path) {
         case ("insulin", "/add"):
-            if activeSheet == nil {
+            if showActivitySheet {
+                pendingDeepLink = .insulinSheet
+                showActivitySheet = false
+            } else if activeSheet == nil {
                 showInsulinSheet = true
             } else {
                 pendingDeepLink = .insulinSheet
+                activeSheet = nil
+            }
+        case ("activity", "/add"):
+            if showInsulinSheet {
+                pendingDeepLink = .activitySheet
+                showInsulinSheet = false
+            } else if activeSheet == nil {
+                showActivitySheet = true
+            } else {
+                pendingDeepLink = .activitySheet
                 activeSheet = nil
             }
         case ("capture", ""), ("capture", "/"):
             if showInsulinSheet {
                 pendingDeepLink = .captureCover
                 showInsulinSheet = false
+            } else if showActivitySheet {
+                pendingDeepLink = .captureCover
+                showActivitySheet = false
             } else if activeSheet == nil {
                 activeSheet = .capture
             } else if activeSheet != .capture {
@@ -217,6 +271,9 @@ struct AppRoot: View {
             if showInsulinSheet {
                 pendingDeepLink = .graphCover
                 showInsulinSheet = false
+            } else if showActivitySheet {
+                pendingDeepLink = .graphCover
+                showActivitySheet = false
             } else if activeSheet == nil {
                 activeSheet = .graph
             } else if activeSheet != .graph {

@@ -27,6 +27,9 @@ nonisolated enum SettingsKeys {
     // Insulin metric chip: show/hide the dose markers on the Graph chart
     // (PRD regression-suggestion-integration App 9).
     static let trendsShowInsulin = "medata.trends.showInsulin"
+    // Activity metric chip: show/hide the activity band on the Graph chart
+    // (specs/data/activity-events Req 4.1).
+    static let trendsShowActivity = "medata.trends.showActivity"
 
     // Per-kind insulin product defaults (PRD regression-suggestion-integration
     // App 5). Free-text editable in Settings; the dose sheet reads them at
@@ -36,4 +39,10 @@ nonisolated enum SettingsKeys {
     static let insulinTypeBasal = "medata.insulin.basalType"
     static let insulinTypeBolusDefault = "NovoRapid"
     static let insulinTypeBasalDefault = "Lantus"
+
+    // Most recently saved activity kind (specs/data/activity-events Req 3.3),
+    // stored as the kind's stable machine key so the entry sheet opens on it
+    // and a repeat activity is a two-tap save. Written by ActivityModel on a
+    // successful save only.
+    static let activityLastKind = "medata.activity.lastKind"
 }
