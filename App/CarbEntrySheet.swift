@@ -17,9 +17,23 @@ struct CarbEntrySheet: View {
     // is up the entry sheet stays visible underneath — the model's `didSave`
     // latch keeps both save buttons dead so no second row can be written.
     @State private var showingPresetSheet = false
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
 
     private let store: any PersistenceStore
     private let nextSortOrder: Int
+
+    // The subject this sheet's live figure produces. `carbs` is nil until a
+    // saveable value is typed, and a nil carbohydrate total suppresses rather
+    // than defaulting to zero.
+    private var doseSubject: DoseSubject {
+        DoseSubject(
+            carbsG: model.carbs.map(Double.init),
+            instant: model.timestamp,
+            source: .intake,
+            fatG: model.macros.fatG,
+            proteinG: model.macros.proteinG
+        )
+    }
 
     init(store: any PersistenceStore, editing: IntakeEntry? = nil, nextSortOrder: Int = 0) {
         self.store = store
@@ -52,6 +66,8 @@ struct CarbEntrySheet: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+        .task(id: model.carbsText) { await doseSuggestions?.refresh(for: doseSubject) }
+        .onDisappear { doseSuggestions?.clearReadout() }
         .sheet(isPresented: $showingPresetSheet, onDismiss: { dismiss() }) {
             QuickPresetEditSheet(
                 store: store,
@@ -78,9 +94,24 @@ struct CarbEntrySheet: View {
                 .onChange(of: model.carbsText) { model.clampCarbsText() }
                 .accessibilityLabel("Carbohydrates in grams")
                 .accessibilityIdentifier("carb.amount")
-            Text("grams")
-                .font(.subheadline)
-                .foregroundStyle(Color.textSecondary)
+            // The same middle-dot segment the review screen appends, in the
+            // secondary line that already exists (insulin-dosing Req 6.6).
+            // Same font, same colour, same grammar: a quantity and a unit
+            // symbol, no verb. The word changes from "grams" to "g carbs"
+            // only when a second quantity joins it, so the line stays
+            // readable as a pair.
+            HStack(spacing: 0) {
+                Text(doseSuggestions?.readoutUnits == nil ? "grams" : "g carbs")
+                if let units = doseSuggestions?.readoutUnits {
+                    Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
+                    Text("\(units)").fontWeight(.semibold)
+                    Text(" U").accessibilityLabel("\(units) units")
+                }
+            }
+            .font(.subheadline.monospacedDigit())
+            .foregroundStyle(Color.textSecondary)
+            .lineLimit(1)
+            .accessibilityIdentifier("carb.doseSuggestion")
         }
         .frame(maxWidth: .infinity)
     }
@@ -145,7 +176,10 @@ struct CarbEntrySheet: View {
     private var saveButton: some View {
         Button {
             Task {
-                if await model.save() { dismiss() }
+                if await model.save() {
+                    await doseSuggestions?.arm(from: doseSubject)
+                    dismiss()
+                }
             }
         } label: {
             if model.isSaving {

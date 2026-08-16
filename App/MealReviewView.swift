@@ -37,6 +37,9 @@ struct MealReviewView: View {
     @FocusState private var gramFieldFocused: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Optional so this surface still composes anywhere the model is not in
+    // the environment; a nil model is simply a line with no dose segment.
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
 
     // Bundled food database, resolved once per process (ResultView precedent).
     private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
@@ -133,6 +136,14 @@ struct MealReviewView: View {
         .task { await model.start() }
         .task { photo = await MealPhotoLoader.loadImage(assetID: record.photoAssetID) }
         .task { await loadContours() }
+        // The readout follows the total the developer will actually record
+        // (insulin-dosing Req 3.2), so tapping `1/2` on the plate scale rolls
+        // the carb figure, the plate mass and the dose in one synchronised
+        // numeric roll — the divisor is taught by motion, not by a sentence.
+        .task(id: model.pendingTotalCarbsG) {
+            await doseSuggestions?.refresh(for: doseSubject)
+        }
+        .onDisappear { doseSuggestions?.clearReadout() }
     }
 
     private func discard(then completion: @escaping () -> Void) {
@@ -339,18 +350,89 @@ struct MealReviewView: View {
                 Spacer()
                 ConfidencePill(sigmaMeal: sigma)
             }
-            // Field validation reads a kitchen scale, and a scale reads mass
-            // not carbs — the total must be visible at the moment of capture
-            // (mass-readout smolspec; same treatment as result.massLine).
-            Text("≈ \(Int(model.pendingTotalMassG.rounded())) g on plate")
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(Color.captureChromeText.opacity(0.75))
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalMassG)
-                .accessibilityIdentifier("review.massLine")
+            secondLine
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("review.total")
+    }
+
+    // The second line is a TIMELINE (insulin-dosing design-direction §2.2):
+    // what is on the plate now, then what to inject now. Segments accrete
+    // left to right in the order their moment arrives, joined by ` · `, so a
+    // later "+90 min" segment is a right-hand append rather than a redesign.
+    // Field validation reads a kitchen scale, and a scale reads mass not
+    // carbs — the mass total must stay visible at the moment of capture
+    // (mass-readout smolspec; same treatment as result.massLine).
+    //
+    // `ViewThatFits` implements the shed order literally: language goes
+    // before information — `on plate`, then the `≈`, then the mass segment
+    // entirely. The dose segment and its `U` are never shed and never
+    // abbreviated, and the line never wraps, because a second line would
+    // push the plate control toward the fold (meal-review Req 6.6).
+    private var secondLine: some View {
+        let mass = Int(model.pendingTotalMassG.rounded())
+        return ViewThatFits(in: .horizontal) {
+            segments(mass: "≈ \(mass) g on plate")
+            segments(mass: "≈ \(mass) g")
+            segments(mass: "\(mass) g")
+            if doseSuggestions?.readoutUnits != nil { segments(mass: nil) }
+        }
+    }
+
+    // One font, one colour, one height. The dose figure earns its emphasis
+    // through weight on the NUMERAL run only — not colour, because this
+    // screen's single accent belongs to `Record`, the control that writes a
+    // row. A number that is not accent-coloured visibly cannot be an
+    // instruction, which is what makes the distinction structural and lets
+    // it carry no explanatory copy at all.
+    @ViewBuilder
+    private func segments(mass: String?) -> some View {
+        HStack(spacing: 0) {
+            if let mass {
+                Text(mass)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalMassG)
+                    .accessibilityIdentifier("review.massLine")
+            }
+            if let units = doseSuggestions?.readoutUnits {
+                if mass != nil {
+                    // A `Text` run at its own opacity, not a divider view.
+                    Text(" · ").foregroundStyle(Color.captureChromeText.opacity(0.45))
+                }
+                Text("\(units)")
+                    .fontWeight(.semibold)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(reduceMotion ? nil : .smooth, value: units)
+                Text(" U")
+                    .accessibilityIdentifier("review.doseSuggestion")
+                    // VoiceOver has no adjacency to read the relationship
+                    // from, so the combined label gains a third clause naming
+                    // the quantity. Naming a number is labelling, not counsel.
+                    .accessibilityLabel("\(units) units")
+            }
+        }
+        .font(.subheadline.monospacedDigit())
+        .foregroundStyle(Color.captureChromeText.opacity(0.75))
+        .lineLimit(1)
+        .minimumScaleFactor(0.9)
+    }
+
+    // The subject the suggester reads. `.mealCorrected` the moment any row
+    // carries an actual correction, so the ledger can tell a raw estimate
+    // from one the developer moved.
+    private var doseSubject: DoseSubject {
+        DoseSubject(
+            carbsG: model.pendingTotalCarbsG,
+            instant: record.createdAt,
+            source: model.hasActualCorrections ? .mealCorrected : .meal,
+            sourceEventID: record.id,
+            fatG: Double(record.macros.clinicalTotals.fatG),
+            proteinG: Double(record.macros.clinicalTotals.proteinG),
+            sigmaMeal: Double(sigma),
+            // A corrected meal's fat goes stale: PbUserCorrection carries
+            // carbohydrate only (insulin-dosing Req 8.3).
+            fatStale: model.hasActualCorrections
+        )
     }
 
     private var correctedMarker: some View {
@@ -373,6 +455,10 @@ struct MealReviewView: View {
         Button {
             Task {
                 await model.record()
+                // Arms the dose sheet's opening value for the next 45
+                // minutes. No sheet is raised from here — a dose stays a
+                // separate, deliberate act, and Record still dismisses.
+                await doseSuggestions?.arm(from: doseSubject)
                 onRecord()
             }
         } label: {
