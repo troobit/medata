@@ -121,3 +121,80 @@ references:
   - Blocked-by: yh454uh (Extend TrendsModel to fold .intake events into carbBars), yh454ui (Add RecordRow.intakeIntakeRecord case and wire RecordsModel/delete), yh454uj (Build CarbEntryModel and CarbEntrySheet new + edit), yh454uk (Build QuickPresetEditSheet and save-as-preset action), yh454ul (Build IntakeModel), yh454um (Replace IntakeView.swift wholesale and wire quick-add grid + recent-entries list)
   - Stream: 1
   - References: docs/agent-notes/ui-capture-flow.md, docs/agent-notes/device-build-and-test.md
+
+## Preset origin stamp (Req 8.8, 8.9)
+
+- [ ] 12. Write tests for quick_presets.source_meal_id round-trip and the schema 8 to 9 migration <!-- id:yh454uo -->
+  - Extend MedataCore/Tests/PersistenceTests/QuickPresetTests.swift, XCTest style matching the existing cases
+  - Cover: saveQuickPreset persists sourceMealID and quickPresets() reads it back; nil round-trips as NULL
+  - Cover: an INSERT OR REPLACE update of an existing preset preserves source_meal_id when the caller passes it through, per Req 8.9
+  - Cover: a DB created at schema 8 (quick_presets without the column) gains source_meal_id on open, its existing presets survive with NULL, and a second open does not throw duplicate column name
+  - Cover: deleting the meal named by source_meal_id leaves the preset row and its value unchanged (Req 8.8) - the stamp is never dereferenced
+  - Stream: 1
+  - Requirements: [8.8](requirements.md#8.8), [8.9](requirements.md#8.9)
+  - References: design.md#Schema: quick_presets.source_meal_id
+
+- [ ] 13. Implement schema v9, QuickPreset.sourceMealID, and QuickPreset.nextSortOrder(after:) <!-- id:yh454up -->
+  - GRDBPersistenceStore.createSchema: quick_presets CREATE TABLE gains source_meal_id TEXT (nullable); stamp schema_version 9
+  - migrate(): read the stored schema_version before re-stamping and run ALTER TABLE quick_presets ADD COLUMN source_meal_id TEXT only when it is below 9 - ADD COLUMN is not idempotent in SQLite. Non-destructive, so event-log-schema Decision 10 still holds
+  - Update the migrate() header comment with the version-9 line, matching the existing per-version notes
+  - QuickPreset gains public var sourceMealID: UUID?; quickPreset(from:) decodes it, saveQuickPreset binds it
+  - Add public static func nextSortOrder(after presets: [QuickPreset]) -> Int to QuickPreset and rewrite IntakeModel.nextSortOrder to call it - one expression, three call sites
+  - Blocked-by: yh454uo (Write tests for quick_presets.source_meal_id round-trip and the schema 8 to 9 migration)
+  - Stream: 1
+  - Requirements: [8.8](requirements.md#8.8), [8.9](requirements.md#8.9)
+  - References: design.md#Schema: quick_presets.source_meal_id, decision_log.md
+
+- [ ] 14. Carry sourceMealID through QuickPresetEditSheet edits <!-- id:yh454uq -->
+  - App/QuickPresetEditSheet.swift destructures the preset it is given and reconstructs a QuickPreset on save, so an edit silently drops the new column
+  - Capture private let sourceMealID: UUID? in init alongside presetID/sortOrder and pass it through untouched on save
+  - No test task - App-layer UI; covered by the store-level Req 8.9 case and the on-device checklist
+  - Blocked-by: yh454up (Implement schema v9, QuickPreset.sourceMealID, and QuickPreset.nextSortOrderafter:)
+  - Stream: 1
+  - Requirements: [8.9](requirements.md#8.9)
+  - References: design.md#Schema: quick_presets.source_meal_id
+
+## Save as quick-add from a result surface (Req 8)
+
+- [ ] 15. Add the shared quickPresetDraft builder to MealRouting.swift <!-- id:yh454ur -->
+  - App/MealRouting.swift - the existing home for App-layer meal plumbing shared across surfaces, so no new file and no project.pbxproj registration
+  - quickPresetDraft(displayedCarbsG:foodNames:sourceMealID:existingPresets:) -> QuickPreset
+  - Name: first two prettified food names joined with " + ", then " +N" when N further foods remain; empty when the caller passes no names
+  - Carbs: Double(displayedCarbsG.rounded()) clamped into CarbEntryModel.minCarbs...maxCarbs (1...999); a meal rounding to 0 g yields an empty carb field and a disabled Save via the sheet existing canSave rule
+  - Macros: left absent (Req 8.4) - clinicalTotals protein/fat/fibre are deliberately not carried
+  - sortOrder from QuickPreset.nextSortOrder(after: existingPresets)
+  - Blocked-by: yh454up (Implement schema v9, QuickPreset.sourceMealID, and QuickPreset.nextSortOrderafter:)
+  - Stream: 1
+  - Requirements: [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
+  - References: design.md#The flattening, and what survives it, design.md#Which number is frozen
+
+- [ ] 16. Add Save as quick-add to MealReviewView (post-capture) <!-- id:yh454us -->
+  - One non-destructive Button in the existing ToolbarItem(placement: .topBarTrailing) Menu, above Retake and Delete; label "Save as quick-add" - the string CarbEntrySheet already ships; a11y id review.saveAsQuickAdd
+  - @State private var presetDraft: QuickPreset? plus .sheet(item:) presenting QuickPresetEditSheet(store:preset:isNew: true), same construction as CarbEntrySheet
+  - Draft inputs: model.pendingTotalCarbsG (corrected total, Req 8.3), model.activeFoods.map { MealReviewModel.prettify($0.currentClassId) } in the existing carbs-descending order, model.record.id, and store.quickPresets() fetched inside the menu action with the usual (try? ...) ?? [] fallback
+  - No confidence, calibration, or dev_stub gate (Req 8.5, Decision 12); no new copy beyond the label (developer-phase no-disclaimer rule)
+  - No test task - App-layer UI, build + on-device gate
+  - Blocked-by: yh454ur (Add the shared quickPresetDraft builder to MealRouting.swift)
+  - Stream: 1
+  - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
+  - References: design.md#The action on the two result surfaces
+
+- [ ] 17. Add Save as quick-add to ResultView (from records) <!-- id:yh454ut -->
+  - One Button in the actionRow ellipsis Menu, above the destructive Delete; same "Save as quick-add" label; a11y id result.saveAsQuickAdd
+  - Same @State presetDraft + .sheet(item:) shape as the review surface; ResultView already holds let store: any PersistenceStore
+  - Draft inputs: heroCarbsG (the displayed total, adjustments and corrections included, Req 8.3), the existing prettified carbs-sorted rows, record.id, and store.quickPresets()
+  - No test task - App-layer UI, build + on-device gate
+  - Blocked-by: yh454ur (Add the shared quickPresetDraft builder to MealRouting.swift)
+  - Stream: 1
+  - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
+  - References: design.md#The action on the two result surfaces
+
+- [ ] 18. Build, test, spell, and run the Req 8 on-device checklist <!-- id:yh454uu -->
+  - No new files, so no project.pbxproj registration - confirm that is still true before building
+  - Run make build and make test; report both XCTest and swift-testing totals
+  - Run make spell
+  - Walk the Req 8 on-device checklist in design.md, including the schema-8 carry-over DB case and the sqlite3 check that source_meal_id survives an edit
+  - Blocked-by: yh454us (Add Save as quick-add to MealReviewView post-capture), yh454ut (Add Save as quick-add to ResultView from records), yh454uq (Carry sourceMealID through QuickPresetEditSheet edits)
+  - Stream: 1
+  - Requirements: [8.6](requirements.md#8.6), [8.7](requirements.md#8.7)
+  - References: design.md#Testing Strategy, docs/agent-notes/device-build-and-test.md

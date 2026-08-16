@@ -4,6 +4,8 @@
 
 MeData currently records carbs only as a by-product of the photo/estimation pipeline. This feature adds a direct manual intake path: a carb-entry sheet modelled on the existing insulin-dose flow, and one-tap quick-add presets (e.g. a pint, a bagel, chips) that write straight to the ledger — so carbs can be logged in seconds without the camera. It also lets the user manage their own quick-add presets and edit or delete any ledger record, keeping the barrier to timely, accurate logging as low as possible.
 
+A quick-add preset has two origins. It can be authored by hand (Req 4), or it can be born from a successful capture (Req 8): a meal eaten repeatedly at the same place is measured once with the camera and replayed with a tap on every later visit, so the second photo of a plate already measured is never taken.
+
 ## Dependencies
 
 - **Home-router navigation shell** (separate `specs/ui/` spec, not yet written). That spec introduces a new home page routing to `intake` / `dose` / `records` and demotes Graph to visualisation only. This feature supplies the content of the `intake` route; the entry point itself is owned by the home-router spec. Until it lands, the intake surface can be reached from a temporary entry point (design decides the seam).
@@ -17,6 +19,9 @@ MeData currently records carbs only as a by-product of the photo/estimation pipe
 - Named or nested quick-add groups — presets are a single flat collection (interpretation pending confirmation at review).
 - Universal edit/delete over photo meals, insulin, and glucose records — deferred to the records/home-router spec, which owns the unified records surface; this spec edits/deletes manually-added carb entries only.
 - Displaying macros in the graph or in daily totals — captured macros are shown only in an entry's own detail; no aggregate macro view.
+- Recreating a meal from a preset — a preset replays as a manual carb record, never as a photo-derived meal. The originating capture's per-class decomposition, masks, photos, and confidence are not restored (Req 8.7).
+- Recognising a repeat meal automatically — the app does not match a new capture against existing presets, nor suggest one. Saving a preset and replaying it are both explicit user actions.
+- Re-deriving a capture-born preset when calibration lands — a preset's carbohydrate value is frozen at creation and is only ever changed by the user editing it.
 
 ## Requirements
 
@@ -95,3 +100,21 @@ MeData currently records carbs only as a by-product of the photo/estimation pipe
 5. <a name="7.5"></a>The edit and delete actions SHALL be reachable inline from the entry, without navigating through intermediate screens.  
 
 *Note: edit/delete over photo meals, insulin, and glucose records is out of scope here — it belongs to the records/home-router spec that owns the unified records surface (see Non-Goals).*
+
+### 8. Quick-add preset from a captured meal
+
+**User Story:** As someone who eats the same meal at the same place again and again, I want to save a captured meal as a quick-add preset, so that on every later visit I log it with one tap instead of photographing a plate I have already measured.
+
+**Acceptance Criteria:**
+
+1. <a name="8.1"></a>The system SHALL offer a save-as-preset action on a meal's result surface, both on the surface shown immediately after a successful capture and on the surface reached from records.  
+2. <a name="8.2"></a>WHEN the user invokes the save-as-preset action, the system SHALL open the same preset-creation surface used for a hand-authored preset (Req 4.1), pre-filled with the meal's carbohydrate value and with a preset name derived from the meal's detected foods, both editable before the preset is saved.  
+3. <a name="8.3"></a>The carbohydrate value carried into the preset SHALL be the total the result surface is displaying at that moment, including any corrections the user has already made to that meal, rather than the pipeline's original estimate.  
+4. <a name="8.4"></a>The preset SHALL carry a carbohydrate value only; protein, fat, and fibre SHALL be left absent for the user to supply.  
+5. <a name="8.5"></a>The save-as-preset action SHALL be available for any displayed meal result regardless of its confidence band or calibration state.  
+6. <a name="8.6"></a>A preset created from a meal SHALL behave as any other quick-add preset wherever it appears — the same tile, the same one-tap write (Req 3.2), and the same edit and delete (Req 4.2).  
+7. <a name="8.7"></a>WHEN a preset created from a meal is tapped, the system SHALL write one manual carb record exactly as any other quick-add does, and SHALL NOT create a meal record or any photo-derived data.  
+8. <a name="8.8"></a>The system SHALL record which meal a preset was created from as a point-in-time stamp; correcting or deleting the originating meal SHALL NOT change, invalidate, or remove the preset.  
+9. <a name="8.9"></a>WHEN a preset created from a meal is subsequently edited (Req 4.2), the system SHALL preserve its originating-meal stamp.  
+
+*Note: a refused capture produces no result surface, so there is nothing to save from it; Req 8.5 constrains only results that are actually displayed.*
