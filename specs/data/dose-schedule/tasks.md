@@ -182,7 +182,7 @@ metadata:
 
 ## Phase 5 — Verify
 
-- [ ] 20. make test green, make build, make spell clean <!-- id:dsm0ub4 -->
+- [x] 20. make test green, make build, make spell clean <!-- id:dsm0ub4 -->
   - Report BOTH totals — XCTest and swift-testing; the swift-testing slice alone is not the test count
   - Blocked-by: ds6xz3f (MedataCore tests for the pure arithmetic), ds9fd1j (MedataCore tests for the ledger transitions), dsj8sy9 (Schedule editing in Settings, including the interval and the cutoff), dsk9tz1 (Degraded mode with notification authorisation refused or revoked), dsg6qw5 (ADJUST opens the dose sheet pre-seeded, and records that the amount was adjusted), dsh7rx7 (Skip an outstanding dose)
 
@@ -229,7 +229,7 @@ metadata:
   - Blocked-by: dsq3xe0 (STOP — on-device: a stale follow-up after the dose was logged elsewhere writes nothing)
   - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
 
-- [ ] 27. Amend the sibling spec that this one contradicts <!-- id:dsu7bj9 -->
+- [x] 27. Amend the sibling spec that this one contradicts <!-- id:dsu7bj9 -->
   - Decision 1 Impact records this as owed: specs/data/insulin-dosing/requirements.md Req 12.7 and the notifications non-goal both need amending in place to point here
   - The reversal is partial — the clause forbidding an adherence figure, streak or missed-dose indicator survives untouched, and the amendment must say so rather than deleting Req 12.7 wholesale
   - Deferred because that file was being modified concurrently when this spec was written; check it is free before editing

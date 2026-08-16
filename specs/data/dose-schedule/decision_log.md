@@ -105,8 +105,13 @@ the tree.
 ### Impact
 
 `specs/data/insulin-dosing/requirements.md` Req 12.7 and the notifications non-goal
-both need amending in place to point here. Neither edit is made yet, because that
-file is being modified concurrently by other work; both are owed.
+both need amending in place to point here.
+
+**Both amendments landed on 2026-08-16** ([task 27](tasks.md)). Req 12.7 now carries
+only the adherence-display clause, with the reversed prompting clause quoted in an
+amendment note beneath it; the non-goal now reads "No scheduled follow-up doses or
+extended/square-wave boluses" with the same treatment. Neither was deleted — the
+original wording is quoted in place so the reversal is legible rather than silent.
 
 ---
 
