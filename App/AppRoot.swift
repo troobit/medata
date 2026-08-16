@@ -31,6 +31,11 @@ struct AppRoot: View {
     // defers a deep-linked present until the conflicting presentation's
     // dismissal completes.
     @State private var showInsulinSheet = false
+    // The activity-entry sheet (specs/data/activity-events Req 3), the same
+    // plain-sheet weight as the dose sheet and owned here for the same reason:
+    // the home Activity control and `medata://activity/add` raise one surface
+    // from any app state.
+    @State private var showActivitySheet = false
     @State private var pendingDeepLink: DeepLinkTarget?
     // The home page's latest-reading header (Req 4). Owned here rather than by
     // HomeView so the subscription survives every cover present/dismiss —
@@ -89,6 +94,7 @@ struct AppRoot: View {
             },
             onIntake: { activeSheet = .intake },
             onDose: { showInsulinSheet = true },
+            onActivity: { showActivitySheet = true },
             onRecords: { activeSheet = .records },
             onGraph: { activeSheet = .graph },
             onSettings: { activeSheet = .settings }
@@ -164,6 +170,9 @@ struct AppRoot: View {
             }
         }) {
             InsulinDoseSheet(store: store)
+        }
+        .sheet(isPresented: $showActivitySheet) {
+            ActivitySheet(store: store)
         }
         .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.

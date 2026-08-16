@@ -52,4 +52,9 @@ extension Color {
     // markers reuse the bolus teal.
     static let seriesInsulinBolus = Color(uiColor: .systemTeal)
     static let seriesInsulinBasal = Color(uiColor: .systemPurple)
+    // Activity markers (specs/data/activity-events Req 4.1): distinct from the
+    // glucose trace (orange), the carb bars (accent green) and both insulin
+    // series (teal / purple), so the activity band is never read as any of
+    // them. Also the selected-chip fill on the activity entry sheet.
+    static let seriesActivity = Color(uiColor: .systemPink)
 }
