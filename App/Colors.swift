@@ -52,4 +52,15 @@ extension Color {
     // markers reuse the bolus teal.
     static let seriesInsulinBolus = Color(uiColor: .systemTeal)
     static let seriesInsulinBasal = Color(uiColor: .systemPurple)
+
+    // MARK: - Activity band (specs/data/activity-events Req 4)
+
+    // Activity is coloured by CHARACTER, not by kind. Character is the fixed
+    // aerobic/anaerobic/mixed property a later model keys on (Decision 2), so
+    // putting it in the colour channel makes the covariate under study visible
+    // without a legend entry per kind. All three are distinct from the glucose
+    // orange, the carbohydrate accent green, and both insulin series.
+    static let seriesActivityAerobic = Color(uiColor: .systemPink)
+    static let seriesActivityAnaerobic = Color(uiColor: .systemBrown)
+    static let seriesActivityMixed = Color(uiColor: .systemIndigo)
 }

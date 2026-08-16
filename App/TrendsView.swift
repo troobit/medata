@@ -17,13 +17,16 @@ struct TrendsView: View {
     let store: any PersistenceStore
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(ActivityStore.self) private var activityStore: ActivityStore?
     @State private var model: TrendsModel
     @State private var path: [MealRoute] = []
     @State private var showOptions = false
+    @State private var showActivitySheet = false
 
     @AppStorage(SettingsKeys.trendsShowCarbs) private var showCarbs = true
     @AppStorage(SettingsKeys.trendsShowGlucose) private var showGlucose = true
     @AppStorage(SettingsKeys.trendsShowInsulin) private var showInsulin = true
+    @AppStorage(SettingsKeys.trendsShowActivity) private var showActivity = true
     @AppStorage(SettingsKeys.trendsShowTargetBand) private var showTargetBand = true
     @AppStorage(SettingsKeys.trendsScaleFixed) private var scaleFixed = false
     @AppStorage(SettingsKeys.trendsFixedMax) private var fixedMax = 14
@@ -48,6 +51,7 @@ struct TrendsView: View {
                     if model.range == .day {
                         dayMeals
                         dayInsulin
+                        dayActivity
                     }
                 }
                 .padding(20)
@@ -79,7 +83,13 @@ struct TrendsView: View {
             }
         }
         .sheet(isPresented: $showOptions) { TrendsOptionsSheet() }
-        .task { await model.start() }
+        // `attach` before `start`, because the first reload reads the activity
+        // range through it (TrendsModel builds in `init`, before the
+        // environment exists).
+        .task {
+            model.attach(activities: activityStore)
+            await model.start()
+        }
         .onChange(of: model.range) { _, _ in
             Task { await model.reload() }
         }
@@ -395,13 +405,75 @@ struct TrendsView: View {
         }
         .accessibilityIdentifier("graph.dose.\(dose.id.uuidString)")
     }
+
+    // MARK: - Day activity list (specs/data/activity-events Req 4.3)
+
+    // The same shape as the Insulin list above — read-only, height-pinned,
+    // scroll-disabled — so the third day section reads as a sibling of the
+    // first two rather than as a new kind of surface.
+    private var dayActivity: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Activity")
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+            if model.dayActivities.isEmpty {
+                Text("no activity")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+            } else {
+                List {
+                    ForEach(model.dayActivities) { item in
+                        activityRow(item)
+                            .listRowBackground(Color.surfacePrimary)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .environment(\.defaultMinListRowHeight, doseRowHeight)
+                .frame(height: CGFloat(model.dayActivities.count) * doseRowHeight)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func activityRow(_ item: ActivityEvent) -> some View {
+        HStack {
+            Text(timeLabel(item.timestamp))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.textPrimary)
+            Label(item.kind.label, systemImage: item.kind.symbolName)
+                .font(.subheadline)
+                .foregroundStyle(activityColour(item.kind.character))
+            Spacer()
+            if let minutes = item.durationMinutes {
+                Text("\(Int(minutes.rounded())) min")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+        .accessibilityIdentifier("graph.activity.\(item.id.uuidString)")
+    }
+
+    // Coloured by CHARACTER, not by kind — the covariate under study, and the
+    // same channel `Colors.swift` reserves for the chart's activity band.
+    private func activityColour(_ character: ActivityCharacter) -> Color {
+        switch character {
+        case .aerobic: Color.seriesActivityAerobic
+        case .anaerobic: Color.seriesActivityAnaerobic
+        case .mixed: Color.seriesActivityMixed
+        }
+    }
 }
 
 // Leading-aligned wrapping row for the metric chips (snaqui Req 5): each chip
 // keeps its natural size and overflow starts a new line, so nothing ever
 // compresses to an ellipsis. Chips are measured with an unspecified proposal
 // (their ideal size) both when building lines and when placing them.
-private struct ChipFlow: Layout {
+// Internal rather than file-private: the activity sheet lays its kind chips out
+// with the same wrap, and two copies of a Layout would drift.
+struct ChipFlow: Layout {
     var spacing: CGFloat
     var lineSpacing: CGFloat
 

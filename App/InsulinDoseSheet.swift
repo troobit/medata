@@ -12,10 +12,11 @@ import SwiftUI
 // comes from the per-kind Settings defaults (App 5).
 struct InsulinDoseSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
     @State private var model: InsulinDoseModel
 
-    init(store: any PersistenceStore) {
-        _model = State(initialValue: InsulinDoseModel(store: store))
+    init(store: any PersistenceStore, seed: DoseSeed? = nil) {
+        _model = State(initialValue: InsulinDoseModel(store: store, seed: seed))
     }
 
     var body: some View {
@@ -36,6 +37,8 @@ struct InsulinDoseSheet: View {
             .background(Color.surfacePrimary)
             .navigationTitle("Insulin")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: model.kind) { model.consumeProvenance() }
+            .onChange(of: model.timestamp) { model.consumeProvenance() }
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
@@ -63,9 +66,19 @@ struct InsulinDoseSheet: View {
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.1), value: model.units)
                     .accessibilityIdentifier("insulin.units")
-                Text("units")
+                // One line in a slot that already exists. While the seeded
+                // value is untouched the caption states where the number came
+                // from; the first press of either step control, or any change
+                // of kind or time, replaces it with the plain label the sheet
+                // ships with today. Both states are a single-line
+                // `.subheadline` in the same slot, so nothing moves on the
+                // swap — and editability is demonstrated rather than stated.
+                Text(model.provenance ?? "units")
                     .font(.subheadline)
                     .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .accessibilityIdentifier("insulin.provenance")
             }
             .frame(minWidth: 120)
             stepControl("plus", direction: .up, identifier: "insulin.plus")
@@ -115,7 +128,20 @@ struct InsulinDoseSheet: View {
     private var saveButton: some View {
         Button {
             Task {
-                if await model.save() { dismiss() }
+                if await model.save() {
+                    // linkDose is an UPDATE on the side table only — the
+                    // insulin event's metadata JSON is written exactly as it
+                    // is today and no key is added (Req 7.5, 9.7).
+                    if let suggestionID = model.suggestionID,
+                        let eventID = model.lastSavedEventID {
+                        await doseSuggestions?.noteSavedDose(
+                            suggestionID: suggestionID,
+                            eventID: eventID,
+                            units: Double(model.units)
+                        )
+                    }
+                    dismiss()
+                }
             }
         } label: {
             if model.isSaving {

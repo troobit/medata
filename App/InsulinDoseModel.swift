@@ -24,11 +24,37 @@ final class InsulinDoseModel {
     private(set) var isSaving = false
     private(set) var saveError: String?
 
+    // The suggestion this presentation opened from, if any (Req 6.4/7.5). The
+    // caption states the carbohydrate figure the sheet cannot show and the
+    // divisor that produced the number — "from 60 g at 5 g/U" — because this
+    // is the one surface where the source number is not on screen.
+    private(set) var provenance: String?
+    private(set) var suggestionID: UUID?
+    private(set) var lastSavedEventID: UUID?
+
     private let store: any PersistenceStore
     private var holdTask: Task<Void, Never>?
 
-    init(store: any PersistenceStore) {
+    // One optional parameter, defaulted, changes nothing that does not opt in.
+    // A nil seed opens at 10 U exactly as today, so the home Dose control and
+    // `medata://insulin/add` are behaviourally unchanged (Req 6.3).
+    init(store: any PersistenceStore, seed: DoseSeed? = nil) {
         self.store = store
+        self.suggestionID = seed?.suggestionID
+        if let seed {
+            units = min(max(seed.units, Self.minUnits), Self.maxUnits)
+            provenance = seed.provenance
+        }
+    }
+
+    // The caption is consumed by the first EDIT, not by the first change of
+    // value: `step(_:)` clamps at 1 and 60, so a press at either bound leaves
+    // `units` untouched and an observer on `units` would silently fail to
+    // fire. `beginHold` runs on every press-down, so it is the honest hook —
+    // and once a human has overridden the number the screen can no longer
+    // describe it as derived.
+    func consumeProvenance() {
+        provenance = nil
     }
 
     enum StepDirection {
@@ -48,6 +74,7 @@ final class InsulinDoseModel {
     // the single source of timing truth.
     func beginHold(_ direction: StepDirection) {
         endHold()
+        consumeProvenance()
         step(direction)
         holdTask = Task { [weak self] in
             let start = Date()
@@ -105,6 +132,9 @@ final class InsulinDoseModel {
         )
         do {
             try await store.saveInsulinDose(dose)
+            // The amount actually saved is recorded unmodified; the seed only
+            // ever changed the opening value (Req 6.5, 7.5).
+            lastSavedEventID = dose.id
             return true
         } catch {
             saveError = "Save failed: \(error.localizedDescription)"

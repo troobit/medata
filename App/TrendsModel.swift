@@ -37,6 +37,18 @@ struct InsulinMarker: Identifiable {
     let kind: InsulinKind?
 }
 
+// One chart marker in the activity band (specs/data/activity-events Req 4).
+// Day range: one per activity, spanning start to start+duration where a
+// duration exists and a point where it does not. Week/Month: one per non-empty
+// day carrying that day's count, with a nil character (a day can mix).
+struct ActivityMarker: Identifiable {
+    let id = UUID()
+    let start: Date
+    let end: Date?
+    let character: ActivityCharacter?
+    let count: Int
+}
+
 // View-model for the Trends screen (§10). Loads meals, `bsl` glucose, and
 // `insulin` doses for the selected range, refreshes on `eventsDidChange`, and
 // exposes chart series and summary stats. All bucketing / axis maths comes from
@@ -54,6 +66,10 @@ final class TrendsModel {
     // per-entry TrendsChartPoint or Week/Month's dailyBuckets, both of which
     // need a date per sample.
     private(set) var intakeCarbs: [DatedValue] = []
+    // Activity events for the selected range (specs/data/activity-events
+    // Req 4.1). Read through `ActivityStoring` rather than the store directly
+    // so the read path is one call the whole app shares.
+    private(set) var activity: [ActivityEvent] = []
 
     // Chart series and axis maxima are shaped ONCE per reload and stored, not
     // recomputed on every access. They were computed properties, and the chart
@@ -67,6 +83,7 @@ final class TrendsModel {
     private(set) var carbBars: [TrendsChartPoint] = []
     private(set) var glucoseLine: [TrendsChartPoint] = []
     private(set) var insulinMarkers: [InsulinMarker] = []
+    private(set) var activityMarkers: [ActivityMarker] = []
     private(set) var carbAxisMax: Double = 0
     private(set) var autoGlucoseMax: Double = 0
     // Corrections overlay (snaqui PRD Req 3): the latest correction's total per
@@ -77,9 +94,16 @@ final class TrendsModel {
     private let store: any PersistenceStore
     private let calendar = Calendar.current
     private var subscription: Task<Void, Never>?
+    private var activities: (any ActivityStoring)?
 
     init(store: any PersistenceStore) {
         self.store = store
+    }
+
+    // Supplied from the view's environment after construction, because the
+    // activity reader is owned by AppRoot and the model is built in `init`.
+    func attach(activities: (any ActivityStoring)?) {
+        self.activities = activities
     }
 
     func start() async {
@@ -131,6 +155,7 @@ final class TrendsModel {
         intakeCarbs = intakeEvents.compactMap { event in
             event.value.map { DatedValue(date: event.timestamp, value: $0) }
         }
+        activity = (try? await activities?.activities(in: iv.start...iv.end)) ?? []
         recomputeSeries(in: iv)
     }
 
@@ -150,6 +175,17 @@ final class TrendsModel {
             insulinMarkers = insulin.map {
                 InsulinMarker(date: $0.timestamp, units: $0.units, kind: $0.kind)
             }
+            // A span where a duration was recorded, a point where it was not
+            // (Req 4.2) — the absence of a duration is shown as an absence,
+            // not as a zero-length bar.
+            activityMarkers = activity.map {
+                ActivityMarker(
+                    start: $0.timestamp,
+                    end: $0.end,
+                    character: $0.kind.character,
+                    count: 1
+                )
+            }
         case .week, .month:
             // Meal and intake samples combine BEFORE bucketing, so a day's
             // bucket total is one number regardless of how many sources
@@ -167,6 +203,17 @@ final class TrendsModel {
             insulinMarkers = TrendsMath.dailyBuckets(insulinSamples, in: iv, calendar: calendar)
                 .filter { $0.count > 0 }
                 .map { InsulinMarker(date: $0.start, units: $0.total, kind: nil) }
+            // Per-day count, x-aligned with the carbohydrate buckets through
+            // the same `dailyBuckets` call (Req 4.1). The sample value is 1
+            // per activity, so the bucket total IS the count.
+            let activitySamples = activity.map { DatedValue(date: $0.timestamp, value: 1) }
+            activityMarkers = TrendsMath.dailyBuckets(activitySamples, in: iv, calendar: calendar)
+                .filter { $0.count > 0 }
+                .map {
+                    ActivityMarker(
+                        start: $0.start, end: nil, character: nil, count: Int($0.total.rounded())
+                    )
+                }
         }
         carbAxisMax = TrendsMath.carbAxisMax(forMaxCarbs: carbBars.map(\.value).max() ?? 0)
         let dataMax = glucoseLine.map(\.value).max() ?? 0
@@ -218,6 +265,18 @@ final class TrendsModel {
     // The day's doses, newest first, for the Day-view Insulin list (App 8).
     var dayDoses: [InsulinEntry] {
         insulin.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // The day's activities, newest first (specs/data/activity-events Req 4.3).
+    var dayActivities: [ActivityEvent] {
+        activity.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // Total recorded activity minutes over the range. Activities logged
+    // without a duration contribute nothing, which is why the stat card names
+    // the minutes rather than the sessions.
+    var totalActivityMinutes: Double {
+        activity.reduce(0) { $0 + ($1.durationMinutes ?? 0) }
     }
 
     private var dayCount: Int {

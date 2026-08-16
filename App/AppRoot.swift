@@ -38,6 +38,17 @@ struct AppRoot: View {
     // re-subscribe every time.
     @State private var homeGlucose: HomeGlucoseModel
 
+    // Owned here, exactly as `DoseSuggestionModel` and `ActivityStore` state in
+    // their own headers, so a seed armed inside the Capture cover survives that
+    // cover's dismissal. Injected into the environment so the review screen,
+    // the carb sheet, the dose sheet and the Graph read the same instances.
+    @State private var doseSuggestions: DoseSuggestionModel
+    @State private var activityStore: ActivityStore
+    // Read once at the moment the dose sheet is raised, never inside the sheet
+    // builder: `takeSeed()` consumes the seed, and consuming it during a view
+    // update would be a state mutation mid-body.
+    @State private var pendingSeed: DoseSeed?
+
     // The deep links under the `medata` scheme — each a single-tap lock-screen
     // widget target (PRD amendment to App 10; glucose-lock-widget Req 7.1).
     private enum DeepLinkTarget {
@@ -61,6 +72,8 @@ struct AppRoot: View {
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
         _homeGlucose = State(initialValue: HomeGlucoseModel(store: store))
+        _doseSuggestions = State(initialValue: DoseSuggestionModel(store: store))
+        _activityStore = State(initialValue: ActivityStore(store: store))
     }
 
     // A single optional so the covers are mutually exclusive by construction —
@@ -88,18 +101,20 @@ struct AppRoot: View {
                 activeSheet = .capture
             },
             onIntake: { activeSheet = .intake },
-            onDose: { showInsulinSheet = true },
+            onDose: { presentInsulinSheet() },
             onRecords: { activeSheet = .records },
             onGraph: { activeSheet = .graph },
             onSettings: { activeSheet = .settings }
         )
         .tint(.medataAccent)
+        .environment(doseSuggestions)
+        .environment(activityStore)
         .fullScreenCover(item: $activeSheet, onDismiss: {
             // A deep-linked present waits for the cover's dismissal to
             // finish; presenting mid-animation is silently dropped by SwiftUI.
             switch pendingDeepLink {
             case .insulinSheet:
-                showInsulinSheet = true
+                presentInsulinSheet()
             case .captureCover:
                 activeSheet = .capture
             case .graphCover:
@@ -163,7 +178,7 @@ struct AppRoot: View {
                 break
             }
         }) {
-            InsulinDoseSheet(store: store)
+            InsulinDoseSheet(store: store, seed: pendingSeed)
         }
         .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.
@@ -193,12 +208,21 @@ struct AppRoot: View {
     //                          From a locked device iOS defers the open until
     //                          the user authenticates, then `onOpenURL` fires
     //                          here as usual (Req 7.2) — nothing extra needed.
+    // Req 6.4: the sheet opens on the armed suggestion where one is in force
+    // and at the standing default otherwise. `takeSeed()` returns nil once the
+    // seed's 45 minutes have lapsed, so both two-tap paths are unchanged when
+    // nothing is armed.
+    private func presentInsulinSheet() {
+        pendingSeed = doseSuggestions.takeSeed()
+        showInsulinSheet = true
+    }
+
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "medata" else { return }
         switch (url.host, url.path) {
         case ("insulin", "/add"):
             if activeSheet == nil {
-                showInsulinSheet = true
+                presentInsulinSheet()
             } else {
                 pendingDeepLink = .insulinSheet
                 activeSheet = nil
