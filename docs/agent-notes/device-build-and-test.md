@@ -109,22 +109,89 @@ weaker claim, `strings`/`coremltools` on the `.mlpackage` the build compiled.
 `myfoodrepo-bridge/tasks-training-and-export.md` task 6 asked for the 12-hex id
 in the launch log for months; no build has ever emitted it there.
 
-### Tagging a UI attempt
+## Comparing UI attempts on the phone
 
-When a UI design is worth comparing against later, commit it on a clean tree and
-tag that commit `<design>-attempt-N` — `tilt-guide-attempt-1` and
-`tilt-guide-attempt-2` are the existing pair (`docs/agent-notes/tilt-aim-guide.md`).
-The tag points at exactly one commit, `N` is only the order the attempts were
-tried in, and the tag claims nothing beyond "this is what that attempt was". It
-is not a version label, nothing reads it, and no numbering is reserved —
-everything stays v0 until main (pipeline Decision 50). Build the tagged commit
-and the stamp comes out clean, so a capture round and the attempt it shows are
-joined by the sha.
+The whole convention is git branches, git tags and the build stamp. Nothing
+reads any of it, no tooling exists for it, and none should be built.
 
-To spin a variant out of an attempt later, branch from the tag:
-`git switch -c <design>-<variant> <design>-attempt-N`. Nothing else needs
-updating, and deleting a tag once its attempt stops being interesting is fine —
-`git log` still holds the commit.
+### The name
+
+One tag per attempt: **`<surface>-attempt-N`**. `<surface>` is the screen or
+control being tried, not the spec. `N` is only the order the attempts were tried
+in — not a ranking, not a version, and no numbering is reserved. Everything stays
+v0 until main (pipeline Decision 50).
+
+In use today: `tilt-guide-attempt-1/2`, `insulin-dosing-ui-attempt-1/2/3`,
+`activity-sheet-attempt-1/2`, `activity-graph-attempt-1/2`,
+`dose-schedule-ui-attempt-1/2`.
+
+**Tag on a clean tree.** That is the load-bearing rule. A clean tree makes the
+build stamp read `<sha>-<timestamp>` with no `-dirty`, which is what lets a sha
+identify an attempt at all — see the build-stamp section above.
+
+### The three shapes, in preference order
+
+**1. Both on `research`, chosen at runtime.** When the variants can coexist in
+one binary, merge both and put a developer-phase switch in Settings.
+`dose-schedule` does this: Settings → Reminder → Surface flips between the
+outstanding-dose card and the repurposed Dose route. One install, no rebuild
+between looks, and the comparison is immediate. Prefer this whenever it is
+possible — the switch is a handful of lines and it is deleted when the choice is
+made.
+
+**2. Both on `research`, one after the other, each tagged.** When the variants
+cannot coexist but do not conflict with anything else, commit attempt 1, tag it,
+then commit attempt 2 on top and tag that. `research` carries the last one;
+earlier attempts are a `git checkout <tag>` away. `activity-events` does this —
+`research` shows sheet attempt 2 and graph attempt 2, and attempt 1 of either is
+one checkout back.
+
+**3. Off to the side on a branch, nothing merged.** When the variants are
+competing designs for the same screen and merging any of them would pre-empt the
+choice. `insulin-dosing` is here: three whole App layers for one readout, on
+`insulin-dosing-ui-{1,2,3}-on-research`, tagged
+`insulin-dosing-ui-attempt-{1,2,3}-on-research`. Nothing merges until a person
+looks at all three and picks one.
+
+### Deploying each one
+
+```sh
+git checkout <tag-or-branch> && make deploy-device    # UI work; Debug is fine
+git checkout research                                 # back to the line
+```
+
+`make deploy-device` prints `DEPLOYED BUILD STAMP: <sha>-<timestamp>`. Use
+`deploy-release` instead if the attempt touches the capture flow, because the
+Debug stub cannot arm the shutter (matrix below).
+
+### Which attempt is on the phone right now
+
+The build stamp is the version label, and `git describe` decodes it. Take the
+sha from the deploy output, or from `event=launch buildStamp=…` in
+`sudo make logs-device`:
+
+```sh
+git describe --tags 87443aa      # -> activity-sheet-attempt-1
+git describe --tags 34b4d6c      # -> activity-graph-attempt-2-16-g34b4d6c
+```
+
+An exact tag name means the installed binary **is** that attempt. A
+`<tag>-<n>-g<sha>` answer means it is not — it is `n` commits past the nearest
+tag, i.e. an ordinary build. That distinction is the entire versioning story; a
+`-dirty` in the stamp voids it, because the sha then names a commit whose content
+is not what was compiled.
+
+### Rebasing an attempt onto a moved `research`
+
+Attempts go stale — the three `insulin-dosing` attempts were a month behind and
+none of them still built. Rebuild them on the current line, but **never move the
+original tag**: it is the record of what that attempt was. Make a new ref and
+say so in its name. The `-on-research` suffix above is that, and the naming is
+free — any suffix works as long as the original tag stays put.
+
+Deleting a tag once its attempt stops being interesting is fine; `git log` still
+holds the commit, and `git switch -c <name> <tag>` still spins a variant out of
+one while it exists.
 
 ## Debug vs Release stub matrix
 

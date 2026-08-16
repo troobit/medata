@@ -23,6 +23,8 @@ This development cycle currently runs along the 'research' branch, with intent t
 
 Less is more. The gate for app/UI work is: **does it build + does it look right on device**. Keep the MedataCore math tests green (`make test`); do not add new test scaffolding unless explicitly asked. The app-target files under `MeData/Tests/` and `MeData/UITests/` are **documentation contracts, not an executable suite** — no committed test target runs them; never claim to have run them or write new ones expecting execution (see `docs/agent-notes/ui-capture-flow.md`).
 
+Because that gate is a person looking at a screen, a UI surface worth deciding about SHOULD ship as **two or more attempts**, not one: commit each on a clean tree and tag it `<surface>-attempt-N`, or merge both behind a developer-phase switch when they can coexist. `git describe --tags <build-stamp sha>` then names which attempt is installed. Git branches and tags are the whole mechanism — build no tooling around it. Convention and the three shapes: `docs/agent-notes/device-build-and-test.md`, "Comparing UI attempts on the phone".
+
 ## Feature flags and generated artifacts
 
 - `HARNESS_ENABLED` — Debug-only; gates harness/CLI code out of the shipping iOS binary. Never make shipped code depend on it.
