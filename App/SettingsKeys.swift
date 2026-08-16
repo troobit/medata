@@ -27,6 +27,9 @@ nonisolated enum SettingsKeys {
     // Insulin metric chip: show/hide the dose markers on the Graph chart
     // (PRD regression-suggestion-integration App 9).
     static let trendsShowInsulin = "medata.trends.showInsulin"
+    // Activity metric chip: show/hide the activity band on the Graph chart
+    // (specs/data/activity-events Req 4.1).
+    static let trendsShowActivity = "medata.trends.showActivity"
 
     // Per-kind insulin product defaults (PRD regression-suggestion-integration
     // App 5). Free-text editable in Settings; the dose sheet reads them at
