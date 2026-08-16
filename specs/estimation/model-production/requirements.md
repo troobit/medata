@@ -81,8 +81,12 @@ This spec defines the repeatable process that takes the on-device food segmenter
 **Acceptance Criteria:**
 
 1. <a name="6.1"></a>The exported model SHALL be verified Apple-Neural-Engine-resident in Xcode's Core ML performance report (a human-gated step requiring Xcode and a Mac) before the MVP gate is met.  
-2. <a name="6.2"></a>A device capture run with the bundled Core ML segmenter on the v1 hardware floor (iPhone 13 Pro Max, a human-gated step) SHALL complete with `estimate.end success=true`, SHALL stamp `segmenterSource = "coreml_<modelVersion>"` (not the dev-stub tag), SHALL produce a finite carbohydrate value > 0, and SHALL produce a non-degenerate food mask whose coverage is plausible for the captured plate — a sanity check on the deployment distribution, distinct from the FoodSeg103 mIoU bar.  
+2. <a name="6.2"></a>A device capture run with the bundled Core ML segmenter on the v1 hardware floor (~~iPhone 13 Pro Max~~ **iPhone 16 Pro** — see the note below, a human-gated step) SHALL complete with `estimate.end success=true`, SHALL stamp `segmenterSource = "coreml_<modelVersion>"` (not the dev-stub tag), SHALL produce a finite carbohydrate value > 0, and SHALL produce a non-degenerate food mask whose coverage is plausible for the captured plate — a sanity check on the deployment distribution, distinct from the FoodSeg103 mIoU bar.  
 3. <a name="6.3"></a>The MVP gate SHALL be met when the export-eligibility gates ([3.2](#3.2), [3.5](#3.5), [4.2](#4.2), [4.3](#4.3)), bundling ([5.2](#5.2)), ANE residency ([6.1](#6.1)), and the on-device run ([6.2](#6.2)) all hold; it SHALL NOT require β_c calibration or the v1 numeric-accuracy bar.  
+
+*Note on the hardware floor in [6.2](#6.2) (added 2026-08-16).* The iPhone 13 Pro Max named above is superseded. `specs/estimation/segmenter-foundation/decision_log.md` Decision 22 moved the measured-target device to the iPhone 16 Pro, and `CLAUDE.md`'s hard-invariants block states the floor as "**Hardware floor: iPhone 16 Pro**". Because that supersession was recorded in a different spec's log, this requirement — the MVP gate's own — read as current for two `/spout` runs while naming a device no longer in use. The criterion is otherwise unchanged; only the device it names moves.
+
+The floor is a recommendation for measured targets, not an engine-boundary gate: the non-LiDAR two-view plus ID-1-card path is retained, not descoped (`segmenter-foundation` Decision 26), so a non-LiDAR iOS 26.5 device still runs the pipeline.
 
 ### 7. Uncalibrated Honesty at MVP
 
