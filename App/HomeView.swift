@@ -14,6 +14,13 @@ import SwiftUI
 // (ui-capture-flow.md gotcha).
 struct HomeView: View {
     let glucose: HomeGlucoseModel
+    // The outstanding-dose surface (specs/data/dose-schedule Req 2.4, 4.5).
+    // Empty when nothing is due, which is most of the day and is also the whole
+    // of the feature's inert state when no schedule is defined (Req 1.7).
+    var outstandingDoses: [OutstandingDose] = []
+    var onLogDose: (OutstandingDose) -> Void = { _ in }
+    var onAdjustDose: (OutstandingDose) -> Void = { _ in }
+    var onSkipDose: (OutstandingDose) -> Void = { _ in }
     let onCapture: () -> Void
     let onIntake: () -> Void
     let onDose: () -> Void
@@ -28,6 +35,7 @@ struct HomeView: View {
                 .foregroundStyle(Color.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             glucoseHeader
+            outstandingDoseSection
             Spacer()
             captureButton
             routeButton("Intake", systemImage: "fork.knife", identifier: "home.intake", action: onIntake)
@@ -40,6 +48,22 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.surfacePrimary)
         .task { await glucose.start() }
+    }
+
+    // UI attempt 1: a dedicated card per outstanding dose, above every route.
+    // The ledger is the source of truth here — the card appears because an
+    // occurrence is open, not because a notification was delivered or seen, so
+    // it carries the whole feature when authorisation is refused (Req 7.2).
+    @ViewBuilder
+    private var outstandingDoseSection: some View {
+        ForEach(outstandingDoses) { dose in
+            OutstandingDoseBanner(
+                dose: dose,
+                onLog: { onLogDose(dose) },
+                onAdjust: { onAdjustDose(dose) },
+                onSkip: { onSkipDose(dose) }
+            )
+        }
     }
 
     // The most recent reading, the one thing on home that is not a route

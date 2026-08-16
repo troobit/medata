@@ -1225,14 +1225,27 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             );
             CREATE INDEX IF NOT EXISTS dose_suggestions_timestamp
                 ON dose_suggestions(timestamp);
+            CREATE TABLE IF NOT EXISTS dose_occurrences (
+                id                TEXT    PRIMARY KEY,
+                schedule_id       TEXT    NOT NULL,
+                due_at            INTEGER NOT NULL,
+                outcome           TEXT    NOT NULL,
+                closed_at         INTEGER,
+                insulin_event_id  TEXT,
+                was_nominal       INTEGER
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS dose_occurrences_schedule
+                ON dose_occurrences(schedule_id, due_at);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '8')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '9')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '8' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 8 adds
+    // Idempotent: re-stamps schema_version to '9' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 9 adds
+    // dose_occurrences (specs/data/dose-schedule, design "The occurrence
+    // ledger"); version 8 added
     // dose_suggestions (specs/data/insulin-dosing, design "The ledger");
     // version 7 added
     // correction_records (specs/ui/meal-review, design "Correction store");
@@ -1244,7 +1257,7 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     // tables (Decision 10).
     private static func migrate(_ db: Database) throws {
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '8')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '9')"
         )
     }
 
@@ -1659,6 +1672,171 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             givenUnits: row["given_units"],
             insulinEventID: insulinEventIDString.flatMap(UUID.init(uuidString:)),
             buildStamp: row["build_stamp"]
+        )
+    }
+
+    // MARK: - Dose occurrences (specs/data/dose-schedule "The occurrence ledger")
+
+    public func openOccurrence(
+        scheduleID: UUID, dueAt: Date
+    ) async throws -> DoseOccurrence {
+        let dueAtMs = Int64(dueAt.timeIntervalSince1970 * 1000)
+        return try await queue.write { db in
+            // INSERT OR IGNORE against the UNIQUE (schedule_id, due_at) index:
+            // opening the same due instant twice — two foreground passes in a
+            // second, or a foreground racing a notification handler — yields
+            // ONE row, not two. Req 2.3's cap is enforced by the schema rather
+            // than by every caller remembering to check first.
+            try db.execute(
+                sql: """
+                    INSERT OR IGNORE INTO dose_occurrences
+                        (id, schedule_id, due_at, outcome, closed_at,
+                         insulin_event_id, was_nominal)
+                    VALUES (?, ?, ?, ?, NULL, NULL, NULL)
+                    """,
+                arguments: [
+                    UUID().uuidString, scheduleID.uuidString, dueAtMs,
+                    OccurrenceOutcome.outstanding.rawValue
+                ]
+            )
+            guard let row = try Row.fetchOne(
+                db,
+                sql: """
+                    SELECT * FROM dose_occurrences
+                    WHERE schedule_id = ? AND due_at = ?
+                    """,
+                arguments: [scheduleID.uuidString, dueAtMs]
+            ) else {
+                throw PersistenceError.corruptRecord(
+                    "dose_occurrences row vanished after insert: \(scheduleID) @ \(dueAtMs)"
+                )
+            }
+            return try Self.doseOccurrence(from: row)
+        }
+        // No eventsDidChange: occurrence rows are not `events` rows. Only the
+        // insulin event fires it, so history refreshes exactly once per logged
+        // dose rather than twice (dose_suggestions / estimation_outcomes
+        // convention).
+    }
+
+    public func closeOccurrence(
+        id: UUID,
+        outcome: OccurrenceOutcome,
+        closedAt: Date,
+        insulinEventID: UUID? = nil,
+        wasNominal: Bool? = nil
+    ) async throws -> Bool {
+        // Guard the vocabulary at the boundary: `outstanding` is the open
+        // state, not an outcome, and closing to it would make the compare-and-
+        // set a no-op that still reported success.
+        guard outcome != .outstanding else { return false }
+        let closedAtMs = Int64(closedAt.timeIntervalSince1970 * 1000)
+        return try await queue.write { db in
+            // The compare-and-set Req 4.6 rests on. `WHERE outcome =
+            // 'outstanding'` inside the write transaction means a second action
+            // on the same occurrence — a stale follow-up notification tapped
+            // after the dose was logged in-app — matches zero rows and reports
+            // no transition, so the caller writes no insulin event. This is a
+            // single-process, single-writer path, so unlike the widget snapshot
+            // guard it is exact rather than advisory.
+            try db.execute(
+                sql: """
+                    UPDATE dose_occurrences
+                    SET outcome = ?, closed_at = ?, insulin_event_id = ?,
+                        was_nominal = ?
+                    WHERE id = ? AND outcome = ?
+                    """,
+                arguments: [
+                    outcome.rawValue, closedAtMs, insulinEventID?.uuidString,
+                    wasNominal, id.uuidString,
+                    OccurrenceOutcome.outstanding.rawValue
+                ]
+            )
+            return db.changesCount > 0
+        }
+    }
+
+    public func closeOccurrencesAsMissed(
+        ids: [UUID], closedAt: Date
+    ) async throws -> Int {
+        guard !ids.isEmpty else { return 0 }
+        let closedAtMs = Int64(closedAt.timeIntervalSince1970 * 1000)
+        return try await queue.write { db in
+            var closed = 0
+            for id in ids {
+                // Each row carries the same outstanding-only gate as
+                // `closeOccurrence`, so a row already logged or skipped between
+                // the lazy read and this write is left exactly as it is.
+                try db.execute(
+                    sql: """
+                        UPDATE dose_occurrences
+                        SET outcome = ?, closed_at = ?
+                        WHERE id = ? AND outcome = ?
+                        """,
+                    arguments: [
+                        OccurrenceOutcome.missed.rawValue, closedAtMs,
+                        id.uuidString, OccurrenceOutcome.outstanding.rawValue
+                    ]
+                )
+                closed += db.changesCount
+            }
+            return closed
+        }
+    }
+
+    public func outstandingOccurrences() async throws -> [DoseOccurrence] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM dose_occurrences
+                    WHERE outcome = ?
+                    ORDER BY due_at ASC, id ASC
+                    """,
+                arguments: [OccurrenceOutcome.outstanding.rawValue]
+            ).map(Self.doseOccurrence(from:))
+        }
+    }
+
+    public func doseOccurrences(limit: Int) async throws -> [DoseOccurrence] {
+        try await queue.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM dose_occurrences
+                    ORDER BY due_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                arguments: [limit]
+            ).map(Self.doseOccurrence(from:))
+        }
+    }
+
+    private static func doseOccurrence(from row: Row) throws -> DoseOccurrence {
+        let idString: String = row["id"]
+        let scheduleIDString: String = row["schedule_id"]
+        guard let id = UUID(uuidString: idString),
+              let scheduleID = UUID(uuidString: scheduleIDString) else {
+            throw PersistenceError.corruptRecord(
+                "invalid dose_occurrences UUID: \(idString) / \(scheduleIDString)"
+            )
+        }
+        let outcomeRaw: String = row["outcome"]
+        guard let outcome = OccurrenceOutcome(rawValue: outcomeRaw) else {
+            throw PersistenceError.corruptRecord(
+                "unknown dose_occurrences outcome: \(outcomeRaw)"
+            )
+        }
+        let closedAtMs: Int64? = row["closed_at"]
+        let insulinEventIDString: String? = row["insulin_event_id"]
+        return DoseOccurrence(
+            id: id,
+            scheduleID: scheduleID,
+            dueAt: Date(timeIntervalSince1970: Double(row["due_at"] as Int64) / 1000),
+            outcome: outcome,
+            closedAt: closedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) },
+            insulinEventID: insulinEventIDString.flatMap(UUID.init(uuidString:)),
+            wasNominal: row["was_nominal"]
         )
     }
 

@@ -49,6 +49,12 @@
 		11AA0003300000000272C1E0 /* MealReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AA0004300000000272C1E0 /* MealReviewView.swift */; };
 		B66AE5539A5F478E793B981F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FA70734182528B1ECAEDD1 /* HomeView.swift */; };
 		877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851614006E459D54779E1B6 /* IntakeView.swift */; };
+		4B1E7B9937A77958F1E8D680 /* DoseScheduleSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E70E7F62D219422D49967FE /* DoseScheduleSettingsSection.swift */; };
+		935ED850EFE06735E30BDEAC /* OutstandingDoseBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E0489A4630C3696AC8063E /* OutstandingDoseBanner.swift */; };
+		5108CA01B23844E463832059 /* DoseNotificationDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A5620B758BC0A039530B0D8 /* DoseNotificationDelegate.swift */; };
+		05D9E2C838D3ADA4D563C08E /* DoseScheduleModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2ADA9AC8AC0FDE4FD937BEF /* DoseScheduleModel.swift */; };
+		ED7B2BD8C8539135015C87C4 /* LocalReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C67F25AF64599711FA1E6B /* LocalReminderScheduler.swift */; };
+		FDBF38B04D3418E579A89AF8 /* DoseScheduleSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 766DAF32874F3F5DA9CF0DB3 /* DoseScheduleSettings.swift */; };
 		180BF780028C4E409B5B127F /* CarbEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85695F786A184CFFA741C58F /* CarbEntryModel.swift */; };
 		59760C101F974CC8B530459B /* CarbEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469D6F69D437403394586C88 /* CarbEntrySheet.swift */; };
 		7FDE038E77DB431B8DC8CA93 /* QuickPresetEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */; };
@@ -110,6 +116,12 @@
 		11AA0004300000000272C1E0 /* MealReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReviewView.swift; path = ../App/MealReviewView.swift; sourceTree = SOURCE_ROOT; };
 		39FA70734182528B1ECAEDD1 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomeView.swift; path = ../App/HomeView.swift; sourceTree = SOURCE_ROOT; };
 		0851614006E459D54779E1B6 /* IntakeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IntakeView.swift; path = ../App/IntakeView.swift; sourceTree = SOURCE_ROOT; };
+		1E70E7F62D219422D49967FE /* DoseScheduleSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseScheduleSettingsSection.swift; path = ../App/DoseScheduleSettingsSection.swift; sourceTree = SOURCE_ROOT; };
+		99E0489A4630C3696AC8063E /* OutstandingDoseBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OutstandingDoseBanner.swift; path = ../App/OutstandingDoseBanner.swift; sourceTree = SOURCE_ROOT; };
+		3A5620B758BC0A039530B0D8 /* DoseNotificationDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseNotificationDelegate.swift; path = ../App/DoseNotificationDelegate.swift; sourceTree = SOURCE_ROOT; };
+		B2ADA9AC8AC0FDE4FD937BEF /* DoseScheduleModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseScheduleModel.swift; path = ../App/DoseScheduleModel.swift; sourceTree = SOURCE_ROOT; };
+		E2C67F25AF64599711FA1E6B /* LocalReminderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalReminderScheduler.swift; path = ../App/LocalReminderScheduler.swift; sourceTree = SOURCE_ROOT; };
+		766DAF32874F3F5DA9CF0DB3 /* DoseScheduleSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseScheduleSettings.swift; path = ../App/DoseScheduleSettings.swift; sourceTree = SOURCE_ROOT; };
 		85695F786A184CFFA741C58F /* CarbEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CarbEntryModel.swift; path = ../App/CarbEntryModel.swift; sourceTree = SOURCE_ROOT; };
 		469D6F69D437403394586C88 /* CarbEntrySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CarbEntrySheet.swift; path = ../App/CarbEntrySheet.swift; sourceTree = SOURCE_ROOT; };
 		7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QuickPresetEditSheet.swift; path = ../App/QuickPresetEditSheet.swift; sourceTree = SOURCE_ROOT; };
@@ -251,6 +263,12 @@
 				7A31C0DE5E10A4B29F44E103 /* BenchmarkView.swift */,
 				39FA70734182528B1ECAEDD1 /* HomeView.swift */,
 				0851614006E459D54779E1B6 /* IntakeView.swift */,
+				1E70E7F62D219422D49967FE /* DoseScheduleSettingsSection.swift */,
+				99E0489A4630C3696AC8063E /* OutstandingDoseBanner.swift */,
+				3A5620B758BC0A039530B0D8 /* DoseNotificationDelegate.swift */,
+				B2ADA9AC8AC0FDE4FD937BEF /* DoseScheduleModel.swift */,
+				E2C67F25AF64599711FA1E6B /* LocalReminderScheduler.swift */,
+				766DAF32874F3F5DA9CF0DB3 /* DoseScheduleSettings.swift */,
 				85695F786A184CFFA741C58F /* CarbEntryModel.swift */,
 				469D6F69D437403394586C88 /* CarbEntrySheet.swift */,
 				7D626798E72C409F8A84C099 /* QuickPresetEditSheet.swift */,
@@ -456,6 +474,12 @@
 				7A31C0DE5E10A4B29F44E104 /* BenchmarkView.swift in Sources */,
 				B66AE5539A5F478E793B981F /* HomeView.swift in Sources */,
 				877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */,
+				4B1E7B9937A77958F1E8D680 /* DoseScheduleSettingsSection.swift in Sources */,
+				935ED850EFE06735E30BDEAC /* OutstandingDoseBanner.swift in Sources */,
+				5108CA01B23844E463832059 /* DoseNotificationDelegate.swift in Sources */,
+				05D9E2C838D3ADA4D563C08E /* DoseScheduleModel.swift in Sources */,
+				ED7B2BD8C8539135015C87C4 /* LocalReminderScheduler.swift in Sources */,
+				FDBF38B04D3418E579A89AF8 /* DoseScheduleSettings.swift in Sources */,
 				180BF780028C4E409B5B127F /* CarbEntryModel.swift in Sources */,
 				59760C101F974CC8B530459B /* CarbEntrySheet.swift in Sources */,
 				7FDE038E77DB431B8DC8CA93 /* QuickPresetEditSheet.swift in Sources */,

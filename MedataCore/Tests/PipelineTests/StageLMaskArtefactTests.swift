@@ -211,6 +211,24 @@ private struct ThrowingStore: PersistenceStore {
     func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord] {
         fatalError("unused")
     }
+    func openOccurrence(scheduleID: UUID, dueAt: Date) async throws -> DoseOccurrence {
+        fatalError("unused")
+    }
+    func closeOccurrence(
+        id: UUID, outcome: OccurrenceOutcome, closedAt: Date,
+        insulinEventID: UUID?, wasNominal: Bool?
+    ) async throws -> Bool {
+        fatalError("unused")
+    }
+    func closeOccurrencesAsMissed(ids: [UUID], closedAt: Date) async throws -> Int {
+        fatalError("unused")
+    }
+    func outstandingOccurrences() async throws -> [DoseOccurrence] {
+        fatalError("unused")
+    }
+    func doseOccurrences(limit: Int) async throws -> [DoseOccurrence] {
+        fatalError("unused")
+    }
     func benchmarkMeals() async throws -> [BenchmarkMeal] {
         fatalError("unused")
     }
