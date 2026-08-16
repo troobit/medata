@@ -22,6 +22,9 @@ struct AppRoot: View {
     let glucoseConnections: GlucoseConnectionsModel
     let visionCardDetector: VisionCardDetector?
     let preShutterSegmenter: PreShutterSegmenter?
+    // Set by the ADJUST notification action, which is `.foreground` and so
+    // arrives with the app coming to the front (dose-schedule Decision 2).
+    let adjustRouter: DoseAdjustRouter
 
     @State private var activeSheet: ActiveSheet?
     // The insulin dose sheet is a plain sheet, not a cover (Decision 10),
@@ -37,6 +40,15 @@ struct AppRoot: View {
     // HomeView is rebuilt on each of those, and a @State inside it would
     // re-subscribe every time.
     @State private var homeGlucose: HomeGlucoseModel
+    // The dose schedule (specs/data/dose-schedule). Owned here for the same
+    // reason `homeGlucose` is: HomeView is rebuilt on every cover
+    // present/dismiss, and the outstanding set must survive that.
+    @State private var doseSchedule: DoseScheduleModel
+    // Which outstanding dose the pre-seeded sheet is adjusting, if any. The
+    // sheet writes the insulin event; this is what tells the schedule which
+    // occurrence that event discharges (Req 5.2).
+    @State private var adjustingDose: OutstandingDose?
+    @Environment(\.scenePhase) private var scenePhase
 
     // The deep links under the `medata` scheme — each a single-tap lock-screen
     // widget target (PRD amendment to App 10; glucose-lock-widget Req 7.1).
@@ -52,7 +64,8 @@ struct AppRoot: View {
         store: any PersistenceStore,
         glucoseConnections: GlucoseConnectionsModel,
         visionCardDetector: VisionCardDetector? = nil,
-        preShutterSegmenter: PreShutterSegmenter? = nil
+        preShutterSegmenter: PreShutterSegmenter? = nil,
+        adjustRouter: DoseAdjustRouter
     ) {
         self.captureModel = captureModel
         self.engine = engine
@@ -60,7 +73,9 @@ struct AppRoot: View {
         self.glucoseConnections = glucoseConnections
         self.visionCardDetector = visionCardDetector
         self.preShutterSegmenter = preShutterSegmenter
+        self.adjustRouter = adjustRouter
         _homeGlucose = State(initialValue: HomeGlucoseModel(store: store))
+        _doseSchedule = State(initialValue: DoseScheduleModel(store: store))
     }
 
     // A single optional so the covers are mutually exclusive by construction —
@@ -80,6 +95,13 @@ struct AppRoot: View {
     var body: some View {
         HomeView(
             glucose: homeGlucose,
+            outstandingDoses: doseSchedule.outstanding,
+            onLogDose: { dose in Task { await doseSchedule.logNominal(dose) } },
+            onAdjustDose: { dose in
+                adjustingDose = dose
+                showInsulinSheet = true
+            },
+            onSkipDose: { dose in Task { await doseSchedule.skip(dose) } },
             onCapture: {
                 // The benchmark tag must not survive into a non-benchmark
                 // capture — clear it here in case a deferred benchmark
@@ -128,6 +150,7 @@ struct AppRoot: View {
                 NavigationStack {
                     SettingsView(
                         store: store,
+                        doseSchedule: doseSchedule,
                         hasLiDAR: captureModel.supportsLiDAR,
                         glucoseConnections: glucoseConnections,
                         captureLineage: captureModel.segmenterSource,
@@ -152,6 +175,7 @@ struct AppRoot: View {
         // widget tap arriving while this sheet is up would otherwise be set and
         // then silently discarded (glucose-lock-widget design, Deep link).
         .sheet(isPresented: $showInsulinSheet, onDismiss: {
+            adjustingDose = nil
             switch pendingDeepLink {
             case .captureCover:
                 pendingDeepLink = nil
@@ -163,7 +187,20 @@ struct AppRoot: View {
                 break
             }
         }) {
-            InsulinDoseSheet(store: store)
+            // Pre-seeded when an outstanding dose is being adjusted (Req 5.1);
+            // the plain dose sheet otherwise. The sheet is the same one either
+            // way and gains no schedule-specific controls.
+            InsulinDoseSheet(
+                store: store,
+                seedUnits: adjustingDose?.nominalUnits,
+                seedKind: adjustingDose?.schedule.kind,
+                onSaved: { eventID in
+                    guard let dose = adjustingDose else { return }
+                    Task {
+                        await doseSchedule.recordAdjusted(dose, insulinEventID: eventID)
+                    }
+                }
+            )
         }
         .onChange(of: activeSheet) { old, new in
             // The AR session runs only while Capture is the frontmost cover.
@@ -181,6 +218,37 @@ struct AppRoot: View {
         }
         .onOpenURL { url in
             handleDeepLink(url)
+        }
+        // The lazy pass of design.md section 5. Occurrences open, the
+        // missed-successor rule runs and the notification plan is rebuilt when
+        // something LOOKS — never on a timer and never on a background task,
+        // because the CGM `BGAppRefreshTask` already spends that budget.
+        .task { await doseSchedule.refresh() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await doseSchedule.refresh() }
+            }
+        }
+        .onChange(of: adjustRouter.pending) { _, pending in
+            guard let pending else { return }
+            adjustRouter.pending = nil
+            presentAdjust(for: pending)
+        }
+    }
+
+    // The ADJUST action arrives with the app coming to the front. Route it
+    // through the same `pendingDeepLink` resume every other deep link uses, so
+    // landing during a dismissing presentation is not silently dropped
+    // (docs/agent-notes/insulin-dose-ui.md).
+    private func presentAdjust(for pending: PendingDoseAdjust) {
+        adjustingDose = doseSchedule.outstanding.first {
+            $0.schedule.id == pending.scheduleID
+        }
+        if activeSheet == nil {
+            showInsulinSheet = true
+        } else {
+            pendingDeepLink = .insulinSheet
+            activeSheet = nil
         }
     }
 

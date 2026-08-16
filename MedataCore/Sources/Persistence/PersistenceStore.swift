@@ -51,7 +51,10 @@ public enum EventType {
 // Whether a dose is fast-acting meal/correction insulin or background
 // insulin. Raw values are the exact `metadata.kind` strings in the medreg
 // convention.
-public enum InsulinKind: String, Sendable, Equatable, CaseIterable {
+// `Codable` so `ScheduledDose` (specs/data/dose-schedule) can round-trip
+// through the settings store as a plain Codable array; the raw values are the
+// medreg strings above, so the encoded form is the convention's own vocabulary.
+public enum InsulinKind: String, Sendable, Equatable, CaseIterable, Codable {
     case bolus
     case basal
 }
@@ -624,4 +627,55 @@ public protocol PersistenceStore: Sendable {
     // Req 7.2 read path (ledger review / export). Returns at most `limit` rows
     // ordered newest first ((timestamp, id) descending).
     func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord]
+
+    // specs/data/dose-schedule Req 2.1, 2.2. Opens the occurrence for one
+    // scheduled dose at one due instant, returning the row whether it was just
+    // created or already existed. Idempotent by construction: a UNIQUE
+    // (schedule_id, due_at) index plus INSERT OR IGNORE means two foreground
+    // passes — or a foreground racing the notification handler — yield ONE
+    // outstanding row, which is what caps outstanding occurrences at one per
+    // schedule (Req 2.3). Occurrence rows are not `events` rows: no
+    // `eventsDidChange` interaction, so history refreshes exactly once per
+    // logged dose rather than twice.
+    func openOccurrence(scheduleID: UUID, dueAt: Date) async throws -> DoseOccurrence
+
+    // Req 2.2, 4.3, 4.6. A genuine COMPARE-AND-SET: records the outcome only if
+    // the row is still `outstanding`, and returns whether it transitioned. The
+    // caller writes the insulin event ONLY when it did — that is the whole of
+    // Req 4.6's idempotency, and it is why a stale follow-up notification tapped
+    // after the dose was logged elsewhere writes nothing at all.
+    //
+    // `closedAt` is the moment the dose was LOGGED, never the scheduled time
+    // (Req 4.3); `dueAt` minus `closedAt` gives lateness by subtraction with no
+    // extra column (Req 4.4). `insulinEventID` and `wasNominal` stay nil for a
+    // skip or a miss, which write no insulin event of any amount (Req 6.3).
+    // Passing `.outstanding` is rejected with `false` rather than performing a
+    // no-op that reports success.
+    @discardableResult
+    func closeOccurrence(
+        id: UUID,
+        outcome: OccurrenceOutcome,
+        closedAt: Date,
+        insulinEventID: UUID?,
+        wasNominal: Bool?
+    ) async throws -> Bool
+
+    // Req 2.3, 6.2. The write half of the missed-successor rule
+    // (`DoseScheduleMath.occurrencesToCloseAsMissed` computes the ids). One
+    // transaction; each row carries the same outstanding-only gate, so a row
+    // logged or skipped between the lazy read and this write is untouched.
+    // Returns how many rows actually transitioned.
+    @discardableResult
+    func closeOccurrencesAsMissed(ids: [UUID], closedAt: Date) async throws -> Int
+
+    // Req 2.4. Every open occurrence, oldest first. The in-app outstanding
+    // surface reads THIS — the ledger is the source of truth and notifications
+    // are a view onto it, so the row renders whether or not a notification was
+    // ever delivered or seen.
+    func outstandingOccurrences() async throws -> [DoseOccurrence]
+
+    // Read path for review and export: at most `limit` rows, newest due first.
+    // Carries the `dueAt`/`closedAt` pairs the interval and cutoff are meant to
+    // be set from once real use has accumulated (design.md open question 1).
+    func doseOccurrences(limit: Int) async throws -> [DoseOccurrence]
 }
