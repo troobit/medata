@@ -13,7 +13,12 @@
 	<!-- Custom URL scheme (PRD regression-suggestion-integration App 10):
 	     medata://insulin/add opens the dose-entry sheet (AppRoot.onOpenURL).
 	     Lives here because CFBundleURLTypes cannot be expressed as an
-	     INFOPLIST_KEY_ build setting. -->
+	     INFOPLIST_KEY_ build setting.
+	     The array registers SCHEMES, not links: medata://capture,
+	     medata://graph and medata://activity/add
+	     (specs/data/activity-events Req 3.5) all arrive through this one
+	     entry and are told apart by host and path in AppRoot.handleDeepLink.
+	     A new link therefore adds no element here. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

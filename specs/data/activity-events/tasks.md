@@ -33,7 +33,7 @@ references:
 
 ## Entry
 
-- [ ] 4. `ActivityModel` and `ActivitySheet` <!-- id:av4hjd2 -->
+- [x] 4. `ActivityModel` and `ActivitySheet` <!-- id:av4hjd2 -->
   - Medium-detent `.sheet` modelled on `InsulinDoseSheet`/`InsulinDoseModel`, not a full-screen cover
   - Kind chips preselected to the most recently used kind via a new `SettingsKeys` entry, so a repeat activity is open → Save
   - Optional duration stepper, blank by default, blank saves nil and never blocks Save
@@ -44,7 +44,7 @@ references:
   - Blocked-by: av2mqr4 (Add the store surface — save, delete, and the lookback query)
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [2.4](requirements.md#2.4), [4.4](requirements.md#4.4)
 
-- [ ] 5. Deep link `medata://activity/add` <!-- id:av5rfk6 -->
+- [x] 5. Deep link `medata://activity/add` <!-- id:av5rfk6 -->
   - Added to the existing `CFBundleURLTypes` array in the partial `MeData/Info.plist` — it cannot be an `INFOPLIST_KEY_` build setting
   - Handled in `AppRoot.handleDeepLink`, inheriting the existing `pendingDeepLink` resume so arrival during a dismissing presentation is not silently dropped
   - Blocked-by: av4hjd2 (`ActivityModel` and `ActivitySheet`)
@@ -52,7 +52,7 @@ references:
 
 ## Display
 
-- [ ] 6. Graph day/week/month rendering <!-- id:av6zcx1 -->
+- [x] 6. Graph day/week/month rendering <!-- id:av6zcx1 -->
   - Day: span mark from start to start+duration where a duration exists, point mark where it does not; own band below the insulin band, keyed off the same `glucoseAxisMax` fraction so it stays clear of the glucose plot under Auto and Fixed y-scales
   - Week/Month: per-day count x-aligned with the carbohydrate buckets via `TrendsMath.dailyBuckets`
   - New `Colors.swift` tokens distinct from both insulin series and the glucose trace
@@ -60,7 +60,7 @@ references:
   - Blocked-by: av2mqr4 (Add the store surface — save, delete, and the lookback query)
   - Requirements: [4.1](requirements.md#4.1), [4.2](requirements.md#4.2)
 
-- [ ] 7. Records row and swipe-to-delete <!-- id:av7bnv5 -->
+- [x] 7. Records row and swipe-to-delete <!-- id:av7bnv5 -->
   - Row carries kind label and duration; deletion by the same swipe the insulin rows use
   - Needs the `List`-inside-`ScrollView` treatment with a pinned height — without the height pin it collapses to zero
   - Blocked-by: av2mqr4 (Add the store surface — save, delete, and the lookback query)

@@ -161,6 +161,8 @@ struct RecordsView: View {
             GlucoseRecordRow(reading: reading)
         case .intake(let record):
             IntakeRecordRow(record: record)
+        case .activity(let entry):
+            ActivityRecordRow(entry: entry)
         }
     }
 }
@@ -357,6 +359,39 @@ private struct IntakeRecordRow: View {
             Spacer()
         }
         .accessibilityIdentifier("records.row.intake")
+    }
+}
+
+// Activity row: kind label and duration (specs/data/activity-events Req 4.3).
+// No navigation; deleted by the list's onDelete swipe, the same gesture the
+// insulin rows use (Req 3.6). An unrecorded duration shows nothing at all
+// rather than "0 min" — absent and zero are different facts (Req 1.5).
+private struct ActivityRecordRow: View {
+    let entry: ActivityEntry
+
+    var body: some View {
+        HStack {
+            Image(systemName: entry.kind.symbolName)
+                .foregroundStyle(Color.seriesActivity)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(entry.kind.displayLabel)
+                        .font(.headline)
+                        .foregroundStyle(Color.textPrimary)
+                    if let minutes = entry.durationMinutes {
+                        Text("\(Int(minutes.rounded())) min")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+                Text(timeString(entry.timestamp))
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
+            }
+            Spacer()
+        }
+        .accessibilityIdentifier("records.row.activity")
     }
 }
 
