@@ -49,6 +49,7 @@
 		11AA0003300000000272C1E0 /* MealReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AA0004300000000272C1E0 /* MealReviewView.swift */; };
 		B66AE5539A5F478E793B981F /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FA70734182528B1ECAEDD1 /* HomeView.swift */; };
 		877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0851614006E459D54779E1B6 /* IntakeView.swift */; };
+		7F8CDFC09E427BB01C8EDC14 /* OutstandingDoseControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE98C712948C858C8C179C8 /* OutstandingDoseControl.swift */; };
 		4B1E7B9937A77958F1E8D680 /* DoseScheduleSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E70E7F62D219422D49967FE /* DoseScheduleSettingsSection.swift */; };
 		935ED850EFE06735E30BDEAC /* OutstandingDoseBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E0489A4630C3696AC8063E /* OutstandingDoseBanner.swift */; };
 		5108CA01B23844E463832059 /* DoseNotificationDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A5620B758BC0A039530B0D8 /* DoseNotificationDelegate.swift */; };
@@ -116,6 +117,7 @@
 		11AA0004300000000272C1E0 /* MealReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReviewView.swift; path = ../App/MealReviewView.swift; sourceTree = SOURCE_ROOT; };
 		39FA70734182528B1ECAEDD1 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomeView.swift; path = ../App/HomeView.swift; sourceTree = SOURCE_ROOT; };
 		0851614006E459D54779E1B6 /* IntakeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IntakeView.swift; path = ../App/IntakeView.swift; sourceTree = SOURCE_ROOT; };
+		4FE98C712948C858C8C179C8 /* OutstandingDoseControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OutstandingDoseControl.swift; path = ../App/OutstandingDoseControl.swift; sourceTree = SOURCE_ROOT; };
 		1E70E7F62D219422D49967FE /* DoseScheduleSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseScheduleSettingsSection.swift; path = ../App/DoseScheduleSettingsSection.swift; sourceTree = SOURCE_ROOT; };
 		99E0489A4630C3696AC8063E /* OutstandingDoseBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OutstandingDoseBanner.swift; path = ../App/OutstandingDoseBanner.swift; sourceTree = SOURCE_ROOT; };
 		3A5620B758BC0A039530B0D8 /* DoseNotificationDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseNotificationDelegate.swift; path = ../App/DoseNotificationDelegate.swift; sourceTree = SOURCE_ROOT; };
@@ -263,6 +265,7 @@
 				7A31C0DE5E10A4B29F44E103 /* BenchmarkView.swift */,
 				39FA70734182528B1ECAEDD1 /* HomeView.swift */,
 				0851614006E459D54779E1B6 /* IntakeView.swift */,
+				4FE98C712948C858C8C179C8 /* OutstandingDoseControl.swift */,
 				1E70E7F62D219422D49967FE /* DoseScheduleSettingsSection.swift */,
 				99E0489A4630C3696AC8063E /* OutstandingDoseBanner.swift */,
 				3A5620B758BC0A039530B0D8 /* DoseNotificationDelegate.swift */,
@@ -474,6 +477,7 @@
 				7A31C0DE5E10A4B29F44E104 /* BenchmarkView.swift in Sources */,
 				B66AE5539A5F478E793B981F /* HomeView.swift in Sources */,
 				877E65EB15FB2650021F56AB /* IntakeView.swift in Sources */,
+				7F8CDFC09E427BB01C8EDC14 /* OutstandingDoseControl.swift in Sources */,
 				4B1E7B9937A77958F1E8D680 /* DoseScheduleSettingsSection.swift in Sources */,
 				935ED850EFE06735E30BDEAC /* OutstandingDoseBanner.swift in Sources */,
 				5108CA01B23844E463832059 /* DoseNotificationDelegate.swift in Sources */,

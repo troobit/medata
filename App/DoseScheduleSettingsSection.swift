@@ -56,7 +56,24 @@ extension SettingsView {
                 Text(cutoffLabel)
                     .foregroundStyle(Color.textSecondary)
             }
+            // The two attempts at the in-app surface, side by side on one
+            // build (tags `dose-schedule-ui-attempt-1` and `-2`). A comparison
+            // switch for the phone, not a feature — it goes when one of the two
+            // wins.
+            Picker("Surface", selection: surfaceStyleBinding) {
+                Text("Card").tag(DoseScheduleSettings.SurfaceStyle.banner)
+                Text("Dose control").tag(DoseScheduleSettings.SurfaceStyle.doseRoute)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("settings.doseSurface")
         }
+    }
+
+    private var surfaceStyleBinding: Binding<DoseScheduleSettings.SurfaceStyle> {
+        Binding(
+            get: { doseSchedule.surfaceStyle },
+            set: { doseSchedule.surfaceStyle = $0 }
+        )
     }
 
     private func scheduleRow(_ schedule: ScheduledDose) -> some View {
