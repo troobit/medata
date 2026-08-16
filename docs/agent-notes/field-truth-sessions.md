@@ -5,6 +5,87 @@ evidence base for β_c calibration and class-coverage decisions. Pull the
 outcome rows and bundles per the devicectl recipe in
 `device-build-and-test.md`.
 
+## 2026-08-16 — toast and a cereal bowl, model `coreml_ab812dc3aa9d`, build `a33cb5d-20260815-231735` (Release, clean tree)
+
+The `myfoodrepo-bridge` task 7 capture pass. No scale truth taken — the developer
+judged by eye, so the numbers below are against nominal portions, not weighed
+ground truth. Every attempt wrote a bundle to `Documents/captures/`.
+
+**This session is what closed task 6.** All nine outcome rows carry
+`modelVersion=coreml_ab812dc3aa9d` on a build installed the night before, which
+is the live-lineage evidence the launch log cannot give (see
+`device-build-and-test.md`, "`segmenterSource` has two forms").
+
+### Scene 1 — one slice of toast, 11:42–11:44
+
+| Time | Path | Outcome | Estimate / failure |
+|---|---|---|---|
+| 11:42:56 | single-view LiDAR | success | `bread_wholemeal` 188.9 cm³ → 75.6 g / **28.7 g carbs** |
+| 11:43:21 | two-view SfS | refused | `noFoodVolumeRecovered`, oblique 28.2° |
+| 11:44:09 | two-view SfS | refused | `noFoodPixels`, no oblique mask at all |
+| 11:44:33 | two-view SfS | refused | `noFoodVolumeRecovered`, oblique 29.3° |
+
+Nominal for one medium wholemeal slice is ~36 g / ~15 g carbs, so the LiDAR
+reading is about **2x over** — the familiar direction. `planeReference=edgeBand`,
+`planeRingBandMediansMm=[3.75, 5.49, 6.90]`, median **5.15 mm**: the same
+plane-below-the-table mechanism as the 26.1 mm reproductions below, an order of
+magnitude smaller this time. Solving the excess over a nominal ~110 cm³ against a
+5.15 mm offset implies a ~150 cm² footprint, about one slice — self-consistent,
+but inferred, not weighed. **Take a scale truth on the next flat-food capture**;
+this session cannot settle whether the offset shrank or the slice was thick.
+
+### Scene 2 — a bowl of milk, yogurt and submerged Weetbix, 11:55
+
+| Time | Path | Outcome | Estimate / failure |
+|---|---|---|---|
+| 11:55:31 | two-view SfS | refused | `noFoodPixels`; `supportplane.end failure=emptyFoodMask candidates=0`, oblique 18.2° |
+| 11:55:33 | two-view SfS | refused | same, same frame |
+| 11:55:34 | two-view SfS | refused | `worldTrackingDegraded` at oblique capture |
+| 11:55:43 | two-view SfS | success | `bread_wholemeal` 63.8 cm³ + `tomato` 246.6 cm³ = **14.5 g carbs**; oblique 25.3° |
+| 11:55:56 | single-view LiDAR | success | `cheese` 66.9 cm³ → 73.6 g / **0.07 g carbs** |
+
+Every mask read `topClass=33 topClassPercent=94–98` — class 33 is `background`
+(`ClassPalette.swift:69`) — leaving 0–2 % food coverage, against 8–10 % on the
+toast.
+
+**This is not a cereal misclassification, and reading it as one would send the
+next retrain in the wrong direction.** The developer's account of the scene:
+the visible surface was milk and yogurt, with the Weetbix submerged beneath it.
+So `cereal` (24) was not visible to be predicted, `milk` (28) exists as a liquid
+class but was not chosen, and **yogurt has no class in the palette at all**. No
+correct answer was available to the segmenter. The gap is that the pipeline
+estimates what it can see and has no concept of food occluded beneath a liquid
+or another food — a bowl whose contents are mostly hidden is outside what the
+visual hull plus a surface segmentation can express, however the model is
+trained. Adding cereal training images does not address it.
+
+**Third reproduction of the dangerous-direction failure.** `cheese` at 0.07 g
+carbs for a breakfast bowl repeats the pattern of `carrot` at 1.50 g for bread
+(2026-08-05, below): a confident success whose wrong class hides a large carb
+load. For a dosing tool an under-read is the direction that harms; the toast's
+2x over-read at least errs safe.
+
+**The bowl defeats the edge-band plane reference.** The LiDAR capture fitted
+`planeReference=edgeBand` with a ring median of **23.3 mm** — the ring is sitting
+on the bowl rim, not the table — while the two-view capture of the same scene
+fitted `foodSupport` and got **1.57 mm**. That is the sharpest edgeBand-vs-
+foodSupport contrast recorded so far and it is direct evidence for
+`estimation/support-plane-reference`: whatever else it settles, the reference
+must not be the rim of the vessel.
+
+### On the two-view carve
+
+Mixed, and it partly rehabilitates `specs/bugfixes/two-view-carve-no-volume`,
+whose Resolution blames a mis-aimed oblique and left the on-device verification
+open. Today the carve **recovered volume at an oblique of 25.3°** — dead on the
+target ring — and recovered nothing at 28.2° and 29.3°, both inside the 10–40°
+arming band. Aim matters more than "inside the band" captures. What that report
+still does not explain: the 28.2°/29.3° attempts had food pixels in *both* views
+(10/8 % and 5/4 %) with `degenerateRaySkipCount=0`,
+`degenerateVoxelSkipCount=0` and nothing threshold-discarded, and still carved
+nothing. Do not close that report on this session — it needs a trail where the
+oblique is aimed and the tilt is off the ring.
+
 ## 2026-08-13 — speckle/stability gate closed (no weighed truth)
 
 Developer verdict on device: speckle is gone and readings are stable.
