@@ -8,13 +8,13 @@ references:
 
 ## Phase A — Wake-source core (MedataCore, macOS-testable)
 
-- [ ] 1. Write failing swift-testing tests for the heartbeat decision logic <!-- id:usr54m5 -->
+- [x] 1. Write failing swift-testing tests for the heartbeat decision logic <!-- id:usr54m5 -->
   - New test file in MedataCore/Tests/GlucoseIngestionTests: shouldFire (beats under 30 s apart yield one fire; 30 s or more yields two; first beat with nil lastBeatAt fires), isStale (boundary at exactly staleWindow; nil lastBeatAt), matchesSensor (ABBOTT-prefixed names match; other prefixes and nil do not)
   - Example tables, no PBT (design Testing Strategy); tests must fail against the not-yet-created type
   - Stream: 1
   - Requirements: [2.1](requirements.md#2.1), [2.5](requirements.md#2.5), [5.2](requirements.md#5.2)
 
-- [ ] 2. Implement HeartbeatWakeSource protocol, HeartbeatConnectionState, and the pure statics to pass the tests <!-- id:usr54m6 -->
+- [x] 2. Implement HeartbeatWakeSource protocol, HeartbeatConnectionState, and the pure statics to pass the tests <!-- id:usr54m6 -->
   - New file(s) in MedataCore/Sources/GlucoseIngestion (Req 1.4/9.1 placement); MainActor protocol, enum states idle/unavailable/pairing/connected/stale/repairNeeded, Constants (namePrefix, notifyCharacteristicUUID, restoreIdentifier, minInterval 30, staleWindow 70, preFetchDelay 1)
   - No CoreBluetooth types in the pure statics so they compile on the macOS test host (Decision 6)
   - make test green, both totals reported
@@ -22,7 +22,7 @@ references:
   - Stream: 1
   - Requirements: [1.1](requirements.md#1.1), [1.2](requirements.md#1.2), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [5.2](requirements.md#5.2)
 
-- [ ] 3. Implement the Libre3HeartbeatSource CoreBluetooth central behind os(iOS) <!-- id:usr54m7 -->
+- [x] 3. Implement the Libre3HeartbeatSource CoreBluetooth central behind os(iOS) <!-- id:usr54m7 -->
   - Also covers Req 2.4a (sensor swap: no background rediscovery, repairNeeded state, foreground re-pair) — anchor unsupported by the rune requirements field
   - Observable MainActor final class, NSObject, CBCentralManagerDelegate plus CBPeripheralDelegate, CBCentralManager(queue: nil, restore identifier) — Decision 10 shape; onHeartbeat closure is a constructor argument
   - Pairing scan (foreground wildcard, ABBOTT prefix, candidate surfaced then confirmPairing persists identifier); subsequent connects via retrievePeripherals(withIdentifiers:); retrieve-empty means repairNeeded
@@ -82,7 +82,7 @@ references:
 
 ## Phase B — Research continuity (parallel stream)
 
-- [ ] 10. Run the Phase B re-verification sweep and log it, whether or not the verdict moves <!-- id:usr54me -->
+- [x] 10. Run the Phase B re-verification sweep and log it, whether or not the verdict moves <!-- id:usr54me -->
   - Check DiaBLE Discussion #22, LibreCRKit, and the 39C3/CCC 2025 xDrip4iOS Libre 3+ project for on-device iOS decrypt progress; append a dated entry to the re-check log in docs/agent-notes/libre3-direct-ble.md
   - Independent of stream 1 — run concurrently with the Phase A build; repeat roughly monthly (the frontier cadence); Phase B remains gated on this log (Req 7.1)
   - No implementation: Phase B code is not written until the note records on-device iOS decrypt demonstrated (Req 6.2, 7.1)
