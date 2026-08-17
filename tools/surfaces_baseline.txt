@@ -1,0 +1,11 @@
+# Coverage ratchet baseline for tools/check_surfaces.sh.
+#
+# covered_min is the number of UI structs that have a catalogue row with status
+# `shipped` in design-system/surfaces.md. The check fails when the live number
+# drops below it, and prints a `ratchet_raise` line when it climbs above — bump
+# this value in the same commit that adds the rows.
+#
+# Locked in at 61 — every struct the check scans has a `shipped` row, which is
+# what the first pass of the catalogue earned. Raise it again only when a real
+# row raises `covered`; never to make a red check green.
+covered_min=61

@@ -1,0 +1,160 @@
+<!--
+  catalogue id: meal-review/dose-suggestion
+  attempt:      3  (branch `insulin-dosing-ui-3-on-research`)
+  testing:      whether the readout belongs on meal review at all — attempt 3 leaves that
+                surface untouched and puts the dose where a dose is logged, in one
+                consolidated manual-entry sheet ("ONE manual-entry surface, three modes …
+                This is that third sheet refusing to exist" — App/LogSheet.swift).
+  zones:        photo · total-row · primary-action · scale-control · accessory-line · food-rows
+                (declared for `meal-review` in design-system/surfaces.md). The second frame
+                is a DIFFERENT surface with no zone vocabulary declared yet, so it is
+                deliberately unmarked rather than inventing names.
+-->
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>meal-review/dose-suggestion — attempt 3</title>
+  <link rel="stylesheet" href="../../tokens.css">
+  <link rel="stylesheet" href="../../wireframe.css">
+</head>
+<body>
+
+<div class="stage">
+  <h1>meal-review/dose-suggestion — attempt 3 (meal review)</h1>
+  <p>Nothing. <code>git diff --name-only research...insulin-dosing-ui-3-on-research</code> does not
+     list <code>App/MealReviewView.swift</code>: this option changes no zone of this surface. The
+     second line is the one that ships today, and the dose is read one surface away.</p>
+
+  <div class="device">
+    <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+
+    <div class="screen">
+      <div class="toolbar">&#8943;</div>
+
+      <div class="photo" data-zone="photo">photo + class outlines</div>
+      <div class="gap-3"></div>
+
+      <!-- totalRow, unchanged from research: `≈ 214 g on plate` and no second
+           segment. App/MealReviewView.swift line 345 on this branch is the same
+           line it is on research. -->
+      <div class="total" data-zone="total-row">
+        <div class="figure-row">
+          <span class="figure">60</span>
+          <span class="unit">g carbs</span>
+          <span class="spacer"></span>
+          <span class="pill pill--moderate">&#9650; Moderate</span>
+        </div>
+        <div class="dotline">
+          <span>&#8776; 214 g on plate</span>
+        </div>
+      </div>
+
+      <div class="gap-3"></div>
+      <button class="record" data-zone="primary-action">Record 60 g</button>
+      <div class="gap-3"></div>
+
+      <div class="scale" data-zone="scale-control">
+        <span class="label">PLATE</span>
+        <span class="spacer"></span>
+        <span class="frac is-active">All</span>
+        <span class="frac">&frac34;</span>
+        <span class="frac">&frac12;</span>
+        <span class="frac">&frac14;</span>
+      </div>
+
+      <div class="gap-3"></div>
+      <div class="divider"></div>
+
+      <div class="scrollarea">
+        <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
+        <div class="rows" data-zone="food-rows">
+          <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
+          <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="homebar"></div>
+  </div>
+
+  <p class="note">
+    <strong>An option can be &ldquo;this zone does not change&rdquo;.</strong> Six zones, six
+    unchanged. That is a legible answer, and putting it beside the other two in
+    <code>compare.html</code> is the point: the choice between attempt 1 and attempt 2 is which
+    second line to carry, and the choice attempt 3 raises is whether to carry one here at all.
+  </p>
+</div>
+
+<div class="stage">
+  <h1>attempt 3 &mdash; where the dose went: <code>log-sheet</code>, insulin mode</h1>
+  <p>Seeded from the meal within 45 minutes of arming, so the common case stays two taps. The
+     carbohydrate figure is not on this screen, so the screen restates it — the same rule the other
+     two options apply in the opposite direction (<code>specs/data/insulin-dosing/design-direction.md</code>
+     §1: &ldquo;Provenance appears exactly where the source number is not visible&rdquo;).</p>
+
+  <div class="device">
+    <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+
+    <div class="screen">
+      <div class="backdrop">home, dimmed</div>
+    </div>
+
+    <div class="scrim"></div>
+
+    <div class="sheet">
+      <div class="grabber"></div>
+      <!-- The mode selector IS the title: a menu where a static navigation title
+           used to be. Zero points of added height, and every entry point names
+           its own mode, so the selector is a way out of a wrong turn. -->
+      <div class="sheet-title">Insulin <span class="chev">&#9662;</span></div>
+
+      <div class="segmented">
+        <span class="is-active">Bolus</span>
+        <span>Basal</span>
+      </div>
+
+      <div class="stepper">
+        <span class="step">&minus;</span>
+        <span class="numeral-block">
+          <span class="numeral">12</span>
+          <span class="provenance">from 60 g at 5 g/U</span>
+        </span>
+        <span class="step">+</span>
+      </div>
+
+      <div class="timerow"><span>Time</span><span class="value">17 Aug 2026, 09:41</span></div>
+
+      <button class="record">Save 12 U bolus</button>
+    </div>
+
+    <div class="homebar"></div>
+  </div>
+
+  <p class="note">
+    <strong>One slot, two states.</strong> <code>from 60 g at 5 g/U</code> holds the caption slot only
+    while the seeded value is untouched; the first press of either step control replaces it with the
+    plain <code>units</code> label, permanently for that presentation. Same font in both states, so the
+    slot cannot change height on the swap. The carbs mode of the same sheet carries the segment on its
+    own second line instead — <span class="mono">grams &#183; 12 U</span>.
+  </p>
+
+  <p class="note">
+    <strong>Why this frame carries no zone marks.</strong> Zone names are declared once per surface in
+    <code>design-system/surfaces.md</code> and reused by every option for that surface. No vocabulary is
+    declared for <code>log-sheet</code>, so this frame marks nothing: inventing zone names inside one
+    option is exactly the drift the convention exists to stop.
+  </p>
+
+  <p class="note">
+    <strong>What a zone table cannot express.</strong> Attempt 3&rsquo;s proposition is not a zone choice —
+    it is &ldquo;this surface does not carry the readout, and three sheets become one&rdquo;. That is a
+    surface-level move, and it belongs in the surface-delta table in the owning spec&rsquo;s
+    <code>requirements.md</code> (<code>consolidate</code>, three ids to one), not in the composition
+    record. The two artifacts are complementary and the limit is worth stating out loud.
+  </p>
+</div>
+
+</body>
+</html>

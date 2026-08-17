@@ -1,0 +1,48 @@
+/* GENERATED FILE — do not edit by hand.
+ * Source: App/Colors.swift (hand-written, authoritative)
+ * Regenerate: python3 tools/design_tokens/tokens_to_css.py
+ *
+ * Every `static let <name>` becomes `--medata-<kebab(name)>`, with no
+ * exceptions — hence `--medata-medata-accent`.
+ *
+ * Values marked `approx` come from `Color(uiColor:)`, which UIKit resolves
+ * per appearance and therefore has no fixed sRGB value. They are emitted at
+ * the documented DARK-appearance value, because the wireframes are OLED-dark
+ * (design-system/MASTER.md, "Style — three layers, used together").
+ */
+
+:root {
+  /* Brand */
+  --medata-medata-accent: #63FF00;
+
+  /* Capture / Result (OLED) */
+  --medata-capture-background: #000000;
+  --medata-capture-chrome-text: #FFFFFF;
+  --medata-capture-chrome-bg: rgb(255 255 255 / 0.1);
+  --medata-capture-scrim: rgb(0 0 0 / 0.45);
+
+  /* Surfaces (Meals / Settings — system Grouped) */
+  --medata-surface-primary: #000000; /* approx: .systemGroupedBackground at dark appearance */
+  --medata-surface-elevated: #1C1C1E; /* approx: .secondarySystemGroupedBackground at dark appearance */
+  --medata-text-primary: #FFFFFF; /* approx: .label at dark appearance */
+  --medata-text-secondary: rgb(235 235 245 / 0.6); /* approx: .secondaryLabel at dark appearance */
+  --medata-separator-subtle: rgb(84 84 88 / 0.65); /* approx: .separator at dark appearance */
+
+  /* Confidence pill */
+  --medata-confidence-high: #63FF00; /* alias of medataAccent */
+  --medata-confidence-moderate: #FF9F0A; /* approx: .systemOrange at dark appearance */
+  --medata-confidence-low: #FF453A; /* approx: .systemRed at dark appearance */
+  --medata-confidence-very-low: #595959;
+
+  /* Placeholder chip (research Req 23.3) */
+  --medata-placeholder-bg: #FFD60A; /* approx: .systemYellow at dark appearance */
+  --medata-placeholder-fg: #000000;
+
+  /* Trends chart (Decision 12, design-handoff-00) */
+  --medata-series-glucose: #FF9F0A; /* approx: .systemOrange at dark appearance */
+  --medata-band-target: rgb(99 255 0 / 0.1); /* alias of medataAccent at 0.10 */
+  --medata-series-insulin-bolus: #40C8E0; /* approx: .systemTeal at dark appearance */
+  --medata-series-insulin-basal: #BF5AF2; /* approx: .systemPurple at dark appearance */
+  --medata-series-activity: #FF375F; /* approx: .systemPink at dark appearance */
+  --medata-band-activity: rgb(255 55 95 / 0.13); /* approx: alias of seriesActivity at 0.13, .systemPink at dark appearance */
+}

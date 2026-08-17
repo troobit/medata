@@ -1,5 +1,13 @@
 # Wireframe intake (Claude artifacts → UI spec)
 
+> **Superseded in part — read `specs/ui/wireframe-library/` first.** That spec makes
+> `design-system/surfaces.md` the reference for what surfaces and states exist, and makes
+> wireframes disposable zone-marked HTML authored to compare options rather than one-way
+> handoff inputs. This note still describes the design-handoff archive correctly; its
+> "Translation pipeline" and "Landing zone" sections describe the older scheme. Rewriting
+> this file is a tracked task ("Rewrite docs/agent-notes/wireframe-intake.md for the new
+> pipeline", `specs/ui/wireframe-library/tasks.md`).
+
 How wireframes designed in Claude on the web get turned into a MeData UI spec.
 There is no claude.ai connector in the CLI session, so artifacts arrive by paste.
 
