@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **CGM Direct: Libre 3/3+ direct BLE access spec** (`specs/data/cgm-direct/requirements.md`, `specs/data/cgm-direct/decision_log.md`, `docs/agent-notes/libre3-direct-ble.md`): New spec for reading the FreeStyle Libre 3 / 3+ sensor directly over Bluetooth Low Energy, as a sibling to the shipped cloud-follower `cgm-connect` spec. Phase A (BLE heartbeat wake) is shippable on iOS now, proven in production code (xDrip+), and adds a reliable background wake and reading-aligned fetch within the existing vendor rate budget, fixing the root cause of the 2026-08-05 hypo-latency event (missed iOS task deferral). Phase B (on-device decrypt, zero cloud) is research-gated on the feasibility frontier (DiaBLE / LibreCRKit white-box interpreter maturity and iOS native-lib execution). The feasibility note is a living document with a re-verification checklist, updated ~monthly as the reverse-engineering frontier moves. Four accepted decisions frame the architecture: new spec vs extension, heartbeat as a wake source not a `GlucoseSource`, Phase A respects the vendor budget (no per-minute cloud freshness claim), and Phase B may NFC-activate the sensor as owner to obtain the blePIN, gated behind a test sensor and Phase A as the everyday path.
+
 ### Fixed
 
 - **Carbohydrate events sharing one bolus are confounded** (`tools/dosing/retrospective.py`, `specs/data/insulin-dosing/decision_log.md` Decision 14): The D0 retrospective instrument tested for an intervening carbohydrate event using a time span that opened at the paired dose, so an intake before a dose and a meal after it — one dose covering two plates — read as two clean windows. Sharing a dose is a pairing fact rather than a span fact, so it is now a distinct filter, `no_shared_bolus`, with its own attrition line between the stacking and intervening-carbohydrate steps. The intervening-carbohydrate span separately widens to open at the earlier of the carbohydrate event and its dose. Both tighten the surviving fraction, the single number Req 11.4 exists to protect.
