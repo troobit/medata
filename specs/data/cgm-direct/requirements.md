@@ -48,7 +48,7 @@ The work is two phases with very different feasibility, and the requirements are
 - Non-Libre sensors (Dexcom, Medtronic) and non-Abbott BLE protocols — the heartbeat abstraction
   is written so another vendor's transmitter could be added later, but none is in scope now.
 - A MeData backend, hosted service, or cloud sync of MeData's own data.
-- The Ypsomed / `mylife-software.net` cloud (user-flagged, AU) as a follower source — it is another
+- The Ypsomed / `mylife-software.net` cloud (AU) as a follower source — it is another
   cloud-custody middleman on the same footing as LibreLinkUp and is out of scope; the direct-BLE
   path exists precisely to not depend on any such custodian (feasibility note "Data-custody
   middlemen"). Recorded as a possible future fallback only.
@@ -82,30 +82,49 @@ Abbott app, so that my official app and its alarms keep working while MeData get
 
 **Acceptance Criteria:**
 
-1. <a name="2.1"></a>WHEN the user enables the BLE heartbeat, the system SHALL scan for and connect
-   to a peripheral whose advertised name begins with the Abbott sensor prefix (`ABBOTT`), matching
-   the transmitter identifier the user confirms, and SHALL treat the receive characteristic
-   `0898177A-EF89-11E9-81B4-2A2AE2DBCCE4` (the one-minute reading characteristic) as the notify
-   source (feasibility note "Evidence: heartbeat is real"). These BLE identifiers SHALL be
+1. <a name="2.1"></a>WHEN the user enables the BLE heartbeat, the system SHALL scan **in the
+   foreground** (wildcard scan — iOS does not deliver wildcard scans in the background) for
+   peripherals whose advertised name begins with the Abbott sensor prefix (`ABBOTT`), SHALL present
+   the discovered sensor's name for the user to confirm, and SHALL persist the confirmed
+   peripheral's identifier. Subsequent connects SHALL use the persisted identifier
+   (`retrievePeripherals(withIdentifiers:)`) with no scan — a pending connect to a known peripheral
+   works from the background and across relaunches. The system SHALL treat the receive
+   characteristic `0898177A-EF89-11E9-81B4-2A2AE2DBCCE4` (the one-minute reading characteristic) as
+   the notify source (feasibility note "Evidence: heartbeat is real"). All BLE identifiers SHALL be
    easily-updated constants, as Abbott changes them.
 2. <a name="2.2"></a>The system SHALL connect as a **second** BLE central, concurrent with Abbott's
    app owning the authenticated session, and SHALL NOT require, attempt, or hold the sensor's
    authenticated pairing (blePIN) in Phase A — it observes connection and notify events only.
-3. <a name="2.3"></a>The system SHALL register CoreBluetooth for background operation (state
-   restoration and background central usage) so a connection event can wake the app while it is
-   suspended; the Info.plist SHALL declare the Bluetooth background mode and a functional usage
-   string (Req 6.3).
-4. <a name="2.4"></a>WHEN the sensor connection drops (out of range, sensor swap, Abbott app
-   momentarily holding it), the system SHALL attempt reconnection on the OS scan/reconnect path and
-   SHALL surface a not-connected / stale-heartbeat state (Req 5), WITHOUT deleting or altering any
-   stored reading.
-5. <a name="2.5"></a>The system SHALL debounce heartbeat events with a minimum interval of no less
+3. <a name="2.3"></a>The system SHALL run its CoreBluetooth central so a connection/notify event can
+   wake the app while it is suspended, using only the self-service `bluetooth-central`
+   `UIBackgroundModes` value (Req [6.3](#6.3)). No restricted Bluetooth entitlement is required or
+   requested: `com.apple.developer.bluetooth-central-background` is the watchOS gate, and screen-off
+   scanning has its own separate restricted entitlement — neither applies to connection-event wakes
+   on an iPhone (Decision 4).
+4. <a name="2.4"></a>WHEN the sensor connection drops transiently (out of range, Abbott app
+   momentarily holding it), the system SHALL re-issue the connect to the persisted peripheral (the
+   OS holds a pending connect that completes on reconnection, including from the background) and
+   SHALL surface a stale-heartbeat state meanwhile (Req 5), WITHOUT deleting or altering any stored
+   reading.
+5. <a name="2.4a"></a>WHEN the worn sensor is **replaced** (a new peripheral identifier), the system
+   SHALL NOT attempt background rediscovery — wildcard scanning does not run in the background, and
+   scanning a service UUID unverified on 3+ hardware is out of scope (Decision 8). The heartbeat
+   SHALL surface a re-pair state, re-pairing SHALL be a foreground action repeating the Req
+   [2.1](#2.1) confirm flow, and the cloud path SHALL continue unaffected in the interim (Req
+   [1.3](#1.3)). One app-open per sensor swap is the accepted contract.
+6. <a name="2.5"></a>The system SHALL debounce heartbeat events with a minimum interval of no less
    than 30 seconds (matching the proven `minimumTimeBetweenTwoHeartBeats`), so a burst of BLE
    callbacks yields at most one heartbeat trigger per interval.
-6. <a name="2.6"></a>WHERE the worn sensor is a Libre 3 **Plus** specifically, the connection
+7. <a name="2.6"></a>WHERE the worn sensor is a Libre 3 **Plus** specifically, the connection
    behaviour is asserted from Libre 3 evidence and SHALL be re-verified on 3+ hardware
    (feasibility note re-verification checklist); until then the feature ships behind the
    developer-phase enable switch (Req 6).
+8. <a name="2.7"></a>The central SHALL be created with a CoreBluetooth **state-restoration
+   identifier** and SHALL implement the restore delegate (`centralManager(_:willRestoreState:)`) so
+   iOS can relaunch the app into the background and hand back the already-connected peripheral; on
+   restore the system SHALL re-attach the heartbeat→fetch wiring (Req [3.6](#3.6)) before honouring
+   any pending connection event, so a relaunch-driven wake does not fire against a detached trigger.
+   The restore identifier SHALL be an easily-updated constant (Req [2.1](#2.1)).
 
 ### 3. Heartbeat-Triggered Fetch Within the Vendor Budget
 
@@ -130,9 +149,26 @@ less often exactly when lateness matters.
    re-armed, the heartbeat SHALL serve as its "a new reading now exists" trigger, so a
    budget-permitted urgent fetch near a low is aligned to real reading availability rather than a
    blind timer; with the uniform-5-minute baseline (Decision 13) in force, this reduces to Req 3.1.
-5. <a name="3.5"></a>The system SHALL make no claim, in code comment, status copy, or decision log,
-   that Phase A delivers per-minute freshness from the cloud; the honest Phase A gain is reliable
-   background wakes and reading-aligned, budget-bounded fetches (feasibility note, "What this buys").
+5. <a name="3.5"></a>The system SHALL make no claim, in code comment, status copy, decision log, **or
+   agent note**, that Phase A delivers per-minute freshness from the cloud; the honest Phase A gain
+   is reliable background wakes and reading-aligned, budget-bounded fetches, i.e. a **bounded**
+   worst-case staleness of roughly one gate interval plus one beat (~6 minutes) in place of an
+   unbounded OS wake deferral (feasibility note, "What this buys").
+6. <a name="3.6"></a>A heartbeat SHALL trigger the reading fetch ONLY while the `LibreLinkUpGlucoseSource`
+   is connected with its sink attached; a heartbeat that arrives during a background cold-launch race
+   SHALL first await the app's source-reconnect completion (the `startTask` the BGTask handler already
+   awaits, `docs/agent-notes/glucose-ingestion.md` "BGTask registration point") and SHALL no-op
+   without error WHERE LibreLinkUp is not connected. This mirrors the background-refresh handler's
+   guard so the two wake paths share one precondition.
+7. <a name="3.7"></a>WHEN the app is launched by the OS into the **background** (CoreBluetooth state
+   restoration or any non-user-initiated launch), the LibreLinkUp launch reconnect SHALL NOT run the
+   gate-ignoring immediate validation fetch — it SHALL attach the sink and leave the first fetch to
+   the rate-gated, ~1 s-delayed heartbeat path (Req [3.1](#3.1), [3.3](#3.3)). The gate-ignoring
+   fetch remains reserved for user-initiated actions (typing credentials; a foreground open), per
+   the cgm-connect rationale "one request on a user action, not a rate". Without this, every
+   OS-driven relaunch would spend an ungated request that races Abbott's upload — new ban exposure
+   (Req [3.2](#3.2)) and the stale previous reading (Req 3.3) on exactly the wake path this feature
+   exists for (Decision 7).
 
 ### 4. Storage and Provenance
 
@@ -176,6 +212,13 @@ is alive, so that I can tell the wake mechanism is working without ceremony.
    Functional state (connected, stale heartbeat, last-seen time) is not a disclaimer and stays.
 5. <a name="5.5"></a>Glucose values SHALL be displayed in mmol/L only, with no mg/dL option
    (`specs/data/cgm-connect` [Req 6.4](../cgm-connect/requirements.md#6.4)).
+6. <a name="5.6"></a>The heartbeat state surface SHALL distinguish, as separate functional states
+   with a next step: Bluetooth off or permission denied ("enable Bluetooth" / "allow in Settings"),
+   sensor re-pair needed (Req [2.4a](#2.4a)), scanning/pairing, connected, and stale — a user
+   diagnosing "is the wake working" must not see a generic disabled look for all of them.
+7. <a name="5.7"></a>The last-heartbeat time SHALL be persisted (app-private) so the Settings row
+   survives a relaunch — after a background restoration relaunch, a healthy connection must not
+   display an empty last-beat (the same reasoning as `LibreLinkUpGlucoseSource.persistedLastSuccessAt()`).
 
 ### 6. Developer-Phase Gating
 
@@ -189,6 +232,12 @@ young, so that an unverified BLE interaction cannot silently affect the everyday
    `specs/data/cgm-connect` behaviour).
 2. <a name="6.2"></a>WHILE Phase B is unproven on iOS, the app SHALL NOT NFC-activate or take
    ownership of any sensor (Req 7.4); Phase A SHALL remain the everyday path.
+3. <a name="6.3"></a>The app's capability declarations SHALL add, alongside the existing
+   `UIBackgroundModes` `fetch` entry (`MeData/Info.plist`), the `bluetooth-central` background mode
+   and an `NSBluetoothAlwaysUsageDescription` usage string (functional copy, Req [5.4](#5.4)). No new
+   signed entitlement is required for Phase A (Req [2.3](#2.3)). These declarations SHALL be present
+   whether or not the developer-phase switch (Req [6.1](#6.1)) is on — a declared-but-unused
+   background mode is inert, and gating the plist on a runtime flag is not possible.
 
 ### 7. Phase B — On-Device Decrypt (Research Targets and Gates)
 
@@ -248,3 +297,37 @@ on-device decrypt.
    unaffected; the BLE heartbeat, being a wake for a cloud fetch, SHALL simply find the vendor
    unreachable and surface it per `specs/data/cgm-connect` [Req 3.4](../cgm-connect/requirements.md#3.4)
    without error to the estimation path.
+
+### 10. Sensor Uploader — user-controlled, never Abbott-gated
+
+**User Story:** As the wearer, whose sensor is installed in my own body and whose data is mine, I
+want a regional App Store restriction on Abbott's LibreLink app treated as a friction to route
+around with documented steps — not as a legitimate or terminal block on reaching my own sensor.
+
+**Acceptance Criteria:**
+
+1. <a name="10.1"></a>Phase A observes an **already-active** authenticated session and reads the
+   value its owner has uploaded to LibreLinkUp; it does not itself activate or own the sensor. Some
+   uploader must therefore be running against the sensor (activation, the notify session the
+   heartbeat observes, the LibreView upload the fetch reads), but that uploader is a user-controlled
+   prerequisite, **not** an Abbott-granted privilege. The uploader is NOT required to be a
+   region-matched Abbott app on the primary iPhone.
+2. <a name="10.2"></a>The spec SHALL document, and keep current, the concrete user-controlled routes
+   to obtain a working uploader, in preference order, so a regional restriction is never a dead end:
+   (a) install the LibreLink matching the **sensor's country of purchase** by switching the iPhone's
+   App Store region — step-by-step in `docs/libre-app-region-setup.md`, including the sensor↔country
+   lock and the free-app "Payment Method: None" path; (b) the **Juggluco bridge** on an Android
+   device (activates + uploads to LibreView, no Abbott iOS app on the iPhone at all); (c) Phase B
+   on-device decrypt, the only route with no external uploader — the custody-independent end goal.
+3. <a name="10.3"></a>WHERE no uploader is yet active, Phase A and the `cgm-connect` cloud path
+   degrade truthfully and without error (heartbeat states per Req 5; cloud failure per
+   `specs/data/cgm-connect` [Req 3.4](../cgm-connect/requirements.md#3.4)) — this is a **recoverable,
+   documented gap** the user closes by taking a Route 10.2 step, not an accepted permanent block.
+4. <a name="10.4"></a>WHERE the Juggluco bridge (Route b) is adopted, heartbeat coexistence SHALL be
+   re-verified against the **Android-held** session before being relied on — the current coexistence
+   evidence (xdripswift) is for a same-phone LibreLink session only — and Abbott's realtime alarms
+   move to the Android device with the session (Juggluco alarms in their place); the spec's alarm
+   Non-Goal is unchanged.
+5. <a name="10.5"></a>The region-switch route and the sensor↔country lock SHALL be logged as
+   standing research items per Req [8.2](#8.2) (Abbott's app packaging and region rules move), and
+   `docs/libre-app-region-setup.md` SHALL be re-verified before it is relied on.
