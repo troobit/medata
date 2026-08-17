@@ -1,11 +1,10 @@
 # Libre 3 / 3+ direct-device access (BLE) — feasibility
 
 **Status: living document. The frontier moves ~monthly; every claim below is stamped. Re-verify
-before acting.** This exists because the user asked for a way for the iPhone to read the
-FreeStyle Libre 3 Plus *directly from the device they wear*, not via a cloud follower. The user
-owns the sensor (installed in their body) and has authorised breaking Abbott's transport to
-collect their own data. This note is the feasibility record; the spec that frames it is
-`specs/data/<direct-cgm>` (to be created).
+before acting.** This exists to support reading the FreeStyle Libre 3 Plus *directly from the
+worn device*, not via a cloud follower. The user owns the sensor (installed in their body) and
+has authorised breaking Abbott's transport to collect their own data. This note is the
+feasibility record; the spec that frames it is `specs/data/cgm-direct`.
 
 ## The one distinction that governs everything
 
@@ -27,7 +26,7 @@ BLE to a Libre 3 buys two *different* things, and they have opposite feasibility
      when the phone was unlocked. A BLE central wake does not depend on that deferral.
    - **Reading-aligned fetch, within the existing budget.** The (still rate-gated) fetch lands
      just after a new value is in the cloud rather than on a blind timer, and supplies the
-     dormant adaptive-urgency machinery (Decision 12) a true "new reading now" trigger.
+     dormant adaptive-urgency machinery (`cgm-connect` Decision 12) a true "new reading now" trigger.
    True per-minute, network-free freshness is **Phase B only** — local decrypt has no cloud and
    no ban budget, so the 1-minute stream is free there.
 
@@ -113,9 +112,10 @@ decrypt works end-to-end on a test sensor first.
 
 ## Recommendation (phasing)
 
-- **Phase A — BLE heartbeat → immediate cloud fetch.** Shippable on iOS now, proven pattern,
-  coexists with the Abbott app, no NFC, no crypto break. Turns the current best-effort 5-min
-  poll into ~1-min freshness. This is the concrete near-term win.
+- **Phase A — BLE heartbeat → reading-aligned, rate-gated cloud fetch.** Shippable on iOS now,
+  proven pattern, coexists with the Abbott app, no NFC, no crypto break. Replaces the unbounded OS
+  wake deferral with a bounded worst-case staleness of ~one gate interval plus one beat (~6 min) —
+  NOT per-minute freshness (spec Req 3.5). This is the concrete near-term win.
 - **Phase B — full on-device decrypt (no cloud).** Track as research against DiaBLE/LibreCRKit;
   gated on the white-box interpreter maturing on iOS and on the user accepting MeData-as-activator.
   Keep this note current; it *will* change.
@@ -127,3 +127,35 @@ decrypt works end-to-end on a test sensor first.
 - [ ] Does connecting a second BLE central perturb the Abbott app / sensor on Libre 3 **Plus**
       specifically (this note's heartbeat evidence is Libre 3; verify on 3+)?
 - [ ] Ypsomed mylife: is there a documented follower API for the AU account?
+- [ ] Uploader route A — region-switch (spec Req 10.2/10.5, Decision 11, `docs/libre-app-region-setup.md`):
+      are the App Store region-change steps and the sensor↔country lock still accurate? The worn 3+
+      needs the LibreLink of its **country of purchase**; a region-mismatched iPhone can install it
+      by switching App Store region (free app, Payment Method: None). This is a documented,
+      recoverable route — never a block on reaching the user's own sensor.
+- [ ] Uploader route B — Juggluco bridge (spec Req 10.2/10.4): can Juggluco on an Android device
+      activate a 3+ and upload to LibreView (cloud path with no Abbott iOS app)? And can the MeData
+      heartbeat central coexist with an **Android-held** session — the xdripswift coexistence
+      evidence is same-phone only.
+
+## Re-check log (Req 8.2 — record every re-check, moved verdict or not)
+
+### 2026-08-17 — cgm-direct spec authoring re-check. Verdict UNCHANGED (Phase B still iOS-blocked).
+
+- **Heartbeat (Phase A)** — re-confirmed against `xdripswift` master
+  `Libre3HeartbeatBluetoothTransmitter.swift`: connect to `ABBOTT*` as a second central, notify on
+  `0898177A-EF89-11E9-81B4-2A2AE2DBCCE4`, never write, never decrypt, 1 s pre-fetch delay, debounce.
+  New GATT detail for the record: data service `FDE3`, device-info `180A`; write/login `F001`, read
+  notify `F002`. No change to Phase A feasibility — still shippable today.
+- **On-device decrypt (Phase B)** — the ECDH-P256 handshake is reproducible on iOS with CryptoKit
+  (65-byte X9.63 uncompressed public keys are accepted); the wall remains the obfuscated KDF/key-wrap
+  (WhiteCryption SKB / Zimperium, `liblibre3extension.so`, `generateEphemeralKeys()`). No public iOS
+  clean-room decrypt yet. Blocker 3 stands.
+- **Frontier moved (context, not verdict):** `maheini/FreeStyle-Libre-3-patch` was **archived
+  2026-02-22** with "The decryption was successfully cracked", pointing to **Juggluco** (Android,
+  offline, non-root) as the reference solution — consistent with this note's "Android can" section.
+  A **39C3 / CCC 2025** project ("xDrip4iOS — extending Libre Sensor 3+") is actively investigating
+  the iOS port. These are the two things to re-check next cycle.
+- **Libre 3 vs 3+**: same BLE protocol and same decrypt path; the only 3+-specific concern is the
+  heartbeat coexistence re-verify (checklist item 3), still open — no 3+ hardware evidence gathered
+  yet.
+- **Ypsomed mylife**: not investigated this cycle; still open.

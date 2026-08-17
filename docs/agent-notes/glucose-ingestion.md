@@ -209,9 +209,12 @@ exists, and why each does not apply here:
   approval required; lets a notification break through silent/Focus. It governs *alerting*,
   not data-refresh cadence. Irrelevant until the app has glucose alarms.
 - **Bluetooth background entitlements** (`com.apple.developer.bluetooth-central-background`
-  and the screen-off scanning pair) — for apps talking to a CGM **directly over BLE**. Not
-  self-service; special approval. This app talks to LibreLinkUp's cloud API, never to the
-  sensor, so they do not apply.
+  and the screen-off scanning pair) — restricted entitlements: the former is the **watchOS**
+  gate, the latter governs screen-off scanning. NEITHER is needed for an iPhone app to be
+  woken by BLE connection/notify events — the self-service `bluetooth-central`
+  `UIBackgroundModes` value suffices (cgm-direct Decision 4). Do not re-read this bullet as
+  "direct BLE needs special approval"; it does not, and `specs/data/cgm-direct` Phase A builds
+  on exactly that.
 - **Regulated-medical-device declaration** (App Store Connect) — a disclosure for review,
   not a runtime capability. Confers no scheduling priority.
 - **`NSSupportsLiveActivitiesFrequentUpdates`** — raises the push budget for Live
