@@ -52,6 +52,30 @@ with an immediate initial snapshot on subscribe.
 `.connected`, including for a sourceID that never registered (sources self-announce via
 their first successful ingest; accepted behaviour).
 
+## Libre3HeartbeatSource + HeartbeatWakeSource (specs/data/cgm-direct Phase A)
+
+BLE heartbeat wake for the LibreLinkUp fetch — NOT a `GlucoseSource` (cgm-direct Decision 1):
+a value-less "a reading exists now" signal; it never touches the event log. Three files:
+
+- `HeartbeatWakeSource.swift` — `@MainActor` protocol + `HeartbeatConnectionState` enum +
+  the pure `Libre3Heartbeat` statics (`shouldFire` 30 s debounce, `isStale` 70 s window,
+  `matchesSensor` ABBOTT prefix) and `Constants`. Deliberately CoreBluetooth-free so the
+  statics compile and unit-test on the macOS host (`HeartbeatDecisionTests`, example tables).
+  Boundary directions: exactly `minInterval` apart FIRES; exactly `staleWindow` old is FRESH;
+  nil `lastBeatAt` fires and reads stale.
+- `Libre3HeartbeatSource.swift` — the whole file is `#if os(iOS)` (`canImport(CoreBluetooth)`
+  excludes nothing on macOS — Decision 6); delegate flow is device-verified only, like
+  HealthKit's observer path. `@Observable @MainActor` NSObject with `@preconcurrency`
+  delegate conformances; `queue: nil` = main-queue delivery, so isolation matches (Decision
+  10). `onHeartbeat` closure is a constructor argument — no attach-later window for a
+  restored event to fire against (Req 2.7).
+- `stale` is display-derived via `isStale` (absence of an event), never set by the source;
+  `repairNeeded` is set only when `retrievePeripherals(withIdentifiers:)` returns empty.
+  Persisted keys: `glucose.source.libre3-heartbeat.{lastBeatAt,peripheralIdentifier,sensorName}`.
+
+The app wiring (model closure, `runValidationFetch` gate, Info.plist bluetooth-central,
+Settings section) is cgm-direct tasks 4–7; not yet built as of 2026-08-18.
+
 ## HealthKitGlucoseSource (Phase 3, task 8)
 
 Actor, entire file behind `#if canImport(HealthKit)` (Decision 8) — never exercised by

@@ -139,6 +139,79 @@ decrypt works end-to-end on a test sensor first.
 
 ## Re-check log (Req 8.2 — record every re-check, moved verdict or not)
 
+### 2026-08-18 — monthly frontier re-check. Verdict MOVED: on-device iOS decrypt is now demonstrated in open source. This supersedes the "BLOCKED ON iOS as of 2026-06" verdict in section "Full local decrypt" above and its Blocker 3 (iOS white-box execution).
+
+- **On-device decrypt (Phase B) — the wall came down.** Two open-source repos now do the full
+  Libre 3 / 3+ value derivation on iOS with no cloud on the value path:
+  - `airedev326/LibreCRKit` (pushed 2026-08-05, last updated 2026-08-13) — a clean-room Swift
+    package doing NFC activation → BLE authorization (ECDSA-P256/SHA-256 sensor-certificate verify
+    with bundled Abbott patch-signing public keys, P-256 ECDH ephemeral exchange) → **post-auth
+    data-plane AES-128-CCM decrypt** and realtime `glucoseData` / `patchStatus` parsing. Its own
+    README states "A LibreView account is not a protocol requirement", i.e. the value path is
+    network-free. `protocol.md` documents the NFC activation response carrying the `blePIN`, which
+    is how the owner-activation path (this note's "MeData-can-activate" owner decision, 2026-08-17)
+    removes Blocker 1.
+  - `LoopKit/LibreLoop` (pushed 2026-08-05, 1 star) — a FreeStyle Libre 3/3+ `CGMManager` plugin
+    for Loop, **built on LibreCRKit**. README: "Working end-to-end on iOS. The plugin pairs with a
+    Libre 3 sensor via NFC, maintains a BLE session, and delivers glucose readings to Loop every 5
+    minutes." Reconnect-after-restart, historical backfill, and sensor end-of-life tracking are all
+    described as functional, and commit messages cite dated field logs against real worn sensors
+    (2026-07-25 and 2026-07-26, one at lifeCount 21791 min = 15.1 days). It explicitly "bypasses the
+    official Abbott FreeStyle Libre 3 app", which means the Abbott app's alarms are inactive while it
+    runs — the same alarm-displacement tradeoff Req 7.4 already anticipates for owner activation.
+  This is the first time the note's Req 7.1 gate condition — "on-device iOS decrypt is demonstrated
+  (DiaBLE / LibreCRKit frontier)" — is met by a runnable, public implementation rather than a PoC
+  that stops at the challenge. The 5-minute cadence LibreLoop uses is a Loop choice, not a limit;
+  the decrypt is local, so the 1-minute stream is available network-free (does not license any
+  per-minute cloud polling — Req 3.5 unchanged).
+- **Caveats on the demonstration (why this is "gate met, now verify", not "ship Phase B today").**
+  Both repos are young (LibreLoop 1 star) and substantially AI-agent-authored (airedev326 is an
+  "Artificial Intelligence Reverse Engineering Development" coding agent); gui-dos noted on
+  2026-06-17 that `LibreCRKit/protocol.md` still contains "several inaccuracies and even real
+  hallucinations". No independent reproduction by this project yet, and none on the user's own 3+.
+  Per Req 7.4 the owner-activation decrypt path must be proven end to end on a **separate test
+  sensor** before it is run on the user's live sensor; that gate stands regardless of this move.
+  Recommended next step for the owner: evaluate LibreCRKit/LibreLoop on a test sensor before
+  committing any Phase B build.
+- **DiaBLE Discussion #22 (`gui-dos/DiaBLE`, checked 2026-08-18)** — no new posts since the
+  2026-08-17 entry; last comment is still 2026-06-17T20:51 (discussion `updatedAt` 2026-06-17). The
+  standing thread (EasyLars' PoC reaching the 23-byte challenge but blocked at the KDF /
+  WhiteCryption scalar; dugamarian's Libre 3 ↔ Apple Watch connection; gui-dos embedding LibreCRKit
+  as a "LibreCR" tab) is unchanged. The forward motion this cycle is in the LibreCRKit/LibreLoop
+  repos, not in the discussion.
+- **39C3 / CCC 2025 xDrip4iOS Libre 3+ project (checked 2026-08-18)** — the assembly page
+  (events.ccc.de, 39C3, Hamburg 27–30 Dec 2025) remains an announcement-only "is it possible?"
+  investigation; no published decrypt result or media.ccc.de recording found. It is not the source
+  of the moved verdict.
+- **Juggluco / Libre 3+ (checked 2026-08-18)** — unchanged: `maheini/FreeStyle-Libre-3-patch` still
+  archived (2026-02-22, "decryption was successfully cracked", points to Juggluco as the Android
+  reference); no new 3+ reverse-engineering surfaced beyond it. Consistent with the "Android can"
+  section.
+- **Context, not evidence for our path:** mylife Loop (Ypsomed / CamAPS FX) received Health Canada
+  approval in Jan 2026 for iOS with the Libre 3 Plus. That is a **regulated Abbott-partner vendor
+  integration**, not a clean-room decrypt, so it does not bear on this note's feasibility verdict —
+  but it does reinforce the Ypsomed data-custody line below as a potential follower/vendor cloud.
+
+**Uploader-route desk-check (Req 10.5 — region-switch and sensor↔country lock currency; on-device
+verification of the routes remains user-hardware work, not done here):**
+
+- **Route A — App Store region switch (`docs/libre-app-region-setup.md`)** — the documented steps
+  are still current as of 2026-08-18: Apple still requires a zero balance and no active
+  subscriptions before a region change; the path (Settings → name → Media & Purchases → View Account
+  → Country/Region → Change Country or Region) and the "Payment Method: None for free apps once an
+  in-country address is given" allowance both still hold. One packaging drift worth recording:
+  Abbott has shipped a **unified "Libre by Abbott" app in the US** (App Store id 6670330506) distinct
+  from the country-specific "FreeStyle Libre 3" listings elsewhere, so the doc's "search FreeStyle
+  Libre 3" step is region-dependent — match by publisher (Abbott) and supported sensor, not a fixed
+  app name. `docs/libre-app-region-setup.md` updated accordingly this cycle.
+- **Sensor↔country-of-purchase lock** — still accurate: Abbott's own travel FAQ confirms sensors
+  and apps/readers from one market may not be compatible with another market's, i.e. the worn 3+
+  needs the LibreLink of its country of purchase.
+- **Route B — Juggluco Android bridge, and heartbeat coexistence with an Android-held session
+  (Req 10.4)** — not verifiable here (requires an Android device activating a 3+ and an iPhone
+  heartbeat central against that session). Still open; the xdripswift coexistence evidence remains
+  same-phone only.
+
 ### 2026-08-17 — cgm-direct spec authoring re-check. Verdict UNCHANGED (Phase B still iOS-blocked).
 
 - **Heartbeat (Phase A)** — re-confirmed against `xdripswift` master

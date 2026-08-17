@@ -9,8 +9,9 @@ friction to route around, **not** a terminal block.
 
 This document is the concrete how-to for the primary route (region-matched LibreLink) and points to
 the alternatives. It is referenced by `specs/data/cgm-direct` Req 10 and Decision 11, and is a
-living operational note — correct as of 2026-08-17; Abbott's app packaging and region rules move,
-so re-verify before relying on a step.
+living operational note — re-verified current 2026-08-18 (region-change steps and sensor↔country
+lock unchanged; US app packaging drift noted at Route A step 5); Abbott's app packaging and region
+rules move, so re-verify before relying on a step.
 
 ## Why a region matters at all
 
@@ -42,8 +43,10 @@ Preferred: it keeps everything on the one iPhone and needs no second device.
    is free, so **Payment Method → None** is accepted once the address is in-country; a real payment
    card is not required. (A plausible in-country address is enough for a free app; keep it truthful
    where possible.)
-5. **Install LibreLink** from that country's App Store (search "FreeStyle Libre 3"). Confirm the
-   listing's seller is Abbott and the supported sensor matches.
+5. **Install LibreLink** from that country's App Store. Abbott's app naming is region-dependent —
+   most regions list "FreeStyle Libre 3", but the US now ships a unified **"Libre by Abbott"** app
+   (App Store id 6670330506, confirmed 2026-08-18) — so match by **publisher (Abbott) and supported
+   sensor**, not a fixed app name.
 6. **Sign in with the LibreView account** already used for `cgm-connect` (or create one and connect
    it as the follower — see `docs/agent-notes/librelinkup-api.md`). Activate the sensor if it is not
    already active.
