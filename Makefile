@@ -1,6 +1,6 @@
 # MeData developer loop.
 #
-# SwiftPM core:   make build / make test / make spell
+# SwiftPM core:   make build / make test / make spell / make surfaces
 # Device loop:    make deploy-device        (Debug — UI/non-capture work only)
 #                 make deploy-release-stub  (Release + forced stub — capture testing)
 #                 make logs-device          (pull filtered device logs)
@@ -41,7 +41,7 @@ BUILD_STAMP := $(GIT_SHA)-$(shell date +%Y%m%d-%H%M%S)
 XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 	-destination 'id=$(DEVICE_UDID)'
 
-.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell worktree harness-accuracy
+.PHONY: help build test build-app deploy-device logs-device deploy-release deploy-release-stub spell surfaces worktree harness-accuracy
 
 help:
 	@echo "MeData targets:"
@@ -50,6 +50,10 @@ help:
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"
 	@echo "  spell                Spelling lint (tools/check_spelling.sh)"
+	@echo "  surfaces             Surface catalogue lint (tools/check_surfaces.sh):"
+	@echo "                       design-system/surfaces.md vs the structs and state"
+	@echo "                       enums in App/ + MeData/MeDataWidgets/. Prints"
+	@echo "                       covered=N total=M and a report-only layer listing"
 	@echo "  harness-accuracy     replay capture bundles offline through the accuracy harness"
 	@echo "                       (FIXTURES=<dir> SHA=<checkpoint> [OUT=<file>]; untruthed"
 	@echo "                        bundles report UNSCORED and exit non-zero — expected)"
@@ -94,6 +98,16 @@ test:
 
 spell:
 	bash tools/check_spelling.sh
+
+# Surface catalogue lint. Checks design-system/surfaces.md against App/ and
+# MeData/MeDataWidgets/: every View/Shape/Layout/*Representable/Widget struct
+# has a row (or an `exempt: <Name>` marker with its reason in the same row),
+# every case of the named
+# state enums has a `state source` row, and the shipped-row count has not
+# regressed against tools/surfaces_baseline.txt. The layer report at the end is
+# advisory — it prints today's UI↔data imports and never fails the target.
+surfaces:
+	bash tools/check_surfaces.sh
 
 # Replay recorded capture bundles through the offline accuracy harness.
 # Pull bundles off the device first (Files app, or the devicectl recipe in

@@ -1,0 +1,538 @@
+<!--
+  catalogue id: meal-review/dose-suggestion
+  what:         every option for one surface, in one page, at true device metrics,
+                adjacent — plus a per-zone view that puts one region of all three
+                options side by side.
+  why:          the options existed before this page did; what did not exist was any
+                way to look at them at once. Each one needed `git checkout` +
+                `make deploy-device` to be seen at all, one at a time, so comparison
+                happened from memory across rebuilds. This page is the fix.
+  opens:        by double-clicking the file. No server, no build step, no framework.
+
+  This page carries its own copy of each option's screen markup. That is deliberate:
+  a file:// page cannot read its siblings (no fetch, no cross-frame scripting), and
+  the whole folder — options and this page together — is deleted when the SwiftUI
+  lands. Edit an option here and in its own file, or edit it here and re-render the
+  option file from this one; the duplication lives for days, not months.
+-->
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>meal-review/dose-suggestion — compare</title>
+  <link rel="stylesheet" href="../../tokens.css">
+  <link rel="stylesheet" href="../../wireframe.css">
+  <style>
+    /* Page chrome for the comparison itself. Everything inside a device frame is
+     * `wireframe.css`; everything outside it is furniture and lives here, so the
+     * shared stylesheet does not grow a page-specific tail. */
+    body {
+      display: block;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    [hidden] { display: none !important; }
+
+    .cmp-head {
+      padding: var(--space-4) var(--space-4) var(--space-3);
+      border-bottom: 1px solid var(--frame-edge);
+      max-width: 1400px;
+    }
+    .cmp-head h1 {
+      margin: 0 0 var(--space-2);
+      font-size: var(--type-title3);
+      font-weight: 600;
+      color: #e6e6ea;
+    }
+    .cmp-head .deciding {
+      margin: 0 0 var(--space-2);
+      font-size: var(--type-body);
+      color: #c9c9d1;
+      max-width: 74ch;
+      line-height: 1.45;
+    }
+    .cmp-head dl {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 2px var(--space-3);
+      margin: 0;
+      font-size: var(--type-caption);
+      line-height: 1.5;
+      max-width: 92ch;
+    }
+    .cmp-head dt { color: #6f6f78; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding-top: 3px; }
+    .cmp-head dd { margin: 0; color: var(--frame-note); }
+    .cmp-head code, .cmp-foot code { font-family: var(--font-mono); color: #c9c9d1; }
+
+    /* Controls ------------------------------------------------------------- */
+    .cmp-bar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2) var(--space-3);
+      padding: var(--space-2) var(--space-4);
+      background: var(--frame-page);
+      border-bottom: 1px solid var(--frame-edge);
+    }
+    .cmp-bar .group { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+    .cmp-bar .lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6f6f78;
+      margin-right: var(--space-1);
+    }
+    .cmp-bar button {
+      font-family: var(--font-mono);
+      font-size: var(--type-footnote);
+      color: #c9c9d1;
+      background: #1b1b1f;
+      border: 1px solid var(--frame-edge);
+      border-radius: 100px;
+      padding: 5px 12px;
+      min-height: 30px;
+      cursor: pointer;
+    }
+    .cmp-bar button:hover { border-color: #55555c; }
+    .cmp-bar button.is-active {
+      background: var(--medata-capture-chrome-text);
+      border-color: var(--medata-capture-chrome-text);
+      color: var(--medata-capture-background);
+    }
+    .cmp-bar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--type-footnote);
+      color: #c9c9d1;
+      cursor: pointer;
+    }
+    .cmp-bar kbd {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      border: 1px solid var(--frame-edge);
+      border-radius: 4px;
+      padding: 0 4px;
+      color: #6f6f78;
+    }
+
+    /* Whole-screen view ----------------------------------------------------- */
+    .strip {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-6);
+      padding: var(--space-4);
+      overflow-x: auto;
+    }
+    .option { display: flex; flex-direction: column; gap: var(--space-2); flex: 0 0 auto; }
+    /* Fixed so the three frames start at the same y. Options that do not line up
+     * are options you compare by scrolling, which is the thing this page exists
+     * to stop. */
+    .option .cap { width: var(--device-w); min-height: 108px; }
+    .option .cap b { color: #e6e6ea; font-size: var(--type-footnote); font-weight: 600; }
+    .option .cap p {
+      margin: 4px 0 0;
+      font-size: var(--type-caption);
+      line-height: 1.45;
+      color: var(--frame-note);
+    }
+    .option .cap .branch { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 10px; color: #6f6f78; }
+    /* Not true metrics any more, which is why the control says so. */
+    :root.fit .option, :root.fit .zone-card { zoom: 0.72; }
+
+    /* Per-zone view --------------------------------------------------------- */
+    .zone-head { padding: var(--space-4) var(--space-4) 0; max-width: 96ch; }
+    .zone-head h2 {
+      margin: 0 0 var(--space-1);
+      font-family: var(--font-mono);
+      font-size: var(--type-body);
+      color: #e6e6ea;
+      font-weight: 600;
+    }
+    .zone-head p { margin: 0; font-size: var(--type-caption); line-height: 1.5; color: var(--frame-note); }
+    .zone-card {
+      flex: 0 0 auto;
+      width: var(--device-w);
+      border: 1px solid var(--frame-edge);
+      border-radius: var(--radius-control);
+      overflow: hidden;
+      background: var(--medata-capture-background);
+      color: var(--medata-capture-chrome-text);
+    }
+    .zone-card .card-head {
+      padding: 6px 10px;
+      background: #17171a;
+      border-bottom: 1px solid var(--frame-edge);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      color: #9a9aa3;
+    }
+    /* The clone sits in the same 16pt gutter the screen gives it, so a width
+     * measured here is the width measured in the frame. */
+    .zone-card .card-body { padding: var(--space-3); display: flex; flex-direction: column; }
+    /* The photo is 40% of an 874 - 59 - 34 = 781pt screen. Out of the device it
+     * has nothing to take a percentage of, so the number is restated. */
+    .zone-card .card-body > .photo { flex: none; height: 312px; }
+    .zone-card .card-body > .rows { flex: none; }
+    .zone-card .card-body > .record { flex: none; }
+
+    .cmp-foot {
+      padding: var(--space-4);
+      border-top: 1px solid var(--frame-edge);
+      font-size: var(--type-caption);
+      line-height: 1.6;
+      color: var(--frame-note);
+    }
+    .cmp-foot h3 { margin: 0 0 var(--space-1); font-size: var(--type-footnote); color: #c9c9d1; max-width: 92ch; }
+    .cmp-foot ul { margin: 0 0 var(--space-3); padding-left: 18px; max-width: 92ch; }
+  </style>
+</head>
+<body>
+
+<header class="cmp-head">
+  <h1>meal-review/dose-suggestion &mdash; three options, side by side</h1>
+  <p class="deciding"><strong>Deciding:</strong> what the second line of <code>totalRow</code> carries
+     &mdash; two segments, three segments, or nothing, because the dose is read on another surface
+     entirely.</p>
+  <dl>
+    <dt>catalogue id</dt>
+    <dd><code>meal-review/dose-suggestion</code> &mdash; the same key names the row in
+        <code>design-system/surfaces.md</code>, these files, and the render that goes to
+        <code>design-system/archive/ios-v0/meal-review-dose-suggestion.png</code> when it ships.</dd>
+    <dt>owning spec</dt>
+    <dd><code>specs/data/insulin-dosing/</code>; the look is fixed in
+        <code>design-direction.md</code>, the layout order in
+        <code>design-system/pages/meal-review.md</code>.</dd>
+    <dt>worked figure</dt>
+    <dd>a 60 g-carbohydrate meal on a 214 g plate: 60 g &divide; 5.0 g/U = 12.0 U. The large numeral
+        and the mass segment are different quantities and are never the same number.</dd>
+    <dt>options</dt>
+    <dd>branches <code>insulin-dosing-ui-{1,2,3}-on-research</code>, 542 / 1,565 / 1,015 lines of
+        Swift. Three options was the point; being unable to look at them together was the problem.</dd>
+    <dt>not a gate</dt>
+    <dd>this page moves the <em>choice</em> earlier. HTML can lie about Dynamic Type, safe areas and
+        <code>ViewThatFits</code> &mdash; the phone remains the acceptance test.</dd>
+  </dl>
+</header>
+
+<nav class="cmp-bar">
+  <div class="group">
+    <label><input type="checkbox" id="zone-toggle"> Outline zones <kbd>z</kbd></label>
+    <label><input type="checkbox" id="fit-toggle"> Fit to window <kbd>f</kbd>
+      <span class="lbl">0.72&times;, not true metrics</span></label>
+  </div>
+  <div class="group">
+    <span class="lbl">View</span>
+    <button data-view="screens" class="is-active">Whole screens <kbd>0</kbd></button>
+  </div>
+  <div class="group" id="zone-buttons">
+    <span class="lbl">One zone, all three</span>
+    <button data-view="zone" data-zone-pick="photo"
+            data-question="~40% of height, 4:3 .fit, 16pt corners. All three options leave it exactly as it ships — a zone with nothing to choose is still worth seeing, because it is what makes the zones that do differ obvious.">photo <kbd>1</kbd></button>
+    <button data-view="zone" data-zone-pick="total-row"
+            data-question="The decision. Attempt 1 appends one segment to the line that already ships; attempt 2 appends two, carrying the divisor at every meal; attempt 3 appends none. All three are the derived register — same font, same colour, emphasis by weight, never accent — so the only question is whether the line still reads as one quantity.">total-row <kbd>2</kbd></button>
+    <button data-view="zone" data-zone-pick="primary-action"
+            data-question="`Record 60 g` in the committed register: medataAccent fill, height 48, radius 12, the label naming the value it is about to write. No option proposed a change, and the accent budget on this screen is spent here — which is why no dose readout may be accent-coloured.">primary-action <kbd>3</kbd></button>
+    <button data-view="zone" data-zone-pick="scale-control"
+            data-question="44x34 capsules. specs/ui/meal-review/requirements.md: 'The scale control SHALL be visible without scrolling when the surface first appears.' — which is why no option is allowed to wrap the second line onto a second row.">scale-control <kbd>4</kbd></button>
+    <button data-view="zone" data-zone-pick="accessory-line"
+            data-question="Calibration state, liquid over-estimate, unknown region and unsupported liquid collapsed to one expandable line, icon plus text, never colour alone. First thing below the scroll boundary; unchanged by every option.">accessory-line <kbd>5</kbd></button>
+    <button data-view="zone" data-zone-pick="food-rows"
+            data-question="The scrolling rows. Untouched on this surface by all three options — what attempt 3 offers here is a vocabulary rather than a layout: App/EntryChrome.swift's chip treatment is, in its own words, 'the plate-fraction control's, moved to the grouped palette'.">food-rows <kbd>6</kbd></button>
+  </div>
+</nav>
+
+<main>
+
+<!-- Whole screens ========================================================= -->
+<section id="view-screens" class="strip">
+
+  <article class="option" data-attempt="1" data-label="attempt 1 · two segments">
+    <div class="cap">
+      <b>attempt 1 &mdash; two segments</b>
+      <span class="branch">insulin-dosing-ui-1-on-research &middot; 8 files, 542 lines</span>
+      <p>The dose is appended to the line that already ships. Zero new rows, zero new controls, zero
+         pixels of height. Built inline in <code>App/MealReviewView.swift</code>.</p>
+    </div>
+    <div class="device">
+      <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+      <div class="screen">
+        <div class="toolbar">&#8943;</div>
+        <div class="photo" data-zone="photo">photo + class outlines</div>
+        <div class="gap-3"></div>
+        <div class="total" data-zone="total-row">
+          <div class="figure-row">
+            <span class="figure">60</span>
+            <span class="unit">g carbs</span>
+            <span class="spacer"></span>
+            <span class="pill pill--moderate">&#9650; Moderate</span>
+          </div>
+          <div class="dotline">
+            <span>&#8776; 214 g on plate</span><span class="sep"> &#183; </span><span class="emph">12</span><span> U</span>
+          </div>
+        </div>
+        <div class="gap-3"></div>
+        <button class="record" data-zone="primary-action">Record 60 g</button>
+        <div class="gap-3"></div>
+        <div class="scale" data-zone="scale-control">
+          <span class="label">PLATE</span>
+          <span class="spacer"></span>
+          <span class="frac is-active">All</span>
+          <span class="frac">&frac34;</span>
+          <span class="frac">&frac12;</span>
+          <span class="frac">&frac14;</span>
+        </div>
+        <div class="gap-3"></div>
+        <div class="divider"></div>
+        <div class="scrollarea">
+          <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
+          <div class="rows" data-zone="food-rows">
+            <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
+            <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="homebar"></div>
+    </div>
+  </article>
+
+  <article class="option" data-attempt="2" data-label="attempt 2 · three segments">
+    <div class="cap">
+      <b>attempt 2 &mdash; three segments</b>
+      <span class="branch">insulin-dosing-ui-2-on-research &middot; 17 files, 1,565 lines</span>
+      <p>The divisor rides the line at every meal instead of living only in the dose sheet. Extracted
+         as <code>App/DoseReadoutLine.swift</code>; the ratio segment is the first thing shed.</p>
+    </div>
+    <div class="device">
+      <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+      <div class="screen">
+        <div class="toolbar">&#8943;</div>
+        <div class="photo" data-zone="photo">photo + class outlines</div>
+        <div class="gap-3"></div>
+        <div class="total" data-zone="total-row">
+          <div class="figure-row">
+            <span class="figure">60</span>
+            <span class="unit">g carbs</span>
+            <span class="spacer"></span>
+            <span class="pill pill--moderate">&#9650; Moderate</span>
+          </div>
+          <div class="dotline">
+            <span>&#8776; 214 g on plate</span><span class="sep"> &#183; </span><span class="emph">12</span><span> U</span><span class="sep"> &#183; </span><span>5 g/U</span>
+          </div>
+        </div>
+        <div class="gap-3"></div>
+        <button class="record" data-zone="primary-action">Record 60 g</button>
+        <div class="gap-3"></div>
+        <div class="scale" data-zone="scale-control">
+          <span class="label">PLATE</span>
+          <span class="spacer"></span>
+          <span class="frac is-active">All</span>
+          <span class="frac">&frac34;</span>
+          <span class="frac">&frac12;</span>
+          <span class="frac">&frac14;</span>
+        </div>
+        <div class="gap-3"></div>
+        <div class="divider"></div>
+        <div class="scrollarea">
+          <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
+          <div class="rows" data-zone="food-rows">
+            <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
+            <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="homebar"></div>
+    </div>
+  </article>
+
+  <article class="option" data-attempt="3" data-label="attempt 3 · no segment here">
+    <div class="cap">
+      <b>attempt 3 &mdash; no segment here</b>
+      <span class="branch">insulin-dosing-ui-3-on-research &middot; 14 files, 1,015 lines</span>
+      <p>Consolidation: three manual-entry sheets become one, and the dose is read where a dose is
+         logged. <code>App/MealReviewView.swift</code> is not in this branch&rsquo;s diff at all &mdash;
+         every zone below is what ships today. See <code>attempt-3.html</code> for where it went.</p>
+    </div>
+    <div class="device">
+      <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+      <div class="screen">
+        <div class="toolbar">&#8943;</div>
+        <div class="photo" data-zone="photo">photo + class outlines</div>
+        <div class="gap-3"></div>
+        <div class="total" data-zone="total-row">
+          <div class="figure-row">
+            <span class="figure">60</span>
+            <span class="unit">g carbs</span>
+            <span class="spacer"></span>
+            <span class="pill pill--moderate">&#9650; Moderate</span>
+          </div>
+          <div class="dotline">
+            <span>&#8776; 214 g on plate</span>
+          </div>
+        </div>
+        <div class="gap-3"></div>
+        <button class="record" data-zone="primary-action">Record 60 g</button>
+        <div class="gap-3"></div>
+        <div class="scale" data-zone="scale-control">
+          <span class="label">PLATE</span>
+          <span class="spacer"></span>
+          <span class="frac is-active">All</span>
+          <span class="frac">&frac34;</span>
+          <span class="frac">&frac12;</span>
+          <span class="frac">&frac14;</span>
+        </div>
+        <div class="gap-3"></div>
+        <div class="divider"></div>
+        <div class="scrollarea">
+          <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
+          <div class="rows" data-zone="food-rows">
+            <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
+            <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="homebar"></div>
+    </div>
+  </article>
+
+</section>
+
+<!-- One zone, all three ==================================================== -->
+<section id="view-zone" hidden>
+  <div class="zone-head">
+    <h2 id="zone-name"></h2>
+    <p id="zone-question"></p>
+  </div>
+  <div class="strip" id="zone-strip"></div>
+</section>
+
+</main>
+
+<footer class="cmp-foot">
+  <h3>How to use the thing you are looking at</h3>
+  <ul>
+    <li>Pick a zone above and the same region of all three options lands beside itself. That turns
+        &ldquo;attempt 2&rsquo;s total row against attempt 1&rsquo;s&rdquo; into a two-second judgement instead
+        of a memory exercise across two rebuilds.</li>
+    <li>Write the winning zones down in <code>composition.md</code>. A table of zone choices is a
+        complete, unambiguous brief for the next option or for the SwiftUI &mdash; and a composed
+        option is an ordinary option: build it as <code>attempt-4.html</code> and it appears here on
+        the same terms as the other three.</li>
+    <li>The zone-choice table outlives these files. When the implementation lands the folder is
+        deleted and the table, with its reasons, moves to the owning spec&rsquo;s
+        <code>decision_log.md</code>.</li>
+  </ul>
+  <h3>What this page does not do</h3>
+  <ul>
+    <li>It does not settle decomposition. Attempts 1 and 2 render the second line identically in
+        places; one inlined it, the other extracted <code>App/DoseReadoutLine.swift</code>. A picture
+        has no channel for that, and neither does a zone choice.</li>
+    <li>It does not check anything. Nothing verifies that a SwiftUI implementation respects the zone
+        boundaries its wireframe declared; zones are a naming convention, not a construct.</li>
+    <li>It does not replace the on-device gate, and a composed option is still an option, not a
+        decision. It still has to be looked at on the phone.</li>
+  </ul>
+</footer>
+
+<script>
+// Three behaviours, no framework, no storage, no dependencies.
+//   1. outline the zones           2. switch views          3. keyboard shortcuts
+(function () {
+  var root = document.documentElement;
+  var options = Array.prototype.slice.call(document.querySelectorAll('.option'));
+  var viewScreens = document.getElementById('view-screens');
+  var viewZone = document.getElementById('view-zone');
+  var strip = document.getElementById('zone-strip');
+  var zoneName = document.getElementById('zone-name');
+  var zoneQuestion = document.getElementById('zone-question');
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.cmp-bar button'));
+  var zoneToggle = document.getElementById('zone-toggle');
+  var fitToggle = document.getElementById('fit-toggle');
+
+  zoneToggle.addEventListener('change', function () {
+    root.classList.toggle('zones', zoneToggle.checked);
+  });
+  fitToggle.addEventListener('change', function () {
+    root.classList.toggle('fit', fitToggle.checked);
+  });
+
+  // The zone view is built by cloning each option's own marked region, so it can
+  // never drift from the frame above it: there is one copy of the markup per
+  // option on this page, and both views read it.
+  function showZone(zone, question) {
+    strip.textContent = '';
+    options.forEach(function (option) {
+      var region = option.querySelector('[data-zone="' + zone + '"]');
+      var card = document.createElement('div');
+      card.className = 'zone-card';
+      var head = document.createElement('div');
+      head.className = 'card-head';
+      head.textContent = option.dataset.label;
+      var body = document.createElement('div');
+      body.className = 'card-body';
+      if (region) {
+        body.appendChild(region.cloneNode(true));
+      } else {
+        body.textContent = 'zone not present in this option';
+      }
+      card.appendChild(head);
+      card.appendChild(body);
+      strip.appendChild(card);
+    });
+    zoneName.textContent = zone;
+    zoneQuestion.textContent = question || '';
+    viewScreens.hidden = true;
+    viewZone.hidden = false;
+  }
+
+  function showScreens() {
+    viewZone.hidden = true;
+    viewScreens.hidden = false;
+  }
+
+  function activate(button) {
+    buttons.forEach(function (other) { other.classList.remove('is-active'); });
+    button.classList.add('is-active');
+    // The picker buttons carry `data-zone-pick`, not `data-zone`: `data-zone`
+    // means "this element IS that zone", and only regions inside a frame are.
+    if (button.dataset.view === 'zone') {
+      showZone(button.dataset.zonePick, button.dataset.question);
+      // So a view is linkable: `compare.html#zone=total-row` opens on that
+      // comparison, which is how you hand one to someone else.
+      location.replace('#zone=' + button.dataset.zonePick);
+    } else {
+      showScreens();
+      location.replace('#screens');
+    }
+  }
+
+  buttons.forEach(function (button) {
+    button.addEventListener('click', function () { activate(button); });
+  });
+
+  var wanted = (location.hash.match(/^#zone=(.+)$/) || [])[1];
+  if (wanted) {
+    buttons.forEach(function (button) {
+      if (button.dataset.zonePick === wanted) { activate(button); }
+    });
+  }
+
+  // z / f toggle; 0 returns to whole screens; 1-6 pick a zone in bar order.
+  document.addEventListener('keydown', function (event) {
+    if (event.metaKey || event.ctrlKey || event.altKey) { return; }
+    var key = event.key;
+    if (key === 'z') { zoneToggle.checked = !zoneToggle.checked; zoneToggle.dispatchEvent(new Event('change')); return; }
+    if (key === 'f') { fitToggle.checked = !fitToggle.checked; fitToggle.dispatchEvent(new Event('change')); return; }
+    var index = '0123456'.indexOf(key);
+    if (index >= 0 && index < buttons.length) { activate(buttons[index]); }
+  });
+})();
+</script>
+
+</body>
+</html>

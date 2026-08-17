@@ -1,0 +1,104 @@
+<!--
+  catalogue id: meal-review/dose-suggestion
+  attempt:      1  (branch `insulin-dosing-ui-1-on-research`)
+  testing:      whether a two-segment middle-dot line — plate mass, then dose —
+                reads as a quantity rather than an instruction with no copy to say so.
+  zones:        photo · total-row · primary-action · scale-control · accessory-line · food-rows
+                (declared for `meal-review` in design-system/surfaces.md; this file
+                marks them, it does not name new ones)
+-->
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>meal-review/dose-suggestion — attempt 1</title>
+  <link rel="stylesheet" href="../../tokens.css">
+  <link rel="stylesheet" href="../../wireframe.css">
+</head>
+<body>
+
+<div class="stage">
+  <h1>meal-review/dose-suggestion — attempt 1</h1>
+  <p>Two segments. The dose is appended to the line that already ships, and nothing else on the
+     screen moves: zero new rows, zero new controls, zero pixels of height.</p>
+
+  <div class="device">
+    <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+
+    <div class="screen">
+      <div class="toolbar">&#8943;</div>
+
+      <div class="photo" data-zone="photo">photo + class outlines</div>
+      <div class="gap-3"></div>
+
+      <!-- totalRow. Second line is inline in MealReviewView on this attempt —
+           `secondLine` / `segments(mass:)`, no extracted type. -->
+      <div class="total" data-zone="total-row">
+        <div class="figure-row">
+          <span class="figure">60</span>
+          <span class="unit">g carbs</span>
+          <span class="spacer"></span>
+          <span class="pill pill--moderate">&#9650; Moderate</span>
+        </div>
+        <div class="dotline">
+          <span>&#8776; 214 g on plate</span><span class="sep"> &#183; </span><span class="emph">12</span><span> U</span>
+        </div>
+      </div>
+
+      <div class="gap-3"></div>
+      <button class="record" data-zone="primary-action">Record 60 g</button>
+      <div class="gap-3"></div>
+
+      <div class="scale" data-zone="scale-control">
+        <span class="label">PLATE</span>
+        <span class="spacer"></span>
+        <span class="frac is-active">All</span>
+        <span class="frac">&frac34;</span>
+        <span class="frac">&frac12;</span>
+        <span class="frac">&frac14;</span>
+      </div>
+
+      <div class="gap-3"></div>
+      <div class="divider"></div>
+
+      <div class="scrollarea">
+        <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
+        <div class="rows" data-zone="food-rows">
+          <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
+          <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="homebar"></div>
+  </div>
+
+  <p class="note">
+    <strong>Shed order</strong> — the line is one line, never wrapped, because a second line pushes the
+    plate control toward the fold. Language goes before information:<br>
+    <span class="mono">&#8776; 214 g on plate &#183; 12 U</span><br>
+    <span class="mono muted">&#8776; 214 g &#183; 12 U</span><br>
+    <span class="mono muted">214 g &#183; 12 U</span><br>
+    <span class="mono muted">12 U</span><br>
+    The dose segment and its <code>U</code> are never shed and never abbreviated.
+  </p>
+
+  <p class="note">
+    <strong>Zones.</strong> Every region carries <code>data-zone</code>, using the vocabulary declared
+    for <code>meal-review</code> in <code>design-system/surfaces.md</code>. That is what makes this
+    option pointable at part by part. Open <code>compare.html</code> to outline the zones and to put
+    this attempt&rsquo;s total row beside the other two.
+  </p>
+
+  <p class="note">
+    <strong>What a rendering cannot settle.</strong> Attempt 1 built this inline inside
+    <code>App/MealReviewView.swift</code>; attempt 2 extracted <code>App/DoseReadoutLine.swift</code>.
+    Nothing on this page distinguishes the two — decomposition has no channel in a picture, and a
+    zone choice does not make one: zones say what it looks like, never how it is factored in Swift.
+    That limit belongs in the decision, not in the wireframe.
+  </p>
+</div>
+
+</body>
+</html>

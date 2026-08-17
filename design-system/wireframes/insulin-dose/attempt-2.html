@@ -1,0 +1,100 @@
+<!--
+  catalogue id: meal-review/dose-suggestion
+  attempt:      2  (branch `insulin-dosing-ui-2-on-research`)
+  testing:      whether carrying the divisor on the line as a third segment — `· 5 g/U` —
+                teaches the ratio at every meal, or just makes the line noisy.
+  zones:        photo · total-row · primary-action · scale-control · accessory-line · food-rows
+                (declared for `meal-review` in design-system/surfaces.md; this file
+                marks them, it does not name new ones)
+-->
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>meal-review/dose-suggestion — attempt 2</title>
+  <link rel="stylesheet" href="../../tokens.css">
+  <link rel="stylesheet" href="../../wireframe.css">
+</head>
+<body>
+
+<div class="stage">
+  <h1>meal-review/dose-suggestion — attempt 2</h1>
+  <p>Three segments. The ratio is the parameter the whole feature exists to measure, so this
+     attempt puts it on screen at every meal instead of only inside the dose sheet.</p>
+
+  <div class="device">
+    <div class="statusbar"><span>9:41</span><span class="island"></span><span class="mono">100%</span></div>
+
+    <div class="screen">
+      <div class="toolbar">&#8943;</div>
+
+      <div class="photo" data-zone="photo">photo + class outlines</div>
+      <div class="gap-3"></div>
+
+      <!-- totalRow. The second line is the extracted `MealTotalSecondLine` in
+           App/DoseReadoutLine.swift on this attempt, built from `MiddleDotLine.Run`s. -->
+      <div class="total" data-zone="total-row">
+        <div class="figure-row">
+          <span class="figure">60</span>
+          <span class="unit">g carbs</span>
+          <span class="spacer"></span>
+          <span class="pill pill--moderate">&#9650; Moderate</span>
+        </div>
+        <div class="dotline">
+          <span>&#8776; 214 g on plate</span><span class="sep"> &#183; </span><span class="emph">12</span><span> U</span><span class="sep"> &#183; </span><span>5 g/U</span>
+        </div>
+      </div>
+
+      <div class="gap-3"></div>
+      <button class="record" data-zone="primary-action">Record 60 g</button>
+      <div class="gap-3"></div>
+
+      <div class="scale" data-zone="scale-control">
+        <span class="label">PLATE</span>
+        <span class="spacer"></span>
+        <span class="frac is-active">All</span>
+        <span class="frac">&frac34;</span>
+        <span class="frac">&frac12;</span>
+        <span class="frac">&frac14;</span>
+      </div>
+
+      <div class="gap-3"></div>
+      <div class="divider"></div>
+
+      <div class="scrollarea">
+        <div class="row row--banner" data-zone="accessory-line">&#8964; uncalibrated &#183; unknown region</div>
+        <div class="rows" data-zone="food-rows">
+          <div class="row"><span class="name">Pasta, cooked</span><span class="val">180 g</span><span class="chev">&rsaquo;</span></div>
+          <div class="row"><span class="name">Tomato sauce</span><span class="val">34 g</span><span class="chev">&rsaquo;</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="homebar"></div>
+  </div>
+
+  <p class="note">
+    <strong>Shed order</strong> — seven candidates, and the ratio is the first thing dropped, so at
+    any width where it does not fit the line is byte-identical to attempt 1:<br>
+    <span class="mono">&#8776; 214 g on plate &#183; 12 U &#183; 5 g/U</span><br>
+    <span class="mono muted">&#8776; 214 g &#183; 12 U &#183; 5 g/U</span><br>
+    <span class="mono muted">214 g &#183; 12 U &#183; 5 g/U</span><br>
+    <span class="mono muted">&#8776; 214 g on plate &#183; 12 U</span><br>
+    <span class="mono muted">&#8776; 214 g &#183; 12 U</span><br>
+    <span class="mono muted">214 g &#183; 12 U</span><br>
+    <span class="mono muted">12 U</span>
+  </p>
+
+  <p class="note">
+    <strong>The question this option actually asks.</strong> Its line and attempt 1&rsquo;s are both the
+    derived register — same font, same colour, weight-only emphasis, no accent. The difference is
+    whether a third segment still reads as one quantity or starts reading as a formula. That is a
+    judgement a person makes by looking, which is why there are three files and not one, and why
+    <code>compare.html</code> puts the three <code>total-row</code> zones side by side rather than
+    asking anyone to hold two rebuilds in their head.
+  </p>
+</div>
+
+</body>
+</html>

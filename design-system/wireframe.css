@@ -1,0 +1,551 @@
+/* Medata wireframe system — flat, OLED-dark, true iPhone 16 Pro metrics.
+ *
+ * Hand-written. Only `tokens.css` is generated.
+ *
+ * Every hue comes from `tokens.css`; nothing here names a hue that
+ * `App/Colors.swift` does not define. What is named outside the tokens is all
+ * neutral: the three `--frame-*` greys of the page the phone sits on, the
+ * hatch standing in for a photo, and white at various opacities. That last one
+ * is the app's own OLED white-on-black chrome convention rather than a token
+ * set — `App/Colors.swift` defines only `captureChromeBG` at
+ * `white.opacity(0.10)` — so it is the one place a wireframe works without a
+ * token, and it is written down here rather than left to be noticed.
+ *
+ * Metrics are logical points at 1pt = 1px, so a value written here is the value
+ * written in Swift. Everything that ships as a measured quantity in
+ * `design-system/MASTER.md` or in `App/` is a variable below, and the wireframes
+ * use the variable rather than repeating the number.
+ *
+ * Anti-patterns from MASTER.md "Anti-patterns to avoid" that this file must
+ * never introduce: shadows, glassmorphism / blur behind chrome, a second accent
+ * colour, gradients as control fills, animated layout properties. The one
+ * gradient present is the hatch on `.photo`, which is the wireframe's
+ * "an image goes here" mark, not a control fill.
+ */
+
+@import "tokens.css";
+
+:root {
+  /* Device — iPhone 16 Pro logical points, portrait. */
+  --device-w: 402px;
+  --device-h: 874px;
+  /* Chrome bands drawn in the frame. These are the visual status-bar and
+   * home-indicator strips, not a claim about UIKit safe-area insets — check a
+   * real inset on the phone before treating either as one. */
+  --status-band: 59px;
+  --home-band: 34px;
+
+  /* Spacing — MASTER.md "Spacing": 4 / 8 / 16 / 24 / 32 / 48pt. No arbitrary
+   * values; if a gap is not on this scale it is a mistake, not a nuance. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+
+  /* Type — MASTER.md "Type scale" for the named roles, plus the iOS text
+   * styles the shipped surfaces actually use, at their default point sizes. */
+  --type-display: 72px;   /* ResultView carb total */
+  --type-title: 28px;     /* section headers */
+  --type-body: 17px;
+  --type-caption: 13px;
+  --type-total: 44px;     /* MealReviewView totalRow figure, 44pt heavy mono */
+  --type-title3: 20px;
+  --type-subheadline: 15px;
+  --type-footnote: 13px;
+  --type-caption2: 11px;
+
+  --font-ui: -apple-system, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Controls — the primary action is h 48 / r 12 (App/MealReviewView.swift). */
+  --control-h: 48px;
+  --radius-control: 12px;
+  --touch-min: 48px;      /* MASTER.md: touch targets >= 48pt everywhere */
+
+  /* The page the phone sits on. Not a screen colour, not from Colors.swift. */
+  --frame-page: #101012;
+  --frame-edge: #35353a;
+  --frame-note: #8b8b93;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  background: var(--frame-page);
+  color: var(--frame-note);
+  font-family: var(--font-ui);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* Caption block beside or above a device — what this attempt is testing.
+ * Lives outside the frame so it can never be mistaken for shipped copy. */
+.stage { display: flex; flex-direction: column; gap: var(--space-3); }
+.stage h1 { margin: 0; font-size: var(--type-body); color: #e6e6ea; font-weight: 600; }
+.stage p { margin: 0; max-width: var(--device-w); font-size: var(--type-caption); line-height: 1.5; }
+.stage code { font-family: var(--font-mono); color: #c9c9d1; }
+
+/* Device frame ------------------------------------------------------- */
+.device {
+  width: var(--device-w);
+  height: var(--device-h);
+  border: 1px solid var(--frame-edge);
+  border-radius: 55px;          /* iPhone 16 Pro display corner radius */
+  background: var(--medata-capture-background);
+  color: var(--medata-capture-chrome-text);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.statusbar {
+  height: var(--status-band);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-5) 0 var(--space-5);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
+.statusbar .island {
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  transform: translateX(-50%);
+  width: 125px;
+  height: 37px;
+  border-radius: 20px;
+  background: #000;
+  border: 1px solid #1b1b1b;
+}
+
+.homebar {
+  height: var(--home-band);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.homebar::after {
+  content: "";
+  width: 140px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--medata-capture-chrome-text);
+  opacity: 0.4;
+}
+
+/* The screen body between the bands. */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--space-3);
+}
+
+.toolbar {
+  height: var(--touch-min);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: var(--type-body);
+  color: var(--medata-capture-chrome-text);
+}
+
+/* Photo / preview placeholder ---------------------------------------- */
+/* `.backdrop` is the same "content goes here" hatch filling the whole screen,
+ * for the surface a sheet is presented over. */
+.photo,
+.backdrop {
+  background: repeating-linear-gradient(
+    135deg,
+    #131313 0 10px,
+    #1a1a1a 10px 20px
+  );
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--type-caption2);
+  letter-spacing: 0.08em;
+  color: rgb(255 255 255 / 0.35);
+  text-transform: uppercase;
+}
+.photo {
+  flex: 0 0 40%;               /* meal review: photo is 40% of height */
+  border-radius: var(--radius-control);
+}
+.backdrop {
+  flex: 1;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--space-3));
+  /* Its label sits near the top, where a sheet does not cover it. */
+  align-content: start;
+  padding-top: var(--space-6);
+}
+.photo .outline {
+  position: absolute;
+  border: 1.5px solid var(--medata-medata-accent);
+  border-radius: 40%;
+  opacity: 0.8;
+}
+
+/* Total row ----------------------------------------------------------- */
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;                    /* VStack(alignment:.leading, spacing: 2) */
+}
+.total .figure-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.total .figure {
+  font-family: var(--font-mono);
+  font-size: var(--type-total);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--medata-capture-chrome-text);
+}
+.total .unit {
+  font-size: var(--type-title3);
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.7);
+}
+.total .spacer { flex: 1; }
+
+/* Confidence pill — colour AND icon, never colour alone (MASTER.md). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: var(--space-1) 12px;
+  border-radius: 100px;
+  font-size: var(--type-body);
+  font-weight: 600;
+  color: var(--medata-capture-chrome-text);
+}
+.pill--high { background: color-mix(in srgb, var(--medata-confidence-high) 85%, transparent); color: var(--medata-capture-background); }
+.pill--moderate { background: color-mix(in srgb, var(--medata-confidence-moderate) 85%, transparent); }
+.pill--low { background: color-mix(in srgb, var(--medata-confidence-low) 85%, transparent); }
+.pill--very-low { background: color-mix(in srgb, var(--medata-confidence-very-low) 85%, transparent); }
+
+/* The middle-dot line — one font, one colour, one height.
+ * Emphasis is weight, never colour: the screen's single accent belongs to the
+ * control that writes a row. */
+.dotline {
+  font-family: var(--font-mono);
+  font-size: var(--type-subheadline);
+  color: rgb(255 255 255 / 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dotline .sep { color: rgb(255 255 255 / 0.45); }
+.dotline .emph { font-weight: 600; }
+.dotline .shed { opacity: 0.35; }   /* wireframe-only: marks a shed candidate */
+
+/* Primary action ------------------------------------------------------ */
+.record {
+  height: var(--control-h);
+  border-radius: var(--radius-control);
+  background: var(--medata-medata-accent);
+  color: var(--medata-capture-background);
+  font-size: var(--type-body);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  display: grid;
+  place-items: center;
+  border: 0;
+  width: 100%;
+}
+
+/* Plate scale control ------------------------------------------------- */
+.scale {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.scale .label {
+  font-size: var(--type-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgb(255 255 255 / 0.6);
+}
+.scale .spacer { flex: 1; }
+.frac {
+  min-width: 44px;
+  height: 34px;
+  border-radius: 100px;
+  border: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--type-footnote);
+  font-weight: 600;
+  background: var(--medata-capture-chrome-bg);
+  color: rgb(255 255 255 / 0.8);
+}
+.frac.is-active {
+  background: var(--medata-capture-chrome-text);
+  color: var(--medata-capture-background);
+}
+
+/* Divider — 1px, white @ 0.08. */
+.divider {
+  height: 1px;
+  background: rgb(255 255 255 / 0.08);
+  flex-shrink: 0;
+}
+
+/* Scrolling rows ------------------------------------------------------ */
+/* Everything below the 1px divider scrolls — the accessory line and the food
+ * rows both, which is why they sit in one scroller and are two zones inside it
+ * (design-system/pages/meal-review.md, "The above-the-fold rule"). */
+.scrollarea {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-min);
+  font-size: var(--type-body);
+  color: var(--medata-capture-chrome-text);
+}
+.row .name { flex: 1; }
+.row .val { font-family: var(--font-mono); color: rgb(255 255 255 / 0.75); }
+.row .chev { color: rgb(255 255 255 / 0.35); }
+.row--banner {
+  font-size: var(--type-caption);
+  color: rgb(255 255 255 / 0.6);
+  min-height: 32px;
+}
+
+/* Chips ---------------------------------------------------------------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) 12px;
+  border-radius: 100px;
+  background: var(--medata-capture-chrome-bg);
+  font-size: var(--type-caption);
+  font-weight: 500;
+}
+.chip--placeholder {
+  background: var(--medata-placeholder-bg);
+  color: var(--medata-placeholder-fg);
+}
+
+/* Utilities ------------------------------------------------------------ */
+.mono { font-family: var(--font-mono); }
+.muted { color: rgb(255 255 255 / 0.6); }
+.gap-1 { height: var(--space-1); flex-shrink: 0; }
+.gap-2 { height: var(--space-2); flex-shrink: 0; }
+.gap-3 { height: var(--space-3); flex-shrink: 0; }
+.gap-4 { height: var(--space-4); flex-shrink: 0; }
+
+/* Zones ---------------------------------------------------------------
+ *
+ * A zone is a named region of a surface — the thing a person points at when
+ * comparing two options ("attempt 2's total row with attempt 1's plate
+ * control"). The vocabulary is declared once per surface in
+ * `design-system/surfaces.md` and reused by every option for that surface;
+ * a wireframe marks its regions with `data-zone="<name>"` and invents nothing.
+ * Zones are a naming convention for regions, not a code construct: no Swift
+ * type has to exist for them and nothing is generated from them.
+ *
+ * The outline is off until `zones` is set on the root element, so an option
+ * page renders as the thing being judged and the scaffolding is opt-in.
+ *
+ * The label is white-on-black, not accent: on every surface in this app the
+ * accent means "this control writes a row" (MASTER.md pre-delivery checklist),
+ * and a scaffolding label must not spend that budget.
+ */
+:root.zones [data-zone] {
+  position: relative;
+  outline: 1px dashed rgb(255 255 255 / 0.30);
+  outline-offset: 2px;
+}
+:root.zones [data-zone]::after {
+  content: attr(data-zone);
+  position: absolute;
+  /* Above the region rather than over it: these zones are one row tall and a
+   * label inside would sit on the content being judged. */
+  top: -11px;
+  right: 2px;
+  z-index: 4;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--medata-capture-chrome-text);
+  color: var(--medata-capture-background);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  pointer-events: none;
+}
+/* The photo is tall and its own top edge is the screen's busiest gap, so its
+ * label goes inside. */
+:root.zones .photo[data-zone]::after {
+  top: 3px;
+  right: 3px;
+}
+/* A label above the first zone in a scroller would be clipped by the scroller,
+ * so that one sits inside too. */
+:root.zones .scrollarea > [data-zone]:first-child::after {
+  top: 0;
+}
+
+/* Sheet — a medium-detent presentation over a surface. Grouped palette, not
+ * the OLED capture palette: sheets are `surfacePrimary` in `App/`. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--medata-capture-scrim);
+}
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 62%;
+  border-radius: 14px 14px 0 0;
+  background: var(--medata-surface-primary);
+  border-top: 1px solid var(--medata-separator-subtle);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) 20px var(--space-4);
+  gap: var(--space-4);
+}
+.sheet .grabber {
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--medata-text-secondary);
+  align-self: center;
+  flex-shrink: 0;
+}
+/* The title IS the mode switch on attempt 3 — a menu where a static
+ * navigation title used to be. The chevron is the whole affordance. */
+.sheet .sheet-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-size: var(--type-body);
+  font-weight: 600;
+  color: var(--medata-text-primary);
+  flex-shrink: 0;
+}
+.sheet .sheet-title .chev {
+  font-size: var(--type-caption2);
+  color: var(--medata-text-secondary);
+}
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--medata-surface-elevated);
+  flex-shrink: 0;
+}
+.segmented span {
+  flex: 1;
+  text-align: center;
+  padding: 6px 0;
+  border-radius: 7px;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  color: var(--medata-text-secondary);
+}
+.segmented span.is-active {
+  background: var(--medata-separator-subtle);
+  color: var(--medata-text-primary);
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+.stepper .step {
+  width: 68px;
+  height: 68px;
+  border-radius: 100px;
+  background: var(--medata-surface-elevated);
+  color: var(--medata-text-primary);
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.stepper .numeral-block {
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.stepper .numeral {
+  font-family: var(--font-mono);
+  font-size: var(--type-display);
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--medata-text-primary);
+}
+/* One slot, two states: the seed's provenance until the first step press,
+ * then the plain unit label. Same font in both, so the slot cannot change
+ * height on the swap. */
+.stepper .provenance {
+  font-size: var(--type-subheadline);
+  color: var(--medata-text-secondary);
+  white-space: nowrap;
+}
+.timerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--touch-min);
+  font-size: var(--type-body);
+  color: var(--medata-text-primary);
+  flex-shrink: 0;
+}
+.timerow .value {
+  font-family: var(--font-mono);
+  font-size: var(--type-footnote);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--medata-surface-elevated);
+  color: var(--medata-text-primary);
+}
+
+/* Margin note — an annotation on the wireframe, never shipped copy. */
+.note {
+  border-left: 2px solid var(--frame-edge);
+  padding-left: var(--space-2);
+  font-size: var(--type-caption);
+  line-height: 1.5;
+  color: var(--frame-note);
+  max-width: var(--device-w);
+}
