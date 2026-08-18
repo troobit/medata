@@ -99,10 +99,10 @@ references:
 
 ## Phase B — Decrypt evaluation (test-sensor gated)
 
-- [ ] 12. Desk audit of LibreCRKit and LibreLoop — licence, protocol correctness, adopt-vs-reimplement <!-- id:usr54mg -->
-  - Read airedev326/LibreCRKit and LoopKit/LibreLoop as source: exact licences (can MeData vendor or must it reimplement?), the AES-128-CCM data-plane path, ECDSA-P256 cert verify with the bundled Abbott patch-signing keys, the P-256 ECDH exchange, and the NFC-activation response that carries the blePIN (protocol.md)
-  - Cross-check protocol.md against DiaBLE Discussion #22 — gui-dos flagged inaccuracies/hallucinations in it on 2026-06-17; note every claim not independently corroborated so the test-sensor run (task 14) targets them
-  - Output an adopt-vs-reimplement recommendation with the licence and correctness evidence behind it; append dated to the re-check log (Req 8.2). No MeData code and no NFC activation in this task
+- [x] 12. Desk audit of LibreCRKit and LibreLoop — licence, protocol correctness, adopt-vs-reimplement <!-- id:usr54mg -->
+  - DONE 2026-08-18 (re-check log): both repos MIT, but the licence is a red herring — LibreCRKit does not solve the WhiteCryption KDF, it bundles ~3 MB of AES tables its own RuntimeTables/README.md says were extracted from Abbott static program regions, so vendoring OR copying redistributes extracted proprietary crypto (DMCA-1201 exposure MIT cannot cure), and reimplementing from protocol.md cannot escape it because the KDF is in the tables, not the docs
+  - Public-key half (ECDSA-P256 cert verify with in-repo Abbott keys, P-256 ECDH, AES-128-CCM) is real, standard CryptoKit, corroborated by DiaBLE 22; only the KDF/table half is the problem. LibreLoop is Pete Schwamb (ps2, trusted Loop maintainer) with dated worn-sensor field logs — genuine end-to-end evidence, but it works because it inherits LibreCRKit-s extracted tables
+  - Recommendation: WAIT — do not adopt, do not reimplement, until a clean-room KDF is published openly or the table-provenance exposure is accepted eyes-open. Full findings and the asserted-only claims list are in docs/agent-notes/libre3-direct-ble.md
   - Stream: 2
   - Requirements: [7.1](requirements.md#7.1), [8.1](requirements.md#8.1), [8.2](requirements.md#8.2)
 
@@ -115,15 +115,17 @@ references:
 
 - [ ] 14. STOP — test-sensor end-to-end decrypt evaluation: activate as owner, hold the BLE session, verify decrypted readings <!-- id:usr54mi -->
   - On the TEST sensor only (never the worn one — Req 7.4): NFC-activate as owner to obtain the blePIN (Decision 3), hold a BLE session across a reconnect, decrypt the 1-minute data plane, and confirm the mmol/L values track the ground-truth reader
+  - Verify the task-12 asserted-only claims specifically: blePIN returned on fresh pair and re-pair; the bundled level0/level1 Abbott keys verify a REAL sensor certificate (correct, not placeholder); the white-box VM + tables produce a byte-exact data-plane key and decrypt a live frame (the one step with no clean-crypto fallback); per-minute notifications decrypt from a locked/backgrounded state on the iPhone 16 Pro floor
   - Confirm the alarm-displacement tradeoff in practice: activating as owner takes the sensor from the Abbott app (Req 7.4, Decision 3) — record it
-  - Verify the value path is genuinely network-free (Req 7.2) — no LibreView account needed, per the LibreCRKit README claim; capture what breaks if offline
+  - Verify the value path is genuinely network-free (Req 7.2) — no LibreView account needed; capture what breaks if offline
   - Record the full outcome, dated, in the re-check log (Req 8.2). This is the Req 7.1 end-to-end proof the Phase B build gates on; a negative result keeps Phase B unbuilt and Phase A the everyday path
   - Blocked-by: usr54mg (Desk audit of LibreCRKit and LibreLoop — licence, protocol correctness, adopt-vs-reimplement), usr54mh (STOP — acquire a separate Libre 3+ test sensor and a ground-truth reader for it)
   - Stream: 2
   - Requirements: [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [8.2](requirements.md#8.2)
 
 - [ ] 15. Author the Phase B build design and task list from the evaluation evidence <!-- id:usr54mj -->
-  - Only after task 14 proves the decrypt end-to-end (Req 7.1): author the Phase B build design and task list against this spec — the value path stays inside GlucoseIngestion and outside every estimation target closure (Req 7.3, 9.1, EstimationFirewallTests), stores under the distinct libre3-ble source identifier snapped/deduped on the shared 5-minute grid (Req 4.3, 7.2), and treats owner activation as the deliberate user-confirmed act Req 7.4 requires
+  - GATED ON A LEGALITY/PROVENANCE DECISION, NOT ONLY ON TASK 14 (task-12 finding): a shippable Phase B cannot embed the extracted Abbott RuntimeTables that LibreCRKit relies on. This task starts only when BOTH the decrypt is proven end-to-end (task 14, Req 7.1) AND the table-provenance exposure is resolved — either a clean-room KDF derivation published openly (removing the table dependency) or an explicit eyes-open owner decision to carry the exposure
+  - Author the Phase B build design and task list against this spec: the value path stays inside GlucoseIngestion and outside every estimation target closure (Req 7.3, 9.1, EstimationFirewallTests), stores under the distinct libre3-ble source identifier snapped/deduped on the shared 5-minute grid (Req 4.3, 7.2), and treats owner activation as the deliberate user-confirmed act Req 7.4 requires
   - The AES-128-CCM decrypt is the property-based-test candidate the design Testing Strategy named (round-trip against vectors) — unlike the Phase A boundary checks
   - Design-and-planning task, not a build: it produces design.md/tasks.md updates for the Phase B implementation stream, which starts only when this lands
   - Blocked-by: usr54mi (STOP — test-sensor end-to-end decrypt evaluation: activate as owner, hold the BLE session, verify decrypted readings)
