@@ -35,13 +35,13 @@ references:
 
 ## Phase A — App wiring (device-verified)
 
-- [ ] 4. Gate the LibreLinkUp launch validation fetch on OS-driven background launches <!-- id:usr54m8 -->
+- [x] 4. Gate the LibreLinkUp launch validation fetch on OS-driven background launches <!-- id:usr54m8 -->
   - Add runValidationFetch parameter to LibreLinkUpGlucoseSource.connect(sink:) (MedataCore/Sources/GlucoseIngestion/LibreLinkUpGlucoseSource.swift); false means attach sink and startPolling, skipping the fetchAndIngest(ignoringRateGate: true) call — Decision 7
   - Existing call sites keep current behaviour (credential entry, foreground opens); wiring change, no new scaffolding; existing GlucoseIngestionTests stay green
   - Stream: 1
   - Requirements: [3.7](requirements.md#3.7)
 
-- [ ] 5. Wire the heartbeat into GlucoseConnectionsModel <!-- id:usr54m9 -->
+- [x] 5. Wire the heartbeat into GlucoseConnectionsModel <!-- id:usr54m9 -->
   - App/GlucoseConnectionsModel.swift: construct Libre3HeartbeatSource in init iff glucose.source.libre3-heartbeat.enabled is set (synchronous UserDefaults read — Decision 10); enableHeartbeat, confirmHeartbeatPairing, disableHeartbeat (disable calls stop() including cancelPeripheralConnection and clears the flag; identifier kept)
   - heartbeatFired(): gate peek (LibreLinkUpRateGate.isOpen) then UIApplication.beginBackgroundTask via CancellableWorkBox, await startTask, connectedSourceIDs guard, sleep preFetchDelay, libreLinkUp.catchUp() — Decision 5; weak self in the closure (no model retain cycle)
   - runStart(): heartbeat resume() when flag set; pass runValidationFetch false when applicationState is background during start()
@@ -49,12 +49,12 @@ references:
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.3](requirements.md#3.3), [3.4](requirements.md#3.4), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [5.3](requirements.md#5.3), [6.1](requirements.md#6.1), [10.1](requirements.md#10.1), [10.3](requirements.md#10.3)
 
-- [ ] 6. Declare the Bluetooth capability in MeData/Info.plist <!-- id:usr54ma -->
+- [x] 6. Declare the Bluetooth capability in MeData/Info.plist <!-- id:usr54ma -->
   - Add bluetooth-central to the existing UIBackgroundModes array; add NSBluetoothAlwaysUsageDescription with functional copy (no disclaimer — Req 5.4); no entitlement change (Decision 4)
   - Stream: 1
   - Requirements: [2.3](requirements.md#2.3), [6.3](requirements.md#6.3)
 
-- [ ] 7. Add the heartbeat section to GlucoseConnectionsView <!-- id:usr54mb -->
+- [x] 7. Add the heartbeat section to GlucoseConnectionsView <!-- id:usr54mb -->
   - App/GlucoseConnectionsView.swift: new Form section matching the LibreLinkUp section patterns (LabeledContent rows, en_IE timeString, accessibility ids under glucose.heartbeat)
   - State row (Pairing / Connected / Stale / Re-pair sensor / Bluetooth off) inside TimelineView periodic every 10 s deriving Stale via isStale; Last heartbeat row from persisted lastBeatAt; Enable, Confirm, Disable buttons; stale row carries the Re-pair action (design: swap detection is manual)
   - Functional copy only; disabled by default behind the developer-phase enable (Req 6.1)

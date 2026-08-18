@@ -73,8 +73,35 @@ a value-less "a reading exists now" signal; it never touches the event log. Thre
   `repairNeeded` is set only when `retrievePeripherals(withIdentifiers:)` returns empty.
   Persisted keys: `glucose.source.libre3-heartbeat.{lastBeatAt,peripheralIdentifier,sensorName}`.
 
-The app wiring (model closure, `runValidationFetch` gate, Info.plist bluetooth-central,
-Settings section) is cgm-direct tasks 4–7; not yet built as of 2026-08-18.
+App wiring (cgm-direct tasks 4–7, built 2026-08-18, device verification pending):
+
+- `LibreLinkUpGlucoseSource.connect(sink:runValidationFetch:)` — the protocol witness
+  `connect(sink:)` forwards with `true`. `false` (Req 3.7, Decision 7) attaches the sink and
+  starts polling but skips the gate-ignoring validation fetch; the model passes it iff
+  `UIApplication.shared.applicationState == .background` during `runStart()` — an OS-driven
+  relaunch must leave the first fetch to the heartbeat path or it races Abbott's ~1 s upload
+  and closes the gate with the previous reading.
+- `GlucoseConnectionsModel` constructs `Libre3HeartbeatSource` in **init** (synchronously,
+  before launch completes) iff `glucose.source.libre3-heartbeat.enabled` is set, so a
+  restoration relaunch always finds the trigger closure attached (Req 2.7). The heartbeat is
+  NOT in `connectedSourceIDs` and never registers with the coordinator. `heartbeatEnabled` is
+  the observable mirror of the flag (same rule as `connectedSourceIDs`: views never read
+  UserDefaults). `enableHeartbeat()` is idempotent and doubles as the re-pair action
+  (constructs if needed, sets flag, `startPairing()`); `disableHeartbeat()` = `stop()` + clear
+  flag, persisted identifier kept.
+- `heartbeatFired()`: `LibreLinkUpRateGate.isOpen()` peek first (most beats end there — the
+  source already recorded the beat), then `beginBackgroundTask` with a `CancellableWorkBox`
+  expiration (same discipline as the BGTask handler), `await startTask?.value`,
+  `connectedSourceIDs` guard (Req 3.6), `preFetchDelay` sleep, `libreLinkUp.catchUp()`.
+- `runStart()` calls `heartbeat?.resume()` before the awaited source connects.
+- `GlucoseConnectionsView` "Sensor heartbeat" section: state row inside
+  `TimelineView(.periodic(from:by: 10))` deriving Stale via `isStale` (stale is
+  display-derived, never set by the source); the Re-pair action rides every settled state
+  (connected/stale/repairNeeded) because BLE cannot tell "out of range" from "replaced";
+  accessibility ids under `glucose.heartbeat.*`.
+- `MeData/Info.plist`: `bluetooth-central` added to `UIBackgroundModes`,
+  `NSBluetoothAlwaysUsageDescription` functional copy (Req 6.3, declared whether or not the
+  developer-phase switch is on).
 
 ## HealthKitGlucoseSource (Phase 3, task 8)
 

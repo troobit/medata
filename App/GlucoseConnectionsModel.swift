@@ -1,5 +1,6 @@
 #if os(iOS)
 import BackgroundTasks
+import UIKit
 #endif
 import Foundation
 import GlucoseIngestion
@@ -34,6 +35,20 @@ final class GlucoseConnectionsModel {
     // concurrent setCredentials/connect calls.
     private(set) var busySourceIDs: Set<String> = []
 
+    // Observable mirror of the heartbeat's persisted enabled flag (cgm-direct
+    // Req 6.1) — same rule as connectedSourceIDs: the view reads only this.
+    private(set) var heartbeatEnabled = false
+    #if os(iOS)
+    // BLE heartbeat wake (specs/data/cgm-direct). NOT a glucose source: never
+    // registered with the coordinator, never in connectedSourceIDs — its only
+    // effect is the rate-gated fetch in heartbeatFired(). Constructed in init
+    // iff the enabled flag is set, so a restoration relaunch always finds a
+    // central whose trigger closure is already attached (Req 2.7), and a
+    // disabled heartbeat constructs no central and prompts for no Bluetooth
+    // permission (Req 6.1).
+    private(set) var heartbeat: Libre3HeartbeatSource?
+    #endif
+
     private let coordinator: IngestionCoordinator
     private let healthKit = HealthKitGlucoseSource()
     private let libreLinkUp = LibreLinkUpGlucoseSource()
@@ -48,6 +63,12 @@ final class GlucoseConnectionsModel {
         for id in [healthKit.id, libreLinkUp.id] where Self.connectedFlag(for: id) {
             connectedSourceIDs.insert(id)
         }
+        heartbeatEnabled = UserDefaults.standard.bool(forKey: Self.heartbeatEnabledKey)
+        #if os(iOS)
+        if heartbeatEnabled {
+            heartbeat = Libre3HeartbeatSource(onHeartbeat: { [weak self] in self?.heartbeatFired() })
+        }
+        #endif
     }
 
     // MARK: - Launch (Req 1.3, 1.4)
@@ -80,11 +101,27 @@ final class GlucoseConnectionsModel {
                 self.discrepancyCounts = counts
             }
         }
+        #if os(iOS)
+        // Reconnect the heartbeat to the persisted sensor (cgm-direct). On a
+        // restoration relaunch the OS already holds the connection and this
+        // re-arms the notify subscription; issued before the awaited source
+        // connects so the central is not kept waiting on network round trips.
+        heartbeat?.resume()
+        // Req 3.7: an OS-driven background launch (CoreBluetooth state
+        // restoration) must not spend the gate-ignoring validation fetch —
+        // that request would race Abbott's ~1 s upload and close the gate
+        // against the properly-delayed heartbeat fetch. The first fetch is
+        // left to the heartbeat path; foreground launches keep today's
+        // immediate validation.
+        let launchedIntoBackground = UIApplication.shared.applicationState == .background
+        #else
+        let launchedIntoBackground = false
+        #endif
         if connectedSourceIDs.contains(healthKitID) {
             await connectHealthKitNow()
         }
         if connectedSourceIDs.contains(libreLinkUpID) {
-            await connectLibreLinkUpNow()
+            await connectLibreLinkUpNow(runValidationFetch: !launchedIntoBackground)
         }
     }
 
@@ -146,6 +183,71 @@ final class GlucoseConnectionsModel {
                 #endif
             }
         }
+    }
+
+    // MARK: - BLE heartbeat wake (specs/data/cgm-direct Req 5.1, 5.3, 6.1)
+
+    #if os(iOS)
+    // Enable is the explicit developer-phase action (Req 6.1): constructing
+    // the central triggers the Bluetooth permission prompt, the flag makes the
+    // next launch reconstruct it, and the foreground wildcard pairing scan
+    // starts (Req 2.1). Re-pairing after a sensor swap re-runs this same flow
+    // (Req 2.4a) — the enable is idempotent.
+    func enableHeartbeat() {
+        setHeartbeatEnabledFlag(true)
+        if heartbeat == nil {
+            heartbeat = Libre3HeartbeatSource(onHeartbeat: { [weak self] in self?.heartbeatFired() })
+        }
+        heartbeat?.startPairing()
+    }
+
+    func confirmHeartbeatPairing() {
+        heartbeat?.confirmPairing()
+    }
+
+    // Additive-off (Req 5.3): stop() cancels the connection and scanning, the
+    // cleared flag keeps the next launch from constructing the central, and
+    // the persisted identifier is kept so a re-enable pairs the same sensor.
+    // The LibreLinkUp source and stored readings are untouched.
+    func disableHeartbeat() {
+        heartbeat?.stop()
+        setHeartbeatEnabledFlag(false)
+    }
+
+    // One debounced beat = one gate-checked fetch attempt (cgm-direct
+    // Decision 5). The gate peek is a single UserDefaults read — roughly four
+    // of five beats find the gate closed and end here, spending no background
+    // assertion and no actor hop; the source already recorded the beat, so
+    // its meaning ("a reading exists now") survives the early return.
+    private func heartbeatFired() {
+        guard LibreLinkUpRateGate.isOpen() else { return }
+        // A CoreBluetooth event wake grants ~10 s of runtime. Expiration
+        // cancels the work Task (same discipline as the BGTask handler);
+        // cancellation surfaces through the URLSession await as a failed
+        // fetch, nothing is acked, and the next open-gate beat retries.
+        let work = CancellableWorkBox()
+        let assertion = UIApplication.shared.beginBackgroundTask { work.cancel() }
+        work.task = Task { [weak self] in
+            defer { UIApplication.shared.endBackgroundTask(assertion) }
+            guard let self else { return }
+            // Req 3.6: lose the cold-launch race — the launch reconnect must
+            // attach the sink first, and the fetch runs only while
+            // LibreLinkUp is connected.
+            await self.startTask?.value
+            guard self.connectedSourceIDs.contains(self.libreLinkUpID) else { return }
+            // Req 3.3: give Abbott's app its ~1 s upload of the just-produced
+            // reading, so the fetch returns the newest value, not the previous.
+            try? await Task.sleep(for: .seconds(Libre3Heartbeat.Constants.preFetchDelay))
+            await self.libreLinkUp.catchUp()
+        }
+    }
+    #endif
+
+    private static let heartbeatEnabledKey = "glucose.source.libre3-heartbeat.enabled"
+
+    private func setHeartbeatEnabledFlag(_ enabled: Bool) {
+        heartbeatEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.heartbeatEnabledKey)
     }
 
     // MARK: - Foreground catch-up (Req 2.6, 3.2)
@@ -219,9 +321,9 @@ final class GlucoseConnectionsModel {
     // LibreLinkUp's connect surfaces fetch failures through its own `.failed`
     // state rather than throws today, but map a throw the same way the
     // HealthKit branch does — no silent-swallow path.
-    private func connectLibreLinkUpNow() async {
+    private func connectLibreLinkUpNow(runValidationFetch: Bool = true) async {
         do {
-            try await libreLinkUp.connect(sink: coordinator)
+            try await libreLinkUp.connect(sink: coordinator, runValidationFetch: runValidationFetch)
             scheduleBackgroundRefresh()
         } catch {
             await coordinator.reportState(

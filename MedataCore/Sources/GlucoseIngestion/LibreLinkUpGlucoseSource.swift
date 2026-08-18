@@ -111,6 +111,15 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
     // the 15-minute poll loop starts only when credentials exist. Fetch
     // failures surface through the connection state (Req 3.4), not throws.
     public func connect(sink: any GlucoseIngestSink) async throws {
+        try await connect(sink: sink, runValidationFetch: true)
+    }
+
+    // runValidationFetch false is the OS-driven background-launch path
+    // (cgm-direct Req 3.7, Decision 7): attach the sink and start polling,
+    // leaving the first fetch to the rate-gated heartbeat. The gate-ignoring
+    // fetch below stays reserved for user actions — typed credentials, a
+    // foreground open — where a state must appear within seconds.
+    public func connect(sink: any GlucoseIngestSink, runValidationFetch: Bool) async throws {
         let generation = connectionGeneration
         self.sink = sink
         guard keychain.credentials() != nil else {
@@ -120,14 +129,16 @@ public actor LibreLinkUpGlucoseSource: GlucoseSource {
             await sink.reportState(connectionState, for: id)
             return
         }
-        // The one fetch that ignores the shared rate gate. connect() is the
-        // credential-validation path — a user who just typed a password, or a
-        // launch reconnect, must get a state within seconds rather than sit on
-        // `.notConnected` for up to an interval because the widget happened to
-        // fetch a minute ago. It is one request on a user action, not a rate.
-        await fetchAndIngest(ignoringRateGate: true)
-        // A disconnect that interleaved the fetch must not resurrect polling.
-        guard generation == connectionGeneration else { return }
+        if runValidationFetch {
+            // The one fetch that ignores the shared rate gate. connect() is the
+            // credential-validation path — a user who just typed a password, or a
+            // launch reconnect, must get a state within seconds rather than sit on
+            // `.notConnected` for up to an interval because the widget happened to
+            // fetch a minute ago. It is one request on a user action, not a rate.
+            await fetchAndIngest(ignoringRateGate: true)
+            // A disconnect that interleaved the fetch must not resurrect polling.
+            guard generation == connectionGeneration else { return }
+        }
         startPolling()
     }
 

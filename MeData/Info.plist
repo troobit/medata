@@ -39,10 +39,20 @@
 	<array>
 		<string>com.medata.librelinkup.refresh</string>
 	</array>
+	<!-- cgm-direct Req 6.3: bluetooth-central lets a CoreBluetooth connect or
+	     notify event wake (and state-restore relaunch) the app for the BLE
+	     heartbeat. Self-service background mode; no signed entitlement
+	     (cgm-direct Decision 4). Declared whether or not the developer-phase
+	     heartbeat switch is on — an unused background mode is inert. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>bluetooth-central</string>
 	</array>
+	<!-- cgm-direct Req 6.3: shown on the Bluetooth permission prompt the
+	     heartbeat enable triggers. Functional copy only (Req 5.4). -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth connects to the worn Libre sensor so each new reading can trigger a glucose fetch.</string>
 	<!-- capture-bundle-recorder smolspec: expose Documents (captures/ fixture
 	     bundles) in the Files app and Finder — the recorder's sole management
 	     surface. Developer-phase only; remove alongside the recorder before
