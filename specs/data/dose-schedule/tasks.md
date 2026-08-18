@@ -162,6 +162,7 @@ metadata:
   - Ends the reminder and closes the occurrence as skipped, writing no insulin event of any amount including zero
   - Does not ask why. There is no reason field, no picker, no free-text prompt
   - Available from the in-app row; the notification carries only the two actions from task 12
+  - Superseded (Decision 5): the per-occurrence Skip affordance is removed from both surfaces — the outstanding-dose surface routes to the schedule's settings instead; DoseDischarge.skip survives for the schedule-delete path
   - Blocked-by: dsf5nv3 (Outstanding-dose row with one-tap discharge)
   - Requirements: [6.1](requirements.md#6.1), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4)
 

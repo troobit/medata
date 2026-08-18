@@ -10,8 +10,9 @@ import SwiftUI
 // card appearing above it. Home keeps exactly the same shape whether or not a
 // dose is due, and the discharge lands where the hand already goes.
 //
-// The secondary closures move behind a long press, because putting Adjust and
-// Skip on the row would rebuild the card this attempt exists to avoid.
+// The secondary actions move behind a long press, because putting Adjust and
+// the schedule-settings route on the row would rebuild the card this attempt
+// exists to avoid.
 //
 // What it trades away: discoverability, entirely. A control that changes meaning
 // teaches nothing, and a developer who has not read this file has no way to know
@@ -27,7 +28,7 @@ struct OutstandingDoseControl: View {
     let dose: OutstandingDose
     let onLog: () -> Void
     let onAdjust: () -> Void
-    let onSkip: () -> Void
+    let onScheduleSettings: () -> Void
 
     @State private var showsSecondary = false
 
@@ -54,7 +55,7 @@ struct OutstandingDoseControl: View {
         .buttonStyle(.borderedProminent)
         .tint(.medataAccent)
         .accessibilityIdentifier("dose.log")
-        // A long press is the only affordance for the two uncommon closures.
+        // A long press is the only affordance for the two uncommon actions.
         // That is the cost of not adding a surface, and it is deliberate rather
         // than an oversight.
         .onLongPressGesture { showsSecondary = true }
@@ -65,8 +66,8 @@ struct OutstandingDoseControl: View {
         ) {
             Button("Adjust") { onAdjust() }
                 .accessibilityIdentifier("dose.adjust")
-            Button("Skip") { onSkip() }
-                .accessibilityIdentifier("dose.skip")
+            Button("Schedule settings") { onScheduleSettings() }
+                .accessibilityIdentifier("dose.scheduleSettings")
             Button("Cancel", role: .cancel) {}
         }
     }

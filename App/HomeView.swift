@@ -20,7 +20,10 @@ struct HomeView: View {
     var outstandingDoses: [OutstandingDose] = []
     var onLogDose: (OutstandingDose) -> Void = { _ in }
     var onAdjustDose: (OutstandingDose) -> Void = { _ in }
-    var onSkipDose: (OutstandingDose) -> Void = { _ in }
+    // The gear on the outstanding-dose surface. No per-dose parameter: it opens
+    // the schedule-settings surface, not a per-occurrence editor — a dose one
+    // would skip every time means the schedule itself needs adjusting.
+    var onScheduleSettings: () -> Void = {}
     // Which of the two attempts is showing. A developer-phase comparison
     // switch, not a preference.
     var surfaceStyle: DoseScheduleSettings.SurfaceStyle = .banner
@@ -41,8 +44,7 @@ struct HomeView: View {
             glucoseHeader
             outstandingDoseSection
             Spacer()
-            captureButton
-            routeButton("Intake", systemImage: "fork.knife", identifier: "home.intake", action: onIntake)
+            ingestRow
             // `doseRoute` rather than a plain Dose button: dose-schedule
             // attempt 2 repurposes this control as the discharge action while a
             // dose is outstanding (see below).
@@ -70,18 +72,22 @@ struct HomeView: View {
     // which is what makes the refused-authorisation path (Req 7.2) the same
     // feature rather than a degraded one.
 
-    // Attempt 1: a dedicated card per outstanding dose, above every route.
+    // Attempt 1: ONE card, above every route, for the earliest-due
+    // outstanding dose — discharging it surfaces the next. A card per
+    // outstanding dose stacked in this fixed VStack and pushed the glucose
+    // hero (home-router Req 4.1's topmost content) off the page once several
+    // schedules were outstanding at once; the ledger still holds every
+    // occurrence, the surface shows them one at a time — the same honest
+    // limit attempt 2 already accepted.
     @ViewBuilder
     private var outstandingDoseSection: some View {
-        if surfaceStyle == .banner {
-            ForEach(outstandingDoses) { dose in
-                OutstandingDoseBanner(
-                    dose: dose,
-                    onLog: { onLogDose(dose) },
-                    onAdjust: { onAdjustDose(dose) },
-                    onSkip: { onSkipDose(dose) }
-                )
-            }
+        if surfaceStyle == .banner, let dose = outstandingDoses.first {
+            OutstandingDoseBanner(
+                dose: dose,
+                onLog: { onLogDose(dose) },
+                onAdjust: { onAdjustDose(dose) },
+                onScheduleSettings: onScheduleSettings
+            )
         }
     }
 
@@ -97,7 +103,7 @@ struct HomeView: View {
                 dose: dose,
                 onLog: { onLogDose(dose) },
                 onAdjust: { onAdjustDose(dose) },
-                onSkip: { onSkipDose(dose) }
+                onScheduleSettings: onScheduleSettings
             )
         } else {
             routeButton(
@@ -202,6 +208,18 @@ struct HomeView: View {
         }
     }
 
+    // Capture and Intake share one row: both are data ingestion — a capture
+    // IS an intake estimate, the Intake sheet is the manual path to the same
+    // record. Capture keeps the accent-prominent treatment and the leading
+    // position, so it remains the primary action (Req 1.3) while the row
+    // gives the fixed VStack back a slot.
+    private var ingestRow: some View {
+        HStack(spacing: 12) {
+            captureButton
+            intakeButton
+        }
+    }
+
     // The primary action (Req 1.3): the largest control, accent-filled via the
     // same `.borderedProminent` + `.tint(.medataAccent)` treatment the old
     // Graph-toolbar capture control carried. Dark foreground on the bright
@@ -220,8 +238,25 @@ struct HomeView: View {
         .accessibilityIdentifier("home.capture")
     }
 
-    // The six secondary routes: one consistent full-width treatment on the
-    // elevated surface (statCard idiom).
+    // Intake matches Capture's height and weight inside the shared row but
+    // stays on the elevated surface — same family as the routes, not a second
+    // accent fighting the primary action.
+    private var intakeButton: some View {
+        Button(action: onIntake) {
+            Label("Intake", systemImage: "fork.knife")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 12))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.intake")
+    }
+
+    // The remaining secondary routes: one consistent full-width treatment on
+    // the elevated surface (statCard idiom).
     private func routeButton(
         _ title: String,
         systemImage: String,

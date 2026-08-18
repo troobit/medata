@@ -53,6 +53,10 @@ struct AppRoot: View {
     // sheet writes the insulin event; this is what tells the schedule which
     // occurrence that event discharges (Req 5.2).
     @State private var adjustingDose: OutstandingDose?
+    // Set by the outstanding-dose gear before presenting `.settings`, so the
+    // cover lands on the dose-schedule section rather than the top of the Form.
+    // Reset on dismiss so a plain Settings open is unaffected.
+    @State private var settingsOpensAtDoseSchedule = false
     @Environment(\.scenePhase) private var scenePhase
 
     // The deep links under the `medata` scheme — each a single-tap lock-screen
@@ -107,7 +111,10 @@ struct AppRoot: View {
                 adjustingDose = dose
                 showInsulinSheet = true
             },
-            onSkipDose: { dose in Task { await doseSchedule.skip(dose) } },
+            onScheduleSettings: {
+                settingsOpensAtDoseSchedule = true
+                activeSheet = .settings
+            },
             surfaceStyle: doseSchedule.surfaceStyle,
             onCapture: {
                 // The benchmark tag must not survive into a non-benchmark
@@ -125,6 +132,7 @@ struct AppRoot: View {
         )
         .tint(.medataAccent)
         .fullScreenCover(item: $activeSheet, onDismiss: {
+            settingsOpensAtDoseSchedule = false
             // A deep-linked present waits for the cover's dismissal to
             // finish; presenting mid-animation is silently dropped by SwiftUI.
             switch pendingDeepLink {
@@ -173,7 +181,8 @@ struct AppRoot: View {
                             captureModel.benchmarkMealID = mealID
                             pendingDeepLink = .captureCover
                             activeSheet = nil
-                        }
+                        },
+                        scrollToDoseSchedule: settingsOpensAtDoseSchedule
                     )
                 }
             }
