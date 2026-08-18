@@ -96,3 +96,36 @@ references:
   - Documentation and verification only; no MeData code changes fall out of this task
   - Stream: 2
   - Requirements: [10.2](requirements.md#10.2), [10.4](requirements.md#10.4), [10.5](requirements.md#10.5)
+
+## Phase B — Decrypt evaluation (test-sensor gated)
+
+- [ ] 12. Desk audit of LibreCRKit and LibreLoop — licence, protocol correctness, adopt-vs-reimplement <!-- id:usr54mg -->
+  - Read airedev326/LibreCRKit and LoopKit/LibreLoop as source: exact licences (can MeData vendor or must it reimplement?), the AES-128-CCM data-plane path, ECDSA-P256 cert verify with the bundled Abbott patch-signing keys, the P-256 ECDH exchange, and the NFC-activation response that carries the blePIN (protocol.md)
+  - Cross-check protocol.md against DiaBLE Discussion #22 — gui-dos flagged inaccuracies/hallucinations in it on 2026-06-17; note every claim not independently corroborated so the test-sensor run (task 14) targets them
+  - Output an adopt-vs-reimplement recommendation with the licence and correctness evidence behind it; append dated to the re-check log (Req 8.2). No MeData code and no NFC activation in this task
+  - Stream: 2
+  - Requirements: [7.1](requirements.md#7.1), [8.1](requirements.md#8.1), [8.2](requirements.md#8.2)
+
+- [ ] 13. STOP — acquire a separate Libre 3+ test sensor and a ground-truth reader for it <!-- id:usr54mh -->
+  - Manual gate (prerequisites.md): a SECOND Libre 3+, distinct from the worn sensor, is required — Req 7.4 forbids the live-sensor decrypt attempt until the path is proven on a test sensor, because owner-activation displaces Abbott alarms (Decision 3)
+  - Also obtain an independent ground-truth reference for that sensor (a reader or region-matched LibreLink) so decrypted values in task 14 can be checked against a known-good source
+  - Note the sensor country of purchase — the blePIN/activation path and any uploader fallback are country-locked (Req 10.2)
+  - Stream: 2
+  - Requirements: [7.4](requirements.md#7.4)
+
+- [ ] 14. STOP — test-sensor end-to-end decrypt evaluation: activate as owner, hold the BLE session, verify decrypted readings <!-- id:usr54mi -->
+  - On the TEST sensor only (never the worn one — Req 7.4): NFC-activate as owner to obtain the blePIN (Decision 3), hold a BLE session across a reconnect, decrypt the 1-minute data plane, and confirm the mmol/L values track the ground-truth reader
+  - Confirm the alarm-displacement tradeoff in practice: activating as owner takes the sensor from the Abbott app (Req 7.4, Decision 3) — record it
+  - Verify the value path is genuinely network-free (Req 7.2) — no LibreView account needed, per the LibreCRKit README claim; capture what breaks if offline
+  - Record the full outcome, dated, in the re-check log (Req 8.2). This is the Req 7.1 end-to-end proof the Phase B build gates on; a negative result keeps Phase B unbuilt and Phase A the everyday path
+  - Blocked-by: usr54mg (Desk audit of LibreCRKit and LibreLoop — licence, protocol correctness, adopt-vs-reimplement), usr54mh (STOP — acquire a separate Libre 3+ test sensor and a ground-truth reader for it)
+  - Stream: 2
+  - Requirements: [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [8.2](requirements.md#8.2)
+
+- [ ] 15. Author the Phase B build design and task list from the evaluation evidence <!-- id:usr54mj -->
+  - Only after task 14 proves the decrypt end-to-end (Req 7.1): author the Phase B build design and task list against this spec — the value path stays inside GlucoseIngestion and outside every estimation target closure (Req 7.3, 9.1, EstimationFirewallTests), stores under the distinct libre3-ble source identifier snapped/deduped on the shared 5-minute grid (Req 4.3, 7.2), and treats owner activation as the deliberate user-confirmed act Req 7.4 requires
+  - The AES-128-CCM decrypt is the property-based-test candidate the design Testing Strategy named (round-trip against vectors) — unlike the Phase A boundary checks
+  - Design-and-planning task, not a build: it produces design.md/tasks.md updates for the Phase B implementation stream, which starts only when this lands
+  - Blocked-by: usr54mi (STOP — test-sensor end-to-end decrypt evaluation: activate as owner, hold the BLE session, verify decrypted readings)
+  - Stream: 2
+  - Requirements: [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [4.3](requirements.md#4.3)
