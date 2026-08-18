@@ -111,9 +111,12 @@ nonisolated enum DoseDischarge {
         }
     }
 
-    // Req 6.1, 6.3: ends the reminder and writes no insulin event of any
-    // amount, including zero. No reason is asked for and there is nowhere to
-    // record one (Req 6.4).
+    // Closes the occurrence as skipped, ending the reminder and writing no
+    // insulin event of any amount, including zero (Req 6.3). No reason is
+    // asked for and there is nowhere to record one (Req 6.4). The sole caller
+    // is `delete(scheduleID:)` — a schedule removed while its occurrence is
+    // outstanding releases that occurrence as skipped (Req 6.1); there is no
+    // per-occurrence Skip in the UI.
     @discardableResult
     static func skip(
         store: any PersistenceStore, occurrenceID: UUID, at instant: Date
@@ -296,16 +299,6 @@ final class DoseScheduleModel {
             }
         } catch {
             log.notice("event=dose.adjust.failed error=\(String(describing: error), privacy: .public)")
-        }
-        await refresh(now: instant)
-    }
-
-    func skip(_ dose: OutstandingDose, at instant: Date = Date()) async {
-        let closed = await DoseDischarge.skip(
-            store: store, occurrenceID: dose.occurrence.id, at: instant
-        )
-        if closed {
-            scheduler.cancel(identifiers: tailIdentifiers(for: dose))
         }
         await refresh(now: instant)
     }

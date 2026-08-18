@@ -5,8 +5,10 @@ import SwiftUI
 // Req 2.4, 4.5; tagged `dose-schedule-ui-attempt-1`).
 //
 // The bet: an outstanding dose deserves its own surface. A dedicated card sits
-// on Home above every route, states the dose and how late it is, and offers all
-// three closures — Log, Adjust, Skip — as visible controls. Nothing is hidden
+// on Home above every route, states the dose and how late it is, and offers
+// Log and Adjust as visible controls plus a gear that routes to the schedule's
+// settings — a dose one would skip every time means the schedule is wrong, so
+// the card offers the durable fix rather than a per-day skip. Nothing is hidden
 // behind a gesture and nothing is inferred from a control changing meaning.
 //
 // What it trades away: permanent vertical space on the launch screen for a card
@@ -27,7 +29,7 @@ struct OutstandingDoseBanner: View {
     let dose: OutstandingDose
     let onLog: () -> Void
     let onAdjust: () -> Void
-    let onSkip: () -> Void
+    let onScheduleSettings: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -35,7 +37,7 @@ struct OutstandingDoseBanner: View {
             HStack(spacing: 10) {
                 logButton
                 secondaryButton("Adjust", identifier: "dose.adjust", action: onAdjust)
-                secondaryButton("Skip", identifier: "dose.skip", action: onSkip)
+                scheduleSettingsButton
             }
         }
         .padding(16)
@@ -77,6 +79,22 @@ struct OutstandingDoseBanner: View {
         .buttonStyle(.borderedProminent)
         .tint(.medataAccent)
         .accessibilityIdentifier("dose.log")
+    }
+
+    // The secondary treatment, icon-only: the gear is a route, not a closure
+    // over this occurrence.
+    private var scheduleSettingsButton: some View {
+        Button(action: onScheduleSettings) {
+            Image(systemName: "gearshape")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.textPrimary)
+                .padding(14)
+                .background(Color.surfacePrimary, in: RoundedRectangle(cornerRadius: 10))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dose.scheduleSettings")
+        .accessibilityLabel("Schedule settings")
     }
 
     private func secondaryButton(

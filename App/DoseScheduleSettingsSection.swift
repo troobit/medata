@@ -15,6 +15,8 @@ extension SettingsView {
 
     @ViewBuilder
     var doseScheduleSection: some View {
+        // The anchor for the outstanding-dose gear: SettingsView scrolls here
+        // on appear when `scrollToDoseSchedule` is set.
         Section("Dose schedule") {
             ForEach(doseSchedule.schedules) { schedule in
                 scheduleRow(schedule)
@@ -36,6 +38,7 @@ extension SettingsView {
             }
             .accessibilityIdentifier("settings.doseScheduleAdd")
         }
+        .id("doseScheduleSection")
 
         Section("Reminder") {
             // I and K. Seeded at 30 minutes and 4 for a two-hour tail. They are

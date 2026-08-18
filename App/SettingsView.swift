@@ -36,6 +36,9 @@ struct SettingsView: View {
     // which tags `CaptureFlowModel.benchmarkMealID` and sequences
     // dismiss-Settings → present-Capture through its deep-link machinery.
     let onBenchmarkCapture: (UUID) -> Void
+    // The outstanding-dose gear lands here: when set, the Form scrolls to the
+    // dose-schedule section on appear instead of opening at the top.
+    var scrollToDoseSchedule: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     // Empty string means the capture-mode key is unset — `captureModeBinding`
@@ -70,6 +73,12 @@ struct SettingsView: View {
     #endif
 
     var body: some View {
+        ScrollViewReader { proxy in
+            settingsForm(proxy: proxy)
+        }
+    }
+
+    private func settingsForm(proxy: ScrollViewProxy) -> some View {
         Form {
             Section {
                 Button("Account") {}
@@ -192,6 +201,11 @@ struct SettingsView: View {
         // Deliberately untitled (snaqui Req 4); inline mode so no large-title
         // band is reserved.
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard scrollToDoseSchedule else { return }
+            // Deferred one turn so the List has laid out before the scroll.
+            Task { proxy.scrollTo("doseScheduleSection", anchor: .top) }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 CloseCoverButton { dismiss() }

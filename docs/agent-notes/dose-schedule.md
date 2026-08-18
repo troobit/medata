@@ -70,6 +70,14 @@ outcome beyond recording it, so the latency is harmless.
 it has no successor to compare against. `DoseScheduleModel.delete(scheduleID:)`
 closes it as skipped instead, because that path knows the intent.
 
+**There is no per-occurrence Skip in the UI** (Decision 5). Both surfaces
+carry a gear routing to the schedule's settings where Skip used to be — a
+dose one would skip every time means the schedule is wrong, and the fix is
+editing or removing it. `DoseDischarge.skip` remains live: it is the
+schedule-delete path above, and historical `skipped` rows keep decoding.
+The `OccurrenceOutcome` enum, the store, and the MedataCore tests are
+untouched.
+
 **`I` and `K` are guesses.** 30 minutes x 4 is reasoned, not measured
 (design.md open question 1, task 26). Once `dueAt`/`closedAt` pairs accumulate,
 set both from the distribution. The Settings copy must not present them as
@@ -88,7 +96,8 @@ suite.
 
 Tagged `dose-schedule-ui-attempt-1` and `dose-schedule-ui-attempt-2`, and both
 reachable on the tip through the `medata.doseSchedule.surfaceStyle` switch in
-Settings. Attempt 1 gives the outstanding dose its own card on Home with all
-three actions visible; attempt 2 overloads the existing Dose route control so
-nothing new appears on screen. See the commit messages on the two tags for what
-each trades away.
+Settings. Attempt 1 gives the outstanding dose its own card on Home with Log
+and Adjust visible plus the schedule-settings gear; attempt 2 overloads the
+existing Dose route control so nothing new appears on screen, with Adjust and
+the gear route behind a long press. See the commit messages on the two tags
+for what each trades away.

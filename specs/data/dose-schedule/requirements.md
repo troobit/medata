@@ -58,7 +58,9 @@ partial, and its exact scope is [Decision 1](decision_log.md).
 1. <a name="2.1"></a>A scheduled dose SHALL become **due** at its scheduled time on
    each day it is enabled.
 2. <a name="2.2"></a>A due dose SHALL remain **outstanding** until it is either
-   logged (Requirement 4) or explicitly skipped (Requirement 6).
+   logged (Requirement 4) or closed without an insulin event (Requirement 6) —
+   closed as missed by the rollover (Req 2.3), or released as skipped when its
+   schedule is removed.
 3. <a name="2.3"></a>The system SHALL hold at most one outstanding occurrence per
    scheduled dose. WHEN a scheduled dose becomes due while its previous occurrence is
    still outstanding, the previous occurrence SHALL be closed as missed
@@ -78,9 +80,9 @@ partial, and its exact scope is [Decision 1](decision_log.md).
 2. <a name="3.2"></a>The reminder SHALL repeat at a configurable interval while the
    dose remains outstanding, so a dismissed or missed notification does not end the
    prompt.
-3. <a name="3.3"></a>The repeat SHALL stop when the dose is logged or skipped, and
-   SHALL stop unconditionally after a configurable cutoff, so a forgotten dose does
-   not prompt indefinitely.
+3. <a name="3.3"></a>The repeat SHALL stop when the dose is logged or its
+   occurrence is otherwise closed (Requirement 6), and SHALL stop unconditionally
+   after a configurable cutoff, so a forgotten dose does not prompt indefinitely.
 4. <a name="3.4"></a>The reminder SHALL carry no reassurance, encouragement,
    warning, or coaching text. Its content is a kind, a quantity, and a time — the
    developer-phase copy rule ([CLAUDE.md](../../../CLAUDE.md)) applies unchanged and
@@ -135,8 +137,14 @@ figure would quietly record a fiction on exactly the days that carry the most si
 
 ## 6. Missed and skipped
 
-1. <a name="6.1"></a>The developer SHALL be able to mark an outstanding dose as
-   **skipped**, ending its reminder without recording an insulin event.
+1. <a name="6.1"></a>The system SHALL NOT offer a per-occurrence skip action. The
+   outstanding-dose surface SHALL instead offer a route to the schedule's
+   settings, because a dose that would be skipped repeatedly is a schedule
+   defect — adjusting or removing the scheduled reminder is the durable fix, and
+   a per-day skip would duplicate schedule management
+   ([Decision 5](decision_log.md)). WHEN a schedule is removed while its
+   occurrence is outstanding, that occurrence SHALL close as **skipped**
+   (recorded, with no insulin event) rather than lingering.
 2. <a name="6.2"></a>An occurrence closed as missed (Req 2.3) or skipped SHALL be
    recorded as such, because a dose not taken is data and inferring it later from an
    absent event is not equivalent — an absent event is indistinguishable from an

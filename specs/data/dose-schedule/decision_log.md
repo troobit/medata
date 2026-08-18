@@ -355,3 +355,90 @@ surviving a delete is exactly the defect that task exists to prevent.
 superseded by this entry.
 
 ---
+
+## Decision 5: No per-occurrence Skip — the surface routes to the schedule's settings instead
+
+**Date**: 2026-08-18
+**Status**: accepted
+
+### Context
+
+Both attempts at the outstanding-dose surface carried a per-occurrence Skip
+action — a visible button on the attempt-1 card, a long-press dialog entry on
+the attempt-2 control — closing the occurrence as `skipped` with no insulin
+event ([Req 6.1](requirements.md#6.1) as originally written).
+
+A skip is a statement that this reminder does not apply today. But a dose one
+would skip every time it fires means the *schedule* is wrong, and the per-day
+action treats the symptom while leaving the defect armed for tomorrow: the same
+reminder fires again, is skipped again, and the ledger fills with skipped rows
+that each individually look like a one-off. The action duplicates schedule
+management through a worse interface — one that can only ever answer for today.
+
+### Decision
+
+Remove the per-occurrence Skip from both surfaces. In its place, the surface
+carries a gear (`gearshape`) that routes to the schedule's settings — the
+attempt-1 card puts it beside Adjust, the attempt-2 dialog replaces its Skip
+entry with a "Schedule settings" entry. The `skipped` outcome itself survives
+unchanged: deleting a schedule while its occurrence is outstanding still closes
+that occurrence as skipped, historical `skipped` rows still decode, and the
+`OccurrenceOutcome` enum and store are untouched.
+
+### Rationale
+
+The durable fix for a reminder that no longer applies is adjusting or removing
+the scheduled reminder, and the gear puts that fix one tap from the exact moment
+the mismatch is noticed. The `skipped` outcome remains the right record for the
+one case that still produces it — a schedule removed mid-occurrence has no
+successor to roll the occurrence into `missed`, so the delete path closes it as
+skipped because it knows the intent ([Decision 4](decision_log.md) discipline:
+the ledger records what happened, the plan is derived). A genuinely one-off
+untaken dose still lands in the ledger without any action at all: the rollover
+closes it as `missed` (Req 2.3), which is the accurate word for it.
+
+### Alternatives Considered
+
+- **Keep the Skip button as it shipped**: A visible per-day action for a
+  schedule-level problem — rejected because every repeated use of it is
+  evidence the schedule needs editing, and the button absorbs exactly the
+  moment that evidence is clearest.
+- **Keep Skip only in the attempt-2 long-press dialog**: Hides the duplication
+  rather than removing it, and leaves the two attempts disagreeing about what
+  closures an outstanding dose offers — rejected; the comparison between the
+  attempts should be about surface shape, not action set.
+- **A per-occurrence "pause until tomorrow" instead of skip**: Adds a fourth
+  occurrence state and a resume rule for a case the missed rollover already
+  records honestly — rejected as machinery without a consumer.
+
+### Consequences
+
+**Positive:**
+
+- One honest path for "this reminder no longer applies": edit or remove the
+  schedule, which fixes tomorrow as well as today.
+- The surface stays at two actions plus a route — Log, Adjust, gear — and the
+  two attempts stay comparable on shape alone.
+- `DoseDischarge.skip`, the store, and every MedataCore test stand unchanged;
+  historical `skipped` rows keep decoding.
+
+**Negative:**
+
+- A genuinely one-off skip now costs a trip into Settings, or simply letting
+  the occurrence lapse to `missed` at rollover — there is no one-tap "not
+  today".
+- [Req 6.4](requirements.md#6.4)'s "no reason asked" becomes mostly vacuous:
+  the only remaining skip is the schedule-delete path, which has no prompt to
+  attach a reason to.
+
+### Impact
+
+`App/OutstandingDoseBanner.swift`, `App/OutstandingDoseControl.swift`,
+`App/HomeView.swift`, `App/AppRoot.swift` (gear wiring, Settings landing on the
+dose-schedule section), `App/SettingsView.swift`,
+`App/DoseScheduleSettingsSection.swift` (scroll anchor),
+`App/DoseScheduleModel.swift` (the UI-facing `skip(_:at:)` removed;
+`DoseDischarge.skip` retained for `delete(scheduleID:)`). Req 6.1 is redefined
+in place; task 17 carries a superseding note.
+
+---
