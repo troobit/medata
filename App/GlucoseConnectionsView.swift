@@ -19,6 +19,7 @@ struct GlucoseConnectionsView: View {
             Form {
                 healthKitSection
                 libreLinkUpSection
+                heartbeatSection
             }
             .navigationTitle("Glucose sources")
             .navigationBarTitleDisplayMode(.inline)
@@ -90,6 +91,91 @@ struct GlucoseConnectionsView: View {
     private var libreLinkUpFailed: Bool {
         if case .failed = model.states[model.libreLinkUpID] { return true }
         return false
+    }
+
+    // BLE heartbeat wake (specs/data/cgm-direct Req 5.1, 5.6). Disabled by
+    // default behind the developer-phase enable (Req 6.1); enabling starts
+    // the foreground pairing scan and triggers the Bluetooth permission
+    // prompt. Functional copy only (Req 5.4).
+    @ViewBuilder
+    private var heartbeatSection: some View {
+        Section("Sensor heartbeat") {
+            if let heartbeat = model.heartbeat, model.heartbeatEnabled {
+                // `stale` is defined by the absence of a beat, so the state
+                // row derives it inside a periodic timeline — truthful
+                // whenever it is on screen, no timer in the source (Req 5.2).
+                TimelineView(.periodic(from: .now, by: 10)) { context in
+                    LabeledContent(
+                        "State",
+                        value: Self.heartbeatStateText(
+                            heartbeat.state, lastBeatAt: heartbeat.lastBeatAt, now: context.date))
+                }
+                .accessibilityIdentifier("glucose.heartbeat.state")
+                if case .unavailable(let reason) = heartbeat.state {
+                    Text(reason)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+                if let lastBeatAt = heartbeat.lastBeatAt {
+                    // Persisted, so the row survives a relaunch (Req 5.7).
+                    LabeledContent("Last heartbeat", value: Self.timeString(lastBeatAt))
+                        .accessibilityIdentifier("glucose.heartbeat.lastBeat")
+                }
+                if case .pairing(.some(let sensorName)) = heartbeat.state {
+                    Button("Confirm \(sensorName)") {
+                        model.confirmHeartbeatPairing()
+                    }
+                    .accessibilityIdentifier("glucose.heartbeat.confirm")
+                }
+                // BLE cannot tell "out of range for a while" from "sensor
+                // replaced", so the re-pair action rides every settled state,
+                // not just repairNeeded — the user knows they swapped
+                // (Req 2.4a, design "Swap detection is manual").
+                switch heartbeat.state {
+                case .connected, .stale, .repairNeeded:
+                    Button("Re-pair sensor") {
+                        model.enableHeartbeat()
+                    }
+                    .accessibilityIdentifier("glucose.heartbeat.repair")
+                case .idle, .unavailable, .pairing:
+                    EmptyView()
+                }
+                Button("Disable", role: .destructive) {
+                    model.disableHeartbeat()
+                }
+                .accessibilityIdentifier("glucose.heartbeat.disable")
+            } else {
+                LabeledContent("State", value: "Off")
+                Button("Enable heartbeat") {
+                    model.enableHeartbeat()
+                }
+                .accessibilityIdentifier("glucose.heartbeat.enable")
+            }
+        }
+    }
+
+    // Req 5.6: each functional state a user diagnosing "is the wake working"
+    // must tell apart. The unavailable row's next-step copy renders beneath.
+    private static func heartbeatStateText(
+        _ state: HeartbeatConnectionState, lastBeatAt: Date?, now: Date
+    ) -> String {
+        switch state {
+        case .idle:
+            return "Starting"
+        case .unavailable:
+            return "Unavailable"
+        case .pairing(nil):
+            return "Scanning for the sensor"
+        case .pairing(.some):
+            return "Sensor found"
+        case .connected, .stale:
+            let stale = Libre3Heartbeat.isStale(
+                now: now, lastBeatAt: lastBeatAt,
+                staleWindow: Libre3Heartbeat.Constants.staleWindow)
+            return stale ? "Stale" : "Connected"
+        case .repairNeeded:
+            return "Re-pair sensor"
+        }
     }
 
     // State per Req 6.1: Not connected / Connected (+ last-reading time) /
