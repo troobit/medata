@@ -262,6 +262,13 @@ body's data. This phase is research; the criteria below are **gates**, not a bui
    this as a deliberate, user-confirmed act that displaces Abbott's app and its realtime alarms on
    that sensor, SHALL confirm it before acting, and SHALL NOT perform it on the user's live sensor
    until the full decrypt path is proven end-to-end on a separate test sensor first.
+5. <a name="7.5"></a>Phase B SHALL NOT be implemented on a key-derivation path that depends on
+   crypto tables extracted from Abbott's binaries — vendoring them, copying them, or reimplementing
+   around them all redistribute the same extracted material. It SHALL be built only WHERE either a
+   clean-room key derivation is published openly, removing the table dependency, or the owner
+   records an explicit eyes-open decision to carry the redistribution exposure and the scope that
+   decision covers. Either outcome SHALL be recorded, dated, in `docs/agent-notes/libre3-direct-ble.md`
+   (Req 8.2). A decrypt proven end-to-end under Req 7.1 SHALL NOT by itself open this gate.
 
 ### 8. Feasibility Note Currency (Standing Requirement)
 
