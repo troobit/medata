@@ -327,3 +327,8 @@ decrypt (AES-128-CCM round-trip against vectors) would be the PBT candidate when
 - The task list carries a standing re-verification work stream (DiaBLE #22, LibreCRKit, 39C3
   project, Libre 3+ coexistence on-device, Ypsomed follower API), run on a cadence and logged
   whether or not the verdict moves (Req 8.2), concurrent with the Phase A build stream.
+- Two independent gates, not one (Decision 12): feasibility (Req 7.1 — is an on-device iOS decrypt
+  demonstrated) and crypto-table provenance (Req 7.5 — the known decrypt derives its key from tables
+  extracted from Abbott's binaries, which a shippable Phase B cannot embed). A working decrypt does
+  not open the second gate; it opens only on a clean-room key derivation published openly or a
+  recorded eyes-open owner decision.

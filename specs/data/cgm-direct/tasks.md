@@ -123,11 +123,22 @@ references:
   - Stream: 2
   - Requirements: [7.1](requirements.md#7.1), [7.4](requirements.md#7.4), [8.2](requirements.md#8.2)
 
-- [ ] 15. Author the Phase B build design and task list from the evaluation evidence <!-- id:usr54mj -->
-  - GATED ON A LEGALITY/PROVENANCE DECISION, NOT ONLY ON TASK 14 (task-12 finding): a shippable Phase B cannot embed the extracted Abbott RuntimeTables that LibreCRKit relies on. This task starts only when BOTH the decrypt is proven end-to-end (task 14, Req 7.1) AND the table-provenance exposure is resolved — either a clean-room KDF derivation published openly (removing the table dependency) or an explicit eyes-open owner decision to carry the exposure
+- [ ] 15. STOP — resolve the crypto-table provenance gate: clean-room KDF, or a recorded eyes-open decision <!-- id:usr54mk -->
+  - The Req 7.5 gate, separate from the Req 7.1 decrypt proof and not opened by it: task 12 found the WhiteCryption KDF lives in ~3 MB of AES tables LibreCRKit's own RuntimeTables/README.md says were extracted from Abbott static program regions, so vendoring, copying, or reimplementing from protocol.md all redistribute the same extracted material (DMCA-1201 exposure MIT cannot cure)
+  - Resolve by one of the two exits Req 7.5 allows: (a) confirm from the task-10 re-verification sweep that a clean-room key derivation has been published openly, removing the table dependency; or (b) record an explicit eyes-open owner decision to carry the exposure, naming the scope it covers (personal build on the owner's device vs a distributed binary)
+  - Owner judgement, no code, and no default: while the gate stays open Phase B is not built and Phase A remains the everyday path, indefinitely if it comes to that
+  - Record the outcome and date in the re-check log of docs/agent-notes/libre3-direct-ble.md (Req 8.2) — a "still unresolved, reasons unchanged" entry is itself the record
+  - Blocked by task 14 because there is nothing to weigh until the decrypt is proven end-to-end; a negative task 14 makes the question moot and this task closes with the path abandoned
+  - Blocked-by: usr54mi (STOP — test-sensor end-to-end decrypt evaluation: activate as owner, hold the BLE session, verify decrypted readings)
+  - Stream: 2
+  - Requirements: [7.5](requirements.md#7.5), [8.2](requirements.md#8.2)
+  - References: decision_log.md
+
+- [ ] 16. Author the Phase B build design and task list from the evaluation evidence <!-- id:usr54mj -->
+  - Starts only when the Req 7.5 provenance gate is resolved (task 15) — which in turn carries the Req 7.1 end-to-end decrypt proof (task 14). A shippable Phase B cannot embed the extracted Abbott RuntimeTables, so a working decrypt alone does not release this task; whichever exit task 15 took (clean-room KDF, or a recorded eyes-open decision and its scope) is the input that shapes the design
   - Author the Phase B build design and task list against this spec: the value path stays inside GlucoseIngestion and outside every estimation target closure (Req 7.3, 9.1, EstimationFirewallTests), stores under the distinct libre3-ble source identifier snapped/deduped on the shared 5-minute grid (Req 4.3, 7.2), and treats owner activation as the deliberate user-confirmed act Req 7.4 requires
   - The AES-128-CCM decrypt is the property-based-test candidate the design Testing Strategy named (round-trip against vectors) — unlike the Phase A boundary checks
   - Design-and-planning task, not a build: it produces design.md/tasks.md updates for the Phase B implementation stream, which starts only when this lands
-  - Blocked-by: usr54mi (STOP — test-sensor end-to-end decrypt evaluation: activate as owner, hold the BLE session, verify decrypted readings)
+  - Blocked-by: usr54mk (STOP — resolve the crypto-table provenance gate: clean-room KDF, or a recorded eyes-open decision)
   - Stream: 2
   - Requirements: [7.2](requirements.md#7.2), [7.3](requirements.md#7.3), [4.3](requirements.md#4.3)

@@ -565,3 +565,86 @@ not block Phase A while any uploader is active.
   heartbeat coexistence is unverified until the stream-2 task runs.
 
 ---
+
+## Decision 12: Phase B is gated on crypto-table provenance, not only on a working decrypt
+
+**Date**: 2026-08-18
+**Status**: accepted
+
+### Context
+
+The Phase B desk audit (task 12) found that the public-key half of the Libre 3+ direct-BLE path is
+ordinary standard crypto — ECDSA-P256 certificate verification against Abbott keys carried in the
+open-source repos, P-256 ECDH, AES-128-CCM — but the key-derivation half is not. LibreCRKit does not
+solve the WhiteCryption KDF; it bundles roughly 3 MB of AES tables that its own
+`RuntimeTables/README.md` states were extracted from Abbott static program regions, and LibreLoop's
+genuine worn-sensor field logs work because they inherit those tables. The KDF lives in the tables,
+not in the protocol documentation, so reimplementing from `protocol.md` reaches the same material by
+another route.
+
+Until now the only stated Phase B gate was Req 7.1 — feasibility, i.e. whether an on-device iOS
+decrypt is demonstrated. That gate can be satisfied by a decrypt that works precisely because it
+carries extracted proprietary crypto. Feasibility and shippability are different questions, and one
+requirement was standing in for both.
+
+### Decision
+
+Add Req 7.5 as a second, independent Phase B gate: no implementation on a key-derivation path that
+depends on tables extracted from Abbott's binaries. It opens only when a clean-room derivation is
+published openly, removing the table dependency, or when the owner records an explicit eyes-open
+decision to carry the redistribution exposure and names the scope that decision covers. Either
+outcome is dated in the re-check log (Req 8.2). Resolving this gate is its own task in the
+test-sensor stream, and authoring the Phase B build design blocks on it rather than on the decrypt
+proof alone.
+
+### Rationale
+
+The two gates fail for different reasons and are resolved by different evidence, so collapsing them
+hides one. Req 7.1 is answered by a working decrypt on a test sensor; Req 7.5 is answered by the
+open-source frontier publishing a clean-room KDF, or by an owner's judgement about redistributing
+extracted material — an MIT licence on the wrapper does not cure a DMCA-1201 exposure in the payload
+it carries. Making the second gate explicit means an affirmative task-14 result cannot be read as
+clearance to build, and it names the two exits so the gate is resolvable rather than a permanent
+vague unease. Placing the resolution downstream of task 14 keeps the decision concrete: there is
+nothing to weigh about carrying an exposure for a path not yet shown to work, and a failed task 14
+makes the question moot.
+
+### Alternatives Considered
+
+- **Leave it as prose on task 15**: The gate was already written into that task's detail bullets -
+  Rejected: a constraint that stops a build belongs in requirements where the design and any later
+  task list must answer to it; buried in one task's notes it disappears the moment the task is
+  rewritten, and nothing records how it could ever be resolved.
+- **Fold the provenance condition into Req 7.1**: One gate, fewer moving parts - Rejected: 7.1 is
+  answered by evidence from the re-verification sweep and the test sensor, 7.5 by a legal-exposure
+  judgement; a single criterion satisfied by either kind of evidence is not testable.
+- **Decide the exposure now, in the spec**: Removes the open gate - Rejected: the decision needs the
+  task-14 result to be about anything real, and pre-committing either way (blanket refusal or
+  blanket acceptance) discards the clean-room outcome that would make the question disappear.
+- **Drop Phase B and keep Phase A permanently**: No exposure at all - Rejected: Phase B is the only
+  path with no cloud custodian and no external uploader, which is why this spec exists; the frontier
+  moves, and a standing gate keeps the option open without building on extracted material.
+
+### Consequences
+
+**Positive:**
+- Phase B cannot be built on extracted Abbott crypto by default or by inattention; opening the gate
+  takes a recorded, dated act.
+- The two exits are named, so the gate is resolvable — the monthly sweep (task 10) is already the
+  instrument that would detect a published clean-room KDF.
+- Feasibility evidence and shippability judgement stay separable in the re-check log.
+
+**Negative:**
+- Phase B may stay unbuilt indefinitely even after a successful test-sensor decrypt, with Phase A —
+  and its cloud custodian — remaining the everyday path.
+- The eyes-open exit puts a legal-exposure judgement on the owner with no counsel in the loop; its
+  scope (personal build versus distributed binary) has to be stated when it is taken, or the record
+  is worth little.
+
+### Impact
+
+`requirements.md` Req 7.5 (new); `tasks.md` Phase B decrypt-evaluation stream — new task 15 resolves
+the gate, and task 16 (Phase B build design and task list) blocks on it instead of on task 14
+directly.
+
+---
