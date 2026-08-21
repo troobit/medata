@@ -12,6 +12,7 @@ import SwiftUI
 // - the recent-entries list — swipe-delete, tap-to-edit inline (Req 7.1/7.5).
 struct IntakeView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
     @State private var model: IntakeModel
     @State private var activeSheet: IntakeSheet?
 
@@ -135,10 +136,31 @@ struct IntakeView: View {
     // (Req 4.2). Sizing/contentShape stay INSIDE the label (Button gotcha).
     // The tile is disabled and dimmed while its write is in flight so a
     // double-tap cannot write two rows.
+    private func presetSubject(_ preset: QuickPreset) -> DoseSubject {
+        DoseSubject(
+            carbsG: preset.carbsG,
+            instant: Date(),
+            source: .quickPreset,
+            sourceEventID: nil,
+            fatG: preset.macros.fatG,
+            proteinG: preset.macros.proteinG,
+            sigmaMeal: nil,
+            fatStale: false
+        )
+    }
+
     private func presetButton(_ preset: QuickPreset) -> some View {
         let isSaving = model.savingPresetID == preset.id
         return Button {
-            Task { await model.tapPreset(preset) }
+            Task {
+                await model.tapPreset(preset)
+                // A preset tap shows NOTHING (specs/data/insulin-dosing
+                // Req 6.6): a second number on a tile whose whole label is a
+                // carbohydrate figure would rewrite the control and blunt its
+                // one job. The suggestion still reaches the developer one tap
+                // later, as the dose sheet's opening value.
+                await doseSuggestions?.arm(from: presetSubject(preset))
+            }
         } label: {
             VStack(spacing: 2) {
                 Text(preset.name)

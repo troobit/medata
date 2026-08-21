@@ -12,6 +12,7 @@ import SwiftUI
 // comes from the per-kind Settings defaults (App 5).
 struct InsulinDoseSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
     @State private var model: InsulinDoseModel
     // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1): the
     // sheet opens pre-seeded with the schedule's kind and nominal amount, so a
@@ -20,13 +21,18 @@ struct InsulinDoseSheet: View {
     // where `units` and `kind` start and who is told about the saved event.
     private let onSaved: ((UUID) -> Void)?
 
+    // Two seed paths, one sheet: the schedule's nominal amount (`seedUnits` /
+    // `seedKind`) and the armed suggestion (`seed`), which also carries the
+    // caption. They are never both in force — the schedule adjust and the
+    // meal readout are different presentations.
     init(
         store: any PersistenceStore,
         seedUnits: Int? = nil,
         seedKind: InsulinKind? = nil,
+        seed: DoseSeed? = nil,
         onSaved: ((UUID) -> Void)? = nil
     ) {
-        let model = InsulinDoseModel(store: store)
+        let model = InsulinDoseModel(store: store, seed: seed)
         if let seedUnits {
             model.seed(units: seedUnits, kind: seedKind ?? model.kind)
         } else if let seedKind {
@@ -54,6 +60,8 @@ struct InsulinDoseSheet: View {
             .background(Color.surfacePrimary)
             .navigationTitle("Insulin")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: model.kind) { model.consumeProvenance() }
+            .onChange(of: model.timestamp) { model.consumeProvenance() }
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
@@ -81,9 +89,19 @@ struct InsulinDoseSheet: View {
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.1), value: model.units)
                     .accessibilityIdentifier("insulin.units")
-                Text("units")
+                // One line in a slot that already exists. While the seeded
+                // value is untouched the caption states where the number came
+                // from; the first press of either step control, or any change
+                // of kind or time, replaces it with the plain label the sheet
+                // ships with today. Both states are a single-line
+                // `.subheadline` in the same slot, so nothing moves on the
+                // swap — and editability is demonstrated rather than stated.
+                Text(model.provenance ?? "units")
                     .font(.subheadline)
                     .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .accessibilityIdentifier("insulin.provenance")
             }
             .frame(minWidth: 120)
             stepControl("plus", direction: .up, identifier: "insulin.plus")
@@ -134,7 +152,19 @@ struct InsulinDoseSheet: View {
         Button {
             Task {
                 if await model.save() {
-                    if let eventID = model.savedEventID { onSaved?(eventID) }
+                    // linkDose is an UPDATE on the side table only — the
+                    // insulin event's metadata JSON is written exactly as it
+                    // is today and no key is added (Req 7.5, 9.7).
+                    if let eventID = model.savedEventID {
+                        if let suggestionID = model.suggestionID {
+                            await doseSuggestions?.noteSavedDose(
+                                suggestionID: suggestionID,
+                                eventID: eventID,
+                                units: Double(model.units)
+                            )
+                        }
+                        onSaved?(eventID)
+                    }
                     dismiss()
                 }
             }
