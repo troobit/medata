@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Worktree tool removes nextup.md sharing** (`Makefile`, `tools/new_worktree.sh`): The `new_worktree.sh` script no longer copies `nextup.md` from the main checkout to newly created worktrees. The tool creates the worktree and prints its path; sharing of project task lists is now handled separately.
+- **Fingerprick glucose spec refined with trend logic and sensor delta recording** (`specs/data/fingerprick-glucose/{requirements,design,decision_log,tasks}.md`): Decision 5 now routes the latest-reading display to Graph and adds a BSL control to the Dose row, inverting the prominence with Dose plain and BSL accent-prominent to echo the Capture/Intake pattern. Decision 7 refined to derive the trend arrow from one provenance at a time — sensor first when it qualifies, then blood alone under the same count-and-span rules — avoiding false rates from modality offsets while keeping blood-only operation viable. Decision 12 establishes that a blood reading stamps its sensor delta (`paired_sensor_value`, `paired_sensor_instant`, `sensor_delta`) at ingestion when a sensor-provenance row exists in the preceding 15 minutes, creating an explicit measure to improve on for later calibration work. Tasks 6, 7 and 17 updated with the refined design, requirements 4.5 added and linked throughout, and the design gap note removed from task 15 as surfaces are now documented. Specs for cgm-connect, libre-ingestion, glucose-lock-widget and home-router requirements re-linked for consistency.
+- **Orbit config adds codex agent** (`.orbit.yaml`): Codex agent type added with 1h timeout for future orchestration use.
 
 ### Added
 

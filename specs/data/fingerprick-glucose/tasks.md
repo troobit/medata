@@ -21,7 +21,7 @@ references:
 - [ ] 2. Write GlucoseDerivation precedence and trend-exclusion tests (Red) <!-- id:3sphmgd -->
   - Blood inside the window is displayed over a strictly newer sensor reading; blood outside it is not; the later of two in-window blood readings wins; a reading back-dated beyond the window never displays — assert it falls out of the same comparison rather than a separate branch.
   - holdsUntil equals the blood instant + holdWindow while a blood reading is displayed and is nil otherwise; provenance names the displayed reading.
-  - Trend: a blood reading offset from a flat sensor trace leaves the rate unchanged; the sensor-only count and span rules are unchanged; blood-only input yields no trend at all.
+  - Trend: a blood reading offset from a flat sensor trace leaves the sensor-derived rate unchanged; the count and span rules are unchanged; a blood-only series satisfying those rules yields a blood-derived trend and one failing them yields none; a mixed series is never regressed — with the sensor series short of the span, qualifying blood readings take over.
   - Empty input stays .neverRecorded and sensor-only input is identical to today's behaviour.
   - Blocked-by: 3sphmgc (Add GlucoseProvenance and carry it on GlucoseReading and GlucoseSnapshot)
   - Stream: 1
@@ -30,7 +30,7 @@ references:
 
 - [ ] 3. Implement precedence and the sensor-only trend in GlucoseDerivation (Green) <!-- id:3sphmge -->
   - snapshot(from:now:holdWindow:) — the latest blood reading whose timestamp is within holdWindow of now, else the latest reading of any provenance; status is the band of whichever was displayed.
-  - Trend runs over readings.filter { $0.provenance == .sensor } — filtered before the regression, not after, so a modality offset can never be reported as a rate.
+  - Trend derives from one provenance at a time: the sensor series when it satisfies the count-and-span rules, else the blood series alone under the same rules — never a mixed regression, so a modality offset can never be reported as a rate (Decision 7).
   - No default for holdWindow: the widget extension passes 0 because it holds no blood readings, the app passes the setting. GlucoseSnapshotSource.snapshot keeps forwarding for app-side callers.
   - Blocked-by: 3sphmgd (Write GlucoseDerivation precedence and trend-exclusion tests Red)
   - Stream: 1
@@ -64,18 +64,20 @@ references:
   - Re-delivering the same (source_id, native_id) writes no second row and emits no eventsDidChange; two hand entries at the same instant with no native id both persist.
   - A blood row at the instant of an existing sensor row leaves that row present and separately retrievable by id, and the path issues no UPDATE and no DELETE.
   - An out-of-range value is rejected at the store the way saveInsulinDose rejects units, so a deep-linked or future caller cannot bypass the pad's bound.
+  - A blood reading recorded with a sensor-provenance row in the preceding 15 minutes stamps paired_sensor_value, paired_sensor_instant and sensor_delta into metadata; with none, the keys are absent — never null (Req 4.5, Decision 12).
   - Blocked-by: 3sphmgc (Add GlucoseProvenance and carry it on GlucoseReading and GlucoseSnapshot)
   - Stream: 1
-  - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [4.1](requirements.md#4.1), [4.4](requirements.md#4.4)
+  - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [4.1](requirements.md#4.1), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
   - References: MedataCore/Tests/PersistenceTests/LiveBslIngestTests.swift
 
 - [ ] 7. Implement BloodBslReading and recordBloodBsl (Green) <!-- id:3sphmgi -->
   - BloodBslReading (instant, mmolL, sourceID, nativeID?) on PersistenceStore; the GRDB implementation is one INSERT in one transaction returning the new UUID, matching saveInsulinDose's shape.
   - Dedup is a json_extract(metadata, '$.native_id') lookup gated on source_id — a scan over the candidate range rather than an indexed key lookup (Decision 10).
+  - The same transaction reads the latest sensor-provenance row within the preceding 15 minutes for the pairing stamp before the INSERT — a read, never an UPDATE, so the path stays insert-only (Decision 12).
   - changeBroadcaster.notify() exactly once, and only when a row was actually written.
   - Blocked-by: 3sphmgh (Write recordBloodBsl store tests Red)
   - Stream: 1
-  - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [4.1](requirements.md#4.1), [4.4](requirements.md#4.4)
+  - Requirements: [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6), [4.1](requirements.md#4.1), [4.4](requirements.md#4.4), [4.5](requirements.md#4.5)
   - References: MedataCore/Sources/Persistence/PersistenceStore.swift, MedataCore/Sources/Persistence/GRDBPersistenceStore.swift
 
 - [ ] 8. Write IngestionCoordinator provenance-routing tests (Red) <!-- id:3sphmgj -->
@@ -143,7 +145,6 @@ references:
 - [ ] 15. Name provenance on the lock-screen widget and keep its own fetch sensor-labelled (Green) <!-- id:3sphmgq -->
   - GlucoseRender / GlucoseTimeline.render carry provenance through to the view, and GlucoseWidget.swift names it beside the value.
   - The extension's own vendor fetch builds GlucoseReading with the literal .sensor and passes holdWindow 0; its write now goes through merged, so a sensor fetch landing during a hold contributes trend only.
-  - Design gap: design.md's Surfaces table has no row for the lock-screen widget's render although Req 3.5 covers it — add one when this lands.
   - Blocked-by: 3sphmgp (Write GlucoseTimeline provenance-render and staleness tests Red), 3sphmgg (Implement merged and the deletion-authorised write Green)
   - Stream: 1
   - Requirements: [3.5](requirements.md#3.5), [3.6](requirements.md#3.6), [3.7](requirements.md#3.7), [3.8](requirements.md#3.8)
@@ -160,13 +161,14 @@ references:
   - Requirements: [2.3](requirements.md#2.3), [2.4](requirements.md#2.4), [2.5](requirements.md#2.5), [2.6](requirements.md#2.6)
   - References: App/GlucoseEntrySheet.swift, App/GlucoseEntryModel.swift, App/InsulinDoseSheet.swift, MeData/MeData.xcodeproj/project.pbxproj
 
-- [ ] 17. Make the home latest-reading display raise the sheet and name provenance <!-- id:3sphmgs -->
-  - The reading becomes a Button presenting the entry sheet — supersedes home-router Decision 15's read-only framing. No new route row, and the tap target carries no label.
+- [ ] 17. Add the BSL control to the Dose row and route the reading to Graph <!-- id:3sphmgs -->
+  - A BSL Button joins doseRoute's row, the pair echoing ingestRow with the prominent and plain treatments inverted — Dose plain in the leading slot, BSL accent-prominent in the trailing slot; it presents the entry sheet (Decision 5). With dose-schedule's attempt-2 OutstandingDoseControl active, that control occupies the Dose slot beside BSL.
+  - The glucose header becomes a route to Graph via onGraph, matching the lock-screen widget's tap destination, and is no longer display-only (home-router Req 4.8 redefined by Decision 5).
   - Renders snapshot.provenance beside the value.
   - App/UI: no preceding test, same gate as task 16.
   - Blocked-by: 3sphmgr (Build the glucose entry sheet and its model), 3sphmgo (Implement the provenance decode, hold-window setting, and app-side pass-through Green)
   - Stream: 2
-  - Requirements: [2.1](requirements.md#2.1), [3.5](requirements.md#3.5), [3.7](requirements.md#3.7)
+  - Requirements: [2.1](requirements.md#2.1), [2.7](requirements.md#2.7), [3.5](requirements.md#3.5), [3.7](requirements.md#3.7)
   - References: App/HomeView.swift, App/HomeGlucoseModel.swift
 
 - [ ] 18. Add the medata://glucose/add deep link <!-- id:3sphmgt -->

@@ -160,40 +160,43 @@ Retaining the route costs one field and keeps the record honest: a later questio
 
 ---
 
-## Decision 5: The home page row with Dose is added to with 'BSL', and echoes the row above, inverting the capture/intake button styling
+## Decision 5: A BSL control joins the Dose row; the latest-reading display routes to Graph
 
-**Date**: 2026-08-20
-**Status**: accepted (narrows `specs/ui/home-router` Decision 15)
+**Date**: 2026-08-21
+**Status**: accepted (supersedes the display-only reading rule of `specs/ui/home-router` Decision 15 / Req 4.8)
 
 ### Context
 
-Graph location is where you end up if you click the blood glucose reading on top of screen.
+Recording a reading has to cost almost nothing or it will not happen, and the record is the product. Home already carries the latest reading as, in the words of `specs/ui/home-router` [Decision 15](../../ui/home-router/decision_log.md), "Home shows the latest glucose reading, narrowing the pure-router rule" — a display element above the route rows, and per [Req 4.8](../../ui/home-router/requirements.md#4.8) "display-only — not tappable, not editable, and not a route". That same decision considered making the reading tappable with Graph as the destination and rejected it "for now as scope beyond the ask", naming it "the obvious first extension if the device pass wants it".
 
-Recording a reading has to cost almost nothing or it will not happen, and the record is the product. Home already carries the latest reading as, in the words of `specs/ui/home-router` [Decision 15](../../ui/home-router/decision_log.md), "Home shows the latest glucose reading, narrowing the pure-router rule" — a display element, not a route, sitting above six route rows.
+Home's layout offers one natural slot for a new control: the ingest row pairs Capture (accent-prominent) with Intake (plain surface), while Dose sits alone on a full-width row below it.
 
 ### Decision
 
-Tapping a page's button presents the glucose-entry surface. A `medata://glucose/add` deep link and a launcher widget in the existing `MeDataWidgets` family present the same surface without the app being open.
+Home gains a BSL control sharing the Dose row, the pair echoing the Capture/Intake row above with the prominent and plain treatments inverted. Tapping BSL presents the glucose-entry surface. Tapping the latest-reading display presents the Graph — the extension Decision 15 anticipated. A `medata://glucose/add` deep link and a launcher widget in the existing `MeDataWidgets` family present the same entry surface without the app being open.
 
 ### Rationale
 
-The number the user disagrees with is the control that corrects it — the shortest path from noticing a wrong value to recording the right one, and no new chrome on a page already carrying six route rows plus two primary actions.
+A tap on the reading most plausibly means "show me this number in context", which is Graph — the meaning the lock-screen widget's tap already carries (`specs/ui/glucose-lock-widget` Req 7: "tapping the tile to open the glucose graph"). Overloading that tap with data entry would put the app's least guessable action on its one unlabelled element. A labelled BSL button costs no guesswork, and the Dose row is the one row with the width to take it: Dose is the only full-width control among paired rows, and BSL beside it groups the two record-creating taps — dose taken, blood measured — on one line. Inverting the prominence keeps one accent button per row rather than stacking two accents in the same column.
 
 The widget matters more than the in-app entry. `InsulinDoseWidget` and `CaptureWidget` already establish a launcher family of roughly ten lines each, deep-linking into the app without a persistence import. A glucose launcher means a reading is recorded from the Lock Screen without the app being opened at all, which is the lowest interaction cost this feature can reach.
 
 ### Alternatives Considered
 
-- **A seventh route row on home**: consistent with how every other entry sheet is reached, and leaves the home-router decision untouched - rejected because it lengthens the page and puts the target further from the value it corrects.
-- **Both, built for a side-by-side device comparison**: rejected because the two are not exclusive — the header tap subsumes the row's function — and the extra ledger cost would land on the least uncertain part of the feature.
+- **Tapping the reading raises the entry surface**: the correction affordance sits on the value being corrected - rejected because it spends the reading's only tap on entry, leaving no route from the number to its own history, and an unlabelled interactive number is undiscoverable; entry gets a labelled control instead and the reading's tap goes to Graph.
+- **A seventh route row on home**: consistent with how every other entry sheet is reached - rejected because it lengthens the page when the Dose row has the width spare.
+- **Both a tappable reading and a BSL button, compared on device**: rejected because the reading's tap is assigned to Graph, so the two entry affordances cannot coexist as alternatives — one meaning per surface.
 
 ### Consequences
 
 **Positive:**
 - A blood reading reaches the record from the Lock Screen without opening the app.
-- The correction affordance sits on the value being corrected, needing no label to explain it.
+- Entry is a labelled control, and the reading gains the history route Decision 15 predicted, matching the lock-screen widget's tap destination.
+- The Dose row's two-button shape mirrors the ingest row, so home keeps its length.
 
 **Negative:**
-- A display element becomes interactive, so the home page no longer separates cleanly into routes and one read-only reading, and the tap target must be discoverable without a label.
+- The Dose row now holds two controls, so `specs/data/dose-schedule`'s attempt-2 outstanding-dose control — which takes over the Dose slot while a dose is outstanding — must fit beside BSL.
+- The reading stops being display-only, so home-router Req 4.8 is redefined and Decision 2's pure-router line retreats another step.
 - A fourth widget joins the bundle, adding to what the user must arrange on a Lock Screen already holding dose and capture launchers.
 
 ---
@@ -209,16 +212,13 @@ Every glucose row today is snapped to a 5-minute grid mark before storage, which
 
 ### Decision
 
-
-Reconsider: 2 write paths - can we jsut assert that this is actually the TRUE value, and record the delta between the CGM data as a measure to improve on?
-
-A blood reading is stored at the instant it was measured. Sensor readings continue to snap and merge keep-first exactly as they do now.
+A blood reading is stored at the instant it was measured — it is the reference measurement, asserted as recorded. Sensor readings continue to snap and merge keep-first exactly as they do now.
 
 ### Rationale
 
-The grid is a dedup device for samples of one continuous trace, where two sources reporting the same 5-minute mark are reporting the same underlying measurement. A fingerstick is not a sample of that trace; it is a discrete event with no counterpart to deduplicate against, and snapping it would falsify its instant for no benefit while manufacturing exactly the collision Decision 2 rejects.
+The grid is a dedup device for samples of one continuous trace, where two sources reporting the same 5-minute mark are reporting the same underlying measurement. A fingerstick is not a sample of that trace; it is a discrete reference measurement with no counterpart to deduplicate against, and snapping it would falsify its instant for no benefit while manufacturing exactly the collision Decision 2 rejects.
 
-Keeping the instant true also protects the pairing: the interval between a blood reading and the sensor readings around it is the quantity any later error analysis depends on, and rounding it away destroys resolution that cannot be recovered.
+Keeping the instant true also protects the pairing: the interval between a blood reading and the sensor readings around it is the quantity any later error analysis depends on, and rounding it away destroys resolution that cannot be recovered. The second write path is the cost of that assertion, and what the pair buys in exchange is made explicit by Decision 12: the delta between the blood reading and the sensor trace is recorded at ingestion as the measure to improve on.
 
 ### Alternatives Considered
 
@@ -237,41 +237,47 @@ Keeping the instant true also protects the pairing: the interval between a blood
 
 ---
 
-## Decision 7: The trend arrow is derived from sensor readings alone
+## Decision 7: The trend derives from one provenance at a time — sensor first, blood alone as the fallback
 
-**Date**: 2026-08-20
+**Date**: 2026-08-21
 **Status**: accepted
 
 ### Context
 
-The trend arrow is a least-squares rate over readings in a window, defined by `specs/ui/glucose-lock-widget` [Req 3.1](../../ui/glucose-lock-widget/requirements.md#3.1) as "a single rate of change in mmol/L per minute over those readings" across the preceding 30 minutes. It is a pure function shared by the home page, the widget publisher, and the widget extension's own fetch. Blood readings entering that series would sit in it at a systematic offset from the interstitial values around them.
+The trend arrow is a least-squares rate over readings in a window, defined by `specs/ui/glucose-lock-widget` [Req 3.1](../../ui/glucose-lock-widget/requirements.md#3.1) as "a single rate of change in mmol/L per minute over those readings" across the preceding 30 minutes. It is a pure function shared by the home page, the widget publisher, and the widget extension's own fetch.
+
+Blood readings relate to that series in two ways. Dropped into it, they sit at a systematic offset from the interstitial values around them. But they can also be the only series there is: a sensor session ends, fails, or is simply not worn, and a user testing by fingerstick still needs to know which way glucose is moving — the same question, answerable from the same arithmetic.
 
 ### Decision
 
-Can this be reconsidered? The blood readings are TRUE, cgm are not correct at the time. A blood reading could alter the trend. It is also possible that these readings ARE the only data - as CGM data can't be gathered at all times: so - the system must be able to take readings and infer direction with these data in the same way.
-
-Blood readings are excluded from the trend derivation. The reported current value may be a blood reading while the arrow beside it describes the sensor trace.
+The trend derives from readings of a single provenance, never a mixed series. Sensor readings satisfying the window's existing count-and-span rules produce the trend; when they do not, blood readings alone are tried under the same rules; when neither qualifies, there is no trend. The reported current value may be a blood reading while the arrow beside it derives from the sensor trace.
 
 ### Rationale
 
-A single blood point dropped into a regression over interstitial values does not measure a change in glucose; it measures the difference between two measurement modalities, and the arrow would report that difference as a rate. On a steady trace a blood reading a millimole above the sensor would swing the arrow to rising, at the moment the user is looking hardest at it.
+A blood point dropped into a regression over interstitial values does not measure a change in glucose; it measures the difference between two measurement modalities, and the arrow would report that difference as a rate. On a steady trace a blood reading a millimole above the sensor would swing the arrow to rising, at the moment the user is looking hardest at it. The blood value being the truer measure of *level* does not rescue this: the slope is corrupted by the between-modality step regardless of which modality is right.
 
-The arrow and the number answering to different sources is not a contradiction: the number answers "what is my glucose", where blood is the better measurement, and the arrow answers "which way is it going", which only a series can answer and only the sensor provides.
+But the offset only corrupts a *mixed* series. Fingersticks regressed against fingersticks carry no step, so the same rate function over blood readings alone describes a real direction — sparser and noisier, but honest. Excluding blood readings absolutely, as this decision first did, conflated the two cases and left a sensorless user with no arrow their own data could support. The existing qualification thresholds — `specs/ui/glucose-lock-widget` [Req 3.3](../../ui/glucose-lock-widget/requirements.md#3.3): "IF fewer than two readings fall within the window, OR the earliest and latest in-window readings span less than 10 minutes, THEN the system SHALL report no trend" — apply to the blood series unchanged, so a lone fingerstick can never fabricate a direction.
+
+Sensor-first ordering, rather than newest-reading-first, keeps the arrow's source stable while a sensor is live: entering one blood reading must not flip the arrow onto a sparse blood regression when a dense sensor series is present.
 
 ### Alternatives Considered
 
-- **Include blood readings in the derivation**: one series, no exclusion rule - rejected because it converts a modality offset into a reported rate of change, precisely when the arrow is being relied on.
+- **One mixed derivation over all readings**: one series, no fallback - rejected because it converts a modality offset into a reported rate of change, precisely when the arrow is being relied on.
+- **Exclude blood readings from the trend absolutely** (this decision's first form): the simplest exclusion rule - rejected because a user with only blood readings gets no arrow at all, though consecutive fingersticks carry a direction the same rate function extracts.
+- **Correct sensor readings by the recorded delta (Decision 12) and regress the corrected series**: would let a blood reading legitimately move the arrow - rejected for now as calibration, a stated non-goal; it needs the accumulated pairs and a validated model of lag and drift, not a subtraction.
 - **Suppress the arrow entirely while a blood reading holds the value**: honest about the mismatch - rejected because it withholds correct sensor information for up to 15 minutes, and direction is what a user checks after an unexpected blood result.
 
 ### Consequences
 
 **Positive:**
-- The arrow keeps one meaning and one input, and cannot be moved by an act of measurement.
+- The arrow keeps one meaning — a rate over a homogeneous series — and a single act of measurement cannot move it while a sensor series stands.
+- A user with no sensor connected gets a direction once two in-window fingersticks span 10 minutes, so blood-only operation is a working mode rather than a degraded one.
 - Trend behaviour is unchanged for anyone with no blood readings, so existing verification stands.
 
 **Negative:**
-- The displayed value and the arrow can derive from different readings, which is defensible but needs explaining to anyone reading the code.
-- A user with no sensor connected and only blood readings gets no arrow at all.
+- The displayed value and the arrow can still derive from different readings, which is defensible but needs explaining to anyone reading the code.
+- A blood-derived arrow rests on sparse, irregular sampling, so it appears and disappears with entry cadence rather than on the sensor's 5-minute beat.
+- Which provenance feeds the arrow switches silently at the qualification boundary; nothing on the surface names the arrow's source.
 
 ---
 
@@ -425,3 +431,42 @@ Restricting the rollback to the removed instants means it can only ever discard 
 **Negative:**
 - The store's write signature grows a parameter that only the deletion paths supply, and every deletion path must remember to supply it.
 - A rollback can still discard an extension fetch in the narrow case where the displayed reading was deleted while the extension held a newer one; that self-corrects on the next widget wake.
+
+---
+
+## Decision 12: A blood reading stamps its sensor delta at ingestion
+
+**Date**: 2026-08-21
+**Status**: accepted
+
+### Context
+
+Decision 2 preserves every blood-and-sensor pair on the grounds that the pair is "the only data from which this sensor's own error can ever be estimated", and Decision 3 leaves the hold window tunable so that measurement can eventually inform it. As first specified the pairs existed only implicitly: consuming them meant re-deriving, for every blood reading, which sensor reading counts as its counterpart — and deriving it later gives a different answer than deriving it at the time, because backfill and screenshot import can add sensor rows beside a blood instant after the fact.
+
+The blood reading is the reference measurement (Decision 6). What the sensor said at that same moment is therefore not neutral context; it is the sensor's measured error, available for free at the instant of recording.
+
+### Decision
+
+When a blood reading is recorded and a sensor-provenance reading exists within the 15 minutes preceding the blood instant, the blood event's metadata records that sensor reading's value and instant and the signed difference, blood minus sensor. When no such reading exists, no pairing is recorded. The stamp acts on nothing in this feature: no display, no precedence, and no correction consumes it.
+
+### Rationale
+
+Recording the delta at ingestion fixes the pairing at the moment it is true: the paired sensor value is the one the surfaces were showing when the finger was pricked, which is the comparison that means something. A later query can only approximate it — an imported or backfilled row landing nearer the blood instant would silently change the answer — and every future consumer would have to re-implement the pairing rule to get any answer at all.
+
+The cost is three metadata keys on an event whose metadata already carries provenance and route, which is the auxiliary-data role `specs/data/event-log-schema` [Req 1.2](../event-log-schema/requirements.md#1.2) assigns to `metadata`: "the canonical scalar measurement for an event in the `value` column and all multi-dimensional or auxiliary data in the `metadata` column". The 15-minute bound is the staleness threshold at which the existing ladder stops treating a sensor reading as describing the present; a sensor reading older than that is not what the fingerstick was checked against.
+
+### Alternatives Considered
+
+- **Derive pairs by query when analysis eventually wants them**: no write-path change now - rejected because the nearest-row answer is unstable under backfill and import, and the pairing rule would live in every consumer instead of one writer.
+- **A dedicated pairing event type**: keeps the blood event lean - rejected because it spends a new event type on what three metadata keys record, and creates a row that must be kept consistent with two others.
+- **Apply the delta as a correction to subsequent sensor readings**: makes the fingerstick improve the trace immediately - rejected as calibration, a stated non-goal needing a validated model of lag and drift, not a subtraction.
+
+### Consequences
+
+**Positive:**
+- Every fingerstick doubles as a sensor-error sample with no collection effort, giving the tunable hold window (Decision 3) something measured to be tuned from.
+- The pairing is fixed at recording time, immune to later backfill rearranging the neighbourhood.
+
+**Negative:**
+- The stamp is frozen: a sensor reading arriving later that sits nearer the blood instant does not update it, so the recorded delta is against what was known, not against the closest sample that ever existed.
+- Three more metadata keys whose meaning a consumer must not mistake for an authoritative sensor row.

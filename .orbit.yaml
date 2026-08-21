@@ -21,3 +21,7 @@ agents:
     type: claude-code
     auto-approve: true
     model: claude-fable-5
+
+  codex:
+    type: codex
+    timeout: 1h
