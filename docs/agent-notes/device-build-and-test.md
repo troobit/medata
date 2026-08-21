@@ -121,9 +121,9 @@ control being tried, not the spec. `N` is only the order the attempts were tried
 in — not a ranking, not a version, and no numbering is reserved. Everything stays
 v0 until main (pipeline Decision 50).
 
-In use today: `tilt-guide-attempt-1/2`, `insulin-dosing-ui-attempt-1/2/3`,
-`activity-sheet-attempt-1/2`, `activity-graph-attempt-1/2`,
-`dose-schedule-ui-attempt-1/2`.
+In use today: `tilt-guide-attempt-1/2`, `insulin-dosing-ui-attempt-1/2/3`
+(and their `-on-research` and `-on-research-2` replays), `activity-sheet-attempt-1/2`,
+`activity-graph-attempt-1/2`, `dose-schedule-ui-attempt-1/2`.
 
 **Tag on a clean tree.** That is the load-bearing rule. A clean tree makes the
 build stamp read `<sha>-<timestamp>` with no `-dirty`, which is what lets a sha
@@ -150,8 +150,10 @@ one checkout back.
 competing designs for the same screen and merging any of them would pre-empt the
 choice. `insulin-dosing` is here: three whole App layers for one readout, on
 `insulin-dosing-ui-{1,2,3}-on-research`, tagged
-`insulin-dosing-ui-attempt-{1,2,3}-on-research`. Nothing merges until a person
-looks at all three and picks one.
+`insulin-dosing-ui-attempt-{1,2,3}-on-research` and, after the second replay,
+`…-on-research-2` (`fa733f5` / `109d7c0` / `5d272c5`, all built clean on
+`006606f`). Nothing merges until a person looks at all three and picks one.
+What each attempt actually is: `docs/agent-notes/insulin-dose-ui.md`.
 
 ### Deploying each one
 
@@ -184,10 +186,19 @@ is not what was compiled.
 ### Rebasing an attempt onto a moved `research`
 
 Attempts go stale — the three `insulin-dosing` attempts were a month behind and
-none of them still built. Rebuild them on the current line, but **never move the
+none of them still built, and a month later the same three were 32 commits
+behind again. Rebuild them on the current line, but **never move the
 original tag**: it is the record of what that attempt was. Make a new ref and
 say so in its name. The `-on-research` suffix above is that, and the naming is
 free — any suffix works as long as the original tag stays put.
+
+A replay onto a moved `research` is a merge, not a transcription, and the
+merge can be a decision in its own right: attempts 2 and 3 both carried their
+own activity surfaces, written before `activity-events` existed, and research
+has since merged a different implementation of exactly that. Both replays drop
+their own copy and take research's — re-fighting a settled decision inside a UI
+attempt makes the comparison about the wrong screen. Say in the commit message
+which parts of an attempt did not survive the replay and why.
 
 Deleting a tag once its attempt stops being interesting is fine; `git log` still
 holds the commit, and `git switch -c <name> <tag>` still spins a variant out of
