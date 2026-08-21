@@ -451,7 +451,7 @@ One case with the subtype in the payload keeps `RecordRow`'s `timestamp`/`id`/re
 ## Decision 15: Home shows the latest glucose reading, narrowing the pure-router rule
 
 **Date**: 2026-08-04
-**Status**: accepted (narrows Decision 2)
+**Status**: accepted (narrows Decision 2; its display-only rule is superseded by `specs/data/fingerprick-glucose` Decision 5, which makes the reading a route to Graph — the "obvious first extension" anticipated below)
 
 ### Context
 

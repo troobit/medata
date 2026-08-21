@@ -2,7 +2,7 @@
 
 ## Overview
 
-Blood readings enter the existing `bsl` stream carrying a provenance marker, stored at their true instant rather than on the 5-minute sensor grid. Precedence is a pure function over readings, shared by the app and the widget extension, so both resolve "the current value" identically without the extension gaining database access.
+Blood readings enter the existing `bsl` stream carrying a provenance marker, stored at their true instant rather than on the 5-minute sensor grid, each stamped with the sensor's concurrent value and the delta against it. Precedence is a pure function over readings, shared by the app and the widget extension, so both resolve "the current value" identically without the extension gaining database access. The trend derives from one provenance at a time — sensor first, blood alone when no sensor series qualifies.
 
 ## Architecture
 
@@ -29,6 +29,8 @@ Blood readings bypass the grid because the grid is a cross-source dedup device f
 
 `recordBloodBsl` returns the new event's `UUID` so the caller can report it, matching `saveInsulinDose`'s shape. It writes one row in one transaction and emits exactly one `eventsDidChange`. It is insert-only — it holds no UPDATE and no DELETE against any existing row — which is how Reqs 4.1 and 4.4 are met structurally rather than by discipline: a blood reading sharing an instant with a sensor reading produces a second row with its own id, and both remain individually retrievable and deletable.
 
+**The pairing stamp.** Inside the same transaction, before the INSERT, `recordBloodBsl` reads the latest sensor-provenance row within the 15 minutes preceding the blood instant and stamps `paired_sensor_value`, `paired_sensor_instant`, and `sensor_delta` (blood minus sensor) into the new event's metadata (Decision 12, Req 4.5). With no such row the keys are absent. It is a read, never a mutation — the path stays insert-only. The delta is derivable from the other two keys; it is stored anyway so a future error analysis is one `json_extract` away, redundancy accepted at one key.
+
 **Idempotence.** `HealthKitGlucoseSource.connect` re-runs a 90-day backfill on every connect; for sensor readings keep-first absorbs the repeat. Blood readings have no keep-first, so the repeat would duplicate. Dedup is a `json_extract(metadata, '$.native_id')` lookup gated on `source_id`, using `HKObject.uuid` as the native id. Hand entries carry no native id and are never deduplicated — two fingersticks a minute apart are two readings, not a repeat.
 
 ### Precedence
@@ -42,7 +44,7 @@ public static func snapshot(
 ```
 
 - **Displayed reading** — the latest blood reading whose timestamp lies within `holdWindow` of `now`; otherwise the latest reading of any provenance (Reqs 3.1, 3.3, 3.4). A blood reading whose instant already precedes `now` by more than the window is never selected, which is Req 3.9 falling out of the same comparison rather than a separate branch.
-- **Trend** — `trend(readings.filter { $0.provenance == .sensor }, now:)` (Req 5.1). Excluding blood before the regression, not after, is what stops a modality offset being reported as a rate.
+- **Trend** — one provenance at a time (Req 5.1): the rate runs over the sensor readings; when they fail the existing count-and-span rules it runs over the blood readings alone under the same rules; a mixed series is never regressed, which is what stops a modality offset being reported as a rate (Decision 7). The widget extension's own fetch holds only vendor sensor data, so its derivation is the sensor pass by construction; the blood fallback is reachable only app-side, where the published snapshot carries its result to the widget.
 - **Status** — band of the displayed reading, unchanged.
 
 Placing this in `GlucoseDerivation` rather than in either caller follows the extraction already made for the same reason: two surfaces deriving "the latest reading and its trend" independently is how they drift (`GlucoseSnapshotSource` header note, home-router Decision 15).
@@ -125,10 +127,12 @@ The literal values identifying a Contour sample are not specified here and must 
 
 | Surface | File | Change |
 |---|---|---|
-| Home header | `App/HomeView.swift`, `HomeGlucoseModel.swift` | the reading becomes a `Button` raising the entry sheet; renders `snapshot.provenance` (Req 3.5). Supersedes home-router Decision 15's read-only framing |
+| Home header | `App/HomeView.swift`, `HomeGlucoseModel.swift` | the reading becomes a route to Graph (Req 2.7, Decision 5 — the extension home-router Decision 15 anticipated) and renders `snapshot.provenance` (Req 3.5) |
+| Home BSL control | `App/HomeView.swift` | a BSL `Button` joins the Dose row, the pair echoing the Capture/Intake row with the prominent and plain treatments inverted — Dose plain in the leading slot, BSL accent-prominent in the trailing slot; raises the entry sheet (Req 2.1). With dose-schedule's attempt-2 `OutstandingDoseControl` active, that control occupies the Dose slot beside BSL |
 | Entry sheet | `App/GlucoseEntrySheet.swift`, `GlucoseEntryModel.swift` (new) | below |
 | Deep link | `App/AppRoot.swift` | `medata://glucose/add` joins the `DeepLink` enum and `handleDeepLink`, reusing the existing `pendingDeepLink` sequencing |
 | Launcher widget | `MeData/MeDataWidgets/MeDataWidgets.swift` | a fourth `Widget` matching `InsulinDoseWidget` exactly — `LauncherView`, `LauncherProvider`, same supported families, `kind: "ie.medata.widget.glucose.add"` |
+| Lock-screen widget | `MedataCore/Sources/GlucoseWidgetShared/GlucoseTimeline.swift`, `MeData/MeDataWidgets/GlucoseWidget.swift` | the render names the displayed reading's provenance (Req 3.5); the extension's own fetch labels readings `.sensor` and passes a zero hold window |
 | Graph | `App/TrendsModel.swift`, `TrendsView.swift` | sensor readings keep the existing `LineMark` trace; blood readings become a separate `PointMark` series (Req 4.2) |
 | Records | `App/RecordsModel.swift`, `RecordsView.swift` | `GlucoseRow` carries provenance; the row labels it (Req 4.3) |
 | Settings | `App/GlucoseConnectionsView.swift`, `SettingsView.swift` | the writer-classification list, and the hold-window control |
@@ -162,6 +166,7 @@ Every consumer of `bsl` rows or `GlucoseReading`, and whether provenance reaches
 | `App/TrendsModel.swift:157` | yes | splits trace from markers |
 | `App/RecordsModel.swift:222` | yes | row label |
 | Widget extension vendor fetch → `GlucoseReading` | yes, constant | vendor data is always `.sensor`; passes the literal |
+| `recordBloodBsl` pairing read | yes | selects the latest sensor-provenance row in the preceding 15 minutes for the delta stamp (Req 4.5) |
 | `ingestBsl` (screenshot import) | no | sensor by construction, path unchanged |
 | `App/GlucoseImportModel.swift` | no | same |
 | `deleteBslEvent(id:)` | no | provenance-agnostic; Req 6.1 needs no change |
@@ -190,7 +195,7 @@ public struct BloodBslReading: Sendable, Equatable {
 }
 ```
 
-Stored `metadata` for a blood reading: `provenance: "blood"`, `source_id`, `native_id` when present. Keys absent rather than null when nil, matching `liveBslMetadataJSON`.
+Stored `metadata` for a blood reading: `provenance: "blood"`, `source_id`, `native_id` when present, and — when a sensor-provenance reading exists in the preceding 15 minutes — `paired_sensor_value`, `paired_sensor_instant`, `sensor_delta` (Req 4.5). Keys absent rather than null when nil, matching `liveBslMetadataJSON`.
 
 ## Error Handling
 
@@ -198,6 +203,7 @@ Stored `metadata` for a blood reading: `provenance: "blood"`, `source_id`, `nati
 |---|---|
 | Hand entry outside 1.0–30.0 | unreachable — the pad cannot express it; the store rejects out-of-range as `saveInsulinDose` does, so a deep-linked or future caller cannot bypass the UI bound |
 | Blood sample re-delivered by HealthKit | dedup on `(source_id, native_id)`; the write is a no-op and no notification is emitted |
+| No sensor reading within 15 minutes of the blood instant | the pairing keys are absent; recording proceeds unchanged (Req 4.5) |
 | Snapshot schema v1 read by a v2 build | existing behaviour — `read` returns `.neverRecorded` on version mismatch, self-correcting on the next publish. App and extension ship in one build, so the mismatch window is a single launch |
 | `holdsUntil` stale after the window setting changes mid-hold | the next publish recomputes it; the stale value can only extend or shorten one hold |
 | Writer classified as blood in error | no data is destroyed (Decision 2); reclassifying corrects subsequent samples, and existing rows are correctable only by deletion |
@@ -209,10 +215,10 @@ The project's gate for app and UI work is build plus device inspection, and `CLA
 | Unit | Cases |
 |---|---|
 | `GlucoseDerivation.snapshot(from:now:holdWindow:)` | blood inside window wins over a newer sensor reading; blood outside window loses; latest of two in-window blood readings wins (Req 3.4); back-dated beyond the window never displays (Req 3.9); empty and sensor-only inputs unchanged |
-| `GlucoseDerivation.trend` | a blood reading in the window does not move the rate (Req 5.1); sensor-only span rules unchanged (Req 5.2) |
+| `GlucoseDerivation.trend` | a blood reading in the window does not move the sensor-derived rate (Req 5.1); a blood-only series satisfying the count-and-span rules yields a blood-derived trend, and one failing them yields none (Req 5.2); a mixed series is never regressed; sensor rules unchanged |
 | `GlucoseSnapshotStore.merged` | each of the three cases; the invariant that the displayed reading's date never decreases; a sensor candidate during a hold refreshes trend but not value |
 | `GlucoseSnapshotStore.write(_:replacingDeleted:)` | deleting the displayed reading rolls the snapshot back to an older one (Req 6.2); a removed instant that is not the displayed one does not authorise a rollback |
-| `recordBloodBsl` | instant stored unsnapped; re-delivery with the same native id is a no-op; two hand entries at the same instant both persist |
+| `recordBloodBsl` | instant stored unsnapped; re-delivery with the same native id is a no-op; two hand entries at the same instant both persist; the pairing stamp records the latest in-window sensor row and is absent when none exists (Req 4.5) |
 
 The `merged` invariant — displayed reading date is non-decreasing across any sequence of writes — is the one property-based candidate here. It is written as example-based cases covering the three branches instead, because adopting a property-testing framework would be new scaffolding of exactly the kind the project's test gate excludes.
 

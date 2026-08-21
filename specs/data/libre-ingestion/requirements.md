@@ -76,7 +76,7 @@ The extraction process is a Swift port of the validated Python reference impleme
 **Acceptance Criteria:**
 
 1. <a name="5.1"></a>WHEN a submitted image's content is identical to an already-processed image, the system SHALL skip it and report the skip, WHERE already-processed means the earlier processing completed without rejection (a rejected image SHALL NOT count as processed); re-processing any image SHALL never alter stored readings.
-2. <a name="5.2"></a>WHEN a new image yields readings for timestamps that already hold stored `bsl` readings, the system SHALL keep the stored readings unchanged and append only readings at timestamps not yet covered.
+2. <a name="5.2"></a>WHEN a new image yields readings for timestamps that already hold stored sensor-provenance `bsl` readings, the system SHALL keep the stored readings unchanged and append only readings at timestamps not yet covered. *(Narrowed to sensor provenance by `specs/data/fingerprick-glucose` [Req 1.3](../fingerprick-glucose/requirements.md#1.3): blood-provenance readings sit off the sampling grid and SHALL NOT suppress an extracted reading. Superseded wording: "timestamps that already hold stored `bsl` readings".)*
 3. <a name="5.3"></a>WHEN a kept stored reading and the newly extracted value at the same timestamp differ by more than 0.3 mmol/L, the system SHALL report the discrepancy in the import summary without modifying the stored value.
 4. <a name="5.4"></a>After processing each image, the system SHALL report how many readings were extracted, stored, and skipped as already present, and — of the overlapping readings — the count agreeing within ±0.3 mmol/L and the count differing by more than 0.3 mmol/L.
 
