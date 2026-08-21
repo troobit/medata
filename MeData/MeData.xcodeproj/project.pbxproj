@@ -38,6 +38,9 @@
 		11CC66A23000000000272C1E /* GlucoseConnectionsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CC66A43000000000272C1E /* GlucoseConnectionsModel.swift */; };
 		11CC66A33000000000272C1E /* GlucoseConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CC66A53000000000272C1E /* GlucoseConnectionsView.swift */; };
 		11AB55A02FF1000000272C1E /* InsulinDoseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */; };
+		11DA1E84B65EADE8EB6A981E /* LogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA92AAF3C1338E5336EA1E /* LogSheet.swift */; };
+		11DA487E1030409CF609121E /* EntryChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DAB2D3F8C2E1BE1421BE1E /* EntryChrome.swift */; };
+		11DAD8B938B28488BE3C8B1E /* DoseSuggestionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */; };
 		11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */; };
 		11AC77A03010000000272C1E /* ActivityModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AC77B03010000000272C1E /* ActivityModel.swift */; };
 		11AC77A13010000000272C1E /* ActivitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AC77B13010000000272C1E /* ActivitySheet.swift */; };
@@ -108,6 +111,9 @@
 		11CC66A43000000000272C1E /* GlucoseConnectionsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseConnectionsModel.swift; path = ../App/GlucoseConnectionsModel.swift; sourceTree = SOURCE_ROOT; };
 		11CC66A53000000000272C1E /* GlucoseConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GlucoseConnectionsView.swift; path = ../App/GlucoseConnectionsView.swift; sourceTree = SOURCE_ROOT; };
 		11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InsulinDoseModel.swift; path = ../App/InsulinDoseModel.swift; sourceTree = SOURCE_ROOT; };
+		11DA92AAF3C1338E5336EA1E /* LogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LogSheet.swift; path = ../App/LogSheet.swift; sourceTree = SOURCE_ROOT; };
+		11DAB2D3F8C2E1BE1421BE1E /* EntryChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EntryChrome.swift; path = ../App/EntryChrome.swift; sourceTree = SOURCE_ROOT; };
+		11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseSuggestionModel.swift; path = ../App/DoseSuggestionModel.swift; sourceTree = SOURCE_ROOT; };
 		11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InsulinDoseSheet.swift; path = ../App/InsulinDoseSheet.swift; sourceTree = SOURCE_ROOT; };
 		11AC77B03010000000272C1E /* ActivityModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivityModel.swift; path = ../App/ActivityModel.swift; sourceTree = SOURCE_ROOT; };
 		11AC77B13010000000272C1E /* ActivitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivitySheet.swift; path = ../App/ActivitySheet.swift; sourceTree = SOURCE_ROOT; };
@@ -242,6 +248,9 @@
 				11CC66A43000000000272C1E /* GlucoseConnectionsModel.swift */,
 				11CC66A53000000000272C1E /* GlucoseConnectionsView.swift */,
 				11AB55B02FF1000000272C1E /* InsulinDoseModel.swift */,
+				11DA92AAF3C1338E5336EA1E /* LogSheet.swift */,
+				11DAB2D3F8C2E1BE1421BE1E /* EntryChrome.swift */,
+				11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */,
 				11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */,
 				11AC77B03010000000272C1E /* ActivityModel.swift */,
 				11AC77B13010000000272C1E /* ActivitySheet.swift */,
@@ -321,6 +330,7 @@
 				111EC91D2FBD45B500272C1E /* MedataCore */,
 				118B44A52FF0000000272C1E /* GlucoseGraph */,
 				11CC66A13000000000272C1E /* GlucoseIngestion */,
+				11DA9728D9DA7CB3236C171E /* Dosing */,
 				11FE88A32FF4000000272C1E /* LibreLinkUpKit */,
 			);
 			productName = MeData;
@@ -457,6 +467,9 @@
 				11CC66A23000000000272C1E /* GlucoseConnectionsModel.swift in Sources */,
 				11CC66A33000000000272C1E /* GlucoseConnectionsView.swift in Sources */,
 				11AB55A02FF1000000272C1E /* InsulinDoseModel.swift in Sources */,
+				11DA1E84B65EADE8EB6A981E /* LogSheet.swift in Sources */,
+				11DA487E1030409CF609121E /* EntryChrome.swift in Sources */,
+				11DAD8B938B28488BE3C8B1E /* DoseSuggestionModel.swift in Sources */,
 				11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */,
 				11AC77A03010000000272C1E /* ActivityModel.swift in Sources */,
 				11AC77A13010000000272C1E /* ActivitySheet.swift in Sources */,
@@ -829,6 +842,10 @@
 		11FE88A32FF4000000272C1E /* LibreLinkUpKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LibreLinkUpKit;
+		};
+		11DA9728D9DA7CB3236C171E /* Dosing */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Dosing;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
