@@ -109,7 +109,7 @@ metadata:
   - What each attempt is, and what its replay dropped: `docs/agent-notes/insulin-dose-ui.md`
   - `git checkout <tag> && make deploy-device` for each in turn; `git describe --tags <build-stamp sha>` must name an exact tag, or the phone is not running the attempt
   - The verdict is a person's, taken on the phone: no test decides it, and nothing merges before it
-  - Record it as a decision in decision_log.md and say in the note what the losers traded away; the winner's App layer is then what tasks 10 to 13 build on
+  - Record it as a decision in decision_log.md and say in the note what the losers traded away; the winner's App layer is then what tasks 11 to 14 build on
   - Stream: 1
   - Requirements: [3.1](requirements.md#3.1), [6.1](requirements.md#6.1), [6.4](requirements.md#6.4)
   - References: design-direction.md#2. Meal review — the primary surface
@@ -210,8 +210,8 @@ metadata:
 
 ## Phase 7 — Fat programme (BLOCKED — staged, each stage names its precondition)
 
-- [ ] 18. STOP — record the scoring verdict from task 16 <!-- id:idz000m -->
-  - BLOCKED-ON EVIDENCE: task 16's surviving fraction
+- [ ] 18. STOP — record the scoring verdict from task 17 <!-- id:idz000m -->
+  - BLOCKED-ON EVIDENCE: task 17's surviving fraction
   - IF too few unconfounded windows survive to distinguish one ratio from another, outcome scoring is NOT built and the ratios stay configured values for longer — that is an acceptable result recorded as a decision, not a failure
   - Only a positive verdict opens the scoring work, and any ratio adjustment ever proposed from outcomes is applied by an explicit user tap, never automatically, with rows either side of the change distinguishable so no comparison pools them
   - Human verdict; never run autonomously
@@ -237,7 +237,7 @@ metadata:
   - Requirements: [8.7](requirements.md#8.7), [8.8](requirements.md#8.8)
 
 - [ ] 21. STOP — establish whether a delayed rise follows high fat-protein units for this user <!-- id:idz000p -->
-  - BLOCKED-ON EVIDENCE: needs the recorded fpu column populated over months of real meals plus the glucose coverage measured in task 16
+  - BLOCKED-ON EVIDENCE: needs the recorded fpu column populated over months of real meals plus the glucose coverage measured in task 17
   - The materiality threshold is set at the knee of THIS user's own recorded distribution, never adopted from a published constant
   - The gate is disjunctive — high fpu OR high protein alone — because the conjunctive published rule is silent on the 50 g fat, 20 g protein pizza that motivated this work
   - IF no late rise is visible, the fat programme stops here and that is a result
@@ -247,8 +247,8 @@ metadata:
   - Requirements: [8.6](requirements.md#8.6), [8.7](requirements.md#8.7), [8.8](requirements.md#8.8)
 
 - [ ] 22. F2 — implement exactly one fat rule, default off <!-- id:idz000q -->
-  - BLOCKED-ON EVIDENCE: all three of task 18, task 19 and task 20 must have cleared; no fat strategy changes a suggested number before then
-  - One rule only, chosen by what task 20 showed, from the four enumerated candidates: fat-uplift-v1, fat-split-v1, fat-protein-v1, fat-fpu-v1
+  - BLOCKED-ON EVIDENCE: all three of task 19, task 20 and task 21 must have cleared; no fat strategy changes a suggested number before then
+  - One rule only, chosen by what task 21 showed, from the four enumerated candidates: fat-uplift-v1, fat-split-v1, fat-protein-v1, fat-fpu-v1
   - Stamped by fat_rule_id and fat_rule_version on every row it produces so outcomes are never pooled across rules
   - Ships disabled by default and refuses to run on rows flagged fat_stale
   - Blocked-by: idz000n (F1 — user corrections carry corrected fat and protein), idz000o (STOP — weigh one reference meal against the pipeline's fat estimate), idz000p (STOP — establish whether a delayed rise follows high fat-protein units for this user)
@@ -257,7 +257,7 @@ metadata:
   - References: design.md#Fat: the staged plan (Req 8)
 
 - [ ] 23. F3 — delayed follow-up suggestion and the notification surface it needs <!-- id:idz000r -->
-  - BLOCKED-ON EVIDENCE: task 21 must first show its rule actually moves the late excursion
+  - BLOCKED-ON EVIDENCE: task 22 must first show its rule actually moves the late excursion
   - Also blocked on machinery that does not exist: the app has no notification, timer or scheduling surface at all today
   - Records the ACTUAL elapsed time at which the follow-up dose was given, not merely that one was given — otherwise a dose given at 4 h scores as if it were given at 2.5 h
   - Blocked-by: idz000q (F2 — implement exactly one fat rule, default off)
@@ -267,7 +267,7 @@ metadata:
 ## Phase 8 — Spec reconciliation (unblocked; do first)
 
 - [ ] 24. F4 — a second fat rule, arbitrated against the first <!-- id:idz000s -->
-  - BLOCKED-ON EVIDENCE: task 22 must be producing follow-ups that are actually taken
+  - BLOCKED-ON EVIDENCE: task 23 must be producing follow-ups that are actually taken
   - Stratified by fat-protein-unit band with n reported per cell
   - Deterministic alternation is not randomisation: a rule landing systematically on the same weekday meal is a live confound the ledger will not flag by itself
   - Blocked-by: idz000r (F3 — delayed follow-up suggestion and the notification surface it needs)
@@ -275,7 +275,7 @@ metadata:
   - Requirements: [8.4](requirements.md#8.4), [8.5](requirements.md#8.5), [7.9](requirements.md#7.9)
 
 - [x] 25. Annotate the superseded non-goal in the shipped PRD — do not rewrite it <!-- id:idz000t -->
-  - Discharges the first clause of Decision 1's Impact section, which reads: "specs/regression-suggestion-integration/prd.md (one cross-reference line), specs/OVERVIEW.md, and everything in this spec." The third clause is this spec; the first two had no task until now, so the repo contradicts itself in a way no ledger surfaced. Neither this task nor task 25 depends on any code
+  - Discharges the first clause of Decision 1's Impact section, which reads: "specs/regression-suggestion-integration/prd.md (one cross-reference line), specs/OVERVIEW.md, and everything in this spec." The third clause is this spec; the first two had no task until now, so the repo contradicts itself in a way no ledger surfaced. Neither this task nor task 26 depends on any code
   - `specs/regression-suggestion-integration/prd.md` currently states, under `## Non-goals`: "No dose suggestion, insulin-on-board, or regression maths in the app — medreg owns all modelling, off-device, against exported data." That is now false in part and nothing on the page says so
   - Add ONE cross-reference line beneath that bullet pointing at `specs/data/insulin-dosing/decision_log.md` Decision 1, "Reverse the 'no dose suggestion in the app' non-goal, narrowly". Do NOT delete or reword the original bullet: that PRD is marked Done and is a record of what shipped, so editing its text destroys the record, while annotating it preserves both the original intent and the reversal
   - State the scope precisely, because the reversal is narrow: dose-suggestion arithmetic and insulin-on-board move on-device; parameter FITTING does not, and `~/repos/medreg` remains the only place parameters are estimated from history
