@@ -45,7 +45,7 @@ XCODEBUILD = xcodebuild -project MeData/MeData.xcodeproj -scheme MeData \
 
 help:
 	@echo "MeData targets:"
-	@echo "  worktree             create .worktrees/<name> and share root's nextup.md into it"
+	@echo "  worktree             create .worktrees/<name>"
 	@echo "                       (name=<dir> [branch=<branch>]; branch defaults to name, off HEAD)"
 	@echo "  build                swift build (SwiftPM core: MedataCore, Harness*)"
 	@echo "  test                 swift test + print the two test totals (XCTest AND swift-testing)"

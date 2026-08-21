@@ -32,12 +32,4 @@ else
     git -C "$main_root" worktree add -b "$branch" "$wt_dir"
 fi
 
-# Copy nextup.md.
-if [ -e "$main_root/nextup.md" ]; then
-    cp "$main_root/nextup.md" "$wt_dir/nextup.md"
-    echo "copied nextup.md from $main_root/nextup.md"
-else
-    echo "note: no nextup.md in the main checkout to seed"
-fi
-
 echo "worktree ready: $wt_dir  [$branch]"

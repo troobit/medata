@@ -6,11 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Worktree tool removes nextup.md sharing** (`Makefile`, `tools/new_worktree.sh`): The `new_worktree.sh` script no longer copies `nextup.md` from the main checkout to newly created worktrees. The tool creates the worktree and prints its path; sharing of project task lists is now handled separately.
+
 ### Added
 
 - **CGM Direct Phase B design gate — table provenance (Req 7.5, Decision 12)** (`specs/data/cgm-direct/{decision_log,requirements}.md`): Phase B decrypt adds a second independent gate distinct from feasibility (Req 7.1) — the open-source frontier must publish a clean-room KDF removing the table dependency, or the owner records a dated eyes-open decision to carry the redistribution exposure and its scope, before Phase B ships. The gate resolves via the re-verification sweep (task 10) or a recorded decision (task 15), not by working decrypt alone; a shippable implementation cannot embed the ~3 MB of AES tables LibreCRKit's RuntimeTables/README.md identifies as extracted from Abbott binaries.
-
-### Changed
 
 - **The per-occurrence Skip is gone from both outstanding-dose surfaces; a gear routes to the schedule's settings instead (dose-schedule Decision 5, Req 6.1 redefined)** (`App/OutstandingDoseBanner.swift`, `App/OutstandingDoseControl.swift`, `App/HomeView.swift`, `App/AppRoot.swift`, `App/SettingsView.swift`, `App/DoseScheduleSettingsSection.swift`, `App/DoseScheduleModel.swift`): a dose one would skip every time means the schedule is wrong, so the surface now offers the durable fix — the attempt-1 card puts a `gearshape` button (`dose.scheduleSettings`) where Skip stood, the attempt-2 long-press dialog replaces its Skip entry with "Schedule settings", and the gear presents Settings scrolled to the dose-schedule section. Ledger semantics are unchanged: the `skipped` outcome, `DoseDischarge.skip`, the store and all MedataCore tests stand — deleting a schedule still closes its open occurrence as skipped, and historical rows keep decoding. The UI-facing `DoseScheduleModel.skip(_:at:)` is removed as uncalled.
 
