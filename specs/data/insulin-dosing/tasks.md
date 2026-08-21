@@ -102,18 +102,28 @@ metadata:
     - Stream: 1
     - Requirements: [7.4](requirements.md#7.4), [7.5](requirements.md#7.5), [10.5](requirements.md#10.5)
 
-## Phase 3 — Settings plumbing
+## Phase 3 — The attempt choice, then Settings plumbing
 
-- [ ] 8. Seven SettingsKeys constants for the ratios, increment and provenance <!-- id:idz000d -->
+- [ ] 8. STOP — install the three UI attempts and pick one <!-- id:idz000v -->
+  - Three whole App layers for one readout, none merged, per shape 3 of the attempt convention: `insulin-dosing-ui-attempt-{1,2,3}-on-research-2` (`fa733f5` / `109d7c0` / `5d272c5`), all replayed on `006606f` and building clean
+  - What each attempt is, and what its replay dropped: `docs/agent-notes/insulin-dose-ui.md`
+  - `git checkout <tag> && make deploy-device` for each in turn; `git describe --tags <build-stamp sha>` must name an exact tag, or the phone is not running the attempt
+  - The verdict is a person's, taken on the phone: no test decides it, and nothing merges before it
+  - Record it as a decision in decision_log.md and say in the note what the losers traded away; the winner's App layer is then what tasks 10 to 13 build on
+  - Stream: 1
+  - Requirements: [3.1](requirements.md#3.1), [6.1](requirements.md#6.1), [6.4](requirements.md#6.4)
+  - References: design-direction.md#2. Meal review — the primary surface
+
+- [ ] 9. Seven SettingsKeys constants for the ratios, increment and provenance <!-- id:idz000d -->
   - Four per-band ratio keys in GRAMS PER UNIT, the pen increment, the ratio source, and the free-text medreg fit reference
   - Flat keys of the same kind as insulinTypeBolus — no structured or array-valued setting is introduced
   - An absent per-band key means the seed default is in force and the suggestion row records that
-  - Blocked-by: idz0002 (CarbRatio and CarbRatioTable — one direction, named in the type)
+  - Blocked-by: idz0002 (CarbRatio and CarbRatioTable — one direction, named in the type), idz000v (STOP — install the three UI attempts and pick one)
   - Stream: 1
   - Requirements: [1.3](requirements.md#1.3), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4)
   - References: design.md#Settings: seven flat keys, no new shape (Req 1.3, 6.9, 9.4)
 
-- [ ] 9. Settings rows in the existing Insulin section <!-- id:idz000e -->
+- [ ] 10. Settings rows in the existing Insulin section <!-- id:idz000e -->
   - Four LabeledContent rows in band order, each a trailing decimal field suffixed g/U with the reciprocal rendered beneath as read-only secondary text
   - Pen increment picker (0.5 or 1 U), ratio source picker (Chosen or medreg), medreg fit free-text field
   - Validation is CarbRatio.init? and DosableIncrement.init?: a rejected entry reverts on commit with no error copy
@@ -125,7 +135,7 @@ metadata:
 
 ## Phase 4 — App wiring
 
-- [ ] 10. DoseSubject and DoseSuggestionModel <!-- id:idz000f -->
+- [ ] 11. DoseSubject and DoseSuggestionModel <!-- id:idz000f -->
   - MainActor Observable, owned by AppRoot so a seed armed inside the Capture cover survives that cover's dismissal
   - refresh(for:) reads Settings, queries the 360-minute bolus window and the last glucose reading, calls the pure suggester, publishes the readout and writes the ledger row in a detached task so a persistence failure never blocks or delays recording
   - The starting glucose is RECORDED ONLY — no correction term consumes it in iteration 1
@@ -136,7 +146,7 @@ metadata:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.7](requirements.md#3.7), [4.5](requirements.md#4.5), [4.7](requirements.md#4.7), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.7](requirements.md#7.7), [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [10.1](requirements.md#10.1)
   - References: design.md#Data flow: estimate to suggestion to seed
 
-- [ ] 11. Meal review readout on the existing mass line <!-- id:idz000g -->
+- [ ] 12. Meal review readout on the existing mass line <!-- id:idz000g -->
   - Append a middle-dot segment to the second line of totalRow at the same subheadline monospacedDigit and captureChromeText opacity, as an HStack of two Texts so the line height is unchanged and the scale control stays above the scroll boundary
   - New accessibility identifier review.doseSuggestion beside the retained review.massLine
   - numericText transition and smooth animation, both gated on reduceMotion, exactly as the other animated numerals on that screen
@@ -147,7 +157,7 @@ metadata:
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.6](requirements.md#6.6), [6.7](requirements.md#6.7), [6.8](requirements.md#6.8)
   - References: design.md#Presentation (Req 6)
 
-- [ ] 12. Manual intake path — same readout, same arming <!-- id:idz000h -->
+- [ ] 13. Manual intake path — same readout, same arming <!-- id:idz000h -->
   - CarbEntrySheet shows the same middle-dot segment in its existing secondary line
   - A quick-add preset tap shows nothing, arms the seed and writes its ledger row — the suggestion reaches the developer one tap later as the sheet's opening value
   - The suggestion is not silently absent for carbohydrates that did not arrive through the camera
@@ -156,7 +166,9 @@ metadata:
   - Requirements: [3.3](requirements.md#3.3), [6.6](requirements.md#6.6), [6.7](requirements.md#6.7)
   - References: design.md#Presentation (Req 6)
 
-- [ ] 13. Seed the dose sheet through one optional initialiser parameter <!-- id:idz000i -->
+## Phase 5 — Verify
+
+- [ ] 14. Seed the dose sheet through one optional initialiser parameter <!-- id:idz000i -->
   - InsulinDoseModel.init(store:seed:) and InsulinDoseSheet.init(store:seed:), both defaulted nil, at the single construction site in AppRoot
   - A nil seed opens at 10 U exactly as today, so the home Dose control and the insulin add deep link are behaviourally unchanged and both two-tap paths survive
   - No sheet is presented from inside the Capture cover, so the pendingDeepLink sequencing is untouched
@@ -166,15 +178,15 @@ metadata:
   - Requirements: [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [9.7](requirements.md#9.7)
   - References: design.md#The seam: where 10 U becomes a suggestion (Req 6.3, 6.4)
 
-## Phase 5 — Verify
-
-- [ ] 14. make test green, make build, make spell <!-- id:idz000j -->
+- [ ] 15. make test green, make build, make spell <!-- id:idz000j -->
   - Report BOTH totals from make test — XCTest and swift-testing
   - Blocked-by: idz000g (Meal review readout on the existing mass line), idz000h (Manual intake path — same readout, same arming), idz000i (Seed the dose sheet through one optional initialiser parameter), idz000c (Tests: round-trip save then read newest-first; a second save with the same id replaces rather than appends; linkDose fills given_units and insulin_event_id; neither write fires eventsDidChange; an upgrade from a schema-7 database keeps every existing event)
   - Stream: 1
   - Requirements: [10.1](requirements.md#10.1), [10.3](requirements.md#10.3)
 
-- [ ] 15. STOP — on-device verification on the iPhone 16 Pro <!-- id:idz000k -->
+## Phase 6 — Evidence gate before any scoring (BLOCKED — no evidence exists yet)
+
+- [ ] 16. STOP — on-device verification on the iPhone 16 Pro <!-- id:idz000k -->
   - Capture a meal and confirm the dose figure appears on the mass line with the plate-scale control still visible without scrolling
   - Confirm the dose sheet opens seeded after recording, and opens at 10 U from the home control and the deep link when nothing is armed
   - Confirm a quick-add preset arms a seed and shows nothing on the preset button
@@ -185,9 +197,7 @@ metadata:
   - Stream: 1
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [7.2](requirements.md#7.2)
 
-## Phase 6 — Evidence gate before any scoring (BLOCKED — no evidence exists yet)
-
-- [ ] 16. STOP — retrospective measurement over an exported live database <!-- id:idz000l -->
+- [ ] 17. STOP — retrospective measurement over an exported live database <!-- id:idz000l -->
   - BLOCKED-ON EVIDENCE: needs a human-produced export of the real device database; there is no synthetic substitute and no agent may fabricate one
   - tools/dosing/retrospective.py emitting compact key=value lines, no narration
   - Reports the sigma_meal distribution; the fpu distribution across recorded meals; meal-or-intake to bolus pairing yield inside 45 minutes; glucose coverage across the 6 hours after each such dose; the rate at which a further bolus lands inside that window; and the combined surviving fraction under all the confounding filters
@@ -198,7 +208,9 @@ metadata:
   - Requirements: [11.2](requirements.md#11.2), [11.4](requirements.md#11.4)
   - References: design.md#The evidence gate before any scoring (Req 11)
 
-- [ ] 17. STOP — record the scoring verdict from task 16 <!-- id:idz000m -->
+## Phase 7 — Fat programme (BLOCKED — staged, each stage names its precondition)
+
+- [ ] 18. STOP — record the scoring verdict from task 16 <!-- id:idz000m -->
   - BLOCKED-ON EVIDENCE: task 16's surviving fraction
   - IF too few unconfounded windows survive to distinguish one ratio from another, outcome scoring is NOT built and the ratios stay configured values for longer — that is an acceptable result recorded as a decision, not a failure
   - Only a positive verdict opens the scoring work, and any ratio adjustment ever proposed from outcomes is applied by an explicit user tap, never automatically, with rows either side of the change distinguishable so no comparison pools them
@@ -207,9 +219,7 @@ metadata:
   - Stream: 1
   - Requirements: [11.1](requirements.md#11.1), [11.3](requirements.md#11.3), [11.5](requirements.md#11.5)
 
-## Phase 7 — Fat programme (BLOCKED — staged, each stage names its precondition)
-
-- [ ] 18. F1 — user corrections carry corrected fat and protein <!-- id:idz000n -->
+- [ ] 19. F1 — user corrections carry corrected fat and protein <!-- id:idz000n -->
   - PbUserCorrection gains corrected_fat_g and corrected_protein_g, written from Macros.reDerive, which already computes both
   - The cheapest gate to clear and independent of every other fat stage: without it the fat figure is least trustworthy on exactly the meals that got the most human attention
   - Until this lands, fat_stale flags those rows and any fat rule refuses them
@@ -218,7 +228,7 @@ metadata:
   - Requirements: [8.3](requirements.md#8.3), [8.8](requirements.md#8.8)
   - References: design.md#Fat: the staged plan (Req 8)
 
-- [ ] 19. STOP — weigh one reference meal against the pipeline's fat estimate <!-- id:idz000o -->
+- [ ] 20. STOP — weigh one reference meal against the pipeline's fat estimate <!-- id:idz000o -->
   - BLOCKED-ON EVIDENCE: needs a physically weighed and reference-counted meal; benchmark_meals holds truth_carbs_g and nothing else, so the fat figure has no ground truth anywhere in this repository
   - clinicalTotals.fat_g is computed and persisted but read by no app surface — it has never been checked against anything
   - Human execution and human verdict; never run autonomously
@@ -226,7 +236,7 @@ metadata:
   - Stream: 2
   - Requirements: [8.7](requirements.md#8.7), [8.8](requirements.md#8.8)
 
-- [ ] 20. STOP — establish whether a delayed rise follows high fat-protein units for this user <!-- id:idz000p -->
+- [ ] 21. STOP — establish whether a delayed rise follows high fat-protein units for this user <!-- id:idz000p -->
   - BLOCKED-ON EVIDENCE: needs the recorded fpu column populated over months of real meals plus the glucose coverage measured in task 16
   - The materiality threshold is set at the knee of THIS user's own recorded distribution, never adopted from a published constant
   - The gate is disjunctive — high fpu OR high protein alone — because the conjunctive published rule is silent on the 50 g fat, 20 g protein pizza that motivated this work
@@ -236,7 +246,7 @@ metadata:
   - Stream: 2
   - Requirements: [8.6](requirements.md#8.6), [8.7](requirements.md#8.7), [8.8](requirements.md#8.8)
 
-- [ ] 21. F2 — implement exactly one fat rule, default off <!-- id:idz000q -->
+- [ ] 22. F2 — implement exactly one fat rule, default off <!-- id:idz000q -->
   - BLOCKED-ON EVIDENCE: all three of task 18, task 19 and task 20 must have cleared; no fat strategy changes a suggested number before then
   - One rule only, chosen by what task 20 showed, from the four enumerated candidates: fat-uplift-v1, fat-split-v1, fat-protein-v1, fat-fpu-v1
   - Stamped by fat_rule_id and fat_rule_version on every row it produces so outcomes are never pooled across rules
@@ -246,7 +256,7 @@ metadata:
   - Requirements: [8.4](requirements.md#8.4), [8.5](requirements.md#8.5), [8.6](requirements.md#8.6), [7.9](requirements.md#7.9)
   - References: design.md#Fat: the staged plan (Req 8)
 
-- [ ] 22. F3 — delayed follow-up suggestion and the notification surface it needs <!-- id:idz000r -->
+- [ ] 23. F3 — delayed follow-up suggestion and the notification surface it needs <!-- id:idz000r -->
   - BLOCKED-ON EVIDENCE: task 21 must first show its rule actually moves the late excursion
   - Also blocked on machinery that does not exist: the app has no notification, timer or scheduling surface at all today
   - Records the ACTUAL elapsed time at which the follow-up dose was given, not merely that one was given — otherwise a dose given at 4 h scores as if it were given at 2.5 h
@@ -254,7 +264,9 @@ metadata:
   - Stream: 2
   - Requirements: [8.9](requirements.md#8.9), [8.5](requirements.md#8.5)
 
-- [ ] 23. F4 — a second fat rule, arbitrated against the first <!-- id:idz000s -->
+## Phase 8 — Spec reconciliation (unblocked; do first)
+
+- [ ] 24. F4 — a second fat rule, arbitrated against the first <!-- id:idz000s -->
   - BLOCKED-ON EVIDENCE: task 22 must be producing follow-ups that are actually taken
   - Stratified by fat-protein-unit band with n reported per cell
   - Deterministic alternation is not randomisation: a rule landing systematically on the same weekday meal is a live confound the ledger will not flag by itself
@@ -262,9 +274,7 @@ metadata:
   - Stream: 2
   - Requirements: [8.4](requirements.md#8.4), [8.5](requirements.md#8.5), [7.9](requirements.md#7.9)
 
-## Phase 8 — Spec reconciliation (unblocked; do first)
-
-- [x] 24. Annotate the superseded non-goal in the shipped PRD — do not rewrite it <!-- id:idz000t -->
+- [x] 25. Annotate the superseded non-goal in the shipped PRD — do not rewrite it <!-- id:idz000t -->
   - Discharges the first clause of Decision 1's Impact section, which reads: "specs/regression-suggestion-integration/prd.md (one cross-reference line), specs/OVERVIEW.md, and everything in this spec." The third clause is this spec; the first two had no task until now, so the repo contradicts itself in a way no ledger surfaced. Neither this task nor task 25 depends on any code
   - `specs/regression-suggestion-integration/prd.md` currently states, under `## Non-goals`: "No dose suggestion, insulin-on-board, or regression maths in the app — medreg owns all modelling, off-device, against exported data." That is now false in part and nothing on the page says so
   - Add ONE cross-reference line beneath that bullet pointing at `specs/data/insulin-dosing/decision_log.md` Decision 1, "Reverse the 'no dose suggestion in the app' non-goal, narrowly". Do NOT delete or reword the original bullet: that PRD is marked Done and is a record of what shipped, so editing its text destroys the record, while annotating it preserves both the original intent and the reversal
@@ -273,7 +283,7 @@ metadata:
   - Run `make spell` after the edit
   - Requirements: [10.5](requirements.md#10.5)
 
-- [x] 25. Regenerate the specs index so it carries this spec and activity-events <!-- id:idz000u -->
+- [x] 26. Regenerate the specs index so it carries this spec and activity-events <!-- id:idz000u -->
   - `/specs-overview` — `specs/OVERVIEW.md` is a generated index and currently lists neither `specs/data/insulin-dosing` nor `specs/data/activity-events`
   - Also confirm the regenerated Segmenter Foundation row no longer contradicts itself: it currently reads both "19 of 22 tasks done" and "ALL 23 tasks done" in the same cell
   - Blocked-by: idz000t (Annotate the superseded non-goal in the shipped PRD — do not rewrite it)

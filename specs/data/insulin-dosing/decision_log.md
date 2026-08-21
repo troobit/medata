@@ -1023,3 +1023,84 @@ filters only as "the confounding filters". Task 16's measurement is unaffected i
 blocked on a human-produced export.
 
 ---
+
+## Decision 15: The App layer ships as three competing attempts, and the choice is a task
+
+**Date**: 2026-08-21
+**Status**: accepted
+
+### Context
+
+Phases 1 and 2 are merged: the `Dosing` target computes a suggestion and the `dose_suggestions`
+ledger records it. What remains for iteration 1 is the App layer — where a suggested dose appears,
+how far it reaches, and whether it seeds the dose sheet. The project's test gate for UI work is a
+person looking at a screen (`CLAUDE.md`), so this is not a question tests can settle.
+
+Three whole App layers were written for it rather than one, and they disagree about scope rather
+than about styling: attempt 1 adds seven characters to a line that already exists and nothing else;
+attempt 2 adds the readout plus a provenance caption on the dose sheet it seeds; attempt 3 reads the
+suggestion as a reason to consolidate three near-identical entry sheets into one `LogSheet` with a
+mode menu for a title. Merging any of them would settle the question by default.
+
+Until now no task carried the choice. `rune` therefore reported the first Settings task ready when
+it was not, and the highest-leverage gate in the spec — it releases tasks 9 to 16 — was visible only
+in three branch names.
+
+### Decision
+
+The three attempts stay unmerged on `insulin-dosing-ui-{1,2,3}-on-research`, tagged per the attempt
+convention, and the choice between them is task 8, a STOP task that blocks the rest of the spec. The
+verdict is recorded here and in `docs/agent-notes/insulin-dose-ui.md` before any of tasks 9 to 13 is
+started.
+
+### Rationale
+
+Shape 3 of the attempt convention (`docs/agent-notes/device-build-and-test.md`) exists for exactly
+this case: competing designs for one surface, where merging one pre-empts the comparison. The two
+cheaper shapes do not apply — the attempts cannot coexist in one binary behind a switch, because
+each rewrites the same views, and committing them one after another on `research` would leave the
+last one in place as the de facto winner.
+
+Making the choice a task rather than a note is what stops it being skipped. A gate that lives only
+in branch names is invisible to `rune next`, and an agent that cannot see it will start task 9 on
+whichever App layer happens to be checked out.
+
+### Alternatives Considered
+
+- **Merge one attempt now and treat the others as follow-up refactors**: Unblocks the eight
+  downstream tasks immediately - Rejected: the readout's whole design claim is about restraint, and
+  a merged design is never re-litigated on its merits once code depends on it.
+- **A developer-phase switch carrying all three, as `dose-schedule` does**: One install, no rebuild
+  between looks - Rejected: the three attempts replace the same views and, in attempt 3's case,
+  restructure the entry sheets; a switch over them would be larger than any of the attempts.
+- **Decide from the design direction document and screenshots**: No device time needed - Rejected:
+  the difference between the attempts is what the screen feels like at the moment of recording a
+  meal, which the document already describes and cannot demonstrate.
+
+### Consequences
+
+**Positive:**
+
+- The comparison happens on one tree: all three attempts were replayed onto `006606f` and build
+  clean, so a single sitting judges them against the same Graph, capture flow and activity surfaces.
+- `rune next` now reports the choice instead of reporting task 9 ready, and the eight tasks it gates
+  are honestly blocked.
+- The losing attempts stay reachable by tag, so a rejected idea can be lifted later without
+  archaeology.
+
+**Negative:**
+
+- The whole App phase is stalled behind one human sitting with a phone.
+- Attempts go stale: these three have now been replayed twice, and each replay is a merge that must
+  decide what the attempt no longer proposes — both replays dropped their private activity
+  implementations in favour of the `activity-events` work research merged in between.
+- Three App layers exist for one readout, and two of them will be discarded.
+
+### Impact
+
+`specs/data/insulin-dosing/tasks.md` gains task 8 and gates task 9 on it. No requirement changes.
+The branches, their `-on-research-2` tags and what each attempt is are recorded in
+`docs/agent-notes/insulin-dose-ui.md`; the convention itself is in
+`docs/agent-notes/device-build-and-test.md`.
+
+---
