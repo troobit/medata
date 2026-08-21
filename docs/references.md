@@ -43,6 +43,29 @@ This codebase was made possible by, and builds on the work of others, detailed b
    in `specs/estimation/pipeline/requirements.md`,
    `specs/estimation/pipeline/decision_log.md`.
 
+5. Rebrin, K., Sheppard, N. F. Jr. and Steil, G. M., 'Use of Subcutaneous
+   Interstitial Fluid Glucose to Estimate Blood Glucose: Revisiting Delay and
+   Sensor Offset', *Journal of Diabetes Science and Technology*, vol. 4, no. 5
+   (2010), pp. 1087-1098. DOI:
+   [10.1177/193229681000400507](https://doi.org/10.1177/193229681000400507);
+   PMID: [20920428](https://pubmed.ncbi.nlm.nih.gov/20920428/).
+   - Interstitial-to-blood glucose delay and sensor offset across research
+   groups. The physiological basis for a blood reading outranking a sensor
+   reading for a bounded period. Cited in
+   `specs/data/fingerstick-glucose/decision_log.md`.
+
+6. McClatchey, P. M., McClain, E. S., Williams, I. M., Malabanan, C. M.,
+   James, F. D., Lord, P. C., Gregory, J. M., Cliffel, D. E. and Wasserman,
+   D. H., 'Fibrotic Encapsulation Is the Dominant Source of Continuous Glucose
+   Monitor Delays', *Diabetes*, vol. 68, no. 10 (2019), pp. 1892-1901. DOI:
+   [10.2337/db19-0229](https://doi.org/10.2337/db19-0229); PMID:
+   [31399432](https://pubmed.ncbi.nlm.nih.gov/31399432/).
+   - More than 80% of the blood-to-sensor delay is attributable to fibrous
+   encapsulation of the implanted sensor, which grows over a sensor's wear
+   period. The reason the blood-reading hold window is a tunable setting
+   rather than a fixed constant. Cited in
+   `specs/data/fingerstick-glucose/decision_log.md`.
+
 ### Dataset papers
 
 5. Wu, X., Fu, X., Liu, Y., Lim, E.-P., Hoi, S. C. H. and Sun, Q., 'A
