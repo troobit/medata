@@ -41,7 +41,9 @@ final class CarbEntryModel {
     private(set) var saveError: String?
 
     let editing: IntakeEntry?
-    private let store: any PersistenceStore
+    // Exposed so the "save as quick-add" sub-sheet can be built beside this
+    // model rather than threading the store through the content view twice.
+    let store: any PersistenceStore
 
     init(store: any PersistenceStore, editing: IntakeEntry? = nil) {
         self.store = store

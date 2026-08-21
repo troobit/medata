@@ -496,60 +496,6 @@ struct TrendsView: View {
     }
 }
 
-// Leading-aligned wrapping row for the metric chips (snaqui Req 5): each chip
-// keeps its natural size and overflow starts a new line, so nothing ever
-// compresses to an ellipsis. Chips are measured with an unspecified proposal
-// (their ideal size) both when building lines and when placing them.
-private struct ChipFlow: Layout {
-    var spacing: CGFloat
-    var lineSpacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let lines = lines(fitting: proposal.width ?? .infinity, subviews: subviews)
-        let height = lines.map(\.height).reduce(0, +)
-            + lineSpacing * CGFloat(max(0, lines.count - 1))
-        let width = proposal.width ?? lines.map(\.width).max() ?? 0
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(
-        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
-    ) {
-        var y = bounds.minY
-        for line in lines(fitting: bounds.width, subviews: subviews) {
-            var x = bounds.minX
-            for index in line.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
-                subviews[index].place(
-                    at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: .unspecified
-                )
-                x += size.width + spacing
-            }
-            y += line.height + lineSpacing
-        }
-    }
-
-    private struct Line {
-        var indices: [Int] = []
-        var width: CGFloat = 0
-        var height: CGFloat = 0
-    }
-
-    private func lines(fitting maxWidth: CGFloat, subviews: Subviews) -> [Line] {
-        var lines: [Line] = []
-        var current = Line()
-        for (index, subview) in subviews.enumerated() {
-            let size = subview.sizeThatFits(.unspecified)
-            let gap = current.indices.isEmpty ? 0 : spacing
-            if !current.indices.isEmpty, current.width + gap + size.width > maxWidth {
-                lines.append(current)
-                current = Line()
-            }
-            current.width += (current.indices.isEmpty ? 0 : spacing) + size.width
-            current.height = max(current.height, size.height)
-            current.indices.append(index)
-        }
-        if !current.indices.isEmpty { lines.append(current) }
-        return lines
-    }
-}
+// `ChipFlow`, the leading-aligned wrapping row these chips use, now lives in
+// `EntryChrome.swift`: the entry sheet's kind chips need the same layout and
+// two copies would drift.

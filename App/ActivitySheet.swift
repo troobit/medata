@@ -1,173 +1,106 @@
 import Persistence
 import SwiftUI
 
-// The activity-entry sheet (specs/data/activity-events Req 3), presented as a
-// plain medium-detent sheet from AppRoot — the same weight as the insulin dose
-// sheet, deliberately lighter than the Capture/Records/Graph covers.
+// The activity mode of `LogSheet` (specs/data/activity-events Req 3).
 //
-// ATTEMPT 2 — "everything on one surface": all seven kinds are a 4×2 grid of
-// icon tiles, so no kind is ever off-screen and picking one is a single tap
-// wherever the eye lands, and the duration is a row of one-tap presets rather
-// than a stepper. What it gives up is arbitrary precision — 37 minutes cannot
-// be expressed, only the presets or nothing — on the reasoning that a
-// remembered duration is a rounded guess anyway, and that a stepper walking to
-// 45 in five-minute taps is the slowest control on the sheet.
+// The grammar is the insulin mode's, one slot at a time: kind, quantity,
+// when, commit. Only the two middle slots differ — the kind set is seven
+// wrapping chips rather than a two-way segment, and the quantity is optional,
+// which is why it is a stepper with a blank state rather than a numeral that
+// always reads something.
 //
-// It opens on the most recently used kind, so the repeat path is open → Save
-// (Req 3.1/3.3). Duration starts blank and blank saves `nil` (Req 3.4/1.5);
-// the time control defaults to now and moves backwards (Req 3.2). No
-// intensity, effort or calorie control (Req 2.4), and no reassurance or
-// disclaimer copy anywhere (Req 4.4).
-//
-// NOTE: sizing/`contentShape` live INSIDE each Button label — a Button's tap
-// gesture covers only its label, so outside modifiers draw a dead surface
-// (ui-capture-flow.md gotcha).
-struct ActivitySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var model: ActivityModel
+// No intensity control, no effort rating, no calorie field (Req 2.4):
+// intensity is carried by the kind and its recorded cardiovascular character,
+// and by duration where one is given.
+struct ActivityContent: View {
+    @Bindable var model: ActivityModel
+    let onSaved: () -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-
-    init(store: any PersistenceStore) {
-        _model = State(initialValue: ActivityModel(store: store))
+    // The insulin mode's button names the amount it will write; this one names
+    // the kind, and the duration too when there is one to name.
+    private var saveTitle: String {
+        guard let minutes = model.durationMinutes else { return "Save \(model.kind.displayLabel)" }
+        return "Save \(model.kind.displayLabel), \(Int(minutes.rounded())) min"
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                kindGrid
-                durationPresets
-                timeRow
-                saveButton
-                if let saveError = model.saveError {
-                    Text(saveError)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
-                Spacer(minLength: 0)
+        VStack(spacing: 24) {
+            kindChips
+            durationStepper
+            EntryTimeRow(timestamp: $model.timestamp, identifier: "activity.time")
+            EntrySaveButton(
+                title: saveTitle,
+                isSaving: model.isSaving,
+                isEnabled: true,
+                identifier: "activity.save"
+            ) {
+                Task { if await model.save() { onSaved() } }
             }
-            .padding(20)
-            .background(Color.surfacePrimary)
-            .navigationTitle("Activity")
-            .navigationBarTitleDisplayMode(.inline)
+            if let saveError = model.saveError {
+                Text(saveError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+            Spacer(minLength: 0)
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
+        .padding(20)
     }
 
-    // MARK: - Kind (Req 2.1, 3.3)
-
-    // Every kind visible at once: seven tiles over two rows of four, so the
-    // remembered kind and every alternative are one tap apart.
-    private var kindGrid: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
+    // Preselected to the most recently saved kind (Req 3.3), so the repeat
+    // case is open → Save. Wraps rather than compressing — the Graph's metric
+    // chips and these are one layout (`ChipFlow`).
+    private var kindChips: some View {
+        ChipFlow(spacing: 8, lineSpacing: 8) {
             ForEach(ActivityKind.allCases, id: \.self) { kind in
-                kindTile(kind)
+                EntryChip(
+                    title: kind.displayLabel,
+                    isActive: model.kind == kind,
+                    identifier: "activity.kind.\(kind.rawValue)"
+                ) {
+                    model.kind = kind
+                }
             }
         }
-        .accessibilityIdentifier("activity.kinds")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func kindTile(_ kind: ActivityKind) -> some View {
-        let isOn = model.kind == kind
-        return Button {
-            model.kind = kind
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: kind.symbolName)
-                    .font(.system(size: 22, weight: .medium))
-                Text(kind.displayLabel)
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+    // Optional, and it never blocks a save (Req 3.4). Blank renders an em
+    // dash and stores an ABSENT duration, never 0 (Req 1.5) — this is the one
+    // slot in the app where the em dash is right, because the slot exists and
+    // has no value.
+    private var durationStepper: some View {
+        HStack(spacing: 28) {
+            stepControl("minus", isUp: false, identifier: "activity.minus")
+            VStack(spacing: 0) {
+                Text(model.durationLabel)
+                    .font(.system(size: 56, weight: .bold).monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.1), value: model.durationMinutes)
+                    .accessibilityIdentifier("activity.duration")
+                Text("minutes")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                isOn ? Color.seriesActivity : Color.surfaceElevated,
-                in: RoundedRectangle(cornerRadius: 12)
-            )
-            .foregroundStyle(isOn ? Color.captureBackground : Color.textSecondary)
-            .contentShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("activity.kind.\(kind.rawValue)")
-    }
-
-    // MARK: - Duration (Req 3.4)
-
-    // One tap sets a duration, tapping the same preset again clears it — so
-    // blank, which is what most entries will carry, is never more than one tap
-    // away and never blocks Save.
-    private var durationPresets: some View {
-        HStack(spacing: 8) {
-            ForEach(ActivityModel.durationPresets, id: \.self) { minutes in
-                durationChip(minutes)
-            }
+            .frame(minWidth: 120)
+            stepControl("plus", isUp: true, identifier: "activity.plus")
         }
         .frame(maxWidth: .infinity)
-        .accessibilityIdentifier("activity.duration")
     }
 
-    private func durationChip(_ minutes: Double) -> some View {
-        let isOn = model.durationMinutes == minutes
-        return Button {
-            model.toggleDuration(minutes)
+    private func stepControl(_ symbol: String, isUp: Bool, identifier: String) -> some View {
+        Button {
+            if isUp { model.stepDurationUp() } else { model.stepDurationDown() }
         } label: {
-            Text("\(Int(minutes))")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(isOn ? Color.textPrimary : Color.surfaceElevated, in: Capsule())
-                .foregroundStyle(isOn ? Color.surfacePrimary : Color.textSecondary)
-                .contentShape(Capsule())
+            Image(systemName: symbol)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(Color.textPrimary)
+                .frame(width: 68, height: 68)
+                .background(Color.surfaceElevated, in: Circle())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("activity.duration.\(Int(minutes))")
-    }
-
-    // MARK: - Time (Req 3.2)
-
-    private var timeRow: some View {
-        DatePicker(
-            "Start",
-            selection: $model.timestamp,
-            in: ...Date(),
-            displayedComponents: [.date, .hourAndMinute]
-        )
-        .datePickerStyle(.compact)
-        .environment(\.locale, Locale(identifier: "en_IE"))
-        .accessibilityIdentifier("activity.time")
-    }
-
-    // The button states what will be written, duration included, so the one
-    // control that is easy to leave in the wrong state is legible before the
-    // tap rather than after it.
-    private var saveButton: some View {
-        Button {
-            Task {
-                if await model.save() { dismiss() }
-            }
-        } label: {
-            if model.isSaving {
-                MedataLoadingSymbol(mode: .loop, size: 22)
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text(saveLabel)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.medataAccent)
-        .foregroundStyle(Color.captureBackground)
-        .disabled(model.isSaving)
-        .accessibilityIdentifier("activity.save")
-    }
-
-    private var saveLabel: String {
-        guard let minutes = model.durationMinutes else { return "Save \(model.kind.displayLabel)" }
-        return "Save \(model.kind.displayLabel) · \(Int(minutes)) min"
+        .accessibilityLabel(isUp ? "Increase duration" : "Decrease duration")
+        .accessibilityIdentifier(identifier)
     }
 }
