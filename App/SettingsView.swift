@@ -70,6 +70,7 @@ struct SettingsView: View {
     #if DEBUG
     @State private var isClearing = false
     @State private var confirmsClear = false
+    @State private var isSeedingMeal = false
     #endif
 
     var body: some View {
@@ -184,6 +185,18 @@ struct SettingsView: View {
                 .disabled(isSeeding)
                 .accessibilityIdentifier("settings.seedGlucose")
 
+                Button {
+                    seedDemoMeal()
+                } label: {
+                    if isSeedingMeal {
+                        MedataLoadingSymbol(mode: .loop, size: 22)
+                    } else {
+                        Text("Seed demo meal")
+                    }
+                }
+                .disabled(isSeedingMeal)
+                .accessibilityIdentifier("settings.seedMeal")
+
                 Button(role: .destructive) {
                     confirmsClear = true
                 } label: {
@@ -253,6 +266,69 @@ struct SettingsView: View {
             defer { isSeeding = false }
             try? await grdb.seedDemoBslEvents()
         }
+    }
+
+    // Writes one fixed meal so the surfaces that only exist after a capture —
+    // the review screen above all — can be judged without a camera, and judged
+    // against the SAME numbers on every build. 56.0 g of carbohydrate: 11 U on
+    // the breakfast seed ratio (5 g/U), 6 U on the other three (10 g/U), so the
+    // rounding is visible either way. Segmenter source `demo_seed` keeps these
+    // rows separable from real captures in the correction corpus.
+    private func seedDemoMeal() {
+        isSeedingMeal = true
+        Task {
+            defer { isSeedingMeal = false }
+            try? await store.save(SettingsView.demoMeal(), artefacts: [])
+        }
+    }
+
+    private static func demoMeal() -> MealRecord {
+        // (class, volume cm³, mass g, carbs g, protein g, fat g)
+        let foods: [(String, Float, Float, Float, Float, Float)] = [
+            ("white_rice", 150, 180, 50.4, 4.7, 0.5),
+            ("chicken", 110, 120, 0.0, 29.0, 7.6),
+            ("broccoli", 110, 80, 5.6, 3.4, 0.7)
+        ]
+        let beta: Float = 0.9
+        var macros = PbMacroResult()
+        var volumes = PbVolumeResult()
+        for (classId, volume, mass, carbs, protein, fat) in foods {
+            var perClass = PbPerClassMacros()
+            perClass.volumeCm3 = volume
+            perClass.massG = mass
+            perClass.carbsG = carbs
+            perClass.proteinG = protein
+            perClass.fatG = fat
+            perClass.betaUsed = beta
+            perClass.betaStatus = .calibrated
+            macros.perClass[classId] = perClass
+            volumes.perClassVolumesCm3[classId] = volume
+            // Relabel refuses without a pre-β volume (meal-review Decision 14),
+            // so the demo meal carries one.
+            volumes.perClassVolumesPreBetaCm3[classId] = volume / beta
+        }
+        macros.totalCarbsG = foods.reduce(0) { $0 + $1.3 }
+
+        var confidence = PbConfidenceResult()
+        confidence.sigmaMeal = 0.82
+        confidence.sigmaScale = 0.90
+        confidence.sigmaSeg = 0.85
+
+        return MealRecord(
+            capturePath: .singleViewLidar,
+            databaseEdition: "CoFID 2024 + AFCD 2024",
+            paletteVersion: ClassPalette.standard.version,
+            segmenterSource: "demo_seed",
+            calibration: PbCameraIntrinsics(),
+            supportPlane: PbSupportPlane(),
+            scale: PbMetricScale(),
+            volumes: volumes,
+            macros: macros,
+            confidence: confidence,
+            perClassCalibration: Dictionary(
+                uniqueKeysWithValues: foods.map { ($0.0, PbBetaCalibrationStatus.calibrated) }
+            )
+        )
     }
 
     private func clearAllData() {
