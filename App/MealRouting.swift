@@ -27,6 +27,11 @@ func mealRouteDestination(
             store: store,
             record: record,
             onFullResult: { path.wrappedValue.append(.result(record)) },
+            onReview: {
+                #if DEBUG
+                path.wrappedValue.append(.review(record))
+                #endif
+            },
             onDeleted: { popOne(path) }
         )
     case .result(let record):
@@ -39,6 +44,24 @@ func mealRouteDestination(
                 path.wrappedValue.removeAll()
             }
         )
+    #if DEBUG
+    // Retake has no meaning off the capture stack, so it and Delete share the
+    // one honest behaviour here: delete the meal and unwind.
+    case .review(let record):
+        MealReviewView(
+            record: record,
+            store: store,
+            onRecord: { popOne(path) },
+            onRetake: {
+                Task { try? await store.deleteMeal(id: record.id) }
+                path.wrappedValue.removeAll()
+            },
+            onDelete: {
+                Task { try? await store.deleteMeal(id: record.id) }
+                path.wrappedValue.removeAll()
+            }
+        )
+    #endif
     }
 }
 
