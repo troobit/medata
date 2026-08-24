@@ -122,7 +122,7 @@ in — not a ranking, not a version, and no numbering is reserved. Everything st
 v0 until main (pipeline Decision 50).
 
 In use today: `tilt-guide-attempt-1/2`, `insulin-dosing-ui-attempt-1/2/3`
-(and their `-on-research` and `-on-research-2` replays), `activity-sheet-attempt-1/2`,
+(and their `-on-research`, `-on-research-2` and `-on-research-3` replays), `activity-sheet-attempt-1/2`,
 `activity-graph-attempt-1/2`, `dose-schedule-ui-attempt-1/2`.
 
 **Tag on a clean tree.** That is the load-bearing rule. A clean tree makes the
@@ -150,10 +150,28 @@ one checkout back.
 competing designs for the same screen and merging any of them would pre-empt the
 choice. `insulin-dosing` is here: three whole App layers for one readout, on
 `insulin-dosing-ui-{1,2,3}-on-research`, tagged
-`insulin-dosing-ui-attempt-{1,2,3}-on-research` and, after the second replay,
-`…-on-research-2` (`fa733f5` / `109d7c0` / `5d272c5`, all built clean on
-`006606f`). Nothing merges until a person looks at all three and picks one.
+`insulin-dosing-ui-attempt-{1,2,3}-on-research` and, after the third replay,
+`…-on-research-3` (`ff9d29f` / `e0373bd` / `26af5f9`, all built clean on
+`a1618ee`). Nothing merges until a person looks at all three and picks one.
 What each attempt actually is: `docs/agent-notes/insulin-dose-ui.md`.
+
+### Getting the surface on screen without a capture
+
+A comparison is only a comparison if every attempt shows the same numbers, and
+the post-capture surfaces used to need a fresh plate of food per install. Two
+DEBUG-only affordances (`a1618ee`) remove that:
+
+- **Settings → Seed demo meal** writes one fixed record — three foods, 56.0 g of
+  carbohydrate — through the ordinary `save(_:artefacts:)` path. It appears in
+  Records and Trends immediately. Its segmenter source is `demo_seed`, which is
+  what keeps its correction-corpus rows separable from real captures.
+- **Records → a meal → ⋯ → Review** pushes `MealReviewView` for a stored meal
+  (`MealRoute.review`). Off the capture stack Retake means nothing, so it and
+  Delete both delete the meal and unwind.
+
+Neither exists in Release, and neither touches MedataCore. Replay the commit
+onto an attempt branch the same way any other research change is replayed —
+without it, the attempt build has no seed button.
 
 ### Deploying each one
 

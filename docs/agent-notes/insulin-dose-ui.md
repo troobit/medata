@@ -76,13 +76,15 @@ one of them would pre-empt the choice, so none is merged.
 
 | | Branch | Tag (replay 2) | Sha |
 |---|---|---|---|
-| 1 | `insulin-dosing-ui-1-on-research` | `insulin-dosing-ui-attempt-1-on-research-2` | `fa733f5` |
-| 2 | `insulin-dosing-ui-2-on-research` | `insulin-dosing-ui-attempt-2-on-research-2` | `109d7c0` |
-| 3 | `insulin-dosing-ui-3-on-research` | `insulin-dosing-ui-attempt-3-on-research-2` | `5d272c5` |
+| 1 | `insulin-dosing-ui-1-on-research` | `insulin-dosing-ui-attempt-1-on-research-3` | `ff9d29f` |
+| 2 | `insulin-dosing-ui-2-on-research` | `insulin-dosing-ui-attempt-2-on-research-3` | `e0373bd` |
+| 3 | `insulin-dosing-ui-3-on-research` | `insulin-dosing-ui-attempt-3-on-research-3` | `26af5f9` |
 
-All three were replayed on `006606f` and build clean. The original
-`insulin-dosing-ui-attempt-{1,2,3}` tags and their first `-on-research` replays
-stay where they are; those trees no longer build against current `research`.
+All three were replayed on `006606f`, then carried the demo-meal commit
+`a1618ee`, and all three build clean. Every earlier tag —
+`insulin-dosing-ui-attempt-{1,2,3}` and its `-on-research` / `-on-research-2`
+replays — stays where it is; those trees no longer build against current
+`research`.
 
 All three share the same spine: a `DoseSuggestionModel` in `App/` reading the
 merged `Dosing` target, a readout on the meal-review second line and on the
@@ -142,3 +144,14 @@ The choice is task 8 in `specs/data/insulin-dosing/tasks.md`, and it gates tasks
 naming an exact tag proves which one is on the phone. Record the verdict as a
 decision in that spec's `decision_log.md` and say here what the losers traded
 away.
+
+Each build carries the two DEBUG affordances from `a1618ee`, which is what makes
+the three comparable: **Settings → Seed demo meal** writes one fixed 56.0 g
+record, and **Records → that meal → ⋯ → Review** opens the review surface on it
+without a capture — 11 U on the breakfast seed ratio, 6 U on the other three, the
+same numbers on every attempt. The path to judge in full is seed → Review →
+Record → open the dose sheet: the readout on the review line (attempts 1 and 2),
+the seeded opening value and its provenance caption (attempt 2 only), and the
+consolidated sheet (attempt 3). The manual path — Intake → carb entry — needs no
+seed at all. Mechanism and its Release exclusion: `device-build-and-test.md`,
+"Getting the surface on screen without a capture".
