@@ -105,8 +105,9 @@ metadata:
 ## Phase 3 — The attempt choice, then Settings plumbing
 
 - [ ] 8. STOP — install the three UI attempts and pick one <!-- id:idz000v -->
-  - Three whole App layers for one readout, none merged, per shape 3 of the attempt convention: `insulin-dosing-ui-attempt-{1,2,3}-on-research-2` (`fa733f5` / `109d7c0` / `5d272c5`), all replayed on `006606f` and building clean
+  - Three whole App layers for one readout, none merged, per shape 3 of the attempt convention: `insulin-dosing-ui-attempt-{1,2,3}-on-research-3` (`ff9d29f` / `e0373bd` / `26af5f9`), all replayed onto `a1618ee` and building clean
   - What each attempt is, and what its replay dropped: `docs/agent-notes/insulin-dose-ui.md`
+  - The three show the same numbers because every build carries the DEBUG seed: Settings → Seed demo meal writes one fixed 56.0 g meal, and Records → that meal → ⋯ → Review opens the review surface on it with no capture. Judge seed → Review → Record → dose sheet, then the manual Intake path, which needs no seed
   - `git checkout <tag> && make deploy-device` for each in turn; `git describe --tags <build-stamp sha>` must name an exact tag, or the phone is not running the attempt
   - The verdict is a person's, taken on the phone: no test decides it, and nothing merges before it
   - Record it as a decision in decision_log.md and say in the note what the losers traded away; the winner's App layer is then what tasks 11 to 14 build on
