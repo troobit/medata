@@ -13,6 +13,9 @@ struct MealOverviewView: View {
     let store: any PersistenceStore
     let record: MealRecord
     var onFullResult: () -> Void = {}
+    // Developer-phase only (DEBUG menu item below): pushes the post-capture
+    // review surface for this stored meal.
+    var onReview: () -> Void = {}
     var onDeleted: () -> Void = {}
 
     @State private var photo: UIImage?
@@ -46,6 +49,10 @@ struct MealOverviewView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    #if DEBUG
+                    Button("Review") { onReview() }
+                        .accessibilityIdentifier("overview.review")
+                    #endif
                     Button("Delete", role: .destructive) { showDeleteConfirm = true }
                 } label: {
                     Image(systemName: "ellipsis")
