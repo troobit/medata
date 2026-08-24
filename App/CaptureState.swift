@@ -21,6 +21,13 @@ enum CaptureRoute: Hashable {
 enum MealRoute: Hashable {
     case overview(MealRecord)    // → MealOverviewView
     case result(MealRecord)      // → ResultView (history read path)
+    #if DEBUG
+    // Developer-phase only: re-opens the post-capture review surface for a
+    // stored meal, so a UI attempt can be judged against a fixed meal without
+    // a fresh capture (insulin-dosing tasks.md task 8). Not a product path —
+    // history correction belongs to ResultView's per-food rows.
+    case review(MealRecord)      // → MealReviewView
+    #endif
 }
 
 enum PermissionSubject: Equatable, Sendable {
