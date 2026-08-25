@@ -124,7 +124,7 @@ references:
 
 ## Preset origin stamp (Req 8.8, 8.9)
 
-- [ ] 12. Write tests for quick_presets.source_meal_id round-trip and the schema 9 to 10 migration <!-- id:yh454uo -->
+- [x] 12. Write tests for quick_presets.source_meal_id round-trip and the schema 9 to 10 migration <!-- id:yh454uo -->
   - Extend MedataCore/Tests/PersistenceTests/QuickPresetTests.swift, XCTest style matching the existing cases
   - Cover: saveQuickPreset persists sourceMealID and quickPresets() reads it back; nil round-trips as NULL
   - Cover: an INSERT OR REPLACE update of an existing preset preserves source_meal_id when the caller passes it through, per Req 8.9
@@ -134,7 +134,7 @@ references:
   - Requirements: [8.8](requirements.md#8.8), [8.9](requirements.md#8.9)
   - References: design.md#Schema: quick_presets.source_meal_id
 
-- [ ] 13. Implement schema v10, QuickPreset.sourceMealID, and QuickPreset.nextSortOrder(after:) <!-- id:yh454up -->
+- [x] 13. Implement schema v10, QuickPreset.sourceMealID, and QuickPreset.nextSortOrder(after:) <!-- id:yh454up -->
   - GRDBPersistenceStore.createSchema: quick_presets CREATE TABLE gains source_meal_id TEXT (nullable); stamp schema_version 10
   - migrate(): read the stored schema_version before re-stamping and run ALTER TABLE quick_presets ADD COLUMN source_meal_id TEXT only when it is below 10 - ADD COLUMN is not idempotent in SQLite. Non-destructive, so event-log-schema Decision 10 still holds
   - Update the migrate() header comment with the version-9 line, matching the existing per-version notes
@@ -145,7 +145,7 @@ references:
   - Requirements: [8.8](requirements.md#8.8), [8.9](requirements.md#8.9)
   - References: design.md#Schema: quick_presets.source_meal_id, decision_log.md
 
-- [ ] 14. Carry sourceMealID through QuickPresetEditSheet edits <!-- id:yh454uq -->
+- [x] 14. Carry sourceMealID through QuickPresetEditSheet edits <!-- id:yh454uq -->
   - App/QuickPresetEditSheet.swift destructures the preset it is given and reconstructs a QuickPreset on save, so an edit silently drops the new column
   - Capture private let sourceMealID: UUID? in init alongside presetID/sortOrder and pass it through untouched on save
   - No test task - App-layer UI; covered by the store-level Req 8.9 case and the on-device checklist
@@ -156,7 +156,7 @@ references:
 
 ## Save as quick-add from a result surface (Req 8)
 
-- [ ] 15. Add the shared quickPresetDraft builder to MealRouting.swift <!-- id:yh454ur -->
+- [x] 15. Add the shared quickPresetDraft builder to MealRouting.swift <!-- id:yh454ur -->
   - App/MealRouting.swift - the existing home for App-layer meal plumbing shared across surfaces, so no new file and no project.pbxproj registration
   - quickPresetDraft(displayedCarbsG:foodNames:sourceMealID:existingPresets:) -> QuickPreset
   - Name: first two prettified food names joined with " + ", then " +N" when N further foods remain; empty when the caller passes no names
@@ -168,7 +168,7 @@ references:
   - Requirements: [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.4](requirements.md#8.4)
   - References: design.md#The flattening, and what survives it, design.md#Which number is frozen
 
-- [ ] 16. Add Save as quick-add to MealReviewView (post-capture) <!-- id:yh454us -->
+- [x] 16. Add Save as quick-add to MealReviewView (post-capture) <!-- id:yh454us -->
   - One non-destructive Button in the existing ToolbarItem(placement: .topBarTrailing) Menu, above Retake and Delete; label "Save as quick-add" - the string CarbEntrySheet already ships; a11y id review.saveAsQuickAdd
   - @State private var presetDraft: QuickPreset? plus .sheet(item:) presenting QuickPresetEditSheet(store:preset:isNew: true), same construction as CarbEntrySheet
   - Draft inputs: model.pendingTotalCarbsG (corrected total, Req 8.3), model.activeFoods.map { MealReviewModel.prettify($0.currentClassId) } in the existing carbs-descending order, model.record.id, and store.quickPresets() fetched inside the menu action with the usual (try? ...) ?? [] fallback
@@ -179,7 +179,7 @@ references:
   - Requirements: [8.1](requirements.md#8.1), [8.2](requirements.md#8.2), [8.3](requirements.md#8.3), [8.5](requirements.md#8.5)
   - References: design.md#The action on the two result surfaces
 
-- [ ] 17. Add Save as quick-add to ResultView (from records) <!-- id:yh454ut -->
+- [x] 17. Add Save as quick-add to ResultView (from records) <!-- id:yh454ut -->
   - One Button in the actionRow ellipsis Menu, above the destructive Delete; same "Save as quick-add" label; a11y id result.saveAsQuickAdd
   - Same @State presetDraft + .sheet(item:) shape as the review surface; ResultView already holds let store: any PersistenceStore
   - Draft inputs: heroCarbsG (the displayed total, adjustments and corrections included, Req 8.3), the existing prettified carbs-sorted rows, record.id, and store.quickPresets()
