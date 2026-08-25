@@ -47,6 +47,24 @@ nonisolated enum SettingsKeys {
     static let insulinTypeBolusDefault = "NovoRapid"
     static let insulinTypeBasalDefault = "Lantus"
 
+    // Per-band carbohydrate ratios in GRAMS PER UNIT (specs/data/insulin-dosing
+    // Req 1.1). An absent key means the seed default is in force and the
+    // suggestion records that (Req 1.6). NEVER store the reciprocal — the
+    // "N U per 10 g" figure beside each field is rendered from these, not
+    // written back.
+    static let ratioOvernightGPerU = "medata.insulin.ratio.overnight"
+    static let ratioBreakfastGPerU = "medata.insulin.ratio.breakfast"
+    static let ratioLunchGPerU = "medata.insulin.ratio.lunch"
+    static let ratioDinnerGPerU = "medata.insulin.ratio.dinner"
+    // Pen increment in units: 0.5 or 1.0 (Req 5.1, 5.6).
+    static let dosableIncrementU = "medata.insulin.dosableIncrement"
+    // Provenance of the configured ratios: "manual" | "medreg" (Req 9.4); an
+    // absent per-band key overrides this with "seed" on that band's rows.
+    static let ratioSource = "medata.insulin.ratioSource"
+    // Free text naming the medreg fit the values came from, e.g. an export
+    // date or run label. Recorded verbatim, never parsed (Req 9.4).
+    static let ratioFitRef = "medata.insulin.ratioFitRef"
+
     // Most recently saved activity kind (specs/data/activity-events Req 3.3),
     // stored as the kind's stable machine key so the entry sheet opens on it
     // and a repeat activity is a two-tap save. Written by ActivityModel on a

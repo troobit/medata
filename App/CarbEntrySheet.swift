@@ -1,60 +1,71 @@
 import Persistence
 import SwiftUI
 
-// The manual carb-entry sheet (specs/data/manual-carb-intake Req 1, 2, 4.4,
-// 7.2). Mirrors InsulinDoseSheet's presentation: a plain medium-detent sheet,
-// drag-dismissable, no CloseCoverButton. The amount is a numeric-keypad field
-// rather than a stepper (Req 1.1 — 1–999 g is too wide for ±1 taps), the time
-// row reuses the insulin sheet's compact back-dating DatePicker, and the
-// optional macros sit behind a DisclosureGroup (Req 2.1). Reused for editing
-// via `editing:` (Req 7.2).
-struct CarbEntrySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var model: CarbEntryModel
+// The carbohydrate mode of `LogSheet` (specs/data/manual-carb-intake Req 1, 2,
+// 4.4, 7.2). The amount is a numeric-keypad field rather than a stepper
+// (Req 1.1 — 1–999 g is two orders of magnitude too wide for ±1 taps), and the
+// optional macros sit behind a DisclosureGroup (Req 2.1).
+//
+// This is the mode that fits the unified grammar least well, and the code
+// shows it: there is no kind slot to fill (only `.carb` ships), the quantity
+// is unbounded text rather than a bounded stepper, the macros disclosure can
+// outgrow the medium detent so this mode keeps its own ScrollView, and it
+// carries a second, non-committing action ("Save as quick-add") that neither
+// other mode has. It is included anyway because the chrome — the back-dating
+// row, the accent commit, the detent, the dismissal — really is the same job.
+struct CarbEntryContent: View {
+    @Bindable var model: CarbEntryModel
+    let nextSortOrder: Int
+    let onFinished: () -> Void
+
+    // Optional so any surface can host this content without the app-level
+    // model; absent simply means no suggestion segment.
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
+
     // "Save as quick-add" (Req 4.4): the entry save is already committed when
     // this sub-sheet opens; cancelling it creates no preset and rolls back
-    // nothing, so its dismissal always closes the entry sheet too. While it
-    // is up the entry sheet stays visible underneath — the model's `didSave`
+    // nothing, so its dismissal always closes the entry sheet too. While it is
+    // up the entry sheet stays visible underneath — the model's `didSave`
     // latch keeps both save buttons dead so no second row can be written.
     @State private var showingPresetSheet = false
 
-    private let store: any PersistenceStore
-    private let nextSortOrder: Int
-
-    init(store: any PersistenceStore, editing: IntakeEntry? = nil, nextSortOrder: Int = 0) {
-        self.store = store
-        self.nextSortOrder = nextSortOrder
-        _model = State(initialValue: CarbEntryModel(store: store, editing: editing))
-    }
-
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    carbField
-                    timeRow
-                    macroDisclosure
-                    saveButton
-                    if model.editing == nil {
-                        saveAsQuickAddButton
-                    }
-                    if let saveError = model.saveError {
-                        Text(saveError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+        ScrollView {
+            VStack(spacing: 24) {
+                carbField
+                EntryTimeRow(timestamp: $model.timestamp, identifier: "carb.time")
+                macroDisclosure
+                EntrySaveButton(
+                    title: saveLabel,
+                    isSaving: model.isSaving,
+                    isEnabled: model.canSave,
+                    identifier: "carb.save"
+                ) {
+                    Task {
+                        if await model.save() {
+                            await armSuggestion()
+                            onFinished()
+                        }
                     }
                 }
-                .padding(20)
+                if model.editing == nil {
+                    saveAsQuickAddButton
+                }
+                if let saveError = model.saveError {
+                    Text(saveError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
             }
-            .background(Color.surfacePrimary)
-            .navigationTitle(model.editing == nil ? "Carbs" : "Edit carbs")
-            .navigationBarTitleDisplayMode(.inline)
+            .padding(20)
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showingPresetSheet, onDismiss: { dismiss() }) {
+        // Recomputed as the amount and the time change, so the figure on
+        // screen is always the one this save would produce.
+        .task(id: suggestionKey) { await refreshSuggestion() }
+        .onDisappear { doseSuggestions?.clear() }
+        .sheet(isPresented: $showingPresetSheet, onDismiss: { onFinished() }) {
             QuickPresetEditSheet(
-                store: store,
+                store: model.store,
                 preset: QuickPreset(
                     name: "",
                     carbsG: Double(model.carbs ?? 0),
@@ -78,25 +89,28 @@ struct CarbEntrySheet: View {
                 .onChange(of: model.carbsText) { model.clampCarbsText() }
                 .accessibilityLabel("Carbohydrates in grams")
                 .accessibilityIdentifier("carb.amount")
-            Text("grams")
-                .font(.subheadline)
-                .foregroundStyle(Color.textSecondary)
+            // The secondary line takes the same middle-dot segment the meal
+            // review screen uses, in the same derived register: a quantity and
+            // a unit symbol, no verb, no qualifier. A suppressed suggestion is
+            // an absent segment, not a placeholder.
+            HStack(spacing: 0) {
+                Text("grams")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+                if let readout = doseSuggestions?.readout {
+                    (
+                        Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
+                            + Text(readout).fontWeight(.semibold)
+                    )
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+                    .contentTransition(.numericText())
+                    .animation(.smooth, value: readout)
+                    .accessibilityIdentifier("carb.doseSuggestion")
+                }
+            }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Time (Req 1.2) — InsulinDoseSheet.timeRow pattern verbatim
-
-    private var timeRow: some View {
-        DatePicker(
-            "Time",
-            selection: $model.timestamp,
-            in: ...Date(),
-            displayedComponents: [.date, .hourAndMinute]
-        )
-        .datePickerStyle(.compact)
-        .environment(\.locale, Locale(identifier: "en_IE"))
-        .accessibilityIdentifier("carb.time")
     }
 
     // MARK: - Macros (Req 2.1–2.3)
@@ -142,29 +156,6 @@ struct CarbEntrySheet: View {
 
     // MARK: - Save (Req 1.3, 1.4)
 
-    private var saveButton: some View {
-        Button {
-            Task {
-                if await model.save() { dismiss() }
-            }
-        } label: {
-            if model.isSaving {
-                MedataLoadingSymbol(mode: .loop, size: 22)
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text(saveLabel)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.medataAccent)
-        .foregroundStyle(Color.captureBackground)
-        .disabled(!model.canSave)
-        .accessibilityIdentifier("carb.save")
-    }
-
     // Plain "Save" until a saveable value exists — "Save 0 g" reads as a
     // savable zero when it is neither.
     private var saveLabel: String {
@@ -177,7 +168,10 @@ struct CarbEntrySheet: View {
     private var saveAsQuickAddButton: some View {
         Button {
             Task {
-                if await model.save() { showingPresetSheet = true }
+                if await model.save() {
+                    await armSuggestion()
+                    showingPresetSheet = true
+                }
             }
         } label: {
             Text("Save as quick-add")
@@ -189,5 +183,63 @@ struct CarbEntrySheet: View {
         .foregroundStyle(Color.textSecondary)
         .disabled(!model.canSave)
         .accessibilityIdentifier("carb.saveAsQuickAdd")
+    }
+
+    // MARK: - Dose suggestion (insulin-dosing Req 6.5)
+
+    private var suggestionKey: String { "\(model.carbs ?? 0)-\(model.timestamp.timeIntervalSince1970)" }
+
+    private var subject: DoseSubject? {
+        guard let carbs = model.carbs, carbs >= CarbEntryModel.minCarbs else { return nil }
+        return DoseSubject(
+            carbsG: Double(carbs),
+            instant: model.timestamp,
+            source: .intake,
+            sourceEventID: model.editing?.id,
+            fatG: model.macros.fatG,
+            proteinG: model.macros.proteinG,
+            sigmaMeal: nil
+        )
+    }
+
+    private func refreshSuggestion() async {
+        guard let subject else {
+            doseSuggestions?.clear()
+            return
+        }
+        await doseSuggestions?.refresh(for: subject)
+    }
+
+    private func armSuggestion() async {
+        guard let subject else { return }
+        await doseSuggestions?.arm(from: subject)
+    }
+}
+
+// The edit path keeps its own sheet: `LogSheet` creates rows, and editing an
+// existing row is a different job with a different title and no mode to
+// switch to. Reusing the content view keeps the two from drifting.
+struct CarbEntrySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var model: CarbEntryModel
+
+    private let nextSortOrder: Int
+
+    init(store: any PersistenceStore, editing: IntakeEntry? = nil, nextSortOrder: Int = 0) {
+        self.nextSortOrder = nextSortOrder
+        _model = State(initialValue: CarbEntryModel(store: store, editing: editing))
+    }
+
+    var body: some View {
+        NavigationStack {
+            CarbEntryContent(
+                model: model, nextSortOrder: nextSortOrder, onFinished: { dismiss() }
+            )
+            .background(Color.surfacePrimary)
+            .navigationTitle(model.editing == nil ? "Carbs" : "Edit carbs")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }

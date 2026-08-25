@@ -1,62 +1,45 @@
 import Persistence
 import SwiftUI
 
-// The insulin dose-entry sheet (PRD regression-suggestion-integration App
-// 1–5). Presented as a plain sheet from the Graph so it feels lighter than
-// the Capture/Data/Settings covers. Opens pre-filled with 10 U bolus now, so
-// the common case is exactly two taps: syringe → Save. The dose is a large
-// numeral flanked by big +/− controls (tap = 1 U; hold repeats, accelerating
-// after ~2 s — timing lives in `InsulinDoseModel`). The bolus/basal toggle
-// and the compact back-dating control sit off the happy path: neither needs
-// touching for the default save. No product-name field — `insulin_type`
-// comes from the per-kind Settings defaults (App 5).
-struct InsulinDoseSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var model: InsulinDoseModel
-    // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1): the
-    // sheet opens pre-seeded with the schedule's kind and nominal amount, so a
-    // changed dose is an adjustment rather than a fresh entry. The sheet is not
-    // rebuilt and gains no schedule-specific controls — the only difference is
-    // where `units` and `kind` start and who is told about the saved event.
-    private let onSaved: ((UUID) -> Void)?
-
-    init(
-        store: any PersistenceStore,
-        seedUnits: Int? = nil,
-        seedKind: InsulinKind? = nil,
-        onSaved: ((UUID) -> Void)? = nil
-    ) {
-        let model = InsulinDoseModel(store: store)
-        if let seedUnits {
-            model.seed(units: seedUnits, kind: seedKind ?? model.kind)
-        } else if let seedKind {
-            model.kind = seedKind
-        }
-        _model = State(initialValue: model)
-        self.onSaved = onSaved
-    }
+// The insulin mode of `LogSheet` (PRD regression-suggestion-integration App
+// 1–5). Opens pre-filled with 10 U bolus now — or with a suggested value when
+// one was armed (specs/data/insulin-dosing Req 6.4) — so the common case is
+// exactly two taps: syringe → Save. The dose is a large numeral flanked by big
+// +/− controls (tap = 1 U; hold repeats, accelerating after ~2 s — timing
+// lives in `InsulinDoseModel`). The bolus/basal toggle and the compact
+// back-dating control sit off the happy path: neither needs touching for the
+// default save. No product-name field — `insulin_type` comes from the per-kind
+// Settings defaults (App 5).
+//
+// Chrome (title, detent, dismissal) belongs to `LogSheet`; this is the
+// quantity control and nothing else.
+struct InsulinDoseContent: View {
+    @Bindable var model: InsulinDoseModel
+    let onSaved: () -> Void
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                kindPicker
-                stepper
-                timeRow
-                saveButton
-                if let saveError = model.saveError {
-                    Text(saveError)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
-                Spacer(minLength: 0)
+        VStack(spacing: 24) {
+            kindPicker
+            stepper
+            EntryTimeRow(timestamp: $model.timestamp, identifier: "insulin.time")
+            EntrySaveButton(
+                title: "Save \(model.units) U \(model.kind == .bolus ? "bolus" : "basal")",
+                isSaving: model.isSaving,
+                isEnabled: true,
+                identifier: "insulin.save"
+            ) {
+                Task { if await model.save() { onSaved() } }
             }
-            .padding(20)
-            .background(Color.surfacePrimary)
-            .navigationTitle("Insulin")
-            .navigationBarTitleDisplayMode(.inline)
+            if let saveError = model.saveError {
+                Text(saveError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+            Spacer(minLength: 0)
         }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
+        .padding(20)
+        .onChange(of: model.kind) { model.consumeSeedCaption() }
+        .onChange(of: model.timestamp) { model.consumeSeedCaption() }
     }
 
     // Bolus default; switching kind preserves the chosen units (App 4).
@@ -81,9 +64,20 @@ struct InsulinDoseSheet: View {
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.1), value: model.units)
                     .accessibilityIdentifier("insulin.units")
-                Text("units")
+                // One slot, two states. While a seeded value is untouched the
+                // caption names where the number came from — the carbohydrate
+                // figure is not on this screen, so the sheet restates it. The
+                // first press of either step control replaces it with the
+                // plain unit label, permanently for this presentation, so the
+                // screen can never describe a number as derived once a human
+                // has overridden it. Same font in both states: the slot must
+                // not change height on the swap.
+                Text(model.unitsCaption)
                     .font(.subheadline)
                     .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .accessibilityIdentifier("insulin.caption")
             }
             .frame(minWidth: 120)
             stepControl("plus", direction: .up, identifier: "insulin.plus")
@@ -114,45 +108,5 @@ struct InsulinDoseSheet: View {
             }
             .accessibilityLabel(direction == .up ? "Increase dose" : "Decrease dose")
             .accessibilityIdentifier(identifier)
-    }
-
-    // Compact back-dating control (App 4) — a forgotten dose is logged at its
-    // real administration time; the default stays "now" on the happy path.
-    private var timeRow: some View {
-        DatePicker(
-            "Time",
-            selection: $model.timestamp,
-            in: ...Date(),
-            displayedComponents: [.date, .hourAndMinute]
-        )
-        .datePickerStyle(.compact)
-        .environment(\.locale, Locale(identifier: "en_IE"))
-        .accessibilityIdentifier("insulin.time")
-    }
-
-    private var saveButton: some View {
-        Button {
-            Task {
-                if await model.save() {
-                    if let eventID = model.savedEventID { onSaved?(eventID) }
-                    dismiss()
-                }
-            }
-        } label: {
-            if model.isSaving {
-                MedataLoadingSymbol(mode: .loop, size: 22)
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text("Save \(model.units) U \(model.kind == .bolus ? "bolus" : "basal")")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.medataAccent)
-        .foregroundStyle(Color.captureBackground)
-        .disabled(model.isSaving)
-        .accessibilityIdentifier("insulin.save")
     }
 }
