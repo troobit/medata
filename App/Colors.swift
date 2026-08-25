@@ -17,7 +17,13 @@ extension Color {
     static let captureChromeBG = Color.white.opacity(0.10)
     static let captureScrim = Color.black.opacity(0.45)
 
-    // MARK: - Surfaces (Meals / Settings — system Grouped)
+    // MARK: - Surfaces (grouped structure — always resolved dark)
+    //
+    // specs/ui/unified-dark-theme: UIUserInterfaceStyle=Dark pins the process
+    // dark, so these adaptive tokens are structure (base vs elevated card),
+    // not a light/dark split — surfacePrimary resolves #000000, identical to
+    // captureBackground, and surfaceElevated #1C1C1E. They stay semantic
+    // rather than hard-coded so a future light theme is a one-line revert.
 
     static let surfacePrimary = Color(uiColor: .systemGroupedBackground)
     static let surfaceElevated = Color(uiColor: .secondarySystemGroupedBackground)
