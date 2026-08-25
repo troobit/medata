@@ -1104,3 +1104,109 @@ The branches, their `-on-research-2` tags and what each attempt is are recorded 
 `docs/agent-notes/device-build-and-test.md`.
 
 ---
+
+## Decision 16: The attempt verdict — attempt 3's consolidation as the base, attempt 2's reach ported onto it
+
+**Date**: 2026-08-25
+**Status**: accepted
+
+### Context
+
+Decision 15 held the three App layers unmerged until a person judged them, and framed what they
+disagree about: "they disagree about scope rather than about styling". The judgement axis was how
+far the suggestion reaches past the review line. Attempt 3 was the last build installed
+(`insulin-dosing-ui-attempt-3-on-research-3`, `26af5f9`), and under it the review line carries no
+dose readout at all — the suggestion appears only as the seeded opening value of the consolidated
+`LogSheet`. The direction taken from that install is that this is not enough: the suggested dose
+must be readable on **every surface that presents a meal's carbohydrate total** — the capture
+review, the manual entry path, and the history surfaces reached from Records — not only inside a
+sheet the user has to open. That settles the scope axis the comparison was built around, by
+product direction rather than by preferring one attempt's styling; what remains a device judgement
+(the exact reading of the line, design-direction.md §10's bare `12 U` versus `12 U at 5 g/U`) stays
+inside task 16's on-device STOP, where it always was.
+
+The same direction demands the entry-sheet consolidation: with the readout reaching three-plus
+surfaces, the three near-identical entry sheets (`InsulinDoseSheet`, `ActivitySheet`,
+`CarbEntrySheet`) each carrying their own copy of the back-dating row, save button and sheet chrome
+is a coordination cost that grows with every surface the suggestion touches — attempt 3's own
+thesis, stated in its `LogSheet` header: "This is that third sheet refusing to exist."
+
+### Decision
+
+No single attempt wins. The verdict is a **synthesis**: attempt 3's App layer
+(`insulin-dosing-ui-3-on-research`) merges as the base — `LogSheet` in three modes, `EntryChrome`,
+its `DoseSuggestionModel` and its seven `SettingsKeys` — and attempt 2's reach is ported onto it:
+`DoseReadoutLine` (`MiddleDotLine` / `MealTotalSecondLine`), the readout on the review line and the
+manual entry line, the dose sheet's provenance caption consumed by the first press, and the seed
+that is actually consumed. Attempt 3's documented ledger stub is replaced with the real
+`saveDoseSuggestion` / `linkDose` calls phases 1–2 merged, and the Settings ratio rows (task 10)
+are built against attempt 1/2's `SettingsView` treatment. Attempt 1 is rejected outright.
+
+### Rationale
+
+The attempts partition cleanly because they disagree about different things. Attempt 2's claim is
+about *reach* — the readout as a reusable view rendered on every entry path, and provenance
+restated exactly where the source number is off screen. Attempt 3's claim is about *structure* —
+one entry surface, one back-dating row, one commit button. The product direction affirms both
+claims at once and neither attempt alone: attempt 2 leaves three duplicated sheets standing, and
+attempt 3 leaves the review line bare. The two claims touch disjoint files almost everywhere
+(readout components versus sheet consolidation), which is what makes the synthesis a port rather
+than a rewrite.
+
+Attempt 3 is the base rather than attempt 2 because the consolidation is the structural change:
+porting a 146-line readout view onto a reorganised sheet layer is mechanical, while porting a sheet
+reorganisation onto a tree that already wired the readout into the old sheets would redo attempt
+3's work under merge pressure.
+
+### Alternatives Considered
+
+- **Attempt 1 (the readout and nothing else)**: The most restrained reading of the design
+  direction - Rejected: it arms a seed on Record but never consumes one (`takeSeed()` has no
+  caller), so the dose sheet still opens at the standing 10 U and the number is retyped by hand —
+  under the everywhere-readable bar this is the gap, not the restraint. What it traded away that
+  the synthesis keeps: nothing; its seven-character review segment survives verbatim inside
+  attempt 2's `MealTotalSecondLine` shed order.
+- **Attempt 2 alone**: The full readout reach with the smallest structural change - Rejected: it
+  leaves the three-sheet duplication standing and writes its ledger rows to a private
+  `InMemoryDoseLedger` rather than the merged store. What it traded away that the synthesis keeps:
+  nothing; its readout components and provenance caption port whole.
+- **Attempt 3 alone**: The consolidation, judged on its own merits - Rejected: its review line
+  shows no dose at all, which the product direction names as the defect to fix. What it traded
+  away that the synthesis keeps: nothing structural; its `LogSheet`/`EntryChrome` land unchanged.
+- **Wait for a three-way device sitting per task 8 as written**: The purest reading of
+  Decision 15 - Rejected: the sitting's question — how far should the suggestion reach — has been
+  answered by direction after an attempt-3 install; holding the widest fan-out in the repo for a
+  comparison whose axis is already settled converts a gate into a stall. The styling half of the
+  judgement survives as task 16's on-device STOP.
+
+### Consequences
+
+**Positive:**
+
+- Tasks 9–15 unblock against a named App layer; the widest fan-out in the repo is released.
+- Both losing claims are kept, not discarded — the synthesis is strictly additive over attempts 2
+  and 3, and the losing *branches* stay reachable by tag per the attempt convention.
+- The ledger goes live: rows land in `dose_suggestions` from the first merged build, where every
+  attempt but the base wrote to memory or a stub.
+
+**Negative:**
+
+- The synthesis tree is a shape no phone has displayed; the first on-device look at the combined
+  layer happens at task 16, later than the attempt convention prefers.
+- The port must reconcile attempt 2's components with attempt 3's reorganised sheets by hand —
+  `CarbEntrySheet` in particular was rewritten as `CarbEntryContent` inside `LogSheet` and the
+  readout line lands there, not in the file attempt 2 patched.
+- design-direction.md §10's open question (bare `12 U` versus `12 U at 5 g/U`) is carried unjudged
+  into the merged tree; attempt 2 shipped the data-forward branch and that choice now needs an
+  explicit device verdict at task 16 or it becomes the winner by inertia.
+
+### Impact
+
+`specs/data/insulin-dosing/tasks.md`: task 8 closes with this verdict; tasks 9–15 unblock; the
+history-surface readout added by the Requirement 6 amendment (Req 6.10) gains its own task.
+`requirements.md` Requirement 6 is amended in the same pass. `docs/agent-notes/insulin-dose-ui.md`
+gains the verdict per Decision 15's contract. The current tags are the `-on-research-3` replays
+(`ff9d29f` / `e0373bd` / `26af5f9`); Decision 15's Impact section predates the third replay and
+names `-on-research-2`.
+
+---
