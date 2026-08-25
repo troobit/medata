@@ -250,31 +250,18 @@ private struct MealRecordRow: View {
     }
 
     var body: some View {
-        HStack {
-            Image(systemName: "fork.knife")
-                .foregroundStyle(Color.textSecondary)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(carbs) g carbs")
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(Color.textPrimary)
-                    Text("≈ \(massG) g")
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(Color.textSecondary)
-                }
-                Text(timeString(meal.record.createdAt))
-                    .font(.caption)
+        TimelineRow(glyph: "fork.knife", glyphTint: Color.textSecondary, timestamp: meal.record.createdAt) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(carbs) g carbs")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+                Text("≈ \(massG) g")
+                    .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
             }
-            Spacer()
+        } trailing: {
             if meal.isCorrected {
-                Text("corrected")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.surfaceElevated, in: Capsule())
-                    .foregroundStyle(Color.textSecondary)
+                CorrectedMarker(palette: .grouped, identifier: "records.row.meal.corrected")
             }
         }
         .accessibilityIdentifier("records.row.meal")
@@ -286,24 +273,19 @@ private struct InsulinRecordRow: View {
     let entry: InsulinEntry
 
     var body: some View {
-        HStack {
-            Image(systemName: "syringe")
-                .foregroundStyle(entry.kind == .basal ? Color.seriesInsulinBasal : Color.seriesInsulinBolus)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text("\(Int(entry.units.rounded())) U")
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(Color.textPrimary)
-                    Text(entry.kind == .bolus ? "Bolus" : "Basal")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.textSecondary)
-                }
-                Text(timeString(entry.timestamp))
-                    .font(.caption)
+        TimelineRow(
+            glyph: "syringe",
+            glyphTint: entry.kind == .basal ? Color.seriesInsulinBasal : Color.seriesInsulinBolus,
+            timestamp: entry.timestamp
+        ) {
+            HStack(spacing: 8) {
+                Text("\(Int(entry.units.rounded())) U")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+                Text(entry.kind == .bolus ? "Bolus" : "Basal")
+                    .font(.subheadline)
                     .foregroundStyle(Color.textSecondary)
             }
-            Spacer()
         }
         .accessibilityIdentifier("records.row.insulin")
     }
@@ -315,19 +297,10 @@ private struct GlucoseRecordRow: View {
     let reading: GlucoseRow
 
     var body: some View {
-        HStack {
-            Image(systemName: "drop.fill")
-                .foregroundStyle(Color.seriesGlucose)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(String(format: "%.1f mmol/L", reading.mmolL))
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
-                Text(timeString(reading.timestamp))
-                    .font(.caption)
-                    .foregroundStyle(Color.textSecondary)
-            }
-            Spacer()
+        TimelineRow(glyph: "drop.fill", glyphTint: Color.seriesGlucose, timestamp: reading.timestamp) {
+            Text(String(format: "%.1f mmol/L", reading.mmolL))
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(Color.textPrimary)
         }
         .accessibilityIdentifier("records.row.glucose")
     }
@@ -339,24 +312,15 @@ private struct IntakeRecordRow: View {
     let record: IntakeRecord
 
     var body: some View {
-        HStack {
-            Image(systemName: "carrot")
-                .foregroundStyle(Color.textSecondary)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(record.displayValue)
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(Color.textPrimary)
-                    Text(record.typeLabel)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.textSecondary)
-                }
-                Text(timeString(record.timestamp))
-                    .font(.caption)
+        TimelineRow(glyph: "carrot", glyphTint: Color.textSecondary, timestamp: record.timestamp) {
+            HStack(spacing: 8) {
+                Text(record.displayValue)
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+                Text(record.typeLabel)
+                    .font(.subheadline)
                     .foregroundStyle(Color.textSecondary)
             }
-            Spacer()
         }
         .accessibilityIdentifier("records.row.intake")
     }
@@ -370,26 +334,17 @@ private struct ActivityRecordRow: View {
     let entry: ActivityEntry
 
     var body: some View {
-        HStack {
-            Image(systemName: entry.kind.symbolName)
-                .foregroundStyle(Color.seriesActivity)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(entry.kind.displayLabel)
-                        .font(.headline)
-                        .foregroundStyle(Color.textPrimary)
-                    if let minutes = entry.durationMinutes {
-                        Text("\(Int(minutes.rounded())) min")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(Color.textSecondary)
-                    }
+        TimelineRow(glyph: entry.kind.symbolName, glyphTint: Color.seriesActivity, timestamp: entry.timestamp) {
+            HStack(spacing: 8) {
+                Text(entry.kind.displayLabel)
+                    .font(.headline)
+                    .foregroundStyle(Color.textPrimary)
+                if let minutes = entry.durationMinutes {
+                    Text("\(Int(minutes.rounded())) min")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(Color.textSecondary)
                 }
-                Text(timeString(entry.timestamp))
-                    .font(.caption)
-                    .foregroundStyle(Color.textSecondary)
             }
-            Spacer()
         }
         .accessibilityIdentifier("records.row.activity")
     }
@@ -397,12 +352,4 @@ private struct ActivityRecordRow: View {
 
 private func recordCountLabel(_ count: Int) -> String {
     count == 1 ? "1 record" : "\(count) records"
-}
-
-private func timeString(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_IE")
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .short
-    return formatter.string(from: date)
 }

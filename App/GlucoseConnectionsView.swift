@@ -204,12 +204,9 @@ struct GlucoseConnectionsView: View {
         }
     }
 
-    // Same en_IE medium/short format as the Records rows.
+    // Same en_IE medium/short format as the Records rows (shared cached
+    // formatter, specs/ui/shared-meal-components Req 4.2).
     private static func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_IE")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        MedataFormat.dateTimeString(date)
     }
 }

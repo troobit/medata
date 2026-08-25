@@ -217,24 +217,16 @@ struct IntakeView: View {
         Button {
             activeSheet = .editEntry(entry)
         } label: {
-            HStack {
-                Image(systemName: "carrot")
-                    .foregroundStyle(Color.textSecondary)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(Int(entry.carbsG.rounded())) g")
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(Color.textPrimary)
-                    Text(entryTimeString(entry.timestamp))
-                        .font(.caption)
+            TimelineRow(glyph: "carrot", glyphTint: Color.textSecondary, timestamp: entry.timestamp) {
+                Text("\(Int(entry.carbsG.rounded())) g")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(Color.textPrimary)
+            } footer: {
+                if let macros = macroSummary(entry.macros) {
+                    Text(macros)
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(Color.textSecondary)
-                    if let macros = macroSummary(entry.macros) {
-                        Text(macros)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(Color.textSecondary)
-                    }
                 }
-                Spacer()
             }
             .contentShape(Rectangle())
         }
@@ -259,10 +251,3 @@ struct IntakeView: View {
     }
 }
 
-private func entryTimeString(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_IE")
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .short
-    return formatter.string(from: date)
-}

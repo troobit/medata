@@ -103,19 +103,14 @@ struct MealOverviewView: View {
     private var totalRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .lastTextBaseline, spacing: 12) {
-                HStack(alignment: .lastTextBaseline, spacing: 6) {
-                    Text("\(displayTotal)")
-                        .font(.system(size: 40, weight: .heavy).monospacedDigit())
-                        .foregroundStyle(Color.textPrimary)
-                    Text("g carbs")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.textSecondary)
+                CarbAmountText(carbs: displayTotal, pointSize: 40, palette: .grouped)
+                if isCorrected {
+                    CorrectedMarker(palette: .grouped, identifier: "overview.correctedMarker")
                 }
-                if isCorrected { correctedMarker }
                 Spacer()
                 ConfidencePill(sigmaMeal: record.confidence.sigmaMeal)
             }
-            if let line = Self.suggestionLine(suggestion) {
+            if let line = RecordedSuggestion.line(suggestion) {
                 // History readout (Req 6.10): "suggested" is permitted here —
                 // naming a past hypothesis is labelling, not counsel
                 // (design-direction §6.3). Grouped palette, so textSecondary.
@@ -126,29 +121,6 @@ struct MealOverviewView: View {
             }
         }
         .accessibilityIdentifier("overview.total")
-    }
-
-    // The recorded row's values verbatim (Req 6.11). `suggested 12 U · 5 g/U`,
-    // gaining `· given 14 U` once a dose was linked (Req 7.5). A suppressed
-    // row renders nothing — absence, never a placeholder (Req 6.6).
-    static func suggestionLine(_ row: DoseSuggestionRecord?) -> String? {
-        guard let row, let rounded = row.roundedUnits else { return nil }
-        var line = "suggested \(DoseReadout.wholeUnitsLabel(rounded))"
-        line += " · \(DoseReadout.gramsPerUnitLabel(row.crGramsPerUnit))"
-        if let given = row.givenUnits {
-            line += " · given \(DoseReadout.wholeUnitsLabel(given))"
-        }
-        return line
-    }
-
-    private var correctedMarker: some View {
-        Text("corrected")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(Color.surfaceElevated, in: Capsule())
-            .foregroundStyle(Color.textSecondary)
-            .accessibilityIdentifier("overview.correctedMarker")
     }
 
     // §9.2 per-class rows: mask-colour swatch, name, mass, volume, carbs (no σ).
@@ -197,11 +169,7 @@ struct MealOverviewView: View {
 
     private var metadataLine: String {
         let path = record.capturePath == .singleViewLidar ? "1-view · LiDAR" : "2-view"
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_IE")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return "\(path) · \(formatter.string(from: record.createdAt))"
+        return "\(path) · \(MedataFormat.dateTimeString(record.createdAt))"
     }
 
     private struct PerClassRow {
@@ -217,7 +185,7 @@ struct MealOverviewView: View {
             .map { name, macro in
                 PerClassRow(
                     name: name,
-                    displayName: MealOverviewView.prettify(correctedClassIds[name] ?? name),
+                    displayName: MedataFormat.prettify(correctedClassIds[name] ?? name),
                     massG: Int(macro.massG.rounded()),
                     volumeCm3: Int(macro.volumeCm3.rounded()),
                     carbsG: Int(macro.carbsG.rounded())
@@ -244,11 +212,6 @@ struct MealOverviewView: View {
         }
         let colour = ClassColourTable.standard.colour(forClassId: id)
         return Color(red: colour.red, green: colour.green, blue: colour.blue)
-    }
-
-    private static func prettify(_ raw: String) -> String {
-        let spaced = raw.replacingOccurrences(of: "_", with: " ")
-        return spaced.prefix(1).uppercased() + spaced.dropFirst()
     }
 
     private func loadPhoto() async {

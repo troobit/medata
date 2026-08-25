@@ -384,10 +384,7 @@ struct TrendsView: View {
     }
 
     private func timeLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_IE")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        MedataFormat.clockString(date)
     }
 
     // MARK: - Day insulin list (App 8)

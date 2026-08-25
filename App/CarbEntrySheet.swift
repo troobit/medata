@@ -80,78 +80,35 @@ struct CarbEntryContent: View {
     // MARK: - Amount (Req 1.1, 1.4)
 
     private var carbField: some View {
-        VStack(spacing: 0) {
-            TextField("0", text: $model.carbsText)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 56, weight: .bold).monospacedDigit())
-                .foregroundStyle(Color.textPrimary)
-                .onChange(of: model.carbsText) { model.clampCarbsText() }
-                .accessibilityLabel("Carbohydrates in grams")
-                .accessibilityIdentifier("carb.amount")
-            // The secondary line takes the same middle-dot segment the meal
-            // review screen uses, in the same derived register: a quantity and
-            // a unit symbol, no verb, no qualifier. A suppressed suggestion is
-            // an absent segment, not a placeholder.
-            HStack(spacing: 0) {
-                Text("grams")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.textSecondary)
-                if let readout = doseSuggestions?.readout {
-                    (
-                        Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
-                            + Text(readout.unitsLabel).fontWeight(.semibold)
-                    )
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(Color.textSecondary)
-                    .contentTransition(.numericText())
-                    .animation(.smooth, value: readout)
-                    .accessibilityIdentifier("carb.doseSuggestion")
-                }
+        // The secondary line takes the same middle-dot segment the meal
+        // review screen uses, in the same derived register: a quantity and
+        // a unit symbol, no verb, no qualifier. A suppressed suggestion is
+        // an absent segment, not a placeholder.
+        CarbAmountField(text: $model.carbsText, identifier: "carb.amount") {
+            if let readout = doseSuggestions?.readout {
+                (
+                    Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
+                        + Text(readout.unitsLabel).fontWeight(.semibold)
+                )
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Color.textSecondary)
+                .contentTransition(.numericText())
+                .animation(.smooth, value: readout)
+                .accessibilityIdentifier("carb.doseSuggestion")
             }
         }
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Macros (Req 2.1–2.3)
 
     private var macroDisclosure: some View {
-        DisclosureGroup(isExpanded: $model.macrosExpanded) {
-            VStack(spacing: 8) {
-                macroRow("Protein", text: $model.proteinText, identifier: "carb.protein")
-                macroRow("Fat", text: $model.fatText, identifier: "carb.fat")
-                macroRow("Fibre", text: $model.fibreText, identifier: "carb.fibre")
-            }
-            .padding(.top, 8)
-        } label: {
-            Text("Macros")
-                .font(.headline)
-                .foregroundStyle(Color.textPrimary)
-        }
-    }
-
-    private func macroRow(_ title: String, text: Binding<String>, identifier: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(Color.textPrimary)
-            Spacer()
-            TextField("", text: text)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 72)
-                // Same sanitiser as the carb field: digits only, 3-digit cap,
-                // so pasted junk cannot persist or vanish a typed value.
-                .onChange(of: text.wrappedValue) {
-                    let clamped = CarbEntryModel.clampedDigits(text.wrappedValue)
-                    if clamped != text.wrappedValue { text.wrappedValue = clamped }
-                }
-                .accessibilityIdentifier(identifier)
-            Text("g")
-                .foregroundStyle(Color.textSecondary)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
+        MacroDisclosure(
+            isExpanded: $model.macrosExpanded,
+            protein: $model.proteinText,
+            fat: $model.fatText,
+            fibre: $model.fibreText,
+            idPrefix: "carb"
+        )
     }
 
     // MARK: - Save (Req 1.3, 1.4)
@@ -241,5 +198,98 @@ struct CarbEntrySheet: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+}
+
+// MARK: - Shared carb/macro fields (specs/ui/shared-meal-components Req 2)
+//
+// One implementation of the 56 pt centred carb keypad field and the macro
+// disclosure, consumed by the entry surface above and by QuickPresetEditSheet
+// — the two were byte-identical copies. The digits-only 3-digit clamp is
+// baked in so pasted junk cannot persist or vanish a typed value on either
+// surface.
+
+struct CarbAmountField<SecondaryLine: View>: View {
+    @Binding var text: String
+    let identifier: String
+    @ViewBuilder var secondaryLine: SecondaryLine
+
+    init(
+        text: Binding<String>,
+        identifier: String,
+        @ViewBuilder secondaryLine: () -> SecondaryLine = { EmptyView() }
+    ) {
+        _text = text
+        self.identifier = identifier
+        self.secondaryLine = secondaryLine()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TextField("0", text: $text)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.center)
+                .font(.system(size: 56, weight: .bold).monospacedDigit())
+                .foregroundStyle(Color.textPrimary)
+                .onChange(of: text) {
+                    let clamped = CarbEntryModel.clampedDigits(text)
+                    if clamped != text { text = clamped }
+                }
+                .accessibilityLabel("Carbohydrates in grams")
+                .accessibilityIdentifier(identifier)
+            HStack(spacing: 0) {
+                Text("grams")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+                secondaryLine
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+struct MacroDisclosure: View {
+    @Binding var isExpanded: Bool
+    @Binding var protein: String
+    @Binding var fat: String
+    @Binding var fibre: String
+    let idPrefix: String
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(spacing: 8) {
+                macroRow("Protein", text: $protein, identifier: "\(idPrefix).protein")
+                macroRow("Fat", text: $fat, identifier: "\(idPrefix).fat")
+                macroRow("Fibre", text: $fibre, identifier: "\(idPrefix).fibre")
+            }
+            .padding(.top, 8)
+        } label: {
+            Text("Macros")
+                .font(.headline)
+                .foregroundStyle(Color.textPrimary)
+        }
+    }
+
+    private func macroRow(_ title: String, text: Binding<String>, identifier: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(Color.textPrimary)
+            Spacer()
+            TextField("", text: text)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 72)
+                // Same sanitiser as the carb field: digits only, 3-digit cap.
+                .onChange(of: text.wrappedValue) {
+                    let clamped = CarbEntryModel.clampedDigits(text.wrappedValue)
+                    if clamped != text.wrappedValue { text.wrappedValue = clamped }
+                }
+                .accessibilityIdentifier(identifier)
+            Text("g")
+                .foregroundStyle(Color.textSecondary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
     }
 }

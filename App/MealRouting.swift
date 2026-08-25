@@ -144,3 +144,27 @@ struct GlucoseRow: Identifiable, Equatable {
     let timestamp: Date
     let mmolL: Double
 }
+
+// One row's worth of display data for the Records timeline (design-handoff-00
+// §8, critic R2; relocated from the retired MealHistoryModel.swift —
+// specs/ui/shared-meal-components Req 6.2). `RecordsModel.reload()` composes
+// each meal with its corrections so that a landed correction actually
+// invalidates the SwiftUI row: a value-identical `MealRecord` refetch alone
+// would diff as unchanged, so the corrected total and the corrected flag are
+// folded into this struct (which IS `Equatable`).
+struct DisplayMeal: Identifiable, Equatable {
+    let record: MealRecord
+    // True when any correction row exists for the meal (Req 7.3 marker).
+    let isCorrected: Bool
+    // The most-recent correction's total override, or nil when no correction set
+    // a total — callers fall back to the original estimate.
+    let correctedTotalCarbsG: Float?
+
+    var id: UUID { record.id }
+
+    // Total to show in the row: the corrected override when present, otherwise
+    // the pipeline's original estimate.
+    var displayTotalCarbsG: Float {
+        correctedTotalCarbsG ?? record.macros.totalCarbsG
+    }
+}

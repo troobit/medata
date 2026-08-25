@@ -41,6 +41,9 @@
 		11DA1E84B65EADE8EB6A981E /* LogSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA92AAF3C1338E5336EA1E /* LogSheet.swift */; };
 		11DA487E1030409CF609121E /* EntryChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DAB2D3F8C2E1BE1421BE1E /* EntryChrome.swift */; };
 		11DA7A01C4D2E9AB55FF1E1E /* DoseReadoutLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA3B92E7F04C1D88AA2E1E /* DoseReadoutLine.swift */; };
+		11DA5C0288A1B34E77CD3E1E /* ServingRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA6D13F9B25C4A66DE4E1E /* ServingRows.swift */; };
+		11DAA046C7E5F23D11007E1E /* MealReadouts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DAB157D8F60A4E22118E1E /* MealReadouts.swift */; };
+		11DA8E24A5C3D01B99EE5E1E /* SharedFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA9F35B6D4E12C00FF6E1E /* SharedFormatting.swift */; };
 		11DAD8B938B28488BE3C8B1E /* DoseSuggestionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */; };
 		11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */; };
 		11AC77A03010000000272C1E /* ActivityModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AC77B03010000000272C1E /* ActivityModel.swift */; };
@@ -72,7 +75,6 @@
 		115DA0AB2FD1000000272C1E /* TrendsOptionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */; };
 		115DA0AC2FD1000000272C1E /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115DA0BC2FD1000000272C1E /* AboutView.swift */; };
 		112B11C22FCE000000272C1E /* ConfidencePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D22FCE000000272C1E /* ConfidencePill.swift */; };
-		112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112B11D32FCE000000272C1E /* MealHistoryModel.swift */; };
 		114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B02FE2000000272C1E /* VisionCardDetector.swift */; };
 		114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */; };
 		11ED000E2FF2000000272C1E /* MeDataWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 11ED00012FF2000000272C1E /* MeDataWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -115,6 +117,9 @@
 		11DA92AAF3C1338E5336EA1E /* LogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LogSheet.swift; path = ../App/LogSheet.swift; sourceTree = SOURCE_ROOT; };
 		11DAB2D3F8C2E1BE1421BE1E /* EntryChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EntryChrome.swift; path = ../App/EntryChrome.swift; sourceTree = SOURCE_ROOT; };
 		11DA3B92E7F04C1D88AA2E1E /* DoseReadoutLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseReadoutLine.swift; path = ../App/DoseReadoutLine.swift; sourceTree = SOURCE_ROOT; };
+		11DA6D13F9B25C4A66DE4E1E /* ServingRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ServingRows.swift; path = ../App/ServingRows.swift; sourceTree = SOURCE_ROOT; };
+		11DAB157D8F60A4E22118E1E /* MealReadouts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealReadouts.swift; path = ../App/MealReadouts.swift; sourceTree = SOURCE_ROOT; };
+		11DA9F35B6D4E12C00FF6E1E /* SharedFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SharedFormatting.swift; path = ../App/SharedFormatting.swift; sourceTree = SOURCE_ROOT; };
 		11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DoseSuggestionModel.swift; path = ../App/DoseSuggestionModel.swift; sourceTree = SOURCE_ROOT; };
 		11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = InsulinDoseSheet.swift; path = ../App/InsulinDoseSheet.swift; sourceTree = SOURCE_ROOT; };
 		11AC77B03010000000272C1E /* ActivityModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ActivityModel.swift; path = ../App/ActivityModel.swift; sourceTree = SOURCE_ROOT; };
@@ -146,7 +151,6 @@
 		115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsOptionsSheet.swift; path = ../App/TrendsOptionsSheet.swift; sourceTree = SOURCE_ROOT; };
 		115DA0BC2FD1000000272C1E /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AboutView.swift; path = ../App/AboutView.swift; sourceTree = SOURCE_ROOT; };
 		112B11D22FCE000000272C1E /* ConfidencePill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConfidencePill.swift; path = ../App/ConfidencePill.swift; sourceTree = SOURCE_ROOT; };
-		112B11D32FCE000000272C1E /* MealHistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealHistoryModel.swift; path = ../App/MealHistoryModel.swift; sourceTree = SOURCE_ROOT; };
 		114CD0B02FE2000000272C1E /* VisionCardDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VisionCardDetector.swift; path = ../App/VisionCardDetector.swift; sourceTree = SOURCE_ROOT; };
 		114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PreShutterSegmenter.swift; path = ../App/PreShutterSegmenter.swift; sourceTree = SOURCE_ROOT; };
 		2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MealRouting.swift; path = ../App/MealRouting.swift; sourceTree = SOURCE_ROOT; };
@@ -253,6 +257,9 @@
 				11DA92AAF3C1338E5336EA1E /* LogSheet.swift */,
 				11DAB2D3F8C2E1BE1421BE1E /* EntryChrome.swift */,
 				11DA3B92E7F04C1D88AA2E1E /* DoseReadoutLine.swift */,
+				11DA6D13F9B25C4A66DE4E1E /* ServingRows.swift */,
+				11DAB157D8F60A4E22118E1E /* MealReadouts.swift */,
+				11DA9F35B6D4E12C00FF6E1E /* SharedFormatting.swift */,
 				11DA60E3A035A46527BD511E /* DoseSuggestionModel.swift */,
 				11AB55B12FF1000000272C1E /* InsulinDoseSheet.swift */,
 				11AC77B03010000000272C1E /* ActivityModel.swift */,
@@ -272,7 +279,6 @@
 				115DA0BB2FD1000000272C1E /* TrendsOptionsSheet.swift */,
 				115DA0BC2FD1000000272C1E /* AboutView.swift */,
 				112B11D22FCE000000272C1E /* ConfidencePill.swift */,
-				112B11D32FCE000000272C1E /* MealHistoryModel.swift */,
 				114CD0B02FE2000000272C1E /* VisionCardDetector.swift */,
 				114CD0B12FE2000000272C1E /* PreShutterSegmenter.swift */,
 				2D6A2BF8949732DE5C4C4089 /* MealRouting.swift */,
@@ -473,6 +479,9 @@
 				11DA1E84B65EADE8EB6A981E /* LogSheet.swift in Sources */,
 				11DA487E1030409CF609121E /* EntryChrome.swift in Sources */,
 				11DA7A01C4D2E9AB55FF1E1E /* DoseReadoutLine.swift in Sources */,
+				11DA5C0288A1B34E77CD3E1E /* ServingRows.swift in Sources */,
+				11DAA046C7E5F23D11007E1E /* MealReadouts.swift in Sources */,
+				11DA8E24A5C3D01B99EE5E1E /* SharedFormatting.swift in Sources */,
 				11DAD8B938B28488BE3C8B1E /* DoseSuggestionModel.swift in Sources */,
 				11AB55A12FF1000000272C1E /* InsulinDoseSheet.swift in Sources */,
 				11AC77A03010000000272C1E /* ActivityModel.swift in Sources */,
@@ -491,7 +500,6 @@
 				115DA0AB2FD1000000272C1E /* TrendsOptionsSheet.swift in Sources */,
 				115DA0AC2FD1000000272C1E /* AboutView.swift in Sources */,
 				112B11C22FCE000000272C1E /* ConfidencePill.swift in Sources */,
-				112B11C32FCE000000272C1E /* MealHistoryModel.swift in Sources */,
 				114CD0A02FE2000000272C1E /* VisionCardDetector.swift in Sources */,
 				114CD0A12FE2000000272C1E /* PreShutterSegmenter.swift in Sources */,
 				0EAC1E7EAC5832F3CDFC3771 /* MealRouting.swift in Sources */,

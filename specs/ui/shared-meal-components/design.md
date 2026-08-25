@@ -10,7 +10,7 @@ and parameterised, not redesigned.
 | New file | Contents | Consumed by |
 |---|---|---|
 | `App/ServingRows.swift` | `PlateFraction` (moved from `ResultView.swift`), `PlateFractionControl`, `ServingAmountButton`, `GramEditor`, `StepButton`, `ServingStepLogic` (`step(_:direction:)` + `clampedRowGrams`) | `MealReviewView`, `ResultView` |
-| `App/MealReadouts.swift` | `CarbTotalBlock` (numeral + `g carbs` + `CorrectedMarker` + `ConfidencePill` + secondary line slot), `CorrectedMarker`, `MealPhotoCard` (parameterised height) | `MealOverviewView`, `MealReviewView`, `ResultView`, `RecordsView` (marker), `IntakeView` |
+| `App/MealReadouts.swift` | `MealPalette`, `CarbAmountText` (numeral + `g carbs` pair), `CorrectedMarker`, `RecordedSuggestion.line`, `MealPhotoLoader` (relocated from the retired `MealHistoryModel.swift`) — containers stay per-surface (Decision 3) | `MealOverviewView`, `MealReviewView`, `ResultView`, `RecordsView` (marker) |
 | `App/SharedFormatting.swift` | `MedataFormat.timeString(_:)` / `.dateTimeString(_:)` over cached `en_IE` formatters; `MedataFormat.prettify(_:)`; `TimelineRow` layout (glyph 20 pt frame, headline/caption stack, trailing content) | `RecordsView` rows, `IntakeView.entryRow`, `MealOverviewView`, `GlucoseConnectionsView`, `EstimationLogView`, `TrendsView` |
 
 The carb-amount form (Req 2) does not need a fourth file: `LogSheet.CarbEntryContent`

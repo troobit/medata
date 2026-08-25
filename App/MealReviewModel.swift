@@ -833,9 +833,9 @@ final class MealReviewModel {
         }
     }
 
-    // "white_rice" → "White rice" (shared display convention).
+    // "white_rice" → "White rice" — the one shared implementation
+    // (specs/ui/shared-meal-components Req 4.3).
     static func prettify(_ raw: String) -> String {
-        let spaced = raw.replacingOccurrences(of: "_", with: " ")
-        return spaced.prefix(1).uppercased() + spaced.dropFirst()
+        MedataFormat.prettify(raw)
     }
 }
