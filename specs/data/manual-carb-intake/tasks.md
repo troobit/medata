@@ -194,6 +194,7 @@ references:
   - Run make build and make test; report both XCTest and swift-testing totals
   - Run make spell
   - Walk the Req 8 on-device checklist in design.md, including the schema-8 carry-over DB case and the sqlite3 check that source_meal_id survives an edit
+  - Machine half done 2026-08-25: build-app clean, spell clean, XCTest 639/0 (the four schema-version pins moved to 10 with the version), swift-testing 466/467 (the one failure is the pre-existing python3<3.10 generate.py environment issue); the on-device checklist half remains human-gated
   - Blocked-by: yh454us (Add Save as quick-add to MealReviewView post-capture), yh454ut (Add Save as quick-add to ResultView from records), yh454uq (Carry sourceMealID through QuickPresetEditSheet edits)
   - Stream: 1
   - Requirements: [8.6](requirements.md#8.6), [8.7](requirements.md#8.7)
