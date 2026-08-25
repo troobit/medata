@@ -18,6 +18,10 @@ final class InsulinDoseModel {
 
     var units = 10
     var kind: InsulinKind = .bolus
+    // The seed's provenance caption while the seeded value is untouched, nil
+    // otherwise (specs/data/insulin-dosing design-direction §3.2). Cleared by
+    // the first edit and never restored for this presentation.
+    private(set) var seedCaption: String?
     // Administration time; the compact back-dating control writes here and the
     // saved event carries it (UTC ms conversion happens in the store).
     var timestamp = Date()
@@ -32,12 +36,32 @@ final class InsulinDoseModel {
     private let store: any PersistenceStore
     private var holdTask: Task<Void, Never>?
 
-    init(store: any PersistenceStore) {
+    // One optional parameter, defaulted, changes nothing that does not opt in
+    // (specs/data/insulin-dosing Req 6.3, 6.4). With no seed the sheet opens
+    // at 10 U exactly as it always has.
+    init(store: any PersistenceStore, seed: DoseSeed? = nil) {
         self.store = store
+        if let seed {
+            units = min(max(seed.units, Self.minUnits), Self.maxUnits)
+            seedCaption = seed.provenance
+        }
     }
 
     enum StepDirection {
         case up, down
+    }
+
+    // What sits under the numeral: the seed's provenance until the first
+    // edit, the plain unit label after it.
+    var unitsCaption: String { seedCaption ?? "units" }
+
+    // Consumes the provenance caption. Must be driven by the INTENT to edit,
+    // never by an observed change to `units`: `step(_:)` clamps, so pressing
+    // − at 1 U or + at 60 U leaves the value untouched and a value observer
+    // would never fire — the caption would survive an edit it was meant to be
+    // consumed by.
+    func consumeSeedCaption() {
+        seedCaption = nil
     }
 
     // MARK: - Stepping (App 3)
@@ -53,6 +77,7 @@ final class InsulinDoseModel {
     // the single source of timing truth.
     func beginHold(_ direction: StepDirection) {
         endHold()
+        consumeSeedCaption()
         step(direction)
         holdTask = Task { [weak self] in
             let start = Date()
