@@ -242,6 +242,9 @@ struct ResultView: View {
     // visible, mirroring MealOverviewView (Decision 18).
     @State private var isCorrected = false
     @State private var correctedTotal: Float?
+    // The recorded dose suggestion for this meal (insulin-dosing Req 6.10),
+    // loaded once per push; nil for meals that never produced one.
+    @State private var suggestion: DoseSuggestionRecord?
     // Predicted class id → corrected class id from the meal's corrections
     // (meal-review Req 8.7): every surface that names a relabelled food names
     // the corrected one, not the predicted one.
@@ -421,6 +424,7 @@ struct ResultView: View {
             if !focused { editingClassId = nil }
         }
         .task { await loadPhoto() }
+        .task { suggestion = try? await store.doseSuggestion(forSourceEventID: record.id) }
         .task {
             loadServings()
             await observeCorrections()
@@ -468,6 +472,18 @@ struct ResultView: View {
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .animation(reduceMotion ? nil : .smooth, value: pendingTotalMassG)
                 .accessibilityIdentifier("result.massLine")
+            // History readout (insulin-dosing Req 6.10/6.11): the RECORDED
+            // suggestion for this meal, verbatim from its ledger row — never a
+            // recomputation, because the band, ratio and insulin-on-board
+            // belong to the moment the number was produced. Absent row,
+            // absent line; "suggested" labels a past hypothesis
+            // (design-direction §6.3) and is not counsel.
+            if let line = MealOverviewView.suggestionLine(suggestion) {
+                Text(line)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                    .accessibilityIdentifier("result.doseSuggestion")
+            }
             if showsEstimatedLine {
                 Text("estimated \(ResultFormat.carbsGrams(record.macros.totalCarbsG)) g")
                     .font(.caption.monospacedDigit())

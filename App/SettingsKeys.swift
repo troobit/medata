@@ -1,3 +1,4 @@
+import Dosing
 import Foundation
 import Persistence
 
@@ -47,11 +48,13 @@ nonisolated enum SettingsKeys {
     static let insulinTypeBolusDefault = "NovoRapid"
     static let insulinTypeBasalDefault = "Lantus"
 
-    // Per-band carbohydrate ratios in GRAMS PER UNIT (specs/data/insulin-dosing
-    // Req 1.1). An absent key means the seed default is in force and the
-    // suggestion records that (Req 1.6). NEVER store the reciprocal — the
-    // "N U per 10 g" figure beside each field is rendered from these, not
-    // written back.
+    // Per-band carbohydrate ratios in GRAMS PER UNIT — grams of carbohydrate
+    // covered by one unit of insulin (specs/data/insulin-dosing Req 1.1). The
+    // reciprocal direction is NEVER stored; Settings renders it read-only
+    // beside the field. An absent key means the seed default is in force and
+    // the suggestion row records that (Req 1.6). Flat keys of the same kind as
+    // `insulinTypeBolus` — no structured or array-valued setting is
+    // introduced.
     static let ratioOvernightGPerU = "medata.insulin.ratio.overnight"
     static let ratioBreakfastGPerU = "medata.insulin.ratio.breakfast"
     static let ratioLunchGPerU = "medata.insulin.ratio.lunch"
@@ -64,6 +67,15 @@ nonisolated enum SettingsKeys {
     // Free text naming the medreg fit the values came from, e.g. an export
     // date or run label. Recorded verbatim, never parsed (Req 9.4).
     static let ratioFitRef = "medata.insulin.ratioFitRef"
+
+    static func ratioKey(for band: DoseBand) -> String {
+        switch band {
+        case .overnight: ratioOvernightGPerU
+        case .breakfast: ratioBreakfastGPerU
+        case .lunch: ratioLunchGPerU
+        case .dinner: ratioDinnerGPerU
+        }
+    }
 
     // Most recently saved activity kind (specs/data/activity-events Req 3.3),
     // stored as the kind's stable machine key so the entry sheet opens on it

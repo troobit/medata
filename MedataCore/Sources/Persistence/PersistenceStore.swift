@@ -628,6 +628,11 @@ public protocol PersistenceStore: Sendable {
     // ordered newest first ((timestamp, id) descending).
     func doseSuggestions(limit: Int) async throws -> [DoseSuggestionRecord]
 
+    // Req 6.10 read path: the newest recorded suggestion for one meal or
+    // intake, so a history surface can render the row's values verbatim
+    // (Req 6.11 — never a recomputation). Nil when the subject has no row.
+    func doseSuggestion(forSourceEventID id: UUID) async throws -> DoseSuggestionRecord?
+
     // specs/data/dose-schedule Req 2.1, 2.2. Opens the occurrence for one
     // scheduled dose at one due instant, returning the row whether it was just
     // created or already existed. Idempotent by construction: a UNIQUE
@@ -678,4 +683,13 @@ public protocol PersistenceStore: Sendable {
     // Carries the `dueAt`/`closedAt` pairs the interval and cutoff are meant to
     // be set from once real use has accumulated (design.md open question 1).
     func doseOccurrences(limit: Int) async throws -> [DoseOccurrence]
+}
+
+extension PersistenceStore {
+    // Default: no recorded suggestion. Lets stores that never persist
+    // suggestions (test doubles) conform without a stub; the real store
+    // overrides with the `dose_suggestions` query.
+    public func doseSuggestion(forSourceEventID id: UUID) async throws -> DoseSuggestionRecord? {
+        nil
+    }
 }

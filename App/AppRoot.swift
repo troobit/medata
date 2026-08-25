@@ -231,7 +231,19 @@ struct AppRoot: View {
                 seedUnits: adjustingDose?.nominalUnits,
                 seedKind: adjustingDose?.schedule.kind,
                 seed: pendingSeed,
-                onInsulinSaved: { eventID in
+                onInsulinSaved: { eventID, units in
+                    // Req 7.5: the saved dose is linked back to the suggestion
+                    // row the seed came from — an UPDATE on the side table
+                    // only, and only when a seeded suggestion was in force.
+                    if let suggestionID = pendingSeed?.suggestionID {
+                        Task {
+                            await doseSuggestions.noteSavedDose(
+                                suggestionID: suggestionID,
+                                eventID: eventID,
+                                units: Double(units)
+                            )
+                        }
+                    }
                     guard let dose = adjustingDose else { return }
                     Task {
                         await doseSchedule.recordAdjusted(dose, insulinEventID: eventID)

@@ -1629,6 +1629,21 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
         }
     }
 
+    public func doseSuggestion(forSourceEventID id: UUID) async throws -> DoseSuggestionRecord? {
+        try await queue.read { db in
+            try Row.fetchOne(
+                db,
+                sql: """
+                    SELECT * FROM dose_suggestions
+                    WHERE source_event_id = ?
+                    ORDER BY timestamp DESC, id DESC
+                    LIMIT 1
+                    """,
+                arguments: [id.uuidString]
+            ).map(Self.doseSuggestion(from:))
+        }
+    }
+
     private static func doseSuggestion(from row: Row) throws -> DoseSuggestionRecord {
         let idString: String = row["id"]
         guard let id = UUID(uuidString: idString) else {

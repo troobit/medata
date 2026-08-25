@@ -19,6 +19,11 @@ struct MealOverviewView: View {
     var onDeleted: () -> Void = {}
 
     @State private var photo: UIImage?
+    // The recorded suggestion for this meal, rendered verbatim (insulin-dosing
+    // Req 6.10/6.11): the row's values, never a recomputation — the band,
+    // ratio and insulin-on-board that produced the number belong to the
+    // moment it was produced. Absent row, absent line.
+    @State private var suggestion: DoseSuggestionRecord?
     @State private var isCorrected = false
     @State private var correctedTotal: Float?
     // Predicted class id → corrected class id (meal-review Req 8.7): a
@@ -66,6 +71,7 @@ struct MealOverviewView: View {
             Button("Cancel", role: .cancel) {}
         }
         .task { await loadPhoto() }
+        .task { suggestion = try? await store.doseSuggestion(forSourceEventID: record.id) }
         .task { await observeCorrections() }
     }
 
@@ -95,20 +101,44 @@ struct MealOverviewView: View {
     }
 
     private var totalRow: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 12) {
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text("\(displayTotal)")
-                    .font(.system(size: 40, weight: .heavy).monospacedDigit())
-                    .foregroundStyle(Color.textPrimary)
-                Text("g carbs")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.textSecondary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                HStack(alignment: .lastTextBaseline, spacing: 6) {
+                    Text("\(displayTotal)")
+                        .font(.system(size: 40, weight: .heavy).monospacedDigit())
+                        .foregroundStyle(Color.textPrimary)
+                    Text("g carbs")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.textSecondary)
+                }
+                if isCorrected { correctedMarker }
+                Spacer()
+                ConfidencePill(sigmaMeal: record.confidence.sigmaMeal)
             }
-            if isCorrected { correctedMarker }
-            Spacer()
-            ConfidencePill(sigmaMeal: record.confidence.sigmaMeal)
+            if let line = Self.suggestionLine(suggestion) {
+                // History readout (Req 6.10): "suggested" is permitted here —
+                // naming a past hypothesis is labelling, not counsel
+                // (design-direction §6.3). Grouped palette, so textSecondary.
+                Text(line)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+                    .accessibilityIdentifier("overview.doseSuggestion")
+            }
         }
         .accessibilityIdentifier("overview.total")
+    }
+
+    // The recorded row's values verbatim (Req 6.11). `suggested 12 U · 5 g/U`,
+    // gaining `· given 14 U` once a dose was linked (Req 7.5). A suppressed
+    // row renders nothing — absence, never a placeholder (Req 6.6).
+    static func suggestionLine(_ row: DoseSuggestionRecord?) -> String? {
+        guard let row, let rounded = row.roundedUnits else { return nil }
+        var line = "suggested \(DoseReadout.wholeUnitsLabel(rounded))"
+        line += " · \(DoseReadout.gramsPerUnitLabel(row.crGramsPerUnit))"
+        if let given = row.givenUnits {
+            line += " · given \(DoseReadout.wholeUnitsLabel(given))"
+        }
+        return line
     }
 
     private var correctedMarker: some View {
