@@ -60,7 +60,7 @@ final class IntakeModel {
     // Insertion order for a NEW preset: max existing sortOrder + 1 (flat
     // list, Decision 6).
     var nextSortOrder: Int {
-        (presets.map(\.sortOrder).max() ?? -1) + 1
+        QuickPreset.nextSortOrder(after: presets)
     }
 
     func reloadPresets() async {

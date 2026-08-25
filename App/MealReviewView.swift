@@ -42,6 +42,10 @@ struct MealReviewView: View {
     // design.md — the model is owned by AppRoot). Absent, the second line is
     // exactly what ships today.
     @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
+    // Capture-born quick-add draft (manual-carb-intake Req 8): set by the
+    // menu action, presented as the same edit sheet a hand-authored preset
+    // uses (Req 8.2).
+    @State private var presetDraft: QuickPreset?
 
     // Bundled food database, resolved once per process (ResultView precedent).
     private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
@@ -131,12 +135,33 @@ struct MealReviewView: View {
         .onChange(of: model.pendingTotalCarbsG) {
             Task { await doseSuggestions?.refresh(for: doseSubject) }
         }
+        .sheet(item: $presetDraft) { draft in
+            QuickPresetEditSheet(store: store, preset: draft, isNew: true)
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Retake and delete (Req 1.3): both discard the recorded meal and
             // set capture_abandoned on every row before the delete lands.
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // Capture-born preset (manual-carb-intake Req 8.1): the
+                    // draft freezes the DISPLAYED total at the moment of the
+                    // tap (Req 8.3); no confidence, calibration or dev_stub
+                    // gate (Req 8.5, Decision 12).
+                    Button("Save as quick-add") {
+                        Task {
+                            let presets = (try? await store.quickPresets()) ?? []
+                            presetDraft = quickPresetDraft(
+                                displayedCarbsG: Float(model.pendingTotalCarbsG),
+                                foodNames: model.activeFoods.map {
+                                    MealReviewModel.prettify($0.currentClassId)
+                                },
+                                sourceMealID: record.id,
+                                existingPresets: presets
+                            )
+                        }
+                    }
+                    .accessibilityIdentifier("review.saveAsQuickAdd")
                     Button("Retake") { discard(then: onRetake) }
                     Button("Delete", role: .destructive) { discard(then: onDelete) }
                 } label: {

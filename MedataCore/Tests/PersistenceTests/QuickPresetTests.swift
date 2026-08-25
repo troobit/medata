@@ -212,4 +212,114 @@ final class QuickPresetTests: XCTestCase {
         XCTAssertNil(saved.macros.fatG)
         XCTAssertNil(saved.macros.fibreG)
     }
+
+    // MARK: - source_meal_id (manual-carb-intake Req 8.8/8.9, schema v10)
+
+    func testSourceMealIDRoundTripsAndNilStoresAsNull() async throws {
+        let mealID = UUID()
+        let stamped = QuickPreset(
+            name: "From capture", carbsG: 47, sortOrder: 60, sourceMealID: mealID
+        )
+        let plain = makePreset(name: "Hand-authored", carbsG: 20, sortOrder: 61)
+        try await store.saveQuickPreset(stamped)
+        try await store.saveQuickPreset(plain)
+
+        let presets = try await store.quickPresets()
+        XCTAssertEqual(
+            try XCTUnwrap(presets.first { $0.id == stamped.id }).sourceMealID, mealID
+        )
+        XCTAssertNil(try XCTUnwrap(presets.first { $0.id == plain.id }).sourceMealID)
+
+        let q = try DatabaseQueue(path: dbURL.path)
+        try await q.read { db in
+            let stored: String? = try Row.fetchOne(
+                db, sql: "SELECT source_meal_id FROM quick_presets WHERE id = ?",
+                arguments: [plain.id.uuidString]
+            )?["source_meal_id"]
+            XCTAssertNil(stored, "an absent origin must be NULL, not an empty string")
+        }
+    }
+
+    func testUpdatePreservesSourceMealIDWhenCarriedThrough() async throws {
+        // Req 8.9: the edit path reconstructs the QuickPreset and passes the
+        // stamp through untouched — INSERT OR REPLACE must keep it.
+        let id = UUID()
+        let mealID = UUID()
+        let original = QuickPreset(
+            id: id, name: "Rice + Chicken", carbsG: 56, sortOrder: 70, sourceMealID: mealID
+        )
+        try await store.saveQuickPreset(original)
+
+        let edited = QuickPreset(
+            id: id, name: "Rice bowl", carbsG: 60, sortOrder: 70, sourceMealID: mealID
+        )
+        try await store.saveQuickPreset(edited)
+
+        let presets = try await store.quickPresets()
+        let matches = presets.filter { $0.id == id }
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches[0].name, "Rice bowl")
+        XCTAssertEqual(matches[0].sourceMealID, mealID, "the edit must not drop the stamp")
+    }
+
+    func testSchema9DatabaseGainsColumnOnOpenAndSurvivesReopen() async throws {
+        // Build a schema-9-shaped DB by hand: quick_presets WITHOUT the
+        // column, one existing preset, version stamped 9.
+        let nineDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("QuickPresetTests-v9-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: nineDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: nineDir) }
+        let nineURL = nineDir.appendingPathComponent("meals.sqlite")
+
+        let q = try DatabaseQueue(path: nineURL.path)
+        try await q.write { db in
+            try db.execute(sql: """
+                CREATE TABLE quick_presets (
+                    id          TEXT PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    carbs_g     REAL NOT NULL,
+                    protein_g   REAL,
+                    fat_g       REAL,
+                    fibre_g     REAL,
+                    sort_order  INTEGER NOT NULL
+                );
+                CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+                """)
+            try db.execute(
+                sql: "INSERT INTO quick_presets (id, name, carbs_g, sort_order) VALUES (?, ?, ?, ?)",
+                arguments: [UUID().uuidString, "Carried over", 30.0, 0]
+            )
+            try db.execute(
+                sql: "INSERT INTO meta (k, v) VALUES ('schema_version', '9')"
+            )
+        }
+
+        let opened = try GRDBPersistenceStore(dbURL: nineURL, artefactsBaseURL: nineDir)
+        let presets = try await opened.quickPresets()
+        let carried = try XCTUnwrap(presets.first { $0.name == "Carried over" })
+        XCTAssertNil(carried.sourceMealID, "a pre-v10 preset survives with NULL")
+
+        // A second open must not throw "duplicate column name" — the ALTER is
+        // gated on the stored version, which the first open re-stamped to 10.
+        let reopened = try GRDBPersistenceStore(dbURL: nineURL, artefactsBaseURL: nineDir)
+        _ = try await reopened.quickPresets()
+    }
+
+    func testDeletingTheSourceMealLeavesThePresetUntouched() async throws {
+        // Req 8.8: the stamp is a point-in-time record and is never
+        // dereferenced — no deletion path cascades from meals into
+        // quick_presets.
+        let mealID = UUID()
+        let preset = QuickPreset(
+            name: "From capture", carbsG: 47, sortOrder: 80, sourceMealID: mealID
+        )
+        try await store.saveQuickPreset(preset)
+
+        try await store.deleteMeal(id: mealID)
+
+        let presets = try await store.quickPresets()
+        let survived = try XCTUnwrap(presets.first { $0.id == preset.id })
+        XCTAssertEqual(survived.sourceMealID, mealID,
+                       "deleting the origin meal must change nothing on the preset")
+    }
 }
