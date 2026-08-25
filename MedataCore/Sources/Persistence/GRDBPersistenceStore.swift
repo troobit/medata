@@ -1138,13 +1138,14 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 processed_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS quick_presets (
-                id          TEXT PRIMARY KEY,
-                name        TEXT NOT NULL,
-                carbs_g     REAL NOT NULL,
-                protein_g   REAL,
-                fat_g       REAL,
-                fibre_g     REAL,
-                sort_order  INTEGER NOT NULL
+                id             TEXT PRIMARY KEY,
+                name           TEXT NOT NULL,
+                carbs_g        REAL NOT NULL,
+                protein_g      REAL,
+                fat_g          REAL,
+                fibre_g        REAL,
+                sort_order     INTEGER NOT NULL,
+                source_meal_id TEXT
             );
             CREATE TABLE IF NOT EXISTS estimation_outcomes (
                 id                TEXT    PRIMARY KEY,
@@ -1238,12 +1239,17 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
                 ON dose_occurrences(schedule_id, due_at);
             """)
         try db.execute(
-            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '9')"
+            sql: "INSERT OR IGNORE INTO meta (k, v) VALUES ('schema_version', '10')"
         )
     }
 
-    // Idempotent: re-stamps schema_version to '9' so a dev DB carried over
-    // from an earlier code path is correctly labelled. Version 9 adds
+    // Idempotent: re-stamps schema_version to '10' so a dev DB carried over
+    // from an earlier code path is correctly labelled. Version 10 adds
+    // quick_presets.source_meal_id (specs/data/manual-carb-intake Req 8,
+    // design "Schema: quick_presets.source_meal_id") — the one ADD COLUMN,
+    // gated on the stored version because ADD COLUMN is not idempotent in
+    // SQLite; non-destructive, so event-log-schema Decision 10 still holds.
+    // Version 9 added
     // dose_occurrences (specs/data/dose-schedule, design "The occurrence
     // ledger"); version 8 added
     // dose_suggestions (specs/data/insulin-dosing, design "The ledger");
@@ -1256,8 +1262,22 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
     // matching the processed_images/v4 precedent exactly. No DDL on legacy
     // tables (Decision 10).
     private static func migrate(_ db: Database) throws {
+        let stored = try String.fetchOne(
+            db, sql: "SELECT v FROM meta WHERE k = 'schema_version'"
+        ).flatMap(Int.init) ?? 0
+        if stored < 10 {
+            // A schema-10 CREATE already carries the column; only a table
+            // created at 9 or below needs the ALTER.
+            let hasColumn = try Row.fetchAll(db, sql: "PRAGMA table_info(quick_presets)")
+                .contains { $0["name"] == "source_meal_id" }
+            if !hasColumn {
+                try db.execute(
+                    sql: "ALTER TABLE quick_presets ADD COLUMN source_meal_id TEXT"
+                )
+            }
+        }
         try db.execute(
-            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '9')"
+            sql: "INSERT OR REPLACE INTO meta (k, v) VALUES ('schema_version', '10')"
         )
     }
 
@@ -1310,13 +1330,14 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             try db.execute(
                 sql: """
                     INSERT OR REPLACE INTO quick_presets
-                        (id, name, carbs_g, protein_g, fat_g, fibre_g, sort_order)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (id, name, carbs_g, protein_g, fat_g, fibre_g, sort_order,
+                         source_meal_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                 arguments: [
                     preset.id.uuidString, preset.name, preset.carbsG,
                     preset.macros.proteinG, preset.macros.fatG, preset.macros.fibreG,
-                    preset.sortOrder
+                    preset.sortOrder, preset.sourceMealID?.uuidString
                 ]
             )
         }
@@ -1884,12 +1905,14 @@ public final class GRDBPersistenceStore: PersistenceStore, @unchecked Sendable {
             fatG: row["fat_g"],
             fibreG: row["fibre_g"]
         )
+        let sourceMealIDString: String? = row["source_meal_id"]
         return QuickPreset(
             id: id,
             name: row["name"],
             carbsG: row["carbs_g"],
             macros: macros,
-            sortOrder: row["sort_order"]
+            sortOrder: row["sort_order"],
+            sourceMealID: sourceMealIDString.flatMap(UUID.init(uuidString:))
         )
     }
 }

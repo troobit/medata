@@ -217,6 +217,10 @@ struct ResultView: View {
     // The recorded dose suggestion for this meal (insulin-dosing Req 6.10),
     // loaded once per push; nil for meals that never produced one.
     @State private var suggestion: DoseSuggestionRecord?
+    // Capture-born quick-add draft (manual-carb-intake Req 8): set by the
+    // ellipsis-menu action, presented as the same edit sheet a hand-authored
+    // preset uses (Req 8.2).
+    @State private var presetDraft: QuickPreset?
     // Predicted class id → corrected class id from the meal's corrections
     // (meal-review Req 8.7): every surface that names a relabelled food names
     // the corrected one, not the predicted one.
@@ -398,6 +402,9 @@ struct ResultView: View {
         .task {
             loadServings()
             await observeCorrections()
+        }
+        .sheet(item: $presetDraft) { draft in
+            QuickPresetEditSheet(store: store, preset: draft, isNew: true)
         }
     }
 
@@ -793,6 +800,21 @@ struct ResultView: View {
             .accessibilityIdentifier("result.done")
 
             Menu {
+                // Capture-born preset from the history read path
+                // (manual-carb-intake Req 8.1): freezes the displayed total —
+                // adjustments and corrections included (Req 8.3).
+                Button("Save as quick-add") {
+                    Task {
+                        let presets = (try? await store.quickPresets()) ?? []
+                        presetDraft = quickPresetDraft(
+                            displayedCarbsG: heroCarbsG,
+                            foodNames: foodRows.map(\.displayName),
+                            sourceMealID: record.id,
+                            existingPresets: presets
+                        )
+                    }
+                }
+                .accessibilityIdentifier("result.saveAsQuickAdd")
                 Button("Delete", role: .destructive, action: onDelete)
             } label: {
                 Image(systemName: "ellipsis")

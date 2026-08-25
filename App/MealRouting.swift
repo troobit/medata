@@ -145,6 +145,43 @@ struct GlucoseRow: Identifiable, Equatable {
     let mmolL: Double
 }
 
+// The capture-born preset draft (specs/data/manual-carb-intake Req 8, task
+// 15): a meal's DISPLAYED total, frozen at the moment of the tap, becomes a
+// quick-add preset draft for the shared edit sheet. Lives here — the standing
+// home for App-layer meal plumbing shared across surfaces — so the review and
+// result surfaces build byte-identical drafts.
+//
+// Name: first two prettified food names joined with " + ", then " +N" when N
+// further foods remain; empty when the caller passes no names (the sheet's
+// name-required rule then holds Save disabled until one is typed). Carbs: the
+// displayed total, corrections included (Req 8.3), clamped into the manual
+// 1–999 g range — a meal rounding to 0 g yields an empty carb field and a
+// disabled Save via the sheet's existing canSave rule. Macros stay absent
+// (Req 8.4): clinicalTotals protein/fat/fibre are deliberately not carried.
+func quickPresetDraft(
+    displayedCarbsG: Float,
+    foodNames: [String],
+    sourceMealID: UUID,
+    existingPresets: [QuickPreset]
+) -> QuickPreset {
+    let name: String
+    if foodNames.isEmpty {
+        name = ""
+    } else {
+        let lead = foodNames.prefix(2).joined(separator: " + ")
+        let rest = foodNames.count - 2
+        name = rest > 0 ? "\(lead) +\(rest)" : lead
+    }
+    let rounded = Int(displayedCarbsG.rounded())
+    let clamped = min(max(rounded, 0), CarbEntryModel.maxCarbs)
+    return QuickPreset(
+        name: name,
+        carbsG: Double(clamped),
+        sortOrder: QuickPreset.nextSortOrder(after: existingPresets),
+        sourceMealID: sourceMealID
+    )
+}
+
 // One row's worth of display data for the Records timeline (design-handoff-00
 // §8, critic R2; relocated from the retired MealHistoryModel.swift —
 // specs/ui/shared-meal-components Req 6.2). `RecordsModel.reload()` composes

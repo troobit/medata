@@ -170,19 +170,33 @@ public struct QuickPreset: Sendable, Equatable, Identifiable {
     public var carbsG: Double
     public var macros: IntakeMacros
     public var sortOrder: Int
+    // The meal a capture-born preset was frozen from (manual-carb-intake
+    // Req 8.8/8.9): a point-in-time stamp, never dereferenced — deleting or
+    // correcting the meal changes nothing about the preset. Nil for
+    // hand-authored presets.
+    public var sourceMealID: UUID?
 
     public init(
         id: UUID = UUID(),
         name: String,
         carbsG: Double,
         macros: IntakeMacros = IntakeMacros(),
-        sortOrder: Int
+        sortOrder: Int,
+        sourceMealID: UUID? = nil
     ) {
         self.id = id
         self.name = name
         self.carbsG = carbsG
         self.macros = macros
         self.sortOrder = sortOrder
+        self.sourceMealID = sourceMealID
+    }
+
+    // Next free slot at the end of the grid — one expression, one home
+    // (manual-carb-intake task 13; IntakeModel and the preset drafts all
+    // call this).
+    public static func nextSortOrder(after presets: [QuickPreset]) -> Int {
+        (presets.map(\.sortOrder).max() ?? -1) + 1
     }
 }
 

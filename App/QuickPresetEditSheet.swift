@@ -24,12 +24,17 @@ struct QuickPresetEditSheet: View {
     private let store: any PersistenceStore
     private let presetID: UUID
     private let sortOrder: Int
+    // Carried through untouched on save (manual-carb-intake Req 8.9): the
+    // sheet reconstructs the QuickPreset, so an edit would otherwise silently
+    // drop the capture-origin stamp.
+    private let sourceMealID: UUID?
     private let isNew: Bool
 
     init(store: any PersistenceStore, preset: QuickPreset, isNew: Bool) {
         self.store = store
         self.presetID = preset.id
         self.sortOrder = preset.sortOrder
+        self.sourceMealID = preset.sourceMealID
         self.isNew = isNew
         _name = State(initialValue: preset.name)
         _carbsText = State(initialValue: preset.carbsG >= 1 ? String(Int(preset.carbsG.rounded())) : "")
@@ -130,7 +135,8 @@ struct QuickPresetEditSheet: View {
                 fatG: Self.macroValue(fatText),
                 fibreG: Self.macroValue(fibreText)
             ),
-            sortOrder: sortOrder
+            sortOrder: sortOrder,
+            sourceMealID: sourceMealID
         )
         do {
             try await store.saveQuickPreset(preset)
