@@ -117,8 +117,10 @@ so a fourth copy of the back-dating row or save button is never written.
 
 1. <a name="5.1"></a>The shared entry chrome (`EntryTimeRow`, `EntrySaveButton`, `EntryChip`,
    `ChipFlow` — landing with the insulin-dosing Decision 16 synthesis) SHALL be the only
-   implementation of the back-dating row and commit button across `LogSheet`'s three modes,
-   `QuickPresetEditSheet`, and `DoseScheduleSettingsSection`'s time row.
+   implementation of the back-dating row and commit button across `LogSheet`'s three modes
+   and `QuickPresetEditSheet`. (`DoseScheduleSettingsSection`'s time picker is excluded: it
+   is a schedule time-of-day control — hour and minute only, no date, no future bound — not
+   a back-dating row, and forcing it through `EntryTimeRow` would change its behaviour.)
 2. <a name="5.2"></a>No standalone sheet SHALL retain a private copy of the sheet chrome
    (NavigationStack + background + detents + drag indicator) where the consolidated
    `LogSheet` already presents that mode.

@@ -84,86 +84,33 @@ struct QuickPresetEditSheet: View {
             .accessibilityIdentifier("preset.name")
     }
 
+    // Shared field bodies (specs/ui/shared-meal-components Req 2): the same
+    // CarbAmountField / MacroDisclosure the entry surface renders, with this
+    // sheet's accessibility ids; the commit button is the shared EntryChrome
+    // treatment (Req 2.3).
     private var carbField: some View {
-        VStack(spacing: 0) {
-            TextField("0", text: $carbsText)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 56, weight: .bold).monospacedDigit())
-                .foregroundStyle(Color.textPrimary)
-                .onChange(of: carbsText) { clampCarbsText() }
-                .accessibilityLabel("Carbohydrates in grams")
-                .accessibilityIdentifier("preset.amount")
-            Text("grams")
-                .font(.subheadline)
-                .foregroundStyle(Color.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
+        CarbAmountField(text: $carbsText, identifier: "preset.amount")
     }
 
     private var macroDisclosure: some View {
-        DisclosureGroup(isExpanded: $macrosExpanded) {
-            VStack(spacing: 8) {
-                macroRow("Protein", text: $proteinText, identifier: "preset.protein")
-                macroRow("Fat", text: $fatText, identifier: "preset.fat")
-                macroRow("Fibre", text: $fibreText, identifier: "preset.fibre")
-            }
-            .padding(.top, 8)
-        } label: {
-            Text("Macros")
-                .font(.headline)
-                .foregroundStyle(Color.textPrimary)
-        }
-    }
-
-    private func macroRow(_ title: String, text: Binding<String>, identifier: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(Color.textPrimary)
-            Spacer()
-            TextField("", text: text)
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 72)
-                // Same sanitiser as the carb field: digits only, 3-digit cap,
-                // so pasted junk cannot persist or vanish a typed value.
-                .onChange(of: text.wrappedValue) {
-                    let clamped = CarbEntryModel.clampedDigits(text.wrappedValue)
-                    if clamped != text.wrappedValue { text.wrappedValue = clamped }
-                }
-                .accessibilityIdentifier(identifier)
-            Text("g")
-                .foregroundStyle(Color.textSecondary)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
+        MacroDisclosure(
+            isExpanded: $macrosExpanded,
+            protein: $proteinText,
+            fat: $fatText,
+            fibre: $fibreText,
+            idPrefix: "preset"
+        )
     }
 
     private var saveButton: some View {
-        Button {
+        EntrySaveButton(
+            title: "Save preset",
+            isSaving: isSaving,
+            isEnabled: canSave,
+            identifier: "preset.save"
+        ) {
             Task { await save() }
-        } label: {
-            if isSaving {
-                MedataLoadingSymbol(mode: .loop, size: 22)
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text("Save preset")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-            }
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.medataAccent)
-        .foregroundStyle(Color.captureBackground)
-        .disabled(!canSave)
-        .accessibilityIdentifier("preset.save")
-    }
-
-    private func clampCarbsText() {
-        let text = CarbEntryModel.clampedDigits(carbsText)
-        if text != carbsText { carbsText = text }
     }
 
     // Empty macro text stays absent, never 0 (Req 2.3 applies to presets too).

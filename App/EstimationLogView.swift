@@ -478,16 +478,9 @@ enum LogExport {
 }
 
 // Shared formatter — allocating a DateFormatter per row render is expensive.
-private enum RowTime {
-    static let formatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_IE")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }()
-}
+// Row timestamps render through the shared cached en_IE formatter
+// (specs/ui/shared-meal-components Req 4.2).
 
 private func timeString(_ timestampMs: Int64) -> String {
-    RowTime.formatter.string(from: Date(timeIntervalSince1970: Double(timestampMs) / 1000))
+    MedataFormat.dateTimeString(Date(timeIntervalSince1970: Double(timestampMs) / 1000))
 }

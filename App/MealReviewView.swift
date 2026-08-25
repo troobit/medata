@@ -46,8 +46,8 @@ struct MealReviewView: View {
     // Bundled food database, resolved once per process (ResultView precedent).
     private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
 
-    private static let fallbackStepGrams = 10.0
-    private static let maxRowGrams = 5000.0
+    // Step increment and per-row mass ceiling: ServingStepLogic
+    // (App/ServingRows.swift), shared with ResultView.
 
     init(
         record: MealRecord,
@@ -358,15 +358,17 @@ struct MealReviewView: View {
     private var totalRow: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text("\(Int(model.pendingTotalCarbsG.rounded()))")
-                    .font(.system(size: 44, weight: .heavy).monospacedDigit())
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-                    .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalCarbsG)
-                    .foregroundStyle(Color.captureChromeText)
-                Text("g carbs")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.captureChromeText.opacity(0.7))
-                if model.hasActualCorrections { correctedMarker }
+                CarbAmountText(
+                    carbs: Int(model.pendingTotalCarbsG.rounded()),
+                    pointSize: 44,
+                    palette: .capture,
+                    animates: Double(model.pendingTotalCarbsG),
+                    suffixFont: .title3.weight(.semibold),
+                    spacing: 10
+                )
+                if model.hasActualCorrections {
+                    CorrectedMarker(palette: .capture, identifier: "review.correctedMarker")
+                }
                 Spacer()
                 ConfidencePill(sigmaMeal: sigma)
             }
@@ -386,15 +388,6 @@ struct MealReviewView: View {
         .accessibilityIdentifier("review.total")
     }
 
-    private var correctedMarker: some View {
-        Text("corrected")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(Color.captureChromeBG, in: Capsule())
-            .foregroundStyle(Color.captureChromeText.opacity(0.7))
-            .accessibilityIdentifier("review.correctedMarker")
-    }
 
     // MARK: - Primary action (Req 7.1–7.3)
 
@@ -436,25 +429,17 @@ struct MealReviewView: View {
                 .foregroundStyle(Color.captureChromeText.opacity(0.6))
             Spacer()
             ForEach(PlateFraction.allCases, id: \.self) { fraction in
-                let isActive = model.scale == fraction
-                Button {
+                PlateFractionButton(
+                    fraction: fraction,
+                    isActive: model.scale == fraction,
+                    minWidth: 44,
+                    height: 34,
+                    inactiveBackground: Color.captureChromeBG,
+                    inactiveTextOpacity: 0.8,
+                    idPrefix: "review"
+                ) {
                     Task { await model.setScale(fraction) }
-                } label: {
-                    Text(fraction.label)
-                        .font(.footnote.weight(.semibold))
-                        .monospacedDigit()
-                        .frame(minWidth: 44)
-                        .frame(height: 34)
-                        .background(
-                            isActive ? Color.captureChromeText : Color.captureChromeBG,
-                            in: Capsule()
-                        )
-                        .foregroundStyle(
-                            isActive ? Color.captureBackground : Color.captureChromeText.opacity(0.8)
-                        )
-                        .contentShape(Capsule())
                 }
-                .accessibilityIdentifier("review.fraction.\(fraction.identifier)")
             }
         }
         .accessibilityElement(children: .contain)
@@ -616,15 +601,39 @@ struct MealReviewView: View {
             }
             HStack(spacing: 8) {
                 if editingClassId == food.classId {
-                    gramEditor(food)
+                    ServingGramEditor(
+                        text: $gramEditText,
+                        grams: food.currentMassG,
+                        serving: model.solidServing(for: food.classId),
+                        idPrefix: "review.row.\(food.classId)",
+                        focus: $gramFieldFocused
+                    ) { grams in
+                        model.setAmount(classId: food.classId, grams: grams)
+                    }
                 } else {
-                    amountButton(food)
+                    ServingAmountButton(
+                        grams: food.currentMassG,
+                        serving: model.solidServing(for: food.classId),
+                        idPrefix: "review.row.\(food.classId)"
+                    ) {
+                        editingClassId = food.classId
+                        gramEditText = String(Int(food.currentMassG.rounded()))
+                        gramFieldFocused = true
+                    }
                 }
                 Spacer(minLength: 8)
-                stepButton("minus", food: food, enabled: food.currentMassG > 0) {
+                ServingStepButton(
+                    symbol: "minus",
+                    enabled: food.currentMassG > 0,
+                    idPrefix: "review.row.\(food.classId)"
+                ) {
                     step(food, direction: -1)
                 }
-                stepButton("plus", food: food, enabled: food.currentMassG < Self.maxRowGrams) {
+                ServingStepButton(
+                    symbol: "plus",
+                    enabled: food.currentMassG < ServingStepLogic.maxRowGrams,
+                    idPrefix: "review.row.\(food.classId)"
+                ) {
                     step(food, direction: 1)
                 }
                 relabelButton(food)
@@ -756,116 +765,23 @@ struct MealReviewView: View {
     }
 
     // MARK: - Amounts (Req 6.1, 6.7 — serving-adjust items 1 and 3 unchanged)
-
-    private func amountButton(_ food: ReviewFood) -> some View {
-        Button {
-            editingClassId = food.classId
-            gramEditText = String(Int(food.currentMassG.rounded()))
-            gramFieldFocused = true
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if let serving = model.solidServing(for: food.classId) {
-                    let count = ServingMath.displayHalfUnits(
-                        ServingMath.servings(grams: food.currentMassG, gramsPerUnit: serving.gramsPerUnit)
-                    )
-                    Text("≈ \(ServingMath.halfUnitText(count)) \(unitLabel(serving, count: count))")
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.captureChromeText)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                    Text("\(Int(food.currentMassG.rounded())) g")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(Color.captureChromeText.opacity(0.6))
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                } else {
-                    Text("\(Int(food.currentMassG.rounded())) g")
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.captureChromeText)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                }
-            }
-            .multilineTextAlignment(.leading)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .accessibilityIdentifier("review.row.\(food.classId).amount")
-    }
-
-    private func gramEditor(_ food: ReviewFood) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            TextField("0", text: $gramEditText)
-                .keyboardType(.numberPad)
-                .focused($gramFieldFocused)
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(Color.captureChromeText)
-                .frame(width: 52)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 8)
-                .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
-                .onChange(of: gramEditText) { _, newValue in
-                    let clamped = Self.clampedRowGrams(newValue)
-                    if clamped != newValue { gramEditText = clamped }
-                    if let grams = Int(clamped) {
-                        model.setAmount(classId: food.classId, grams: Double(grams))
-                    }
-                }
-                .accessibilityIdentifier("review.row.\(food.classId).gramField")
-            Text("g")
-                .font(.caption)
-                .foregroundStyle(Color.captureChromeText.opacity(0.6))
-            if let serving = model.solidServing(for: food.classId) {
-                let count = ServingMath.displayHalfUnits(
-                    ServingMath.servings(grams: food.currentMassG, gramsPerUnit: serving.gramsPerUnit)
-                )
-                Text("≈ \(ServingMath.halfUnitText(count)) \(unitLabel(serving, count: count))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-            }
-        }
-    }
-
-    private func unitLabel(_ serving: SolidServing, count: Double) -> String {
-        ServingMath.unitLabel(count: count, singular: serving.unitSingular, plural: serving.unitPlural)
-    }
-
-    private func stepButton(
-        _ symbol: String, food: ReviewFood, enabled: Bool, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .frame(width: 44, height: 44)
-                .background(Color.captureBackground.opacity(0.6), in: Circle())
-                .foregroundStyle(Color.captureChromeText.opacity(enabled ? 1 : 0.3))
-                .contentShape(Circle())
-        }
-        .disabled(!enabled)
-        .accessibilityIdentifier("review.row.\(food.classId).\(symbol)")
-    }
+    //
+    // The amount button, gram editor and step buttons are the shared
+    // serving-row controls (App/ServingRows.swift, shared-meal-components
+    // Req 1); this surface routes their callbacks to MealReviewModel.
 
     // Serving-unit step where one exists; the shipped gram fallback otherwise
     // (Req 6.1, 6.2). Not capped at the measured volume (Req 6.5).
     private func step(_ food: ReviewFood, direction: Double) {
-        let stepGrams: Double
-        if let serving = model.solidServing(for: food.classId) {
-            stepGrams = serving.step * serving.gramsPerUnit
-        } else {
-            stepGrams = Self.fallbackStepGrams
-        }
-        let next = min(Self.maxRowGrams, max(0, food.currentMassG + direction * stepGrams))
+        let next = ServingStepLogic.stepped(
+            from: food.currentMassG,
+            serving: model.solidServing(for: food.classId),
+            direction: direction
+        )
         model.setAmount(classId: food.classId, grams: next)
         if editingClassId == food.classId {
             gramEditText = String(Int(next.rounded()))
         }
-    }
-
-    // Mass keypad sanitiser (ResultView precedent).
-    private static func clampedRowGrams(_ text: String) -> String {
-        let digits = String(text.filter(\.isNumber).prefix(4))
-        guard let value = Int(digits) else { return "" }
-        return String(min(value, Int(maxRowGrams)))
     }
 }
 

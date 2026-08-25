@@ -124,3 +124,58 @@ is perf-protected by home-router Decision 13 and its cited hang bugfix.
   three-site sweep (unchanged from today, now recorded).
 
 ---
+
+## Decision 3: The shared unit is the content, not the container
+
+**Date**: 2026-08-25
+**Status**: accepted
+
+### Context
+
+Requirement 3.1 asks for one carb-total implementation across `MealOverviewView`,
+`MealReviewView` and `ResultView`. In code the three blocks are structurally different
+containers: the overview and review rows are leading-aligned baseline HStacks carrying a
+trailing confidence pill, while the result hero is a centred VStack with an estimated-line
+and the recorded-suggestion line, and each carries a different secondary stack. The photo
+surfaces differ the same way — a 240 pt overlay card, a 64 pt thumbnail, and the review
+photo layer share only their loading logic and fallback.
+
+### Decision
+
+Extract the CONTENT as the shared implementations — `CarbAmountText` (numeral + `g carbs`
+pair, parameterised by palette, numeral size and suffix treatment), `CorrectedMarker`,
+`RecordedSuggestion.line`, and the relocated `MealPhotoLoader` — and leave each surface
+owning its container layout. `MealPhotoCard` from the design sketch is not built; the card
+layouts stay per-surface and only the loader is shared.
+
+### Rationale
+
+Forcing the three containers through one block view would need slots for every difference
+(pill placement, secondary stack, alignment, centring), leaving a component that is all
+parameters and no shared substance — coordination cost without divergence protection. The
+divergence that actually bit (four marker variants, two suffix opacities) lives in the
+content, and that is what is now written once.
+
+### Alternatives Considered
+
+- **A slot-based `CarbTotalBlock` container**: One view for all three blocks - Rejected:
+  its parameter surface would exceed the code it removes, and every future surface change
+  would thread through slot plumbing.
+- **Leave the totals duplicated, share only the marker**: Smaller change - Rejected: the
+  numeral pair is where the dose segment and mass line attach, exactly the multi-surface
+  coordination Decision 1 names.
+
+### Consequences
+
+**Positive:**
+
+- The two accidental divergences (marker backgrounds, 0.7 vs 0.75 suffix opacity) resolve
+  to one deliberate treatment.
+- Each surface's layout remains readable in place.
+
+**Negative:**
+
+- Requirement 3.1's "carb-total block" reads wider than what shipped; this decision is the
+  recorded narrowing (the pair + marker + suggestion line are shared, the container is not).
+
+---

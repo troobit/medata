@@ -182,40 +182,12 @@ enum ResultViewLayout {
     }
 }
 
-// The plate-fraction quick control's stops (serving-adjust PRD, iOS Req 2):
-// the leftovers case is one tap. All is the untouched default and writes
-// nothing; the highlighted stop is DERIVED from the rows, so nudging one row
-// off a fraction clears the highlight while the other rows stay put.
-enum PlateFraction: CaseIterable {
-    case all, threeQuarters, half, quarter
-
-    var factor: Double {
-        switch self {
-        case .all: return 1
-        case .threeQuarters: return 0.75
-        case .half: return 0.5
-        case .quarter: return 0.25
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .all: return "All"
-        case .threeQuarters: return "¾"
-        case .half: return "½"
-        case .quarter: return "¼"
-        }
-    }
-
-    var identifier: String {
-        switch self {
-        case .all: return "all"
-        case .threeQuarters: return "threeQuarters"
-        case .half: return "half"
-        case .quarter: return "quarter"
-        }
-    }
-}
+// The plate-fraction stops (`PlateFraction`) and the shared serving-row
+// controls live in App/ServingRows.swift (specs/ui/shared-meal-components
+// Req 1): one implementation renders the amount button, gram editor and step
+// buttons here and on MealReviewView. The highlighted stop on THIS surface is
+// DERIVED from the rows, so nudging one row off a fraction clears the
+// highlight while the other rows stay put.
 
 // Result screen (§6, design-system/pages/result.md, reshaped by the
 // serving-adjust PRD; capture-step presentation superseded by
@@ -271,12 +243,8 @@ struct ResultView: View {
     // Sub-half-gram differences are invisible at whole-gram display rounding,
     // so they neither show the log pill nor count as a divergence.
     private static let gramEpsilon = 0.5
-    // Gram-stepper fallback increment for rows without a serving unit.
-    private static let fallbackStepGrams = 10.0
-    // Per-row MASS ceiling, matching the benchmark grams bound
-    // (`BenchmarkMeal.itemGramsRange`). Deliberately not the 999 g carb-entry
-    // convention — a 1 L drink already weighs ~1000 g.
-    private static let maxRowGrams = 5000.0
+    // Step increment and per-row mass ceiling: ServingStepLogic
+    // (App/ServingRows.swift), shared with MealReviewView.
 
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsPlaceholderChip: Bool { record.segmenterSource == "dev_stub" }
@@ -313,7 +281,7 @@ struct ResultView: View {
             .map { name, macro in
                 FoodRow(
                     id: name,
-                    displayName: Self.prettify(correctedClassIds[name] ?? name),
+                    displayName: MedataFormat.prettify(correctedClassIds[name] ?? name),
                     originalGrams: Double(macro.massG),
                     originalCarbsG: Double(macro.carbsG),
                     isLiquid: macro.isLiquid
@@ -389,7 +357,9 @@ struct ResultView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     carbTotal
-                    if isCorrected { correctedMarker }
+                    if isCorrected {
+                        CorrectedMarker(palette: .capture, identifier: "result.correctedMarker")
+                    }
                     ConfidencePill(sigmaMeal: sigma)
                     if showsPlaceholderChip { placeholderChip }
                     switch calibrationBanner {
@@ -431,19 +401,6 @@ struct ResultView: View {
         }
     }
 
-    // `corrected` marker (Req 7.3). Same string and capsule treatment as
-    // MealOverviewView's marker, adapted to the Result screen's dark capture
-    // palette.
-    private var correctedMarker: some View {
-        Text("corrected")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(Color.captureChromeBG, in: Capsule())
-            .foregroundStyle(Color.captureChromeText.opacity(0.7))
-            .accessibilityIdentifier("result.correctedMarker")
-    }
-
     // Hero (§6.1, revised by snaqui Req 1): the carb total the user is eating —
     // scaled live while adjusting, corrected when a correction is recorded,
     // the original estimate otherwise. When the hero diverges from the
@@ -451,16 +408,14 @@ struct ResultView: View {
     // full-plate value is never hidden. `g carbs` suffix per the copy inventory.
     private var carbTotal: some View {
         VStack(spacing: 4) {
-            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                Text("\(ResultFormat.carbsGrams(heroCarbsG))")
-                    .font(.system(size: displayPoints, weight: .heavy, design: .default).monospacedDigit())
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-                    .animation(reduceMotion ? nil : .smooth, value: heroCarbsG)
-                Text("g carbs")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.captureChromeText.opacity(0.7))
-            }
-            .foregroundStyle(Color.captureChromeText)
+            CarbAmountText(
+                carbs: ResultFormat.carbsGrams(heroCarbsG),
+                pointSize: displayPoints,
+                palette: .capture,
+                animates: Double(heroCarbsG),
+                suffixFont: .title3.weight(.semibold),
+                spacing: 8
+            )
             // Estimated plate mass beside the hero (specs/ui/mass-readout):
             // the kitchen-scales validation number — a scale reads total mass,
             // not carbs, so the mass estimate must be visible without
@@ -478,7 +433,7 @@ struct ResultView: View {
             // belong to the moment the number was produced. Absent row,
             // absent line; "suggested" labels a past hypothesis
             // (design-direction §6.3) and is not counsel.
-            if let line = MealOverviewView.suggestionLine(suggestion) {
+            if let line = RecordedSuggestion.line(suggestion) {
                 Text(line)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.captureChromeText.opacity(0.75))
@@ -539,26 +494,17 @@ struct ResultView: View {
     private var fractionControl: some View {
         HStack(spacing: 2) {
             ForEach(PlateFraction.allCases, id: \.self) { fraction in
-                let isActive = activeFraction == fraction
-                Button {
+                PlateFractionButton(
+                    fraction: fraction,
+                    isActive: activeFraction == fraction,
+                    minWidth: 30,
+                    height: 26,
+                    inactiveBackground: .clear,
+                    inactiveTextOpacity: 0.7,
+                    idPrefix: "result"
+                ) {
                     applyFraction(fraction)
-                } label: {
-                    Text(fraction.label)
-                        .font(.footnote.weight(.semibold))
-                        .monospacedDigit()
-                        .frame(minWidth: 30)
-                        .frame(height: 26)
-                        .padding(.horizontal, 4)
-                        .background(
-                            isActive ? Color.captureChromeText : .clear,
-                            in: Capsule()
-                        )
-                        .foregroundStyle(
-                            isActive ? Color.captureBackground : Color.captureChromeText.opacity(0.7)
-                        )
-                        .contentShape(Capsule())
                 }
-                .accessibilityIdentifier("result.fraction.\(fraction.identifier)")
             }
         }
         .padding(2)
@@ -584,116 +530,43 @@ struct ResultView: View {
             }
             HStack(spacing: 8) {
                 if editingClassId == row.id {
-                    gramEditor(row)
+                    ServingGramEditor(
+                        text: $gramEditText,
+                        grams: pendingGramsFor(row),
+                        serving: serving(for: row),
+                        idPrefix: "result.row.\(row.id)",
+                        focus: $gramFieldFocused
+                    ) { grams in
+                        pendingGrams[row.id] = grams
+                    }
                 } else {
-                    amountButton(row)
+                    ServingAmountButton(
+                        grams: pendingGramsFor(row),
+                        serving: serving(for: row),
+                        idPrefix: "result.row.\(row.id)"
+                    ) {
+                        beginGramEdit(row)
+                    }
                 }
                 Spacer(minLength: 8)
-                stepButton("minus", row: row, enabled: pendingGramsFor(row) > 0) {
+                ServingStepButton(
+                    symbol: "minus",
+                    enabled: pendingGramsFor(row) > 0,
+                    idPrefix: "result.row.\(row.id)"
+                ) {
                     step(row, direction: -1)
                 }
-                stepButton("plus", row: row, enabled: pendingGramsFor(row) < Self.maxRowGrams) {
+                ServingStepButton(
+                    symbol: "plus",
+                    enabled: pendingGramsFor(row) < ServingStepLogic.maxRowGrams,
+                    idPrefix: "result.row.\(row.id)"
+                ) {
                     step(row, direction: 1)
                 }
             }
         }
         .padding(.vertical, 8)
         .accessibilityIdentifier("result.row.\(row.id)")
-    }
-
-    // The amount, serving-first: "≈ 1½ potatoes · 87 g" for a class with a
-    // serving unit, plain "120 g" for the gram fallback. A Button (not the
-    // steppers) so tapping it opens the gram reveal; shape inside the label.
-    private func amountButton(_ row: FoodRow) -> some View {
-        Button {
-            beginGramEdit(row)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if let serving = serving(for: row) {
-                    let count = ServingMath.displayHalfUnits(
-                        ServingMath.servings(grams: pendingGramsFor(row), gramsPerUnit: serving.gramsPerUnit)
-                    )
-                    Text("≈ \(ServingMath.halfUnitText(count)) \(unitLabel(serving, count: count))")
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.captureChromeText)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                    Text("\(Int(pendingGramsFor(row).rounded())) g")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(Color.captureChromeText.opacity(0.6))
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                } else {
-                    Text("\(Int(pendingGramsFor(row).rounded())) g")
-                        .font(.subheadline.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.captureChromeText)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                }
-            }
-            .multilineTextAlignment(.leading)
-            .contentShape(Rectangle())
-        }
-        .accessibilityIdentifier("result.row.\(row.id).amount")
-    }
-
-    // The gram reveal (iOS Req 3): an editable gram value, two-way bound with
-    // the serving readout — typing grams re-renders the serving equivalence
-    // live, and stepping while editing rewrites the field. Digits-only clamp
-    // via the mass sanitiser below (NOT the 3-digit carb-entry one).
-    private func gramEditor(_ row: FoodRow) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            TextField("0", text: $gramEditText)
-                .keyboardType(.numberPad)
-                .focused($gramFieldFocused)
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(Color.captureChromeText)
-                .frame(width: 52)
-                .padding(.vertical, 4)
-                .padding(.horizontal, 8)
-                .background(Color.captureBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
-                .onChange(of: gramEditText) { _, newValue in
-                    let clamped = Self.clampedRowGrams(newValue)
-                    if clamped != newValue { gramEditText = clamped }
-                    // Empty is a transient typing state — keep the last value.
-                    if let grams = Int(clamped) {
-                        pendingGrams[row.id] = Double(grams)
-                    }
-                }
-                .accessibilityIdentifier("result.row.\(row.id).gramField")
-            Text("g")
-                .font(.caption)
-                .foregroundStyle(Color.captureChromeText.opacity(0.6))
-            if let serving = serving(for: row) {
-                let count = ServingMath.displayHalfUnits(
-                    ServingMath.servings(grams: pendingGramsFor(row), gramsPerUnit: serving.gramsPerUnit)
-                )
-                Text("≈ \(ServingMath.halfUnitText(count)) \(unitLabel(serving, count: count))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(Color.captureChromeText.opacity(0.6))
-                    .contentTransition(reduceMotion ? .identity : .numericText())
-            }
-        }
-    }
-
-    private func unitLabel(_ serving: SolidServing, count: Double) -> String {
-        ServingMath.unitLabel(count: count, singular: serving.unitSingular, plural: serving.unitPlural)
-    }
-
-    // Compact ± step control. Sizing and `contentShape` live INSIDE each
-    // Button label — the dead-surface trap (ui-capture-flow.md).
-    private func stepButton(
-        _ symbol: String, row: FoodRow, enabled: Bool, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .frame(width: 36, height: 36)
-                .background(Color.captureBackground.opacity(0.6), in: Circle())
-                .foregroundStyle(Color.captureChromeText.opacity(enabled ? 1 : 0.3))
-                .contentShape(Circle())
-        }
-        .disabled(!enabled)
-        .accessibilityIdentifier("result.row.\(row.id).\(symbol)")
     }
 
     // The single confirm action (iOS Req 4): appears only while the pending
@@ -715,25 +588,10 @@ struct ResultView: View {
 
     // MARK: - Adjustment behaviour
 
-    // Mass keypad sanitiser (BenchmarkMealEditorSheet.clampedGrams precedent):
-    // strips non-digits, caps at 4 digits, clamps at `maxRowGrams`. Idempotent
-    // for any whole-gram value within the cap, so the programmatic
-    // `gramEditText` writes in `step()` / `applyFraction` survive the
-    // onChange round-trip without corrupting `pendingGrams`.
-    private static func clampedRowGrams(_ text: String) -> String {
-        let digits = String(text.filter(\.isNumber).prefix(4))
-        guard let value = Int(digits) else { return "" }
-        return String(min(value, Int(maxRowGrams)))
-    }
-
     private func step(_ row: FoodRow, direction: Double) {
-        let stepGrams: Double
-        if let serving = serving(for: row) {
-            stepGrams = serving.step * serving.gramsPerUnit
-        } else {
-            stepGrams = Self.fallbackStepGrams
-        }
-        let next = min(Self.maxRowGrams, max(0, pendingGramsFor(row) + direction * stepGrams))
+        let next = ServingStepLogic.stepped(
+            from: pendingGramsFor(row), serving: serving(for: row), direction: direction
+        )
         pendingGrams[row.id] = next
         if editingClassId == row.id {
             gramEditText = String(Int(next.rounded()))
@@ -858,12 +716,6 @@ struct ResultView: View {
     // which equals the original estimate until the user adjusts a row.
     private var pendingTotalMassG: Double {
         foodRows.reduce(0) { $0 + pendingGramsFor($1) }
-    }
-
-    // "white_rice" → "White rice".
-    private static func prettify(_ raw: String) -> String {
-        let spaced = raw.replacingOccurrences(of: "_", with: " ")
-        return spaced.prefix(1).uppercased() + spaced.dropFirst()
     }
 
     private var placeholderChip: some View {
