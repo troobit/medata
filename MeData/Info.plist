@@ -53,6 +53,14 @@
 	     heartbeat enable triggers. Functional copy only (Req 5.4). -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth connects to the worn Libre sensor so each new reading can trigger a glucose fetch.</string>
+	<!-- specs/ui/unified-dark-theme Decision 1: one dark presentation for the
+	     whole process. Under dark resolution .systemGroupedBackground is
+	     #000000 — identical to captureBackground — so the OLED capture family
+	     and the grouped family converge without any view changing tokens.
+	     Process-level on purpose (Req 1.4): no sheet, cover, or UIKit-hosted
+	     surface can miss a root modifier that does not exist. -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 	<!-- capture-bundle-recorder smolspec: expose Documents (captures/ fixture
 	     bundles) in the Files app and Finder — the recorder's sole management
 	     surface. Developer-phase only; remove alongside the recorder before
