@@ -6,18 +6,18 @@ references:
 ---
 # Unified Dark Theme
 
-- [ ] 1. Force dark: UIUserInterfaceStyle in MeData/Info.plist, Colors.swift comment amendment <!-- id:wenwhit -->
+- [x] 1. Force dark: UIUserInterfaceStyle in MeData/Info.plist, Colors.swift comment amendment <!-- id:wenwhit -->
   - Requirements: [1.1](requirements.md#1.1), [1.3](requirements.md#1.3), [1.4](requirements.md#1.4), [1.5](requirements.md#1.5)
 
-- [ ] 2. Reconcile design-system/MASTER.md — style-table scope, grouped block annotation, colour block level with Colors.swift <!-- id:wenwhiu -->
+- [x] 2. Reconcile design-system/MASTER.md — style-table scope, grouped block annotation, colour block level with Colors.swift <!-- id:wenwhiu -->
   - Blocked-by: wenwhit (Force dark: UIUserInterfaceStyle in MeData/Info.plist, Colors.swift comment amendment)
   - Requirements: [3.1](requirements.md#3.1), [3.4](requirements.md#3.4)
 
-- [ ] 3. Page docs — amend meal-overview.md and data.md in place; author records.md <!-- id:wenwhiv -->
+- [x] 3. Page docs — amend meal-overview.md and data.md in place; author records.md <!-- id:wenwhiv -->
   - Blocked-by: wenwhit (Force dark: UIUserInterfaceStyle in MeData/Info.plist, Colors.swift comment amendment)
   - Requirements: [3.2](requirements.md#3.2), [3.3](requirements.md#3.3)
 
-- [ ] 4. make build-app and make spell <!-- id:wenwhiw -->
+- [x] 4. make build-app and make spell <!-- id:wenwhiw -->
   - Blocked-by: wenwhit (Force dark: UIUserInterfaceStyle in MeData/Info.plist, Colors.swift comment amendment), wenwhiu (Reconcile design-system/MASTER.md — style-table scope, grouped block annotation, colour block level with Colors.swift), wenwhiv (Page docs — amend meal-overview.md and data.md in place; author records.md)
   - Requirements: [1.1](requirements.md#1.1)
 

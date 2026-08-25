@@ -105,7 +105,7 @@ Cross-repo check (2026-07-05): a store-written fixture loads in medreg via `medr
 
 `saveIntakeEntry`/`updateIntakeEntry` reject carbs outside 1...999 (`PersistenceError.intakeCarbsOutOfRange`). Update and delete are gated on `event_type = intake` so a meal/insulin/bsl row sharing the id survives; intake has no side tables. Each write notifies `eventsDidChange` once (unconditionally, matching insulin).
 
-Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT EXISTS` retrofits it onto v4 DBs — no DDL on legacy tables): `id` TEXT PK, `name`, `carbs_g` NOT NULL, optional `protein_g`/`fat_g`/`fibre_g`, `sort_order`. The three authored defaults ("A pint" 17 g, "Bagel" 45 g, "Chips" 40 g) are seeded **at most once per DB**, gated on the `quick_presets_seeded` meta flag — deleting all presets does NOT reseed on relaunch. `saveQuickPreset` is INSERT OR REPLACE (insert and update in one); preset writes do not notify `eventsDidChange`.
+Quick-add presets live in the `quick_presets` table (schema v5; `CREATE IF NOT EXISTS` retrofits it onto v4 DBs — no DDL on legacy tables): `id` TEXT PK, `name`, `carbs_g` NOT NULL, optional `protein_g`/`fat_g`/`fibre_g`, `sort_order`, and (schema **v10**, manual-carb-intake Req 8) nullable `source_meal_id` — the capture-origin stamp, a point-in-time record never dereferenced by any read or deletion path; deleting the origin meal changes nothing on the preset. v10 is the one `ALTER TABLE ADD COLUMN` migration in `migrate()`, gated on the stored `schema_version` because ADD COLUMN is not idempotent in SQLite. The three authored defaults ("A pint" 17 g, "Bagel" 45 g, "Chips" 40 g) are seeded **at most once per DB**, gated on the `quick_presets_seeded` meta flag — deleting all presets does NOT reseed on relaunch. `saveQuickPreset` is INSERT OR REPLACE (insert and update in one); preset writes do not notify `eventsDidChange`.
 
 ## Activity events (activity-events)
 
@@ -121,7 +121,7 @@ Nothing in `MedataCore` or `App` consumes the lookback within the activity-event
 
 ## Dose suggestions (insulin-dosing)
 
-`dose_suggestions` (schema **v8**; `CREATE IF NOT EXISTS` retrofits it onto v7 DBs — no DDL on legacy tables) is a derived side table like `quick_presets` / `estimation_outcomes`: **none of `saveDoseSuggestion`, `linkDose`, `doseSuggestions` touches `eventsDidChange`** (Req 7.4), and none of them adds a key to the insulin event's metadata contract, which medreg owns and parses (Req 7.3, 9.7).
+`dose_suggestions` (schema **v8**; `CREATE IF NOT EXISTS` retrofits it onto v7 DBs — no DDL on legacy tables) is a derived side table like `quick_presets` / `estimation_outcomes`: **none of `saveDoseSuggestion`, `linkDose`, `doseSuggestions`, `doseSuggestion(forSourceEventID:)` touches `eventsDidChange`** (Req 7.4; the by-subject read serves the Req 6.10 history readout and has a protocol-extension default returning nil so test doubles conform without a stub), and none of them adds a key to the insulin event's metadata contract, which medreg owns and parses (Req 7.3, 9.7).
 
 The version literal `'8'` lives in **three** places in `GRDBPersistenceStore.swift` — the `INSERT OR IGNORE` in `createSchema`, the `INSERT OR REPLACE` in `migrate`, and the changelog comment between them. Bump all three together or `migrate` silently re-stamps a v8 database back down on every launch.
 

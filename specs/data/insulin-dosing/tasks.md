@@ -115,7 +115,7 @@ metadata:
   - Requirements: [3.1](requirements.md#3.1), [6.1](requirements.md#6.1), [6.4](requirements.md#6.4)
   - References: design-direction.md#2. Meal review — the primary surface
 
-- [ ] 9. Seven SettingsKeys constants for the ratios, increment and provenance <!-- id:idz000d -->
+- [x] 9. Seven SettingsKeys constants for the ratios, increment and provenance <!-- id:idz000d -->
   - Four per-band ratio keys in GRAMS PER UNIT, the pen increment, the ratio source, and the free-text medreg fit reference
   - Flat keys of the same kind as insulinTypeBolus — no structured or array-valued setting is introduced
   - An absent per-band key means the seed default is in force and the suggestion row records that
@@ -124,7 +124,7 @@ metadata:
   - Requirements: [1.3](requirements.md#1.3), [1.6](requirements.md#1.6), [1.7](requirements.md#1.7), [9.3](requirements.md#9.3), [9.4](requirements.md#9.4)
   - References: design.md#Settings: seven flat keys, no new shape (Req 1.3, 6.9, 9.4)
 
-- [ ] 10. Settings rows in the existing Insulin section <!-- id:idz000e -->
+- [x] 10. Settings rows in the existing Insulin section <!-- id:idz000e -->
   - Four LabeledContent rows in band order, each a trailing decimal field suffixed g/U with the reciprocal rendered beneath as read-only secondary text
   - Pen increment picker (0.5 or 1 U), ratio source picker (Chosen or medreg), medreg fit free-text field
   - Validation is CarbRatio.init? and DosableIncrement.init?: a rejected entry reverts on commit with no error copy
@@ -136,7 +136,7 @@ metadata:
 
 ## Phase 4 — App wiring
 
-- [ ] 11. DoseSubject and DoseSuggestionModel <!-- id:idz000f -->
+- [x] 11. DoseSubject and DoseSuggestionModel <!-- id:idz000f -->
   - MainActor Observable, owned by AppRoot so a seed armed inside the Capture cover survives that cover's dismissal
   - refresh(for:) reads Settings, queries the 360-minute bolus window and the last glucose reading, calls the pure suggester, publishes the readout and writes the ledger row in a detached task so a persistence failure never blocks or delays recording
   - The starting glucose is RECORDED ONLY — no correction term consumes it in iteration 1
@@ -147,7 +147,7 @@ metadata:
   - Requirements: [3.1](requirements.md#3.1), [3.2](requirements.md#3.2), [3.7](requirements.md#3.7), [4.5](requirements.md#4.5), [4.7](requirements.md#4.7), [7.1](requirements.md#7.1), [7.2](requirements.md#7.2), [7.7](requirements.md#7.7), [8.1](requirements.md#8.1), [8.3](requirements.md#8.3), [10.1](requirements.md#10.1)
   - References: design.md#Data flow: estimate to suggestion to seed
 
-- [ ] 12. Meal review readout on the existing mass line <!-- id:idz000g -->
+- [x] 12. Meal review readout on the existing mass line <!-- id:idz000g -->
   - Append a middle-dot segment to the second line of totalRow at the same subheadline monospacedDigit and captureChromeText opacity, as an HStack of two Texts so the line height is unchanged and the scale control stays above the scroll boundary
   - New accessibility identifier review.doseSuggestion beside the retained review.massLine
   - numericText transition and smooth animation, both gated on reduceMotion, exactly as the other animated numerals on that screen
@@ -158,7 +158,7 @@ metadata:
   - Requirements: [6.1](requirements.md#6.1), [6.2](requirements.md#6.2), [6.6](requirements.md#6.6), [6.7](requirements.md#6.7), [6.8](requirements.md#6.8)
   - References: design.md#Presentation (Req 6)
 
-- [ ] 13. Manual intake path — same readout, same arming <!-- id:idz000h -->
+- [x] 13. Manual intake path — same readout, same arming <!-- id:idz000h -->
   - CarbEntrySheet shows the same middle-dot segment in its existing secondary line
   - A quick-add preset tap shows nothing, arms the seed and writes its ledger row — the suggestion reaches the developer one tap later as the sheet's opening value
   - The suggestion is not silently absent for carbohydrates that did not arrive through the camera
@@ -167,7 +167,7 @@ metadata:
   - Requirements: [3.3](requirements.md#3.3), [6.6](requirements.md#6.6), [6.7](requirements.md#6.7)
   - References: design.md#Presentation (Req 6)
 
-- [ ] 14. Merge the Decision 16 synthesis App layer onto research <!-- id:idz000w -->
+- [x] 14. Merge the Decision 16 synthesis App layer onto research <!-- id:idz000w -->
   - Merge insulin-dosing-ui-3-on-research (LogSheet, EntryChrome, DoseSuggestionModel, seven SettingsKeys) as the base; the demo-meal commit exists on both sides with identical content and must resolve clean
   - Port attempt 2 components from insulin-dosing-ui-2-on-research: DoseReadoutLine.swift (MiddleDotLine / MealTotalSecondLine), the review-line readout, the dose sheet provenance caption consumed by the first press, and the consumed seed — the review line lands in MealReviewView and the manual line in LogSheet.CarbEntryContent, not in the file attempt 2 patched
   - Replace the LEDGER STUB in DoseSuggestionModel with the real saveDoseSuggestion / linkDose calls; attempt 2 wrote to InMemoryDoseLedger and attempt 3 to a stub — neither row shape reaches the store today
@@ -176,7 +176,7 @@ metadata:
   - Requirements: [3.1](requirements.md#3.1), [6.1](requirements.md#6.1), [6.4](requirements.md#6.4)
   - References: decision_log.md, design-direction.md, docs/agent-notes/insulin-dose-ui.md
 
-- [ ] 15. History-surface readout — MealOverviewView and ResultView render the recorded suggestion <!-- id:idz000x -->
+- [x] 15. History-surface readout — MealOverviewView and ResultView render the recorded suggestion <!-- id:idz000x -->
   - Persistence gains a read API for the row by its subject — doseSuggestion(forSourceEventID:) — reading the newest row for that meal or intake; no new table, no eventsDidChange
   - MealOverviewView totalRow and ResultView carbTotal each gain the middle-dot segment in the derived register: the rounded suggested units, and given units beside them where linkDose filled given_units (design-direction.md §6.3 grammar, suggested then given)
   - The values are the recorded row, never a recomputation (Req 6.11); a meal with no row shows nothing in its place
@@ -187,7 +187,7 @@ metadata:
 
 ## Phase 5 — Verify
 
-- [ ] 16. Seed the dose sheet through one optional initialiser parameter <!-- id:idz000i -->
+- [x] 16. Seed the dose sheet through one optional initialiser parameter <!-- id:idz000i -->
   - InsulinDoseModel.init(store:seed:) and InsulinDoseSheet.init(store:seed:), both defaulted nil, at the single construction site in AppRoot
   - A nil seed opens at 10 U exactly as today, so the home Dose control and the insulin add deep link are behaviourally unchanged and both two-tap paths survive
   - No sheet is presented from inside the Capture cover, so the pendingDeepLink sequencing is untouched
