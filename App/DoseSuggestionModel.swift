@@ -63,6 +63,17 @@ nonisolated struct DoseReadout: Sendable, Equatable {
         "from \(Int(carbsG.rounded())) g at \(ratioLabel)"
     }
 
+    // Spoken forms for VoiceOver labels: "12 U" reads as "twelve you" and
+    // "5 g/U" as "g slash u" if the display strings are spoken verbatim
+    // (ui-ux review 2026-08-25).
+    var spokenUnits: String { "\(units) units" }
+    var spokenRatio: String {
+        let value = gramsPerUnit
+        let text = value == value.rounded()
+            ? String(Int(value)) : String(format: "%.1f", value)
+        return "\(text) grams per unit"
+    }
+
     // Shared formatting for surfaces that render a RECORDED row rather than
     // the live readout (Req 6.10). Whole values drop the decimal so the
     // common case reads "12 U"; a 0.5 U pen shows the half.

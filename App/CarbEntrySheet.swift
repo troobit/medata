@@ -21,6 +21,7 @@ struct CarbEntryContent: View {
     // Optional so any surface can host this content without the app-level
     // model; absent simply means no suggestion segment.
     @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // "Save as quick-add" (Req 4.4): the entry save is already committed when
     // this sub-sheet opens; cancelling it creates no preset and rolls back
@@ -92,8 +93,11 @@ struct CarbEntryContent: View {
                 )
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(Color.textSecondary)
-                .contentTransition(.numericText())
-                .animation(.smooth, value: readout)
+                // Gated on Reduce Motion like every other animated numeral
+                // (design-direction §2.4; ui-ux review 2026-08-25).
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .animation(reduceMotion ? nil : .smooth, value: readout)
+                .accessibilityLabel(readout.spokenUnits)
                 .accessibilityIdentifier("carb.doseSuggestion")
             }
         }

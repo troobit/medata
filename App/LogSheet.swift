@@ -152,6 +152,9 @@ struct LogSheet: View {
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(Color.textSecondary)
             }
+            // The visible title stays compact; the tappable surface meets the
+            // 44 pt floor (ui-ux review 2026-08-25).
+            .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Entry mode, \(mode.title)")

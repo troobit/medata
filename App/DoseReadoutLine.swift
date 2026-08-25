@@ -103,7 +103,7 @@ struct MealTotalSecondLine: View {
 
     private var spokenLabel: String {
         guard let readout else { return "\(mass) grams on plate" }
-        return "\(mass) grams on plate. \(readout.units) units at \(readout.ratioLabel)."
+        return "\(mass) grams on plate. \(readout.spokenUnits) at \(readout.spokenRatio)."
     }
 
     private func line(_ runs: [MiddleDotLine.Run?]) -> some View {
@@ -116,11 +116,12 @@ struct MealTotalSecondLine: View {
 
     var body: some View {
         if let doseRun {
-            // Shed words before numbers, and the least certain number first.
+            // The ratio is the FIRST thing shed: at any width where it does
+            // not fit, the line is byte-identical to design.md's
+            // `≈ 214 g on plate · 12 U` and then follows design-direction
+            // §2.3's shed order (words before numbers, the dose never).
             ViewThatFits(in: .horizontal) {
                 line([massRun("≈ \(mass) g on plate"), doseRun, ratioRun])
-                line([massRun("≈ \(mass) g"), doseRun, ratioRun])
-                line([massRun("\(mass) g"), doseRun, ratioRun])
                 line([massRun("≈ \(mass) g on plate"), doseRun])
                 line([massRun("≈ \(mass) g"), doseRun])
                 line([massRun("\(mass) g"), doseRun])

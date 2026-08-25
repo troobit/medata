@@ -102,6 +102,26 @@ enum RecordedSuggestion {
         }
         return line
     }
+
+    // VoiceOver form: "12 U" spoken verbatim reads as "twelve you" and
+    // "5 g/U" as "g slash u" (ui-ux review 2026-08-25).
+    static func spokenLine(_ row: DoseSuggestionRecord?) -> String? {
+        guard let row, let rounded = row.roundedUnits else { return nil }
+        let ratio = row.crGramsPerUnit
+        let ratioText = ratio == ratio.rounded()
+            ? String(Int(ratio)) : String(format: "%.1f", ratio)
+        var line = "suggested \(spokenUnits(rounded)) at \(ratioText) grams per unit"
+        if let given = row.givenUnits {
+            line += ", given \(spokenUnits(given))"
+        }
+        return line
+    }
+
+    private static func spokenUnits(_ units: Double) -> String {
+        let rounded = (units * 10).rounded() / 10
+        if rounded == rounded.rounded() { return "\(Int(rounded)) units" }
+        return String(format: "%.1f units", rounded)
+    }
 }
 
 // Photo resolution for the meal surfaces (Meal-overview and Result resolve
