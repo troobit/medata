@@ -26,7 +26,8 @@ references:
 - [x] 6. Remove MealHistoryModel.swift, its tests file and pbxproj entries <!-- id:6yhak3a -->
   - Requirements: [6.2](requirements.md#6.2)
 
-- [ ] 7. Gate: make build-app, make test (both totals), make spell <!-- id:6yhak3b -->
+- [x] 7. Gate: make build-app, make test (both totals), make spell <!-- id:6yhak3b -->
+  - 2026-08-25: make build-app clean; make spell clean; make test XCTest 639/0 failures (3 skipped), swift-testing 466/467 — the one failure is the pre-existing python3<3.10 generate.py environment issue in EndToEndCalibrateBakeTests, untouched by this spec
   - Blocked-by: 6yhak35 (ServingRows.swift — extract PlateFraction, amount button, gram editor, step logic; adopt in MealReviewView and ResultView), 6yhak36 (MealReadouts.swift — CarbTotalBlock, CorrectedMarker, MealPhotoCard; adopt across the four marker sites and three total sites), 6yhak37 (SharedFormatting.swift — cached en_IE formatters, prettify, TimelineRow; adopt across six row/formatter sites), 6yhak38 (Carb-amount form unification — CarbAmountFields shared by LogSheet.CarbEntryContent and QuickPresetEditSheet), 6yhak39 (Entry-chrome adoption — QuickPresetEditSheet and DoseScheduleSettingsSection consume EntryTimeRow/EntrySaveButton; no private sheet chrome remains for consolidated modes), 6yhak3a (Remove MealHistoryModel.swift, its tests file and pbxproj entries)
   - Requirements: [6.1](requirements.md#6.1), [6.3](requirements.md#6.3)
 

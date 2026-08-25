@@ -197,8 +197,11 @@ metadata:
   - Requirements: [6.3](requirements.md#6.3), [6.4](requirements.md#6.4), [6.5](requirements.md#6.5), [7.5](requirements.md#7.5), [9.7](requirements.md#9.7)
   - References: design.md#The seam: where 10 U becomes a suggestion (Req 6.3, 6.4)
 
-- [ ] 17. make test green, make build, make spell <!-- id:idz000j -->
+- [x] 17. make test green, make build, make spell <!-- id:idz000j -->
   - Report BOTH totals from make test — XCTest and swift-testing
+  - Run 2026-08-25: XCTest 639 tests, 0 failures (3 skipped); swift-testing 467 tests in 53 suites, 466 passed
+  - The one failure is pre-existing and environmental, not from this spec: EndToEndCalibrateBakeTests shells out to python3 tools/food_db/generate.py, and the machine default python3 is pre-3.10 (TypeError on str | None at generate.py:657) — the known Python-blocked make test
+  - make build-app and make spell clean
   - Blocked-by: idz000g (Meal review readout on the existing mass line), idz000h (Manual intake path — same readout, same arming), idz000x (History-surface readout — MealOverviewView and ResultView render the recorded suggestion), idz000i (Seed the dose sheet through one optional initialiser parameter), idz000c (Tests: round-trip save then read newest-first; a second save with the same id replaces rather than appends; linkDose fills given_units and insulin_event_id; neither write fires eventsDidChange; an upgrade from a schema-7 database keeps every existing event)
   - Stream: 1
   - Requirements: [10.1](requirements.md#10.1), [10.3](requirements.md#10.3)
