@@ -13,7 +13,7 @@ Read this file first when implementing any new view. Then check `design-system/p
 
 | Layer | Used on | Reference style |
 |---|---|---|
-| **Dark Mode (OLED)** | Photo tab, ResultView | Pure black `#000000` AR-preview background, white-on-black chrome, minimal glow. |
+| **Dark Mode (OLED)** | App-wide (originally Photo tab, ResultView — extended by `specs/ui/unified-dark-theme` Decision 1: `UIUserInterfaceStyle = Dark` pins the whole process dark) | Pure black `#000000` AR-preview background, white-on-black chrome, minimal glow. |
 | **Exaggerated Minimalism** | ResultView carb total, Meals row metadata | Oversized numeric type, extreme negative space, single accent (`#63FF00`). |
 | **Flat Design Mobile (Touch-First)** | Tab bar, all interactive controls | Zero shadow, instant press feedback (`scale 0.97`), ≥48pt targets, solid colours over gradients. |
 
@@ -34,7 +34,13 @@ extension Color {
     static let captureChromeBG    = Color.white.opacity(0.10)   // chip / pill backgrounds over preview
     static let captureScrim       = Color.black.opacity(0.45)   // for top/bottom gradient overlays
 
-    // Surfaces (Meals / Settings — system Grouped)
+    // Surfaces (grouped structure — always resolved dark)
+    // Originally "Meals / Settings — system Grouped". specs/ui/unified-dark-theme
+    // Decision 1: UIUserInterfaceStyle=Dark pins the process dark, so these
+    // adaptive tokens are structure (base vs elevated card), not a light/dark
+    // split — surfacePrimary resolves #000000, identical to captureBackground,
+    // and surfaceElevated #1C1C1E. They stay semantic rather than hard-coded so
+    // a future light theme is a one-line revert. (Mirrors App/Colors.swift.)
     static let surfacePrimary     = Color(uiColor: .systemGroupedBackground)
     static let surfaceElevated    = Color(uiColor: .secondarySystemGroupedBackground)
     static let textPrimary        = Color(uiColor: .label)
@@ -54,6 +60,19 @@ extension Color {
     // Trends chart (Decision 12, design-handoff-00)
     static let seriesGlucose      = Color(uiColor: .systemOrange) // glucose line series on the Trends chart
     static let bandTarget         = medataAccent.opacity(0.10)    // 3.9–10.0 mmol/L target range band fill
+
+    // Insulin dose markers (PRD regression-suggestion-integration App 6):
+    // bolus and basal must be distinct from each other AND from the glucose
+    // (orange) and carb (accent green) series. Week/Month per-day aggregate
+    // markers reuse the bolus teal.
+    static let seriesInsulinBolus = Color(uiColor: .systemTeal)
+    static let seriesInsulinBasal = Color(uiColor: .systemPurple)
+
+    // Activity markers (specs/data/activity-events Req 4.1): distinct from the
+    // glucose trace, the carb bars and both insulin series. Also the
+    // selected-chip fill on the activity entry sheet.
+    static let seriesActivity     = Color(uiColor: .systemPink)
+    static let bandActivity       = seriesActivity.opacity(0.13)  // shaded active-period backdrop — a ground, not a mark
 }
 ```
 

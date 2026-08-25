@@ -14,14 +14,26 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   and a 50 ms polling Task applies whatever the schedule says is due — the
   view never owns timing. UI floor is 1 U, hard stop 60 U (the store accepts
   0–60; the floor keeps a save from ever reading 0).
-- **`InsulinDoseSheet`** is a plain `.sheet` (medium detent) presented by
-  TrendsView — deliberately lighter than the Capture/Data/Settings
+- **`LogSheet`** (the Decision 16 merge, see below) consolidates the three
+  entry sheets: insulin, activity and carbohydrate entry are modes of one
+  sheet whose title is the mode menu, with `EntryChrome` holding the shared
+  time row, save button and chips. `InsulinDoseSheet.swift` now hosts only
+  the insulin mode's content; chrome (title, detent, dismissal) belongs to
+  `LogSheet`, presented from `AppRoot`. The sheet stays a plain `.sheet`
+  (medium detent) — deliberately lighter than the Capture/Data/Settings
   full-screen covers. The +/− controls use
   `onLongPressGesture(minimumDuration: .infinity, …, onPressingChanged:)` so
   tap and hold share one press-down/press-up code path. No product-name
   field: `insulin_type` fills at save time from per-kind Settings defaults
   (`SettingsKeys.insulinTypeBolus/Basal`, defaults NovoRapid/Lantus; empty or
   whitespace falls back to the default).
+- **`DoseSuggestionModel`** computes the suggestion from the merged `Dosing`
+  target and writes real `dose_suggestions` rows via `saveDoseSuggestion` /
+  `linkDose` (no in-memory ledger survives the merge). The history surfaces
+  (`MealOverviewView`, `ResultView`) read a meal's recorded suggestion back
+  via `doseSuggestion(forSourceEventID:)` and render it as the read-only
+  `suggested 12 U · 5 g/U (· given 14 U)` line
+  (`specs/data/insulin-dosing/requirements.md` Req 6.10).
 - **TrendsModel** loads insulin via `events(in:type: EventType.insulin)` in
   the same `reload()` the `eventsDidChange` subscription drives, decoding
   `kind` from the metadata JSON (rows that fail to decode are dropped).
@@ -65,14 +77,37 @@ the chart. The core API (EventType.insulin, `InsulinDose`, `saveInsulinDose`,
   registered in `project.pbxproj` (four sections — see the checklist in
   `ui-capture-flow.md`).
 
-## The three dose-suggestion attempts (undecided)
+## The three dose-suggestion attempts (decided — Decision 16 synthesis)
 
-`specs/data/insulin-dosing` phases 1–2 are merged on `research` — the `Dosing`
-target and the `dose_suggestions` ledger at schema 8. Phase 4, the App layer
-that shows a suggested dose, exists only as three competing attempts on
-branches, per shape 3 of the attempt convention
-(`device-build-and-test.md`, "Comparing UI attempts on the phone"): merging any
-one of them would pre-empt the choice, so none is merged.
+The verdict is taken: `specs/data/insulin-dosing/decision_log.md` Decision 16,
+"The attempt verdict — attempt 3's consolidation as the base, attempt 2's
+reach ported onto it". No single attempt won; the synthesis is **merged on
+`research`** and the tags below remain as archive per the attempt convention
+(`device-build-and-test.md`, "Comparing UI attempts on the phone") — reachable
+history, not unmerged work.
+
+What merged: attempt 3's App layer as the base (`LogSheet` in three modes,
+`EntryChrome`, its `DoseSuggestionModel`, its seven `SettingsKeys`), with
+attempt 2's reach ported on top — `DoseReadoutLine` (`MiddleDotLine` /
+`MealTotalSecondLine`), the readout on the review line and the manual entry
+line, the dose sheet's provenance caption consumed by the first press, and a
+seed that is actually consumed. Attempt 3's documented ledger stub was
+replaced with the real `saveDoseSuggestion` / `linkDose` wiring. Attempt 1 was
+rejected outright — the seed it armed on Record was never consumed
+(`takeSeed()` had no caller), which under the everywhere-readable bar is "the
+gap, not the restraint" (Decision 16).
+
+What the losers traded away (Decision 15's contract): nothing, in all three
+cases. Attempt 1's seven-character review segment "survives verbatim inside
+attempt 2's `MealTotalSecondLine` shed order"; attempt 2's readout components
+and provenance caption ported whole; attempt 3's `LogSheet`/`EntryChrome`
+landed unchanged. What remains device-judged sits inside task 16's on-device
+STOP: chiefly design-direction §10's open question — bare `12 U` versus
+`12 U at 5 g/U` on the review line. The merged build ships the data-forward
+branch, so without an explicit device verdict at task 16 that choice "becomes
+the winner by inertia" (Decision 16).
+
+The descriptions below record what each attempt was.
 
 | | Branch | Tag (replay 2) | Sha |
 |---|---|---|---|
@@ -97,8 +132,7 @@ seven characters appended to a line that already exists: `≈ 214 g on plate ·
 then the mass, never the dose. Nothing else on any screen changes. It arms a
 seed on Record but **never consumes one** — `takeSeed()` has no caller — so the
 dose sheet still opens at the standing 10 U and the number is retyped by hand.
-Whether that is the restraint working or a gap is the first thing to judge on
-the phone.
+Decision 16 judged that the gap, not the restraint.
 
 **Attempt 2 — the readout, plus the surfaces it implies.** Seventeen files as
 written; the replay dropped its private activity implementation (see below), so
@@ -131,27 +165,24 @@ absorb research's `ActivitySheet` (deleted) and rebinding its `ActivityContent`
 to research's `ActivityModel`. Neither replay is a transcription, and neither
 attempt should be read as still proposing an activity design.
 
-Attempt 2 also still writes its suggestion rows through an in-memory
-`InMemoryDoseLedger` rather than the real `saveDoseSuggestion`/`linkDose` that
-research now has. Nothing on the screen under judgment depends on where the row
-lands, so it was left as the attempt wrote it.
+Attempt 2 also wrote its suggestion rows through an in-memory
+`InMemoryDoseLedger`; the merge replaced that with the real
+`saveDoseSuggestion`/`linkDose` calls (Decision 16), so rows land in
+`dose_suggestions` from the first merged build.
 
-### Deciding
+### Judging the merged tree (task 16)
 
-The choice is task 8 in `specs/data/insulin-dosing/tasks.md`, and it gates tasks
-9–16 — the widest fan-out in the repo. Install each in turn with
-`git checkout <tag> && make deploy-device`; `git describe --tags <stamp sha>`
-naming an exact tag proves which one is on the phone. Record the verdict as a
-decision in that spec's `decision_log.md` and say here what the losers traded
-away.
+Task 8 in `specs/data/insulin-dosing/tasks.md` closed with the Decision 16
+verdict; tasks 9–15 unblocked against the merged layer. What survives as an
+on-device judgement is task 16's STOP — the synthesis tree is a shape no phone
+had displayed at merge time, and it includes design-direction §10's `12 U`
+versus `12 U at 5 g/U` choice on the review line.
 
-Each build carries the two DEBUG affordances from `a1618ee`, which is what makes
-the three comparable: **Settings → Seed demo meal** writes one fixed 56.0 g
-record, and **Records → that meal → ⋯ → Review** opens the review surface on it
-without a capture — 11 U on the breakfast seed ratio, 6 U on the other three, the
-same numbers on every attempt. The path to judge in full is seed → Review →
-Record → open the dose sheet: the readout on the review line (attempts 1 and 2),
-the seeded opening value and its provenance caption (attempt 2 only), and the
-consolidated sheet (attempt 3). The manual path — Intake → carb entry — needs no
-seed at all. Mechanism and its Release exclusion: `device-build-and-test.md`,
-"Getting the surface on screen without a capture".
+The two DEBUG affordances from `a1618ee` remain the way to get the surface on
+screen: **Settings → Seed demo meal** writes one fixed 56.0 g record, and
+**Records → that meal → ⋯ → Review** opens the review surface on it without a
+capture. The path to judge in full is seed → Review → Record → open the dose
+sheet: the readout on the review line, the seeded opening value and its
+provenance caption, and the consolidated `LogSheet`. The manual path — Intake
+→ carb entry — needs no seed at all. Mechanism and its Release exclusion:
+`device-build-and-test.md`, "Getting the surface on screen without a capture".

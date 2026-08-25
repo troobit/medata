@@ -35,6 +35,9 @@ by tapping a Data or Trends row (`MealRoute.overview`).
 
 - **Container:** `ScrollView` on `surfacePrimary`, pushed inside the sheet's
   `NavigationStack`. Title `Meal`, inline.
+  *Amendment (`specs/ui/unified-dark-theme` Decision 1):* `surfacePrimary` now
+  always resolves dark — `UIUserInterfaceStyle = Dark` pins the process dark,
+  so this surface is pure black (`#000000`), never the light grouped grey.
 - **Photo + masks (§9.1):** a 240pt rounded (16pt) card. `MaskOverlayLoader`
   (store + mealId) tints the persisted mask over the captured photo; when the
   mask artefact is absent the loader renders nothing and the photo shows through,
