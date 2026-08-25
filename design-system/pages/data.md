@@ -3,6 +3,11 @@
 **Inherits:** `design-system/MASTER.md`. The §8 Data (meal log) screen.
 Supersedes `meals-tab.md` (feed-style photo cards → anonymous grouped rows).
 
+> **Superseded for the Records surface by `records.md`.** This page describes
+> the retired Data screen; `RecordsView` replaced it (home-router: Records
+> replaces Data) and `design-system/pages/records.md` is its page doc. Kept
+> for the row and grouping details later surfaces inherited.
+
 **Brief:** A plain chronological log of every capture, grouped by day. Rows are
 anonymous instruments — thumbnail, time, carbs, confidence — with no meal names.
 A row opens the Meal overview, never the full Result.
@@ -38,6 +43,9 @@ Empty state (no meals): a centred `fork.knife` glyph and `No meals yet`.
 
 - **Container:** system grouped `List` (`.insetGrouped`) on `surfacePrimary`,
   inside the sheet's own `NavigationStack`. Title `Data`, inline.
+  *Amendment (`specs/ui/unified-dark-theme` Decision 1):* `surfacePrimary` now
+  always resolves dark — `UIUserInterfaceStyle = Dark` pins the process dark,
+  so grouped surfaces are black base with `#1C1C1E` cards, never light grey.
 - **Day grouping (§8.1):** one `Section` per calendar day, newest first. Header
   is `Today` / `Yesterday` / a medium-format date (`en_IE`). Rows within a day
   stay in store order (newest first).
