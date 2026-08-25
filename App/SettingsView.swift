@@ -1,3 +1,4 @@
+import Dosing
 import Pipeline
 import SwiftUI
 
@@ -53,6 +54,12 @@ struct SettingsView: View {
     private var bolusInsulinType = SettingsKeys.insulinTypeBolusDefault
     @AppStorage(SettingsKeys.insulinTypeBasal)
     private var basalInsulinType = SettingsKeys.insulinTypeBasalDefault
+    @AppStorage(SettingsKeys.dosableIncrementU)
+    private var dosableIncrement = 1.0
+    @AppStorage(SettingsKeys.ratioSource)
+    private var ratioSource = "manual"
+    @AppStorage(SettingsKeys.ratioFitRef)
+    private var ratioFitRef = ""
 
     private var captureModeBinding: Binding<CaptureMode> {
         Binding(
@@ -127,6 +134,35 @@ struct SettingsView: View {
                         .multilineTextAlignment(.trailing)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("settings.insulinBasal")
+                }
+                // Carbohydrate ratios in band order (specs/data/insulin-dosing
+                // Req 1.2, 6.9). The STORED value is grams per unit and the
+                // field is suffixed g/U so the direction is on screen at all
+                // times; the reciprocal beneath spells out the developer's own
+                // phrasing — "= 2.0 U per 10 g" — so the two conventions are
+                // visibly the same number and nobody has to hold the inversion
+                // in their head. A field labelled merely "Ratio" is the trap
+                // this layout exists to close.
+                ForEach(DoseBand.allCases, id: \.self) { band in
+                    CarbRatioRow(band: band)
+                }
+                Picker("Pen increment", selection: $dosableIncrement) {
+                    Text("0.5 U").tag(0.5)
+                    Text("1 U").tag(1.0)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.dosableIncrement")
+                Picker("Ratio source", selection: $ratioSource) {
+                    Text("Chosen").tag("manual")
+                    Text("medreg").tag("medreg")
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.ratioSource")
+                LabeledContent("medreg fit") {
+                    TextField("", text: $ratioFitRef)
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("settings.ratioFitRef")
                 }
             }
 
@@ -255,6 +291,81 @@ struct SettingsView: View {
             } catch {
                 exportError = "Export failed: \(error.localizedDescription)"
             }
+        }
+    }
+
+    // MARK: - Carbohydrate ratio row (specs/data/insulin-dosing Req 1.2, 1.5)
+
+    // Colocated to avoid a project.pbxproj entry for a one-row view.
+    //
+    // Validation is `CarbRatio.init?`: a rejected entry leaves the stored
+    // value in force and the field reverts on commit. No error copy, no
+    // validation message — the value in force is always the value on screen.
+    private struct CarbRatioRow: View {
+        let band: DoseBand
+
+        @State private var text = ""
+        @FocusState private var focused: Bool
+
+        private var storedRatio: CarbRatio {
+            let raw = UserDefaults.standard.double(forKey: SettingsKeys.ratioKey(for: band))
+            return CarbRatio(gramsPerUnit: raw)
+                ?? CarbRatioTable.seed[band]
+                ?? CarbRatio(gramsPerUnit: 10.0)!
+        }
+
+        private static func fieldText(_ ratio: CarbRatio) -> String {
+            String(format: "%.1f", ratio.gramsPerUnit)
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 2) {
+                LabeledContent {
+                    HStack(spacing: 4) {
+                        TextField("", text: $text)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 64)
+                            .focused($focused)
+                            .accessibilityIdentifier("settings.ratio.\(band.rawValue)")
+                        Text("g/U")
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(band.label)
+                            .foregroundStyle(Color.textPrimary)
+                        // Which meals the row governs, made concrete without
+                        // a sentence.
+                        Text(band.windowLabel)
+                            .font(.footnote)
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+                Text(reciprocalLabel)
+                    .font(.footnote)
+                    .foregroundStyle(Color.textSecondary)
+                    .accessibilityIdentifier("settings.ratioReciprocal.\(band.rawValue)")
+            }
+            .onAppear { text = Self.fieldText(storedRatio) }
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused { commit() }
+            }
+        }
+
+        // Rendered, never stored (Req 1.1).
+        private var reciprocalLabel: String {
+            String(format: "= %.1f U per 10 g", storedRatio.unitsPerTenGrams)
+        }
+
+        private func commit() {
+            if let value = Double(text.replacingOccurrences(of: ",", with: ".")),
+                let ratio = CarbRatio(gramsPerUnit: value) {
+                UserDefaults.standard.set(
+                    ratio.gramsPerUnit, forKey: SettingsKeys.ratioKey(for: band)
+                )
+            }
+            text = Self.fieldText(storedRatio)
         }
     }
 

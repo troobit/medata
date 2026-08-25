@@ -59,11 +59,13 @@ struct LogSheet: View {
     @State private var carbs: CarbEntryModel
 
     private let nextSortOrder: Int
-    // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1) reaches
-    // the insulin mode through the same door as everything else: the schedule
-    // seeds the opening amount and is told which event the save wrote. No
-    // schedule-specific control appears, and no fourth mode.
-    private let onInsulinSaved: ((UUID) -> Void)?
+    // The dose-schedule ADJUST path (specs/data/dose-schedule Req 5.1) and the
+    // suggestion linkage (insulin-dosing Req 7.5) both reach the insulin mode
+    // through the same door as everything else: the schedule seeds the opening
+    // amount and each caller is told which event the save wrote and how many
+    // units it recorded. No schedule-specific control appears, and no fourth
+    // mode.
+    private let onInsulinSaved: ((UUID, Int) -> Void)?
 
     init(
         store: any PersistenceStore,
@@ -72,7 +74,7 @@ struct LogSheet: View {
         seedKind: InsulinKind? = nil,
         seed: DoseSeed? = nil,
         nextSortOrder: Int = 0,
-        onInsulinSaved: ((UUID) -> Void)? = nil
+        onInsulinSaved: ((UUID, Int) -> Void)? = nil
     ) {
         _mode = State(initialValue: mode)
         let insulinModel = InsulinDoseModel(store: store, seed: seed)
@@ -113,7 +115,9 @@ struct LogSheet: View {
             InsulinDoseContent(
                 model: insulin,
                 onSaved: {
-                    if let eventID = insulin.savedEventID { onInsulinSaved?(eventID) }
+                    if let eventID = insulin.savedEventID {
+                        onInsulinSaved?(eventID, insulin.units)
+                    }
                     dismiss()
                 }
             )

@@ -100,7 +100,7 @@ struct CarbEntryContent: View {
                 if let readout = doseSuggestions?.readout {
                     (
                         Text(" · ").foregroundStyle(Color.textSecondary.opacity(0.45))
-                            + Text(readout).fontWeight(.semibold)
+                            + Text(readout.unitsLabel).fontWeight(.semibold)
                     )
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)

@@ -37,6 +37,11 @@ struct MealReviewView: View {
     @FocusState private var gramFieldFocused: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Optional: this surface is also reachable from history routes, and a
+    // model is only injected on the live capture path (specs/data/insulin-dosing
+    // design.md — the model is owned by AppRoot). Absent, the second line is
+    // exactly what ships today.
+    @Environment(DoseSuggestionModel.self) private var doseSuggestions: DoseSuggestionModel?
 
     // Bundled food database, resolved once per process (ResultView precedent).
     private static let foodDatabase: (any FoodDatabase)? = try? GRDBFoodDatabase.bundled()
@@ -64,6 +69,23 @@ struct MealReviewView: View {
     private var sigma: Float { record.confidence.sigmaMeal }
     private var showsVeryLowSurface: Bool {
         ResultFormat.showsVeryLowSurface(sigma) && !veryLowDecided
+    }
+
+    // The input shape the suggester takes (specs/data/insulin-dosing design.md,
+    // `DoseSubject`). Fat and protein are recorded covariates only in
+    // iteration 1 — no fat term enters the arithmetic (Req 8.1). `fatStale`
+    // flags a corrected meal, whose fat figure the correction did not update.
+    private var doseSubject: DoseSubject {
+        DoseSubject(
+            carbsG: model.pendingTotalCarbsG,
+            instant: record.createdAt,
+            source: model.hasActualCorrections ? .mealCorrected : .meal,
+            sourceEventID: record.id,
+            fatG: Double(record.macros.clinicalTotals.fatG),
+            proteinG: Double(record.macros.clinicalTotals.proteinG),
+            sigmaMeal: Double(sigma),
+            fatStale: model.hasActualCorrections
+        )
     }
 
     private var palette: ClassPalette { .standard }
@@ -100,6 +122,15 @@ struct MealReviewView: View {
             .padding(.top, 8)
         }
         .background(Color.captureBackground.ignoresSafeArea())
+        // The suggestion is computed from the total the user will actually
+        // record (Req 3.2), so it re-derives with every correction — tapping
+        // 1/2 on the plate scale rolls the carb total, the plate mass and the
+        // dose figure together, which teaches the divisor better than a
+        // caption could.
+        .task { await doseSuggestions?.refresh(for: doseSubject) }
+        .onChange(of: model.pendingTotalCarbsG) {
+            Task { await doseSuggestions?.refresh(for: doseSubject) }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Retake and delete (Req 1.3): both discard the recorded meal and
@@ -342,12 +373,14 @@ struct MealReviewView: View {
             // Field validation reads a kitchen scale, and a scale reads mass
             // not carbs — the total must be visible at the moment of capture
             // (mass-readout smolspec; same treatment as result.massLine).
-            Text("≈ \(Int(model.pendingTotalMassG.rounded())) g on plate")
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(Color.captureChromeText.opacity(0.75))
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .smooth, value: model.pendingTotalMassG)
-                .accessibilityIdentifier("review.massLine")
+            // The dose suggestion appends to this line rather than taking a
+            // row of its own, so nothing above the scroll boundary moves
+            // (specs/ui/meal-review Req 6.6) and the plate control stays
+            // visible without scrolling.
+            MealTotalSecondLine(
+                massG: model.pendingTotalMassG,
+                readout: doseSuggestions?.readout
+            )
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("review.total")
@@ -373,6 +406,11 @@ struct MealReviewView: View {
         Button {
             Task {
                 await model.record()
+                // Arms the seed the dose sheet reads when it next opens
+                // through the existing route (Req 6.4). Nothing is presented
+                // from here: a dose stays a separate, deliberate act, and the
+                // capture path is still shutter -> Record.
+                await doseSuggestions?.arm(from: doseSubject)
                 onRecord()
             }
         } label: {
