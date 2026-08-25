@@ -444,6 +444,7 @@ struct ResultView: View {
                 Text(line)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.captureChromeText.opacity(0.75))
+                    .accessibilityLabel(RecordedSuggestion.spokenLine(suggestion) ?? line)
                     .accessibilityIdentifier("result.doseSuggestion")
             }
             if showsEstimatedLine {
@@ -750,7 +751,10 @@ struct ResultView: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(Color.captureChromeText)
+        // Dark-on-orange: white caption text on this fill is ~2.8:1, under
+        // MASTER.md's >=4.5:1 budget (ui-ux review 2026-08-25); black matches
+        // the placeholder chip's dark-on-bright pairing.
+        .foregroundStyle(Color.captureBackground)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
@@ -769,7 +773,10 @@ struct ResultView: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(Color.captureChromeText)
+        // Dark-on-orange: white caption text on this fill is ~2.8:1, under
+        // MASTER.md's >=4.5:1 budget (ui-ux review 2026-08-25); black matches
+        // the placeholder chip's dark-on-bright pairing.
+        .foregroundStyle(Color.captureBackground)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))

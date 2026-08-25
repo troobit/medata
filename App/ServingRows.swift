@@ -193,6 +193,7 @@ struct ServingStepButton: View {
                 .contentShape(Circle())
         }
         .disabled(!enabled)
+        .accessibilityLabel(symbol == "plus" ? "Increase amount" : "Decrease amount")
         .accessibilityIdentifier("\(idPrefix).\(symbol)")
     }
 }
@@ -230,5 +231,6 @@ struct PlateFractionButton: View {
                 .contentShape(Capsule())
         }
         .accessibilityIdentifier("\(idPrefix).fraction.\(fraction.identifier)")
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 }

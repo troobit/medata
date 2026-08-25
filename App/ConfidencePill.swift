@@ -21,7 +21,12 @@ struct ConfidencePill: View {
             Image(systemName: level.iconName)
         }
         .labelStyle(.titleAndIcon)
-        .foregroundStyle(Color.captureChromeText)
+        // Dark-on-fill for the bright tiers (white on the accent green is
+        // ~1.9:1 and on orange ~2.8:1 — both under MASTER.md's ≥4.5:1
+        // budget; the accent-filled controls already pair captureBackground
+        // text with bright fills). Very Low's desaturated grey is the one
+        // fill dark enough to need white.
+        .foregroundStyle(level == .veryLow ? Color.captureChromeText : Color.captureBackground)
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .frame(minHeight: 28)

@@ -117,6 +117,7 @@ struct MealOverviewView: View {
                 Text(line)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
+                    .accessibilityLabel(RecordedSuggestion.spokenLine(suggestion) ?? line)
                     .accessibilityIdentifier("overview.doseSuggestion")
             }
         }

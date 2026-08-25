@@ -579,7 +579,10 @@ struct MealReviewView: View {
                         Image(systemName: accessoryExpanded ? "chevron.up" : "chevron.down")
                             .font(.caption2.weight(.semibold))
                     }
-                    .foregroundStyle(Color.captureChromeText)
+                    // Dark-on-orange: white caption text on this fill is
+                    // ~2.8:1, under MASTER.md's >=4.5:1 budget (ui-ux review
+                    // 2026-08-25).
+                    .foregroundStyle(Color.captureBackground)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .background(Color.confidenceModerate.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
