@@ -293,7 +293,7 @@ final class DoseSuggestionTests: XCTestCase {
             let version = try String.fetchOne(
                 db, sql: "SELECT v FROM meta WHERE k = 'schema_version'"
             )
-            XCTAssertEqual(version, "9", "the upgrade re-stamps the version")
+            XCTAssertEqual(version, "10", "the upgrade re-stamps the version")
 
             let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM events") ?? -1
             XCTAssertEqual(count, eventRows.count, "no event is lost")
